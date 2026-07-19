@@ -53,6 +53,31 @@ export function CanonicalizeType(t: TypeRecord): TypeRecord {
   if (t.Kind === 'primitive') {
     return { Kind: 'primitive', Name: t.Name, Arguments: t.Arguments.map((a) => (typeof a === 'number' ? a : CanonicalizeType(a))) };
   }
+  // proposal-runtime-types: an object's property and index-signature types are
+  // themselves canonicalized, so a union or intersection nested in a property is
+  // sorted and deduplicated the same way a standalone one is. Without this, a
+  // property union built by makeType and the same union written in source could
+  // carry their members in different orders and, because SameType compares union
+  // members position-wise over the canonical form, intern as distinct types.
+  if (t.Kind === 'object') {
+    return {
+      Kind: 'object',
+      Properties: t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type), optional: p.optional, readonly: p.readonly })),
+      IndexSignatures: t.IndexSignatures.map((ix) => ({ Key: CanonicalizeType(ix.Key), Value: CanonicalizeType(ix.Value) })),
+    };
+  }
+  // A function's parameter, return, and this types are canonicalized for the same
+  // reason. [[ThisType]] is preserved as ~none~ (null) where absent.
+  if (t.Kind === 'function') {
+    return {
+      Kind: 'function',
+      Signatures: t.Signatures.map((g) => ({
+        Parameters: g.Parameters.map(CanonicalizeType),
+        Return: g.Return === null ? null : CanonicalizeType(g.Return),
+        ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType),
+      })),
+    };
+  }
   return t;
 }
 
