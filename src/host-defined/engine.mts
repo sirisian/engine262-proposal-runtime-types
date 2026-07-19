@@ -62,6 +62,12 @@ export const FEATURES = ([
     url: '',
   },
   {
+    name: 'Runtime Types',
+    flag: 'runtime-types',
+    url: 'https://github.com/sirisian/proposal-runtime-types',
+    enableInPlayground: true,
+  },
+  {
     name: 'Temporal',
     flag: 'temporal',
     url: 'https://github.com/tc39/proposal-temporal',

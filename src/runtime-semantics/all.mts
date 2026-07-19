@@ -36,6 +36,7 @@ export * from './ParenthesizedExpression.mts';
 export * from './MemberExpression.mts';
 export * from './EvaluatePropertyAccess.mts';
 export * from './LexicalDeclaration.mts';
+export * from './RuntimeTypesDeclarations.mts';
 export * from './ObjectLiteral.mts';
 export * from './PropertyDefinitionEvaluation.mts';
 export * from './FunctionExpression.mts';

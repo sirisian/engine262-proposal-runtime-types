@@ -34,6 +34,8 @@ import {
 } from './all.mts';
 import {
   surroundingAgent,
+  OrdinaryFunctionCreate,
+  RegisterClassOperator,
   DeclarativeEnvironmentRecord,
   PrivateEnvironmentRecord,
 
@@ -274,6 +276,17 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     const staticElements: (ClassElementDefinitionRecord | ClassStaticBlockDefinitionRecord)[] = [];
     // 25. For each ClassElement e of elements, do
     for (const e of elements) {
+      if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
+        // proposal-runtime-types: named operators with bodies register in the
+        // class operator table; abstract methods have no runtime behaviour.
+        if (e.type === 'OperatorDefinition' && e.OperatorName && e.FunctionBody && e.FormalParameters) {
+          const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+          const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+          const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
+          RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+        }
+        continue;
+      }
       let result;
       // a. If IsStatic of e is false, then
       if (!IsStatic(e)) {
@@ -417,6 +430,17 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     const staticElements: (ClassFieldDefinitionRecord | ClassStaticBlockDefinitionRecord)[] = [];
     // 25. For each ClassElement e of elements, do
     for (const e of elements) {
+      if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
+        // proposal-runtime-types: named operators with bodies register in the
+        // class operator table; abstract methods have no runtime behaviour.
+        if (e.type === 'OperatorDefinition' && e.OperatorName && e.FunctionBody && e.FormalParameters) {
+          const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+          const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+          const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
+          RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+        }
+        continue;
+      }
       let field;
       // a. If IsStatic of e is false, then
       if (IsStatic(e) === false) {

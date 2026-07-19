@@ -12,6 +12,12 @@ export function TopLevelLexicallyScopedDeclarations(node: ParseNode | readonly P
   switch (node.type) {
     case 'ClassDeclaration':
     case 'LexicalDeclaration':
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+    case 'MetaDeclaration':
+    case 'PrimitiveOperatorDeclaration':
       return [node];
     default:
       return [];
@@ -20,4 +26,10 @@ export function TopLevelLexicallyScopedDeclarations(node: ParseNode | readonly P
 
 export type LexicallyScopedDeclaration =
   | ParseNode.ClassDeclaration
-  | ParseNode.LexicalDeclaration;
+  | ParseNode.LexicalDeclaration
+  // proposal-runtime-types
+  | ParseNode.TypeAliasDeclaration
+  | ParseNode.InterfaceDeclaration
+  | ParseNode.EnumDeclaration
+  | ParseNode.MetaDeclaration
+  | ParseNode.PrimitiveOperatorDeclaration;

@@ -1,0 +1,214 @@
+import { Q, EnsureCompletion } from '../completion.mts';
+import { TypedNumberValue, Value } from '../value.mts';
+import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { fitsNumericType, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { Call, R, Throw, ToNumber, ToString, ToBoolean } from '#self';
+
+/**
+ * proposal-runtime-types: the run-time enforcement operations. RequireType is
+ * the check inserted at the ~any~ boundary of the gradual system, and
+ * ConvertValue is the conversion rule applied by `:=`.
+ */
+
+/** #sec-requiretype */
+export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
+  const ok = Q(yield* IsOfType(value, t));
+  if (!ok) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  return value;
+}
+
+/** #sec-the-conversion-rule */
+export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  const already = Q(yield* IsOfType(value, t));
+  if (already) {
+    return value;
+  }
+  if (t.Kind === 'union') {
+    for (const m of t.Members) {
+      const attempt = EnsureCompletion(yield* ConvertValue(value, m));
+      if (attempt.Type === 'normal') {
+        return attempt.Value;
+      }
+    }
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  if (t.Kind === 'primitive') {
+    switch (t.Name) {
+      case 'string':
+        return Q(yield* ToString(value));
+      case 'number':
+        return Q(yield* ToNumber(value));
+      case 'boolean':
+        return ToBoolean(value);
+      case 'uint':
+      case 'int':
+      case 'float16':
+      case 'float32':
+      case 'float64': {
+        // The conversion constructs a value of the numeric value type.
+        const n = Q(yield* ToNumber(value));
+        if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        return new TypedNumberValue(R(n) as number, t);
+      }
+      default:
+        break;
+    }
+  }
+  return Q(yield* RequireType(value, t));
+}
+
+/** Enforces a binding's TypeAnnotation, if any, at initialization. */
+export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null | undefined, value: Value): ValueEvaluator {
+  if (!annotation) {
+    return value;
+  }
+  // #sec-contextual-types: the binding boundary applies the conversion rule,
+  // so an in-range Number becomes the annotated numeric value type's value.
+  const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+  return Q(yield* ConvertValue(value, record));
+}
+
+export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluator<boolean> {
+  const record = Q(yield* TypeNodeToTypeRecord(node));
+  return Q(yield* IsOfType(value, record));
+}
+
+// proposal-runtime-types M11: class operator tables. Operators registered at
+// class definition are keyed by the prototype object, and binary evaluation
+// consults the table before the numeric machinery, only when the left operand
+// is an Object, keeping the untyped path unaffected.
+const classOperatorTables = new WeakMap<object, Map<string, Value>>();
+
+export function RegisterClassOperator(proto: Value, opText: string, fn: Value): void {
+  let table = classOperatorTables.get(proto as object);
+  if (!table) {
+    table = new Map();
+    classOperatorTables.set(proto as object, table);
+  }
+  table.set(opText, fn);
+}
+
+export function LookupClassOperator(value: Value, opText: string): Value | null {
+  let proto: unknown = (value as { Prototype?: unknown }).Prototype;
+  while (proto && proto instanceof Object && !(proto as { type?: string, constructor: unknown } instanceof Array)) {
+    const table = classOperatorTables.get(proto as object);
+    const fn = table?.get(opText);
+    if (fn) {
+      return fn;
+    }
+    proto = (proto as { Prototype?: unknown }).Prototype;
+  }
+  return null;
+}
+
+// proposal-runtime-types M13 #sec-meta-hooks: the `default` hook. A meta
+// declaration registers the type's default, and an annotated binding without
+// an initializer takes it. The method hooks (subtype, validate, narrow,
+// conversionFactor) parse and are name-checked; their judgments join later.
+const typeDefaults = new WeakMap<object, Value>();
+
+export function RegisterTypeDefault(typeObject: object, value: Value): void {
+  typeDefaults.set(typeObject, value);
+}
+
+export function LookupTypeDefault(typeObject: object): Value | undefined {
+  return typeDefaults.get(typeObject);
+}
+
+// proposal-runtime-types M20 #sec-meta-hooks: the meta-type method hooks are
+// user closures registered per Type Object. `validate` is the meta type's half
+// of the validation judgment, consulted from the ~parameterized~ arm of
+// IsOfType; the remaining hooks register here for their consumers.
+const metaHooks = new WeakMap<object, Map<string, Value>>();
+
+export function RegisterMetaHook(typeObject: object, name: string, fn: Value): void {
+  let table = metaHooks.get(typeObject);
+  if (!table) {
+    table = new Map();
+    metaHooks.set(typeObject, table);
+  }
+  table.set(name, fn);
+}
+
+export function LookupMetaHook(typeObject: object, name: string): Value | undefined {
+  return metaHooks.get(typeObject)?.get(name);
+}
+
+export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value): PlainEvaluator<boolean | undefined> {
+  const fn = metaHooks.get(typeObject)?.get('validate');
+  if (!fn) {
+    return undefined;
+  }
+  const result = Q(yield* Call(fn as never, Value.undefined, [value, metadata]));
+  return result === Value.true;
+}
+
+// proposal-runtime-types M19: parameter and return boundaries. Both read the
+// annotations off the function's code node and are complete no-ops when none
+// are present, so an unannotated function keeps its exact behaviour and cost.
+interface AnnotatedFunction {
+  readonly FormalParameters?: unknown;
+  readonly ECMAScriptCode?: unknown;
+}
+
+function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | null | undefined {
+  // The return annotation sits on the declaration, which is the code node's
+  // parent (the body is the child that carries no annotation).
+  const code = fn.ECMAScriptCode as { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation | null } } | null | undefined;
+  return code?.parent?.TypeAnnotation;
+}
+
+export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
+  if (returnAnnotationOf(fn)) {
+    return true;
+  }
+  return ((fn.FormalParameters as readonly ParseNode[] | undefined) ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation);
+}
+
+/** Converts each annotated parameter's bound value in place at entry. */
+export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
+  for (const p of (fn.FormalParameters as readonly ParseNode[] | undefined) ?? []) {
+    const sb = p as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null };
+    if (!sb.TypeAnnotation || !sb.BindingIdentifier) {
+      continue;
+    }
+    const name = Value(sb.BindingIdentifier.name);
+    const has = Q(yield* env.HasBinding(name));
+    if (has === Value.false) {
+      continue;
+    }
+    const current = Q(yield* env.GetBindingValue(name, Value.true));
+    const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current));
+    Q(yield* env.SetMutableBinding(name, converted, Value.false));
+  }
+  return undefined;
+}
+
+/** Applies the return annotation to a return value. */
+export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
+  const annotation = returnAnnotationOf(fn);
+  if (!annotation) {
+    return value;
+  }
+  return Q(yield* EnforceAnnotation(annotation, value));
+}
+
+// proposal-runtime-types M21: class Type Objects. Each class constructor is
+// associated at definition with the interned nominal Type Object of its class
+// type; a type reference to the class name resolves to it, and membership uses
+// the stored constructor directly.
+const classTypeObjects = new WeakMap<object, Value>();
+
+export function AssociateClassType(ctor: object, typeObject: Value): void {
+  classTypeObjects.set(ctor, typeObject);
+}
+
+export function LookupClassType(ctor: object): Value | undefined {
+  return classTypeObjects.get(ctor);
+}

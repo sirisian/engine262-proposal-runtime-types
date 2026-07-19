@@ -10,6 +10,7 @@ import {
   BooleanValue,
   Construct, CreateArrayFromList, EscapeRegExpPattern, isArrayBufferObject, isArrayExoticObject, isDateObject, isErrorObject, isFunctionObject, isModuleNamespaceObject, isPromiseObject, isRegExpObject, isTypedArrayObject, JSStringValue, NullValue, NumberValue, ObjectValue, PrivateName, surroundingAgent, SymbolValue, ThrowCompletion, UndefinedValue, Value, X,
   type Intrinsics, type ErrorObject,
+  TypedNumberValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-throw-an-exception */
@@ -85,6 +86,10 @@ export function format(arg: Formattable): string {
       }
       return n.toString();
     }
+    // proposal-runtime-types R6: a typed number displays its value with a typed
+    // marker in error messages, matching the inspector.
+    case arg instanceof TypedNumberValue:
+      return `${(arg as TypedNumberValue).numberValue()} (typed)`; // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     case arg instanceof BigIntValue:
       return `${String(R(arg))}n`;
     case arg instanceof SymbolValue:
@@ -190,11 +195,13 @@ export interface Throw {
   | "'ownKeys' on proxy: trap returned duplicate entries"
   | "'preventExtensions' on proxy: trap returned truthy but the proxy target is extensible"
   | "'setPrototypeOf' on proxy: trap returned truthy for setting a new prototype on the non-extensible proxy target"
+  | 'A class cannot be both sealed and dynamic'
   | 'A class cannot have static and instance private methods with the same name'
   | 'A class element cannot be named as "constructor"'
   | 'A class element cannot be named as "prototype" or "constructor"'
   | 'A class static field cannot be named as "constructor"'
   | 'AbstractModuleSource cannot be constructed'
+  | 'An abstract method requires an abstract class'
   | 'Array length must be uint32.'
   | 'Array length too big.'
   | 'ArrayBuffer cannot be invoked without new'
@@ -218,11 +225,13 @@ export interface Throw {
   | 'Cannot divide by zero'
   | 'Cannot make length of array-like object surpass the bounds of an integer index'
   | 'Cannot mix BigInt and other types, use explicit conversions'
+  | 'Cannot mix logical operator with ?? operator. Add parentheses to determine precedence.'
   | 'Cannot reduce an empty array with no initial value'
   | 'Cannot resize ArrayBuffer to bigger than maxByteLength'
   | 'Cannot serialize a BigInt to JSON'
   | 'Cannot transfer ArrayBuffer with custom detach key'
   | 'Class missing binding identifier'
+  | 'Class modifier already seen'
   | 'Could not set prototype of object'
   | 'Critical calendar annotation failed.'
   | 'DataView cannot be invoked without new'
@@ -233,6 +242,7 @@ export interface Throw {
   | 'Derived TypedArray constructor created an array which was too small'
   | 'Duplicate __proto__ property'
   | 'Duplicate constructor'
+  | 'Duplicate meta declaration'
   | 'Exponent of bigint must be positive'
   | 'FinalizationRegistry cannot be invoked without new'
   | 'Host does not set a module loader'
@@ -266,6 +276,7 @@ export interface Throw {
   | 'Invalid leap month'
   | 'Invalid left-hand side in for-in/of statement'
   | 'Invalid length'
+  | 'Invalid meta hook name'
   | 'Invalid month'
   | 'Invalid normalization form'
   | 'Invalid receiver'
@@ -289,6 +300,7 @@ export interface Throw {
   | 'Legacy octal literal in strict mode'
   | 'Let in lexical binding'
   | 'Map cannot be invoked without new'
+  | 'Meta hook signature does not match the table'
   | 'Mismatching month and month code'
   | 'Missing catch or finally clause in try statement'
   | 'Missing initializer in const declaration'
@@ -427,21 +439,31 @@ export interface Throw {
   | '$1 is not a constructor'
   | '$1 is not a finite number'
   | '$1 is not a function'
+  | '$1 is not a generic type'
+  | '$1 is not a list'
   | '$1 is not a number'
+  | '$1 is not a parameter'
   | '$1 is not a partial Temporal object'
+  | '$1 is not a property'
+  | '$1 is not a signature'
   | '$1 is not a string'
   | '$1 is not a supported calendar'
+  | '$1 is not a tuple element'
+  | '$1 is not a type'
+  | '$1 is not a type node'
   | '$1 is not a valid array length'
   | '$1 is not a valid epoch nanoseconds'
   | '$1 is not a valid modifier'
   | '$1 is not a valid month code'
   | '$1 is not a valid property name'
+  | '$1 is not an index signature'
   | '$1 is not an integer'
   | '$1 is not an object'
   | '$1 is not an object or a symbol'
   | '$1 is not defined'
   | '$1 is not iterable'
   | '$1 is not object or null'
+  | '$1 is not supported yet'
   | '$1 is not the [[ArrayBufferDetachKey]] of the given ArrayBuffer'
   | '$1 is out of range'
   | '$1 is too large'
@@ -580,6 +602,7 @@ export interface Throw {
   | '$1 is a required on object $2'
   | '$1 is not a $2'
   | '$1 is not a $2 object'
+  | '$1 is not assignable to $2'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'
   | 'Cannot set property $1 on $2'

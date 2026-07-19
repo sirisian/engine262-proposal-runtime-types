@@ -3,7 +3,10 @@ import { Q } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import { ClassDefinitionEvaluation, DecoratorListEvaluation } from './all.mts';
+import { surroundingAgent } from '#self';
 
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
 // ClassExpression :
@@ -13,12 +16,19 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
   const { BindingIdentifier, ClassTail, Decorators } = ClassExpression;
   const sourceText = ClassExpression.sourceText;
   const decorators = Decorators ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
+  let value;
   if (!BindingIdentifier) {
     // 1. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments undefined and ''
-    return Q(yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, Value(''), sourceText, decorators));
+    value = Q(yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, Value(''), sourceText, decorators));
+  } else {
+    // 1. Let className be StringValue of BindingIdentifier.
+    const className = StringValue(BindingIdentifier);
+    // 2. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments className and className.
+    value = Q(yield* ClassDefinitionEvaluation(ClassTail, className, className, sourceText, decorators));
   }
-  // 1. Let className be StringValue of BindingIdentifier.
-  const className = StringValue(BindingIdentifier);
-  // 2. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments className and className.
-  return Q(yield* ClassDefinitionEvaluation(ClassTail, className, className, sourceText, decorators));
+  // proposal-runtime-types M21: associate the class type with its constructor.
+  if (surroundingAgent.feature('runtime-types')) {
+    AssociateClassType(value, GetTypeObject({ Kind: 'nominal', Declaration: ClassExpression, Arguments: [], Constructor: value }));
+  }
+  return value;
 }

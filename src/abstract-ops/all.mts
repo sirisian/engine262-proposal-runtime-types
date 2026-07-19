@@ -24,6 +24,7 @@ export * from './private-names.mts';
 export * from './promise-operations.mts';
 export * from './proxy-objects.mts';
 export * from './realms.mts';
+export * from './runtime-types.mts';
 export * from './reference-operations.mts';
 export * from './regexp-objects.mts';
 export * from './shadow-realm.mts';

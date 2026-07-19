@@ -106,6 +106,7 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%Boolean.prototype%': ObjectValue;
   '%DataView.prototype%': ObjectValue;
   '%Date.prototype%': ObjectValue;
+  '%Type.prototype%': ObjectValue; // proposal-runtime-types
   '%Error.prototype%': ObjectValue;
   '%Error.prototype.toString%': BuiltinFunctionObject;
   '%EvalError.prototype%': ObjectValue;

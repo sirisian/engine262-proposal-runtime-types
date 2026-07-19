@@ -5,6 +5,7 @@ import { getDeclarations, type ArrowInfo } from './Scope.mts';
 import { isReservedWordStrict, Token } from './tokens.mts';
 import { IdentifierParser } from './IdentifierParser.mts';
 import type { ParseNode, ParseNodesByType } from './ParseNode.mts';
+import { surroundingAgent } from '#self';
 
 export enum FunctionKind {
   NORMAL = 0,
@@ -12,6 +13,8 @@ export enum FunctionKind {
 }
 
 interface ArrowParameterConversions {
+  // proposal-runtime-types
+  'SingleNameBinding': ParseNode.SingleNameBinding;
   'IdentifierReference': ParseNode.SingleNameBinding;
   'BindingRestElement': ParseNode.BindingRestElement;
   'Elision': ParseNode.Elision;
@@ -37,7 +40,12 @@ export abstract class FunctionParser extends IdentifierParser {
 
   abstract parseAssignmentExpression(): ParseNode.AssignmentExpressionOrHigher;
 
-  abstract parseBindingElement(): ParseNode.BindingElementLike;
+  abstract parseBindingElement(options?: { allowTypedInitializer?: boolean, allowOptionalMarker?: boolean, ref?: boolean }): ParseNode.BindingElementLike;
+
+  // proposal-runtime-types: implemented by TypeParser further up the mixin chain.
+  abstract parseTypeAnnotation(): ParseNode.TypeAnnotation;
+
+  abstract parseTypedInitializer(): ParseNode.TypedInitializer;
 
   abstract parseBindingRestElement(): ParseNode.BindingRestElement;
 
@@ -97,6 +105,11 @@ export abstract class FunctionParser extends IdentifierParser {
       this.scope.arrowInfoStack.push(null);
 
       node.FormalParameters = this.parseFormalParameters();
+
+      // proposal-runtime-types #sec-annotations-on-the-remaining-function-forms
+      if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+        node.TypeAnnotation = this.parseTypeAnnotation();
+      }
 
       const body = this.parseFunctionBody(isAsync, isGenerator, false);
       this.setFunctionBodyGeneric(node, body.type, body);
@@ -177,6 +190,11 @@ export abstract class FunctionParser extends IdentifierParser {
         return this.finishNode(SingleNameBinding, 'SingleNameBinding');
       }
       case 'BindingRestElement':
+        this.scope.declare(node, 'parameter');
+        return node;
+      case 'SingleNameBinding':
+        // proposal-runtime-types: an annotated parameter was already built as a
+        // binding inside the cover; it only needs its declaration.
         this.scope.declare(node, 'parameter');
         return node;
       case 'Elision':
@@ -333,8 +351,23 @@ export abstract class FunctionParser extends IdentifierParser {
     return this.finishNode(asyncBody, `${isAsync ? 'Async' : ''}ConciseBody`);
   }
 
-  // FormalParameter : BindingElement
+  // FormalParameter : `ref`? BindingElement
+  // proposal-runtime-types: `ref` is contextual, consumed only when what
+  // follows can begin a BindingElement, so a parameter named `ref` still works.
   parseFormalParameter(): ParseNode.FormalParameter {
+    if (surroundingAgent.feature('runtime-types') && this.test('ref')) {
+      switch (this.peekAhead().type) {
+        case Token.IDENTIFIER:
+        case Token.YIELD:
+        case Token.AWAIT:
+        case Token.LBRACE:
+        case Token.LBRACK:
+          this.next();
+          return this.parseBindingElement({ ref: true });
+        default:
+          break;
+      }
+    }
     return this.parseBindingElement();
   }
 

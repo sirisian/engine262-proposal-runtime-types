@@ -16,7 +16,11 @@ export function PrivateBoundIdentifiers(node: ParseNode | readonly ParseNode[]):
     case 'AsyncMethod':
     case 'AsyncGeneratorMethod':
     case 'FieldDefinition':
+    // proposal-runtime-types
+    case 'AbstractMethodDefinition':
       return PrivateBoundIdentifiers(node.ClassElementName);
+    case 'OperatorDefinition':
+      return [];
     default:
       return [];
   }

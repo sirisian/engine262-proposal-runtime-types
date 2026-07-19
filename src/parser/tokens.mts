@@ -56,6 +56,10 @@ export const RawTokens = [
   ['TEMPLATE', '`'],
   // END Template
 
+  // proposal-runtime-types #sec-type-punctuators: continues a member chain, so it
+  // sits inside Member and PropertyOrCall but outside Property.
+  ['PERIOD_LT', '.<'],
+
   // BEGIN Property
   ['PERIOD', '.'],
   ['LBRACK', '['],
@@ -68,6 +72,8 @@ export const RawTokens = [
   ['RBRACK', ']'],
   ['LBRACE', '{'],
   ['COLON', ':'],
+  // proposal-runtime-types #sec-type-punctuators
+  ['COLON_EQ', ':='],
   ['ELLIPSIS', '...'],
   ['CONDITIONAL', '?'],
   // BEGIN AutoSemicolon
@@ -145,6 +151,8 @@ export const RawTokens = [
   ['NUMBER', null],
   ['STRING', null],
   ['BIGINT', null],
+  // proposal-runtime-types #sec-imaginary-literals
+  ['IMAGINARY', null],
 
   // BEGIN Callable
   ['SUPER', 'super'],

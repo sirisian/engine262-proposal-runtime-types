@@ -14,6 +14,12 @@ export function TopLevelLexicallyDeclaredNames(node: ParseNode | readonly ParseN
   switch (node.type) {
     case 'ClassDeclaration':
     case 'LexicalDeclaration':
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+    case 'MetaDeclaration':
+    case 'PrimitiveOperatorDeclaration':
       return BoundNames(node);
     default:
       return [];

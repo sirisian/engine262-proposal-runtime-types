@@ -54,6 +54,9 @@ import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect } from '../intrinsics/Reflect.mts';
+import { builtinTypeRecord } from '../type-system/records.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
 import { bootstrapRegExp } from '../intrinsics/RegExp.mts';
 import { bootstrapRegExpPrototype } from '../intrinsics/RegExpPrototype.mts';
 import { bootstrapRegExpStringIteratorPrototype } from '../intrinsics/RegExpStringIteratorPrototype.mts';
@@ -198,6 +201,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapProxy(realmRec);
 
   bootstrapReflect(realmRec);
+  bootstrapTypePrototype(realmRec);
 
   bootstrapMath(realmRec);
 
@@ -266,6 +270,31 @@ export function CreateIntrinsics(realmRec: Realm) {
 /** https://tc39.es/ecma262/#sec-setdefaultglobalbindings */
 export function SetDefaultGlobalBindings(realmRec: Realm) {
   const global = realmRec.GlobalObject;
+
+  // proposal-runtime-types #sec-value-types: the type names are global
+  // bindings of their interned Type Objects.
+  if (surroundingAgent.feature('runtime-types')) {
+    for (const name of [
+      'any', 'never', 'boolean1',
+      // proposal-runtime-types: the primitive type names bind as global
+      // type-values too, so `HelloWorld === string` and the like work in
+      // expression position, not only the numeric value types.
+      'string', 'number', 'boolean', 'bigint', 'symbol', 'object',
+      'int8', 'int16', 'int32', 'int64', 'int128',
+      'uint8', 'uint16', 'uint32', 'uint64', 'uint128',
+      'float16', 'float32', 'float64',
+    ]) {
+      const record = builtinTypeRecord(name);
+      if (record) {
+        X(global.DefineOwnProperty(Value(name), Descriptor({
+          Value: GetTypeObject(record, realmRec),
+          Writable: Value.false,
+          Enumerable: Value.false,
+          Configurable: Value.true,
+        })));
+      }
+    }
+  }
 
   // Value Properties of the Global Object
   for (const [name, value] of [

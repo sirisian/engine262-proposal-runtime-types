@@ -42,6 +42,12 @@ export function LexicallyScopedDeclarations(node: ParseNode | readonly ParseNode
     case 'GeneratorDeclaration':
     case 'AsyncFunctionDeclaration':
     case 'AsyncGeneratorDeclaration':
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+    case 'MetaDeclaration':
+    case 'PrimitiveOperatorDeclaration':
       return [DeclarationPart(node)];
     case 'CaseBlock': {
       const names = [];

@@ -11,6 +11,12 @@ import {
   Evaluate_ImportDeclaration,
   Evaluate_ExportDeclaration,
   Evaluate_ClassDeclaration,
+  Evaluate_RuntimeTypesBindingDeclaration,
+  Evaluate_IsExpression,
+  Evaluate_TypedConversionExpression,
+  Evaluate_TypeOperatorExpression,
+  Evaluate_MetaDeclaration,
+  Evaluate_TypeArgumentsExpression,
   Evaluate_LexicalDeclaration,
   Evaluate_FunctionDeclaration,
   Evaluate_HoistableDeclaration,
@@ -171,6 +177,16 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return yield* Evaluate_ExportDeclaration(node);
     case 'ClassDeclaration':
       return yield* Evaluate_ClassDeclaration(node);
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+      return yield* Evaluate_RuntimeTypesBindingDeclaration(node);
+    case 'MetaDeclaration':
+      return yield* Evaluate_MetaDeclaration(node);
+    case 'PrimitiveOperatorDeclaration':
+      // Primitive operator tables join the numeric value types.
+      return undefined;
     case 'LexicalDeclaration':
       return yield* Evaluate_LexicalDeclaration(node);
     case 'FunctionDeclaration':
@@ -227,6 +243,17 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     case 'BitwiseXORExpression':
     case 'BitwiseORExpression':
       return yield* Evaluate_BinaryBitwiseExpression(node);
+    // proposal-runtime-types
+    case 'IsExpression':
+      return yield* Evaluate_IsExpression(node);
+    case 'TypedConversionExpression':
+      return yield* Evaluate_TypedConversionExpression(node);
+    case 'TypeOperatorExpression':
+      return yield* Evaluate_TypeOperatorExpression(node);
+    case 'TypeArgumentsExpression':
+      // proposal-runtime-types: generic Type Objects specialize; other bases
+      // pass their Reference through.
+      return (yield* Evaluate_TypeArgumentsExpression(node)) as never;
     case 'RelationalExpression':
       return yield* Evaluate_RelationalExpression(node);
     case 'CoalesceExpression':

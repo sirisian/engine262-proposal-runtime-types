@@ -73,7 +73,12 @@ export function VarScopedDeclarations(node: ParseNode | readonly ParseNode[]): V
       return VarScopedDeclarations(node.LabelledItem);
     case 'TryStatement': {
       const declarations = VarScopedDeclarations(node.Block);
-      if (node.Catch) {
+      if (node.CatchClauses) {
+        // proposal-runtime-types: every clause contributes.
+        for (const clause of node.CatchClauses) {
+          declarations.push(...VarScopedDeclarations(clause));
+        }
+      } else if (node.Catch) {
         declarations.push(...VarScopedDeclarations(node.Catch));
       }
       if (node.Finally) {

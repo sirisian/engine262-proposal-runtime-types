@@ -29,6 +29,9 @@ import {
   type GeneratorObject,
   type AsyncGeneratorObject,
   type Body,
+  functionHasAnnotations,
+  EnforceParameterTypes,
+  EnforceReturnType,
 } from '#self';
 
 export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.FunctionBody | ParseNode.AsyncBody | ParseNode.GeneratorBody | ParseNode.AsyncGeneratorBody) {
@@ -40,6 +43,16 @@ export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.Fu
 export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.FunctionBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  // proposal-runtime-types: the parameter boundary, skipped entirely when the
+  // function has no annotations.
+  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
+    Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+    const result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
+    if (result.Type === 'return') {
+      return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+    }
+    return result;
+  }
   // 2. Return the result of evaluating FunctionStatementList.
   return yield* Evaluate_FunctionStatementList(FunctionStatementList);
 }
@@ -60,6 +73,14 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
 export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
+    Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+    const result = EnsureCompletion(yield* Evaluate(ExpressionBody));
+    if (result.Type === 'return') {
+      return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+    }
+    return result;
+  }
   // 2. Return the result of evaluating ExpressionBody.
   return yield* Evaluate(ExpressionBody);
 }

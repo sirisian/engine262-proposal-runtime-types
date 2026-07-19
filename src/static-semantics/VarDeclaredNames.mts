@@ -74,7 +74,12 @@ export function VarDeclaredNames(node: ParseNode | readonly ParseNode[]): JSStri
       return VarDeclaredNames(node.LabelledItem);
     case 'TryStatement': {
       const names = VarDeclaredNames(node.Block);
-      if (node.Catch) {
+      if (node.CatchClauses) {
+        // proposal-runtime-types: every clause contributes.
+        for (const clause of node.CatchClauses) {
+          names.push(...VarDeclaredNames(clause));
+        }
+      } else if (node.Catch) {
         names.push(...VarDeclaredNames(node.Catch));
       }
       if (node.Finally) {

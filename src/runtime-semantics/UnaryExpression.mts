@@ -2,7 +2,10 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import {
   Value, ReferenceRecord, UndefinedValue, BigIntValue, BooleanValue, JSStringValue, NullValue, NumberValue, ObjectValue, SymbolValue,
+  TypedNumberValue,
+  isTypedNumber,
 } from '../value.mts';
+import { typedUnary } from '../type-system/arithmetic.mts';
 import { __ts_cast__, OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent, EnvironmentRecord } from '#self';
@@ -109,6 +112,10 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     return Value('boolean');
   } else if (val instanceof NumberValue) {
     return Value('number');
+  } else if (isTypedNumber(val)) {
+    // proposal-runtime-types R6: a typed number is a numeric primitive; typeof
+    // reports 'number', consistent with it reading as its underlying Number.
+    return Value('number');
   } else if (val instanceof JSStringValue) {
     return Value('string');
   } else if (val instanceof BigIntValue) {
@@ -138,8 +145,14 @@ function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpr
 function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
+  // proposal-runtime-types R3: read the raw value first; a typed number keeps
+  // its type through unary minus, and must be seen before ToNumeric unwraps it.
+  const rawValue = Q(yield* GetValue(expr));
+  if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
+    return typedUnary('-', rawValue as TypedNumberValue);
+  }
   // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
-  const oldValue = Q(yield* ToNumeric(Q(yield* GetValue(expr))));
+  const oldValue = Q(yield* ToNumeric(rawValue));
   // 3. If oldValue is a Number, then
   if (oldValue instanceof NumberValue) {
     // a. Return Number::unaryMinus(oldValue).
@@ -157,8 +170,14 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
 function* Evaluate_UnaryExpression_Tilde({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
+  // proposal-runtime-types R3: read the raw value first; bitwise NOT preserves
+  // the numeric value type and must see it before ToNumeric unwraps.
+  const rawValue = Q(yield* GetValue(expr));
+  if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
+    return typedUnary('~', rawValue as TypedNumberValue);
+  }
   // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
-  const oldValue = Q(yield* ToNumeric(Q(yield* GetValue(expr))));
+  const oldValue = Q(yield* ToNumeric(rawValue));
   // 3. If oldValue is a Number, then
   if (oldValue instanceof NumberValue) {
     // a. Return Number::bitwiseNOT(oldValue).

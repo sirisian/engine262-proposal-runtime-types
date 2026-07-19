@@ -14,6 +14,12 @@ export function TopLevelVarDeclaredNames(node: ParseNode | readonly ParseNode[])
   switch (node.type) {
     case 'ClassDeclaration':
     case 'LexicalDeclaration':
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+    case 'MetaDeclaration':
+    case 'PrimitiveOperatorDeclaration':
       return [];
     case 'FunctionDeclaration':
     case 'GeneratorDeclaration':

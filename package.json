@@ -62,6 +62,7 @@
     "spec:update": "node scripts/update_spec.mts",
     "test": "run-s -c test:inspector test:owned test:json test:test262",
     "test:test262": "node test/test262/test262.mts",
+    "test:test262:runtime-types": "node test/test262/test262.mts -e runtime-types",
     "test:owned": "vitest test/engine262 --watch=false",
     "test:owned:watch": "vitest test/engine262",
     "test:json": "node test/json/json.mts",

@@ -1,4 +1,5 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
+import { CheckModule, CheckScript } from './type-system/check.mts';
 import { RegExpParser, type RegExpParserContext } from './parser/RegExpParser.mts';
 import {
   SourceTextModuleRecord, SyntheticModuleRecord, type LoadedModuleRequestRecord, type ModuleRecordHostDefined,
@@ -100,6 +101,18 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
     body.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
     return body;
   }
+
+  // proposal-runtime-types #sec-type-errors: the static checker's type errors
+  // join the early-error list, as TypeError objects rather than SyntaxError
+  // objects, which is the specification's deliberate divergence.
+  if (surroundingAgent.feature('runtime-types')) {
+    const typeErrors = CheckScript(body);
+    if (typeErrors.length > 0) {
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      typeErrors.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
+      return typeErrors;
+    }
+  }
   setNodeParent(body, undefined);
   // 4. Return Script Record { [[Realm]]: realm, [[ECMAScriptCode]]: body, [[HostDefined]]: hostDefined }.
   const script = new ScriptRecord({
@@ -129,6 +142,16 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
     const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
     body.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
     return body;
+  }
+  // proposal-runtime-types #sec-type-errors: the same checker gate as the
+  // script goal, over module items.
+  if (surroundingAgent.feature('runtime-types')) {
+    const typeErrors = CheckModule(body);
+    if (typeErrors.length > 0) {
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      typeErrors.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
+      return typeErrors;
+    }
   }
   setNodeParent(body, undefined);
   // 4. Let requestedModules be the ModuleRequests of body.

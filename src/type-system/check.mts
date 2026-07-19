@@ -1,0 +1,432 @@
+import { NumberValue, Value, type ObjectValue } from '../value.mts';
+import type { ThrowCompletion } from '../completion.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import {
+  builtinTypeRecord, displayType, makePrimitive, voidType, type TypeRecord,
+} from './records.mts';
+import { IsAssignable } from './relations.mts';
+import { fitsNumericType } from './runtime.mts';
+import { R, Throw } from '#self';
+
+/**
+ * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
+ * A post-parse walk computing the Static Type of expressions and raising the
+ * specification's type errors. The Static Type of anything the checker does
+ * not model is ~any~, so under the gradual rule silence is sound: an error is
+ * raised only where both sides of a judgment are statically known. Scoping is
+ * simplified to one frame per function; block-level shadowing inside one
+ * function is approximated by overwriting, which cannot introduce a false
+ * positive because an unknown type is ~any~.
+ */
+
+type Known = TypeRecord | null;
+
+interface Frame {
+  readonly bindings: Map<string, TypeRecord>;
+  readonly aliases: Map<string, TypeRecord>;
+}
+
+
+function widen(t: TypeRecord): TypeRecord {
+  return t.Kind === 'literal' ? t.Base : t;
+}
+
+export function CheckScript(script: ParseNode.Script): ObjectValue[] {
+  return CheckStatementList(script.ScriptBody?.StatementList ?? null);
+}
+
+export function CheckModule(module: ParseNode.Module): ObjectValue[] {
+  // Module items are a superset of statements; import/export wrappers are
+  // walked structurally, and their inner declarations checked as usual.
+  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null);
+}
+
+function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectValue[] {
+  const errors: ObjectValue[] = [];
+  const frames: Frame[] = [{ bindings: new Map(), aliases: new Map() }];
+  const returnTypes: Known[] = [];
+
+  const report = (source: TypeRecord, target: TypeRecord) => {
+    const completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+    errors.push(completion.Value as ObjectValue);
+  };
+
+  // #sec-contextual-types: a numeric literal whose value fits a numeric value
+  // type is assignable to it; the boundary constructs the typed value. This is
+  // the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
+  // space is genuinely distinct, and this is how a plain literal enters it.
+  const literalFitsNumericType = (source: TypeRecord, target: TypeRecord): boolean => {
+    if (source.Kind === 'literal' && target.Kind === 'primitive'
+        && ['uint', 'int', 'float16', 'float32', 'float64'].includes(target.Name)
+        && source.Value instanceof NumberValue
+        && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {
+      return true;
+    }
+    if (target.Kind === 'union') {
+      return target.Members.some((m) => literalFitsNumericType(source, m));
+    }
+    return false;
+  };
+
+  const requireAssignable = (source: Known, target: Known) => {
+    if (!source || !target) {
+      return;
+    }
+    // #sec-contextual-types: a numeric literal within a numeric value type's
+    // range converts losslessly at the boundary, so it is statically
+    // assignable; the run-time boundary constructs the typed value.
+    if (literalFitsNumericType(source, target)) {
+      return;
+    }
+    if (!IsAssignable(source, target)) {
+      report(source, target);
+    }
+  };
+
+  const lookup = (name: string): Known => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const t = frames[i].bindings.get(name);
+      if (t) {
+        return t;
+      }
+    }
+    return null;
+  };
+
+  const lookupAlias = (name: string): Known => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const t = frames[i].aliases.get(name);
+      if (t) {
+        return t;
+      }
+    }
+    return null;
+  };
+
+  // The statically resolvable subset of types: built-ins and aliases declared
+  // in the program. An unresolvable type is unknown, and unknown is ~any~.
+  const resolveType = (node: ParseNode.Type): Known => {
+    switch (node.type) {
+      case 'TypeReference': {
+        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
+          const args: (TypeRecord | number)[] = [];
+          if (node.TypeName.MemberNames.length > 0) {
+            return null;
+          }
+          for (const a of node.TypeArguments!.TypeArgumentList) {
+            const r = resolveType(a);
+            if (!r) {
+              return null;
+            }
+            let arg: TypeRecord | number = r;
+            if (r.Kind === 'literal' && r.Value instanceof NumberValue) {
+              arg = R(r.Value);
+            }
+            args.push(arg);
+          }
+          return builtinTypeRecord(node.TypeName.IdentifierReference.name, args);
+        }
+        const name = node.TypeName.IdentifierReference.name;
+        return builtinTypeRecord(name) ?? lookupAlias(name);
+      }
+      case 'PredefinedType':
+        return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
+      case 'ParenthesizedType':
+        return resolveType(node.Type);
+      case 'UnionType':
+      case 'IntersectionType': {
+        const Members: TypeRecord[] = [];
+        for (const m of node.Types) {
+          const r = resolveType(m);
+          if (!r) {
+            return null;
+          }
+          Members.push(r);
+        }
+        return { Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members };
+      }
+      case 'ArrayType': {
+        if (node.ArrayExtent && node.ArrayExtent.type !== 'NumericLiteral') {
+          return null;
+        }
+        const el = node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 0 ? resolveType(node.TypeArguments.TypeArgumentList[0]) : { Kind: 'any' as const };
+        if (!el) {
+          return null;
+        }
+        return { Kind: 'array', Element: el, Extent: node.ArrayExtent ? (node.ArrayExtent as { value: number }).value : 'dynamic' };
+      }
+      case 'TupleType': {
+        const Elements = [];
+        for (const e of node.TupleElementList) {
+          const r = resolveType(e.Type);
+          if (!r) {
+            return null;
+          }
+          Elements.push({ Type: r, Rest: e.Rest, Initial: 'none' as const });
+        }
+        return { Kind: 'tuple', Elements };
+      }
+      case 'FunctionType': {
+        const Parameters = [];
+        for (const p of node.FunctionTypeParameterList) {
+          const pt = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const r = pt ? resolveType(pt.Type) : { Kind: 'any' as const };
+          if (!r) {
+            return null;
+          }
+          Parameters.push(r);
+        }
+        const Return = resolveType(node.ReturnType);
+        return { Kind: 'function', Signatures: [{ Parameters, Return }] };
+      }
+      case 'ObjectType': {
+        const Properties = [];
+        for (const member of node.TypeMemberList) {
+          if (member.type !== 'TypeMember') {
+            return null;
+          }
+          const key = (member.PropertyName as { name?: string, value?: string }).name ?? (member.PropertyName as { value?: string }).value;
+          if (typeof key !== 'string' || !member.TypeAnnotation) {
+            return null;
+          }
+          const r = resolveType(member.TypeAnnotation.Type);
+          if (!r) {
+            return null;
+          }
+          Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly });
+        }
+        return { Kind: 'object', Properties, IndexSignatures: [] };
+      }
+      case 'LiteralType': {
+        if (node.kind === 'imaginary') {
+          return null;
+        }
+        const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
+        const base = node.kind === 'number' ? makePrimitive('number') : node.kind === 'string' ? makePrimitive('string') : node.kind === 'boolean' ? makePrimitive('boolean') : makePrimitive('bigint');
+        return { Kind: 'literal', Value: Value(raw as never), Base: base };
+      }
+      default:
+        return null;
+    }
+  };
+
+  const staticType = (node: ParseNode): Known => {
+    switch (node.type) {
+      case 'NumericLiteral':
+        return { Kind: 'literal', Value: Value((node as { value: number }).value), Base: makePrimitive('number') };
+      case 'StringLiteral':
+        return { Kind: 'literal', Value: Value((node as { value: string }).value), Base: makePrimitive('string') };
+      case 'BooleanLiteral':
+        return { Kind: 'literal', Value: (node as { value: boolean }).value ? Value.true : Value.false, Base: makePrimitive('boolean') };
+      case 'IdentifierReference':
+        return lookup((node as { name: string }).name);
+      case 'ParenthesizedExpression':
+        return staticType((node as { Expression: ParseNode }).Expression);
+      case 'TypedConversionExpression':
+        return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
+      case 'CallExpression': {
+        // A call's static type is the callee function type's return, when
+        // known; the argument check happens in the walk.
+        const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);
+        if (callee && callee.Kind === 'function' && callee.Signatures.length === 1) {
+          return callee.Signatures[0].Return;
+        }
+        return null;
+      }
+      case 'MemberExpression': {
+        const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
+        if (m.IdentifierName && m.MemberExpression) {
+          const objType = staticType(m.MemberExpression);
+          if (objType && objType.Kind === 'object') {
+            const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
+            return prop ? prop.type : null;
+          }
+        }
+        return null;
+      }
+      case 'IsExpression':
+        return makePrimitive('boolean');
+      case 'TemplateLiteral':
+        return makePrimitive('string');
+      default:
+        return null; // ~any~
+    }
+  };
+
+  const declare = (name: string, t: Known) => {
+    if (t) {
+      frames[frames.length - 1].bindings.set(name, t);
+    }
+  };
+
+  const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
+    if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
+      const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
+      if (b.Initializer) {
+        requireAssignable(staticType(b.Initializer), declared);
+        walk(b.Initializer);
+      }
+      declare(b.BindingIdentifier.name, declared);
+    } else if (b.Initializer) {
+      walk(b.Initializer);
+    }
+  };
+
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean) => {
+    frames.push({ bindings: new Map(), aliases: new Map() });
+    returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
+    for (const p of params ?? []) {
+      if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
+        walkBindingElement(p);
+      }
+    }
+    if (body) {
+      walk(body);
+    }
+    returnTypes.pop();
+    frames.pop();
+  };
+
+  const pushBlock = <T,>(f: () => T): T => {
+    // A block or switch introduces a scope; a binding declared inside shadows
+    // an outer one without disturbing it. Overwriting in the same frame stays
+    // sound because an unknown type is any.
+    frames.push({ bindings: new Map(), aliases: new Map() });
+    try {
+      return f();
+    } finally {
+      frames.pop();
+    }
+  };
+
+  const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
+    if (!node) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((n) => walk(n));
+      return;
+    }
+    const n = node as ParseNode;
+    switch (n.type) {
+      case 'Block':
+      case 'CaseBlock':
+        pushBlock(() => {
+          for (const key of Object.keys(n)) {
+            if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+              continue;
+            }
+            const child = (n as unknown as Record<string, unknown>)[key];
+            if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+              walk(child as ParseNode);
+            }
+          }
+        });
+        return;
+      case 'TypeAliasDeclaration': {
+        const resolved = resolveType(n.Type);
+        if (resolved) {
+          frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, resolved);
+        }
+        return;
+      }
+      case 'LexicalBinding':
+      case 'VariableDeclaration': {
+        if (n.BindingIdentifier) {
+          if (n.TypedInitializer) {
+            const inferred = staticType(n.TypedInitializer.AssignmentExpression);
+            declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null);
+            walk(n.TypedInitializer.AssignmentExpression);
+            return;
+          }
+          const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+          if (n.Initializer) {
+            requireAssignable(staticType(n.Initializer), declared);
+            walk(n.Initializer);
+          }
+          declare(n.BindingIdentifier.name, declared);
+          return;
+        }
+        walk(n.Initializer);
+        return;
+      }
+      case 'CallExpression': {
+        const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
+        const callee = staticType(c.CallExpression);
+        if (callee && callee.Kind === 'function' && callee.Signatures.length === 1 && Array.isArray(c.Arguments)) {
+          const sig = callee.Signatures[0];
+          c.Arguments.forEach((arg, i) => {
+            if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
+              requireAssignable(staticType(arg), sig.Parameters[i]);
+            }
+          });
+        }
+        walk(c.CallExpression);
+        walk(c.Arguments);
+        return;
+      }
+      case 'AssignmentExpression': {
+        const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
+        if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
+          requireAssignable(staticType(a.AssignmentExpression), lookup((a.LeftHandSideExpression as { name: string }).name));
+        }
+        walk(a.LeftHandSideExpression);
+        walk(a.AssignmentExpression);
+        return;
+      }
+      case 'ReturnStatement': {
+        const expr = (n as { Expression?: ParseNode | null }).Expression;
+        if (expr) {
+          requireAssignable(staticType(expr), returnTypes[returnTypes.length - 1] ?? null);
+          walk(expr);
+        }
+        return;
+      }
+      case 'FieldDefinition': {
+        if (n.Initializer && n.TypeAnnotation) {
+          requireAssignable(staticType(n.Initializer), resolveType(n.TypeAnnotation.Type));
+        }
+        walk(n.Initializer);
+        return;
+      }
+      case 'FunctionDeclaration':
+      case 'FunctionExpression':
+        enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+        return;
+      case 'ArrowFunction':
+        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true);
+        return;
+      case 'MethodDefinition':
+        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+        return;
+      case 'GeneratorDeclaration':
+      case 'GeneratorExpression':
+      case 'AsyncFunctionDeclaration':
+      case 'AsyncFunctionExpression':
+      case 'AsyncGeneratorDeclaration':
+      case 'AsyncGeneratorExpression':
+      case 'AsyncArrowFunction':
+      case 'GeneratorMethod':
+      case 'AsyncMethod':
+      case 'AsyncGeneratorMethod':
+        // Return annotations of generator and async forms describe the
+        // produced iterator or promise; those judgments arrive later.
+        enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, false);
+        return;
+      default: {
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+            walk(child as ParseNode);
+          }
+        }
+      }
+    }
+  };
+
+  walk(statementList);
+  return errors;
+}

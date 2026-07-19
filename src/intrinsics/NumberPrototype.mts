@@ -3,8 +3,7 @@ import {
   Value,
   NumberValue,
   type Arguments,
-  type FunctionCallContext,
-} from '../value.mts';
+  type FunctionCallContext, isTypedNumber, unwrapToNumber } from '../value.mts';
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
@@ -23,6 +22,11 @@ import {
 function thisNumberValue(value: Value) {
   if (value instanceof NumberValue) {
     return value;
+  }
+  // proposal-runtime-types R6: a typed number reads as its underlying Number, so
+  // Number.prototype methods invoked on a typed receiver operate on its value.
+  if (isTypedNumber(value)) {
+    return unwrapToNumber(value);
   }
   if (value instanceof ObjectValue && 'NumberData' in value) {
     const n = value.NumberData;

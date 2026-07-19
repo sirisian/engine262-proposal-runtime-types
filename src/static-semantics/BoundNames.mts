@@ -44,6 +44,14 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
         return BoundNames(node.BindingIdentifier);
       }
       return [Value('*default*')];
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+      return BoundNames(node.BindingIdentifier);
+    case 'MetaDeclaration':
+    case 'PrimitiveOperatorDeclaration':
+      return [];
     case 'ImportDeclaration':
       if (node.ImportedBinding) {
         return BoundNames(node.ImportedBinding);

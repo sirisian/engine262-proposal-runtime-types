@@ -1,3 +1,4 @@
+import { EnforceAnnotation } from '../abstract-ops/all.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
   Q, X,
@@ -6,19 +7,22 @@ import { Value } from '../value.mts';
 import { IsAnonymousFunctionDefinition, StringValue, type FunctionDeclaration } from '../static-semantics/all.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   surroundingAgent,
   GetValue,
   InitializeReferencedBinding,
   ResolveBinding,
+  LookupTypeDefault,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalBinding :
 //     BindingIdentifier
 //     BindingIdentifier Initializer
-function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initializer, strict }: ParseNode.LexicalBinding): PlainEvaluator {
+function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initializer, strict, TypeAnnotation }: ParseNode.LexicalBinding): PlainEvaluator {
   if (Initializer) {
     // 1. Let bindingId be StringValue of BindingIdentifier.
     const bindingId = StringValue(BindingIdentifier!);
@@ -35,13 +39,26 @@ function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initial
       // b. Let value be ? GetValue(rhs).
       value = Q(yield* GetValue(rhs));
     }
+    // proposal-runtime-types: the annotation check at the binding boundary.
+    value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
     // 5. Return InitializeReferencedBinding(lhs, value).
     return yield* InitializeReferencedBinding(lhs, value);
   } else {
     // 1. Let lhs be ResolveBinding(StringValue of BindingIdentifier).
     const lhs = yield* ResolveBinding(StringValue(BindingIdentifier!), undefined, strict);
+    // proposal-runtime-types #sec-meta-hooks: an annotated binding without an
+    // initializer takes the type's registered default.
+    let initial: Value = Value.undefined;
+    if (TypeAnnotation) {
+      const record = Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
+      const dflt = LookupTypeDefault(GetTypeObject(record));
+      if (dflt !== undefined) {
+        // The default crosses the same conversion boundary as an initializer.
+        initial = Q(yield* EnforceAnnotation(TypeAnnotation, dflt));
+      }
+    }
     // 2. Return InitializeReferencedBinding(lhs, undefined).
-    return yield* InitializeReferencedBinding(lhs, Value.undefined);
+    return yield* InitializeReferencedBinding(lhs, initial);
   }
 }
 

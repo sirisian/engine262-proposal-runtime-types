@@ -55,6 +55,8 @@ export type Value =
   | JSStringValue
   | SymbolValue
   | NumberValue
+  // proposal-runtime-types
+  | TypedNumberValue
   | BigIntValue
   | ObjectValue;
 
@@ -109,6 +111,9 @@ export type PrimitiveValue =
   | JSStringValue
   | SymbolValue
   | NumberValue
+  // proposal-runtime-types R6 (Option A): a numeric value type is a primitive
+  // value, a sibling of NumberValue.
+  | TypedNumberValue
   | BigIntValue;
 
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types */
@@ -479,6 +484,40 @@ export class NumberValue extends PrimitiveValue {
   }
 
   declare static [Symbol.hasInstance]: (value: unknown) => value is NumberValue;
+}
+
+/**
+ * proposal-runtime-types R6 (Option A) #sec-value-types: a numeric value type's
+ * value. It is a sibling of NumberValue under PrimitiveValue, not a subclass, so
+ * a typed number is not an instanceof NumberValue. Membership is decided by the
+ * carried Type Record, a plain Number is not a member of any numeric value type,
+ * and every numeric-reading site unwraps a typed number explicitly.
+ */
+export class TypedNumberValue extends PrimitiveValue {
+  declare readonly type: 'TypedNumber'; // defined on prototype by static block
+
+  readonly value: number;
+
+  readonly TypeRecord: unknown;
+
+  // proposal-runtime-types R6: unlike the other value classes (which use a
+  // private constructor plus a module-level factory for nominal typing), this
+  // constructor is public. The class is already nominally distinct via its
+  // distinct type tag and TypeRecord field, and public construction keeps the
+  // feature-gated call sites (arithmetic, conversion, update) simple.
+  constructor(value: number, typeRecord: unknown) {
+    super();
+    this.value = value;
+    this.TypeRecord = typeRecord;
+  }
+
+  numberValue() {
+    return this.value;
+  }
+
+  static {
+    Object.defineProperty(this.prototype, 'type', { value: 'TypedNumber' });
+  }
 }
 
 /** https://tc39.es/ecma262/#sec-numberbitwiseop */
@@ -958,6 +997,12 @@ export function SameType(x: Value, y: Value) {
     case x === Value.null && y === Value.null:
     case x instanceof BooleanValue && y instanceof BooleanValue:
     case x instanceof NumberValue && y instanceof NumberValue:
+    // proposal-runtime-types R6 (Option A): a typed number is same-type only
+    // with another typed number, never with a plain Number. The per-Type-Record
+    // refinement (a uint8 versus a uint16) lives in the type-system SameType;
+    // at the value level a TypedNumberValue is its own Type in the language
+    // sense, distinct from the Number type.
+    case x instanceof TypedNumberValue && y instanceof TypedNumberValue:
     case x instanceof BigIntValue && y instanceof BigIntValue:
     case x instanceof SymbolValue && y instanceof SymbolValue:
     case x instanceof JSStringValue && y instanceof JSStringValue:
@@ -966,6 +1011,27 @@ export function SameType(x: Value, y: Value) {
     default:
       return false;
   }
+}
+
+/**
+ * proposal-runtime-types R6 (Option A): the type guard for a typed number. Its
+ * own instanceof does not narrow (the value hierarchy shares a static
+ * hasInstance), so call sites use this to narrow a Value to TypedNumberValue.
+ */
+export function isTypedNumber(v: Value): v is TypedNumberValue {
+  return v instanceof TypedNumberValue;
+}
+
+/**
+ * proposal-runtime-types R6 (Option A): the single, named way to read a typed
+ * number as its underlying plain Number. Every numeric-reading site (JSON, Date,
+ * Math, the Number intrinsics, ToNumber, ToString, and so on) that must treat a
+ * typed number as its value routes through here, so the "unwrap" logic exists in
+ * exactly one place. A plain Number passes through unchanged, so callers may
+ * apply it unconditionally where a Number is expected.
+ */
+export function unwrapToNumber(v: NumberValue | TypedNumberValue): NumberValue {
+  return isTypedNumber(v) ? createNumberValue(v.numberValue()) : v; // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
 }
 
 type SafeAccessMethods = 'map' | 'values' | 'entries' | 'filter' | 'forEach' | 'find';

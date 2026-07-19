@@ -9,6 +9,8 @@ import {
   BooleanValue,
   PrimitiveValue,
   type PropertyKeyValue,
+  unwrapToNumber,
+  isTypedNumber,
 } from '../value.mts';
 import {
   Q, X,
@@ -125,6 +127,13 @@ export function ToBoolean(argument: Value): BooleanValue {
   } else if (argument instanceof BooleanValue) {
     // Return argument.
     return argument;
+  } else if (isTypedNumber(argument)) {
+    // proposal-runtime-types R6: a typed number is falsy when its value is +0,
+    // -0, or NaN, matching a plain Number.
+    const n = unwrapToNumber(argument);
+    if (n.numberValue() === 0 || n.isNaN()) { // eslint-disable-line @engine262/mathematical-value -- n is a fresh unwrapped NumberValue
+      return Value.false;
+    }
   } else if (argument instanceof NumberValue) {
     // If argument is +0𝔽, -0𝔽, or NaN, return false; otherwise return true.
     if (R(argument) === 0 || argument.isNaN()) {
@@ -171,6 +180,12 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     }
     // If argument is false, return +0𝔽.
     return F(+0);
+  } else if (isTypedNumber(argument)) {
+    // proposal-runtime-types R6: ToNumber's contract is to produce a Number, so
+    // a typed number unwraps to its underlying plain Number, matching how
+    // Number(5n) yields 5. Value-type identity and arithmetic do not route
+    // through this path for their type decision, so unwrapping here is safe.
+    return unwrapToNumber(argument);
   } else if (argument instanceof NumberValue) {
     // Return argument (no conversion).
     return argument;
@@ -373,6 +388,10 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
     // If argument is true, return "true".
     // If argument is false, return "false".
     return Value(argument === Value.true ? 'true' : 'false');
+  } else if (isTypedNumber(argument)) {
+    // proposal-runtime-types R6: a typed number stringifies as its underlying
+    // decimal, with no type tag (String(5 := uint8) is "5").
+    return X(NumberValue.toString(unwrapToNumber(argument), 10));
   } else if (argument instanceof NumberValue) {
     // Return ! Number::toString(argument).
     return X(NumberValue.toString(argument, 10));
@@ -406,6 +425,12 @@ export function ToObject(argument: Value): ValueCompletion<ObjectValue> {
     // Return a new Boolean object whose [[BooleanData]] internal slot is set to argument.
     const obj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Boolean.prototype%'), ['BooleanData']) as Mutable<BooleanObject>;
     obj.BooleanData = argument;
+    return obj;
+  } else if (isTypedNumber(argument)) {
+    // proposal-runtime-types R6: a typed number boxes to a Number object with
+    // its underlying value, so property access reaches %Number.prototype%.
+    const obj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Number.prototype%'), ['NumberData']) as Mutable<NumberObject>;
+    obj.NumberData = unwrapToNumber(argument);
     return obj;
   } else if (argument instanceof NumberValue) {
     // Return a new Number object whose [[NumberData]] internal slot is set to argument.

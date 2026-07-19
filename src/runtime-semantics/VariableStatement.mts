@@ -7,6 +7,7 @@ import { StringValue, IsAnonymousFunctionDefinition, type FunctionDeclaration } 
 import { Value } from '../value.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
+  EnforceAnnotation,
   GetValue,
   PutValue,
   ResolveBinding,
@@ -17,7 +18,7 @@ import {
 //     BindingIdentifier
 //     BindingIdentifier Initializer
 //     BindingPattern Initializer
-function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, BindingPattern }: ParseNode.VariableDeclaration): PlainEvaluator {
+function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, BindingPattern, TypeAnnotation }: ParseNode.VariableDeclaration): PlainEvaluator {
   if (BindingIdentifier) {
     if (!Initializer) {
       // 1. Return NormalCompletion(empty).
@@ -38,6 +39,8 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, Binding
       // b. Let value be ? GetValue(rhs).
       value = Q(yield* GetValue(rhs));
     }
+    // proposal-runtime-types: the annotation check at the binding boundary.
+    value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
     // 5. Return ? PutValue(lhs, value).
     return Q(yield* PutValue(lhs, value));
   }

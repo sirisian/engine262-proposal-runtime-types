@@ -1,12 +1,15 @@
 import type { Mutable } from '../utils/language.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
-import { ExpressionParser } from './ExpressionParser.mts';
+import { TypeParser } from './TypeParser.mts';
 import { FunctionKind } from './FunctionParser.mts';
 import { getDeclarations, type LabelType } from './Scope.mts';
 import type { ParseNode } from './ParseNode.mts';
-import { Throw } from '#self';
+import { surroundingAgent, Throw } from '#self';
 
-export abstract class StatementParser extends ExpressionParser {
+export abstract class StatementParser extends TypeParser {
+  // proposal-runtime-types: meta-declared type names seen in this parse.
+  private declaredMetaTypes?: Set<string>;
+
   eatSemicolonWithASI() {
     if (this.eat(Token.SEMICOLON)) {
       return true;
@@ -78,6 +81,13 @@ export abstract class StatementParser extends ExpressionParser {
         return this.parseClassDeclaration(null);
       case Token.CONST:
         return this.parseLexicalDeclaration();
+      case Token.ENUM:
+        // proposal-runtime-types EnumDeclaration; `enum` is reserved, so the
+        // gate is additive.
+        if (surroundingAgent.feature('runtime-types')) {
+          return this.parseEnumDeclaration();
+        }
+        return this.parseStatement();
       default:
         if (this.test('let')) {
           switch (this.peekAhead().type) {
@@ -93,6 +103,33 @@ export abstract class StatementParser extends ExpressionParser {
         }
         if (this.test('async') && this.testAhead(Token.FUNCTION) && !this.peekAhead().hadLineTerminatorBefore) {
           return this.parseHoistableDeclaration();
+        }
+        if (this.testClassModifierRun()) {
+          // proposal-runtime-types ClassDeclaration : ClassModifiers? `class` ...
+          return this.parseClassDeclaration(null);
+        }
+        if (surroundingAgent.feature('runtime-types')) {
+          // Each lookahead pair is a SyntaxError today, so the gates are additive.
+          switch (this.peekAhead().type) {
+            case Token.IDENTIFIER:
+            case Token.YIELD:
+            case Token.AWAIT:
+              if (this.test('type') && !this.peekAhead().hadLineTerminatorBefore) {
+                return this.parseTypeAliasDeclaration();
+              }
+              if (this.test('interface')) {
+                return this.parseInterfaceDeclaration();
+              }
+              if (this.test('meta') && !this.peekAhead().hadLineTerminatorBefore) {
+                return this.parseMetaDeclaration();
+              }
+              if (this.test('primitive') && !this.peekAhead().hadLineTerminatorBefore) {
+                return this.parsePrimitiveOperatorDeclaration();
+              }
+              break;
+            default:
+              break;
+          }
         }
         return this.parseStatement();
     }
@@ -122,6 +159,163 @@ export abstract class StatementParser extends ExpressionParser {
     return this.parseClass(decoratorsAttachedToClassDeclaration, false) as ParseNode.ClassDeclaration;
   }
 
+  // TypeAliasDeclaration :
+  //   `type` [no LineTerminator here] BindingIdentifier TypeParameters? `=` Type WhereClauses? `;`
+  parseTypeAliasDeclaration(): ParseNode.TypeAliasDeclaration {
+    const node = this.startNode<ParseNode.TypeAliasDeclaration>();
+    this.expect('type');
+    node.BindingIdentifier = this.parseBindingIdentifier();
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    this.expect(Token.ASSIGN);
+    node.Type = this.parseType();
+    const whereClauses = this.parseWhereClauses();
+    node.WhereClauses = whereClauses.length > 0 ? whereClauses : null;
+    this.semicolon();
+    const finished = this.finishNode(node, 'TypeAliasDeclaration');
+    this.scope.declare(finished, 'lexical');
+    return finished;
+  }
+
+  // InterfaceDeclaration :
+  //   `interface` BindingIdentifier TypeParameters? `{` InterfaceBody? `}`
+  // InterfaceMember :
+  //   TypeMember
+  //   OperatorDefinition
+  parseInterfaceDeclaration(): ParseNode.InterfaceDeclaration {
+    const node = this.startNode<ParseNode.InterfaceDeclaration>();
+    this.expect('interface');
+    node.BindingIdentifier = this.parseBindingIdentifier();
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    this.expect(Token.LBRACE);
+    const InterfaceMemberList: ParseNode.InterfaceMember[] = [];
+    while (!this.test(Token.RBRACE)) {
+      // `operator` and `static` are valid member names, so the operator route
+      // needs what follows them to rule the member reading out.
+      if (this.test(Token.MUL)
+          || (this.test('static') && this.testAhead('operator'))
+          || (this.test('operator')
+            && !this.testAhead(Token.COLON)
+            && !this.testAhead(Token.CONDITIONAL)
+            && !this.testAhead(Token.LPAREN))) {
+        InterfaceMemberList.push(this.parseOperatorDefinition());
+        // An OperatorDefinition carries its own `;` or `}` terminator, so the
+        // separator here is optional.
+        if (!this.eat(Token.COMMA)) {
+          this.eat(Token.SEMICOLON);
+        }
+        continue;
+      }
+      InterfaceMemberList.push(this.parseTypeMember());
+      if (!this.eat(Token.COMMA) && !this.eat(Token.SEMICOLON)) {
+        break;
+      }
+    }
+    this.expect(Token.RBRACE);
+    node.InterfaceMemberList = InterfaceMemberList;
+    const finished = this.finishNode(node, 'InterfaceDeclaration');
+    this.scope.declare(finished, 'lexical');
+    return finished;
+  }
+
+  // EnumDeclaration :
+  //   `enum` BindingIdentifier TypeAnnotation? `{` EnumMemberList? `,`? `}`
+  // EnumMember :
+  //   IdentifierName Initializer?
+  parseEnumDeclaration(): ParseNode.EnumDeclaration {
+    const node = this.startNode<ParseNode.EnumDeclaration>();
+    this.expect(Token.ENUM);
+    node.BindingIdentifier = this.parseBindingIdentifier();
+    node.TypeAnnotation = this.test(Token.COLON) ? this.parseTypeAnnotation() : null;
+    this.expect(Token.LBRACE);
+    const EnumMemberList: ParseNode.EnumMember[] = [];
+    while (!this.test(Token.RBRACE)) {
+      const member = this.startNode<ParseNode.EnumMember>();
+      member.IdentifierName = this.parseIdentifierName();
+      member.Initializer = this.parseInitializerOpt();
+      EnumMemberList.push(this.finishNode(member, 'EnumMember'));
+      if (!this.eat(Token.COMMA)) {
+        break;
+      }
+    }
+    this.expect(Token.RBRACE);
+    node.EnumMemberList = EnumMemberList;
+    const finished = this.finishNode(node, 'EnumDeclaration');
+    this.scope.declare(finished, 'lexical');
+    return finished;
+  }
+
+  // MetaDeclaration :
+  //   `meta` [no LineTerminator here] TypeName `{` MetaHookList? `}`
+  // MetaHook :
+  //   `default` `=` AssignmentExpression `;`
+  //   MethodDefinition
+  // The table of permitted hook names is a semantics-milestone early error.
+  parseMetaDeclaration(): ParseNode.MetaDeclaration {
+    const node = this.startNode<ParseNode.MetaDeclaration>();
+    this.expect('meta');
+    node.TypeName = this.parseTypeName();
+    // #sec-meta-hooks: at most one meta declaration per type.
+    const typeKey = node.TypeName.IdentifierReference.name + node.TypeName.MemberNames.map((m) => `.${m.name}`).join('');
+    if (!this.declaredMetaTypes) {
+      this.declaredMetaTypes = new Set();
+    }
+    if (this.declaredMetaTypes.has(typeKey)) {
+      this.addEarlyError(Throw.SyntaxError('Duplicate meta declaration'), node);
+    } else {
+      this.declaredMetaTypes.add(typeKey);
+    }
+    this.expect(Token.LBRACE);
+    const MetaHookList: ParseNode.MetaHook[] = [];
+    while (!this.test(Token.RBRACE)) {
+      if (this.test(Token.DEFAULT) && this.testAhead(Token.ASSIGN)) {
+        const hook = this.startNode<ParseNode.MetaDefaultHook>();
+        this.next();
+        this.expect(Token.ASSIGN);
+        hook.AssignmentExpression = this.parseAssignmentExpression();
+        this.semicolon();
+        MetaHookList.push(this.finishNode(hook, 'MetaDefaultHook'));
+      } else {
+        const hook = this.parseClassElement();
+        // The table of permitted hook names; a method hook must use one.
+        // #sec-meta-hooks: a method hook must use a name from the table.
+        // Missing required hooks and signature checks join a later pass.
+        const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;
+        const hookArity: Record<string, number> = {
+          subtype: 2, validate: 2, narrow: 3, conversionFactor: 2,
+        };
+        if (typeof hookName !== 'string' || !(hookName in hookArity)) {
+          this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);
+        } else {
+          const params = (hook as { UniqueFormalParameters?: readonly ParseNode.FormalParameter[] }).UniqueFormalParameters;
+          if (Array.isArray(params) && params.length !== hookArity[hookName]) {
+            this.addEarlyError(Throw.SyntaxError('Meta hook signature does not match the table'), hook);
+          }
+        }
+        MetaHookList.push(hook);
+      }
+    }
+    this.expect(Token.RBRACE);
+    node.MetaHookList = MetaHookList;
+    return this.finishNode(node, 'MetaDeclaration');
+  }
+
+  // PrimitiveOperatorDeclaration :
+  //   `primitive` [no LineTerminator here] TypeName TypeParameters? `{` OperatorDefinitionList? `}`
+  parsePrimitiveOperatorDeclaration(): ParseNode.PrimitiveOperatorDeclaration {
+    const node = this.startNode<ParseNode.PrimitiveOperatorDeclaration>();
+    this.expect('primitive');
+    node.TypeName = this.parseTypeName();
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    this.expect(Token.LBRACE);
+    const OperatorDefinitionList: ParseNode.OperatorDefinition[] = [];
+    while (!this.test(Token.RBRACE)) {
+      OperatorDefinitionList.push(this.parseOperatorDefinition());
+    }
+    this.expect(Token.RBRACE);
+    node.OperatorDefinitionList = OperatorDefinitionList;
+    return this.finishNode(node, 'PrimitiveOperatorDeclaration');
+  }
+
   // LexicalDeclaration : LetOrConst BindingList `;`
   parseLexicalDeclaration(): ParseNode.LexicalDeclarationLike {
     const node = this.startNode<ParseNode.LexicalDeclaration>();
@@ -132,7 +326,7 @@ export abstract class StatementParser extends ExpressionParser {
 
     this.scope.declare(node.BindingList, 'lexical');
     node.BindingList.forEach((b) => {
-      if (node.LetOrConst === 'const' && !b.Initializer) {
+      if (node.LetOrConst === 'const' && !b.Initializer && !b.TypedInitializer) {
         this.addEarlyError(Throw.SyntaxError('Missing initializer in const declaration'), b);
       }
     });
@@ -150,7 +344,7 @@ export abstract class StatementParser extends ExpressionParser {
   parseBindingList(): ParseNode.BindingList {
     const bindingList: Mutable<ParseNode.BindingList> = [];
     do {
-      const node = this.parseBindingElement();
+      const node = this.parseBindingElement({ allowTypedInitializer: true, allowOptionalMarker: false });
       bindingList.push(this.repurpose(node, 'LexicalBinding'));
     } while (this.eat(Token.COMMA));
     return bindingList;
@@ -161,14 +355,29 @@ export abstract class StatementParser extends ExpressionParser {
   //   BindingPattern Initializer?
   // SingleNameBinding :
   //   BindingIdentifier Initializer?
-  parseBindingElement(): ParseNode.BindingElementLike {
+  parseBindingElement({ allowTypedInitializer = false, allowOptionalMarker = true, ref = false } = {}): ParseNode.BindingElementLike {
     const node = this.startNode<ParseNode.BindingElementLike>();
     if (this.test(Token.LBRACE) || this.test(Token.LBRACK)) {
       node.BindingPattern = this.parseBindingPattern();
     } else {
       node.BindingIdentifier = this.parseBindingIdentifier();
+      if (surroundingAgent.feature('runtime-types')) {
+        // SingleNameBinding : BindingIdentifier `?`? TypeAnnotation? Initializer?
+        // LexicalBinding / VariableDeclaration : BindingIdentifier TypedInitializer
+        if (allowOptionalMarker && this.eat(Token.CONDITIONAL)) {
+          node.Optional = true;
+        }
+        if (this.test(Token.COLON)) {
+          node.TypeAnnotation = this.parseTypeAnnotation();
+        } else if (allowTypedInitializer && this.test(Token.COLON_EQ)) {
+          node.TypedInitializer = this.parseTypedInitializer();
+        }
+      }
     }
-    node.Initializer = this.parseInitializerOpt();
+    if (ref) {
+      node.Ref = true;
+    }
+    node.Initializer = node.TypedInitializer ? null : this.parseInitializerOpt();
     return this.finishNode(node, node.BindingPattern ? 'BindingElement' : 'SingleNameBinding');
   }
 
@@ -229,6 +438,16 @@ export abstract class StatementParser extends ExpressionParser {
       this.validateIdentifierReference(name.name, node);
     }
     node.BindingIdentifier = this.repurpose(name, 'BindingIdentifier');
+    if (surroundingAgent.feature('runtime-types')) {
+      // SingleNameBinding : BindingIdentifier `?`? TypeAnnotation? Initializer?
+      // A bare `:` after the name is the BindingProperty rename handled above.
+      if (this.eat(Token.CONDITIONAL)) {
+        node.Optional = true;
+      }
+      if (this.test(Token.COLON)) {
+        node.TypeAnnotation = this.parseTypeAnnotation();
+      }
+    }
     node.Initializer = this.parseInitializerOpt();
     return this.finishNode(node, 'SingleNameBinding');
   }
@@ -400,7 +619,16 @@ export abstract class StatementParser extends ExpressionParser {
         break;
       default:
         node.BindingIdentifier = this.parseBindingIdentifier();
-        node.Initializer = this.parseInitializerOpt();
+        if (surroundingAgent.feature('runtime-types')) {
+          // VariableDeclaration : BindingIdentifier TypeAnnotation? Initializer?
+          //                     / BindingIdentifier TypedInitializer
+          if (this.test(Token.COLON)) {
+            node.TypeAnnotation = this.parseTypeAnnotation();
+          } else if (this.test(Token.COLON_EQ)) {
+            node.TypedInitializer = this.parseTypedInitializer();
+          }
+        }
+        node.Initializer = node.TypedInitializer ? null : this.parseInitializerOpt();
         break;
     }
     return this.finishNode(node, 'VariableDeclaration');
@@ -667,6 +895,10 @@ export abstract class StatementParser extends ExpressionParser {
         break;
       default:
         node.BindingIdentifier = this.parseBindingIdentifier();
+        // ForBinding : BindingIdentifier TypeAnnotation?
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+          node.TypeAnnotation = this.parseTypeAnnotation();
+        }
         break;
     }
     return this.finishNode(node, 'ForBinding');
@@ -865,7 +1097,11 @@ export abstract class StatementParser extends ExpressionParser {
     const node = this.startNode<ParseNode.TryStatement>();
     this.expect(Token.TRY);
     node.Block = this.parseBlock();
-    if (this.eat(Token.CATCH)) {
+    // proposal-runtime-types: CatchClauses is a list; the first clause is
+    // also stored as `Catch` so flag-off consumers and the placeholder
+    // evaluation (which runs the first clause) keep working.
+    const CatchClauses: ParseNode.Catch[] = [];
+    while (this.eat(Token.CATCH)) {
       this.scope.with({ lexical: true }, () => {
         const clause = this.startNode<ParseNode.Catch>();
         if (this.eat(Token.LPAREN)) {
@@ -879,15 +1115,30 @@ export abstract class StatementParser extends ExpressionParser {
               break;
           }
           this.scope.declare(clause.CatchParameter, 'lexical-allow-let');
+          // Catch : `catch` `(` CatchParameter TypeAnnotation? `)` Block
+          if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+            clause.TypeAnnotation = this.parseTypeAnnotation();
+          } else {
+            clause.TypeAnnotation = null;
+          }
           this.expect(Token.RPAREN);
         } else {
           clause.CatchParameter = null;
+          clause.TypeAnnotation = null;
         }
         clause.Block = this.parseBlock(false);
-        node.Catch = this.finishNode(clause, 'Catch');
+        CatchClauses.push(this.finishNode(clause, 'Catch'));
       });
+      if (!surroundingAgent.feature('runtime-types')) {
+        break;
+      }
+    }
+    if (CatchClauses.length > 0) {
+      node.Catch = CatchClauses[0];
+      node.CatchClauses = surroundingAgent.feature('runtime-types') ? CatchClauses : null;
     } else {
       node.Catch = null;
+      node.CatchClauses = null;
     }
     if (this.eat(Token.FINALLY)) {
       node.Finally = this.parseBlock();

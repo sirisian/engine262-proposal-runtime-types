@@ -1,6 +1,6 @@
 import { Value } from '../value.mts';
 import { Evaluate, type StatementEvaluator } from '../evaluator.mts';
-import {
+import { ThrowCompletion, Q,
   Completion,
   AbruptCompletion,
   UpdateEmpty,
@@ -10,6 +10,7 @@ import {
 import { BoundNames } from '../static-semantics/all.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { BindingInitialization } from './all.mts';
 import { surroundingAgent, DeclarativeEnvironmentRecord } from '#self';
 
@@ -31,14 +32,34 @@ export function Evaluate_TryStatement(TryStatement: ParseNode.TryStatement) {
   }
 }
 
+// proposal-runtime-types: with CatchClauses present, the thrown value is
+// dispatched to the first clause it matches; a clause without a TypeAnnotation
+// matches everything, and with no matching clause the value rethrows.
+function* DispatchCatchClauses(Catch: ParseNode.Catch, CatchClauses: readonly ParseNode.Catch[] | null | undefined, thrown: Value) {
+  if (!CatchClauses) {
+    return yield* CatchClauseEvaluation(Catch, thrown);
+  }
+  for (const clause of CatchClauses) {
+    if (!clause.TypeAnnotation) {
+      return yield* CatchClauseEvaluation(clause, thrown);
+    }
+    const record = Q(yield* TypeNodeToTypeRecord(clause.TypeAnnotation.Type));
+    const matches = Q(yield* IsOfType(thrown, record));
+    if (matches) {
+      return yield* CatchClauseEvaluation(clause, thrown);
+    }
+  }
+  return ThrowCompletion(thrown);
+}
+
 // TryStatement : `try` Block Catch
-function* Evaluate_TryStatement_BlockCatch({ Block, Catch }: ParseNode.TryStatement) {
+function* Evaluate_TryStatement_BlockCatch({ Block, Catch, CatchClauses }: ParseNode.TryStatement) {
   // 1. Let B be the result of evaluating Block.
   const blockResult = EnsureCompletion(yield* Evaluate(Block));
   // 2. If B.[[Type]] is throw, let C be CatchClauseEvaluation of Catch with argument B.[[Value]].
   let catchResult;
   if (blockResult.Type === 'throw') {
-    catchResult = EnsureCompletion(yield* CatchClauseEvaluation(Catch!, blockResult.Value));
+    catchResult = EnsureCompletion(yield* DispatchCatchClauses(Catch!, CatchClauses, blockResult.Value));
   } else { // 3. Else, let C be B.
     catchResult = blockResult;
   }
@@ -61,13 +82,13 @@ function* Evaluate_TryStatement_BlockFinally({ Block, Finally }: ParseNode.TrySt
 }
 
 // TryStatement : `try` Block Catch Finally
-function* Evaluate_TryStatement_BlockCatchFinally({ Block, Catch, Finally }: ParseNode.TryStatement) {
+function* Evaluate_TryStatement_BlockCatchFinally({ Block, Catch, CatchClauses, Finally }: ParseNode.TryStatement) {
   // 1. Let B be the result of evaluating Block.
   const blockResult = EnsureCompletion(yield* Evaluate(Block));
   // 2. If B.[[Type]] is throw, let C be CatchClauseEvaluation of Catch with argument B.[[Value]].
   let catchResult: Completion<Value | void>;
   if (blockResult.Type === 'throw') {
-    catchResult = EnsureCompletion(yield* CatchClauseEvaluation(Catch!, blockResult.Value));
+    catchResult = EnsureCompletion(yield* DispatchCatchClauses(Catch!, CatchClauses, blockResult.Value));
   } else { // 3. Else, let C be B.
     catchResult = blockResult;
   }

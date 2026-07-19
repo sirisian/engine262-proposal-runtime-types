@@ -22,6 +22,54 @@ import { surroundingAgent, type Feature } from '#self';
 import { Throw } from '#self';
 
 export abstract class ExpressionParser extends FunctionParser {
+  // proposal-runtime-types: while parsing a conditional's consequent a `:` is
+  // the conditional's own colon, so arrow return annotations are suppressed
+  // there (parenthesize the arrow to annotate it). Parenthesized and argument
+  // contexts reset the suppression, since no conditional colon is pending
+  // inside them.
+  protected conditionalConsequentDepth = 0;
+
+  protected withConditionalAnnotationsAllowed<T>(f: () => T): T {
+    const saved = this.conditionalConsequentDepth;
+    this.conditionalConsequentDepth = 0;
+    try {
+      return f();
+    } finally {
+      this.conditionalConsequentDepth = saved;
+    }
+  }
+
+  // proposal-runtime-types: implemented by TypeParser further up the mixin chain.
+  abstract tryParseArrowReturnTypeAnnotation(): ParseNode.TypeAnnotation | null;
+
+  protected abstract parseOperatorDefinition(): ParseNode.OperatorDefinition;
+
+  protected abstract parseTypeReference(): ParseNode.TypeReference;
+
+  protected abstract parseType(): ParseNode.Type;
+
+  protected abstract parseTypeArguments(): ParseNode.TypeArguments;
+
+  // proposal-runtime-types: the modifiers of the class currently being parsed,
+  // for the abstract-method placement check.
+  protected currentClassModifiers: readonly string[] | null = null;
+
+  // ClassModifier : one of `abstract` `sealed` `dynamic`
+  // True when a run of class modifiers can begin here; the run must reach
+  // `class`, so a lone identifier never takes this route.
+  protected testClassModifierRun(): boolean {
+    if (!surroundingAgent.feature('runtime-types')) {
+      return false;
+    }
+    if (!(this.test('abstract') || this.test('sealed') || this.test('dynamic'))) {
+      return false;
+    }
+    return this.testAhead(Token.CLASS)
+      || this.testAhead('abstract')
+      || this.testAhead('sealed')
+      || this.testAhead('dynamic');
+  }
+
   protected abstract readonly state: {
     hasTopLevelAwait: boolean;
     strict: boolean;
@@ -116,36 +164,54 @@ export abstract class ExpressionParser extends FunctionParser {
           && !left.escaped
           && this.test(Token.IDENTIFIER)
           && !this.peek().hadLineTerminatorBefore
-          && this.testAhead(Token.ARROW)
-          && !this.peekAhead().hadLineTerminatorBefore) {
+          && ((this.testAhead(Token.ARROW) && !this.peekAhead().hadLineTerminatorBefore)
+            || (surroundingAgent.feature('runtime-types')
+              && this.conditionalConsequentDepth === 0
+              && this.testAhead(Token.COLON)))) {
         assignmentInfo.clear();
         const node = this.startNode<ParseNode.AsyncArrowFunction>(left);
-        return this.parseArrowFunction(node, {
-          Arguments: [this.parseIdentifierReference()],
-        }, FunctionKind.ASYNC);
+        const Arguments = [this.parseIdentifierReference()];
+        const asyncIdentAnnotation = this.tryParseArrowReturnTypeAnnotation();
+        if (asyncIdentAnnotation) {
+          node.TypeAnnotation = asyncIdentAnnotation;
+        }
+        return this.parseArrowFunction(node, { Arguments }, FunctionKind.ASYNC);
       }
       // IdentifierReference [no LineTerminator here] `=>`
+      // proposal-runtime-types: ArrowFunction : ArrowParameters TypeAnnotation? [no LT] `=>`
+      const identArrowAnnotation = this.test(Token.ARROW) ? null : this.tryParseArrowReturnTypeAnnotation();
       if (this.test(Token.ARROW) && !this.peek().hadLineTerminatorBefore) {
         assignmentInfo.clear();
         const node = this.startNode<ParseNode.ArrowFunction>(left);
+        if (identArrowAnnotation) {
+          node.TypeAnnotation = identArrowAnnotation;
+        }
         return this.parseArrowFunction(node, { Arguments: [left] }, FunctionKind.NORMAL);
       }
     }
 
     // `async` [no LineTerminator here] Arguments [no LineTerminator here] `=>`
-    if (left.type === 'CallExpression' && left.arrowInfo && this.test(Token.ARROW)
-        && !this.peek().hadLineTerminatorBefore) {
+    if (left.type === 'CallExpression' && left.arrowInfo) {
       const last = left.Arguments[left.Arguments.length - 1];
       if (!left.arrowInfo.hasTrailingComma || (last && last.type !== 'AssignmentRestElement')) {
-        assignmentInfo.clear();
-        const node = this.startNode<ParseNode.AsyncArrowFunction>(left);
-        return this.parseArrowFunction(node, left, FunctionKind.ASYNC);
+        const asyncCoverAnnotation = this.test(Token.ARROW) ? null : this.tryParseArrowReturnTypeAnnotation();
+        if (this.test(Token.ARROW) && !this.peek().hadLineTerminatorBefore) {
+          assignmentInfo.clear();
+          const node = this.startNode<ParseNode.AsyncArrowFunction>(left);
+          if (asyncCoverAnnotation) {
+            node.TypeAnnotation = asyncCoverAnnotation;
+          }
+          return this.parseArrowFunction(node, left, FunctionKind.ASYNC);
+        }
       }
     }
 
     if (left.type === 'CoverParenthesizedExpressionAndArrowParameterList') {
       assignmentInfo.clear();
       const node = this.startNode<ParseNode.ArrowFunction>(left);
+      if (left.TypeAnnotation) {
+        node.TypeAnnotation = left.TypeAnnotation;
+      }
       return this.parseArrowFunction(node, left, FunctionKind.NORMAL);
     }
 
@@ -296,7 +362,12 @@ export abstract class ExpressionParser extends FunctionParser {
       const node = this.startNode<ParseNode.ConditionalExpression>(ShortCircuitExpression);
       node.ShortCircuitExpression = ShortCircuitExpression;
       this.scope.with({ in: true }, () => {
-        node.AssignmentExpression_a = this.parseAssignmentExpression();
+        this.conditionalConsequentDepth += 1;
+        try {
+          node.AssignmentExpression_a = this.parseAssignmentExpression();
+        } finally {
+          this.conditionalConsequentDepth -= 1;
+        }
       });
       this.expect(Token.COLON);
       node.AssignmentExpression_b = this.parseAssignmentExpression();
@@ -419,12 +490,37 @@ export abstract class ExpressionParser extends FunctionParser {
     let result: ParseNode.RelationalExpressionOrHigher = this.parseShiftExpression();
     const operators: Token[] = [Token.LT, Token.GT, Token.LTE, Token.GTE, Token.INSTANCEOF];
     if (this.scope.hasIn()) operators.push(Token.IN);
-    while (operators.includes(this.peek().type)) {
-      const node: ParseNode.Unfinished<ParseNode.RelationalExpression> = this.startNode(result);
-      node.RelationalExpression = result;
-      node.operator = this.next().value as ParseNode.RelationalExpression['operator'];
-      node.ShiftExpression = this.parseShiftExpression();
-      result = this.finishNode(node, 'RelationalExpression');
+    while (true) {
+      if (operators.includes(this.peek().type)) {
+        const node: ParseNode.Unfinished<ParseNode.RelationalExpression> = this.startNode(result);
+        node.RelationalExpression = result;
+        node.operator = this.next().value as ParseNode.RelationalExpression['operator'];
+        node.ShiftExpression = this.parseShiftExpression();
+        result = this.finishNode(node, 'RelationalExpression');
+        continue;
+      }
+      if (surroundingAgent.feature('runtime-types')) {
+        // RelationalExpression : RelationalExpression `:=` Type
+        if (this.test(Token.COLON_EQ)) {
+          const node: ParseNode.Unfinished<ParseNode.TypedConversionExpression> = this.startNode(result);
+          node.Expression = result;
+          this.next();
+          node.Type = this.parseType();
+          result = this.finishNode(node, 'TypedConversionExpression');
+          continue;
+        }
+        // RelationalExpression : RelationalExpression [no LineTerminator here] `is` Type
+        // The restriction keeps `x` and `is` on separate lines two statements.
+        if (this.test('is') && !this.peek().hadLineTerminatorBefore) {
+          const node: ParseNode.Unfinished<ParseNode.IsExpression> = this.startNode(result);
+          node.Expression = result;
+          this.next();
+          node.Type = this.parseType();
+          result = this.finishNode(node, 'IsExpression');
+          continue;
+        }
+      }
+      break;
     }
     return result;
   }
@@ -470,7 +566,7 @@ export abstract class ExpressionParser extends FunctionParser {
 
   parseExponentiationExpression(): ParseNode.ExponentiationExpressionOrHigher {
     const left = this.parseUnaryExpression();
-    if (!this.test(Token.EXP) || left.type === 'UnaryExpression' || left.type === 'AwaitExpression') return left;
+    if (!this.test(Token.EXP) || left.type === 'UnaryExpression' || left.type === 'AwaitExpression' || left.type === 'TypeOperatorExpression') return left;
     this.next();
     const node = this.startNode<ParseNode.ExponentiationExpression>(left);
     node.UpdateExpression = left;
@@ -492,6 +588,35 @@ export abstract class ExpressionParser extends FunctionParser {
     return this.scope.with({ in: true }, () => {
       if (this.test(Token.AWAIT) && this.scope.hasAwait()) {
         return this.parseAwaitExpression();
+      }
+      // proposal-runtime-types TypeOperatorExpression : `type` [no LT] Type
+      // `type(x)` stays a call and `type[x]` a member access, so an operand
+      // beginning with `(` or `[` is left to those forms; every other Type-start
+      // token is unambiguous after `type` and begins a type operand. Literal
+      // types (`type 'a'`, `type true`, `type 42`, `type null`) and object types
+      // (`type { x: T }`) are the common forms the corpus uses.
+      if (surroundingAgent.feature('runtime-types') && this.test('type') && !this.peekAhead().hadLineTerminatorBefore) {
+        switch (this.peekAhead().type) {
+          case Token.IDENTIFIER:
+          case Token.YIELD:
+          case Token.AWAIT:
+          case Token.LBRACE:
+          case Token.STRING:
+          case Token.NUMBER:
+          case Token.BIGINT:
+          case Token.TRUE:
+          case Token.FALSE:
+          case Token.NULL:
+          case Token.VOID:
+          case Token.SUB: {
+            const node = this.startNode<ParseNode.TypeOperatorExpression>();
+            this.next();
+            node.Type = this.parseType();
+            return this.finishNode(node, 'TypeOperatorExpression');
+          }
+          default:
+            break;
+        }
       }
       switch (this.peek().type) {
         case Token.DELETE:
@@ -642,7 +767,8 @@ export abstract class ExpressionParser extends FunctionParser {
     }
 
     const check = allowCalls ? isPropertyOrCall : isMember;
-    while (check(this.peek().type)) {
+    while (check(this.peek().type)
+        || (surroundingAgent.feature('runtime-types') && this.test(Token.PERIOD_LT))) {
       let finished: ParseNode.LeftHandSideExpression;
       switch (this.peek().type) {
         case Token.LBRACK: {
@@ -707,6 +833,16 @@ export abstract class ExpressionParser extends FunctionParser {
           node.MemberExpression = result;
           node.TemplateLiteral = this.parseTemplateLiteral(true);
           finished = this.finishNode(node, 'TaggedTemplateExpression');
+          break;
+        }
+        case Token.PERIOD_LT: {
+          // proposal-runtime-types
+          // MemberExpression : MemberExpression TypeArguments
+          // CallExpression : CallExpression TypeArguments
+          const node = this.startNode<ParseNode.TypeArgumentsExpression>(result);
+          node.Expression = result;
+          node.TypeArguments = this.parseTypeArguments();
+          finished = this.finishNode(node, 'TypeArgumentsExpression');
           break;
         }
         default:
@@ -774,6 +910,53 @@ export abstract class ExpressionParser extends FunctionParser {
       this.expect('target');
       return this.finishNode(node as ParseNode.NewTarget, 'NewTarget');
     }
+    // proposal-runtime-types placement form:
+    //   `new` `(` AssignmentExpression (`,` AssignmentExpression){0,2} `)` MemberExpression Arguments
+    // `new (expr)` where what follows the `)` cannot begin a MemberExpression
+    // keeps its meaning of a parenthesized constructor, so the reading is
+    // decided by a checkpointed look past the closing paren.
+    let PlacementArguments: ParseNode.AssignmentExpressionOrHigher[] | null = null;
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.LPAREN)) {
+      const checkpoint = this.getLexerCheckpoint();
+      const savedEarlyErrors = new Set(this.earlyErrors);
+      let speculative: ParseNode.AssignmentExpressionOrHigher[] | null = [];
+      try {
+        this.next();
+        do {
+          if (speculative.length === 3) {
+            speculative = null;
+            break;
+          }
+          speculative.push(this.parseAssignmentExpression());
+        } while (this.eat(Token.COMMA));
+        if (speculative && !this.eat(Token.RPAREN)) {
+          speculative = null;
+        }
+        if (speculative) {
+          switch (this.peek().type) {
+            case Token.IDENTIFIER:
+            case Token.YIELD:
+            case Token.AWAIT:
+            case Token.THIS:
+            case Token.NEW:
+            case Token.SUPER:
+              break;
+            default:
+              speculative = null;
+              break;
+          }
+        }
+      } catch {
+        speculative = null;
+      }
+      if (speculative) {
+        PlacementArguments = speculative;
+      } else {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+      }
+    }
+    (node as ParseNode.Unfinished<ParseNode.NewExpression>).PlacementArguments = PlacementArguments;
     node.MemberExpression = this.parseLeftHandSideExpression(false);
     if (node.MemberExpression.type === 'OptionalExpression') {
       this.raise(Throw.SyntaxError('Unexpected token'));
@@ -782,6 +965,9 @@ export abstract class ExpressionParser extends FunctionParser {
       node.Arguments = this.parseArguments().Arguments;
     } else {
       node.Arguments = null;
+      if (PlacementArguments) {
+        this.raise(Throw.SyntaxError('Unexpected token'));
+      }
     }
     return this.finishNode(node as ParseNode.NewExpression, 'NewExpression');
   }
@@ -789,6 +975,10 @@ export abstract class ExpressionParser extends FunctionParser {
   // PrimaryExpression :
   //   ...
   parsePrimaryExpression(): ParseNode.PrimaryExpression {
+    // proposal-runtime-types: ClassExpression : ClassModifiers? `class` ...
+    if (this.testClassModifierRun()) {
+      return this.parseClassExpression();
+    }
     switch (this.peek().type) {
       case Token.IDENTIFIER:
       case Token.ESCAPED_KEYWORD:
@@ -974,10 +1164,10 @@ export abstract class ExpressionParser extends FunctionParser {
     while (true) {
       const node = this.startNode<ParseNode.AssignmentRestElement>();
       if (this.eat(Token.ELLIPSIS)) {
-        node.AssignmentExpression = this.parseAssignmentExpression();
+        node.AssignmentExpression = this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression());
         Arguments.push(this.finishNode(node, 'AssignmentRestElement'));
       } else {
-        Arguments.push(this.parseAssignmentExpression());
+        Arguments.push(this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression()));
       }
       if (this.eat(Token.RPAREN)) {
         break;
@@ -1002,6 +1192,21 @@ export abstract class ExpressionParser extends FunctionParser {
     const node = this.startNode<ParseNode.ClassLike>();
 
     const decorators = decoratorsAttachedToClassDeclaration || this.parseDecorators();
+    // proposal-runtime-types ClassModifiers
+    let ClassModifiers: string[] | null = null;
+    while (this.testClassModifierRun()) {
+      const word = this.peek().value as string;
+      this.next();
+      ClassModifiers = ClassModifiers || [];
+      if (ClassModifiers.includes(word)) {
+        this.raise(Throw.SyntaxError('Class modifier already seen'));
+      }
+      ClassModifiers.push(word);
+    }
+    if (ClassModifiers && ClassModifiers.includes('sealed') && ClassModifiers.includes('dynamic')) {
+      this.raise(Throw.SyntaxError('A class cannot be both sealed and dynamic'));
+    }
+    node.ClassModifiers = ClassModifiers;
     this.expect(Token.CLASS);
 
     this.scope.with({ strict: true }, () => {
@@ -1015,7 +1220,13 @@ export abstract class ExpressionParser extends FunctionParser {
       } else {
         node.BindingIdentifier = null;
       }
-      node.ClassTail = this.scope.with({ default: false }, () => this.parseClassTail());
+      const savedClassModifiers = this.currentClassModifiers;
+      this.currentClassModifiers = ClassModifiers;
+      try {
+        node.ClassTail = this.scope.with({ default: false }, () => this.parseClassTail());
+      } finally {
+        this.currentClassModifiers = savedClassModifiers;
+      }
     });
     node.Decorators = decorators;
 
@@ -1032,6 +1243,18 @@ export abstract class ExpressionParser extends FunctionParser {
       node.ClassHeritage = this.parseLeftHandSideExpression();
     } else {
       node.ClassHeritage = null;
+    }
+
+    // proposal-runtime-types ImplementsClause : `implements` ImplementsList
+    if (surroundingAgent.feature('runtime-types') && this.test('implements')) {
+      this.next();
+      const ImplementsClause: ParseNode.TypeReference[] = [];
+      do {
+        ImplementsClause.push(this.parseTypeReference());
+      } while (this.eat(Token.COMMA));
+      node.ImplementsClause = ImplementsClause;
+    } else {
+      node.ImplementsClause = null;
     }
 
     this.expect(Token.LBRACE);
@@ -1056,6 +1279,11 @@ export abstract class ExpressionParser extends FunctionParser {
             // nothing
           }
           if (m.type === 'ClassStaticBlock') {
+            continue;
+          }
+          if (m.type === 'OperatorDefinition') {
+            // proposal-runtime-types: operators have no ClassElementName and
+            // take no part in the name bookkeeping below.
             continue;
           }
 
@@ -1142,10 +1370,90 @@ export abstract class ExpressionParser extends FunctionParser {
       );
       node.ClassStaticBlockBody = this.finishNode(ClassStaticBlockBody, 'ClassStaticBlockBody');
       element = this.finishNode(node, 'ClassStaticBlock');
+    } else if (surroundingAgent.feature('runtime-types') && this.classElementStartsOperatorDefinition()) {
+      element = this.parseOperatorDefinition();
+    } else if (surroundingAgent.feature('runtime-types') && this.classElementStartsAbstractMethod()) {
+      element = this.parseAbstractMethodDefinition();
     } else {
       element = this.parseBracketedDefinition('class element');
     }
     return element;
+  }
+
+  // The tokens that can follow `operator` inside a class body: an OperatorName
+  // punctuator, or the start of a conversion form's Type. A `(`, `=`, or line
+  // terminator keeps `operator` an ordinary element name.
+  private tokenStartsOperatorTail(type: Token, hadLineTerminatorBefore: boolean): boolean {
+    switch (type) {
+      case Token.ADD: case Token.SUB: case Token.MUL: case Token.DIV:
+      case Token.MOD: case Token.EXP: case Token.EQ: case Token.LT:
+      case Token.GT: case Token.LTE: case Token.GTE: case Token.BIT_AND:
+      case Token.BIT_OR: case Token.BIT_XOR: case Token.BIT_NOT:
+      case Token.SHL: case Token.SAR: case Token.SHR:
+      case Token.LBRACK:
+      case Token.LBRACE:
+        return true;
+      case Token.IDENTIFIER:
+      case Token.YIELD:
+      case Token.AWAIT:
+        return !hadLineTerminatorBefore;
+      default:
+        return false;
+    }
+  }
+
+  private classElementStartsOperatorDefinition(): boolean {
+    if (this.test(Token.MUL)) {
+      return this.testAhead('operator');
+    }
+    if (this.test('operator')) {
+      const ahead = this.peekAhead();
+      return this.tokenStartsOperatorTail(ahead.type, ahead.hadLineTerminatorBefore);
+    }
+    if (this.test('static') && this.testAhead('operator')) {
+      // `static operator = 1` is a static field named `operator`; look past
+      // `static` to decide.
+      const checkpoint = this.getLexerCheckpoint();
+      this.next();
+      const ahead = this.peekAhead();
+      const result = this.test('operator') && this.tokenStartsOperatorTail(ahead.type, ahead.hadLineTerminatorBefore);
+      this.restoreLexerCheckpoint(checkpoint);
+      return result;
+    }
+    return false;
+  }
+
+  private classElementStartsAbstractMethod(): boolean {
+    if (!this.test('abstract')) {
+      return false;
+    }
+    const ahead = this.peekAhead();
+    if (ahead.hadLineTerminatorBefore) {
+      return false;
+    }
+    return this.tokenIsPropertyName(ahead.type) || ahead.type === Token.LBRACK || ahead.type === Token.PRIVATE_IDENTIFIER;
+  }
+
+  // ClassElement :
+  //   `abstract` ClassElementName `(` UniqueFormalParameters `)` TypeAnnotation? `;`
+  private parseAbstractMethodDefinition(): ParseNode.AbstractMethodDefinition {
+    const node = this.startNode<ParseNode.AbstractMethodDefinition>();
+    if (!this.currentClassModifiers || !this.currentClassModifiers.includes('abstract')) {
+      this.raise(Throw.SyntaxError('An abstract method requires an abstract class'));
+    }
+    this.expect('abstract');
+    node.static = false;
+    node.ClassElementName = this.parseClassElementName();
+    this.scope.with({
+      lexical: true, variable: true, superProperty: true, newTarget: true, await: false, yield: false,
+    }, () => {
+      this.scope.arrowInfoStack.push(null);
+      node.UniqueFormalParameters = this.parseUniqueFormalParameters();
+      this.scope.arrowInfoStack.pop();
+    });
+    node.TypeAnnotation = surroundingAgent.feature('runtime-types') && this.test(Token.COLON) ? this.parseTypeAnnotation() : null;
+    this.semicolon();
+    return this.finishNode(node, 'AbstractMethodDefinition');
   }
 
   parseClassExpression(): ParseNode.ClassExpression {
@@ -1262,15 +1570,54 @@ export abstract class ExpressionParser extends FunctionParser {
   //   `(` `...` BindingPattern `)`
   //   `(` Expression `,` `...` BindingIdentifier `)`
   //   `(` Expression `.` `...` BindingPattern `)`
+  // proposal-runtime-types: inside the parenthesized cover an identifier
+  // directly followed by `:`, or by the adjacent pair `?` `:`, is an annotated
+  // arrow parameter, which makes the cover arrow-only. Anything else restores
+  // the checkpoint, so `(a ? b : c)` parses as a conditional exactly as today.
+  private tryParseAnnotatedArrowParameter(): ParseNode.SingleNameBinding | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.SingleNameBinding>();
+    const BindingIdentifier = this.parseBindingIdentifier();
+    let Optional = false;
+    if (this.eat(Token.CONDITIONAL)) {
+      if (!this.test(Token.COLON)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      Optional = true;
+    } else if (!this.test(Token.COLON)) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    node.BindingIdentifier = BindingIdentifier;
+    node.Optional = Optional;
+    node.TypeAnnotation = this.parseTypeAnnotation();
+    node.Initializer = this.eat(Token.ASSIGN) ? this.parseAssignmentExpression() : null;
+    return this.finishNode(node, 'SingleNameBinding');
+  }
+
   parseCoverParenthesizedExpressionAndArrowParameterList(): ParseNode.CoverParenthesizedExpressionAndArrowParameterList | ParseNode.ParenthesizedExpression {
     const node = this.startNode<ParseNode.CoverParenthesizedExpressionAndArrowParameterList | ParseNode.ParenthesizedExpression>();
     const commaOp = this.startNode<ParseNode.CommaOperator>();
     this.expect(Token.LPAREN);
     if (this.test(Token.RPAREN)) {
-      if (!this.testAhead(Token.ARROW) || this.peekAhead().hadLineTerminatorBefore) {
+      const aheadStartsAnnotation = surroundingAgent.feature('runtime-types')
+        && this.conditionalConsequentDepth === 0
+        && this.testAhead(Token.COLON);
+      if ((!this.testAhead(Token.ARROW) || this.peekAhead().hadLineTerminatorBefore) && !aheadStartsAnnotation) {
         this.unexpected();
       }
       this.next();
+      const emptyCoverAnnotation = this.test(Token.ARROW) ? null : this.tryParseArrowReturnTypeAnnotation();
+      if (!this.test(Token.ARROW)) {
+        this.unexpected();
+      }
+      if (emptyCoverAnnotation) {
+        node.TypeAnnotation = emptyCoverAnnotation;
+      }
       node.Arguments = [];
       return this.finishNode(node, 'CoverParenthesizedExpressionAndArrowParameterList');
     }
@@ -1278,7 +1625,8 @@ export abstract class ExpressionParser extends FunctionParser {
     this.scope.pushArrowInfo();
     this.scope.pushAssignmentInfo('arrow');
 
-    const expressions: (ParseNode.ArgumentListElement | ParseNode.BindingRestElement)[] = [];
+    const expressions: (ParseNode.ArgumentListElement | ParseNode.BindingRestElement | ParseNode.SingleNameBinding)[] = [];
+    let arrowOnly = false;
     let rparenAfterComma;
     while (true) {
       if (this.test(Token.ELLIPSIS)) {
@@ -1297,7 +1645,18 @@ export abstract class ExpressionParser extends FunctionParser {
         this.expect(Token.RPAREN);
         break;
       }
-      expressions.push(this.parseAssignmentExpression());
+      let annotatedParameter: ParseNode.SingleNameBinding | null = null;
+      if (surroundingAgent.feature('runtime-types')
+          && this.test(Token.IDENTIFIER)
+          && (this.testAhead(Token.COLON) || this.testAhead(Token.CONDITIONAL))) {
+        annotatedParameter = this.tryParseAnnotatedArrowParameter();
+      }
+      if (annotatedParameter) {
+        arrowOnly = true;
+        expressions.push(annotatedParameter);
+      } else {
+        expressions.push(this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression()));
+      }
       if (this.eat(Token.COMMA)) {
         if (this.eat(Token.RPAREN)) {
           rparenAfterComma = this.currentToken;
@@ -1314,12 +1673,20 @@ export abstract class ExpressionParser extends FunctionParser {
 
     // ArrowParameters :
     //   CoverParenthesizedExpressionAndArrowParameterList
+    // proposal-runtime-types: ArrowFunction : ArrowParameters TypeAnnotation? [no LT] `=>`
+    const TypeAnnotation = this.test(Token.ARROW) ? null : this.tryParseArrowReturnTypeAnnotation();
     if (this.test(Token.ARROW) && !this.peek().hadLineTerminatorBefore) {
       node.Arguments = expressions;
       node.arrowInfo = arrowInfo;
+      if (TypeAnnotation) {
+        node.TypeAnnotation = TypeAnnotation;
+      }
       assignmentInfo.clear();
       return this.finishNode(node, 'CoverParenthesizedExpressionAndArrowParameterList');
     } else {
+      if (arrowOnly) {
+        this.unexpected();
+      }
       this.scope.arrowInfo?.merge(arrowInfo);
     }
 
@@ -1518,9 +1885,14 @@ export abstract class ExpressionParser extends FunctionParser {
         || this.test(Token.SEMICOLON)
         || this.peek().hadLineTerminatorBefore
         || isAutomaticSemicolon(this.peek().type)
+        || (surroundingAgent.feature('runtime-types') && this.test(Token.COLON))
       )) {
         node.accessor = isAccessorField;
         node.ClassElementName = firstName;
+        // FieldDefinition : ClassElementName TypeAnnotation? Initializer?
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+          (node as ParseNode.Unfinished<ParseNode.FieldDefinition>).TypeAnnotation = this.parseTypeAnnotation();
+        }
         node.Initializer = this.scope.with({ superProperty: true, await: false, yield: false }, () => this.parseInitializerOpt());
         const argumentNode = node.Initializer && ContainsArguments(node.Initializer);
         if (argumentNode) {
@@ -1585,6 +1957,11 @@ export abstract class ExpressionParser extends FunctionParser {
       } else {
         node.PropertySetParameterList = null;
         node.UniqueFormalParameters = this.parseUniqueFormalParameters();
+      }
+
+      // proposal-runtime-types: MethodDefinition return TypeAnnotation, setters excluded.
+      if (surroundingAgent.feature('runtime-types') && !isSetter && this.test(Token.COLON)) {
+        (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation();
       }
 
       this.scope.with({

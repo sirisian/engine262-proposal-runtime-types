@@ -1,17 +1,35 @@
-import {
+import { ObjectValue,
   JSStringValue, Value,
   NumberValue,
   BigIntValue,
   SameType,
 } from '../value.mts';
+import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import { Q } from '../completion.mts';
 import {
-  Assert, Throw, ToNumeric, ToPrimitive, ToString,
-} from '#self';
+  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator } from '#self';
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
 export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value) {
+  // proposal-runtime-types: class operator dispatch. Consulted only when the
+  // left operand is an Object, so the untyped fast path is unaffected.
+  if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
+    const opFn = LookupClassOperator(lval, opText);
+    if (opFn) {
+      return Q(yield* Call(opFn as never, Value.undefined, [lval, rval]));
+    }
+  }
+  // proposal-runtime-types R3: typed-number arithmetic. When either operand is
+  // a numeric value type and neither is a string, compute and wrap into the
+  // target type. A '+' with a string operand still concatenates (handled
+  // below), so this runs only for the numeric case.
+  if (surroundingAgent.feature('runtime-types')
+      && isTypedArithmetic(lval, rval)
+      && !(lval instanceof JSStringValue)
+      && !(rval instanceof JSStringValue)) {
+    return typedBinary(opText as never, lval, rval);
+  }
   // 1. If opText is +, then
   if (opText === '+') {
     // a. Let lprim be ? ToPrimitive(lval).

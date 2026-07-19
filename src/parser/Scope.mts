@@ -113,6 +113,11 @@ export function getDeclarations(node: ParseNode | readonly ParseNode[]): Declara
     case 'ClassDeclaration':
       Assert(!!node.BindingIdentifier);
       return getDeclarations(node.BindingIdentifier);
+    // proposal-runtime-types
+    case 'TypeAliasDeclaration':
+    case 'InterfaceDeclaration':
+    case 'EnumDeclaration':
+      return getDeclarations(node.BindingIdentifier);
     default:
       throw OutOfRange.nonExhaustive(node);
   }
@@ -175,6 +180,11 @@ export class Scope {
   private readonly parser: Parser;
 
   private readonly scopeStack: ScopeInfo[] = [];
+
+  /** proposal-runtime-types: lets speculative parses verify no scope was pushed. */
+  get depth() {
+    return this.scopeStack.length;
+  }
 
   labels: Label[] = [];
 

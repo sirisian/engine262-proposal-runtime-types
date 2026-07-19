@@ -352,6 +352,49 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
     this.raise(Throw.SyntaxError('Unexpected token'), location);
   }
 
+  /** proposal-runtime-types: when positive, `>` never fuses into >> >= >>> etc. */
+  protected noFuseGT = 0;
+
+  /**
+   * proposal-runtime-types: snapshot of all lexer token state, for the
+   * bounded speculative parses the type grammar needs (array extents,
+   * later arrow return annotations). Restoring is only valid when no
+   * scope was pushed in between; TypeParser guards that with Scope#depth.
+   */
+  protected getLexerCheckpoint() {
+    return {
+      position: this.position,
+      line: this.line,
+      columnOffset: this.columnOffset,
+      currentToken: this.currentToken,
+      peekToken: this.peekToken,
+      peekAheadToken: this.peekAheadToken,
+      lineTerminatorBeforeNextToken: this.lineTerminatorBeforeNextToken,
+      positionForNextToken: this.positionForNextToken,
+      lineForNextToken: this.lineForNextToken,
+      columnForNextToken: this.columnForNextToken,
+      scannedValue: this.scannedValue,
+      escapeIndex: this.escapeIndex,
+      noFuseGT: this.noFuseGT,
+    };
+  }
+
+  protected restoreLexerCheckpoint(cp: ReturnType<Lexer['getLexerCheckpoint']>) {
+    this.position = cp.position;
+    this.line = cp.line;
+    this.columnOffset = cp.columnOffset;
+    this.currentToken = cp.currentToken;
+    this.peekToken = cp.peekToken;
+    this.peekAheadToken = cp.peekAheadToken;
+    this.lineTerminatorBeforeNextToken = cp.lineTerminatorBeforeNextToken;
+    this.positionForNextToken = cp.positionForNextToken;
+    this.lineForNextToken = cp.lineForNextToken;
+    this.columnForNextToken = cp.columnForNextToken;
+    this.scannedValue = cp.scannedValue;
+    this.escapeIndex = cp.escapeIndex;
+    this.noFuseGT = cp.noFuseGT;
+  }
+
   advance(): TokenData {
     this.lineTerminatorBeforeNextToken = false;
     this.escapeIndex = -1;
@@ -536,7 +579,6 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
         case Token.RBRACE:
         case Token.LBRACK:
         case Token.RBRACK:
-        case Token.COLON:
         case Token.SEMICOLON:
         case Token.COMMA:
         case Token.BIT_NOT:
@@ -548,6 +590,15 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           } else {
             return this.unexpected(single);
           }
+
+        case Token.COLON:
+          // : :=
+          // https://github.com/sirisian/proposal-runtime-types #sec-type-punctuators
+          if (c1 === '=' && surroundingAgent.feature('runtime-types')) {
+            this.position += 1;
+            return Token.COLON_EQ;
+          }
+          return Token.COLON;
 
         case Token.CONDITIONAL:
           // ? ?. ?? ??=
@@ -583,6 +634,11 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
 
         case Token.GT:
           // > >= >> >>= >>> >>>=
+          // proposal-runtime-types: inside `.<`...`>` type argument or `<`...`>` type
+          // parameter lists the parser sets noFuseGT so nested closers like `>>` split.
+          if (this.noFuseGT > 0) {
+            return Token.GT;
+          }
           if (c1 === '=') {
             this.position += 1;
             return Token.GTE;
@@ -741,6 +797,13 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
               return Token.ELLIPSIS;
             }
           }
+          // https://github.com/sirisian/proposal-runtime-types #sec-type-punctuators
+          // `.<` begins a type argument list. A `.` before a digit was taken by
+          // scanNumber above, so `1.<2` stays NumericLiteral `1.` followed by `<`.
+          if (c1 === '<' && surroundingAgent.feature('runtime-types')) {
+            this.position += 1;
+            return Token.PERIOD_LT;
+          }
           return Token.PERIOD;
 
         case Token.STRING:
@@ -803,6 +866,14 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           return Token.BIGINT;
         default: {
           if (!isDecimalDigit(this.source[this.position])) {
+            // https://github.com/sirisian/proposal-runtime-types #sec-imaginary-literals
+            if (this.source[this.position] === 'i' && surroundingAgent.feature('runtime-types')) {
+              this.position += 1;
+              if (isIdentifierStart(this.source[this.position])) {
+                this.unexpected(this.position);
+              }
+              return Token.IMAGINARY; // scannedValue is already 0
+            }
             return Token.NUMBER;
           }
           // Legacy octal literal (0123)
@@ -911,6 +982,19 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           break;
         }
       }
+    }
+    // https://github.com/sirisian/proposal-runtime-types #sec-imaginary-literals
+    // DecimalImaginaryLiteral :: DecimalLiteral ImaginaryLiteralSuffix. Only the
+    // decimal forms take the suffix, so hex, octal, binary, bigint, and legacy
+    // octal fall through to the identifier-adjacency error below.
+    if (base === 10 && !zeroLeading && this.source[this.position] === 'i' && surroundingAgent.feature('runtime-types')) {
+      const imaginaryBuffer = this.source.slice(start, this.position).replace(/_/g, '');
+      this.position += 1;
+      if (isIdentifierStart(this.source[this.position])) {
+        this.unexpected(this.position);
+      }
+      this.scannedValue = Number.parseFloat(imaginaryBuffer);
+      return Token.IMAGINARY;
     }
     if (isIdentifierStart(this.source[this.position])) {
       this.unexpected(this.position);

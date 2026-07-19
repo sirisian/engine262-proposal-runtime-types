@@ -5,8 +5,7 @@ import {
   ObjectValue,
   JSStringValue,
   UndefinedValue,
-  Value,
-} from '../value.mts';
+  Value, isTypedNumber, unwrapToNumber } from '../value.mts';
 import {
   CodePointsToString,
   PropName,
@@ -453,6 +452,14 @@ function* SerializeJSONProperty(state: State, key: JSStringValue, holder: Object
   if (value instanceof NumberValue) {
     if (value.isFinite()) {
       return X(ToString(value));
+    }
+    return Value('null');
+  }
+  // proposal-runtime-types R6: a typed number serializes as its numeric value.
+  if (isTypedNumber(value)) {
+    const n = unwrapToNumber(value);
+    if (n.isFinite()) {
+      return X(ToString(n));
     }
     return Value('null');
   }

@@ -1,4 +1,6 @@
-import { Value } from '../value.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
+import { ObjectValue, Value } from '../value.mts';
 import { Q } from '../completion.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -13,6 +15,7 @@ import {
   InstantiateAsyncArrowFunctionExpression,
   DecoratorListEvaluation,
 } from './all.mts';
+import { surroundingAgent } from '#self';
 import type {
   FunctionDeclaration, FunctionObject, PrivateName, PropertyKeyValue,
 } from '#self';
@@ -69,6 +72,11 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
   // 1. Let value be the result of ClassDefinitionEvaluation of ClassTail with arguments undefined and name.
   const value = yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, name, sourceText, decorators);
   Q(value);
+  // proposal-runtime-types M21: associate the class type; this is the named
+  // evaluation path taken by `const C = class {}` and property definitions.
+  if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
+    AssociateClassType(value, GetTypeObject({ Kind: 'nominal', Declaration: ClassExpression, Arguments: [], Constructor: value }));
+  }
   // 4. Return value.
   return value;
 }

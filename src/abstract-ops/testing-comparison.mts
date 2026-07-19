@@ -5,10 +5,14 @@ import {
   JSStringValue,
   NumberValue,
   ObjectValue,
+  TypedNumberValue,
   Value,
   wellKnownSymbols,
+  unwrapToNumber,
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
+import { SameType as SameTypeRecord } from '../type-system/relations.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
   Get,
@@ -134,7 +138,36 @@ export function IsStringPrefix(p: JSStringValue, q: JSStringValue) {
 }
 
 /** https://tc39.es/ecma262/#sec-samevalue */
+// proposal-runtime-types R1 #sec-value-types: a value type has no identity, so
+// two typed numbers are the same value iff their Type Records are the same and
+// their payloads match; a typed number is never the same value as a plain
+// Number. Returns a verdict when at least one operand is typed, else null so
+// the caller falls through to the ordinary Number path.
+function typedNumberIdentity(x: Value, y: Value): boolean | null {
+  const xt = x instanceof TypedNumberValue;
+  const yt = y instanceof TypedNumberValue;
+  if (!xt && !yt) {
+    return null;
+  }
+  if (!xt || !yt) {
+    return false;
+  }
+  if (!SameTypeRecord((x as TypedNumberValue).TypeRecord as TypeRecord, (y as TypedNumberValue).TypeRecord as TypeRecord)) {
+    return false;
+  }
+  // proposal-runtime-types R6: unwrap both to plain Numbers before the payload
+  // comparison. A typed number is no longer a NumberValue, so it lacks the
+  // isNaN/isFinite helpers Number::sameValue calls; unwrapToNumber gives a real
+  // NumberValue with the same payload.
+  return NumberValue.sameValue(unwrapToNumber(x as TypedNumberValue), unwrapToNumber(y as TypedNumberValue)) === Value.true;
+}
+
 export function SameValue(x: Value, y: Value): boolean {
+  // proposal-runtime-types R1: typed numbers have value-type identity.
+  const typed = typedNumberIdentity(x, y);
+  if (typed !== null) {
+    return typed;
+  }
   // If SameType(x, y) is false, return false.
   if (!SameType(x, y)) {
     return false;
@@ -150,6 +183,13 @@ export function SameValue(x: Value, y: Value): boolean {
 
 /** https://tc39.es/ecma262/#sec-samevaluezero */
 export function SameValueZero(x: Value, y: Value): boolean {
+  // proposal-runtime-types R1: typed numbers have value-type identity. A
+  // value type has no separate zero identity, so SameValueZero coincides with
+  // SameValue for typed operands (there is no distinct -0 typed value here).
+  const typed = typedNumberIdentity(x, y);
+  if (typed !== null) {
+    return typed;
+  }
   // 1. If SameType(x, y) is false, return false.
   if (!SameType(x, y)) {
     return false;
@@ -362,6 +402,22 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
 
 /** https://tc39.es/ecma262/#sec-isstrictlyequal */
 export function IsStrictlyEqual(x: Value, y: Value): boolean {
+  // proposal-runtime-types R1: === distinguishes value types. Two typed numbers
+  // are strictly equal iff same type and same payload; a typed number is never
+  // strictly equal to a plain Number.
+  const xt = x instanceof TypedNumberValue;
+  const yt = y instanceof TypedNumberValue;
+  if (xt || yt) {
+    if (!xt || !yt) {
+      return false;
+    }
+    if (!SameTypeRecord((x as TypedNumberValue).TypeRecord as TypeRecord, (y as TypedNumberValue).TypeRecord as TypeRecord)) {
+      return false;
+    }
+    // proposal-runtime-types R6: unwrap both to plain Numbers; a typed number
+    // lacks the helpers Number::equal relies on.
+    return NumberValue.equal(unwrapToNumber(x as TypedNumberValue), unwrapToNumber(y as TypedNumberValue)) === Value.true;
+  }
 // 1. If SameType(x, y) is false, return false.
   if (!SameType(x, y)) {
     return false;
@@ -369,7 +425,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
   // 2. If x is a Number, then
   if (x instanceof NumberValue) {
     // a. Return Number::equal(x, y).
-    return NumberValue.equal(x, y as NumberValue) === Value.true;
+    return NumberValue.equal(x, y as unknown as NumberValue) === Value.true;
   }
   // 3. Return SameValueNonNumber(x, y).
   return SameValueNonNumber(x, y);

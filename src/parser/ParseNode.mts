@@ -171,7 +171,10 @@ export namespace ParseNode {
   //   `(` Expression `.` `...` BindingPattern `)`
   export interface CoverParenthesizedExpressionAndArrowParameterList extends BaseParseNode {
     readonly type: 'CoverParenthesizedExpressionAndArrowParameterList';
-    readonly Arguments: readonly (ArgumentListElement | BindingRestElement)[];
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
+    readonly Arguments: readonly (ArgumentListElement | BindingRestElement | SingleNameBinding)[];
     readonly arrowInfo?: ArrowInfo;
   }
 
@@ -343,6 +346,8 @@ export namespace ParseNode {
     | MemberExpression
     | SuperProperty
     | MetaProperty
+    // proposal-runtime-types
+    | TypeArgumentsExpression
     | NewExpression;
 
   // MemberExpression :
@@ -419,6 +424,9 @@ export namespace ParseNode {
   //   `new` MemberExpression Arguments
   export interface NewExpression extends BaseParseNode {
     readonly type: 'NewExpression';
+
+    // proposal-runtime-types placement form
+    readonly PlacementArguments?: readonly AssignmentExpressionOrHigher[] | null;
     // NOTE: Should be NewExpressionOrHigher | MemberExpressionOrHigher
     readonly MemberExpression: LeftHandSideExpression;
     readonly Arguments: Arguments | null;
@@ -439,7 +447,9 @@ export namespace ParseNode {
     | ImportCall
     | CallExpression
     | MemberExpression
-    | TaggedTemplateExpression;
+    | TaggedTemplateExpression
+    // proposal-runtime-types
+    | TypeArgumentsExpression;
 
   // CallExpression (partial) :
   //   CoverCallExpressionAndAsyncArrowHead
@@ -619,7 +629,9 @@ export namespace ParseNode {
   export type UnaryExpressionOrHigher =
     | UpdateExpressionOrHigher
     | UnaryExpression
-    | AwaitExpression;
+    | AwaitExpression
+    // proposal-runtime-types
+    | TypeOperatorExpression;
 
   // UnaryExpression (partial) :
   //   `delete` UnaryExpression
@@ -718,7 +730,10 @@ export namespace ParseNode {
   //   RelationalExpression `in` ShiftExpression
   export type RelationalExpressionOrHigher =
     | ShiftExpressionOrHigher
-    | RelationalExpression;
+    | RelationalExpression
+    // proposal-runtime-types
+    | IsExpression
+    | TypedConversionExpression;
 
   // RelationalExpression (partial) :
   //   RelationalExpression `<` ShiftExpression
@@ -992,7 +1007,13 @@ export namespace ParseNode {
   export type Declaration =
     | HoistableDeclaration
     | ClassDeclaration
-    | LexicalDeclarationLike;
+    | LexicalDeclarationLike
+    // proposal-runtime-types
+    | TypeAliasDeclaration
+    | InterfaceDeclaration
+    | EnumDeclaration
+    | MetaDeclaration
+    | PrimitiveOperatorDeclaration;
 
   // HoistableDeclaration
   //   FunctionDeclaration
@@ -1067,6 +1088,10 @@ export namespace ParseNode {
   export interface LexicalBinding extends BaseParseNode {
     readonly type: 'LexicalBinding';
 
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
+    readonly TypedInitializer?: TypedInitializer;
+
     // LexicalBinding : BindingIdentifier Initializer?
     readonly BindingIdentifier?: BindingIdentifier;
 
@@ -1093,6 +1118,10 @@ export namespace ParseNode {
   //   BindingPattern Initializer
   export interface VariableDeclaration extends BaseParseNode {
     readonly type: 'VariableDeclaration';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
+    readonly TypedInitializer?: TypedInitializer;
     readonly BindingPattern?: BindingPattern;
     readonly BindingIdentifier?: BindingIdentifier;
     readonly Initializer: Initializer | null;
@@ -1175,6 +1204,9 @@ export namespace ParseNode {
   //   BindingPattern Initializer?
   export interface BindingElement extends BaseParseNode {
     readonly type: 'BindingElement';
+
+    // proposal-runtime-types
+    readonly Ref?: boolean;
     readonly BindingPattern: BindingPattern;
     readonly Initializer: Initializer | null;
   }
@@ -1183,6 +1215,12 @@ export namespace ParseNode {
   //   BindingIdentifier Initializer?
   export interface SingleNameBinding extends BaseParseNode {
     readonly type: 'SingleNameBinding';
+
+    // proposal-runtime-types
+    readonly Ref?: boolean;
+    readonly Optional?: boolean;
+    readonly TypeAnnotation?: TypeAnnotation;
+    readonly TypedInitializer?: TypedInitializer;
     readonly BindingIdentifier: BindingIdentifier;
     readonly Initializer: Initializer | null;
   }
@@ -1399,6 +1437,9 @@ export namespace ParseNode {
   //   BindingIdentifier
   export interface ForBinding extends BaseParseNode {
     readonly type: 'ForBinding';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier?: BindingIdentifier;
     readonly BindingPattern?: BindingPattern;
   }
@@ -1504,6 +1545,10 @@ export namespace ParseNode {
     readonly Block: Block;
     readonly Catch: Catch | null;
     readonly Finally: Finally | null;
+
+    // proposal-runtime-types: all catch clauses, the first of which is also
+    // `Catch` so that flag-off consumers keep working.
+    readonly CatchClauses?: readonly Catch[] | null;
   }
 
   // Catch :
@@ -1517,6 +1562,9 @@ export namespace ParseNode {
     readonly type: 'Catch';
     readonly CatchParameter: CatchParameter | null;
     readonly Block: Block;
+
+    // proposal-runtime-types Catch : `catch` `(` CatchParameter TypeAnnotation? `)` Block
+    readonly TypeAnnotation?: TypeAnnotation | null;
   }
 
   // Finally :
@@ -1602,6 +1650,9 @@ export namespace ParseNode {
   //   [+Default] `function` `(` FormalParameters `)` `{` FunctionBody `}`
   export interface FunctionDeclaration extends BaseParseNode {
     readonly type: 'FunctionDeclaration';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly FunctionBody: FunctionBody;
@@ -1611,6 +1662,9 @@ export namespace ParseNode {
   //   `function` BindingIdentifier? `(` FormalParameters `)` `{` FunctionBody `}`
   export interface FunctionExpression extends BaseParseNode {
     readonly type: 'FunctionExpression';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly FunctionBody: FunctionBody;
@@ -1633,6 +1687,9 @@ export namespace ParseNode {
   //  ArrowParameters [no LineTerminator here] `=>` ConciseBody
   export interface ArrowFunction extends BaseParseNode {
     readonly type: 'ArrowFunction';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly ArrowParameters: ArrowParameters;
     readonly ConciseBody: ConciseBodyLike;
   }
@@ -1685,6 +1742,9 @@ export namespace ParseNode {
   //   `async` ArrowFormalParameters
   export interface AsyncArrowFunction extends BaseParseNode {
     readonly type: 'AsyncArrowFunction';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly ArrowParameters: ArrowParameters;
     readonly AsyncConciseBody: AsyncConciseBodyLike;
   }
@@ -1723,6 +1783,9 @@ export namespace ParseNode {
   //   `set` ClassElementName `(` PropertySetParameterList `)` `{` FunctionBody `}`
   export interface MethodDefinition extends BaseParseNode {
     readonly type: 'MethodDefinition';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
     readonly static?: boolean;
     readonly ClassElementName: ClassElementName;
@@ -1740,6 +1803,9 @@ export namespace ParseNode {
   //   [+Default] `function` `*` `(` FormalParameters `)` `{` GeneratorBody `}`
   export interface GeneratorDeclaration extends BaseParseNode {
     readonly type: 'GeneratorDeclaration';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly GeneratorBody: GeneratorBody;
@@ -1749,6 +1815,9 @@ export namespace ParseNode {
   //   `function` `*` BindingIdentifier? `(` FormalParameters `)` `{` GeneratorBody `}`
   export interface GeneratorExpression extends BaseParseNode {
     readonly type: 'GeneratorExpression';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly GeneratorBody: GeneratorBody;
@@ -1758,6 +1827,9 @@ export namespace ParseNode {
   //   `*` ClassElementName `(` UniqueFormalParameters `)` `{` GeneratorBody `}`
   export interface GeneratorMethod extends BaseParseNode {
     readonly type: 'GeneratorMethod';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
     readonly static?: boolean;
     readonly ClassElementName: ClassElementName;
@@ -1790,6 +1862,9 @@ export namespace ParseNode {
   //   [+Default] `async` `function` `*` `(` FormalParameters `)` `{` AsyncGeneratorBody `}`
   export interface AsyncGeneratorDeclaration extends BaseParseNode {
     readonly type: 'AsyncGeneratorDeclaration';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly AsyncGeneratorBody: AsyncGeneratorBody;
@@ -1799,6 +1874,9 @@ export namespace ParseNode {
   //   `async` `function` `*` BindingIdentifier? `(` FormalParameters `)` `{` AsyncGeneratorBody `}`
   export interface AsyncGeneratorExpression extends BaseParseNode {
     readonly type: 'AsyncGeneratorExpression';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly AsyncGeneratorBody: AsyncGeneratorBody;
@@ -1808,6 +1886,9 @@ export namespace ParseNode {
   //   `async` `*` ClassElementName `(` UniqueFormalParameters `)` `{` AsyncGeneratorBody `}`
   export interface AsyncGeneratorMethod extends BaseParseNode {
     readonly type: 'AsyncGeneratorMethod';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
     readonly static?: boolean;
     readonly ClassElementName: ClassElementName;
@@ -1830,6 +1911,9 @@ export namespace ParseNode {
   //   [+Default] `async` `function` `*` `(` FormalParameters `)` `{` AsyncBody `}`
   export interface AsyncFunctionDeclaration extends BaseParseNode {
     readonly type: 'AsyncFunctionDeclaration';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly AsyncBody: AsyncBody;
@@ -1839,6 +1923,9 @@ export namespace ParseNode {
   //   `async` `function` BindingIdentifier? `(` FormalParameters `)` `{` AsyncBody `}`
   export interface AsyncFunctionExpression extends BaseParseNode {
     readonly type: 'AsyncFunctionExpression';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly AsyncBody: AsyncBody;
@@ -1848,6 +1935,9 @@ export namespace ParseNode {
   //   `async` ClassElementName `(` UniqueFormalParameters `)` `{` AsyncBody `}`
   export interface AsyncMethod extends BaseParseNode {
     readonly type: 'AsyncMethod';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
     readonly static?: boolean;
     readonly ClassElementName: ClassElementName;
@@ -1911,6 +2001,9 @@ export namespace ParseNode {
   export interface ClassDeclaration extends BaseParseNode {
     readonly Decorators?: readonly Decorator[] | null;
     readonly type: 'ClassDeclaration';
+
+    // proposal-runtime-types
+    readonly ClassModifiers?: readonly string[] | null;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly ClassTail: ClassTail;
   }
@@ -1920,6 +2013,9 @@ export namespace ParseNode {
   export interface ClassExpression extends BaseParseNode {
     readonly Decorators?: readonly Decorator[] | null;
     readonly type: 'ClassExpression';
+
+    // proposal-runtime-types
+    readonly ClassModifiers?: readonly string[] | null;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly ClassTail: ClassTail;
   }
@@ -1928,6 +2024,9 @@ export namespace ParseNode {
   //   ClassHeritage? `{` ClassBody? `}`
   export interface ClassTail extends BaseParseNode {
     readonly type: 'ClassTail';
+
+    // proposal-runtime-types ImplementsClause : `implements` ImplementsList
+    readonly ImplementsClause?: readonly TypeReference[] | null;
     readonly ClassHeritage: ClassHeritage | null;
     readonly ClassBody: ClassBody | null;
   }
@@ -1957,7 +2056,10 @@ export namespace ParseNode {
   export type ClassElement =
     | MethodDefinitionLike
     | FieldDefinition
-    | ClassStaticBlock;
+    | ClassStaticBlock
+    // proposal-runtime-types
+    | OperatorDefinition
+    | AbstractMethodDefinition;
 
   // FieldDefinition :
   //   ClassElementName Initializer?
@@ -1966,6 +2068,9 @@ export namespace ParseNode {
     readonly Decorators?: readonly Decorator[] | null;
     readonly accessor?: boolean;
     readonly type: 'FieldDefinition';
+
+    // proposal-runtime-types
+    readonly TypeAnnotation?: TypeAnnotation;
     readonly static?: boolean;
     readonly ClassElementName: ClassElementName;
     readonly Initializer: Initializer | null;
@@ -1997,7 +2102,6 @@ export namespace ParseNode {
   //   StatementList?
   export type ClassStaticBlockStatementList =
     | StatementList;
-
 
   // A.5 Scripts and Modules
   // https://tc39.es/ecma262/#sec-scripts-and-modules
@@ -2414,6 +2518,349 @@ export namespace ParseNode {
     | GeneratorBody
     | AsyncBody
     | AsyncGeneratorBody;
+
+  // #region proposal-runtime-types
+  // https://github.com/sirisian/proposal-runtime-types #sec-type-grammar
+  // The type sublanguage. UnionType and IntersectionType are stored n-ary,
+  // since canonicalization treats them as sets; every other node mirrors its
+  // spec production. ArrayType and TupleType are the two refinements of the
+  // spec's ArrayOrTupleType, and the parenthesized/function-type cover is
+  // refined during parsing, so no cover node is materialized.
+
+  export type Type =
+    | UnionType
+    | IntersectionType
+    | SharedType
+    | ReferenceType
+    | KeyOfType
+    | PredefinedType
+    | LiteralType
+    | TypeReference
+    | ComputedType
+    | ArrayType
+    | TupleType
+    | ObjectType
+    | ParenthesizedType
+    | FunctionType;
+
+  // TypeAnnotation : `:` Type
+  export interface TypeAnnotation extends BaseParseNode {
+    readonly type: 'TypeAnnotation';
+    readonly Type: Type;
+  }
+
+  // TypeAliasDeclaration :
+  //   `type` [no LineTerminator here] BindingIdentifier TypeParameters? `=` Type WhereClauses? `;`
+  export interface TypeAliasDeclaration extends BaseParseNode {
+    readonly type: 'TypeAliasDeclaration';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly TypeParameters: TypeParameters | null;
+    readonly Type: Type;
+    readonly WhereClauses: readonly WhereClause[] | null;
+  }
+
+  // InterfaceDeclaration :
+  //   `interface` BindingIdentifier TypeParameters? `{` InterfaceBody? `}`
+  // InterfaceMember : TypeMember | OperatorDefinition
+  export type InterfaceMember = TypeMember | IndexSignature | OperatorDefinition;
+  export interface InterfaceDeclaration extends BaseParseNode {
+    readonly type: 'InterfaceDeclaration';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly TypeParameters: TypeParameters | null;
+    readonly InterfaceMemberList: readonly InterfaceMember[];
+  }
+
+  // EnumDeclaration :
+  //   `enum` BindingIdentifier TypeAnnotation? `{` EnumMemberList? `,`? `}`
+  export interface EnumDeclaration extends BaseParseNode {
+    readonly type: 'EnumDeclaration';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly TypeAnnotation: TypeAnnotation | null;
+    readonly EnumMemberList: readonly EnumMember[];
+  }
+
+  // EnumMember : IdentifierName Initializer?
+  export interface EnumMember extends BaseParseNode {
+    readonly type: 'EnumMember';
+    readonly IdentifierName: IdentifierName;
+    readonly Initializer: Initializer | null;
+  }
+
+  // MetaDeclaration :
+  //   `meta` [no LineTerminator here] TypeName `{` MetaHookList? `}`
+  // MetaHook : `default` `=` AssignmentExpression `;` | MethodDefinition
+  export type MetaHook = MetaDefaultHook | ClassElement;
+  export interface MetaDeclaration extends BaseParseNode {
+    readonly type: 'MetaDeclaration';
+    readonly TypeName: TypeName;
+    readonly MetaHookList: readonly MetaHook[];
+  }
+
+  export interface MetaDefaultHook extends BaseParseNode {
+    readonly type: 'MetaDefaultHook';
+    readonly AssignmentExpression: AssignmentExpressionOrHigher;
+  }
+
+  // PrimitiveOperatorDeclaration :
+  //   `primitive` [no LineTerminator here] TypeName TypeParameters? `{` OperatorDefinitionList? `}`
+  export interface PrimitiveOperatorDeclaration extends BaseParseNode {
+    readonly type: 'PrimitiveOperatorDeclaration';
+    readonly TypeName: TypeName;
+    readonly TypeParameters: TypeParameters | null;
+    readonly OperatorDefinitionList: readonly OperatorDefinition[];
+  }
+
+  // OperatorDefinition :
+  //   `static`? `operator` OperatorName OperatorTypeParameters? `(` FormalParameters `)` TypeAnnotation? `{` FunctionBody `}`
+  //   `static`? `operator` OperatorName OperatorTypeParameters? `(` FormalParameters `)` TypeAnnotation? `;`
+  //   `operator` Type `(` `)` TypeAnnotation? `{` FunctionBody `}`
+  //   `*` `operator` `...` `(` `)` TypeAnnotation? `{` GeneratorBody `}`
+  //   `*` `operator` `...` `(` `)` TypeAnnotation? `;`
+  export interface OperatorDefinition extends BaseParseNode {
+    readonly type: 'OperatorDefinition';
+    readonly static: boolean;
+    readonly OperatorGenerator: boolean;
+    readonly OperatorName: string | null;
+    readonly Type: Type | null;
+    readonly TypeParameters: TypeParameters | null;
+    readonly FormalParameters: FormalParameters | null;
+    readonly TypeAnnotation: TypeAnnotation | null;
+    readonly FunctionBody: FunctionBody | null;
+    readonly GeneratorBody: GeneratorBody | null;
+  }
+
+  // ClassElement :
+  //   `abstract` ClassElementName `(` UniqueFormalParameters `)` TypeAnnotation? `;`
+  export interface AbstractMethodDefinition extends BaseParseNode {
+    readonly type: 'AbstractMethodDefinition';
+    readonly static: false;
+    readonly PropertySetParameterList?: undefined;
+    readonly ClassElementName: ClassElementName;
+    readonly UniqueFormalParameters: FormalParameters;
+    readonly TypeAnnotation: TypeAnnotation | null;
+  }
+
+  // RelationalExpression :
+  //   RelationalExpression [no LineTerminator here] `is` Type
+  export interface IsExpression extends BaseParseNode {
+    readonly type: 'IsExpression';
+    readonly Expression: RelationalExpressionOrHigher;
+    readonly Type: Type;
+  }
+
+  // RelationalExpression :
+  //   RelationalExpression `:=` Type
+  export interface TypedConversionExpression extends BaseParseNode {
+    readonly type: 'TypedConversionExpression';
+    readonly Expression: RelationalExpressionOrHigher;
+    readonly Type: Type;
+  }
+
+  // TypeOperatorExpression :
+  //   `type` [no LineTerminator here] Type
+  export interface TypeOperatorExpression extends BaseParseNode {
+    readonly type: 'TypeOperatorExpression';
+    readonly Type: Type;
+  }
+
+  // MemberExpression : MemberExpression TypeArguments
+  // CallExpression : CallExpression TypeArguments
+  export interface TypeArgumentsExpression extends BaseParseNode {
+    readonly type: 'TypeArgumentsExpression';
+    readonly Expression: LeftHandSideExpression;
+    readonly TypeArguments: TypeArguments;
+  }
+
+  // TypedInitializer : `:=` AssignmentExpression
+  export interface TypedInitializer extends BaseParseNode {
+    readonly type: 'TypedInitializer';
+    readonly AssignmentExpression: AssignmentExpressionOrHigher;
+  }
+
+  // UnionType : IntersectionType / UnionType `|` IntersectionType
+  export interface UnionType extends BaseParseNode {
+    readonly type: 'UnionType';
+    readonly Types: readonly Type[];
+  }
+
+  // IntersectionType : PrimaryType / IntersectionType `&` PrimaryType
+  export interface IntersectionType extends BaseParseNode {
+    readonly type: 'IntersectionType';
+    readonly Types: readonly Type[];
+  }
+
+  // PrimaryType : `shared` PrimaryType
+  export interface SharedType extends BaseParseNode {
+    readonly type: 'SharedType';
+    readonly Type: Type;
+  }
+
+  // ReferenceType : `ref` PrimaryType
+  export interface ReferenceType extends BaseParseNode {
+    readonly type: 'ReferenceType';
+    readonly Type: Type;
+  }
+
+  // KeyOfType : `keyof` PrimaryType
+  export interface KeyOfType extends BaseParseNode {
+    readonly type: 'KeyOfType';
+    readonly Type: Type;
+  }
+
+  // PredefinedType : one of `void` `null`
+  export interface PredefinedType extends BaseParseNode {
+    readonly type: 'PredefinedType';
+    readonly keyword: 'void' | 'null';
+  }
+
+  // LiteralType : NumericLiteral / `-` NumericLiteral / StringLiteral / `true` / `false`
+  export interface LiteralType extends BaseParseNode {
+    readonly type: 'LiteralType';
+    readonly kind: 'number' | 'bigint' | 'imaginary' | 'string' | 'boolean';
+    readonly value: number | bigint | string | boolean;
+    readonly negated: boolean;
+  }
+
+  // TypeName : IdentifierReference / TypeName `.` IdentifierName
+  export interface TypeName extends BaseParseNode {
+    readonly type: 'TypeName';
+    readonly IdentifierReference: IdentifierReference;
+    readonly MemberNames: readonly IdentifierName[];
+  }
+
+  // TypeReference : TypeName TypeArguments?
+  export interface TypeReference extends BaseParseNode {
+    readonly type: 'TypeReference';
+    readonly TypeName: TypeName;
+    readonly TypeArguments: TypeArguments | null;
+  }
+
+  // TypeArguments : `.<` TypeArgumentList `,`? `>`
+  export interface TypeArguments extends BaseParseNode {
+    readonly type: 'TypeArguments';
+    readonly TypeArgumentList: readonly Type[];
+  }
+
+  // ComputedType : TypeReference Arguments / ComputedType Arguments
+  export interface ComputedType extends BaseParseNode {
+    readonly type: 'ComputedType';
+    readonly Callee: TypeReference | ComputedType;
+    readonly Arguments: Arguments;
+  }
+
+  // ArrayOrTupleType : `[` `]` TypeArguments? / `[` ArrayExtent `]` TypeArguments
+  export interface ArrayType extends BaseParseNode {
+    readonly type: 'ArrayType';
+    readonly ArrayExtent: AssignmentExpressionOrHigher | null;
+    readonly TypeArguments: TypeArguments | null;
+  }
+
+  // ArrayOrTupleType : `[` TupleElementList `,`? `]`
+  export interface TupleType extends BaseParseNode {
+    readonly type: 'TupleType';
+    readonly TupleElementList: readonly TupleElement[];
+  }
+
+  // TupleElement : Type Initializer? / `...` Type
+  export interface TupleElement extends BaseParseNode {
+    readonly type: 'TupleElement';
+    readonly Type: Type;
+    readonly Initializer: Initializer | null;
+    readonly Rest: boolean;
+  }
+
+  // ObjectType : `{` TypeMemberList? TypeMemberSeparator? `}`
+  export interface ObjectType extends BaseParseNode {
+    readonly type: 'ObjectType';
+    readonly TypeMemberList: readonly (TypeMember | IndexSignature)[];
+  }
+
+  // TypeMember : PropertyName `?`? TypeAnnotation Initializer? / PropertyName `?`? MethodSignature
+  export interface TypeMember extends BaseParseNode {
+    readonly type: 'TypeMember';
+    readonly PropertyName: PropertyNameLike;
+    readonly Readonly: boolean;
+    readonly Optional: boolean;
+    readonly TypeAnnotation: TypeAnnotation | null;
+    readonly Initializer: Initializer | null;
+    readonly MethodSignature: MethodSignature | null;
+  }
+
+  // IndexSignature : `[` BindingIdentifier TypeAnnotation `]` TypeAnnotation
+  export interface IndexSignature extends BaseParseNode {
+    readonly type: 'IndexSignature';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly KeyTypeAnnotation: TypeAnnotation;
+    readonly ValueTypeAnnotation: TypeAnnotation;
+  }
+
+  // MethodSignature : TypeParameters? `(` FunctionTypeParameterList? `,`? `)` TypeAnnotation?
+  export interface MethodSignature extends BaseParseNode {
+    readonly type: 'MethodSignature';
+    readonly TypeParameters: TypeParameters | null;
+    readonly FunctionTypeParameterList: readonly FunctionTypeParameter[];
+    readonly TypeAnnotation: TypeAnnotation | null;
+  }
+
+  // FunctionType : FunctionTypeParameters `=>` Type
+  export interface FunctionType extends BaseParseNode {
+    readonly type: 'FunctionType';
+    readonly FunctionTypeParameterList: readonly FunctionTypeParameter[];
+    readonly ReturnType: Type;
+  }
+
+  // FunctionTypeParameter : `ref`? Type / `ref`? BindingIdentifier `?`? TypeAnnotation
+  //                       / `...` BindingIdentifier TypeAnnotation / `...` Type
+  export interface FunctionTypeParameter extends BaseParseNode {
+    readonly type: 'FunctionTypeParameter';
+    readonly Ref: boolean;
+    readonly Rest: boolean;
+    // proposal-runtime-types: true when this is a leading `this` parameter, whose
+    // annotation supplies the signature's [[ThisType]] and is not an ordinary
+    // parameter of the type.
+    readonly IsThis: boolean;
+    readonly BindingIdentifier: BindingIdentifier | null;
+    readonly Optional: boolean;
+    readonly TypeAnnotation: TypeAnnotation | null;
+    readonly Type: Type | null;
+  }
+
+  // ParenthesizedType : `(` Type `)`
+  export interface ParenthesizedType extends BaseParseNode {
+    readonly type: 'ParenthesizedType';
+    readonly Type: Type;
+  }
+
+  // TypeParameters : `<` TypeParameterList `,`? `>`
+  export interface TypeParameters extends BaseParseNode {
+    readonly type: 'TypeParameters';
+    readonly TypeParameterList: readonly TypeParameter[];
+  }
+
+  // TypeParameter : BindingIdentifier TypeParameterConstraint? TypeParameterDefault?
+  export interface TypeParameter extends BaseParseNode {
+    readonly type: 'TypeParameter';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly TypeParameterConstraint: Type | null;
+    readonly TypeParameterDefault: Type | null;
+  }
+
+  // WhereClause : `where` RefinementPredicate
+  export interface WhereClause extends BaseParseNode {
+    readonly type: 'WhereClause';
+    readonly RefinementPredicate: RefinementPredicate;
+  }
+
+  // RefinementPredicate : AssignmentExpression / `if` `(` AssignmentExpression `)` `{` RefinementPredicate `}` (`else` `{` RefinementPredicate `}`)?
+  export type RefinementPredicate = AssignmentExpressionOrHigher | ConditionalRefinement;
+
+  export interface ConditionalRefinement extends BaseParseNode {
+    readonly type: 'ConditionalRefinement';
+    readonly Test: AssignmentExpressionOrHigher;
+    readonly Consequent: RefinementPredicate;
+    readonly Alternate: RefinementPredicate | null;
+  }
+  // #endregion proposal-runtime-types
 }
 
 /** https://tc39.es/ecma262/multipage/text-processing.html#sec-patterns */
@@ -2728,6 +3175,7 @@ export namespace ParseNode.RegExp {
     readonly HexDigit_a: string;
     readonly HexDigit_b: string;
   }
+
 }
 
 export type ParseNode =
@@ -2863,7 +3311,48 @@ export type ParseNode =
   | ParseNode.Script
   | ParseNode.ScriptBody
   | ParseNode.Module
-  | ParseNode.ModuleBody;
+  | ParseNode.ModuleBody
+  // proposal-runtime-types
+  | ParseNode.TypeAnnotation
+  | ParseNode.TypedInitializer
+  | ParseNode.TypeAliasDeclaration
+  | ParseNode.InterfaceDeclaration
+  | ParseNode.EnumDeclaration
+  | ParseNode.EnumMember
+  | ParseNode.MetaDeclaration
+  | ParseNode.MetaDefaultHook
+  | ParseNode.PrimitiveOperatorDeclaration
+  | ParseNode.OperatorDefinition
+  | ParseNode.AbstractMethodDefinition
+  | ParseNode.IsExpression
+  | ParseNode.TypedConversionExpression
+  | ParseNode.TypeOperatorExpression
+  | ParseNode.TypeArgumentsExpression
+  | ParseNode.UnionType
+  | ParseNode.IntersectionType
+  | ParseNode.SharedType
+  | ParseNode.ReferenceType
+  | ParseNode.KeyOfType
+  | ParseNode.PredefinedType
+  | ParseNode.LiteralType
+  | ParseNode.TypeName
+  | ParseNode.TypeReference
+  | ParseNode.TypeArguments
+  | ParseNode.ComputedType
+  | ParseNode.ArrayType
+  | ParseNode.TupleType
+  | ParseNode.TupleElement
+  | ParseNode.ObjectType
+  | ParseNode.TypeMember
+  | ParseNode.IndexSignature
+  | ParseNode.MethodSignature
+  | ParseNode.FunctionType
+  | ParseNode.FunctionTypeParameter
+  | ParseNode.ParenthesizedType
+  | ParseNode.TypeParameters
+  | ParseNode.TypeParameter
+  | ParseNode.WhereClause
+  | ParseNode.ConditionalRefinement;
 
 /**
  * A type that contains a mapping of {@link ParseNode} type names to their corresponding {@link ParseNode} type.

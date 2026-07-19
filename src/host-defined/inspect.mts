@@ -1,5 +1,5 @@
 import {
-  JSStringValue, ObjectValue, Value, wellKnownSymbols, BooleanValue, NumberValue, BigIntValue, SymbolValue, UndefinedValue,
+  JSStringValue, ObjectValue, Value, wellKnownSymbols, BooleanValue, NumberValue, BigIntValue, SymbolValue, UndefinedValue, TypedNumberValue,
 } from '../value.mts';
 import { Completion, X } from '../completion.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
@@ -84,6 +84,9 @@ const INSPECTORS = {
     }
     return n.toString();
   },
+  // proposal-runtime-types R6: a typed number prints its value with a typed
+  // marker so it is distinguishable from a plain Number in debug output.
+  TypedNumber: (v: TypedNumberValue) => `${v.numberValue()} (typed)`, // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   BigInt: (v: BigIntValue) => `${R(v)}n`,
   String: (v: JSStringValue) => {
     const s = JSON.stringify(v.stringValue()).slice(1, -1);

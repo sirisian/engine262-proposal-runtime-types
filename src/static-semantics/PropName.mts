@@ -11,6 +11,8 @@ export function PropName(node: ParseNode): string | undefined {
     case 'AsyncGeneratorMethod':
     case 'AsyncMethod':
     case 'FieldDefinition':
+    // proposal-runtime-types
+    case 'AbstractMethodDefinition':
       return PropName(node.ClassElementName);
     case 'PropertyDefinition':
       if (node.PropertyName) {
