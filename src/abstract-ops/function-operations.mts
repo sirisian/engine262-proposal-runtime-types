@@ -285,6 +285,16 @@ export function* InitializeInstanceElements(O: ObjectValue, constructor: ECMAScr
     for (const fieldRecord of fields) {
       // a. Perform ? DefineField(O, fieldRecord).
       Q(yield* DefineField(O, fieldRecord));
+      // proposal-runtime-types (spec sec-typed-classes): record a `readonly`
+      // field with the constructor that declares it, so a later write can be
+      // rejected unless that constructor is the one executing. The field has just
+      // been initialized (its own initializer is the one permitted assignment
+      // outside a constructor); every assignment after this is checked.
+      if ((fieldRecord as { Readonly?: boolean }).Readonly && !(fieldRecord.Name instanceof PrivateName)) {
+        const key = fieldRecord.Name as PropertyKeyValue;
+        const map = ((O as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields ??= new Map());
+        map.set(key instanceof JSStringValue ? key.stringValue() : key, constructor);
+      }
     }
   }
   // https://tc39.es/proposal-pattern-matching/#sec-initializeinstance

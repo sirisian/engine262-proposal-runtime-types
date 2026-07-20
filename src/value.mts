@@ -905,6 +905,24 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
   * Set(P: PropertyKeyValue, V: Value, Receiver: Value): ObjectSlotReturn['Set'] {
     // TODO:
     Q(surroundingAgent.debugger_tryTouchDuringPreview(Receiver as ObjectValue));
+    // proposal-runtime-types (spec sec-typed-classes): a write to a `readonly`
+    // field is a TypeError unless the function running is the constructor that
+    // declares it. The field's declaring constructor is recorded on the instance
+    // when the field is initialized; a write from a method the constructor calls,
+    // a subclass, a reference, or reflection finds a different running function
+    // and is rejected. The check is skipped for the vast majority of objects,
+    // which carry no readonly fields.
+    if (surroundingAgent.feature('runtime-types')) {
+      const readonlyFields = (Receiver as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+      if (readonlyFields !== undefined) {
+        const fieldKey = P instanceof JSStringValue ? P.stringValue() : P;
+        const declaringConstructor = readonlyFields.get(fieldKey);
+        if (declaringConstructor !== undefined
+            && surroundingAgent.executionContextStack.at(-1)?.Function !== declaringConstructor) {
+          return Throw.TypeError('$1 is a readonly field and can only be assigned in the declaring class constructor', P);
+        }
+      }
+    }
     return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver);
   }
 

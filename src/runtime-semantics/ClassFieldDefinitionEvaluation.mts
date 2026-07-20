@@ -24,6 +24,10 @@ export interface ClassFieldDefinitionRecord {
   // declared without an initializer can take its type's default (spec
   // sec-typed-classes: "a typed field takes its type's default").
   readonly TypeAnnotation?: ParseNode.TypeAnnotation | null;
+  // proposal-runtime-types: whether the field is declared `readonly`, so it may
+  // be assigned only in its own initializer and in the declaring class's
+  // constructors (spec sec-typed-classes).
+  readonly Readonly?: boolean;
 }
 export const ClassFieldDefinitionRecord = function ClassFieldDefinitionRecord(value: ClassFieldDefinitionRecord) {
   Object.setPrototypeOf(value, ClassFieldDefinitionRecord.prototype);
@@ -71,6 +75,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     Name: name,
     Initializer: initializer,
     TypeAnnotation: (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation,
+    Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
   });
 }
 

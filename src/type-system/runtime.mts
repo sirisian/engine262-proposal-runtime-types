@@ -989,6 +989,9 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
     if (a.type === 'AssignmentRestElement') {
       return Throw.TypeError('$1 is not supported yet', Value('a spread builder argument'));
     }
+    if (a.type === 'NamedArgument') {
+      return Throw.TypeError('$1 is not supported yet', Value('a named builder argument'));
+    }
     // proposal-runtime-types (Capability B): a builder-call argument that is a
     // bare identifier naming a bound type parameter resolves to that parameter's
     // Type Object (it is a type, not a value binding). This is what lets a return

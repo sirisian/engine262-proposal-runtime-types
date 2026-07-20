@@ -53,6 +53,12 @@ import {
 // This file covers abstract operations defined in
 /** https://tc39.es/ecma262/#sec-operations-on-objects */
 
+// proposal-runtime-types: the sentinel recorded as a frozen field's declaring
+// constructor. It is an ordinary object identity that no running function equals,
+// so a write to a field frozen this way is always rejected (spec sec-typed-classes:
+// freezing a typed instance makes every field readonly).
+const FROZEN_FIELD_SENTINEL = { frozenReadonlyField: true };
+
 /** https://tc39.es/ecma262/#sec-makebasicobject */
 export function MakeBasicObject<const T extends string>(internalSlotsList: readonly T[]) {
   // 1.  Assert: internalSlotsList is a List of internal slot names.
@@ -253,6 +259,29 @@ export function* SetIntegrityLevel(O: ObjectValue, level: 'sealed' | 'frozen'): 
           desc = Descriptor({ Configurable: Value.false, Writable: Value.false });
         }
         Q(yield* DefinePropertyOrThrow(O, k, desc));
+      }
+    }
+    // proposal-runtime-types (spec sec-typed-classes): freezing a typed-class
+    // instance makes every field `readonly` at run time, so a later write is a
+    // TypeError rather than the silent failure a frozen non-writable property
+    // gives outside strict mode. A typed-class instance is one built by a
+    // constructor that seals its instances (a typed field, not `dynamic`); the
+    // same flag that drives auto-sealing identifies it. Each own String-keyed data
+    // field is recorded with a sentinel that no running function equals, so every
+    // write is rejected. The `frozen` descriptors above already reject the write
+    // in strict mode; this makes the rejection a TypeError in every mode.
+    if (surroundingAgent.feature('runtime-types')) {
+      const builtBy = (O as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
+      if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+        const map = ((O as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields ??= new Map());
+        for (const k of keys) {
+          if (k instanceof JSStringValue) {
+            const currentDesc = Q(yield* O.GetOwnProperty(k));
+            if (!(currentDesc instanceof UndefinedValue) && IsDataDescriptor(currentDesc)) {
+              map.set(k.stringValue(), FROZEN_FIELD_SENTINEL);
+            }
+          }
+        }
       }
     }
   }

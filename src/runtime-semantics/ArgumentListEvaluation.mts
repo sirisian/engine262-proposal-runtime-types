@@ -1,5 +1,5 @@
 import {
-  Value, Descriptor, type Arguments,
+  Value, Descriptor, ObjectValue, JSStringValue, wellKnownSymbols, type Arguments,
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
@@ -14,6 +14,10 @@ import {
   ToString,
   GetIterator,
   GetValue,
+  Get,
+  GetMethod,
+  EnumerableOwnProperties,
+  Throw,
   F,
   IteratorStepValue,
 } from '#self';
@@ -152,8 +156,13 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
         // d. Append next as the last element of list.
         precedingArgs.push(next);
       }
+    } else if ((element as { type?: string }).type === 'NamedArgument') {
+      // A named argument does not reach the positional path: a call with named
+      // arguments is evaluated by ArgumentListEvaluationNamed against the callee's
+      // parameters. This branch keeps the positional evaluation total.
+      Assert(false, 'named argument in positional argument evaluation');
     } else {
-      const AssignmentExpression = element;
+      const AssignmentExpression = element as ParseNode.AssignmentExpressionOrHigher;
       // 2. Let ref be the result of evaluating AssignmentExpression.
       const ref = Q(yield* Evaluate(AssignmentExpression));
       // 3. Let arg be ? GetValue(ref).
@@ -176,3 +185,169 @@ export function ArgumentListEvaluation(ArgumentsOrTemplateLiteral: ParseNode.Tem
       throw OutOfRange.nonExhaustive(ArgumentsOrTemplateLiteral);
   }
 }
+
+/**
+ * Whether an argument list uses a by-name argument form: a named argument
+ * `name: expr`, or a spread of an object literal `...{ a: 1 }`. A named argument
+ * always binds by name. A spread of an object literal binds each property by
+ * parameter name (the README's object-spread argument), and is recognized by its
+ * syntax so that an ordinary iterable spread, `...arr` or `...[1, 2]`, is left to
+ * the positional path unchanged. A list with neither is evaluated positionally.
+ */
+export function hasNamedArguments(args: ParseNode.Arguments): boolean {
+  return args.some((element) => {
+    const type = (element as { type?: string }).type;
+    if (type === 'NamedArgument') {
+      return true;
+    }
+    if (type === 'AssignmentRestElement') {
+      const inner = (element as ParseNode.AssignmentRestElement).AssignmentExpression;
+      return (inner as { type?: string }).type === 'ObjectLiteral';
+    }
+    return false;
+  });
+}
+
+/**
+ * The parameters of a function as named-argument resolution reads them: each
+ * parameter's name and whether it may be omitted (it is optional, has a default,
+ * or is the rest parameter), with the index of a rest parameter where present. A
+ * named or object-spread call may omit a parameter only where it may be omitted;
+ * a required parameter left unfilled is an error, since named arguments skip
+ * defaulted parameters rather than required ones.
+ */
+function parameterInfo(func: Value): { names: string[], omittable: boolean[], restIndex: number } {
+  const formals = ((func as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []);
+  const names: string[] = [];
+  const omittable: boolean[] = [];
+  let restIndex = -1;
+  formals.forEach((p, i) => {
+    const node = p as {
+      type?: string,
+      BindingIdentifier?: { name?: string },
+      Optional?: boolean,
+      Initializer?: unknown,
+      TypedInitializer?: unknown,
+    };
+    if (node.type === 'BindingRestElement') {
+      restIndex = i;
+      names.push(node.BindingIdentifier?.name ?? '');
+      omittable.push(true);
+    } else {
+      names.push(node.BindingIdentifier?.name ?? '');
+      const hasDefault = (node.Initializer !== undefined && node.Initializer !== null)
+        || (node.TypedInitializer !== undefined && node.TypedInitializer !== null);
+      omittable.push(node.Optional === true || hasDefault);
+    }
+  });
+  return { names, omittable, restIndex };
+}
+
+/**
+ * Evaluates an argument list that uses by-name forms and returns the positional
+ * argument list to pass to the call, using the called function's parameter names.
+ * A positional argument fills the next position. A named argument `name: expr`
+ * fills the position of the parameter with that name, or the rest position onward
+ * where the name is the rest parameter's. A spread of a plain object binds each
+ * own enumerable property by parameter name; a spread of an iterable fills the
+ * next positions in order, as an ordinary spread does. A position with no argument
+ * is left absent for the callee's own default to fill; a named argument that
+ * matches no parameter is a TypeError.
+ */
+export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value): PlainEvaluator<Arguments> {
+  const { names, omittable, restIndex } = parameterInfo(func);
+  const fixedCount = restIndex === -1 ? names.length : restIndex;
+  const positioned: Value[] = [];
+  const restCollected: Value[] = [];
+  const byName = new Map<string, Value>();
+  // Once a named argument targets the rest parameter, the following positional
+  // arguments continue that rest rather than filling fixed positions: the design's
+  // `f(8, args: 'a', 'b')` gives `args` both 'a' and 'b'.
+  let restOpen = false;
+
+  // A positional value fills the next fixed position, or joins the rest once the
+  // fixed positions are used or the rest has been opened by a named rest argument.
+  const placePositional = (value: Value): void => {
+    if (!restOpen && positioned.length < fixedCount) {
+      positioned.push(value);
+    } else {
+      restCollected.push(value);
+    }
+  };
+
+  const placeNamed = (name: string, value: Value): PlainEvaluator<void> => (function* place() {
+    const idx = names.indexOf(name);
+    if (idx === -1) {
+      return Throw.TypeError('no parameter named $1 for this call', Value(name));
+    }
+    if (restIndex !== -1 && idx === restIndex) {
+      restCollected.push(value);
+      restOpen = true;
+    } else {
+      byName.set(name, value);
+    }
+    return undefined;
+  }());
+
+  for (const element of args) {
+    if ((element as { type?: string }).type === 'NamedArgument') {
+      const named = element as ParseNode.NamedArgument;
+      const ref = Q(yield* Evaluate(named.AssignmentExpression));
+      const value = Q(yield* GetValue(ref));
+      Q(yield* placeNamed(named.Name, value));
+    } else if ((element as { type?: string }).type === 'AssignmentRestElement') {
+      const { AssignmentExpression } = element as ParseNode.AssignmentRestElement;
+      const spreadRef = Q(yield* Evaluate(AssignmentExpression));
+      const spreadObj = Q(yield* GetValue(spreadRef));
+      // A plain object spread binds by parameter name; an iterable spread fills
+      // positions in order. Distinguish by whether the value has an iterator.
+      const method = spreadObj instanceof ObjectValue
+        ? Q(yield* GetMethod(spreadObj, wellKnownSymbols.iterator))
+        : Value.undefined;
+      if (spreadObj instanceof ObjectValue && method === Value.undefined) {
+        // Object spread: bind each own enumerable string-keyed property by name.
+        const keys = Q(yield* EnumerableOwnProperties(spreadObj, 'key'));
+        for (const key of keys) {
+          const value = Q(yield* Get(spreadObj, key as JSStringValue));
+          Q(yield* placeNamed((key as JSStringValue).stringValue(), value));
+        }
+      } else {
+        const iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
+        while (true) {
+          const next = Q(yield* IteratorStepValue(iteratorRecord));
+          if (next === 'done') {
+            break;
+          }
+          placePositional(next);
+        }
+      }
+    } else {
+      const ref = Q(yield* Evaluate(element as ParseNode.AssignmentExpressionOrHigher));
+      const value = Q(yield* GetValue(ref));
+      placePositional(value);
+    }
+  }
+
+  // Assemble the positional list the call receives. Each fixed parameter takes
+  // its positional value, else its named value, else undefined where it may be
+  // omitted (its default applies), else it is a required parameter left unfilled,
+  // an error. The rest parameter, where present, is followed by every collected
+  // rest value in source order.
+  const result: Value[] = [];
+  for (let i = 0; i < fixedCount; i += 1) {
+    if (i < positioned.length) {
+      result.push(positioned[i]);
+    } else if (byName.has(names[i])) {
+      result.push(byName.get(names[i])!);
+    } else if (omittable[i]) {
+      result.push(Value.undefined);
+    } else {
+      return Throw.TypeError('no argument for the required parameter $1', Value(names[i] || String(i)));
+    }
+  }
+  for (const v of restCollected) {
+    result.push(v);
+  }
+  return result as Arguments;
+}
+

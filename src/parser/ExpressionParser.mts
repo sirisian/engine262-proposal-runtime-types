@@ -1166,6 +1166,20 @@ export abstract class ExpressionParser extends FunctionParser {
       if (this.eat(Token.ELLIPSIS)) {
         node.AssignmentExpression = this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression());
         Arguments.push(this.finishNode(node, 'AssignmentRestElement'));
+      } else if (surroundingAgent.feature('runtime-types')
+          && this.conditionalConsequentDepth === 0
+          && this.test(Token.IDENTIFIER)
+          && this.testAhead(Token.COLON)) {
+        // proposal-runtime-types: a named argument `name: expr`. An identifier
+        // directly followed by `:` at the top of an argument selects a parameter
+        // by name (the ternary `:` cannot appear here, since a pending
+        // conditional resets the depth, and `:=` is a distinct token, so a cast
+        // is unaffected). The name is read, the colon eaten, and the value parsed.
+        const named = this.startNode<ParseNode.NamedArgument>();
+        named.Name = this.parseIdentifierName().name;
+        this.expect(Token.COLON);
+        named.AssignmentExpression = this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression());
+        Arguments.push(this.finishNode(named, 'NamedArgument'));
       } else {
         Arguments.push(this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression()));
       }
@@ -1826,6 +1840,28 @@ export abstract class ExpressionParser extends FunctionParser {
           this.markNodeStart(node);
         }
       } else node.static = false;
+
+      // proposal-runtime-types: a `readonly` field modifier, permitted after
+      // `static` (as `static readonly x`) and before the field name. As with
+      // `static`, a following `=`, `;`, or line terminator means `readonly` is
+      // itself the field name (`readonly = 1`), not the modifier.
+      node.readonly = false;
+      if (!staticOrAccessorButNotKeyword
+          && surroundingAgent.feature('runtime-types')
+          && this.test('readonly')) {
+        const readonlyId = this.parseIdentifierName();
+        if (this.test(Token.ASSIGN)
+          || this.test(Token.SEMICOLON)
+          || this.peek().hadLineTerminatorBefore
+          || isAutomaticSemicolon(this.peek().type)
+          || this.test(Token.LPAREN)) {
+          // `readonly` is the field/method name, not the modifier.
+          staticOrAccessorButNotKeyword = readonlyId;
+          this.markNodeStart(node);
+        } else {
+          node.readonly = true;
+        }
+      }
 
       if (!staticOrAccessorButNotKeyword) {
         const accessor = surroundingAgent.feature('decorators') && this.test('accessor') ? this.parseIdentifierName() : null;

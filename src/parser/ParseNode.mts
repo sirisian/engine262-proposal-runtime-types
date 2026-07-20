@@ -512,7 +512,8 @@ export namespace ParseNode {
   // NON-SPEC
   export type ArgumentListElement =
     | AssignmentExpressionOrHigher
-    | AssignmentRestElement;
+    | AssignmentRestElement
+    | NamedArgument;
 
   // OptionalExpression :
   //   MemberExpression OptionalChain
@@ -929,6 +930,15 @@ export namespace ParseNode {
   //   ArgumentList `,` `...` AssignmentExpression
   export interface AssignmentRestElement extends BaseParseNode {
     readonly type: 'AssignmentRestElement';
+    readonly AssignmentExpression: AssignmentExpressionOrHigher;
+  }
+
+  // proposal-runtime-types: a named argument at a call site, `name: expr`. The
+  // name selects a parameter of the called signature; the expression is its
+  // value. Positional arguments and rest/spread are the other argument forms.
+  export interface NamedArgument extends BaseParseNode {
+    readonly type: 'NamedArgument';
+    readonly Name: string;
     readonly AssignmentExpression: AssignmentExpressionOrHigher;
   }
 
@@ -2078,6 +2088,9 @@ export namespace ParseNode {
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
     readonly static?: boolean;
+    // proposal-runtime-types: a `readonly` field may be assigned only in its own
+    // initializer and in a constructor of the declaring class.
+    readonly readonly?: boolean;
     readonly ClassElementName: ClassElementName;
     readonly Initializer: Initializer | null;
   }
@@ -3248,6 +3261,7 @@ export type ParseNode =
   | ParseNode.OptionalExpression
   | ParseNode.OptionalChain
   | ParseNode.AssignmentRestElement
+  | ParseNode.NamedArgument
   | ParseNode.UpdateExpression
   | ParseNode.AwaitExpression
   | ParseNode.UnaryExpression

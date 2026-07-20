@@ -6,7 +6,7 @@ import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
-import { Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction } from '#self';
+import { Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -435,4 +435,36 @@ export function collectOverloadGroups(declarations: readonly OverloadableDeclara
     }
   }
   return byName;
+}
+
+/**
+ * A comparable map key for a field's property key. A String key uses its string
+ * value and a Symbol key uses the Symbol itself, so a readonly field is found by
+ * the same key whether it is written as a String or a Symbol.
+ */
+export function readonlyFieldKey(key: import('../value.mts').PropertyKeyValue): unknown {
+  return key instanceof JSStringValue ? key.stringValue() : key;
+}
+
+/**
+ * Whether a write of property `key` on `receiver` is a forbidden assignment to a
+ * `readonly` field. A readonly field, recorded on the instance with the
+ * constructor that declares it (spec sec-typed-classes), may be assigned only in
+ * its own initializer and in a body of that declaring constructor. The write is
+ * permitted exactly when the function currently running is the declaring
+ * constructor, so an assignment from a method the constructor calls, from a
+ * subclass, through a reference, or through reflection is forbidden. Returns true
+ * when the write must be rejected.
+ */
+export function IsForbiddenReadonlyWrite(receiver: Value, key: import('../value.mts').PropertyKeyValue): boolean {
+  const map = (receiver as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+  if (map === undefined) {
+    return false;
+  }
+  const declaringConstructor = map.get(readonlyFieldKey(key));
+  if (declaringConstructor === undefined) {
+    return false;
+  }
+  const running = surroundingAgent.executionContextStack.at(-1)?.Function;
+  return running !== declaringConstructor;
 }

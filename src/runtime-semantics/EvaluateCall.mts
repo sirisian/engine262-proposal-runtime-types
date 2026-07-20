@@ -3,7 +3,7 @@ import {
 } from '../value.mts';
 import { Q, Completion, AbruptCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ArgumentListEvaluation } from './all.mts';
+import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -12,6 +12,7 @@ import {
   PrepareForTailCall,
   Call,
   EnvironmentRecord,
+  surroundingAgent,
   Throw,
 } from '#self';
 
@@ -37,7 +38,16 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     thisValue = Value.undefined;
   }
   // 3. Let argList be ? ArgumentListEvaluation of arguments.
-  const argList = Q(yield* ArgumentListEvaluation(args));
+  // proposal-runtime-types: an argument list with named arguments is resolved
+  // against the called function's parameter names, so where the syntax is present
+  // and the callee is an ordinary function the callability check is taken first
+  // and the arguments are mapped to positions. The positional path is unchanged.
+  const argsIsNamed = surroundingAgent.feature('runtime-types')
+    && Array.isArray(args) && hasNamedArguments(args as ParseNode.Arguments);
+  let argList;
+  if (!argsIsNamed) {
+    argList = Q(yield* ArgumentListEvaluation(args));
+  }
   // 4. If Type(func) is not Object, throw a TypeError exception.
   // 5. If IsCallable(func) is false, throw a TypeError exception.
   if (!(func instanceof ObjectValue) || !IsCallable(func)) {
@@ -49,6 +59,9 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
       }
     }
     return Throw.TypeError('$1 is not a function', func);
+  }
+  if (argsIsNamed) {
+    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func));
   }
   // 6. If tailPosition is true, perform PrepareForTailCall().
   if (tailPosition) {

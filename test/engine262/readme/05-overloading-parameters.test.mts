@@ -12,9 +12,9 @@ import { evaluated, bool, ok, expectThrown } from './harness.mts';
  * argument against each parameter. Rest parameters and type-based dispatch are
  * verified here.
  *
- * NAMED arguments (`f(a: 1, b: 2)`) and object-spread arguments
- * (`f(...{ a: 1, b: 2 })`) at the call site are not yet implemented, and are
- * documented as a gap rather than asserted.
+ * NAMED arguments (`f(a: 1, b: 2)`) select a parameter by name, and an object
+ * spread (`f(...{ a: 1, b: 2 })`) binds each property by parameter name. Both are
+ * verified here alongside the positional and rest forms.
  */
 
 // ── Rest Parameters ───────────────────────────────────────────────────────────
@@ -69,9 +69,24 @@ test('Function Overloading: type-based dispatch selects the matching signature',
   expect(evaluated('function f(a: string): string { return "str"; } function f(a: uint8): string { return "int"; } f((5 := uint8));')).toBe('int');
 });
 
-test('Named arguments and object-spread arguments are not yet implemented (documents the gap)', () => {
-  // Target (README "Named Parameters"): f(a: 1, b: "x") and f(...{ a: 1, b: "x" })
-  // bind by parameter name. Today both are rejected.
-  expectThrown('function f(a: uint8, b: string) { return b; } f(a: (1 := uint8), b: "x");');
-  expectThrown('function f(a: uint32, b: string) { return b; } f(...{ a: 10, b: "b" });');
+// ── Named Parameters ──────────────────────────────────────────────────────────
+// A named argument `name: expr` selects a parameter by name; an object spread
+// binds each property by parameter name (README "Named Parameters").
+test('Named Parameters: a named argument selects a parameter by name', () => {
+  expect(evaluated('function f(a: uint8, b: string) { return b; } f((1 := uint8), b: "x");')).toBe('x');
+  // named arguments may be written in any order
+  expect(evaluated('function f(a: string, b: string) { return a + b; } f(b: "B", a: "A");')).toBe('AB');
+});
+
+test('Named Parameters: named arguments skip defaulted parameters', () => {
+  // a defaulted parameter may be omitted and named arguments supplied for later ones
+  expect(evaluated('function f(a: string = "x", b: string) { return a + b; } f(b: "a");')).toBe('xa');
+  // omitting a required parameter is an error (README: no signature matches)
+  expectThrown('function g(option1: string, option2: string) {} g(option2: "a");');
+});
+
+test('Named Parameters: an object spread binds by parameter name', () => {
+  expect(evaluated('function f(a: string, b: string) { return a + "," + b; } f(...{ a: "A", b: "B" });')).toBe('A,B');
+  // an ordinary array/iterable spread still fills positions in order
+  expect(evaluated('function f(a: uint32, b: uint32) { return a + b; } f(...[3, 4]);')).toBe('7');
 });

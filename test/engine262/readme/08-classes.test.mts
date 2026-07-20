@@ -14,13 +14,13 @@ import { evaluated, bool, ok, expectThrown } from './harness.mts';
  *    class with typed fields, typed-field defaults, and typed static/private
  *    members.
  *
- *  - The `readonly` class-FIELD modifier does not parse and is a documented gap
- *    (PENDING-CAPABILITIES.md capability E). The type-level `readonly` on object
+ *  - The `readonly` class-FIELD modifier is implemented: a readonly field is
+ *    assignable only in its initializer and the declaring constructor. Object
  *    and interface members is implemented and verified in the interfaces file.
  *
- *  - Constructor OVERLOADING needs the overload-resolution subsystem
- *    (capability C); multiple constructors are a "Duplicate constructor" error
- *    today, verified below.
+ *  - Constructor OVERLOADING needs overload resolution extended to constructors;
+ *    multiple constructors are a "Duplicate constructor" error today, verified
+ *    below.
  */
 
 // ── Auto-sealing: a class with a typed field is sealed ────────────────────────
@@ -86,10 +86,20 @@ test('Constructors: a single typed constructor enforces its parameters', () => {
 });
 
 // ── Documented gaps ───────────────────────────────────────────────────────────
-test('Class Members: the readonly field modifier is not parsed (documents the gap)', () => {
-  // Target (README): `class A { readonly id: uint32 = ...; }` permits assignment
-  // only in the constructor. The class-field readonly modifier does not parse.
-  expectThrown('class A { readonly id: uint32 = (5 := uint32); } typeof A;');
+// ── Readonly Fields ───────────────────────────────────────────────────────────
+// A `readonly` field may be assigned only in its own initializer and in the
+// declaring class's constructors; every other assignment is a TypeError (README
+// "Readonly Fields").
+test('Readonly Fields: a readonly field is assignable in its initializer and constructor', () => {
+  expect(evaluated('class A { readonly id: uint32 = (5 := uint32); } let a = new A(); String(a.id);')).toBe('5');
+  expect(evaluated('class A { readonly id; constructor() { this.id = 10; } } let a = new A(); String(a.id);')).toBe('10');
+});
+
+test('Readonly Fields: assignment outside the constructor is a TypeError', () => {
+  // an external write
+  expectThrown('class A { readonly id = 5; } let a = new A(); a.id = 9;');
+  // a write from a method, even one the constructor calls, is rejected
+  expectThrown('class A { readonly id; constructor() { this.set(); } set() { this.id = 1; } } new A();');
 });
 
 test('Constructor Overloading: multiple constructors are not yet supported (documents the gap)', () => {
