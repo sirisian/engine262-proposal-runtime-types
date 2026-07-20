@@ -91,11 +91,11 @@ const libraryDeclarationSentinel = { type: 'LibraryType', location: { startIndex
 /**
  * The set of library generic type names this implementation resolves in type
  * position. Each is a nominal type distinguished by name and parameterized by its
- * type arguments; none has structural content of its own here (Promise.<T> and
- * Record.<K, V> are identities the reflection API and the awaited operation read).
+ * type arguments; none has structural content of its own here (Promise.<R, E> is
+ * an identity the reflection API and the awaited operation read).
  */
 const libraryTypeNames = new Set([
-  'Promise', 'Record',
+  'Promise',
   // proposal-runtime-types (README Global Objects): global constructors usable as
   // type names. Each is a nominal type whose values are its instances, tested by
   // the prototype chain of the global (see IsOfType). This is what lets

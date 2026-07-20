@@ -87,11 +87,11 @@ test('medium 20 · Promise.all (settled)', () => {
 });
 
 // 26401 · JSON Schema to TypeScript — a recursive schema interpreter: an object
-// schema without properties becomes `Record.<string, any>`, a typed enum becomes
-// the union of its literals, an array schema uses the array kit, and a plain
-// primitive schema its base type. Record is a library generic type (implemented
-// in this phase), so `Record.<string, any>` is a real type on both sides of the
-// identity with no user declaration needed.
+// schema without properties becomes an index-signature object type
+// `{ [k: string]: any }` (which is what TypeScript's `Record<string, any>` is;
+// this proposal has no built-in `Record` type, so the shape is built directly
+// with an index signature), a typed enum becomes the union of its literals, an
+// array schema uses the array kit, and a plain primitive schema its base type.
 test('medium 26401 · JSON Schema to TypeScript', () => {
   const f = `
     function field(schema, name) { const p = Reflect.getReflection(schema).properties.find(x => x.name === name); return p ? p.type : undefined; }
@@ -107,7 +107,7 @@ test('medium 26401 · JSON Schema to TypeScript', () => {
       if (kind === 'number') { const en = field(schema, 'enum'); return en === undefined ? number : union(elementTypes(en)); }
       if (kind === 'object') {
         const properties = field(schema, 'properties');
-        if (properties === undefined) { return type Record.<string, any>; }
+        if (properties === undefined) { return type { [key: string]: any }; }
         const requiredList = field(schema, 'required');
         const required = requiredList === undefined ? [] : elementTypes(requiredList).map(litval);
         return objectOf(Reflect.getReflection(properties).properties.map(p => ({
@@ -119,7 +119,7 @@ test('medium 26401 · JSON Schema to TypeScript', () => {
     }`;
   expectBuilderTrue(`${f}\n type S = { type: 'string' }; String(jsonSchema2TS(S) === string);`);
   expectBuilderTrue(`${f}\n type S = { type: 'number', enum: [1, 2, 3] }; type Expected = 1 | 2 | 3; String(jsonSchema2TS(S) === Expected);`);
-  expectBuilderTrue(`${f}\n type S = { type: 'object' }; type Expected = Record.<string, any>; String(jsonSchema2TS(S) === Expected);`);
+  expectBuilderTrue(`${f}\n type S = { type: 'object' }; type Expected = { [key: string]: any }; String(jsonSchema2TS(S) === Expected);`);
   expectBuilderTrue(`${f}\n type S = { type: 'array', items: { type: 'string' } }; type Expected = [].<string>; String(jsonSchema2TS(S) === Expected);`);
   // an object schema with required and optional properties
   expectBuilderTrue(`${f}
