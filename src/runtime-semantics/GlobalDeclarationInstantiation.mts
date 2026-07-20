@@ -10,8 +10,9 @@ import { Value } from '../value.mts';
 import { Q, NormalCompletion } from '../completion.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { collectOverloadGroups, MakeOverloadedFunction } from '../abstract-ops/runtime-types.mts';
 import { InstantiateFunctionObject } from './all.mts';
-import { Assert, GlobalEnvironmentRecord, Throw } from '#self';
+import { Assert, GlobalEnvironmentRecord, Throw, surroundingAgent } from '#self';
 
 export function* GlobalDeclarationInstantiation(script: ParseNode.Script, env: GlobalEnvironmentRecord) {
   // 2. Let lexNames be the LexicallyDeclaredNames of script.
@@ -129,6 +130,21 @@ export function* GlobalDeclarationInstantiation(script: ParseNode.Script, env: G
     const fo = InstantiateFunctionObject(f, env, privateEnv);
     // c. Perform ? env.CreateGlobalFunctionBinding(fn, fo, false).
     Q(yield* env.CreateGlobalFunctionBinding(fn, fo, Value.false));
+  }
+  // Where a name has more than one function declaration, the declarations are its
+  // overloads: bind that name to a single function that resolves a call to one of
+  // them. The ordinary binding above put the last declaration in place; this
+  // replaces it with the overloaded function built from all of them in source
+  // order. Only when runtime types are enabled; otherwise the last declaration
+  // stands, as it does today.
+  if (surroundingAgent.feature('runtime-types')) {
+    const groups = collectOverloadGroups(varDeclarations as { type: string }[], (d) => BoundNames(d as ParseNode)[0].stringValue());
+    for (const [, decls] of groups) {
+      const name = BoundNames(decls[0] as ParseNode)[0];
+      const functions = decls.map((d) => InstantiateFunctionObject(d as ParseNode.FunctionDeclaration, env, privateEnv));
+      const overloaded = Q(yield* MakeOverloadedFunction(name, functions));
+      Q(yield* env.SetMutableBinding(name, overloaded, Value.false));
+    }
   }
   // 18. For each String vn in declaredVarNames, in list order, do
   for (const vn of declaredVarNames) {

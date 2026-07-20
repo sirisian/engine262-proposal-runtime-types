@@ -12,6 +12,8 @@ import {
 import { Q, X, NormalCompletion } from '../completion.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { collectOverloadGroups, MakeOverloadedFunction } from '../abstract-ops/runtime-types.mts';
 import {
   InstantiateFunctionObject,
   IteratorBindingInitialization_FormalParameters,
@@ -267,6 +269,19 @@ export function* FunctionDeclarationInstantiation(func: ECMAScriptFunctionObject
     const fo = InstantiateFunctionObject(f, lexEnv, privateEnv);
     // c. Perform ! varEnv.SetMutableBinding(fn, fo, false).
     X(varEnv.SetMutableBinding(fn, fo, Value.false));
+  }
+  // Where a name inside this function body has more than one function
+  // declaration, the declarations are its overloads: rebind that name to a single
+  // function that resolves a call to one of them. Same as at the top level, and
+  // only when runtime types are enabled.
+  if (surroundingAgent.feature('runtime-types')) {
+    const overloadGroups = collectOverloadGroups(varDeclarations as { type: string }[], (d) => BoundNames(d as ParseNode)[0].stringValue());
+    for (const [, decls] of overloadGroups) {
+      const name = BoundNames(decls[0] as ParseNode)[0];
+      const functions = decls.map((d) => InstantiateFunctionObject(d as ParseNode.FunctionDeclaration, lexEnv, privateEnv));
+      const overloaded = Q(yield* MakeOverloadedFunction(name, functions));
+      X(varEnv.SetMutableBinding(name, overloaded, Value.false));
+    }
   }
   // 37. Return NormalCompletion(empty).
   return NormalCompletion(undefined);

@@ -5,7 +5,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
-import { Call, R, Throw, ToNumber, ToString, ToBoolean } from '#self';
+import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
+import { Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction } from '#self';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -336,4 +337,102 @@ export function AssociateClassType(ctor: object, typeObject: Value): void {
 
 export function LookupClassType(ctor: object): Value | undefined {
   return classTypeObjects.get(ctor);
+}
+
+/**
+ * Builds the signature of one concrete function declaration for overload
+ * resolution: its parameter descriptions, with each annotated type resolved now
+ * (annotation evaluation is deferred, so it is done here at declaration time and
+ * the resolved types are read synchronously at each call). The rest/optional/
+ * default arity is read from the parameter nodes.
+ */
+export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignature> {
+  const formals = ((fn as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
+  // Resolve each parameter's annotation to a type record up front. describeParameters
+  // wants a synchronous typeOf, so pre-resolve into a map keyed by node.
+  const resolved = new Map<ParseNode, TypeRecord>();
+  for (const p of formals) {
+    const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+    if (ann) {
+      resolved.set(p, Q(yield* TypeNodeToTypeRecord(ann.Type)));
+    }
+  }
+  const params = describeParameters(formals, (annotation) => {
+    for (const [node, rec] of resolved) {
+      if ((node as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation === annotation) {
+        return rec;
+      }
+    }
+    return resolved.values().next().value ?? ({ Kind: 'any' } as TypeRecord);
+  });
+  return { Parameters: params, Function: fn };
+}
+
+/**
+ * Given the concrete function objects declared under one name, in declaration
+ * order, returns a single function object that performs overload resolution at the
+ * call site. Its `length` is the smallest minimum arity among the signatures and
+ * its `name` is the shared name; a call resolves the arguments to one signature
+ * and calls that signature's function, throwing a TypeError where no signature is
+ * viable or more than one is equally best. Because the result is an ordinary
+ * function object, `call`, `apply`, and `bind` route through the same resolution.
+ */
+export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly Value[]): ValueEvaluator {
+  const signatures: OverloadSignature[] = [];
+  for (const fn of functions) {
+    signatures.push(Q(yield* OverloadSignatureOf(fn)));
+  }
+  let length = Infinity;
+  for (const sig of signatures) {
+    length = Math.min(length, minimumArity(sig.Parameters));
+  }
+  if (!Number.isFinite(length)) {
+    length = 0;
+  }
+  const behaviour = function* overloadDispatch(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
+    const resolution = resolveOverload(signatures, args);
+    if (resolution.Kind === 'none') {
+      return Throw.TypeError('no overload of $1 matches these arguments', name);
+    }
+    if (resolution.Kind === 'ambiguous') {
+      return Throw.TypeError('the call to $1 is ambiguous between overloads', name);
+    }
+    return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, args as Value[])));
+  };
+  const overloaded = CreateBuiltinFunction(behaviour as never, length, name, []);
+  return overloaded;
+}
+
+/**
+ * A function-like declaration whose name may be one of several overloads.
+ */
+interface OverloadableDeclaration { readonly type: string; }
+
+/**
+ * From a list of declarations, the names that have more than one plain function
+ * declaration (`function f`), each typed, in declaration order. These are the
+ * names that resolve to an overloaded function; a name with a single declaration,
+ * or whose declarations are generators or async functions, is left to bind
+ * ordinarily. Returns a Map from name to the declarations in source order.
+ */
+export function collectOverloadGroups(declarations: readonly OverloadableDeclaration[], boundName: (d: OverloadableDeclaration) => string): Map<string, OverloadableDeclaration[]> {
+  const byName = new Map<string, OverloadableDeclaration[]>();
+  for (const d of declarations) {
+    if (d.type !== 'FunctionDeclaration') {
+      continue;
+    }
+    const name = boundName(d);
+    const list = byName.get(name);
+    if (list) {
+      list.push(d);
+    } else {
+      byName.set(name, [d]);
+    }
+  }
+  for (const [name, list] of [...byName]) {
+    if (list.length < 2) {
+      byName.delete(name);
+    }
+  }
+  return byName;
 }

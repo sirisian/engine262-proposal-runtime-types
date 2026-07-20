@@ -6,20 +6,15 @@ import { evaluated, bool, ok, expectThrown } from './harness.mts';
  * Sections: Function Overloading (and Overload Resolution), Named Parameters,
  * Rest Parameters.
  *
- * Two features here are NOT yet implemented in the engine and are documented as
- * gaps (see PENDING-CAPABILITIES.md, capabilities C and D) rather than asserted:
+ * Function OVERLOADING resolves a call to the signature that best fits the
+ * argument types (spec sec-overload-resolution): same-name function declarations
+ * accumulate as signatures, and a call selects among them by a ranking of each
+ * argument against each parameter. Rest parameters and type-based dispatch are
+ * verified here.
  *
- *  - Function OVERLOADING is absent. Declaring two functions of one name is
- *    ordinary redeclaration (the last wins); a call runs it regardless of the
- *    argument types, so type-based overload resolution does not happen. The
- *    normative spec (sec-overload-resolution) defines the four-tier ranking; the
- *    Signature Record list on the ~function~ type already supports multiple
- *    signatures, but the value/dispatch side is unbuilt.
- *
- *  - NAMED arguments (`f(a: 1, b: 2)`) and object-spread arguments
- *    (`f(...{ a: 1, b: 2 })`) at the call site are absent.
- *
- * REST parameters ARE implemented and are verified here.
+ * NAMED arguments (`f(a: 1, b: 2)`) and object-spread arguments
+ * (`f(...{ a: 1, b: 2 })`) at the call site are not yet implemented, and are
+ * documented as a gap rather than asserted.
  */
 
 // ── Rest Parameters ───────────────────────────────────────────────────────────
@@ -47,8 +42,8 @@ test('Rest Parameters: unnamed and named rest in a function type are the same si
 });
 
 // ── Function Overloading: what works today ────────────────────────────────────
-// Declaring two functions of one name parses. (Type-based dispatch is not yet
-// implemented; see the file header and PENDING-CAPABILITIES.md capability C.)
+// Declaring two functions of one name parses and evaluates; type-based dispatch
+// among them is verified below.
 test('Function Overloading: same-name declarations parse and evaluate', () => {
   expect(ok('function f(a: uint8): string { return "int"; } function f(a: string): string { return "str"; } typeof f;')).toBe(true);
 });
@@ -63,16 +58,15 @@ test('Function Overloading: a single typed signature enforces its parameters and
   expectThrown('function f(a: uint8): uint8 { return a; } let x = 300; f(x);');
 });
 
-// ── Documented gaps: overloading dispatch and named arguments ─────────────────
-// These record the CURRENT behavior so a future implementation has a failing
-// baseline to turn green. They are written to pass against today's engine, with
-// the note that the target behavior differs.
-test('Function Overloading: type-based dispatch is not yet implemented (documents the gap)', () => {
-  // Target (spec sec-overload-resolution): f((5 := uint8)) selects the uint8
-  // signature and returns "int". Today, dispatch is declaration-order: the last
-  // declaration wins regardless of argument type. We assert the current
-  // behavior so the gap is visible and testable.
-  expect(evaluated('function f(a: uint8): string { return "int"; } function f(a: string): string { return "str"; } f((5 := uint8));')).toBe('str');
+// ── Function Overloading: type-based dispatch ─────────────────────────────────
+// A call to an overloaded name selects the signature whose parameters best fit
+// the argument types (spec sec-overload-resolution).
+test('Function Overloading: type-based dispatch selects the matching signature', () => {
+  // f((5 := uint8)) selects the uint8 signature; f("x") selects the string one.
+  expect(evaluated('function f(a: uint8): string { return "int"; } function f(a: string): string { return "str"; } f((5 := uint8));')).toBe('int');
+  expect(evaluated('function f(a: uint8): string { return "int"; } function f(a: string): string { return "str"; } f("x");')).toBe('str');
+  // resolution does not depend on declaration order.
+  expect(evaluated('function f(a: string): string { return "str"; } function f(a: uint8): string { return "int"; } f((5 := uint8));')).toBe('int');
 });
 
 test('Named arguments and object-spread arguments are not yet implemented (documents the gap)', () => {
