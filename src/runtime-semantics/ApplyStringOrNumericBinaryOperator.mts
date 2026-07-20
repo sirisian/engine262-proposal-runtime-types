@@ -17,7 +17,10 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
     const opFn = LookupClassOperator(lval, opText);
     if (opFn) {
-      return Q(yield* Call(opFn as never, Value.undefined, [lval, rval]));
+      // proposal-runtime-types (spec sec-class-operators): a class operator's
+      // receiver is the left operand and the declaration's single parameter is
+      // the right operand. Dispatch with this = lval and arguments = [rval].
+      return Q(yield* Call(opFn as never, lval, [rval]));
     }
   }
   // proposal-runtime-types R3: typed-number arithmetic. When either operand is

@@ -78,6 +78,59 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   return { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
 }
 
+/**
+ * proposal-runtime-types #sec-default-values: DefaultValueOf.
+ * The value a binding or field of type `t` holds before assignment, or undefined
+ * (standing for the spec's ~none~) when `t` has no default. Callers distinguish
+ * "no default" by receiving the JS `undefined` sentinel, never a Value.
+ *
+ * any -> undefined; a numeric type -> its 0; String -> ''; Boolean -> false;
+ * bigint -> 0n; the null/undefined types -> null/undefined; a union -> null or
+ * undefined only if it admits them; a dynamic array -> an empty array; a fixed
+ * array/tuple -> filled with element defaults; otherwise none (symbol, object,
+ * function, non-nullable unions, and value-type classes without a field default).
+ */
+export function DefaultValueOf(t: TypeRecord): Value | undefined {
+  switch (t.Kind) {
+    case 'any':
+      return Value.undefined;
+    case 'void':
+      // The `undefined` type is represented as `void` here; its default is undefined.
+      return Value.undefined;
+    case 'primitive': {
+      const name = t.Name;
+      if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
+        return new TypedNumberValue(0, t);
+      }
+      if (name === 'string') { return Value(''); }
+      if (name === 'boolean') { return Value.false; }
+      if (name === 'bigint') { return Value(0n); }
+      // symbol has no meaningful zero
+      return undefined;
+    }
+    case 'literal':
+      // The one value of a literal type is its default.
+      return t.Value as Value;
+    case 'union': {
+      // A union defaults to null or undefined only when it admits one.
+      for (const m of t.Members) {
+        if (m.Kind === 'literal' && (m.Value as Value) === Value.null) { return Value.null; }
+      }
+      for (const m of t.Members) {
+        if (m.Kind === 'void') { return Value.undefined; }
+      }
+      return undefined;
+    }
+    default:
+      // object, function, tuple, array, nominal, intersection, parameterized,
+      // reference: no scalar default is materialized here. Arrays and value-type
+      // aggregates get their zero-filled defaults through the memory-layout
+      // extension; the core reports none so a binding of such a type without an
+      // initializer is a type error rather than silently undefined.
+      return undefined;
+  }
+}
+
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
   switch (t.Kind) {
     case 'any':
@@ -183,6 +236,33 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           const ref = Q(yield* ResolveBinding(Value(bi.name)));
           ctor = Q(yield* GetValue(ref));
         }
+        if (!(ctor instanceof ObjectValue)) {
+          return false;
+        }
+        const protoValue = Q(yield* Get(ctor, Value('prototype')));
+        if (!(protoValue instanceof ObjectValue)) {
+          return false;
+        }
+        let proto = Q(yield* value.GetPrototypeOf());
+        while (proto instanceof ObjectValue) {
+          if (proto === protoValue) {
+            return true;
+          }
+          proto = Q(yield* proto.GetPrototypeOf());
+        }
+        return false;
+      }
+      // proposal-runtime-types (README Global Objects): a library nominal named
+      // for a global constructor (Error and its subclasses, Map, Set, Date, and
+      // the rest) tests membership by the prototype chain of that global, the same
+      // instanceof relation a class type uses. This is what lets `let e: Error`,
+      // `catch (e: TypeError)`, and the other global-object types work.
+      if (t.LibraryName) {
+        if (!(value instanceof ObjectValue)) {
+          return false;
+        }
+        const ref = Q(yield* ResolveBinding(Value(t.LibraryName)));
+        const ctor = Q(yield* GetValue(ref));
         if (!(ctor instanceof ObjectValue)) {
           return false;
         }
@@ -478,6 +558,14 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
     }
     case 'FunctionType':
       return Q(yield* functionRecordFromSignature(node.FunctionTypeParameterList, { Type: node.ReturnType } as ParseNode.TypeAnnotation));
+    case 'ReferenceType': {
+      // proposal-runtime-types (references extension; spec ~reference~ kind): a
+      // `ref T` type is a reference to a storage location holding a T. Its Type
+      // Record is { Kind: 'reference', Target: <T's record> }; interning and
+      // reflection over the reference kind are already provided.
+      const Target = Q(yield* TypeNodeToTypeRecord(node.Type));
+      return { Kind: 'reference', Target };
+    }
     case 'KeyOfType': {
       // proposal-runtime-types #sec-keyof: keyof denotes GetTypeObject of the
       // Type Record KeyTypesOf returns for the operand. It is a type error when
@@ -579,7 +667,14 @@ function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypePar
   const Parameters: TypeRecord[] = [];
   let ThisType: TypeRecord | null = null;
   for (const p of params) {
-    const t = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+    const annotation = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+    // A parameter in a function type is a type, optionally introduced by a name
+    // and a colon: `(uint8) => uint8` stores the bare type in [[Type]], while
+    // `(x: uint8) => uint8` stores it in a [[TypeAnnotation]] behind the name.
+    // Read whichever the parser produced; a leading `this` parameter is handled
+    // just below and is not an ordinary parameter.
+    const bareType = (p as { Type?: ParseNode.Type | null }).Type;
+    const t = annotation ?? (bareType ? ({ Type: bareType } as ParseNode.TypeAnnotation) : null);
     // A leading `this` parameter supplies the signature's this type and is not an
     // ordinary parameter.
     if ((p as { IsThis?: boolean }).IsThis) {

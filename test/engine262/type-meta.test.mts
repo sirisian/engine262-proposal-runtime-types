@@ -16,8 +16,10 @@ function evaluated(source: string): string {
 test('the default hook supplies uninitialized annotated bindings', () => {
   expect(evaluated('meta uint8 { default = 7; } let x: uint8; x === (7 := uint8) ? "ok" : "no";')).toBe('ok');
   expect(evaluated('type T = uint8 | string; meta T { default = "d"; } let s: T; s === "d" ? "ok" : "no";')).toBe('ok');
-  // Without a registered default, undefined as today.
-  expect(evaluated('let y: uint8 = 3; let z: string; z === undefined && y === (3 := uint8) ? "ok" : "no";')).toBe('ok');
+  // Without a registered meta-default, a binding still takes its type's
+  // structural default per #sec-default-values: a string is '', not undefined.
+  // (A registered `default` hook, when present, takes precedence over this.)
+  expect(evaluated('let y: uint8 = 3; let z: string; z === "" && y === (3 := uint8) ? "ok" : "no";')).toBe('ok');
   // An initializer wins over the default.
   expect(evaluated('meta uint8 { default = 7; } let x: uint8 = 2; x === (2 := uint8) ? "ok" : "no";')).toBe('ok');
 });

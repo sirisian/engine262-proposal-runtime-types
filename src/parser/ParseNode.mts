@@ -1232,6 +1232,9 @@ export namespace ParseNode {
     readonly type: 'BindingRestElement';
     readonly BindingIdentifier?: BindingIdentifier;
     readonly BindingPattern?: BindingPattern;
+    // proposal-runtime-types: a typed rest parameter carries an array type as its
+    // annotation (`...args: [].<uint32>`).
+    readonly TypeAnnotation?: TypeAnnotation | null;
   }
 
   // EmptyStatement :
@@ -1653,6 +1656,7 @@ export namespace ParseNode {
 
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
+    readonly TypeParameters?: TypeParameters | null;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly FormalParameters: FormalParameters;
     readonly FunctionBody: FunctionBody;
@@ -2004,6 +2008,7 @@ export namespace ParseNode {
 
     // proposal-runtime-types
     readonly ClassModifiers?: readonly string[] | null;
+    readonly TypeParameters?: TypeParameters | null;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly ClassTail: ClassTail;
   }
@@ -2016,6 +2021,7 @@ export namespace ParseNode {
 
     // proposal-runtime-types
     readonly ClassModifiers?: readonly string[] | null;
+    readonly TypeParameters?: TypeParameters | null;
     readonly BindingIdentifier: BindingIdentifier | null;
     readonly ClassTail: ClassTail;
   }

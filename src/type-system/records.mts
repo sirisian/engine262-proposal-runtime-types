@@ -94,7 +94,17 @@ const libraryDeclarationSentinel = { type: 'LibraryType', location: { startIndex
  * type arguments; none has structural content of its own here (Promise.<T> and
  * Record.<K, V> are identities the reflection API and the awaited operation read).
  */
-const libraryTypeNames = new Set(['Promise', 'Record']);
+const libraryTypeNames = new Set([
+  'Promise', 'Record',
+  // proposal-runtime-types (README Global Objects): global constructors usable as
+  // type names. Each is a nominal type whose values are its instances, tested by
+  // the prototype chain of the global (see IsOfType). This is what lets
+  // `let e: Error`, `catch (e: TypeError)`, `let m: Map`, and the rest work.
+  'AggregateError', 'ArrayBuffer', 'DataView', 'Date', 'Error', 'EvalError',
+  'FinalizationRegistry', 'Map', 'Proxy', 'RangeError', 'ReferenceError',
+  'RegExp', 'Set', 'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError',
+  'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
+]);
 
 /**
  * Build the library generic type of the given name applied to the given
@@ -122,7 +132,13 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'any': return anyType;
     case 'never': return neverType;
     case 'boolean1': return makePrimitive('uint', [1]);
-    case 'float16': case 'float32': case 'float64':
+    // proposal-runtime-types: `object` names the object type with no required
+    // properties, to which every Object is assignable (spec: the primitive names
+    // resolve as primitives "except `object`", which is an ~object~ Type Record
+    // with empty Properties). It is not a ~primitive~ record.
+    case 'object': return { Kind: 'object', Properties: [], IndexSignatures: [] };
+    case 'float16': case 'float32': case 'float64': case 'float128':
+    case 'decimal32': case 'decimal64': case 'decimal128':
     case 'number': case 'string': case 'boolean': case 'bigint': case 'symbol':
       return makePrimitive(name);
     case 'int': case 'uint': case 'rational': case 'complex': case 'vector':

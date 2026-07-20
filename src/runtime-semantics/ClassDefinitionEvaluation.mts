@@ -216,6 +216,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       }
       // iii. Let F be the active function object.
       const F = surroundingAgent.activeFunctionObject as ECMAScriptFunctionObject; // eslint-disable-line no-shadow
+      // proposal-runtime-types (spec sec-abstract-classes): an abstract class
+      // with a default constructor also cannot be instantiated directly - throw
+      // when NewTarget is this constructor itself, but allow a concrete subclass's
+      // super() (a concrete NewTarget).
+      if ((F as { IsAbstract?: boolean }).IsAbstract && (F as unknown) === NewTarget) {
+        return Throw.TypeError('$1 is an abstract class and cannot be instantiated', F);
+      }
       let result;
       // iv. If F.[[ConstructorKind]] is derived, then
       if (F.ConstructorKind === 'derived') {
@@ -236,6 +243,14 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         result = Q(yield* OrdinaryCreateFromConstructor(NewTarget, '%Object.prototype%'));
       }
       Q(yield* InitializeInstanceElements(result, F));
+      // proposal-runtime-types (spec sec-typed-classes): a class with a typed
+      // instance field seals its instances. The default (field-only) constructor
+      // seals here at its outermost frame - when F is the class being new'd
+      // (NewTarget) - after base and derived fields are initialized, mirroring the
+      // FunctionConstructSlot path for classes with an explicit constructor.
+      if (F === NewTarget && (F as { SealInstances?: boolean }).SealInstances) {
+        Q(yield* result.PreventExtensions());
+      }
       return result;
     };
     // b. ! CreateBuiltinFunction(defaultConstructor, 0, className, « [[ConstructorKind]], [[SourceText]], [[PrivateMethods]], [[Fields]] », the current Realm Record, constructorParent).
@@ -525,6 +540,29 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     F.PrivateMethods = instancePrivateMethods;
     // 29. Set F.[[Fields]] to instanceFields.
     F.Fields = instanceFields;
+    // proposal-runtime-types (spec sec-typed-classes): a class in which at least
+    // one public or private instance field is typed is automatically sealed - its
+    // instances have PreventExtensions performed and its prototype is frozen - so
+    // that a field may be written but a property may not be added or removed. A
+    // class whose fields are typed opts out with the `dynamic` modifier. We record
+    // the decision on the constructor here (the class body and modifiers are in
+    // scope) and enforce it when each instance's fields are initialized. Whether
+    // instances additionally get value-type layout (contiguous memory, byteLength,
+    // array views) is the memory-layout extension and is not decided here.
+    {
+      const modifiers = (ClassTail as { parent?: { ClassModifiers?: readonly string[] | null } }).parent?.ClassModifiers ?? [];
+      const isDynamic = modifiers.includes('dynamic');
+      const hasTypedInstanceField = (ClassBody ?? []).some((el) => (el as { type?: string, static?: boolean, TypeAnnotation?: unknown }).type === 'FieldDefinition'
+        && !(el as { static?: boolean }).static
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
+      (F as { SealInstances?: boolean }).SealInstances = hasTypedInstanceField && !isDynamic;
+      // proposal-runtime-types (spec sec-abstract-classes): an abstract class
+      // cannot be instantiated - its constructor's [[Construct]] throws a
+      // TypeError when NewTarget is that constructor itself, while super() from a
+      // concrete subclass (a concrete NewTarget) runs it as a constructor body.
+      (F as { IsAbstract?: boolean }).IsAbstract = modifiers.includes('abstract');
+    }
     // 30. For each PrivateElement method of staticPrivateMethods, do
     for (const method of staticPrivateMethods) {
       // a. Perform ! PrivateMethodOrAccessorAdd(F, method).

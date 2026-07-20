@@ -649,6 +649,34 @@ export abstract class TypeParser extends ExpressionParser {
       node.static = true;
     }
     this.expect('operator');
+    // proposal-runtime-types (spec sec-class-operators): the index accessors are
+    // overloadable. `operator[]` names the index accessor; the `[` `]` pair is the
+    // operator name, followed by the parameter list (one or more index
+    // parameters). A `get`/`set` prefix is handled by the class-element parser.
+    if (this.test(Token.LBRACK)) {
+      this.expect(Token.LBRACK);
+      this.expect(Token.RBRACK);
+      node.OperatorName = '[]';
+      if (this.test(Token.PERIOD_LT)) {
+        node.TypeParameters = this.parseTypeParameters();
+      }
+      this.scope.with({
+        lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
+      }, () => {
+        this.scope.arrowInfoStack.push(null);
+        node.FormalParameters = this.parseFormalParameters();
+        if (this.test(Token.COLON)) {
+          node.TypeAnnotation = this.parseTypeAnnotation();
+        }
+        if (this.test(Token.LBRACE)) {
+          node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
+        } else {
+          this.semicolon();
+        }
+        this.scope.arrowInfoStack.pop();
+      });
+      return this.finishNode(node, 'OperatorDefinition');
+    }
     switch (this.peek().type) {
       case Token.ADD: case Token.SUB: case Token.MUL: case Token.DIV:
       case Token.MOD: case Token.EXP: case Token.EQ: case Token.LT:

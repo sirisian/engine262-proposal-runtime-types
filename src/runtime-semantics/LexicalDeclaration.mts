@@ -8,7 +8,7 @@ import { IsAnonymousFunctionDefinition, StringValue, type FunctionDeclaration } 
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   surroundingAgent,
@@ -22,7 +22,18 @@ import {
 //   LexicalBinding :
 //     BindingIdentifier
 //     BindingIdentifier Initializer
-function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initializer, strict, TypeAnnotation }: ParseNode.LexicalBinding): PlainEvaluator {
+function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initializer, TypedInitializer, strict, TypeAnnotation }: ParseNode.LexicalBinding): PlainEvaluator {
+  if (TypedInitializer) {
+    // proposal-runtime-types: the typed-assignment declaration `let a := X`
+    // (README "Typed Assignment"). The binding's type is inferred from X, which
+    // already carries its own type (`:=` and casts produce typed values), so the
+    // value is bound as-is with no separate annotation to enforce.
+    const bindingId = StringValue(BindingIdentifier!);
+    const lhs = X(ResolveBinding(bindingId, undefined, strict));
+    const rhs = Q(yield* Evaluate(TypedInitializer.AssignmentExpression));
+    const value = Q(yield* GetValue(rhs));
+    return yield* InitializeReferencedBinding(lhs, value);
+  }
   if (Initializer) {
     // 1. Let bindingId be StringValue of BindingIdentifier.
     const bindingId = StringValue(BindingIdentifier!);
@@ -51,7 +62,13 @@ function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initial
     let initial: Value = Value.undefined;
     if (TypeAnnotation) {
       const record = Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
-      const dflt = LookupTypeDefault(GetTypeObject(record));
+      // A registered meta-type default takes precedence (a user type may define
+      // its own default); otherwise the type's structural default per
+      // #sec-default-values (numeric 0, '', false, and so on).
+      let dflt = LookupTypeDefault(GetTypeObject(record));
+      if (dflt === undefined) {
+        dflt = DefaultValueOf(record);
+      }
       if (dflt !== undefined) {
         // The default crosses the same conversion boundary as an initializer.
         initial = Q(yield* EnforceAnnotation(TypeAnnotation, dflt));

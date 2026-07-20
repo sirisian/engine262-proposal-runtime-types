@@ -47,6 +47,8 @@ export abstract class FunctionParser extends IdentifierParser {
 
   abstract parseTypedInitializer(): ParseNode.TypedInitializer;
 
+  abstract parseTypeParameters(): ParseNode.TypeParameters;
+
   abstract parseBindingRestElement(): ParseNode.BindingRestElement;
 
   // FunctionDeclaration :
@@ -77,7 +79,8 @@ export abstract class FunctionParser extends IdentifierParser {
     }
     this.expect(Token.FUNCTION);
     const isGenerator = this.eat(Token.MUL);
-    if (!this.test(Token.LPAREN)) {
+    const genericNoName = surroundingAgent.feature('runtime-types') && this.test(Token.LT);
+    if (!this.test(Token.LPAREN) && !genericNoName) {
       node.BindingIdentifier = this.scope.with({
         await: isExpression ? false : undefined,
         yield: isExpression ? false : undefined,
@@ -85,10 +88,17 @@ export abstract class FunctionParser extends IdentifierParser {
       if (!isExpression) {
         this.scope.declare(node.BindingIdentifier, 'function');
       }
-    } else if (isExpression === false && !this.scope.isDefault()) {
+    } else if (isExpression === false && !this.scope.isDefault() && !genericNoName) {
       this.unexpected();
     } else {
       node.BindingIdentifier = null;
+    }
+
+    // proposal-runtime-types: a function may declare type parameters,
+    // `function id<T>(x: T): T`, applied with `.<...>` at the call site. Parsed
+    // only under the feature, before the formal parameter list.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
+      (node as Mutable<ParseNode.FunctionDeclaration>).TypeParameters = this.parseTypeParameters();
     }
 
     this.scope.with({

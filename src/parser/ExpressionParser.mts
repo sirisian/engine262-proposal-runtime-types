@@ -1210,15 +1210,25 @@ export abstract class ExpressionParser extends FunctionParser {
     this.expect(Token.CLASS);
 
     this.scope.with({ strict: true }, () => {
-      if (!this.test(Token.LBRACE) && !this.test(Token.EXTENDS)) {
+      if (!this.test(Token.LBRACE) && !this.test(Token.EXTENDS) && !this.test(Token.LT)) {
         node.BindingIdentifier = this.parseBindingIdentifier();
         if (!isExpression) {
           this.scope.declare(node.BindingIdentifier, 'lexical');
         }
+      } else if (this.test(Token.LT)) {
+        // A generic class expression may omit the binding identifier: `class <T> {}`.
+        node.BindingIdentifier = null;
       } else if (isExpression === false && !this.scope.isDefault()) {
         this.raise(Throw.SyntaxError('Class missing binding identifier'));
       } else {
         node.BindingIdentifier = null;
+      }
+      // proposal-runtime-types: a class may declare type parameters, `class A<T>`,
+      // applied with `.<...>` elsewhere. Parsed only under the feature.
+      if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
+        node.TypeParameters = this.parseTypeParameters();
+      } else {
+        node.TypeParameters = null;
       }
       const savedClassModifiers = this.currentClassModifiers;
       this.currentClassModifiers = ClassModifiers;

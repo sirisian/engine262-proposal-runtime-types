@@ -326,6 +326,13 @@ export abstract class StatementParser extends TypeParser {
 
     this.scope.declare(node.BindingList, 'lexical');
     node.BindingList.forEach((b) => {
+      // proposal-runtime-types: a `const` declaration without an initializer
+      // remains a Syntax Error whether or not the binding carries a type
+      // annotation (spec.emu sec-typed-declarations: "A `const` declaration
+      // without an Initializer remains a Syntax Error, whether or not the binding
+      // carries a TypeAnnotation"). This is the normative rule; the README prose
+      // suggesting a typed const may omit its initializer is superseded here. A
+      // typed `let` without an initializer does take the type's default.
       if (node.LetOrConst === 'const' && !b.Initializer && !b.TypedInitializer) {
         this.addEarlyError(Throw.SyntaxError('Missing initializer in const declaration'), b);
       }
@@ -508,6 +515,13 @@ export abstract class StatementParser extends TypeParser {
       default:
         node.BindingIdentifier = this.parseBindingIdentifier();
         break;
+    }
+    // proposal-runtime-types: a rest parameter may carry a type annotation, an
+    // array type describing its element type (README "Rest Parameters":
+    // `...args: [].<uint32>`). The function-type form already admits this; the
+    // declaration form does too.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+      (node as Mutable<ParseNode.BindingRestElement>).TypeAnnotation = this.parseTypeAnnotation();
     }
     return this.finishNode(node, 'BindingRestElement');
   }

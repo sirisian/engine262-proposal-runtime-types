@@ -124,7 +124,12 @@ test('classes with proposal elements still evaluate', () => {
       operator ==(a, b) { return true; }
       m() { return 'ok'; }
     }
-    new Shape().m();
+    // An abstract class cannot be instantiated directly (spec sec-abstract-classes),
+    // so a concrete subclass exercises that the proposal elements evaluate.
+    class Circle extends Shape {
+      area() { return (1 := float64); }
+    }
+    new Circle().m();
   `);
   expect(completion).toMatchObject({ Type: 'normal' });
   const value = (completion as unknown as { Value: { stringValue(): string } }).Value;

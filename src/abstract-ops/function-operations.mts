@@ -27,6 +27,9 @@ import {
 } from '../runtime-semantics/all.mts';
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { EnforceAnnotation, LookupTypeDefault } from './runtime-types.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
@@ -222,6 +225,23 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   if (initializer !== undefined) {
     // a. Let initValue be ? Call(initializer, receiver).
     initValue = Q(yield* Call(initializer, receiver));
+  } else if ((fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation) {
+    // proposal-runtime-types (spec sec-typed-classes): a typed field declared
+    // without an initializer takes its type's default rather than undefined, the
+    // same rule a typed binding follows (#sec-default-values). A registered
+    // meta-type default wins; otherwise the structural default. A type with no
+    // default leaves the field undefined.
+    const annotation = (fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation!;
+    const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+    let dflt = LookupTypeDefault(GetTypeObject(record));
+    if (dflt === undefined) {
+      dflt = DefaultValueOf(record);
+    }
+    if (dflt === undefined) {
+      initValue = Value.undefined;
+    } else {
+      initValue = Q(yield* EnforceAnnotation(annotation, dflt));
+    }
   } else { // 4. Else, let initValue be undefined.
     initValue = Value.undefined;
   }
@@ -342,6 +362,13 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   Assert(isECMAScriptFunctionObject(F));
   // 2. Assert: Type(newTarget) is Object.
   Assert(newTarget instanceof ObjectValue);
+  // proposal-runtime-types (spec sec-abstract-classes): an abstract class cannot
+  // be instantiated. Its [[Construct]] throws when NewTarget is the abstract
+  // constructor itself (a direct `new`), while super() from a concrete subclass
+  // arrives with a concrete NewTarget and runs the abstract constructor body.
+  if ((F as { IsAbstract?: boolean }).IsAbstract && (F as FunctionObject) === newTarget) {
+    return Throw.TypeError('$1 is an abstract class and cannot be instantiated', F);
+  }
   // 3. Let callerContext be the running execution context.
   // 4. Let kind be F.[[ConstructorKind]].
   const kind = F.ConstructorKind;
@@ -384,6 +411,7 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
     }
     // b. If kind is base, return NormalCompletion(thisArgument).
     if (kind === 'base') {
+      Q(yield* maybeSealTypedInstance(F, newTarget, thisArgument!));
       return NormalCompletion(thisArgument!);
     }
     // c. If result.[[Value]] is not undefined, throw a TypeError exception.
@@ -394,7 +422,29 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
     Q(result);
   }
   // 14. Return ? constructorEnv.GetThisBinding().
-  return Q((constructorEnv as FunctionEnvironmentRecord).GetThisBinding() as ObjectValue);
+  const thisBinding = Q((constructorEnv as FunctionEnvironmentRecord).GetThisBinding() as ObjectValue);
+  Q(yield* maybeSealTypedInstance(F, newTarget, thisBinding));
+  return thisBinding;
+}
+
+/**
+ * proposal-runtime-types (spec sec-typed-classes): seal the fully-constructed
+ * instance of a class with a typed field. This runs only at the outermost
+ * construct frame (F is newTarget), after every base and derived field has been
+ * initialized, so a subclass may still append its own fields during super before
+ * the whole instance is sealed once. The decision is the most-derived class's:
+ * `newTarget.SealInstances` was set at class definition (typed field, not
+ * `dynamic`). PreventExtensions is performed so a field may be written but a
+ * property may not be added or removed.
+ */
+function* maybeSealTypedInstance(F: FunctionObject, newTarget: FunctionObject | UndefinedValue, O: ObjectValue): PlainEvaluator<void> {
+  if (F !== newTarget) {
+    return undefined;
+  }
+  if ((newTarget as { SealInstances?: boolean }).SealInstances) {
+    Q(yield* O.PreventExtensions());
+  }
+  return undefined;
 }
 
 /** https://tc39.es/ecma262/#sec-functionallocate */

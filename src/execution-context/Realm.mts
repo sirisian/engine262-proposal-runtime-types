@@ -282,7 +282,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       'string', 'number', 'boolean', 'bigint', 'symbol', 'object',
       'int8', 'int16', 'int32', 'int64', 'int128',
       'uint8', 'uint16', 'uint32', 'uint64', 'uint128',
-      'float16', 'float32', 'float64',
+      'float16', 'float32', 'float64', 'float128',
+      'decimal32', 'decimal64', 'decimal128',
     ]) {
       const record = builtinTypeRecord(name);
       if (record) {

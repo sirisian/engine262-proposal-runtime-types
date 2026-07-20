@@ -1,6 +1,6 @@
 import { Q, X } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
-import { Value } from '../value.mts';
+import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
@@ -8,6 +8,10 @@ import {
   GetValue,
   IsStrictlyEqual,
   BooleanValue,
+  Call,
+  ToBoolean,
+  surroundingAgent,
+  LookupClassOperator,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-equality-operators-runtime-semantics-evaluation */
@@ -25,6 +29,25 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   const rref = Q(yield* Evaluate(RelationalExpression));
   // 4. Let rval be ? GetValue(rref).
   const rval = Q(yield* GetValue(rref));
+  // proposal-runtime-types (spec sec-class-operators): the equality operators are
+  // overloadable. When the left operand is an Object whose class declares
+  // `operator==`, `==` dispatches to it (receiver is the left operand, parameter
+  // the right) and `!=` returns its negation. Strict equality `===`/`!==` keeps
+  // its own semantics and does not consult the operator. The untyped path is
+  // unaffected.
+  if (surroundingAgent.feature('runtime-types')
+      && lval instanceof ObjectValue
+      && (operator === '==' || operator === '!=')) {
+    const opFn = LookupClassOperator(lval, '==');
+    if (opFn) {
+      const result = Q(yield* Call(opFn as Value, lval, [rval]));
+      const truthy = ToBoolean(result) === Value.true;
+      if (operator === '==') {
+        return truthy ? Value.true : Value.false;
+      }
+      return truthy ? Value.false : Value.true;
+    }
+  }
   switch (operator) {
     case '==':
       // 5. Return the result of performing Abstract Equality Comparison rval == lval.

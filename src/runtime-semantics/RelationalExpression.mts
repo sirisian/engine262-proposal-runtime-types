@@ -21,6 +21,7 @@ import {
   PrivateElementFind,
   Throw,
   surroundingAgent,
+  LookupClassOperator,
 } from '#self';
 import { ResolvePrivateIdentifier, type PrivateEnvironmentRecord } from '#self';
 
@@ -93,6 +94,20 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   const rref = Q(yield* Evaluate(ShiftExpression));
   // 4. Let rval be ? GetValue(rref).
   const rval = Q(yield* GetValue(rref));
+  // proposal-runtime-types (spec sec-class-operators): the relational operators
+  // are overloadable. When the left operand is an Object whose class declares the
+  // operator, dispatch to it with the receiver being the left operand and the
+  // declaration's parameter the right, in place of the abstract comparison. The
+  // untyped path (no such operator) is unaffected. `instanceof` and `in` are not
+  // overloadable and keep their semantics.
+  if (surroundingAgent.feature('runtime-types')
+      && lval instanceof ObjectValue
+      && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')) {
+    const opFn = LookupClassOperator(lval, operator);
+    if (opFn) {
+      return Q(yield* Call(opFn as Value, lval, [rval]));
+    }
+  }
   switch (operator) {
     case '<': {
       // 5. Let r be the result of performing Abstract Relational Comparison lval < rval.

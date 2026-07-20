@@ -18,8 +18,18 @@ import {
 //     BindingIdentifier
 //     BindingIdentifier Initializer
 //     BindingPattern Initializer
-function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, BindingPattern, TypeAnnotation }: ParseNode.VariableDeclaration): PlainEvaluator {
+function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedInitializer, BindingPattern, TypeAnnotation }: ParseNode.VariableDeclaration): PlainEvaluator {
   if (BindingIdentifier) {
+    if (TypedInitializer) {
+      // proposal-runtime-types: the typed-assignment declaration `var b := X`
+      // (README "Typed Assignment"). X carries its own inferred type, so the
+      // value is bound as-is.
+      const bindingId = StringValue(BindingIdentifier);
+      const lhs = Q(yield* ResolveBinding(bindingId, undefined, BindingIdentifier.strict));
+      const rhs = Q(yield* Evaluate(TypedInitializer.AssignmentExpression));
+      const value = Q(yield* GetValue(rhs));
+      return Q(yield* PutValue(lhs, value));
+    }
     if (!Initializer) {
       // 1. Return NormalCompletion(empty).
       return NormalCompletion(undefined);

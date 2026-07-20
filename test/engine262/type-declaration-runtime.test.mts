@@ -34,10 +34,12 @@ test('interfaces check structurally', () => {
 });
 
 test('class operators dispatch on binary expressions', () => {
+  // proposal-runtime-types (spec sec-class-operators): the receiver is the left
+  // operand and the declaration's parameter is the right operand.
   expect(evaluated(`class Vec {
     constructor(x) { this.x = x; }
-    operator +(a, b) { return new Vec(a.x + b.x); }
-    operator *(a, b) { return new Vec(a.x * b.x); }
+    operator +(rhs) { return new Vec(this.x + rhs.x); }
+    operator *(rhs) { return new Vec(this.x * rhs.x); }
   }
   const v = new Vec(2) + new Vec(3);
   const w = new Vec(2) * new Vec(3);

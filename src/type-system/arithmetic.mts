@@ -1,4 +1,4 @@
-import { NumberValue, TypedNumberValue, type Value, BigIntValue } from '../value.mts';
+import { NumberValue, TypedNumberValue, type Value, BigIntValue, ObjectValue } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 
@@ -109,6 +109,15 @@ function payload(v: Value): number {
  */
 export function isTypedArithmetic(x: Value, y: Value): boolean {
   if (x instanceof BigIntValue || y instanceof BigIntValue) {
+    return false;
+  }
+  // proposal-runtime-types: typed-number arithmetic reads each operand's numeric
+  // payload directly, so it only applies when both operands are numeric values.
+  // A typed number combined with an Object (a plain object, or a typed-class
+  // instance with an operator) must fall through to the standard path, which
+  // performs ToPrimitive / class-operator dispatch; taking the typed path here
+  // would read a numeric payload the object does not have.
+  if (x instanceof ObjectValue || y instanceof ObjectValue) {
     return false;
   }
   return x instanceof TypedNumberValue || y instanceof TypedNumberValue;

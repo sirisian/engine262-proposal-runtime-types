@@ -20,6 +20,10 @@ import {
 export interface ClassFieldDefinitionRecord {
   readonly Name: PropertyKeyValue | PrivateName;
   readonly Initializer: ECMAScriptFunctionObject | undefined;
+  // proposal-runtime-types: the field's type annotation, if any, so a field
+  // declared without an initializer can take its type's default (spec
+  // sec-typed-classes: "a typed field takes its type's default").
+  readonly TypeAnnotation?: ParseNode.TypeAnnotation | null;
 }
 export const ClassFieldDefinitionRecord = function ClassFieldDefinitionRecord(value: ClassFieldDefinitionRecord) {
   Object.setPrototypeOf(value, ClassFieldDefinitionRecord.prototype);
@@ -66,6 +70,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   return ClassFieldDefinitionRecord({
     Name: name,
     Initializer: initializer,
+    TypeAnnotation: (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation,
   });
 }
 

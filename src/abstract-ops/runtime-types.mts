@@ -1,8 +1,9 @@
 import { Q, EnsureCompletion } from '../completion.mts';
-import { TypedNumberValue, Value } from '../value.mts';
+import { NumberValue, TypedNumberValue, Value } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { Call, R, Throw, ToNumber, ToString, ToBoolean } from '#self';
 
@@ -49,7 +50,17 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       case 'float16':
       case 'float32':
       case 'float64': {
-        // The conversion constructs a value of the numeric value type.
+        // proposal-runtime-types #sec-conversions: an explicit conversion (the
+        // `:=` operator and the `T(v)` call form) discards information. When the
+        // source is a numeric value it truncates, wraps, or rounds as the target
+        // requires and does not fail merely because information is lost, so
+        // `uint8(300)` is 44. The conversion table is keyed on numeric families,
+        // so a non-numeric source (a String, an object) is not a family the wrap
+        // covers and takes the checked path, which throws when it cannot fit.
+        if (value instanceof NumberValue || value instanceof TypedNumberValue) {
+          const n = Q(yield* ToNumber(value));
+          return new TypedNumberValue(wrapToType(R(n) as number, t), t);
+        }
         const n = Q(yield* ToNumber(value));
         if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
           return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -68,10 +79,60 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   if (!annotation) {
     return value;
   }
-  // #sec-contextual-types: the binding boundary applies the conversion rule,
-  // so an in-range Number becomes the annotated numeric value type's value.
+  // #sec-contextual-types: the binding boundary applies the CHECKED conversion
+  // rule. An in-range Number becomes the annotated numeric value type's value; a
+  // value of the `any` type that does not fit throws rather than silently
+  // wrapping, since nothing in the source said to discard information (a cast
+  // does; that is ConvertValue). An out-of-range literal is already an Early
+  // Error caught by the checker before this runs.
   const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
-  return Q(yield* ConvertValue(value, record));
+  return Q(yield* CheckedConvertValue(value, record));
+}
+
+/**
+ * proposal-runtime-types #sec-the-conversion-rule (RequireType): the checked
+ * conversion used at a typed boundary. Identical to ConvertValue except that a
+ * numeric conversion which would wrap, truncate, or round to an infinity throws
+ * (a RangeError in the spec) rather than discarding information.
+ */
+export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  const already = Q(yield* IsOfType(value, t));
+  if (already) {
+    return value;
+  }
+  if (t.Kind === 'union') {
+    for (const m of t.Members) {
+      const attempt = EnsureCompletion(yield* CheckedConvertValue(value, m));
+      if (attempt.Type === 'normal') {
+        return attempt.Value;
+      }
+    }
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  if (t.Kind === 'primitive') {
+    switch (t.Name) {
+      case 'string':
+        return Q(yield* ToString(value));
+      case 'number':
+        return Q(yield* ToNumber(value));
+      case 'boolean':
+        return ToBoolean(value);
+      case 'uint':
+      case 'int':
+      case 'float16':
+      case 'float32':
+      case 'float64': {
+        const n = Q(yield* ToNumber(value));
+        if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        return new TypedNumberValue(R(n) as number, t);
+      }
+      default:
+        break;
+    }
+  }
+  return Q(yield* RequireType(value, t));
 }
 
 export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluator<boolean> {
@@ -174,7 +235,15 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
 /** Converts each annotated parameter's bound value in place at entry. */
 export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
   for (const p of (fn.FormalParameters as readonly ParseNode[] | undefined) ?? []) {
-    const sb = p as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null };
+    // A rest element binds the collected trailing arguments as an array. Its
+    // annotation is an array type describing the element type; checking each
+    // element is the array-value runtime deferred to the memory-layout extension,
+    // so the rest binding passes through here rather than being converted (which
+    // would fail on the array type). Ordinary parameters below are enforced.
+    if ((p as { type?: string }).type === 'BindingRestElement') {
+      continue;
+    }
+    const sb = p as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, Optional?: boolean };
     if (!sb.TypeAnnotation || !sb.BindingIdentifier) {
       continue;
     }
@@ -184,6 +253,13 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
       continue;
     }
     const current = Q(yield* env.GetBindingValue(name, Value.true));
+    // proposal-runtime-types: an optional parameter whose argument was omitted
+    // holds undefined and is not checked against its type (README "Optional
+    // Parameters": `function f(a: uint32, b?: uint32)` may be called `f(1)`). A
+    // provided argument, even to an optional parameter, is still enforced.
+    if (sb.Optional && current === Value.undefined) {
+      continue;
+    }
     const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current));
     Q(yield* env.SetMutableBinding(name, converted, Value.false));
   }

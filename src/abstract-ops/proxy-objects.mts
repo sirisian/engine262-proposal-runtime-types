@@ -7,6 +7,7 @@ import {
   type ValueCompletion,
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
+import { surroundingAgent } from '#self';
 import { PropertyKeyMap } from '../utils/container.mts';
 import type { ProxyObject } from '../intrinsics/Proxy.mts';
 import {
@@ -546,6 +547,19 @@ export function ProxyCreate(target: Value, handler: Value): ValueCompletion<Prox
   // 2. If Type(handler) is not Object, throw a TypeError exception.
   if (!(handler instanceof ObjectValue)) {
     return Throw.TypeError('Cannot create a proxy with a $1 as $2', 'non-object', 'handler');
+  }
+  // proposal-runtime-types (spec sec-proxy-and-typed-objects): constructing a
+  // Proxy whose target is an instance of a typed class throws a TypeError - such a
+  // value is backed by a layout rather than a property table, a field access does
+  // not consult a handler, and there is no point at which a trap could correctly
+  // run. A typed-class instance is one built by a constructor that seals its
+  // instances (a typed field, not `dynamic`); the same SealInstances flag that
+  // drives auto-sealing identifies it.
+  if (surroundingAgent.feature('runtime-types')) {
+    const builtBy = (target as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
+    if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+      return Throw.TypeError('$1 is a typed class and cannot be proxied', target);
+    }
   }
   // 3. Let P be ! MakeBasicObject(« [[ProxyHandler]], [[ProxyTarget]] »).
   const P = X(MakeBasicObject(['ProxyHandler', 'ProxyTarget'])) as ProxyObject;
