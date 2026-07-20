@@ -445,26 +445,38 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       }
       const ref = Q(yield* ResolveBinding(Value(name)));
       const value = Q(yield* GetValue(ref));
+      // proposal-runtime-types: resolve the name to a base Type Record. The name
+      // is either bound to a Type Object, or it is a class constructor whose
+      // associated class type we look up. A generic type alias is expanded eagerly
+      // here; every other nominal (class, interface, library) carries its type
+      // arguments through the single attach point below, so a name that resolves
+      // as a Type Object and a name that resolves as a constructor instantiate
+      // consistently.
+      let baseRecord: TypeRecord | null = null;
       if (isTypeObject(value)) {
         const record = value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
           return Q(yield* InstantiateGenericAlias(record.Declaration as ParseNode.TypeAliasDeclaration, argRecords));
         }
-        // proposal-runtime-types: a generic class/interface referenced with type
-        // arguments is a nominal instantiation carrying those arguments (spec
-        // ~nominal~ [[Arguments]]). The declaration plus arguments give identity;
-        // reflection exposes them as a `generic` view.
-        if (record.Kind === 'nominal' && argRecords.length > 0) {
-          return { ...record, Arguments: argRecords };
-        }
-        return record;
-      }
-      // proposal-runtime-types M21: a class name denotes its class type.
-      if (value instanceof ObjectValue) {
+        baseRecord = record;
+      } else if (value instanceof ObjectValue) {
+        // proposal-runtime-types M21: a class name denotes its class type.
         const classType = LookupClassType(value);
         if (classType && isTypeObject(classType)) {
-          return classType.TypeRecord;
+          baseRecord = classType.TypeRecord;
         }
+      }
+      if (baseRecord) {
+        // proposal-runtime-types: a generic class/interface referenced with type
+        // arguments is a nominal instantiation carrying those arguments (spec
+        // ~nominal~ [[Arguments]]). Identity is the declaration plus the arguments
+        // (folded into the intern key by orderKey), and reflection exposes them as
+        // a `generic` view. Bare `T` and `T.<...>` are therefore distinct interned
+        // types, and two `T.<A>` are one.
+        if (baseRecord.Kind === 'nominal' && argRecords.length > 0) {
+          return { ...baseRecord, Arguments: argRecords };
+        }
+        return baseRecord;
       }
       return Throw.TypeError('$1 is not a type', Value(name));
     }
