@@ -1,6 +1,7 @@
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
   TypedNumberValue, TypedStringValue,
+  type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
@@ -245,12 +246,98 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     return makePrimitive('symbol');
   }
   if (value instanceof ObjectValue) {
-    return makePrimitive('object');
+    return runtimeObjectType(value, new Set());
   }
   if (value === Value.undefined) {
     return voidType;
   }
   return { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
+}
+
+/**
+ * proposal-runtime-types #sec-runtimetypeof (Object case): the run-time type of an
+ * Object. A Proxy constructed with a type argument carries a [[RuntimeType]] slot
+ * and reports it; a class instance reports the ~nominal~ type of its class; every
+ * other Object reports the structural ~object~ type describing its own enumerable
+ * String-keyed properties and their types (spec: "the ~object~ Type Record whose
+ * [[Properties]] describes the own properties of _value_ and their declared
+ * types"). This is what lets `keyof` and `indexed` read a value's shape, so a
+ * generic constrained by `keysOf(T)` can infer over the keys of a runtime object.
+ *
+ * `seen` breaks reference cycles: a property whose value is an Object already on
+ * the path is given the `object` type rather than being expanded again.
+ */
+function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeRecord {
+  // A Proxy (or any Object) carrying an explicit runtime type reports it.
+  const carried = (value as { RuntimeType?: TypeRecord }).RuntimeType;
+  if (carried) {
+    return carried;
+  }
+  // A class instance reports its class's nominal type, found by walking the
+  // prototype chain to a constructor with an associated class Type Object.
+  const nominal = classInstanceType(value);
+  if (nominal) {
+    return nominal;
+  }
+  // The empty object type (`object`) if there are no own properties to describe.
+  const properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+  seen.add(value);
+  for (const [key, desc] of (value as { properties: Map<PropertyKeyValue, Descriptor> }).properties) {
+    // Only own enumerable String-keyed data properties contribute; a Symbol key
+    // has no place in the object type's String-keyed [[Properties]], and reading
+    // an accessor would run user code, which RuntimeTypeOf must not do.
+    if (!(key instanceof JSStringValue) || desc.Enumerable !== Value.true || desc.Value === undefined) {
+      continue;
+    }
+    const propValue = desc.Value;
+    const propType = propValue instanceof ObjectValue && seen.has(propValue)
+      ? makeObjectType()
+      : RuntimeTypeOf2(propValue, seen);
+    properties.push({ key: key.stringValue(), type: propType, optional: false, readonly: desc.Writable === Value.false });
+  }
+  seen.delete(value);
+  return { Kind: 'object', Properties: properties, IndexSignatures: [] };
+}
+
+/** The `object` type: an object type with no required properties. */
+function makeObjectType(): TypeRecord {
+  return { Kind: 'object', Properties: [], IndexSignatures: [] };
+}
+
+/**
+ * proposal-runtime-types: RuntimeTypeOf threading the cycle-guard set, so a nested
+ * Object property's type is computed with the outer objects on the path recorded.
+ * Non-Object values ignore the set and go through the ordinary RuntimeTypeOf.
+ */
+function RuntimeTypeOf2(value: Value, seen: Set<ObjectValue>): TypeRecord {
+  if (value instanceof ObjectValue) {
+    return runtimeObjectType(value, seen);
+  }
+  return RuntimeTypeOf(value);
+}
+
+/**
+ * proposal-runtime-types: the ~nominal~ type of the class an Object is an instance
+ * of, or null if it is a plain Object. Walks the prototype chain synchronously and
+ * returns the class Type Record of the first prototype whose constructor has an
+ * associated class Type Object.
+ */
+function classInstanceType(value: ObjectValue): TypeRecord | null {
+  let proto: Value = (value as { Prototype?: Value }).Prototype ?? Value.null;
+  const guard = new Set<Value>();
+  while (proto instanceof ObjectValue && !guard.has(proto)) {
+    guard.add(proto);
+    const ctorDesc = (proto as { properties: Map<PropertyKeyValue, Descriptor> }).properties.get(Value('constructor'));
+    const ctor = ctorDesc?.Value;
+    if (ctor instanceof ObjectValue) {
+      const classType = LookupClassType(ctor);
+      if (classType && isTypeObject(classType)) {
+        return classType.TypeRecord;
+      }
+    }
+    proto = (proto as { Prototype?: Value }).Prototype ?? Value.null;
+  }
+  return null;
 }
 
 /**
