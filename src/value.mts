@@ -30,6 +30,8 @@ import {
 } from '#self';
 
 let createStringValue: (value: string) => JSStringValue; // set by static block in StringValue for privileged access to constructor
+// proposal-runtime-types (Capability B): privileged factory for a String value carrying an inferred Type Record, set by the StringValue static block.
+let createTypedStringValue: (value: string, typeRecord: unknown) => JSStringValue;
 let createNumberValue: (value: number) => NumberValue; // set by static block in NumberValue for privileged access to constructor
 let createBigIntValue: (value: bigint) => BigIntValue; // set by static block in BigIntValue for privileged access to constructor
 
@@ -201,7 +203,10 @@ export class JSStringValue extends PrimitiveValue {
 
   readonly value: string;
 
-  private constructor(value: string) {
+  // proposal-runtime-types (Capability B): protected (was private) so the
+  // transparent TypedStringValue subclass can extend it. External construction is
+  // still blocked; strings are created through the Value factory / createStringValue.
+  protected constructor(value: string) {
     super();
     this.value = value;
   }
@@ -213,9 +218,41 @@ export class JSStringValue extends PrimitiveValue {
   static {
     Object.defineProperty(this.prototype, 'type', { value: 'String' });
     createStringValue = (value) => new this(value);
+    createTypedStringValue = (value, typeRecord) => {
+      const s = new this(value) as TypedStringValue;
+      Object.defineProperty(s, 'TypeRecord', { value: typeRecord, enumerable: false });
+      Object.setPrototypeOf(s, TypedStringValue.prototype);
+      return s;
+    };
   }
 
   declare static [Symbol.hasInstance]: (value: unknown) => value is JSStringValue;
+}
+
+/**
+ * proposal-runtime-types (Capability B): a String value that additionally carries
+ * the interned literal/refined Type Record inferred for it (for example the
+ * literal type `'a-b-c'` a generic call's return-type transform produces). It is a
+ * transparent subclass of JSStringValue, so it satisfies every `instanceof
+ * JSStringValue` check and behaves as its underlying string in all operations;
+ * only RuntimeTypeOf reads the carried TypeRecord in preference to the widened
+ * `string`. Constructed only at typed boundaries (a literal-typed conversion or a
+ * generic call's inferred return type) via createTypedStringValue.
+ */
+export class TypedStringValue extends JSStringValue {
+  declare readonly type: 'String';
+
+  declare readonly TypeRecord: unknown;
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is TypedStringValue;
+}
+
+/**
+ * proposal-runtime-types (Capability B): construct a String value carrying the
+ * given interned literal/refined Type Record. Used at typed boundaries only.
+ */
+export function TypedString(value: string, typeRecord: unknown): JSStringValue {
+  return createTypedStringValue(value, typeRecord);
 }
 
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types-symbol-type */

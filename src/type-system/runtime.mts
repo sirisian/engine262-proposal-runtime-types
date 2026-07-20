@@ -1,6 +1,6 @@
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
-  TypedNumberValue,
+  TypedNumberValue, TypedStringValue,
 } from '../value.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
@@ -8,7 +8,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType,
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType,
 } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { IsAssignable } from './relations.mts';
@@ -29,6 +29,36 @@ import {
 // produce the same record and intern to the same Type Object.
 const typeParameterFrames: Map<string, TypeRecord>[] = [];
 
+/**
+ * proposal-runtime-types (Capability B): make a set of type-parameter bindings
+ * active while some evaluation runs (a generic function call evaluates its
+ * parameter types, body, and return type over its inferred bindings). Mirrors the
+ * frame InstantiateGenericAlias pushes for an alias body.
+ */
+export function pushTypeParameterFrame(frame: Map<string, TypeRecord>): void {
+  typeParameterFrames.push(frame);
+}
+
+export function popTypeParameterFrame(): void {
+  typeParameterFrames.pop();
+}
+
+/**
+ * proposal-runtime-types (Capability B): the Type Record bound to a type parameter
+ * of the given name in the active frames, innermost first, or null if none. A
+ * type parameter referenced as a builder-call argument (`joinResult(P, d)`)
+ * resolves to its bound type through this, since it is not a value binding.
+ */
+export function lookupTypeParameter(name: string): TypeRecord | null {
+  for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
+    const bound = typeParameterFrames[i].get(name);
+    if (bound !== undefined) {
+      return bound;
+    }
+  }
+  return null;
+}
+
 export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   if (params.length !== argRecords.length) {
@@ -47,12 +77,157 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
 }
 
 /**
+ * proposal-runtime-types (Capability B, spec sec-computed-constraints): infer the
+ * bindings of a generic function's type parameters from the actual argument values
+ * at a call. Parameters bind left to right; each parameter's constraint is
+ * evaluated over the bindings so far (computed constraints), then the parameter is
+ * inferred from the arguments and checked. Where a parameter's evaluated constraint
+ * is a literal type or a union/tuple of literal types, the inferred binding is the
+ * LITERAL type of the argument's value, not the widened base (spec line 928); this
+ * is what the return-type transform reads back. Returns the frame of bindings.
+ *
+ * The inference matches a type parameter to a formal parameter whose annotation IS
+ * that parameter: `x: T` infers T from x's argument, and a rest `...parts: S`
+ * infers S as the tuple of the trailing arguments' (literal, under constraint)
+ * types. A parameter with no inferable argument falls back to its default, if any.
+ */
+export function* InferGenericBindings(
+  typeParameters: readonly ParseNode.TypeParameter[],
+  formals: readonly ParseNode[],
+  args: readonly Value[],
+): PlainEvaluator<Map<string, TypeRecord>> {
+  const frame = new Map<string, TypeRecord>();
+  // Index the formal parameters: the ordinary ones by position, and the rest
+  // element (if any) by the index at which trailing arguments begin.
+  const ordinary: { name: string, annotationName: string | null }[] = [];
+  let restName: string | null = null;
+  let restAnnotationName: string | null = null;
+  for (const p of formals as readonly ParseNode[]) {
+    const node = p as { type?: string, BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, BindingRestElement?: { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null } };
+    if (node.type === 'BindingRestElement') {
+      const rest = node as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null };
+      restName = rest.BindingIdentifier?.name ?? null;
+      restAnnotationName = annotationTypeName(rest.TypeAnnotation);
+    } else {
+      ordinary.push({ name: node.BindingIdentifier?.name ?? '', annotationName: annotationTypeName(node.TypeAnnotation) });
+    }
+  }
+
+  pushTypeParameterFrame(frame);
+  try {
+    for (const tp of typeParameters) {
+      const paramName = tp.BindingIdentifier.name;
+      // Evaluate the constraint over the bindings so far (computed constraints may
+      // read earlier parameters, which are already in `frame`).
+      let constraint: TypeRecord | null = null;
+      if (tp.TypeParameterConstraint) {
+        constraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
+      }
+      const literalRule = constraint !== null && constraintWantsLiteral(constraint);
+
+      // Find an ordinary parameter annotated with exactly this type parameter.
+      let bound: TypeRecord | null = null;
+      const ordIndex = ordinary.findIndex((o) => o.annotationName === paramName);
+      if (ordIndex >= 0 && ordIndex < args.length) {
+        bound = literalRule ? literalTypeOf(args[ordIndex]) : RuntimeTypeOf(args[ordIndex]);
+      } else if (restName !== null && restAnnotationName === paramName) {
+        // `...parts: S` binds S to the tuple of the trailing arguments' types.
+        const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
+        for (let i = ordinary.length; i < args.length; i += 1) {
+          elements.push({ Type: literalRule ? elementLiteralTypeOf(args[i]) : RuntimeTypeOf(args[i]), Rest: false, Initial: 'none' });
+        }
+        bound = { Kind: 'tuple', Elements: elements };
+      }
+
+      if (bound === null && tp.TypeParameterDefault) {
+        bound = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterDefault));
+      }
+      if (bound === null) {
+        // Nothing to infer from and no default: bind `any` so downstream
+        // resolution does not throw on an unbound reference.
+        bound = anyType;
+      }
+      // spec sec-computed-constraints: the binding is checked against its
+      // evaluated constraint, as any binding is. A mismatched argument fails here
+      // with the evaluated constraint available to the diagnostic. When the
+      // literal rule inferred a tuple for an array constraint `[].<E>`, the check
+      // is element-wise (each inferred element against E), since a fixed tuple of
+      // the element type satisfies the array constraint.
+      if (constraint !== null) {
+        if (constraint.Kind === 'array' && bound.Kind === 'tuple') {
+          for (const el of bound.Elements) {
+            if (!IsAssignable(el.Type, constraint.Element)) {
+              return Throw.TypeError('$1 is not assignable to $2', Value(displayType(el.Type)), Value(displayType(constraint.Element)));
+            }
+          }
+        } else if (!IsAssignable(bound, constraint)) {
+          return Throw.TypeError('$1 is not assignable to $2', Value(displayType(bound)), Value(displayType(constraint)));
+        }
+      }
+      frame.set(paramName, bound);
+    }
+  } finally {
+    popTypeParameterFrame();
+  }
+  return frame;
+}
+
+/** The type-parameter name a `: T` annotation names, or null if it is not a bare reference. */
+function annotationTypeName(annotation: ParseNode.TypeAnnotation | null | undefined): string | null {
+  if (!annotation) {
+    return null;
+  }
+  const type = annotation.Type as { type?: string, TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } }, TypeArguments?: unknown };
+  if (type.type === 'TypeReference' && type.TypeName && (type.TypeName.MemberNames?.length ?? 0) === 0 && !type.TypeArguments) {
+    return type.TypeName.IdentifierReference?.name ?? null;
+  }
+  return null;
+}
+
+/** True when an evaluated constraint is a literal type, or a union/tuple of them, so the literal rule applies. */
+function constraintWantsLiteral(t: TypeRecord): boolean {
+  if (t.Kind === 'literal') {
+    return true;
+  }
+  if (t.Kind === 'union') {
+    return t.Members.length > 0 && t.Members.every((m) => m.Kind === 'literal');
+  }
+  if (t.Kind === 'tuple') {
+    // `[].<string>` (a string array constraint) and a literal tuple both cue the
+    // per-element literal binding of the trailing arguments.
+    return true;
+  }
+  // A `string`/`number` array constraint written `[].<string>` reflects as an
+  // array of that element; cue the literal rule so elements bind literally.
+  if (t.Kind === 'array') {
+    return true;
+  }
+  return false;
+}
+
+/** The literal type of a value (its value with its widened base), used for literal inference. */
+function literalTypeOf(value: Value): TypeRecord {
+  return { Kind: 'literal', Value: value, Base: RuntimeTypeOf(value) };
+}
+
+/** The literal type of a rest-argument element. */
+function elementLiteralTypeOf(value: Value): TypeRecord {
+  return literalTypeOf(value);
+}
+
+/**
  * proposal-runtime-types: the run-time type of a value. Until the numeric
  * value types exist as distinct values, a Number's type is `number`.
  */
 export function RuntimeTypeOf(value: Value): TypeRecord {
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;
+  }
+  // proposal-runtime-types (Capability B): a String value carrying an inferred
+  // literal/refined type reports that type, not the widened `string`. Checked
+  // before the JSStringValue case below, since TypedStringValue is a subclass.
+  if (value instanceof TypedStringValue) {
+    return (value as TypedStringValue).TypeRecord as TypeRecord;
   }
   if (value instanceof NumberValue) {
     return makePrimitive('number');
@@ -726,6 +901,19 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
   for (const a of node.Arguments) {
     if (a.type === 'AssignmentRestElement') {
       return Throw.TypeError('$1 is not supported yet', Value('a spread builder argument'));
+    }
+    // proposal-runtime-types (Capability B): a builder-call argument that is a
+    // bare identifier naming a bound type parameter resolves to that parameter's
+    // Type Object (it is a type, not a value binding). This is what lets a return
+    // type like `joinResult(P, delimiter)` read the inferred `P` alongside the
+    // ordinary value `delimiter`.
+    const bareName = (a as { type?: string, name?: string }).type === 'IdentifierReference' ? (a as { name?: string }).name : undefined;
+    if (bareName !== undefined) {
+      const boundParam = lookupTypeParameter(bareName);
+      if (boundParam !== null) {
+        args.push(GetTypeObject(boundParam));
+        continue;
+      }
     }
     const ref = Q(yield* Evaluate(a));
     args.push(Q(yield* GetValue(ref)));

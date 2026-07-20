@@ -1,10 +1,10 @@
 import { Q, EnsureCompletion } from '../completion.mts';
-import { NumberValue, TypedNumberValue, Value } from '../value.mts';
+import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
-import { fitsNumericType, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { Call, R, Throw, ToNumber, ToString, ToBoolean } from '#self';
 
 /**
@@ -12,6 +12,25 @@ import { Call, R, Throw, ToNumber, ToString, ToBoolean } from '#self';
  * the check inserted at the ~any~ boundary of the gradual system, and
  * ConvertValue is the conversion rule applied by `:=`.
  */
+
+/**
+ * proposal-runtime-types (Capability B): when a String value is given a literal
+ * (or otherwise refined) string type at a typed boundary, carry that type on the
+ * value so RuntimeTypeOf reports it rather than the widened `string`. Returns a
+ * TypedStringValue carrying `t` when `t` narrows `string` and `value` is a plain
+ * string; otherwise returns `value` unchanged. A value already carrying the same
+ * type, or a non-string, is returned as-is.
+ */
+function carryStringType(value: Value, t: TypeRecord): Value {
+  if (!(value instanceof JSStringValue) || value instanceof TypedStringValue) {
+    return value;
+  }
+  // A literal type whose base is `string`, i.e. a specific string value's type.
+  if (t.Kind === 'literal' && t.Value instanceof JSStringValue) {
+    return TypedString(value.stringValue(), t);
+  }
+  return value;
+}
 
 /** #sec-requiretype */
 export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
@@ -26,7 +45,9 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   const already = Q(yield* IsOfType(value, t));
   if (already) {
-    return value;
+    // proposal-runtime-types (Capability B): even when the value already
+    // satisfies the type, a literal string type is carried on the value.
+    return carryStringType(value, t);
   }
   if (t.Kind === 'union') {
     for (const m of t.Members) {
@@ -98,7 +119,9 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   const already = Q(yield* IsOfType(value, t));
   if (already) {
-    return value;
+    // proposal-runtime-types (Capability B): even when the value already
+    // satisfies the type, a literal string type is carried on the value.
+    return carryStringType(value, t);
   }
   if (t.Kind === 'union') {
     for (const m of t.Members) {
@@ -230,6 +253,32 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
     return true;
   }
   return ((fn.FormalParameters as readonly ParseNode[] | undefined) ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation);
+}
+
+/**
+ * proposal-runtime-types (Capability B): the type parameters a generic function
+ * declares, or null when it is not generic. Like the return annotation, they sit
+ * on the declaration, the code node's parent.
+ */
+export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
+  const code = fn.ECMAScriptCode as { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } } | null | undefined;
+  const list = code?.parent?.TypeParameters?.TypeParameterList;
+  return list && list.length > 0 ? list : null;
+}
+
+/**
+ * proposal-runtime-types (Capability B): whether a generic function's type
+ * parameters can be inferred and, if so, the frame of bindings inferred from the
+ * call arguments. A non-generic function returns null; the caller then does not
+ * push a frame.
+ */
+export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[]): PlainEvaluator<Map<string, TypeRecord> | null> {
+  const typeParameters = functionTypeParameters(fn);
+  if (!typeParameters) {
+    return null;
+  }
+  const formals = (fn.FormalParameters as readonly ParseNode[] | undefined) ?? [];
+  return Q(yield* InferGenericBindings(typeParameters, formals, args.map((a) => a ?? Value.undefined)));
 }
 
 /** Converts each annotated parameter's bound value in place at entry. */

@@ -10,6 +10,7 @@ import { Evaluate, type StatementEvaluator } from '../evaluator.mts';
 import { IsAnonymousFunctionDefinition, type FunctionDeclaration } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Mutable } from '../utils/language.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import {
   Evaluate_FunctionStatementList,
   FunctionDeclarationInstantiation,
@@ -32,6 +33,7 @@ import {
   functionHasAnnotations,
   EnforceParameterTypes,
   EnforceReturnType,
+  InferGenericCallBindings,
 } from '#self';
 
 export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.FunctionBody | ParseNode.AsyncBody | ParseNode.GeneratorBody | ParseNode.AsyncGeneratorBody) {
@@ -46,12 +48,24 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // proposal-runtime-types: the parameter boundary, skipped entirely when the
   // function has no annotations.
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
-    Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
-    const result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
-    if (result.Type === 'return') {
-      return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+    // Capability B: a generic function infers its type parameters from the call
+    // arguments and evaluates its parameter and return types over those bindings.
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
+    if (bindings) {
+      pushTypeParameterFrame(bindings);
     }
-    return result;
+    try {
+      Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+      const result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
+      if (result.Type === 'return') {
+        return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+      }
+      return result;
+    } finally {
+      if (bindings) {
+        popTypeParameterFrame();
+      }
+    }
   }
   // 2. Return the result of evaluating FunctionStatementList.
   return yield* Evaluate_FunctionStatementList(FunctionStatementList);
@@ -74,12 +88,23 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
-    Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
-    const result = EnsureCompletion(yield* Evaluate(ExpressionBody));
-    if (result.Type === 'return') {
-      return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+    // Capability B: infer generic type parameters from the call arguments.
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
+    if (bindings) {
+      pushTypeParameterFrame(bindings);
     }
-    return result;
+    try {
+      Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+      const result = EnsureCompletion(yield* Evaluate(ExpressionBody));
+      if (result.Type === 'return') {
+        return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+      }
+      return result;
+    } finally {
+      if (bindings) {
+        popTypeParameterFrame();
+      }
+    }
   }
   // 2. Return the result of evaluating ExpressionBody.
   return yield* Evaluate(ExpressionBody);
