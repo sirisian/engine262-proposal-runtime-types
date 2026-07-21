@@ -7,7 +7,10 @@ import {
   UndefinedValue,
   Value,
   BooleanValue,
+  JSStringValue,
 } from '../value.mts';
+import { builtinTypeRecord } from '../type-system/records.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { Q, X } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import type { Decimal } from '../host-defined/decimal.mts';
@@ -148,6 +151,30 @@ export function* ToPropertyDescriptor(Obj: Value): PlainEvaluator<Descriptor> {
   if (hasWritable === Value.true) {
     const writable = ToBoolean(Q(yield* Get(Obj, Value('writable'))));
     desc = Descriptor({ ...desc, Writable: writable });
+  }
+  // proposal-runtime-types (spec sec-object-types-semantics): a `type` key gives
+  // the property a declared type. Its value is a Type Object, or a String naming a
+  // built-in type such as "uint8", which resolves to the same interned Type Object.
+  // A descriptor with a declared type and no value takes the type's default; a
+  // write to the property is checked against the type.
+  if (surroundingAgent.feature('runtime-types')) {
+    const hasType = Q(yield* HasProperty(Obj, Value('type')));
+    if (hasType === Value.true) {
+      const typeValue = Q(yield* Get(Obj, Value('type')));
+      let typeObject: ObjectValue | undefined;
+      if (typeValue instanceof ObjectValue && 'TypeRecord' in typeValue) {
+        typeObject = typeValue;
+      } else if (typeValue instanceof JSStringValue) {
+        const record = builtinTypeRecord(typeValue.stringValue());
+        if (record !== null) {
+          typeObject = GetTypeObject(record);
+        }
+      }
+      if (typeObject === undefined) {
+        return Throw.TypeError('the type in a property descriptor must be a type');
+      }
+      desc = Descriptor({ ...desc, Type: typeObject });
+    }
   }
   const hasGet = Q(yield* HasProperty(Obj, Value('get')));
   if (hasGet === Value.true) {

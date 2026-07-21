@@ -13,6 +13,8 @@ import {
 } from '../completion.mts';
 import type { Mutable } from '../utils/language.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
+import { DefaultValueOf } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
   Call,
@@ -31,7 +33,7 @@ import {
   type FunctionObject,
   type Intrinsics,
 } from './all.mts';
-import { CreateBuiltinFunction, surroundingAgent } from '#self';
+import { CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 
 export interface OrdinaryObject extends ObjectValue {
   Prototype: ObjectValue | NullValue;
@@ -129,6 +131,40 @@ export function OrdinaryGetOwnProperty(O: ObjectValue, P: PropertyKeyValue) {
 
 // 9.1.6.1 OrdinaryDefineOwnProperty
 export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, Desc: Descriptor): ValueEvaluator<BooleanValue> {
+  // proposal-runtime-types (spec sec-object-types-semantics): a descriptor with a
+  // declared type gives the property a type. A descriptor with a type and no value
+  // takes the type's default; a descriptor with a type and a value has the value
+  // checked against the type. The declared type is recorded on the object so a
+  // later write is checked and a delete is refused. An instance of a non-dynamic
+  // (sealed) typed class has a closed layout and cannot gain a typed own property.
+  // This is on the ordinary [[DefineOwnProperty]], so both Object.defineProperty
+  // and Reflect.defineProperty reach it.
+  if (surroundingAgent.feature('runtime-types') && (Desc as { Type?: object }).Type !== undefined) {
+    const typeObject = (Desc as { Type: object }).Type;
+    const record = (typeObject as { TypeRecord: TypeRecord }).TypeRecord;
+    const builtBy = (O as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
+    if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+      return Throw.TypeError('a typed own property cannot be added to an instance of a non-dynamic typed class');
+    }
+    let applied = Desc;
+    if (Desc.Value !== undefined) {
+      Q(yield* RequireType(Desc.Value, record));
+    } else {
+      let dflt = LookupTypeDefault(typeObject);
+      if (dflt === undefined) {
+        dflt = DefaultValueOf(record);
+      }
+      applied = Descriptor({ ...Desc, Value: dflt ?? Value.undefined });
+    }
+    const current = Q(yield* O.GetOwnProperty(P));
+    const extensible = Q(yield* IsExtensible(O));
+    const result = ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current);
+    if (result === Value.true) {
+      const map = ((O as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
+      map.set(P instanceof JSStringValue ? P.stringValue() : P, typeObject);
+    }
+    return result;
+  }
   const current = Q(yield* O.GetOwnProperty(P));
   const extensible = Q(yield* IsExtensible(O));
   return ValidateAndApplyPropertyDescriptor(O, P, extensible, Desc, current);

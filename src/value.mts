@@ -26,6 +26,7 @@ import {
   type ECMAScriptFunctionObject,
   type DefaultConstructorBuiltinFunction, EnvironmentRecord,
   Throw,
+  RequireType,
   surroundingAgent,
 } from '#self';
 
@@ -922,12 +923,37 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
           return Throw.TypeError('$1 is a readonly field and can only be assigned in the declaring class constructor', P);
         }
       }
+      // proposal-runtime-types (spec sec-object-types-semantics): a write to a
+      // typed own property is checked against its declared type, the same
+      // RequireType a typed field's write performs. The declared type was recorded
+      // on the object when the property was defined; objects with no typed own
+      // property (the vast majority) skip this.
+      const typedProperties = (Receiver as { TypedProperties?: Map<unknown, { TypeRecord: unknown }> }).TypedProperties;
+      if (typedProperties !== undefined) {
+        const propKey = P instanceof JSStringValue ? P.stringValue() : P;
+        const typeObject = typedProperties.get(propKey);
+        if (typeObject !== undefined) {
+          Q(yield* RequireType(V, typeObject.TypeRecord as never));
+        }
+      }
     }
     return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver);
   }
 
   * Delete(P: PropertyKeyValue): ObjectSlotReturn['Delete'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
+    // proposal-runtime-types (spec sec-object-types-semantics): a typed own
+    // property cannot be deleted, since a layout with a hole is not the layout the
+    // type described. Deleting one is a TypeError.
+    if (surroundingAgent.feature('runtime-types')) {
+      const typedProperties = (this as { TypedProperties?: Map<unknown, unknown> }).TypedProperties;
+      if (typedProperties !== undefined) {
+        const propKey = P instanceof JSStringValue ? P.stringValue() : P;
+        if (typedProperties.has(propKey)) {
+          return Throw.TypeError('$1 is a typed property and cannot be deleted', P);
+        }
+      }
+    }
     return yield* OrdinaryDelete(this as unknown as OrdinaryObject, P);
   }
 
@@ -1001,7 +1027,7 @@ export class ReferenceRecord {
   }
 }
 
-export type DescriptorInit = Pick<Descriptor, 'Configurable' | 'Enumerable' | 'Getter' | 'Setter' | 'Value' | 'Writable'>;
+export type DescriptorInit = Pick<Descriptor, 'Configurable' | 'Enumerable' | 'Getter' | 'Setter' | 'Value' | 'Writable' | 'Type'>;
 // @ts-expect-error
 export function Descriptor(O: DescriptorInit): Descriptor // @ts-expect-error
 export @callable() class Descriptor {
@@ -1017,13 +1043,19 @@ export @callable() class Descriptor {
 
   readonly Configurable?: BooleanValue;
 
-  constructor(O: Pick<Descriptor, 'Configurable' | 'Enumerable' | 'Getter' | 'Setter' | 'Value' | 'Writable'>) {
+  // proposal-runtime-types (spec sec-object-types-semantics): the declared type of
+  // a typed own property, from a `type` key in the descriptor. A data property with
+  // a declared type checks each write against it and cannot be deleted.
+  readonly Type?: object;
+
+  constructor(O: Pick<Descriptor, 'Configurable' | 'Enumerable' | 'Getter' | 'Setter' | 'Value' | 'Writable' | 'Type'>) {
     this.Value = O.Value;
     this.Getter = O.Getter;
     this.Setter = O.Setter;
     this.Writable = O.Writable;
     this.Enumerable = O.Enumerable;
     this.Configurable = O.Configurable;
+    this.Type = O.Type;
   }
 
   everyFieldIsAbsent() {
@@ -1032,7 +1064,8 @@ export @callable() class Descriptor {
       && this.Setter === undefined
       && this.Writable === undefined
       && this.Enumerable === undefined
-      && this.Configurable === undefined;
+      && this.Configurable === undefined
+      && this.Type === undefined;
   }
 
   // NON-SPEC

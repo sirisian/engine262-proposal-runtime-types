@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok } from './harness.mts';
+import { evaluated, ok, expectThrown } from './harness.mts';
 
 /**
  * README feature coverage — object typing and typed promises.
@@ -8,10 +8,10 @@ import { evaluated, ok } from './harness.mts';
  *  - Typed promises (Promise.<R, E>) parse, construct, and await correctly; the
  *    resolve/reject TYPE enforcement and combinator inference are static-checker
  *    features. The runtime surface is verified here.
- *  - Object typing via Object.defineProperty with a `type` key is normative core
- *    (spec sec-reflection) but not implemented: the `type` key is silently
- *    accepted, no default is applied, and no write enforcement happens. Documented
- *    as a gap (PENDING-CAPABILITIES.md capability J).
+ *  - Object typing via Object.defineProperty with a `type` key is implemented and
+ *    verified here (spec sec-object-types-semantics): a property defined with a
+ *    `type` takes the type's default when no value is given, checks each write
+ *    against the type, and cannot be deleted, on both the Object and Reflect paths.
  */
 
 // ── Typed Promises ────────────────────────────────────────────────────────────
@@ -43,16 +43,30 @@ test('Typed Promises: the combinators are present', () => {
 });
 
 // ── Object Typing ─────────────────────────────────────────────────────────────
-// Object.defineProperty accepts a `type` key. Today it is accepted but not applied.
-test('Object Typing: Object.defineProperty accepts a type key (accepted but not enforced - documents the gap)', () => {
+// A property defined with a `type` key has a declared type: a write is checked
+// against it, a descriptor with a type and no value takes the type's default, and
+// the property cannot be deleted (README "Object Typing", spec
+// sec-object-types-semantics).
+test('Object Typing: a type key gives a property a declared type, checked on write', () => {
   // the call with a type key succeeds and the value is set
   expect(evaluated('let o = {}; Object.defineProperty(o, "a", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); String(o.a);')).toBe('5');
-  // a string type is likewise accepted
+  // a string naming a type is likewise accepted
   expect(evaluated('let o = {}; Object.defineProperty(o, "b", { type: "uint8", value: (3 := uint8), writable: true, configurable: true }); String(o.b);')).toBe('3');
-  // GAP: the declared type is not enforced on a later write (300 is out of uint8 range)
-  expect(evaluated('let o = {}; Object.defineProperty(o, "a", { type: uint8, value: (5 := uint8), writable: true }); o.a = 300; String(o.a);')).toBe('300');
-  // GAP: the type key is not stored on the descriptor
-  expect(evaluated('let o = {}; Object.defineProperty(o, "a", { type: uint8, value: (5 := uint8) }); let d = Object.getOwnPropertyDescriptor(o, "a"); String(typeof d.type);')).toBe('undefined');
+  // a write out of the declared type's range is a TypeError
+  expectThrown('let o = {}; Object.defineProperty(o, "a", { type: uint8, value: (5 := uint8), writable: true }); o.a = 300;');
+});
+
+test('Object Typing: a type key with no value takes the type default', () => {
+  expect(evaluated('let o = {}; Object.defineProperty(o, "a", { type: uint8, writable: true }); String(o.a);')).toBe('0');
+});
+
+test('Object Typing: a typed own property cannot be deleted', () => {
+  expectThrown('let o = {}; Object.defineProperty(o, "a", { type: uint8, writable: true, configurable: true }); delete o.a;');
+});
+
+test('Object Typing: the Reflect paths enforce the declared type too', () => {
+  expectThrown('let o = {}; Reflect.defineProperty(o, "a", { type: uint8, writable: true }); Reflect.set(o, "a", 300);');
+  expectThrown('let o = {}; Reflect.defineProperty(o, "a", { type: uint8, writable: true, configurable: true }); Reflect.deleteProperty(o, "a");');
 });
 
 test('Object Typing: an ordinary object literal and property access are unchanged', () => {
