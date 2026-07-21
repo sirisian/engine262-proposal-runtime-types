@@ -9,7 +9,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType,
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType,
 } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { IsAssignable } from './relations.mts';
@@ -686,6 +686,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       }
       const builtin = builtinTypeRecord(name, argRecords.map(toNumericArgument));
       if (builtin) {
+        // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is
+        // well-formed only when T is a lane type and N a positive integer. A
+        // malformed vector is a type error at the point its type is formed.
+        const vectorProblem = validateVectorType(builtin);
+        if (vectorProblem !== null) {
+          return Throw.TypeError('$1', Value(vectorProblem));
+        }
         return builtin;
       }
       // proposal-runtime-types: a library generic type (Promise, Record) resolves

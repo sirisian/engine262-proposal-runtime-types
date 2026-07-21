@@ -425,7 +425,8 @@ export interface Throw {
   | 'yield cannot be used inside parameters of arrow functions'
   ): ThrowCompletion;
   (m:
-'$1 can only be used with v flag'
+'$1'
+  | '$1 can only be used with v flag'
   | '$1 cannot be extended by a partial class'
   | '$1 cannot be inverted'
   | '$1 cannot be invoked without new'

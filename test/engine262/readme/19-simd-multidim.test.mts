@@ -12,9 +12,11 @@ import { evaluated, expectThrown, expectErrorFlagOff } from './harness.mts';
  *    verified here. The write direction (`set operator[]`), the multi-argument form
  *    `m[x, y]` (which needs the comma-index grammar of the ranges extension), and
  *    overload resolution among several index operators are deferred.
- *  - SIMD/vector types (`vector.<T, N>`, `float32x4`, `uint32x4`) are not
- *    registered; the SIMD lane types, broadcast constructors, and SIMD operators
- *    are the SIMD extension.
+ *  - `vector.<T, N>` is validated as a core value type: T must be an integer,
+ *    binary floating-point, or vector type and N a positive integer, else it is a
+ *    type error. The named SIMD lane types (`float32x4`, `uint32x4`), their implicit
+ *    broadcast constructors, the SIMD operators, and lane access are the SIMD
+ *    extension and are not registered.
  */
 
 // ── Index-accessor operator declaration ───────────────────────────────────────
@@ -57,10 +59,29 @@ test('Index operators: a non-numeric key falls through to ordinary property acce
   expect(evaluated('class M { operator[](i) { return 1; } foo() { return 7; } } let m = new M(); String(m["foo"]());')).toBe('7');
 });
 
-test('SIMD: vector and named SIMD lane types are not registered (documents the gap)', () => {
-  // Target (README/spec): `vector.<T, N>` is a core value type and the named lane
-  // types (float32x4, uint32x4) are SIMD specializations with broadcast and
-  // operators. Today none are registered.
+// ── Vector types: vector.<T, N> ───────────────────────────────────────────────
+// `vector.<T, N>` is a core value type of exactly N lanes of a lane type T. It is
+// well-formed when T is an integer, binary floating-point, or vector type and N is
+// a positive integer; a malformed vector is a type error (spec sec-vector-types).
+test('Vectors: vector.<T, N> is a well-formed core type for a lane type and positive count', () => {
+  expect(evaluated('type V = vector.<uint32, 4>; typeof V;')).toBe('object');
+  expect(evaluated('type V = vector.<float32, 4>; typeof V;')).toBe('object');
+  // a lane type may itself be a vector: boolean8x16 is vector.<vector.<uint.<1>, 8>, 16>
+  expect(evaluated('type V = vector.<vector.<uint.<1>, 8>, 16>; typeof V;')).toBe('object');
+});
+
+test('Vectors: a malformed vector is a type error', () => {
+  // a non-lane lane type
+  expectThrown('type V = vector.<string, 4>; typeof V;');
+  // a non-positive lane count
+  expectThrown('type V = vector.<uint32, 0>; typeof V;');
+  expectThrown('type V = vector.<uint32, -1>; typeof V;');
+});
+
+test('SIMD: the named SIMD lane types are not registered (documents the gap)', () => {
+  // Target (README/spec): the named lane types (float32x4, uint32x4) are SIMD
+  // specializations of vector.<T, N> with broadcast constructors and operators.
+  // The named aliases, broadcast, and operators are the SIMD extension.
   expectThrown('let a: float32x4;');
   expectThrown('let a: uint32x4;');
 });

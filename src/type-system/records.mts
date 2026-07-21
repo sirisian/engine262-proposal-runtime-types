@@ -77,6 +77,53 @@ export function makePrimitive(Name: string, Arguments: readonly (TypeRecord | nu
 }
 
 /**
+ * proposal-runtime-types (spec sec-vector-types): `vector.<T, N>` is well-formed
+ * when T is a lane type (an integer, binary floating-point, or vector type) and N
+ * is a positive integer. Returns null when the record is a well-formed vector or is
+ * not a vector at all, and a diagnostic string naming the problem otherwise. A
+ * nested vector lane type is validated recursively.
+ */
+export function validateVectorType(t: TypeRecord): string | null {
+  if (t.Kind !== 'primitive' || t.Name !== 'vector') {
+    return null;
+  }
+  const laneType = t.Arguments[0];
+  const laneCount = t.Arguments[1];
+  if (typeof laneType === 'number' || laneType === undefined) {
+    return 'the lane type of a vector must be a type';
+  }
+  if (!isLaneType(laneType)) {
+    return `${displayType(laneType)} is not a valid vector lane type`;
+  }
+  if (typeof laneCount !== 'number' || !Number.isInteger(laneCount) || laneCount <= 0) {
+    return 'the lane count of a vector must be a positive integer';
+  }
+  return validateVectorType(laneType);
+}
+
+/**
+ * A lane type is an integer type, a binary floating-point type, or a vector type
+ * (spec sec-vector-types).
+ */
+function isLaneType(t: TypeRecord): boolean {
+  if (t.Kind !== 'primitive') {
+    return false;
+  }
+  switch (t.Name) {
+    case 'int':
+    case 'uint':
+    case 'float16':
+    case 'float32':
+    case 'float64':
+    case 'float128':
+    case 'vector':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
  * #sec-type-names: the shorthands each denote the same Type Record as their
  * expansion. Returns null when the name is not a built-in type name.
  */
