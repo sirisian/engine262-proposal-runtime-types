@@ -40,6 +40,12 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
     case 'AsyncFunctionDeclaration':
     case 'AsyncGeneratorDeclaration':
     case 'ClassDeclaration':
+      // proposal-runtime-types: a `partial class` re-opens an existing binding
+      // and declares no name of its own, so it contributes no bound name and does
+      // not collide with the class it extends.
+      if ((node as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('partial')) {
+        return [];
+      }
       if (node.BindingIdentifier) {
         return BoundNames(node.BindingIdentifier);
       }

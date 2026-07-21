@@ -596,6 +596,49 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   }
 }
 
+/**
+ * proposal-runtime-types (README "Class Extension"): merge the members of a
+ * `partial class` body into an existing class rather than creating a new one. The
+ * existing constructor F and its prototype receive the new methods and operators:
+ * an instance member is defined on the prototype, a static member on the
+ * constructor, and a named operator registers in the class operator table on the
+ * same object a fresh declaration would use. Fields, private members, and a
+ * constructor are not re-opened here; a partial class adds behaviour, not state or
+ * a second constructor. The class's own environment for member evaluation is the
+ * running execution context's, since a partial declaration is evaluated where it
+ * is written.
+ */
+export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: ParseNode.ClassTail): PlainEvaluator<void> {
+  const ClassBody = ClassTail.ClassBody;
+  if (!ClassBody) {
+    return undefined;
+  }
+  const proto = Q(yield* Get(F, Value('prototype')));
+  if (!(proto instanceof ObjectValue)) {
+    return Throw.TypeError('$1 cannot be extended by a partial class', F);
+  }
+  const elements = NonConstructorElements(ClassBody);
+  for (const e of elements) {
+    if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
+      if (e.type === 'OperatorDefinition' && e.OperatorName && e.FunctionBody && e.FormalParameters) {
+        const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+        const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+        const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
+        RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+      }
+      continue;
+    }
+    if (e.type === 'FieldDefinition' || e.type === 'ClassStaticBlock') {
+      // A partial class adds behaviour, not state. A field or static block in a
+      // partial body is not merged; its members are methods and operators.
+      continue;
+    }
+    const target = IsStatic(e) ? (F as ObjectValue) : proto;
+    Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
+  }
+  return undefined;
+}
+
 /** https://arai-a.github.io/ecma262-compare/snapshot.html?pr=2417#sec-decoratorevaluation */
 export function* DecoratorEvaluation(decorator: ParseNode.Decorator): PlainEvaluator<DecoratorDefinitionRecord> {
   const expr = decorator.MemberExpression || decorator.CallExpression || decorator.ParenthesizedExpression;

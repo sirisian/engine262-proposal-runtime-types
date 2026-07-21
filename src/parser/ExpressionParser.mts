@@ -61,13 +61,14 @@ export abstract class ExpressionParser extends FunctionParser {
     if (!surroundingAgent.feature('runtime-types')) {
       return false;
     }
-    if (!(this.test('abstract') || this.test('sealed') || this.test('dynamic'))) {
+    if (!(this.test('abstract') || this.test('sealed') || this.test('dynamic') || this.test('partial'))) {
       return false;
     }
     return this.testAhead(Token.CLASS)
       || this.testAhead('abstract')
       || this.testAhead('sealed')
-      || this.testAhead('dynamic');
+      || this.testAhead('dynamic')
+      || this.testAhead('partial');
   }
 
   protected abstract readonly state: {
@@ -1222,11 +1223,15 @@ export abstract class ExpressionParser extends FunctionParser {
     }
     node.ClassModifiers = ClassModifiers;
     this.expect(Token.CLASS);
+    // proposal-runtime-types: a `partial class` re-opens an existing class to add
+    // members, so it does not declare a new binding; the name must already be
+    // bound. A non-partial class declares its name as usual.
+    const isPartial = !!ClassModifiers && ClassModifiers.includes('partial');
 
     this.scope.with({ strict: true }, () => {
       if (!this.test(Token.LBRACE) && !this.test(Token.EXTENDS) && !this.test(Token.LT)) {
         node.BindingIdentifier = this.parseBindingIdentifier();
-        if (!isExpression) {
+        if (!isExpression && !isPartial) {
           this.scope.declare(node.BindingIdentifier, 'lexical');
         }
       } else if (this.test(Token.LT)) {

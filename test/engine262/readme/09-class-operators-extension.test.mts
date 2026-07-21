@@ -8,8 +8,6 @@ import { evaluated, bool, ok, expectThrown } from './harness.mts';
  *
  * Deferrals documented rather than asserted:
  *
- *  - `partial class` extension does not parse; documented gap
- *    (PENDING-CAPABILITIES.md capability F).
  *  - SIMD Operators are the SIMD extension and are not exercised here.
  *  - The full operator-overloading rules (operand resolution, scalar-on-the-left,
  *    SIMD intrinsics) are the operator-overloading extension; here we verify the
@@ -75,8 +73,18 @@ test('Mixins: a mixin is a function returning a class expression that extends it
   expect(evaluated('let Mixin = (Base) => class extends Base {}; class Base { base() { return "b"; } } let C = Mixin(Base); let c = new C(); c.base();')).toBe('b');
 });
 
-// ── Documented gap: partial class ─────────────────────────────────────────────
-test('Class Extension: partial class does not parse (documents the gap)', () => {
-  // Target (README): `partial class V { ... }` re-opens V to add methods.
-  expectThrown('class V { x = 1; } partial class V { getX() { return this.x; } } new V().getX();');
+// ── Class Extension: partial class ────────────────────────────────────────────
+// A `partial class` re-opens an existing class to add methods and operators
+// (README "Class Extension").
+test('Class Extension: a partial class adds methods to an existing class', () => {
+  expect(evaluated('class V { x = 1; } partial class V { getX() { return this.x; } } String(new V().getX());')).toBe('1');
+  // the original members remain
+  expect(evaluated('class V { foo() { return "foo"; } } partial class V { bar() { return "bar"; } } let v = new V(); v.foo() + v.bar();')).toBe('foobar');
+  // a static member may be added too
+  expect(evaluated('class V {} partial class V { static make() { return "m"; } } V.make();')).toBe('m');
+});
+
+test('Class Extension: partial extension is available on a sealed class', () => {
+  // partial adds behaviour, not cases, so it is allowed on a sealed class
+  expect(evaluated('sealed class S { foo() { return 1; } } partial class S { bar() { return 2; } } String(new S().bar());')).toBe('2');
 });

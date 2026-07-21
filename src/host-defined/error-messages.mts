@@ -200,6 +200,7 @@ export interface Throw {
   | 'A class element cannot be named as "constructor"'
   | 'A class element cannot be named as "prototype" or "constructor"'
   | 'A class static field cannot be named as "constructor"'
+  | 'A partial class requires a name'
   | 'AbstractModuleSource cannot be constructed'
   | 'An abstract method requires an abstract class'
   | 'Array length must be uint32.'
@@ -423,6 +424,7 @@ export interface Throw {
   ): ThrowCompletion;
   (m:
 '$1 can only be used with v flag'
+  | '$1 cannot be extended by a partial class'
   | '$1 cannot be inverted'
   | '$1 cannot be invoked without new'
   | '$1 cannot be used as a WeakMap key'
@@ -439,6 +441,7 @@ export interface Throw {
   | '$1 is not a Promise constructor'
   | '$1 is not a RegExp object'
   | '$1 is not a TemporalTimeLike object'
+  | '$1 is not a class and cannot be extended by a partial class'
   | '$1 is not a constructor'
   | '$1 is not a finite number'
   | '$1 is not a function'
