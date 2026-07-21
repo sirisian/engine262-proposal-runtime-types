@@ -617,6 +617,7 @@ export interface Throw {
   | '$1 is a required on object $2'
   | '$1 is not a $2'
   | '$1 is not a $2 object'
+  | '$1 is not a case of enum $2'
   | '$1 is not assignable to $2'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'
@@ -636,6 +637,7 @@ export interface Throw {
   | 'The return value ($1) of the throw() on an iterator ($2) must be an object'
   | 'getter ($1) in a property descriptor $2 must be a function'
   | 'setter ($1) in a property descriptor $2 must be a function'
+  | 'switch over enum $1 is missing $2 and has no default'
   , $1: Formattable, $2: Formattable): ThrowCompletion;
   (m:
 '"roundingMode" on object $1 is not valid ($2), only $3 are accepted'

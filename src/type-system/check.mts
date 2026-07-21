@@ -21,9 +21,20 @@ import { R, Throw } from '#self';
 
 type Known = TypeRecord | null;
 
+// proposal-runtime-types (spec sec-enums): what the checker records about an enum
+// declaration so a switch over an enum value can be checked: the member names in
+// declaration order, to match a `case E.Member` label and to report a missing one.
+interface EnumInfo {
+  readonly names: readonly string[];
+}
+
 interface Frame {
   readonly bindings: Map<string, TypeRecord>;
   readonly aliases: Map<string, TypeRecord>;
+  // Enum declarations in scope, by enum name, and the bindings known to hold an
+  // enumerator of one, by variable name to enum name.
+  readonly enums: Map<string, EnumInfo>;
+  readonly enumBindings: Map<string, string>;
 }
 
 
@@ -43,7 +54,7 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
 
 function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectValue[] {
   const errors: ObjectValue[] = [];
-  const frames: Frame[] = [{ bindings: new Map(), aliases: new Map() }];
+  const frames: Frame[] = [{ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
   const returnTypes: Known[] = [];
 
   const report = (source: TypeRecord, target: TypeRecord) => {
@@ -98,6 +109,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
       const t = frames[i].aliases.get(name);
       if (t) {
         return t;
+      }
+    }
+    return null;
+  };
+
+  // The enum declaration named `name`, if one is in scope.
+  const lookupEnum = (name: string): EnumInfo | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const e = frames[i].enums.get(name);
+      if (e) {
+        return e;
+      }
+    }
+    return null;
+  };
+
+  // The enum a binding holds an enumerator of, if it is known to.
+  const lookupEnumBinding = (name: string): string | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const e = frames[i].enumBindings.get(name);
+      if (e) {
+        return e;
       }
     }
     return null;
@@ -259,9 +292,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
     }
   };
 
+  // The enum a binding should be tracked as holding, from its initializer or its
+  // type annotation. `let e = E.Member` and `let e: E` both make `e` enum-typed;
+  // `E.Member` is a MemberExpression on an enum name, and `E` as an annotation is
+  // a TypeReference to an enum name.
+  const enumOfInitializer = (init: ParseNode | null | undefined): string | null => {
+    if (!init) {
+      return null;
+    }
+    let node: ParseNode = init;
+    if (node.type === 'ParenthesizedExpression') {
+      node = (node as { Expression: ParseNode }).Expression;
+    }
+    if (node.type === 'MemberExpression') {
+      const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+      if (m.MemberExpression && m.MemberExpression.type === 'IdentifierReference' && m.IdentifierName) {
+        const enumName = (m.MemberExpression as { name: string }).name;
+        const info = lookupEnum(enumName);
+        if (info && info.names.includes(m.IdentifierName.name)) {
+          return enumName;
+        }
+      }
+    }
+    return null;
+  };
+
+  const enumOfAnnotation = (ann: ParseNode.TypeAnnotation | null | undefined): string | null => {
+    if (!ann) {
+      return null;
+    }
+    const t = ann.Type;
+    if (t.type === 'TypeReference') {
+      const tr = t as unknown as { TypeName: { IdentifierReference: { name: string }, MemberNames: readonly unknown[] }, TypeArguments?: unknown };
+      if (tr.TypeName.MemberNames.length === 0 && !tr.TypeArguments) {
+        const name = tr.TypeName.IdentifierReference.name;
+        if (lookupEnum(name)) {
+          return name;
+        }
+      }
+    }
+    return null;
+  };
+
   const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
       const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
+      // proposal-runtime-types (spec sec-enums): a parameter annotated with an enum
+      // type holds an enumerator, so a switch over it can be checked.
+      const boundEnum = enumOfAnnotation(b.TypeAnnotation) ?? enumOfInitializer(b.Initializer);
+      if (boundEnum) {
+        frames[frames.length - 1].enumBindings.set(b.BindingIdentifier.name, boundEnum);
+      }
       if (b.Initializer) {
         requireAssignable(staticType(b.Initializer), declared);
         walk(b.Initializer);
@@ -273,7 +354,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean) => {
-    frames.push({ bindings: new Map(), aliases: new Map() });
+    frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
     for (const p of params ?? []) {
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
@@ -291,7 +372,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), aliases: new Map() });
+    frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     try {
       return f();
     } finally {
@@ -330,9 +411,76 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
         }
         return;
       }
+      case 'EnumDeclaration': {
+        // proposal-runtime-types (spec sec-enums): record the enum's member names
+        // so a switch over one of its enumerators can be checked for exhaustiveness.
+        const names = n.EnumMemberList.map((m) => m.IdentifierName.name);
+        frames[frames.length - 1].enums.set(n.BindingIdentifier.name, { names });
+        return;
+      }
+      case 'SwitchStatement': {
+        // proposal-runtime-types (spec sec-enums, sec-narrowing): a switch over an
+        // enumerator must label its cases with enumerators of that enum, and a
+        // switch with no default must cover every enumerator. The discriminant is
+        // enum-typed when it is a binding tracked as holding an enumerator.
+        const disc = n.Expression;
+        const discName = disc.type === 'IdentifierReference' ? (disc as { name: string }).name : null;
+        const enumName = discName ? lookupEnumBinding(discName) : null;
+        const info = enumName ? lookupEnum(enumName) : null;
+        if (info) {
+          const block = n.CaseBlock;
+          const clauses: ParseNode.CaseClause[] = [
+            ...(block.CaseClauses_a ?? []),
+            ...(block.CaseClauses_b ?? []),
+          ] as ParseNode.CaseClause[];
+          const covered = new Set<string>();
+          for (const clause of clauses) {
+            const label = clause.Expression;
+            // A valid label is `EnumName.Member`. Any other label in an enum
+            // switch is not an enumerator of the enum and is a type error.
+            let member: string | null = null;
+            let labelEnum: string | null = null;
+            if (label.type === 'MemberExpression') {
+              const m = label as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+              if (m.MemberExpression && m.MemberExpression.type === 'IdentifierReference' && m.IdentifierName) {
+                labelEnum = (m.MemberExpression as { name: string }).name;
+                member = m.IdentifierName.name;
+              }
+            }
+            if (member === null || labelEnum !== enumName || !info.names.includes(member)) {
+              const shown = member !== null && labelEnum !== null ? `${labelEnum}.${member}` : 'a non-enumerator case';
+              const completion = Throw.TypeError('$1 is not a case of enum $2', Value(shown), Value(enumName!)) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            } else {
+              covered.add(member);
+            }
+          }
+          const hasDefault = block.DefaultClause !== undefined && block.DefaultClause !== null;
+          if (!hasDefault) {
+            const missing = info.names.filter((nm) => !covered.has(nm));
+            if (missing.length > 0) {
+              const completion = Throw.TypeError('switch over enum $1 is missing $2 and has no default', Value(enumName!), Value(missing.join(', '))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        // Walk the discriminant and case bodies as usual.
+        walk(n.Expression);
+        walk(n.CaseBlock);
+        return;
+      }
       case 'LexicalBinding':
       case 'VariableDeclaration': {
         if (n.BindingIdentifier) {
+          // proposal-runtime-types (spec sec-enums): track a binding that holds an
+          // enumerator, from `let e = E.Member` or `let e: E`, so a switch over it
+          // can be checked.
+          const boundEnum = enumOfAnnotation(n.TypeAnnotation)
+            ?? enumOfInitializer(n.Initializer)
+            ?? (n.TypedInitializer ? enumOfInitializer(n.TypedInitializer.AssignmentExpression) : null);
+          if (boundEnum) {
+            frames[frames.length - 1].enumBindings.set(n.BindingIdentifier.name, boundEnum);
+          }
           if (n.TypedInitializer) {
             const inferred = staticType(n.TypedInitializer.AssignmentExpression);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null);
