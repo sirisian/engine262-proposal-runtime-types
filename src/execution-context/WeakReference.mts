@@ -73,6 +73,19 @@ export function* CleanupFinalizationRegistry(finalizationRegistry: FinalizationR
 export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
   // 1. If v is an Object, return true.
   if (v instanceof ObjectValue) {
+    // proposal-runtime-types (spec sec-value-types, sec-weak-references-and-typed-objects):
+    // an instance of a typed class cannot be held weakly. A value of a value type
+    // has no identity, so a weak reference to it, a weak collection keyed on it, or
+    // a finalization target of it is meaningless; there is nothing for the
+    // reference to observe the liveness of. A typed-class instance is one built by
+    // a constructor that seals its instances (a typed field, not `dynamic`), the
+    // same SealInstances flag that also forbids proxying it.
+    if (surroundingAgent.feature('runtime-types')) {
+      const builtBy = (v as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
+      if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+        return false;
+      }
+    }
     return true;
   }
 

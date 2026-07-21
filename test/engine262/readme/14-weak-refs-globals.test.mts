@@ -1,19 +1,18 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool } from './harness.mts';
+import { evaluated, bool, expectThrown } from './harness.mts';
 
 /**
  * README feature coverage — weak references and global objects as types.
  * Sections: Weak References, Global Objects.
  *
  *  - Weak references work for reference types (ordinary objects, functions,
- *    symbols). The rejection of VALUE types (a value type has no identity, so
- *    weakly holding one is meaningless) follows from the value-type principle but
- *    has no explicit normative clause - unlike the parallel Proxy-over-typed-class
- *    rejection, which is normative and implemented - so it is documented as a gap
- *    (PENDING-CAPABILITIES.md capability I).
+ *    symbols) and reject VALUE types: a value type has no identity, so a weak
+ *    reference to one, a weak collection keyed on one, or a finalization target of
+ *    one is a TypeError. This is the same identity principle as the parallel
+ *    Proxy-over-typed-class rejection, and is implemented and verified here.
  *  - Global objects as type names are a README listing not yet in the normative
  *    type-name clause; most are not registered as types (Promise is, via typed
- *    promises). Documented as a gap.
+ *    promises). Documented as deferred below.
  */
 
 // ── Weak References: reference types ──────────────────────────────────────────
@@ -30,13 +29,23 @@ test('Weak References: WeakMap and WeakSet accept object keys/values', () => {
 });
 
 // ── Documented gaps ───────────────────────────────────────────────────────────
-test('Weak References: a value-type instance is not rejected (documents the gap)', () => {
-  // Target (README): `new WeakRef(a)` for a value-type class A is a TypeError,
-  // since a value type has no identity to weakly hold. This follows from the
-  // value-type principle but has no explicit normative clause, so today it
-  // succeeds. (The parallel Proxy-over-typed-class rejection IS normative and is
-  // enforced - see the proxy file.)
-  expect(evaluated('class A { a: uint8 = (0 := uint8); } let a = new A(); let r = new WeakRef(a); typeof r;')).toBe('object');
+// ── Weak References: a value-type instance cannot be held weakly ───────────────
+// A value of a value type has no identity, so a weak reference to it, a weak
+// collection keyed on it, or a finalization target of it is a TypeError (README
+// "Weak References").
+test('Weak References: a WeakRef over a typed-class instance is a TypeError', () => {
+  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakRef(new A());');
+});
+
+test('Weak References: a typed-class instance is rejected as a WeakMap key, WeakSet value, and finalization target', () => {
+  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakMap().set(new A(), 1);');
+  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakSet().add(new A());');
+  expectThrown('class A { a: uint8 = (0 := uint8); } new FinalizationRegistry(() => {}).register(new A());');
+});
+
+test('Weak References: an untyped class instance can still be held weakly', () => {
+  // a class with no typed field is not sealed and keeps its identity
+  expect(evaluated('class B { constructor() { this.x = 1; } } let r = new WeakRef(new B()); typeof r;')).toBe('object');
 });
 
 test('Global Objects: global constructors are usable as type names', () => {
