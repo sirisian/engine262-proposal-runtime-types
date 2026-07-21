@@ -6,13 +6,15 @@ import { evaluated, expectThrown, expectErrorFlagOff } from './harness.mts';
  * Sections: Implicit SIMD Constructors, SIMD Operators, Multidimensional and
  * Jagged Array Support Via User-defined Index Operators.
  *
- *  - The index-accessor operator DECLARATION (`operator[](...)`) parses; it is in
- *    the normative overloadable-operators list. The runtime dispatch of `m[i]` to
- *    a declared index operator, and multidimensional/jagged array semantics, are
- *    documented as a gap (PENDING-CAPABILITIES.md capability M).
+ *  - The index-accessor operator `operator[](...)` declares and, for the read
+ *    direction, dispatches: a numeric index access `m[i]` on an instance whose
+ *    class declares `operator[]` calls that operator with the index. Implemented and
+ *    verified here. The write direction (`set operator[]`), the multi-argument form
+ *    `m[x, y]` (which needs the comma-index grammar of the ranges extension), and
+ *    overload resolution among several index operators are deferred.
  *  - SIMD/vector types (`vector.<T, N>`, `float32x4`, `uint32x4`) are not
  *    registered; the SIMD lane types, broadcast constructors, and SIMD operators
- *    are the SIMD extension (capability N).
+ *    are the SIMD extension.
  */
 
 // ── Index-accessor operator declaration ───────────────────────────────────────
@@ -38,10 +40,21 @@ test('Index operators: the declaration syntax requires the runtime-types feature
 });
 
 // ── Documented gaps ───────────────────────────────────────────────────────────
-test('Index operators: m[i] dispatch to a user operator is not yet wired (documents the gap)', () => {
-  // Target (README): `m[0]` dispatches to `operator[](i)`. Today the declaration
-  // parses but the runtime access does not consult it, so m[0] is undefined.
-  expect(evaluated('class M { operator[](i: uint32) { return (99 := uint32); } } let m = new M(); String(m[0]);')).toBe('undefined');
+// ── Index operator dispatch (read direction) ──────────────────────────────────
+// A numeric index access `m[i]` on an instance whose class declares `operator[]`
+// dispatches to that operator, called with the index (README "Multidimensional and
+// Jagged Array Support Via User-defined Index Operators").
+test('Index operators: m[i] on a class with an index operator dispatches to it', () => {
+  expect(evaluated('class M { operator[](i: uint32) { return (99 := uint32); } } let m = new M(); String(m[(0 := uint32)]);')).toBe('99');
+  // the index is passed to the operator
+  expect(evaluated('class M { operator[](i) { return i * 10; } } let m = new M(); String(m[5]);')).toBe('50');
+  // the operator body sees `this`
+  expect(evaluated('class M { constructor() { this.d = [10, 20, 30]; } operator[](i) { return this.d[i]; } } let m = new M(); String(m[1]);')).toBe('20');
+});
+
+test('Index operators: a non-numeric key falls through to ordinary property access', () => {
+  // a string key reaches a method, so an index-defining class keeps its methods
+  expect(evaluated('class M { operator[](i) { return 1; } foo() { return 7; } } let m = new M(); String(m["foo"]());')).toBe('7');
 });
 
 test('SIMD: vector and named SIMD lane types are not registered (documents the gap)', () => {

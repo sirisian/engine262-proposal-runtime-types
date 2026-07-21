@@ -23,7 +23,7 @@ import {
   getActiveScriptId,
 } from './all.mts';
 import {
-  DynamicParsedCodeRecord, surroundingAgent, EnvironmentRecord, GetGlobalObject, Throw,
+  DynamicParsedCodeRecord, surroundingAgent, EnvironmentRecord, GetGlobalObject, Throw, Call,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-ispropertyreference */
@@ -76,6 +76,12 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   // 3. If IsPropertyReference(V) is true, then
   if (IsPropertyReference(V) === Value.true) {
     __ts_cast__<PropertyReference>(V);
+    // proposal-runtime-types (spec sec-class-operators): a computed index access
+    // whose base declares an index operator reads through the operator, called
+    // with the index as its argument, rather than through the ordinary [[Get]].
+    if (V.IndexOperator !== undefined) {
+      return Q(yield* Call(V.IndexOperator, V.Base as Value, [V.ReferencedName as Value]));
+    }
     // a. Let baseObj be ? ToObject(V.[[Base]]).
     const baseObj = Q(ToObject(V.Base));
     // b. If IsPrivateReference(V) is true, then

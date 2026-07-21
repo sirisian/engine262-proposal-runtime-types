@@ -1007,16 +1007,25 @@ export class ReferenceRecord {
 
   readonly ThisValue: Value | undefined;
 
+  // proposal-runtime-types (spec sec-class-operators): set when this reference is
+  // a computed index access `m[i]` whose base is a typed-class instance with a
+  // declared index operator, so GetValue/PutValue dispatch to that operator in
+  // place of the ordinary property [[Get]]/[[Set]]. The value is the index
+  // operator function.
+  readonly IndexOperator?: Value;
+
   constructor({
     Base,
     ReferencedName,
     Strict,
     ThisValue,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue'>) {
+    IndexOperator,
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
     this.ThisValue = ThisValue;
+    this.IndexOperator = IndexOperator;
   }
 
   // NON-SPEC
