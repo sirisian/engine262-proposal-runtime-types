@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, ok } from './harness.mts';
+import { evaluated, bool, ok, expectThrown } from './harness.mts';
 
 /**
  * README feature coverage — arrays and tuples.
@@ -10,11 +10,15 @@ import { evaluated, bool, ok } from './harness.mts';
  * Scope note: the proposal's TYPE-level array and tuple features are implemented
  * in the core (the type constructors, interning, fixed-vs-dynamic identity,
  * assignability, tuple spread, and tuple-object intersection), and are what this
- * file verifies. The VALUE-level runtime of typed arrays — materializing a
- * zero-filled fixed-length array, element checking of an array literal at the
- * binding boundary, the delete/push/pop guards, and the `shared` backing — is
- * deferred by the spec to the memory-layout and threading extensions
- * (table-extension-hooks) and is exercised with those documents, not here.
+ * file verifies. One VALUE-level behavior is also implemented and verified here:
+ * a plain array literal in a `[].<T>` position propagates the element type, so
+ * each element is converted to T at the binding boundary (README "Typed Array
+ * Propagation"). The remaining VALUE-level runtime of typed arrays — the
+ * buffer-backed view constructor `[].<T>(buffer)`, `window`, bounds checking,
+ * materializing a zero-filled fixed-length array, the delete/push/pop guards, and
+ * the `shared` backing — is deferred by the spec to the memory-layout and
+ * threading extensions (table-extension-hooks) and is exercised with those
+ * documents, not here.
  */
 
 // ── Variable-length Typed Arrays: [].<T> ──────────────────────────────────────
@@ -31,6 +35,31 @@ test('Variable-length arrays: [].<T> resolves and interns', () => {
 test('Variable-length arrays: element may itself be a union', () => {
   expect(ok('type A = [].<uint8 | null>; typeof A;')).toBe(true);
   expect(bool('type A = [].<uint8 | null>; type B = [].<uint8 | null>; String(A === B);')).toBe(true);
+});
+
+// ── Typed Array Propagation ───────────────────────────────────────────────────
+// A plain array literal in a `[].<T>` position propagates the element type: each
+// element is converted to T at the binding boundary, so the elements are typed
+// values and their stores wrap.
+test('Typed Array Propagation: an array literal takes the element type', () => {
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.length);')).toBe('3');
+  expect(bool('let a: [].<uint8> = [5]; String(a[0] instanceof uint8);')).toBe(true);
+  // the store wraps like the element type: 255 + 1 is 0 in uint8
+  expect(evaluated('let a: [].<uint8> = [255]; String(a[0] + (1 := uint8));')).toBe('0');
+});
+
+test('Typed Array Propagation: an out-of-range element is rejected', () => {
+  expectThrown('let a: [].<uint8> = [300]; String(a.length);');
+});
+
+test('Typed Array Propagation: a fixed extent must match the literal length', () => {
+  expect(evaluated('let a: [3].<uint8> = [1, 2, 3]; String(a.length);')).toBe('3');
+  expectThrown('let a: [3].<uint8> = [1, 2]; String(a.length);');
+});
+
+test('Typed Array Propagation: propagation is recursive through nested arrays', () => {
+  expect(evaluated('let a: [].<[].<uint8>> = [[1, 2], [3]]; String(a[0][1]);')).toBe('2');
+  expect(bool('let a: [].<[].<uint8>> = [[5]]; String(a[0][0] instanceof uint8);')).toBe(true);
 });
 
 // ── Fixed-length Typed Arrays: [N].<T> ────────────────────────────────────────

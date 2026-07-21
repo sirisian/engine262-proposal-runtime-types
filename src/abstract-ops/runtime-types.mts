@@ -1,12 +1,14 @@
-import { Q, EnsureCompletion } from '../completion.mts';
-import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value } from '../value.mts';
+import { Q, X, EnsureCompletion } from '../completion.mts';
+import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
-import { Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent } from '#self';
+import {
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow,
+} from '#self';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -155,6 +157,31 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       default:
         break;
     }
+  }
+  if (t.Kind === 'array') {
+    // proposal-runtime-types (spec sec-contextual-types, README "Typed Array
+    // Propagation"): a plain array in a `[].<T>` position propagates the element
+    // type. Each element is converted to the element type by the same checked
+    // conversion, so `let a: [].<uint8> = [1, 2, 3]` yields an array whose elements
+    // are uint8 values and whose stores wrap. A fixed extent must match the length.
+    if (value instanceof ObjectValue) {
+      const isArr = Q(IsArray(value));
+      if (isArr === Value.true) {
+        const lenValue = Q(yield* Get(value, Value('length')));
+        const len = R(Q(yield* ToNumber(lenValue))) as number;
+        if (t.Extent !== 'dynamic' && t.Extent !== len) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        const out = X(ArrayCreate(len));
+        for (let i = 0; i < len; i += 1) {
+          const el = Q(yield* Get(value, Value(String(i))));
+          const converted = Q(yield* CheckedConvertValue(el, t.Element));
+          X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
+        }
+        return out;
+      }
+    }
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   return Q(yield* RequireType(value, t));
 }
