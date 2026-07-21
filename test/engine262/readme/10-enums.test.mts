@@ -11,11 +11,8 @@ import { evaluated, bool, expectThrown } from './harness.mts';
  * after `:`), and the subtype relation that makes an enum value usable wherever
  * its underlying type is.
  *
- * Two behaviors are documented as gaps (PENDING-CAPABILITIES.md capability G):
+ * One behavior is documented as deferred rather than asserted:
  *
- *  - `Count(n)` construction (the checked reverse conversion) requires a callable
- *    enum type object; it is NORMATIVE (spec sec-enums) but not yet implemented,
- *    the same callable-type-object gap as the `T(v)` cast-call form.
  *  - The `toString`-maps-to-key behavior and `%Enum.prototype%` iterator methods
  *    (keys/values/entries) appear in the README but are not in the normative
  *    spec.emu enum clause; they are design-level and not implemented.
@@ -72,12 +69,18 @@ test('enum: the declaration binds a static enum object', () => {
 });
 
 // ── Documented gaps ───────────────────────────────────────────────────────────
-test('enum: Count(n) construction is not yet implemented (documents the gap)', () => {
-  // Target (spec sec-enums, NORMATIVE): Count(1) returns the enumerator whose
-  // underlying value is 1, and throws for a value that is not one of them. Today
-  // the enum type object is not callable, so Count(1) throws "not a function".
-  // This is the same callable-type-object gap as the T(v) cast-call form.
-  expectThrown('enum Count { Zero, One, Two }; Count(1);');
+// ── Enum construction: Count(n) ───────────────────────────────────────────────
+// A call on the enum type returns the enumerator whose underlying value is the
+// argument, and is a TypeError for a value that is not one of them (spec
+// sec-enums).
+test('enum: Count(n) returns the enumerator with that underlying value', () => {
+  expect(evaluated('enum Count { Zero, One, Two }; String(Count(1));')).toBe('1');
+  // the result is the enumerator itself
+  expect(evaluated('enum Count { Zero, One, Two }; String(Count(1) === Count.One);')).toBe('true');
+});
+
+test('enum: Count(n) throws for a value that is not an enumerator', () => {
+  expectThrown('enum Count { Zero, One, Two }; Count(9);');
 });
 
 test('enum: toString-to-key and %Enum.prototype% methods are design-level (documents the gap)', () => {

@@ -6,6 +6,7 @@ import {
   isTypedNumber,
 } from '../value.mts';
 import { typedUnary } from '../type-system/arithmetic.mts';
+import { isTypeObject } from '../type-system/intern.mts';
 import { __ts_cast__, OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent, EnvironmentRecord } from '#self';
@@ -123,6 +124,14 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   } else if (val instanceof SymbolValue) {
     return Value('symbol');
   } else if (val instanceof ObjectValue) {
+    // proposal-runtime-types (spec sec-reflect-typeof): a Type Object is callable
+    // (a call on the type is a conversion, `uint8(v)`), but `typeof` reports
+    // "object", since a Type Object is an Object and `typeof uint8 === "object"`
+    // is the feature detection for this proposal. So a Type Object is "object"
+    // even though it is callable.
+    if (surroundingAgent.feature('runtime-types') && isTypeObject(val)) {
+      return Value('object');
+    }
     if (IsCallable(val)) {
       return Value('function');
     }

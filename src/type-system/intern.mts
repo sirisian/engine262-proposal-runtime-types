@@ -1,13 +1,18 @@
-import type { ObjectValue } from '../value.mts';
+import type { ObjectValue, Arguments } from '../value.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
+import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey } from './records.mts';
 import { SameType } from './relations.mts';
-import { OrdinaryObjectCreate, surroundingAgent } from '#self';
+import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
 
 /**
  * proposal-runtime-types #sec-canonicalizetype and #sec-gettypeobject
  */
 export type TypeObject = ObjectValue & { TypeRecord: TypeRecord };
+
+/** A Type Object with the [[Call]] that makes `T(v)` a conversion. */
+type CallableTypeObject = TypeObject & { Call(thisArgument: Value, argumentsList: Arguments): ValueEvaluator };
 
 export function isTypeObject(value: unknown): value is TypeObject {
   return !!value && typeof value === 'object' && 'TypeRecord' in (value as object);
@@ -102,6 +107,27 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   const proto = (realm ?? surroundingAgent.currentRealmRecord).Intrinsics['%Type.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['TypeRecord']) as unknown as TypeObject;
   obj.TypeRecord = canonical;
+  // proposal-runtime-types (spec sec-conversions, sec-enums): a Type Object is
+  // callable. A call on a plain type is an explicit conversion of the argument to
+  // that type, `uint8(v)`, the same operation as `v := uint8`. A call on an enum
+  // type is the reverse conversion: `Count(n)` returns the enumerator whose
+  // underlying value is `n`, and is a TypeError when `n` is not one of them. The
+  // conversion and the enum lookup are read from the barrel at call time, so the
+  // interned object gains a [[Call]] without a load-time cycle, and its identity in
+  // the intern table is unchanged.
+  (obj as CallableTypeObject).Call = function* Call(_thisArgument: Value, argumentsList: Arguments): ValueEvaluator {
+    const arg: Value = argumentsList[0] ?? Value.undefined;
+    const record = (this as TypeObject).TypeRecord;
+    if (record.Kind === 'nominal' && record.EnumMembers !== undefined) {
+      for (const member of record.EnumMembers) {
+        if (SameValue(arg, member)) {
+          return member;
+        }
+      }
+      return Throw.TypeError('$1 is not a value of this enum', arg);
+    }
+    return Q(yield* ConvertValue(arg, record));
+  };
   table.push(obj);
   return obj;
 }

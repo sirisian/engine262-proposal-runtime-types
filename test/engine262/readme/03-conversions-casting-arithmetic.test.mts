@@ -6,15 +6,9 @@ import { evaluated, bool, expectThrown } from './harness.mts';
  * Sections: Conversions, Explicit Casting, Arithmetic and Overflow, Integer
  * Binary Shifts, Integer Division and Remainder.
  *
- * Two boundaries are documented rather than asserted as runtime behavior:
+ * One boundary is documented rather than asserted as runtime behavior:
  *
- *  1. The `T(v)` CALL form of a cast ("a cast is a call on the type") is not yet
- *     wired up: Type Objects are not callable, so `uint8(v)` throws. The `:=`
- *     operator form, which the spec defines as "the same operation", is
- *     implemented and is what these tests use. Making Type Objects callable is a
- *     change to the interning path tracked separately.
- *
- *  2. "Two operands of different value types are a TypeError" is a STATIC checker
+ *  1. "Two operands of different value types are a TypeError" is a STATIC checker
  *     rule. At run time, mixed-type arithmetic does not throw; it proceeds with
  *     the left operand's type. The static rejection is covered by the checker
  *     tests; here we verify the runtime arithmetic that the checker permits.
@@ -76,6 +70,17 @@ test('Explicit Casting: := also performs the ordinary primitive conversions', ()
   expectThrown('("300" := uint8);');
   // an object cannot convert to a numeric type
   expectThrown('({} := uint8);');
+});
+
+// A cast may also be written as a call on the type, `uint8(v)`, which the spec
+// defines as the same operation as `v := uint8`.
+test('Explicit Casting: the call form uint8(v) is the same conversion as :=', () => {
+  expect(bool('String(uint8(300) === (300 := uint8));')).toBe(true);
+  expect(bool('String(uint8(65535) === (255 := uint8));')).toBe(true);
+  // the call form performs the ordinary primitive conversions too
+  expect(bool('String(string(42) === "42");')).toBe(true);
+  // and fails where the conversion cannot be performed
+  expectThrown('uint8("hello");');
 });
 
 // ── Arithmetic and Overflow ───────────────────────────────────────────────────

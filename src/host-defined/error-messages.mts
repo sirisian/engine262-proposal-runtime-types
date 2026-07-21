@@ -464,6 +464,7 @@ export interface Throw {
   | '$1 is not a valid month code'
   | '$1 is not a valid property name'
   | '$1 is not a valid radix'
+  | '$1 is not a value of this enum'
   | '$1 is not an index signature'
   | '$1 is not an integer'
   | '$1 is not an object'
