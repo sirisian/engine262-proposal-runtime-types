@@ -87,6 +87,7 @@ import { bootstrapWeakSet } from '../intrinsics/WeakSet.mts';
 import { bootstrapWeakSetPrototype } from '../intrinsics/WeakSetPrototype.mts';
 import { bootstrapWrapForValidIteratorPrototype } from '../intrinsics/WrapForValidIteratorPrototype.mts';
 import { bootstrapTemporal } from '../intrinsics/Temporal/Temporal.mts';
+import { RegisterTemporalTypeSources } from '../intrinsics/Temporal/type-sources.mts';
 import {
   type ObjectValue, type GlobalEnvironmentRecord, type ParseNode, type LoadedModuleRequestRecord, type ManagedRealmHostDefined, type GCMarker,
   ManagedRealm,
@@ -327,6 +328,13 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
           Configurable: Value.true,
         })));
       }
+    }
+
+    // proposal-runtime-types (temporal.md): when Temporal is present, its classes
+    // and enums become types. This runs after the Temporal intrinsics exist and
+    // before the Temporal global is bound below.
+    if (surroundingAgent.feature('temporal')) {
+      RegisterTemporalTypeSources(realmRec);
     }
   }
 

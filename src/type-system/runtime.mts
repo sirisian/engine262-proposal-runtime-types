@@ -567,8 +567,11 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         return true;
       }
       // #sec-isoftype nominal: a class type's members are the instances whose
-      // prototype chain reaches the constructor bound by [[Declaration]].
-      if (t.Declaration.type === 'ClassDeclaration' || t.Declaration.type === 'ClassExpression') {
+      // prototype chain reaches the constructor bound by [[Declaration]]. A
+      // built-in class type (a Temporal class) carries its resolved [[Constructor]]
+      // and no source ClassDeclaration, so the presence of a constructor is the
+      // general signal that membership is the prototype-chain test.
+      if ((t.Constructor as Value | undefined) !== undefined || t.Declaration.type === 'ClassDeclaration' || t.Declaration.type === 'ClassExpression') {
         if (!(value instanceof ObjectValue)) {
           return false;
         }
@@ -751,6 +754,21 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
             return Throw.TypeError('$1 is not a type', Value(`${baseName}.${part.name}`));
           }
           base = Q(yield* Get(base, Value(part.name)));
+        }
+        // proposal-runtime-types (temporal.md): the accessed value may itself be a
+        // Type Object (a namespaced enum such as Temporal.Unit used as a type), in
+        // which case it denotes that type; or a class constructor with an
+        // associated class type (a Temporal class such as Temporal.Instant), in
+        // which case it denotes that class type. Otherwise it is an enum member and
+        // denotes the literal type of its value.
+        if (isTypeObject(base)) {
+          return base.TypeRecord;
+        }
+        if (base instanceof ObjectValue) {
+          const classType = LookupClassType(base);
+          if (classType && isTypeObject(classType)) {
+            return classType.TypeRecord;
+          }
         }
         // The accessed value becomes a literal type of its own base type.
         return { Kind: 'literal', Value: base, Base: RuntimeTypeOf(base) };
