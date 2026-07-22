@@ -401,10 +401,15 @@ export function TypedRandom(t: TypeRecord, realm: Realm): Value | undefined {
   }
   const d = nextRandomDouble(realm);
   if (isFloat) {
-    // The engine's typed float values hold a Number, so a random float is that
-    // draw carried at the float value type; `Math.random.<float32>()` is
-    // `Math.random.<float32>(0..1)`.
-    return new TypedNumberValue(d, t);
+    // A float draw is taken on the uniform grid of the width's significand
+    // (float32 has a 24-bit significand, float16 an 11-bit one; float64 takes
+    // the draw as produced), so the value is exactly representable at the
+    // width, unchanged by the checked conversion's rounding (wrapToType), and
+    // strictly below 1, where rounding a raw double draw could reach 1.0.
+    // `Math.random.<float32>()` is `Math.random.<float32>(0..1)`.
+    const sigBits = name === 'float64' ? 0 : (name === 'float32' ? 24 : 11);
+    const value = sigBits === 0 ? d : Math.floor(d * (2 ** sigBits)) / (2 ** sigBits);
+    return new TypedNumberValue(value, t);
   }
   // An integer draw covers the whole type range inclusively. Only widths whose
   // cardinality is an exact Number (<= 32 bits) are produced here; wider integer

@@ -69,6 +69,13 @@ test('random: untyped Math.random works, and the typed no-argument form carries 
   expect(evaluated('let r = Math.random.<float32>(); (r is float32) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('Reflect.typeOf(Math.random.<float32>()) === float32 ? "f32" : "num";')).toBe('f32');
   expect(ok('let r = Math.random.<float32>(); r >= 0 && r < 1;')).toBe(true);
+  // a draw is exactly representable at its width, so the checked conversion's
+  // rounding (wrapToType) leaves it unchanged: float32 draws are fround-stable
+  // and float16 draws sit on the 11-bit significand grid (Number() extracts the
+  // plain value, since a typed zero is not === a plain zero)
+  expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let n = Number(Math.random.<float32>()); if (n - Math.fround(n) !== 0) good = false; } good;')).toBe(true);
+  expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let n = Number(Math.random.<float16>()); if (n - Math.f16round(n) !== 0) good = false; } good;')).toBe(true);
+  expect(evaluated('let r = Math.random.<float16>(); (r is float16) ? "yes" : "no";')).toBe('yes');
   // an integer value type draws across its full range, inclusive, at that type
   expect(evaluated('let r = Math.random.<uint8>(); (r is uint8) ? "yes" : "no";')).toBe('yes');
   expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let r = Math.random.<uint8>(); if (!(r >= 0 && r <= 255)) good = false; } good;')).toBe(true);
