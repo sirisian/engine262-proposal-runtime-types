@@ -1168,6 +1168,21 @@ export abstract class ExpressionParser extends FunctionParser {
         node.AssignmentExpression = this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression());
         Arguments.push(this.finishNode(node, 'AssignmentRestElement'));
       } else if (surroundingAgent.feature('runtime-types')
+          && this.test('ref')
+          && !this.peekAhead().hadLineTerminatorBefore
+          && (this.peekAhead().type === Token.IDENTIFIER
+            || this.peekAhead().type === Token.THIS
+            || this.peekAhead().type === Token.YIELD
+            || this.peekAhead().type === Token.AWAIT)) {
+        // proposal-runtime-types (references extension): a `ref` argument
+        // passes the operand's storage location rather than its value. `ref` is
+        // contextual: `f(ref)` and `f(ref, x)` still pass an identifier named
+        // ref, since no operand follows `ref` on the same line.
+        const refNode = this.startNode<ParseNode.RefExpression>();
+        this.next();
+        refNode.Expression = this.parseLeftHandSideExpression();
+        Arguments.push(this.finishNode(refNode, 'RefExpression'));
+      } else if (surroundingAgent.feature('runtime-types')
           && this.conditionalConsequentDepth === 0
           && this.test(Token.IDENTIFIER)
           && this.testAhead(Token.COLON)) {

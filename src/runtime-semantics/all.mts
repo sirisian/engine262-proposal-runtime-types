@@ -45,6 +45,7 @@ export * from './TryStatement.mts';
 export * from './Block.mts';
 export * from './ArrayLiteral.mts';
 export * from './UnaryExpression.mts';
+export * from './RefExpression.mts';
 export * from './EqualityExpression.mts';
 export * from './LogicalANDExpression.mts';
 export * from './LogicalORExpression.mts';

@@ -1,6 +1,7 @@
+import { OutOfRange } from '../utils/language.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
-  TypedNumberValue, TypedStringValue,
+  TypedNumberValue, TypedStringValue, ReferenceValue,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { Q } from '../completion.mts';
@@ -31,7 +32,7 @@ import {
 const typeParameterFrames: Map<string, TypeRecord>[] = [];
 
 /**
- * proposal-runtime-types (Capability B): make a set of type-parameter bindings
+ * proposal-runtime-types: make a set of type-parameter bindings
  * active while some evaluation runs (a generic function call evaluates its
  * parameter types, body, and return type over its inferred bindings). Mirrors the
  * frame InstantiateGenericAlias pushes for an alias body.
@@ -45,7 +46,7 @@ export function popTypeParameterFrame(): void {
 }
 
 /**
- * proposal-runtime-types (Capability B): the Type Record bound to a type parameter
+ * proposal-runtime-types: the Type Record bound to a type parameter
  * of the given name in the active frames, innermost first, or null if none. A
  * type parameter referenced as a builder-call argument (`joinResult(P, d)`)
  * resolves to its bound type through this, since it is not a value binding.
@@ -78,7 +79,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
 }
 
 /**
- * proposal-runtime-types (Capability B, spec sec-computed-constraints): infer the
+ * proposal-runtime-types (spec sec-computed-constraints): infer the
  * bindings of a generic function's type parameters from the actual argument values
  * at a call. Parameters bind left to right; each parameter's constraint is
  * evaluated over the bindings so far (computed constraints), then the parameter is
@@ -221,10 +222,15 @@ function elementLiteralTypeOf(value: Value): TypeRecord {
  * value types exist as distinct values, a Number's type is `number`.
  */
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  if (value instanceof ReferenceValue) {
+    // proposal-runtime-types (references extension): a reference value never
+    // reaches a type query; every read that could carry one dereferences first.
+    throw OutOfRange.nonExhaustive(value);
+  }
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;
   }
-  // proposal-runtime-types (Capability B): a String value carrying an inferred
+  // proposal-runtime-types: a String value carrying an inferred
   // literal/refined type reports that type, not the widened `string`. Checked
   // before the JSStringValue case below, since TypedStringValue is a subclass.
   if (value instanceof TypedStringValue) {

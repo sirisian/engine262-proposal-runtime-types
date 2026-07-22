@@ -1,15 +1,18 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool, expectThrown } from '../readme/harness.mts';
+import { evaluated, ok, bool } from '../readme/harness.mts';
 
 /**
- * Extension coverage — references.md (the `ref` type).
+ * Extension coverage — references.md (the `ref` type and borrowing runtime).
  *
  * The `ref` TYPE is wired at the type level: `ref T` parses, resolves to a
  * reference Type Record, interns, is invariant in its target, and reflects. The
- * `ref` PARAMETER declaration parses. The borrowing RUNTIME (call-site `ref`
- * argument, `for (const ref p of a)`, write-through, liveness checks) is the
- * document's deferred part (specnotes.md: "the `ref` type is in the grammar; the
- * borrowing rules remain the document's"), documented as capability O.
+ * borrowing RUNTIME is implemented as capability O: the call-site `ref` argument
+ * and `ref` return, `ref` parameter aliasing, the `let ref` / `const ref`
+ * lexical binding and rebinding, the index-based `for (const ref p of a)` loop,
+ * decay to the referent at value boundaries, and the two liveness rules. The
+ * fuller borrowing surface (location-consuming returns such as `first(a)++`,
+ * destructuring `ref` members, and the SoA/typed-buffer substrate) is exercised
+ * in extensions/ref-borrowing.test.mts and noted there as deferred.
  */
 
 // ── The ref type at the type level ────────────────────────────────────────────
@@ -43,13 +46,15 @@ test('ref parameter: a `ref` parameter declaration parses', () => {
   expect(evaluated('function f(ref a: int32) { let b = a; return b; } typeof f;')).toBe('function');
 });
 
-// ── Documented gaps: the borrowing runtime ────────────────────────────────────
-test('ref runtime: the call-site `ref` argument does not parse (documents the gap)', () => {
-  // Target (references.md): `f(ref a)` passes the caller's location.
-  expectThrown('function f(ref a: int32) { a = (5 := int32); } let x: int32 = (0 := int32); f(ref x); x;');
+// ── The borrowing runtime (capability O) ──────────────────────────────────────
+test('ref runtime: the call-site `ref` argument passes the caller location', () => {
+  // Target (references.md): `f(ref a)` passes the caller's location, so a write
+  // in the callee is a write in the caller.
+  expect(evaluated('function f(ref a) { a++; } let x = 0; f(ref x); String(x);')).toBe('1');
 });
 
-test('ref runtime: the `for (const ref p of a)` form does not parse (documents the gap)', () => {
-  // Target (references.md): a ref loop binds each element by reference.
-  expectThrown('let a = [1, 2, 3]; for (const ref p of a) { } "ok";');
+test('ref runtime: the `for (const ref p of a)` form binds each element by reference', () => {
+  // Target (references.md): a ref loop binds each element by reference, so the
+  // body writes into the array in place.
+  expect(evaluated('let a = [1, 2, 3]; for (let ref p of a) { p = p * 10; } a[0] + "," + a[1] + "," + a[2];')).toBe('10,20,30');
 });

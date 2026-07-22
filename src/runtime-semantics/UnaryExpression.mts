@@ -4,6 +4,7 @@ import {
   Value, ReferenceRecord, UndefinedValue, BigIntValue, BooleanValue, JSStringValue, NullValue, NumberValue, ObjectValue, SymbolValue,
   TypedNumberValue,
   isTypedNumber,
+  ReferenceValue,
 } from '../value.mts';
 import { typedUnary } from '../type-system/arithmetic.mts';
 import { isTypeObject } from '../type-system/intern.mts';
@@ -136,6 +137,11 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
       return Value('function');
     }
     return Value('object');
+  }
+  if (val instanceof ReferenceValue) {
+    // proposal-runtime-types (references extension): a reference value never
+    // reaches typeof; every read that could carry one dereferences first.
+    throw OutOfRange.nonExhaustive(val);
   }
   throw OutOfRange.exhaustive(val);
 }

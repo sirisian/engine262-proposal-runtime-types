@@ -11,6 +11,7 @@ import {
   Construct, CreateArrayFromList, EscapeRegExpPattern, isArrayBufferObject, isArrayExoticObject, isDateObject, isErrorObject, isFunctionObject, isModuleNamespaceObject, isPromiseObject, isRegExpObject, isTypedArrayObject, JSStringValue, NullValue, NumberValue, ObjectValue, PrivateName, surroundingAgent, SymbolValue, ThrowCompletion, UndefinedValue, Value, X,
   type Intrinsics, type ErrorObject,
   TypedNumberValue,
+  ReferenceValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-throw-an-exception */
@@ -157,6 +158,8 @@ export function format(arg: Formattable): string {
     }
     case isArray(arg):
       return `[${arg.map(format).join(', ')}]`;
+    case arg instanceof ReferenceValue:
+      return '[reference]';
     default:
       throw OutOfRange.exhaustive(arg);
   }
@@ -305,6 +308,7 @@ export interface Throw {
   | 'Mismatching month and month code'
   | 'Missing catch or finally clause in try statement'
   | 'Missing initializer in const declaration'
+  | 'Missing initializer in ref declaration'
   | 'Module export name contains invalid Unicode'
   | 'Module source is not available'
   | 'Multiple possible epoch nanoseconds'
@@ -386,7 +390,9 @@ export interface Throw {
   | 'WeakMap cannot be invoked without new'
   | 'WeakRef cannot be invoked without new'
   | 'WeakSet cannot be invoked without new'
+  | 'a ref for-of loop requires an array whose elements can be referenced'
   | 'a typed own property cannot be added to an instance of a non-dynamic typed class'
+  | 'an array may not be resized while a reference into it is live'
   | 'argument[0] must be a string'
   | 'argument[0] must be an ArrayBuffer'
   | 'arguments cannot be referenced in a class field initializer'
@@ -397,6 +403,9 @@ export interface Throw {
   | 'await cannot be used in formal parameters'
   | 'await cannot be used inside parameters of arrow functions'
   | 'calendar is not a string'
+  | 'cannot take a ref of a private member or a super property'
+  | 'cannot take a ref of a property of a primitive'
+  | 'cannot take a ref of a value; a ref needs a variable, a property, or an array element'
   | 'direction option is required'
   | 'directionParam is required'
   | 'largestUnit must be larger than smallestUnit'
@@ -427,6 +436,7 @@ export interface Throw {
   (m:
 '$1'
   | '$1 can only be used with v flag'
+  | '$1 cannot be bound by ref here'
   | '$1 cannot be extended by a partial class'
   | '$1 cannot be inverted'
   | '$1 cannot be invoked without new'
@@ -455,6 +465,7 @@ export interface Throw {
   | '$1 is not a parameter'
   | '$1 is not a partial Temporal object'
   | '$1 is not a property'
+  | '$1 is not a rebindable ref binding'
   | '$1 is not a signature'
   | '$1 is not a string'
   | '$1 is not a supported calendar'
@@ -504,6 +515,7 @@ export interface Throw {
   | "'set' on proxy: trap returned truthy for property $1 which exists in the proxy target as a non-configurable and non-writable data property with a different value"
   | 'Accessor decorator must return an object or undefined, but $1 was returned'
   | 'Assignment to constant variable $1'
+  | 'Cannot assign to $1'
   | 'Cannot convert $1 to Temporal.Duration'
   | 'Cannot convert $1 to TemporalPartialDurationRecord'
   | 'Cannot convert $1 to a BigInt'
@@ -602,12 +614,16 @@ export interface Throw {
   | 'option.padding $1 is not an object'
   | 'options.padding $1 is not an object'
   | 'overflow option is invalid ($1), only "constrain" and "reject" are accepted'
+  | 'parameter $1 cannot be bound by ref here'
+  | 'parameter $1 requires a ref argument'
   | 'parse is not defined for $1'
   | 'stack property must be set to a string value, but got $1'
   | 'super ($1) is not a constructor'
   | 'targetOffset ($1) cannot be negative'
   | 'temporalCalendarLike must be a string or a Temporal object, but got $1'
+  | 'the argument bound by ref to $1 does not satisfy its type annotation'
   | 'the call to $1 is ambiguous between overloads'
+  | 'the value bound by ref to $1 does not satisfy its type annotation'
   | 'this value $1 is not an object'
   | 'this.add ($1) is not a function'
   | 'timeZoneName option is invalid ($1), only "auto", "never" and "critical" are accepted'

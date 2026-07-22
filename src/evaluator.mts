@@ -74,6 +74,8 @@ import {
   Evaluate_ParenthesizedExpression,
   Evaluate_AssignmentExpression,
   Evaluate_UnaryExpression,
+  Evaluate_RefExpression,
+  Evaluate_RefRebindingStatement,
   Evaluate_ArrowFunction,
   Evaluate_AsyncArrowFunction,
   Evaluate_ConditionalExpression,
@@ -102,7 +104,9 @@ export type ExpressionThatEvaluatedToReferenceRecord = ParseNode.IdentifierRefer
 
 export function Evaluate(node: ExpressionThatEvaluatedToReferenceRecord): ReferenceEvaluator
 export function Evaluate(node: ParseNode.Module | ParseNode.ScriptBody): ValueEvaluator
-export function Evaluate(node: ParseNode.Expression): ExpressionEvaluator
+// proposal-runtime-types (references extension): a `ref` argument or `ref`
+// return operand evaluates like an expression, to a reference value.
+export function Evaluate(node: ParseNode.Expression | ParseNode.RefExpression): ExpressionEvaluator
 export function Evaluate(node: ParseNode): StatementEvaluator
 export function* Evaluate(node: ParseNode): Evaluator<unknown> {
   surroundingAgent.runningExecutionContext.callSite.setLocation(node);
@@ -294,6 +298,10 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return yield* Evaluate_AwaitExpression(node);
     case 'UnaryExpression':
       return yield* Evaluate_UnaryExpression(node);
+    case 'RefExpression':
+      return yield* Evaluate_RefExpression(node);
+    case 'RefRebindingStatement':
+      return yield* Evaluate_RefRebindingStatement(node);
     case 'ArrowFunction':
       return Evaluate_ArrowFunction(node);
     case 'AsyncArrowFunction':

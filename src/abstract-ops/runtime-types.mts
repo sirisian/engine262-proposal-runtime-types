@@ -320,8 +320,16 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
     if ((p as { type?: string }).type === 'BindingRestElement') {
       continue;
     }
-    const sb = p as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, Optional?: boolean };
+    const sb = p as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, Optional?: boolean, Ref?: boolean };
     if (!sb.TypeAnnotation || !sb.BindingIdentifier) {
+      continue;
+    }
+    // proposal-runtime-types (references extension): a ref parameter borrows
+    // the caller's storage location, and its annotation was already checked
+    // against the referent at binding, without conversion. Converting here
+    // would write a changed value back through the borrow into the caller's
+    // storage, which a borrow must never do.
+    if (sb.Ref === true) {
       continue;
     }
     const name = Value(sb.BindingIdentifier.name);

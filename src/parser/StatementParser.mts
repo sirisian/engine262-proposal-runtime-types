@@ -336,6 +336,12 @@ export abstract class StatementParser extends TypeParser {
       if (node.LetOrConst === 'const' && !b.Initializer && !b.TypedInitializer) {
         this.addEarlyError(Throw.SyntaxError('Missing initializer in const declaration'), b);
       }
+      // proposal-runtime-types (references extension): a ref binding aliases
+      // its initializer's storage location, so it cannot be declared without
+      // one.
+      if (b.Ref === true && !b.Initializer && !b.TypedInitializer) {
+        this.addEarlyError(Throw.SyntaxError('Missing initializer in ref declaration'), b);
+      }
     });
 
     return this.finishNode(node, 'LexicalDeclaration');
@@ -351,7 +357,21 @@ export abstract class StatementParser extends TypeParser {
   parseBindingList(): ParseNode.BindingList {
     const bindingList: Mutable<ParseNode.BindingList> = [];
     do {
-      const node = this.parseBindingElement({ allowTypedInitializer: true, allowOptionalMarker: false });
+      // proposal-runtime-types (references extension): `let ref b = a[0]` binds
+      // b as an alias to the initializer's storage location rather than to its
+      // value. Contextual: claimed only when an identifier follows `ref` on the
+      // same line, so `let ref = 1` and a line break after `ref` keep their
+      // base meanings.
+      let ref = false;
+      if (surroundingAgent.feature('runtime-types')
+          && this.test('ref')
+          && this.peekAhead().type === Token.IDENTIFIER
+          && !this.testAhead('of')
+          && !this.peekAhead().hadLineTerminatorBefore) {
+        this.next();
+        ref = true;
+      }
+      const node = this.parseBindingElement({ allowTypedInitializer: true, allowOptionalMarker: false, ref });
       bindingList.push(this.repurpose(node, 'LexicalBinding'));
     } while (this.eat(Token.COMMA));
     return bindingList;
@@ -575,8 +595,30 @@ export abstract class StatementParser extends TypeParser {
         return this.parseTryStatement();
       case Token.DEBUGGER:
         return this.parseDebuggerStatement();
-      default:
+      default: {
+        // proposal-runtime-types (references extension): `ref b = a[1]` rebinds
+        // an existing mutable ref binding to a different storage location.
+        // Claimed only for the exact shape `ref` Identifier `=` on one line;
+        // anything else (a call `ref(x)`, an assignment `ref = 1`, a lone
+        // `ref`) is the ordinary identifier, restored by checkpoint.
+        if (surroundingAgent.feature('runtime-types')
+            && this.test('ref')
+            && this.peekAhead().type === Token.IDENTIFIER
+            && !this.peekAhead().hadLineTerminatorBefore) {
+          const node = this.startNode<ParseNode.RefRebindingStatement>();
+          const checkpoint = this.getLexerCheckpoint();
+          this.next();
+          if (this.testAhead(Token.ASSIGN)) {
+            node.BindingIdentifier = this.parseBindingIdentifier();
+            this.expect(Token.ASSIGN);
+            node.Expression = this.parseLeftHandSideExpression();
+            this.semicolon();
+            return this.finishNode(node, 'RefRebindingStatement');
+          }
+          this.restoreLexerCheckpoint(checkpoint);
+        }
         return this.parseExpressionStatement();
+      }
     }
   }
 
@@ -902,6 +944,18 @@ export abstract class StatementParser extends TypeParser {
   //   BindingPattern
   parseForBinding(): ParseNode.ForBinding {
     const node = this.startNode<ParseNode.ForBinding>();
+    // proposal-runtime-types (references extension): `for (const ref p of a)`
+    // binds p as an alias to each array element in turn. Contextual: never
+    // claimed when `of` follows, so `for (const ref of a)` still binds an
+    // identifier named ref.
+    if (surroundingAgent.feature('runtime-types')
+        && this.test('ref')
+        && this.peekAhead().type === Token.IDENTIFIER
+        && !this.testAhead('of')
+        && !this.peekAhead().hadLineTerminatorBefore) {
+      this.next();
+      node.Ref = true;
+    }
     switch (this.peek().type) {
       case Token.LBRACE:
       case Token.LBRACK:
@@ -1057,6 +1111,22 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.RETURN);
     if (this.eatSemicolonWithASI()) {
       node.Expression = null;
+    } else if (surroundingAgent.feature('runtime-types')
+        && this.test('ref')
+        && !this.peekAhead().hadLineTerminatorBefore
+        && (this.peekAhead().type === Token.IDENTIFIER
+          || this.peekAhead().type === Token.THIS
+          || this.peekAhead().type === Token.YIELD
+          || this.peekAhead().type === Token.AWAIT)) {
+      // proposal-runtime-types (references extension): `return ref x` returns a
+      // borrow of the operand's storage location. Contextual: `return ref` and
+      // `return ref` followed by a line break keep their base meanings (the
+      // identifier, with automatic semicolon insertion).
+      const refNode = this.startNode<ParseNode.RefExpression>();
+      this.next();
+      refNode.Expression = this.parseLeftHandSideExpression();
+      node.Expression = this.finishNode(refNode, 'RefExpression');
+      this.semicolon();
     } else {
       node.Expression = this.parseExpression();
       this.semicolon();

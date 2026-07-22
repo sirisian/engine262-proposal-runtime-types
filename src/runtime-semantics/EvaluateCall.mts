@@ -1,5 +1,5 @@
 import {
-  ObjectValue, Value, ReferenceRecord,
+  ObjectValue, Value, ReferenceRecord, ReferenceValue,
 } from '../value.mts';
 import { Q, Completion, AbruptCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -14,6 +14,7 @@ import {
   EnvironmentRecord,
   surroundingAgent,
   Throw,
+  GetValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
@@ -74,6 +75,14 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // 9. Assert: If result is not an abrupt completion, then Type(result) is an ECMAScript language type.
   if (!(result instanceof AbruptCompletion)) {
     Assert(result instanceof Value || result instanceof Completion);
+  }
+  // proposal-runtime-types (references extension): a `ref` return decays to
+  // the referent's current value at an ordinary call boundary, so a caller
+  // that consumes the call as a value observes the referent and never the
+  // reference. (Consuming a returned reference as a location is a matter for
+  // the assignment-target forms.)
+  if (result instanceof ReferenceValue) {
+    return Q(yield* GetValue(result.Location));
   }
   // 10. Return result.
   return result;

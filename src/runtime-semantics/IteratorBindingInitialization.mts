@@ -1,4 +1,4 @@
-import { Value } from '../value.mts';
+import { Value, ReferenceValue } from '../value.mts';
 import {
   NormalCompletion,
   Q, X,
@@ -10,6 +10,8 @@ import {
 } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
+import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
+import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   Assert,
@@ -26,6 +28,7 @@ import {
 
   IteratorStepValue,
   UndefinedValue, type EnvironmentRecord, type FunctionDeclaration,
+  Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-iteratorbindinginitialization */
@@ -72,7 +75,8 @@ function IteratorBindingInitialization_BindingElement(BindingElement: ParseNode.
 }
 
 // SingleNameBinding : BindingIdentifier Initializer?
-function* IteratorBindingInitialization_SingleNameBinding({ BindingIdentifier, Initializer }: ParseNode.SingleNameBinding, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
+function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.SingleNameBinding, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
+  const { BindingIdentifier, Initializer } = node;
   // 1. Let bindingId be StringValue of BindingIdentifier.
   const bindingId = StringValue(BindingIdentifier);
   // 2. Let lhs be ? ResolveBinding(bindingId, environment).
@@ -95,6 +99,34 @@ function* IteratorBindingInitialization_SingleNameBinding({ BindingIdentifier, I
       const defaultValue = Q(yield* Evaluate(Initializer));
       v = Q(yield* GetValue(defaultValue));
     }
+  }
+  // proposal-runtime-types (references extension): a `ref` parameter binds an
+  // alias to the caller's storage location, so a read in the callee reads the
+  // referent and a write writes through. It requires a `ref` argument, since a
+  // plain value has no location to borrow. An annotation on a ref parameter is
+  // checked against the referent without conversion; a borrow never rewrites
+  // the storage it aliases.
+  if (node.Ref === true) {
+    if (!(v instanceof ReferenceValue)) {
+      return Throw.TypeError('parameter $1 requires a ref argument', bindingId);
+    }
+    if (node.TypeAnnotation) {
+      const referent = Q(yield* GetValue(v.Location));
+      const ok = Q(yield* IsOfTypeNode(referent, node.TypeAnnotation.Type));
+      if (!ok) {
+        return Throw.TypeError('the argument bound by ref to $1 does not satisfy its type annotation', bindingId);
+      }
+    }
+    if (!(lhs.Base instanceof DeclarativeEnvironmentRecord)) {
+      return Throw.TypeError('parameter $1 cannot be bound by ref here', bindingId);
+    }
+    CreateRefBinding(lhs.Base, bindingId, v.Location, true);
+    return NormalCompletion(undefined);
+  }
+  // proposal-runtime-types (references extension): a reference value reaching a
+  // parameter that is not declared `ref` decays to the referent's value.
+  if (v instanceof ReferenceValue) {
+    v = Q(yield* GetValue(v.Location));
   }
   // 6. If environment is undefined, return ? PutValue(lhs, v).
   if (environment === Value.undefined) {

@@ -8,6 +8,7 @@ import {
   wellKnownSymbols,
   BooleanValue,
   JSStringValue,
+  type PropertyKeyValue,
 } from '../value.mts';
 import { type GCMarker } from '../host-defined/engine.mts';
 import {
@@ -75,7 +76,98 @@ interface DeclarativeEnvironmentBinding {
   readonly deletable?: boolean;
   value?: Value | undefined;
 
+  // proposal-runtime-types (references extension): a ref binding is an alias to a
+  // storage location. When present, a read of the binding dereferences to the
+  // location and, when refMutable, a write writes through to it. Rebinding a
+  // `let ref` replaces the location.
+  refLocation?: ReferenceRecord;
+  refMutable?: boolean;
+
   mark(m: GCMarker): void;
+}
+
+/**
+ * proposal-runtime-types (references extension): read the current value of the
+ * storage location a ref binding aliases. The location's base is an Environment
+ * Record for a variable, or an Object for a property or an array element.
+ */
+function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
+  if (location.Base instanceof ObjectValue) {
+    return Q(yield* location.Base.Get(location.ReferencedName as PropertyKeyValue, location.Base));
+  }
+  Assert(location.Base instanceof EnvironmentRecord);
+  return Q(yield* location.Base.GetBindingValue(location.ReferencedName as JSStringValue, location.Strict));
+}
+
+/**
+ * proposal-runtime-types (references extension): write a value through to the
+ * storage location a ref binding aliases.
+ */
+function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEvaluator {
+  if (location.Base instanceof ObjectValue) {
+    const succeeded = Q(yield* location.Base.Set(location.ReferencedName as PropertyKeyValue, V, location.Base));
+    if (succeeded === Value.false && location.Strict === Value.true) {
+      return Throw.TypeError('Cannot assign to $1', location.ReferencedName as Value);
+    }
+    return NormalCompletion(undefined);
+  }
+  Assert(location.Base instanceof EnvironmentRecord);
+  return Q(yield* location.Base.SetMutableBinding(location.ReferencedName as JSStringValue, V, location.Strict));
+}
+
+/**
+ * proposal-runtime-types (references extension): create a ref binding for _N_ in
+ * _envRec_ aliasing _location_. The binding is initialized, not deletable, and,
+ * when _mutable_ is false (a `const ref`), immutable so a write to it is the
+ * ordinary assignment-to-constant error rather than a write-through.
+ */
+export function CreateRefBinding(envRec: DeclarativeEnvironmentRecord, N: JSStringValue, location: ReferenceRecord, mutable: boolean): void {
+  envRec.bindings.set(N, {
+    indirect: false,
+    initialized: true,
+    mutable,
+    strict: true,
+    deletable: false,
+    value: undefined,
+    refLocation: location,
+    refMutable: mutable,
+    mark(m: GCMarker) {
+      m(this.value);
+      this.refLocation?.mark(m);
+    },
+  });
+}
+
+/**
+ * proposal-runtime-types (references extension): rebind an existing mutable ref
+ * binding to a different storage location, the `ref b = a[1]` form. Returns false
+ * when _N_ is not a rebindable ref binding in _envRec_.
+ */
+export function RebindRefBinding(envRec: DeclarativeEnvironmentRecord, N: JSStringValue, location: ReferenceRecord): boolean {
+  const binding = envRec.bindings.get(N);
+  if (binding === undefined || binding.refLocation === undefined || binding.refMutable !== true) {
+    return false;
+  }
+  binding.refLocation = location;
+  return true;
+}
+
+/**
+ * proposal-runtime-types (references extension): the Declarative Environment
+ * Record that directly holds the lexical binding _N_ reachable through _base_, or
+ * undefined when there is none. A `let`/`const` binding is held by a Declarative
+ * Environment Record directly, or, at the top level of a script, by the
+ * Declarative Record of the Global Environment Record; a ref binding must be
+ * created on that holder so a later read or write of the name reaches it.
+ */
+export function RefBindingHolder(base: EnvironmentRecord, N: JSStringValue): DeclarativeEnvironmentRecord | undefined {
+  if (base instanceof DeclarativeEnvironmentRecord) {
+    return base.bindings.has(N) ? base : undefined;
+  }
+  if (base instanceof GlobalEnvironmentRecord) {
+    return base.DeclarativeRecord.bindings.has(N) ? base.DeclarativeRecord : undefined;
+  }
+  return undefined;
 }
 
 interface ModuleEnvironmentBinding extends DeclarativeEnvironmentBinding {
@@ -187,6 +279,13 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     if (binding.initialized === false) {
       return Throw.ReferenceError('$1 cannot be used before initialization', N);
     }
+    // proposal-runtime-types (references extension): a write to a mutable ref
+    // binding writes through to the storage location it aliases. The binding
+    // itself is not rebound; a `const ref` binding is not writable through and
+    // falls to the immutable-binding error below.
+    if (binding.refLocation !== undefined && binding.refMutable === true) {
+      return yield* WriteThroughRefLocation(binding.refLocation, V);
+    }
     // 5. Else if the binding for N in envRec is a mutable binding, change its bound value to V.
     if (binding.mutable === true) {
       binding.value = V;
@@ -208,6 +307,12 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     // 2. Assert: envRec has a binding for N.
     const binding = envRec.bindings.get(N);
     Assert(binding !== undefined);
+    // proposal-runtime-types (references extension): a read of a ref binding
+    // dereferences to the storage location it aliases, so the referent's current
+    // value is returned and the reference itself is never observable.
+    if (binding.refLocation !== undefined) {
+      return yield* ReadThroughRefLocation(binding.refLocation);
+    }
     // 3. If the binding for N in envRec is an uninitialized binding, throw a ReferenceError exception.
     if (binding.initialized === false) {
       return Throw.ReferenceError('$1 cannot be used before initialization', N);

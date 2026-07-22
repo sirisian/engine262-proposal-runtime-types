@@ -1,5 +1,5 @@
 import {
-  JSStringValue, ObjectValue, Value,
+  JSStringValue, ObjectValue, Value, ReferenceRecord,
 } from '../value.mts';
 import {
   Evaluate, type Evaluator, type PlainEvaluator, type StatementEvaluator,
@@ -26,6 +26,7 @@ import {
 import { OutOfRange } from '../utils/language.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { CreateRefBinding } from '../execution-context/Environment.mts';
 import {
   Evaluate_SwitchStatement,
   Evaluate_VariableDeclarationList,
@@ -51,6 +52,8 @@ import {
   ToObject,
   SameValue,
   Throw,
+  IsArray,
+  LengthOfArrayLike,
   type IteratorRecord,
   ValueOfNormalCompletion,
 } from '#self';
@@ -440,6 +443,13 @@ function* LabelledEvaluation_IterationStatement_ForOfStatement(ForOfStatement: P
       return Q(yield* ForInOfBodyEvaluation(ForBinding, Statement, keyResult as IteratorRecord, 'iterate', 'varBinding', labelSet));
     }
     case !!ForDeclaration: {
+      // proposal-runtime-types (references extension): a `for (const ref p of a)`
+      // loop binds each element by reference rather than a copy, so the body
+      // writes into the array in place. It is index-based and does not go through
+      // Symbol.iterator; the length is pinned for the loop's duration.
+      if (ForDeclaration.ForBinding.Ref === true) {
+        return Q(yield* RefForOfEvaluation(ForDeclaration, AssignmentExpression, Statement, labelSet));
+      }
       // 1. Let keyResult be ? ForIn/OfHeadEvaluation(BoundNames of ForDeclaration, AssignmentExpression, iterate).
       const keyResult = Q(yield* ForInOfHeadEvaluation(BoundNames(ForDeclaration), AssignmentExpression, 'iterate'));
       // 2. Return ? ForIn/OfBodyEvaluation(ForDeclaration, Statement, keyResult, iterate, lexicalBinding, labelSet).
@@ -664,6 +674,67 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
       iterationResult = result.Value;
     }
   }
+}
+
+/**
+ * proposal-runtime-types (references extension): the index-based evaluation of a
+ * `for (LetOrConst ref p of a)` loop. Each iteration binds _p_ as a reference to
+ * the array element at the current index, so a write through _p_ writes into the
+ * array. The loop reads the length once and pins it: any resize of the array
+ * while an element reference is live is a TypeError, which a ref loop makes easy
+ * to hit since it holds a reference across the whole iteration. A `let ref` may
+ * be written through and rebound; a `const ref` may not. The loop does not go
+ * through Symbol.iterator and allocates no result object.
+ */
+function* RefForOfEvaluation(ForDeclaration: ParseNode.ForDeclaration, expr: ParseNode.AssignmentExpressionOrHigher, stmt: ParseNode.Statement, labelSet: JSStringSet): StatementEvaluator {
+  const { LetOrConst, ForBinding } = ForDeclaration;
+  const oldEnv = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  const exprRef = Q(yield* Evaluate(expr));
+  const value = Q(yield* GetValue(exprRef));
+  // The referent of a ref loop is an array; a ref denotes an array slot. Other
+  // iterables have no index-addressable storage a borrow could alias.
+  if (!(value instanceof ObjectValue) || X(IsArray(value)) !== Value.true) {
+    return Throw.TypeError('a ref for-of loop requires an array whose elements can be referenced');
+  }
+  const array = value;
+  // Pin the length once; a change to it while a reference is live is a TypeError.
+  const pinned = Q(yield* LengthOfArrayLike(array));
+  const [name] = BoundNames(ForBinding);
+  const mutable = !IsConstantDeclaration(LetOrConst);
+  let iterationResult: Value = Value.undefined;
+  for (let i = 0; i < pinned; i += 1) {
+    // Liveness: the array must not have been resized while a prior iteration's
+    // element reference was live.
+    const current = Q(yield* LengthOfArrayLike(array));
+    if (current !== pinned) {
+      surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
+      return Throw.TypeError('an array may not be resized while a reference into it is live');
+    }
+    const iterationEnv = new DeclarativeEnvironmentRecord(oldEnv);
+    const location = new ReferenceRecord({
+      Base: array,
+      ReferencedName: Value(`${i}`),
+      Strict: Value.true,
+      ThisValue: undefined,
+    });
+    CreateRefBinding(iterationEnv, Value(name.stringValue()), location, mutable);
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = iterationEnv;
+    const result = EnsureCompletion(yield* Evaluate(stmt));
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
+    // A resize during this iteration's body, while the element reference was
+    // live, is equally a TypeError.
+    const after = Q(yield* LengthOfArrayLike(array));
+    if (after !== pinned) {
+      return Throw.TypeError('an array may not be resized while a reference into it is live');
+    }
+    if (LoopContinues(result, labelSet) === Value.false) {
+      return UpdateEmpty(result, iterationResult);
+    }
+    if (result.Value !== undefined) {
+      iterationResult = result.Value;
+    }
+  }
+  return NormalCompletion(iterationResult);
 }
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-bindinginstantiation */

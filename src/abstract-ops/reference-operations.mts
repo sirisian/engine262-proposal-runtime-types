@@ -4,13 +4,14 @@ import {
   PrivateName,
   JSStringValue,
   ObjectValue,
+  ReferenceValue,
 } from '../value.mts';
 import {
   Q,
   type PlainCompletion,
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
-import type { PlainEvaluator } from '../evaluator.mts';
+import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { ResolvePrivateIdentifier } from '../execution-context/PrivateEnvironment.mts';
 import {
   Assert,
@@ -80,7 +81,11 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     // whose base declares an index operator reads through the operator, called
     // with the index as its argument, rather than through the ordinary [[Get]].
     if (V.IndexOperator !== undefined) {
-      return Q(yield* Call(V.IndexOperator, V.Base as Value, [V.ReferencedName as Value]));
+      const operatorResult = Q(yield* Call(V.IndexOperator, V.Base as Value, [V.ReferencedName as Value]));
+      // proposal-runtime-types (references extension): an index operator that
+      // returns a borrow (`return ref this.data[i]`) reads through to the
+      // referent, so the access yields the element's current value.
+      return Q(yield* DecayReferenceValue(operatorResult));
     }
     // a. Let baseObj be ? ToObject(V.[[Base]]).
     const baseObj = Q(ToObject(V.Base));
@@ -214,4 +219,18 @@ export function MakePrivateReference(baseValue: Value, privateIdentifier: JSStri
     Strict: Value.true,
     ThisValue: undefined,
   });
+}
+
+
+/**
+ * proposal-runtime-types (references extension): a reference value decays to
+ * the current value of the storage location it borrows at any boundary that
+ * consumes a value, which is what gives a reference no observable identity. A
+ * non-reference value passes through unchanged.
+ */
+export function* DecayReferenceValue(value: Value): ValueEvaluator {
+  if (value instanceof ReferenceValue) {
+    return Q(yield* GetValue(value.Location));
+  }
+  return value;
 }

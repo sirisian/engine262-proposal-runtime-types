@@ -10,7 +10,7 @@ import {
   PrimitiveValue,
   type PropertyKeyValue,
   unwrapToNumber,
-  isTypedNumber,
+  isTypedNumber, ReferenceValue,
 } from '../value.mts';
 import {
   Q, X,
@@ -39,6 +39,7 @@ import { modulo, truncate } from './math.mts';
 import {
   surroundingAgent,
   Throw,
+  GetValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-toprimitive */
@@ -202,6 +203,12 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     const primValue = Q(yield* ToPrimitive(argument, 'number'));
     // 2. Return ? ToNumber(primValue).
     return Q(yield* ToNumber(primValue));
+  }
+  if (argument instanceof ReferenceValue) {
+    // proposal-runtime-types (references extension): a reference value has no
+    // observable identity; a conversion applies to the referent.
+    const referent = Q(yield* GetValue(argument.Location));
+    return Q(yield* ToNumber(referent));
   }
   throw OutOfRange.exhaustive(argument);
 }
@@ -409,6 +416,12 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
     const primValue = Q(yield* ToPrimitive(argument, 'string'));
     // 2. Return ? ToString(primValue).
     return Q(yield* ToString(primValue));
+  }
+  if (argument instanceof ReferenceValue) {
+    // proposal-runtime-types (references extension): a reference value has no
+    // observable identity; a conversion applies to the referent.
+    const referent = Q(yield* GetValue(argument.Location));
+    return Q(yield* ToString(referent));
   }
   throw OutOfRange.exhaustive(argument);
 }

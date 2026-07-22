@@ -87,6 +87,7 @@ const INSPECTORS = {
   // proposal-runtime-types R6: a typed number prints its value with a typed
   // marker so it is distinguishable from a plain Number in debug output.
   TypedNumber: (v: TypedNumberValue) => `${v.numberValue()} (typed)`, // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+  Reference: () => '[reference]',
   BigInt: (v: BigIntValue) => `${R(v)}n`,
   String: (v: JSStringValue) => {
     const s = JSON.stringify(v.stringValue()).slice(1, -1);

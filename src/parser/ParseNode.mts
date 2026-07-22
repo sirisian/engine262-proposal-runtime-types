@@ -513,7 +513,9 @@ export namespace ParseNode {
   export type ArgumentListElement =
     | AssignmentExpressionOrHigher
     | AssignmentRestElement
-    | NamedArgument;
+    | NamedArgument
+    // proposal-runtime-types (references extension): a `ref` argument
+    | RefExpression;
 
   // OptionalExpression :
   //   MemberExpression OptionalChain
@@ -646,6 +648,16 @@ export namespace ParseNode {
     readonly type: 'UnaryExpression';
     readonly operator: 'delete' | 'void' | 'typeof' | '+' | '-' | '~' | '!';
     readonly UnaryExpression: UnaryExpressionOrHigher;
+  }
+
+  // proposal-runtime-types (references extension):
+  // RefExpression : `ref` LeftHandSideExpression
+  // A `ref` argument or `ref` return operand: evaluates its operand to a
+  // Reference (a variable, a property, or an array element) and yields a
+  // reference value, a borrow of that storage location.
+  export interface RefExpression extends BaseParseNode {
+    readonly type: 'RefExpression';
+    readonly Expression: LeftHandSideExpression;
   }
 
   // ExponentiationExpression :
@@ -1008,7 +1020,9 @@ export namespace ParseNode {
     | LabelledStatement
     | ThrowStatement
     | TryStatement
-    | DebuggerStatement;
+    | DebuggerStatement
+    // proposal-runtime-types (references extension)
+    | RefRebindingStatement;
 
   // Declaration :
   //   HoistableDeclaration
@@ -1101,6 +1115,9 @@ export namespace ParseNode {
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
     readonly TypedInitializer?: TypedInitializer;
+    // references extension: `let ref b = a[0]` binds b as an alias to the
+    // initializer's storage location rather than to its value.
+    readonly Ref?: boolean;
 
     // LexicalBinding : BindingIdentifier Initializer?
     readonly BindingIdentifier?: BindingIdentifier;
@@ -1453,6 +1470,9 @@ export namespace ParseNode {
 
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
+    // references extension: `for (const ref p of a)` binds p as an alias to
+    // each array element in turn.
+    readonly Ref?: boolean;
     readonly BindingIdentifier?: BindingIdentifier;
     readonly BindingPattern?: BindingPattern;
   }
@@ -1478,7 +1498,16 @@ export namespace ParseNode {
   //   `return` [no LineTerminator here] Expression `;`
   export interface ReturnStatement extends BaseParseNode {
     readonly type: 'ReturnStatement';
-    readonly Expression: Expression | null;
+    readonly Expression: Expression | RefExpression | null;
+  }
+
+  // proposal-runtime-types (references extension):
+  // RefRebindingStatement : `ref` BindingIdentifier `=` LeftHandSideExpression `;`
+  // Rebinds an existing mutable ref binding to a different storage location.
+  export interface RefRebindingStatement extends BaseParseNode {
+    readonly type: 'RefRebindingStatement';
+    readonly BindingIdentifier: BindingIdentifier;
+    readonly Expression: LeftHandSideExpression;
   }
 
   // WithStatement :
@@ -3265,6 +3294,8 @@ export type ParseNode =
   | ParseNode.UpdateExpression
   | ParseNode.AwaitExpression
   | ParseNode.UnaryExpression
+  | ParseNode.RefExpression
+  | ParseNode.RefRebindingStatement
   | ParseNode.ExponentiationExpression
   | ParseNode.MultiplicativeExpression
   | ParseNode.AdditiveExpression

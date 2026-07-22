@@ -1,7 +1,7 @@
 import { EnforceAnnotation } from '../abstract-ops/all.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
-  Q, X,
+  NormalCompletion, Q, X,
 } from '../completion.mts';
 import { Value } from '../value.mts';
 import { IsAnonymousFunctionDefinition, StringValue, type FunctionDeclaration } from '../static-semantics/all.mts';
@@ -9,20 +9,59 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
+import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
+import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
+import { RequireBorrowableReference } from './RefExpression.mts';
 import {
   surroundingAgent,
   GetValue,
   InitializeReferencedBinding,
   ResolveBinding,
   LookupTypeDefault,
+  Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalBinding :
 //     BindingIdentifier
 //     BindingIdentifier Initializer
-function* Evaluate_LexicalBinding_BindingIdentifier({ BindingIdentifier, Initializer, TypedInitializer, strict, TypeAnnotation }: ParseNode.LexicalBinding): PlainEvaluator {
+function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBinding): PlainEvaluator {
+  const {
+    BindingIdentifier, Initializer, TypedInitializer, strict, TypeAnnotation,
+  } = node;
+  // proposal-runtime-types (references extension): a `ref` lexical binding, the
+  // `let ref b = a[0]` / `const ref b = a[0]` form. The initializer denotes a
+  // storage location rather than a value, and the binding aliases it: a read
+  // dereferences and, for a `let ref`, a write writes through. A `const ref`
+  // aliases the same location but is not writable through (a reassignment is the
+  // ordinary assignment-to-constant error, while a member write through the
+  // referent is allowed). The initializer must denote a location; a plain value
+  // has nothing to borrow. An annotation is checked against the referent without
+  // conversion, since a borrow never rewrites the storage it aliases.
+  if (node.Ref === true) {
+    const bindingId = StringValue(BindingIdentifier!);
+    const lhs = X(ResolveBinding(bindingId, undefined, strict));
+    const location = Q(yield* RequireBorrowableReference(Initializer as ParseNode.LeftHandSideExpression));
+    if (TypeAnnotation) {
+      const referent = Q(yield* GetValue(location));
+      const ok = Q(yield* IsOfTypeNode(referent, TypeAnnotation.Type));
+      if (!ok) {
+        return Throw.TypeError('the value bound by ref to $1 does not satisfy its type annotation', bindingId);
+      }
+    }
+    const holder = lhs.Base instanceof EnvironmentRecord ? RefBindingHolder(lhs.Base, bindingId) : undefined;
+    if (holder === undefined) {
+      return Throw.TypeError('$1 cannot be bound by ref here', bindingId);
+    }
+    // The binding was created by BlockDeclarationInstantiation as mutable for a
+    // `let` and immutable for a `const`; a `let ref` writes through and rebinds,
+    // a `const ref` does neither. CreateRefBinding replaces the placeholder entry
+    // in place, so the temporal dead zone up to this declaration is preserved.
+    const mutable = holder.bindings.get(bindingId)?.mutable === true;
+    CreateRefBinding(holder, bindingId, location, mutable);
+    return NormalCompletion(undefined);
+  }
   if (TypedInitializer) {
     // proposal-runtime-types: the typed-assignment declaration `let a := X`
     // (README "Typed Assignment"). The binding's type is inferred from X, which

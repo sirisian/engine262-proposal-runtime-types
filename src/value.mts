@@ -60,6 +60,7 @@ export type Value =
   | NumberValue
   // proposal-runtime-types
   | TypedNumberValue
+  | ReferenceValue
   | BigIntValue
   | ObjectValue;
 
@@ -114,9 +115,11 @@ export type PrimitiveValue =
   | JSStringValue
   | SymbolValue
   | NumberValue
-  // proposal-runtime-types R6 (Option A): a numeric value type is a primitive
-  // value, a sibling of NumberValue.
+  // proposal-runtime-types: a numeric value type is a primitive value, a
+  // sibling of NumberValue; a reference value is a non-object leaf that decays
+  // to its referent wherever a primitive is consumed.
   | TypedNumberValue
+  | ReferenceValue
   | BigIntValue;
 
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types */
@@ -1033,6 +1036,36 @@ export class ReferenceRecord {
     m(this.Base);
     m(this.ReferencedName);
     m(this.ThisValue);
+  }
+}
+
+// proposal-runtime-types (references extension): a reference value is a borrow, a
+// first-class handle to a storage location (a variable, an object property, or an
+// array element) that reads and writes through to the original. It has no
+// observable identity: every read of a ref binding dereferences to the referent,
+// and a reference value decays to the referent's value at any boundary that
+// consumes a value, so typeof, ===, and instanceof only ever see the referent. It
+// is produced by the `ref` argument and `ref` return forms and consumed by a `ref`
+// parameter, a `ref` lexical binding, or decay.
+export class ReferenceValue extends PrimitiveValue {
+  declare readonly type: 'Reference';
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is ReferenceValue;
+
+  readonly Location: ReferenceRecord;
+
+  constructor(location: ReferenceRecord) {
+    super();
+    this.Location = location;
+  }
+
+  // NON-SPEC
+  mark(m: GCMarker) {
+    this.Location.mark(m);
+  }
+
+  static {
+    Object.defineProperty(this.prototype, 'type', { value: 'Reference' });
   }
 }
 
