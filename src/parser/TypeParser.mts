@@ -117,7 +117,12 @@ export abstract class TypeParser extends ExpressionParser {
           const node = this.startNode<ParseNode.SharedType | ParseNode.ReferenceType | ParseNode.KeyOfType>();
           const keyword = tok.value;
           this.next();
-          node.Type = this.parsePrimaryType();
+          // `keyof` binds looser than indexed access, as the comment on
+          // parsePostfixType states and as TypeScript groups it: `keyof T[K]` is
+          // `keyof (T[K])`, the keys of the indexed property type, not
+          // `(keyof T)[K]`. So its operand is a PostfixType, which absorbs a
+          // trailing index access. `shared`/`ref` keep a PrimaryType operand.
+          node.Type = keyword === 'keyof' ? this.parsePostfixType() : this.parsePrimaryType();
           if (keyword === 'shared') {
             return this.finishNode(node, 'SharedType');
           }

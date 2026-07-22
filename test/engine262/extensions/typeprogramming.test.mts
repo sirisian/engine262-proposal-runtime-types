@@ -98,13 +98,18 @@ test('indexed access rejects non-literal and numeric-index keys (documents the g
   expectThrown('type T = [uint8, string]; type Z = T[0]; Z;');
 });
 
-// ── keyof binds around its whole operand, so keyof-then-index errors today ─────
-test('keyof applied before an index access resolves keyof first (documents the grouping)', () => {
-  // typeprogramming.md: `keyof T["a"]` groups as `(keyof T)["a"]`, so keyof
-  // resolves to the key union and the trailing index is then applied to that
-  // union, which has no properties. (TypeScript groups the other way; the
-  // current grouping always errors, so a program cannot depend on it.)
-  expectThrown('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; K;');
-  // the intended per-property keyof is available by parenthesizing the access
-  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof (T["a"]); (undefined is K) ? "u" : "not-u";')).toBe('not-u');
+// ── keyof binds looser than an index access, matching the TypeScript grouping ─
+test('keyof applied to an index access groups as keyof of the indexed type', () => {
+  // typeprogramming.md follows TypeScript here: `keyof T["a"]` groups as
+  // `keyof (T["a"])`, the keys of the indexed property type, not `(keyof T)["a"]`.
+  // So it resolves to the union of that property type's keys.
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; Reflect.getReflection(K).kind;')).toBe('union');
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; (("x" is K) && ("y" is K)) ? "both" : "no";')).toBe('both');
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; ("z" is keyof T["a"]) ? "y" : "n";')).toBe('n');
+  // the grouping is the same one written with an explicit parenthesized access,
+  // and both intern to the key union of the property type itself
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type A = keyof T["a"]; type B = keyof (T["a"]); (A === B) ? "same" : "diff";')).toBe('same');
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type P = { x: uint8, y: uint8 }; type A = keyof T["a"]; type B = keyof P; (A === B) ? "same" : "diff";')).toBe('same');
+  // an index access still chains left on its own, and keyof reaches over a deeper chain
+  expect(evaluated('type T = { a: { b: { c: uint8 } } }; ("c" is keyof T["a"]["b"]) ? "yes" : "no";')).toBe('yes');
 });
