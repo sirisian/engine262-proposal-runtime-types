@@ -1,14 +1,17 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { evaluated, run } from '../readme/harness.mts';
 
 /**
- * Extension coverage — regexp.md (typed regular expressions).
+ * Extension coverage (regexp.md, typed regular expressions).
  *
- * The typed layer - `RegExp.<Captures, Groups, Flags>` inferred from a literal,
- * exact match-result shapes, typed replace callbacks, compile-time group-name
- * checking - is a static-inference subsystem that is not implemented (RegExp is
- * not registered as a type name). Documented as capability P. The untyped regexp
- * runtime is intact and verified here.
+ * The core of the typed layer is implemented: `RegExp` is a nominal type, and a
+ * regular expression literal has the type `RegExp.<Captures, Groups>` inferred
+ * from its pattern, checked at an annotated declaration. That inference and its
+ * checking are exercised in extensions/typed-regexp.test.mts. The fuller
+ * match-result surface (exact exec-result shapes, group-name access checking on a
+ * result, typed replace callbacks, the Flags argument, `RegExp.template`, string
+ * narrowing by pattern) is capability P's deferred remainder. This file verifies
+ * the untyped regexp runtime, which the typed layer leaves unchanged.
  */
 
 // ── The untyped runtime is intact ─────────────────────────────────────────────
@@ -46,14 +49,11 @@ test('regexp: RegExp is usable as a type name', () => {
   expect(evaluated('let r = /abc/; String(r instanceof RegExp);')).toBe('true');
 });
 
-// ── Documented gap: the typed-capture layer ───────────────────────────────────
-test('regexp: the RegExp.<Captures, Groups, Flags> literal-type inference is deferred (documents the gap)', () => {
-  // Target (regexp.md): /(.)(.)/  has type RegExp.<[string, string], {}> inferred
-  // from the literal, with exact match-result shapes and typed replace callbacks.
-  // Today RegExp resolves as a plain nominal type but the capture/group/flags
-  // inference from a literal is not performed; a literal's static type does not
-  // carry its capture shape. This is the deferred typed layer (capability P).
-  // The type-argument syntax parses as a nominal with arguments but does not
-  // infer or check capture types.
-  expect(evaluated('type R = RegExp.<[string, string], {}>; typeof R;')).toBe('object');
+// ── The typed-capture layer (capability P core) ───────────────────────────────
+test('regexp: a literal carries its inferred capture shape as its type', () => {
+  // /(.)(.)/  has type RegExp.<[string, string], {}> inferred from the literal, so
+  // an annotation of the matching shape is accepted and a differing one is a type
+  // error. The full coverage of the inference is in typed-regexp.test.mts.
+  expect(evaluated('let r: RegExp.<[string, string], {}> = /(.)(.)/; "ok";')).toBe('ok');
+  expect((run('let r: RegExp.<[string], {}> = /(.)(.)/; "ok";') as { Type: string }).Type).toBe('throw');
 });

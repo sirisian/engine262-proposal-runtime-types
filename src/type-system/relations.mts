@@ -204,6 +204,21 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return IsObjectSubtype(s, t as Extract<TypeRecord, { Kind: 'object' }>, next);
     case 'function':
       return IsFunctionSubtype(s, t as Extract<TypeRecord, { Kind: 'function' }>, next);
+    case 'nominal': {
+      // proposal-runtime-types (regexp.md and the library types generally): a raw
+      // library type, written with no type arguments, is the supertype of every
+      // parameterization of the same library type. This is what lets a bare
+      // `RegExp` annotation hold a `RegExp.<Captures, Groups>` value inferred from
+      // a literal, while `RegExp.<Captures, Groups>` itself remains invariant, so a
+      // capture-shape mismatch between two written parameterizations is still an
+      // error. Identity for same-argument nominals is handled by SameType above.
+      const tn = t as Extract<TypeRecord, { Kind: 'nominal' }>;
+      if (s.LibraryName !== undefined && tn.LibraryName === s.LibraryName
+        && tn.Arguments.length === 0 && s.Arguments.length > 0) {
+        return true;
+      }
+      return false;
+    }
     default:
       return false;
   }

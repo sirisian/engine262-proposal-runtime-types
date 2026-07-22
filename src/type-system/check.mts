@@ -2,10 +2,11 @@ import { NumberValue, Value, type ObjectValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
-  builtinTypeRecord, displayType, makePrimitive, voidType, type TypeRecord,
+  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord,
 } from './records.mts';
 import { IsAssignable } from './relations.mts';
 import { fitsNumericType } from './runtime.mts';
+import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { R, Throw } from '#self';
 
 /**
@@ -157,10 +158,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
             }
             args.push(arg);
           }
-          return builtinTypeRecord(node.TypeName.IdentifierReference.name, args);
+          // proposal-runtime-types: a parameterized type reference is a builtin
+          // numeric (`int.<8>`) or a library type (`RegExp.<C, G>`, `Promise.<T>`,
+          // `Map.<K, V>`). Without the library fallback a `RegExp.<C, G>` annotation
+          // resolves to nothing here and its capture checking never runs.
+          return builtinTypeRecord(node.TypeName.IdentifierReference.name, args)
+            ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? lookupAlias(name);
+        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
@@ -251,6 +257,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
         return { Kind: 'literal', Value: Value((node as { value: string }).value), Base: makePrimitive('string') };
       case 'BooleanLiteral':
         return { Kind: 'literal', Value: (node as { value: boolean }).value ? Value.true : Value.false, Base: makePrimitive('boolean') };
+      case 'RegularExpressionLiteral': {
+        // proposal-runtime-types (regexp.md): a regular expression literal's type
+        // is `RegExp.<Captures, Groups>` inferred from its pattern.
+        const rx = node as { RegularExpressionBody: string, RegularExpressionFlags: string };
+        return inferRegExpLiteralType(rx.RegularExpressionBody, rx.RegularExpressionFlags);
+      }
       case 'IdentifierReference':
         return lookup((node as { name: string }).name);
       case 'ParenthesizedExpression':
