@@ -886,18 +886,35 @@ export namespace ParseNode {
     | LogicalORExpressionOrHigher
     | CoalesceExpression;
 
+  // proposal-runtime-types (ranges.md):
+  // RangeExpression :
+  //   ShortCircuitExpression? `..` ShortCircuitExpression?
+  //   ShortCircuitExpression? `..=` ShortCircuitExpression
+  // A range binds tighter than assignment and looser than `||` and `??`, so its
+  // operands are ShortCircuitExpressions, and it is non-associative.
+  export type RangeExpressionOrHigher =
+    | ShortCircuitExpressionOrHigher
+    | RangeExpression;
+
+  export interface RangeExpression extends BaseParseNode {
+    readonly type: 'RangeExpression';
+    readonly RangeStart: ShortCircuitExpressionOrHigher | null;
+    readonly RangeEnd: ShortCircuitExpressionOrHigher | null;
+    readonly Inclusive: boolean;
+  }
+
   // ConditionalExpression :
   //   ShortCircuitExpression
   //   ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression
   export type ConditionalExpressionOrHigher =
-    | ShortCircuitExpressionOrHigher
+    | RangeExpressionOrHigher
     | ConditionalExpression;
 
   // ConditionalExpression (partial) :
   //   ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression
   export interface ConditionalExpression extends BaseParseNode {
     readonly type: 'ConditionalExpression';
-    readonly ShortCircuitExpression: ShortCircuitExpressionOrHigher;
+    readonly ShortCircuitExpression: RangeExpressionOrHigher;
     readonly AssignmentExpression_a: AssignmentExpressionOrHigher;
     readonly AssignmentExpression_b: AssignmentExpressionOrHigher;
   }
@@ -3309,6 +3326,7 @@ export type ParseNode =
   | ParseNode.LogicalORExpression
   | ParseNode.CoalesceExpression
   | ParseNode.ConditionalExpression
+  | ParseNode.RangeExpression
   | ParseNode.AssignmentExpression
   | ParseNode.CommaOperator
   | ParseNode.LexicalDeclaration

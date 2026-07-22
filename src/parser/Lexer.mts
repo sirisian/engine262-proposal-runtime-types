@@ -796,6 +796,19 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
               this.position += 2;
               return Token.ELLIPSIS;
             }
+            // proposal-runtime-types (ranges.md): `..` and `..=` are the range
+            // operators. A `.` followed by another `.` is never a decimal point
+            // (handled in scanNumber), so `1..6` reaches here as `..` between two
+            // numeric literals. Gated on the feature so the base grammar, where
+            // `1..6` is two numeric literals, is unchanged.
+            if (surroundingAgent.feature('runtime-types')) {
+              if (this.source[this.position + 1] === '=') {
+                this.position += 2;
+                return Token.DOT_DOT_EQ;
+              }
+              this.position += 1;
+              return Token.DOT_DOT;
+            }
           }
           // https://github.com/sirisian/proposal-runtime-types #sec-type-punctuators
           // `.<` begins a type argument list. A `.` before a digit was taken by
@@ -939,7 +952,11 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
       this.scannedValue = BigInt(buffer);
       return Token.BIGINT;
     }
-    if (base === 10 && this.source[this.position] === '.') {
+    // proposal-runtime-types (ranges.md): a `.` is not the decimal point of a
+    // numeric literal when the next character is also a `.`, so `1..6` lexes as
+    // `1`, `..`, `6` rather than `1.` then `.6`. Gated on the feature.
+    if (base === 10 && this.source[this.position] === '.'
+        && !(surroundingAgent.feature('runtime-types') && this.source[this.position + 1] === '.')) {
       this.position += 1;
       if (this.source[this.position] === '_') {
         this.unexpected(this.position);

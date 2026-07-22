@@ -28,6 +28,7 @@ import { bootstrapEval } from '../intrinsics/eval.mts';
 import { bootstrapFinalizationRegistry } from '../intrinsics/FinalizationRegistry.mts';
 import { bootstrapFinalizationRegistryPrototype } from '../intrinsics/FinalizationRegistryPrototype.mts';
 import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorPrototype.mts';
+import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
 import { bootstrapFunctionPrototype } from '../intrinsics/FunctionPrototype.mts';
 import { bootstrapGeneratorFunction } from '../intrinsics/GeneratorFunction.mts';
@@ -94,6 +95,7 @@ import {
   F as toNumberValue,
   Value,
   X,
+  OrdinaryObjectCreate,
   surroundingAgent,
 } from '#self';
 
@@ -274,6 +276,27 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
   // proposal-runtime-types #sec-value-types: the type names are global
   // bindings of their interned Type Objects.
   if (surroundingAgent.feature('runtime-types')) {
+    // proposal-runtime-types (ranges.md): the Range value type's prototypes, and
+    // a minimal global `Range` whose `prototype` is %Range.prototype% so that
+    // `Range` is usable as a type (IsOfType walks the prototype chain of the named
+    // global). The full Range class (its `Range.<T, I>` generics, the Interval
+    // enum, the static `of`, and the `uint8.<1..=6>` bounds desugaring) is the
+    // extension's deferred remainder.
+    bootstrapRangeIteratorPrototype(realmRec);
+    bootstrapRangePrototype(realmRec);
+    const rangeGlobal = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
+    X(rangeGlobal.DefineOwnProperty(Value('prototype'), Descriptor({
+      Value: realmRec.Intrinsics['%Range.prototype%'],
+      Writable: Value.false,
+      Enumerable: Value.false,
+      Configurable: Value.false,
+    })));
+    X(global.DefineOwnProperty(Value('Range'), Descriptor({
+      Value: rangeGlobal,
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
     for (const name of [
       'any', 'never', 'boolean1',
       // proposal-runtime-types: the primitive type names bind as global

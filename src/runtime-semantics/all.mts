@@ -72,6 +72,7 @@ export * from './YieldExpression.mts';
 export * from './StringIndexOf.mts';
 export * from './NumberToBigInt.mts';
 export * from './ConditionalExpression.mts';
+export * from './RangeExpression.mts';
 export * from './RegularExpressionLiteral.mts';
 export * from './RegExp.mts';
 export * from './StringPad.mts';

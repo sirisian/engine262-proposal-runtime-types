@@ -1,41 +1,141 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../readme/harness.mts';
+import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
 
 /**
- * Extension coverage — ranges.md (ranges).
+ * Capability Q (ranges.md) core: range literals as values that iterate.
  *
- * The ranges extension (range literals `1..6`/`1..=6`, `Range.<T>`, range
- * iteration, `a[start..end]` slicing, range case labels and containment) is not
- * implemented; documented as capability Q. The core reserves the bare-range case
- * syntax so the extension can define it without conflict (verified in README file
- * 11). This file records the boundary.
+ * A range names an interval as a value. The literal `a..b` is half-open and
+ * `a..=b` is inclusive, with the open-ended forms `a..`, `..b`, `..=b`, and `..`
+ * omitting an endpoint. A range binds tighter than assignment and looser than
+ * `||`/`??`, is non-associative, and member access binds tighter, so a range
+ * reaches its own members through parentheses. A range over an integer interval
+ * iterates with an implicit step of one, which is the counted loop written once;
+ * a non-integer or unbounded range needs an explicit `step`. The endpoints,
+ * containment, length, and emptiness are the value's core operations, and `Range`
+ * is a usable type name.
+ *
+ * Deferred with the rest of the extension, each needing a facility another part
+ * supplies: the interval kind in the type (`Range.<T, Interval>`) and the two
+ * literal forms' specialization, the `uint8.<1..=6>` bounds desugaring (primitive
+ * metadata), `a[start..end]` slicing to a view (the array view substrate),
+ * range case labels matching by containment, `x is uint8.<1..=6>`, the `Math.random`
+ * source, and the ordering-based generalization to bigint, dimensioned quantities,
+ * and Temporal.
  */
 
-test('ranges: a range literal does not parse (documents the gap)', () => {
-  // Target (ranges.md): `1..6` is a half-open interval value.
-  expectThrown('let r = 1..6; typeof r;');
-  // the inclusive form
-  expectThrown('let r = 1..=6; typeof r;');
+// -- the literal forms construct ----------------------------------------------
+test('a half-open literal has its endpoints', () => {
+  expect(evaluated('(0..10).start;')).toBe('0');
+  expect(evaluated('(0..10).end;')).toBe('10');
 });
 
-test('ranges: range iteration does not parse (documents the gap)', () => {
-  // Target: `for (const i of 0..n)` iterates the interval.
-  expectThrown('let sum = 0; for (const i of 0..5) { sum += i; } sum;');
+test('an inclusive literal has its endpoints', () => {
+  expect(evaluated('(1..=6).start;')).toBe('1');
+  expect(evaluated('(1..=6).end;')).toBe('6');
 });
 
-test('ranges: the Range type is not defined (documents the gap)', () => {
-  // Target: `Range.<uint32>` is the type of an integer range.
-  expectThrown('type R = Range.<uint32>; typeof R;');
+test('the open-ended forms omit an endpoint', () => {
+  expect(evaluated('String((5..).end);')).toBe('undefined');
+  expect(evaluated('(5..).start;')).toBe('5');
+  expect(evaluated('(..10).end;')).toBe('10');
+  expect(evaluated('String((..).start);')).toBe('undefined');
+  expect(evaluated('String((..).end);')).toBe('undefined');
 });
 
-test('ranges: range slicing does not parse (documents the gap)', () => {
-  // Target: `a[start..end]` is a view over the range.
-  expectThrown('let a = [1,2,3,4,5]; let s = a[1..3]; typeof s;');
+// -- iteration: the counted loop, spelled once --------------------------------
+test('a half-open integer range iterates up to but not including the end', () => {
+  expect(evaluated('let s = 0; for (const i of 0..5) { s += i; } String(s);')).toBe('10');
+  expect(evaluated('let a = [...0..5]; a.join(",");')).toBe('0,1,2,3,4');
 });
 
-test('ranges: ordinary numeric member access is unaffected', () => {
-  // `1..toString()` parses today as `(1.).toString()` and is not a range.
+test('an inclusive integer range iterates through the end', () => {
+  expect(evaluated('let s = 0; for (const i of 0..=5) { s += i; } String(s);')).toBe('15');
+  expect(evaluated('let a = [...0..=3]; a.join(",");')).toBe('0,1,2,3');
+});
+
+test('a descending range is empty, not reversed', () => {
+  expect(evaluated('let a = [...10..0]; String(a.length);')).toBe('0');
+});
+
+test('the loop over an array length is half-open by default', () => {
+  expect(evaluated('let arr = [9, 8, 7]; let s = ""; for (const i of 0..arr.length) { s += i; } s;')).toBe('012');
+});
+
+// -- explicit step ------------------------------------------------------------
+test('step widens an integer stride', () => {
+  expect(evaluated('let a = [...(0..10).step(2)]; a.join(",");')).toBe('0,2,4,6,8');
+});
+
+test('a non-integer range iterates only with an explicit step', () => {
+  // a float range has no implicit step
+  expectThrown('let a = [...0.5..2.5]; a;');
+  expect(evaluated('let a = [...(0.0..1.0).step(0.25)]; a.join(",");')).toBe('0,0.25,0.5,0.75');
+});
+
+test('the nth value avoids accumulated error', () => {
+  // start + n*by, not repeated addition, so ten values end at 0.9 not 0.8999...
+  expect(evaluated('String([...(0.0..1.0).step(0.1)].length);')).toBe('10');
+});
+
+// -- containment, length, emptiness -------------------------------------------
+test('contains respects the interval kind', () => {
+  expect(evaluated('String((0..10).contains(5));')).toBe('true');
+  expect(evaluated('String((0..10).contains(10));')).toBe('false');
+  expect(evaluated('String((0..=10).contains(10));')).toBe('true');
+  expect(evaluated('String((0..10).contains(-1));')).toBe('false');
+});
+
+test('length counts the members of a bounded integer range', () => {
+  expect(evaluated('String((0..10).length);')).toBe('10');
+  expect(evaluated('String((0..=10).length);')).toBe('11');
+  expect(evaluated('String((5..5).length);')).toBe('0');
+});
+
+test('isEmpty is true exactly when the range holds nothing', () => {
+  expect(evaluated('String((5..5).isEmpty);')).toBe('true');
+  expect(evaluated('String((0..5).isEmpty);')).toBe('false');
+  expect(evaluated('String((0..=0).isEmpty);')).toBe('false');
+});
+
+// -- precedence and associativity ---------------------------------------------
+test('member access binds tighter than the range', () => {
+  // (0..10).length reaches the member through parentheses
+  expect(evaluated('String((0..10).length);')).toBe('10');
+  // 0..arr.length is 0..(arr.length)
+  expect(evaluated('let arr = [1, 2, 3, 4, 5]; let s = 0; for (const i of 0..arr.length) s += i; String(s);')).toBe('10');
+});
+
+test('a range is looser than a conditional head', () => {
+  // 0..10 ? x : y is (0..10) ? x : y, and a range is truthy
+  expect(evaluated('0..10 ? "y" : "n";')).toBe('y');
+});
+
+test('a range is non-associative', () => {
+  expectThrown('let x = 1..2..3; x;');
+});
+
+// -- Range as a type ----------------------------------------------------------
+test('Range is a usable type name', () => {
+  expect(evaluated('let r: Range = 0..10; typeof r;')).toBe('object');
+  expect(evaluated('let r: Range = 0..=5; String(r.length);')).toBe('6');
+});
+
+test('a non-range value is not assignable to Range', () => {
+  expectThrown('let r: Range = 5; "ok";');
+  expectThrown('let r: Range = "abc"; "ok";');
+});
+
+// -- the base grammar is unchanged with the feature off -----------------------
+test('numeric member access and the C-style loop are unaffected', () => {
+  // 1..toString() parses today as (1.).toString() and is not a range here
   expect(evaluated('(1).toString();')).toBe('1');
-  // a normal for loop still works
   expect(evaluated('let sum = 0; for (let i = 0; i < 5; ++i) { sum += i; } String(sum);')).toBe('10');
+});
+
+test('the range operator does not exist with the feature off', () => {
+  // with the flag off, `1..6` is the base grammar's two numeric literals and a
+  // Syntax Error, and `1..toString()` keeps its base meaning
+  expect((runFlagOff('let r = 1..6; r;') as { Type: string }).Type).toBe('throw');
+  expect((runFlagOff('1..toString();') as { Type: string }).Type).toBe('normal');
+  expect((runFlagOff('let x = 1.5; x;') as { Type: string }).Type).toBe('normal');
 });

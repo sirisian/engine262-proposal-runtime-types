@@ -75,6 +75,10 @@ export const RawTokens = [
   // proposal-runtime-types #sec-type-punctuators
   ['COLON_EQ', ':='],
   ['ELLIPSIS', '...'],
+  // proposal-runtime-types (ranges.md): the range operators. Placed outside the
+  // Member and PropertyOrCall ranges above, since a range is not a member form.
+  ['DOT_DOT', '..'],
+  ['DOT_DOT_EQ', '..='],
   ['CONDITIONAL', '?'],
   // BEGIN AutoSemicolon
   ['SEMICOLON', ';'],

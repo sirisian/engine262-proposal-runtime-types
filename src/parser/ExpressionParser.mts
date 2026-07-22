@@ -358,7 +358,7 @@ export abstract class ExpressionParser extends FunctionParser {
   //   ShortCircuitExpression
   //   ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression
   parseConditionalExpression(): ParseNode.ConditionalExpressionOrHigher {
-    const ShortCircuitExpression = this.parseShortCircuitExpression();
+    const ShortCircuitExpression = this.parseRangeExpression();
     if (this.eat(Token.CONDITIONAL)) {
       const node = this.startNode<ParseNode.ConditionalExpression>(ShortCircuitExpression);
       node.ShortCircuitExpression = ShortCircuitExpression;
@@ -375,6 +375,67 @@ export abstract class ExpressionParser extends FunctionParser {
       return this.finishNode(node, 'ConditionalExpression');
     }
     return ShortCircuitExpression;
+  }
+
+  // proposal-runtime-types (ranges.md):
+  // RangeExpression :
+  //   ShortCircuitExpression? `..` ShortCircuitExpression?
+  //   ShortCircuitExpression? `..=` ShortCircuitExpression
+  // A range binds tighter than assignment and looser than `||`/`??`, and it is
+  // non-associative, so `a..b..c` is a Syntax Error. The end is optional after
+  // `..` (the from and full forms) and required after `..=`.
+  parseRangeExpression(): ParseNode.RangeExpressionOrHigher {
+    if (!this.feature('runtime-types')) {
+      return this.parseShortCircuitExpression();
+    }
+    // The leading-omitted forms `..b`, `..=b`, and `..` begin with the operator.
+    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+      const node = this.startNode<ParseNode.RangeExpression>();
+      return this.finishRangeExpression(node, null);
+    }
+    const left = this.parseShortCircuitExpression();
+    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+      const node = this.startNode<ParseNode.RangeExpression>(left);
+      return this.finishRangeExpression(node, left);
+    }
+    return left;
+  }
+
+  finishRangeExpression(node: ParseNode.Unfinished<ParseNode.RangeExpression>, start: ParseNode.ShortCircuitExpressionOrHigher | null): ParseNode.RangeExpression {
+    const inclusive = this.test(Token.DOT_DOT_EQ);
+    this.next(); // consume `..` or `..=`
+    node.RangeStart = start;
+    node.Inclusive = inclusive;
+    if (inclusive) {
+      // `..=` always has an end.
+      node.RangeEnd = this.parseShortCircuitExpression();
+    } else if (this.rangeEndFollows()) {
+      node.RangeEnd = this.parseShortCircuitExpression();
+    } else {
+      node.RangeEnd = null;
+    }
+    // Non-associative: a second range operator is a Syntax Error.
+    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+      this.unexpected();
+    }
+    return this.finishNode(node, 'RangeExpression');
+  }
+
+  // A range end is present unless the operator is immediately followed by a token
+  // that cannot begin an expression, which is how the from and full forms end.
+  rangeEndFollows(): boolean {
+    switch (this.peek().type) {
+      case Token.RPAREN:
+      case Token.RBRACK:
+      case Token.RBRACE:
+      case Token.SEMICOLON:
+      case Token.COMMA:
+      case Token.COLON:
+      case Token.EOS:
+        return false;
+      default:
+        return true;
+    }
   }
 
   // ShortCircuitExpression :

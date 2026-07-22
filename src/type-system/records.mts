@@ -151,6 +151,8 @@ const libraryTypeNames = new Set([
   'FinalizationRegistry', 'Map', 'Proxy', 'RangeError', 'ReferenceError',
   'RegExp', 'Set', 'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError',
   'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
+  // proposal-runtime-types (ranges.md): the Range value type is a usable type name.
+  'Range',
 ]);
 
 /**

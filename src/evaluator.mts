@@ -79,6 +79,7 @@ import {
   Evaluate_ArrowFunction,
   Evaluate_AsyncArrowFunction,
   Evaluate_ConditionalExpression,
+  Evaluate_RangeExpression,
   Evaluate_RegularExpressionLiteral,
   Evaluate_AnyFunctionBody,
   Evaluate_ExpressionBody,
@@ -308,6 +309,8 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return Evaluate_AsyncArrowFunction(node);
     case 'ConditionalExpression':
       return yield* Evaluate_ConditionalExpression(node);
+    case 'RangeExpression':
+      return yield* Evaluate_RangeExpression(node);
     case 'RegularExpressionLiteral':
       return yield* Evaluate_RegularExpressionLiteral(node);
     case 'AsyncBody':
