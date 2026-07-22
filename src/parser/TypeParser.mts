@@ -59,10 +59,10 @@ export abstract class TypeParser extends ExpressionParser {
   }
 
   // IntersectionType :
-  //   PrimaryType
-  //   IntersectionType `&` PrimaryType
+  //   PostfixType
+  //   IntersectionType `&` PostfixType
   private parseIntersectionType(): ParseNode.Type {
-    return this.parseIntersectionTypeRest(this.parsePrimaryType());
+    return this.parseIntersectionTypeRest(this.parsePostfixType());
   }
 
   private parseIntersectionTypeRest(first: ParseNode.Type): ParseNode.Type {
@@ -72,10 +72,28 @@ export abstract class TypeParser extends ExpressionParser {
     const node = this.startNode<ParseNode.IntersectionType>(first);
     const Types: ParseNode.Type[] = [first];
     while (this.eat(Token.BIT_AND)) {
-      Types.push(this.parsePrimaryType());
+      Types.push(this.parsePostfixType());
     }
     node.Types = Types;
     return this.finishNode(node, 'IntersectionType');
+  }
+
+  // PostfixType :
+  //   PrimaryType
+  //   PostfixType `[` Type `]`
+  // Indexed access binds tighter than `keyof`/`typeof` and than union and
+  // intersection, so `A | T[K]` is `A | (T[K])` and `T[K][J]` chains left.
+  private parsePostfixType(): ParseNode.Type {
+    let type = this.parsePrimaryType();
+    while (this.test(Token.LBRACK)) {
+      const node = this.startNode<ParseNode.IndexedAccessType>(type);
+      node.ObjectType = type;
+      this.expect(Token.LBRACK);
+      node.IndexType = this.parseType();
+      this.expect(Token.RBRACK);
+      type = this.finishNode(node, 'IndexedAccessType');
+    }
+    return type;
   }
 
   // PrimaryType :
@@ -109,6 +127,13 @@ export abstract class TypeParser extends ExpressionParser {
           return this.finishNode(node, 'KeyOfType');
         }
         return this.parseTypeReferenceOrComputedType();
+      }
+      case Token.TYPEOF: {
+        // TypeQueryType : `typeof` TypeName - the type of a value binding.
+        const node = this.startNode<ParseNode.TypeQueryType>();
+        this.next();
+        node.ExpressionName = this.parseTypeName();
+        return this.finishNode(node, 'TypeQueryType');
       }
       case Token.YIELD:
       case Token.AWAIT:

@@ -960,6 +960,62 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       }
       return keys;
     }
+    case 'TypeQueryType': {
+      // proposal-runtime-types (typeprogramming.md 4.1): `typeof x` is the type of
+      // the value bound to the entity name, the query `Reflect.typeOf(x)` performs.
+      const baseName = node.ExpressionName.IdentifierReference.name;
+      const ref = Q(yield* ResolveBinding(Value(baseName)));
+      let value = Q(yield* GetValue(ref));
+      for (const part of node.ExpressionName.MemberNames) {
+        if (!(value instanceof ObjectValue)) {
+          const path = `typeof ${baseName}.${part.name}`;
+          return Throw.TypeError('$1 is not a type', Value(path));
+        }
+        value = Q(yield* Get(value, Value(part.name)));
+      }
+      return RuntimeTypeOf(value);
+    }
+    case 'IndexedAccessType': {
+      // proposal-runtime-types (typeprogramming.md 4.1): `T[K]` is the union, over
+      // each arm _t_ of `T` and each literal key _k_ of `K`, of the type of _t_'s
+      // property named _k_; an optional property's access admits `undefined`
+      // (whose type is `void`). This is the operator form of the kit's `indexed`.
+      const objectType = Q(yield* TypeNodeToTypeRecord(node.ObjectType));
+      const indexType = Q(yield* TypeNodeToTypeRecord(node.IndexType));
+      const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
+      const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
+      const results: TypeRecord[] = [];
+      for (const armRaw of arms) {
+        // See through a nominal structure (an interface or dependent record) and a
+        // metadata-parameterized type to the underlying object.
+        let arm = armRaw;
+        while ((arm.Kind === 'nominal' && arm.Structure) || arm.Kind === 'parameterized') {
+          arm = arm.Kind === 'parameterized' ? arm.Base : arm.Structure!;
+        }
+        if (arm.Kind !== 'object') {
+          return Throw.TypeError('$1 is not a type', Value('indexed access of a type with no properties'));
+        }
+        for (const key of keys) {
+          if (key.Kind !== 'literal' || !(key.Value instanceof JSStringValue)) {
+            return Throw.TypeError('$1', Value('an indexed access key must be a string literal type'));
+          }
+          const keyName = key.Value.stringValue();
+          const prop = arm.Properties.find((p) => p.key === keyName);
+          if (!prop) {
+            return Throw.TypeError('$1', Value(`property '${keyName}' does not exist on the indexed type`));
+          }
+          // An optional property's access admits `undefined`. The engine's `void`
+          // type (which `type undefined` names) has empty membership, so the
+          // admission is the literal `undefined` value type, whose membership is
+          // SameValue and therefore holds for `undefined`.
+          const undefinedType: TypeRecord = { Kind: 'literal', Value: Value.undefined, Base: voidType };
+          results.push(prop.optional
+            ? CanonicalizeType({ Kind: 'union', Members: [prop.type, undefinedType] })
+            : prop.type);
+        }
+      }
+      return CanonicalizeType({ Kind: 'union', Members: results });
+    }
     case 'ComputedType': {
       // #sec-evaluatebuildercall: the callee evaluates and is called with the
       // evaluated arguments; the result must be a Type Object.

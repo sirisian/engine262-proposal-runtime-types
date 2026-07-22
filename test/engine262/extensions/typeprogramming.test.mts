@@ -43,17 +43,29 @@ test('type builders: the is operator tests a value against a type', () => {
   expect(evaluated('let x = "s"; (x is uint8) ? "yes" : "no";')).toBe('no');
 });
 
-// ── Documented gaps: the operators and catalog ────────────────────────────────
-test('type builders: the typeof type operator is deferred (documents the gap)', () => {
-  // Target (typeprogramming.md 4.1): `type T = typeof x` is the type of the value x.
-  expectThrown('let x = (5 := uint8); type T = typeof x; T;');
+// ── The typeof and indexed-access operators ───────────────────────────────────
+test('type builders: the typeof type operator is the type of a value', () => {
+  // typeprogramming.md 4.1: `typeof x` is the type of the value x, the query
+  // Reflect.typeOf(x) performs.
+  expect(evaluated('let x = (5 := uint8); type T = typeof x; (T === uint8) ? "yes" : "no";')).toBe('yes');
+  // a value of that type passes the membership test, one not of it does not
+  expect(evaluated('let s = "hi"; ("world" is typeof s) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('let s = "hi"; (42 is typeof s) ? "yes" : "no";')).toBe('no');
 });
 
-test('type builders: indexed-access types are deferred (documents the gap)', () => {
-  // Target (typeprogramming.md 4.1): `T["a"]` is the type of property a.
-  expectThrown('type T = { a: uint8 }; type A = T["a"]; A;');
+test('type builders: an indexed-access type is the type of the named property', () => {
+  // typeprogramming.md 4.1: `T["a"]` is the type of property a, and `T[keyof T]`
+  // the union of the value types.
+  expect(evaluated('type T = { a: uint8, b: string }; type A = T["a"]; (A === uint8) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('type T = { a: string, b: string }; type V = T[keyof T]; (V === string) ? "yes" : "no";')).toBe('yes');
+  // an optional property's access admits undefined; a required one does not
+  expect(evaluated('type T = { a?: string }; (undefined is T["a"]) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('type T = { a: string }; (undefined is T["a"]) ? "yes" : "no";')).toBe('no');
+  // accessing a key the type does not have is a type error
+  expectThrown('type T = { a: uint8 }; type M = T["missing"]; M;');
 });
 
+// ── Documented gaps: the catalog ships as builders, not syntax ─────────────────
 test('type builders: conditional-type syntax is deferred (documents the gap)', () => {
   // Target (typeprogramming.md 4.3): conditional types ship as builder functions
   // over makeType, not as `extends ? :` syntax; that syntax does not parse.
