@@ -144,3 +144,14 @@ test('operators: scalar-on-the-left is deferred (documents the gap)', () => {
   // once the block exists.
   expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs) { return this; } } let v = new V(3); let r = 2 * v; typeof r;')).toBe('number');
 });
+
+// -- Documented gap: a typed scalar on the left silently numifies --------------
+test('operators: a typed value on the left of an operator does not dispatch either', () => {
+  // Even a typed scalar on the left takes the numeric path rather than the
+  // object's operator: dispatch keys on the left operand, the object numifies to
+  // NaN, and the result is a plain NaN with no dispatch and no throw. This is the
+  // sharper form of the scalar-on-the-left gap; the primitive block that would
+  // fix it belongs to the primitive metadata extension.
+  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); let r = (2 := uint32) * v; typeof r;')).toBe('number');
+  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); let r = (2 := uint32) * v; String(r);')).toBe('NaN');
+});

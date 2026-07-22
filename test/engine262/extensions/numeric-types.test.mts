@@ -59,3 +59,16 @@ test('numeric types: the imaginary literal does not parse (documents the gap)', 
   // extension. The suffix does not lex.
   expectThrown('let a = 3i; typeof a;');
 });
+
+test('numeric types: a typed value is never strictly equal to a plain number of equal magnitude', () => {
+  // A typed value carries its type as part of its identity, so strict equality
+  // against a plain number is always false, for integer and float value types
+  // alike. The plain magnitude is recovered with Number(), which does compare
+  // equal. This underlies why comparisons in these tests extract with Number()
+  // before asserting a numeric value.
+  expect(evaluated('String((5 := uint8) === 5);')).toBe('false');
+  expect(evaluated('String((0 := uint8) === 0);')).toBe('false');
+  expect(evaluated('String((0.5 := float32) === 0.5);')).toBe('false');
+  expect(evaluated('String(Number((5 := uint8)) === 5);')).toBe('true');
+  expect(evaluated('String(Number((0 := uint8)) === 0);')).toBe('true');
+});

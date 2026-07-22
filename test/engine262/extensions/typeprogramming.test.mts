@@ -71,3 +71,40 @@ test('type builders: conditional-type syntax is deferred (documents the gap)', (
   // over makeType, not as `extends ? :` syntax; that syntax does not parse.
   expectThrown('type T = uint8 extends number ? "yes" : "no"; T;');
 });
+
+// ── typeof and indexed-access: depth, a qualified operand, and a round-trip ────
+test('typeof and indexed access compose and round-trip through reflection', () => {
+  // typeprogramming.md: indexed access chains, so an access into an access
+  // resolves stepwise to the nested property type.
+  expect(evaluated('type T = { a: { b: uint8 } }; type A = T["a"]["b"]; (A === uint8) ? "yes" : "no";')).toBe('yes');
+  // the typeof operand may be a qualified member expression, not only a bare name
+  expect(evaluated('let o = { n: (5 := uint8) }; type A = typeof o.n; (A === uint8) ? "yes" : "no";')).toBe('yes');
+  // a type reached through an operator round-trips through the reflection model,
+  // the same interned object coming back from getReflection then makeType
+  expect(evaluated('type T = { a: uint8 }; type A = T["a"]; (Reflect.makeType(Reflect.getReflection(A)) === A) ? "yes" : "no";')).toBe('yes');
+  // a binding annotated with an operator-derived type enforces it at the boundary
+  expect(evaluated('type T = { n: uint8 }; let x: T["n"] = (5 := uint8); String(x);')).toBe('5');
+  expectThrown('type T = { n: uint8 }; let x: T["n"] = 999; x;');
+});
+
+// ── indexed access is limited to string-literal keys today ────────────────────
+test('indexed access rejects non-literal and numeric-index keys (documents the gap)', () => {
+  // typeprogramming.md: beyond string-literal keys, numeric, tuple, and
+  // index-signature access are not covered. Each such form is rejected today; the
+  // diagnostic for a non-literal key names the string-literal requirement.
+  expect(evaluated('let m = ""; try { type T = { a: uint8 }; type Z = T[number]; let x: Z = 0; } catch (e) { m = String(e.message.includes("must be a string literal")); } m;')).toBe('true');
+  expect(evaluated('let m = ""; try { type T = { a: uint8 }; type Z = T[string]; let x: Z = 0; } catch (e) { m = String(e.message.includes("must be a string literal")); } m;')).toBe('true');
+  // a numeric index into a tuple is likewise not resolved
+  expectThrown('type T = [uint8, string]; type Z = T[0]; Z;');
+});
+
+// ── keyof binds around its whole operand, so keyof-then-index errors today ─────
+test('keyof applied before an index access resolves keyof first (documents the grouping)', () => {
+  // typeprogramming.md: `keyof T["a"]` groups as `(keyof T)["a"]`, so keyof
+  // resolves to the key union and the trailing index is then applied to that
+  // union, which has no properties. (TypeScript groups the other way; the
+  // current grouping always errors, so a program cannot depend on it.)
+  expectThrown('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; K;');
+  // the intended per-property keyof is available by parenthesizing the access
+  expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof (T["a"]); (undefined is K) ? "u" : "not-u";')).toBe('not-u');
+});

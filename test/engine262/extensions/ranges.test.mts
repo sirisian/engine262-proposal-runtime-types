@@ -139,3 +139,12 @@ test('the range operator does not exist with the feature off', () => {
   expect((runFlagOff('1..toString();') as { Type: string }).Type).toBe('normal');
   expect((runFlagOff('let x = 1.5; x;') as { Type: string }).Type).toBe('normal');
 });
+
+test('a range case label does not yet match by containment (documents the gap)', () => {
+  // ranges.md: a range case label should match a discriminant the range contains.
+  // Today the label parses but is compared by identity, so an integer in the
+  // range does not select the case and control falls through to the default.
+  expect(evaluated('let x = 3; let r = "none"; switch (x) { case 0..5: r = "in"; break; default: r = "def"; } r;')).toBe('def');
+  // an exact endpoint likewise does not match by identity
+  expect(evaluated('let x = 0; let r = "none"; switch (x) { case 0..5: r = "in"; break; default: r = "def"; } r;')).toBe('def');
+});

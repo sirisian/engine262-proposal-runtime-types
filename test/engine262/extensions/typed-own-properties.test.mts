@@ -94,3 +94,19 @@ test('with the feature off, a type key is an ordinary own property key with no e
   expect(c.Type).toBe('normal');
   expect(c.Value.stringValue?.()).toBe('300');
 });
+
+test('the object-literal typed-property form does not parse yet (documents the gap)', () => {
+  // Object Typing: `{ (a: uint8): 1 }` declares a typed own property at creation,
+  // routing to the same recording as the defineProperty path. That member syntax
+  // is not parsed today.
+  expectThrown('let o = { (a: uint8): 1 }; o.a;');
+});
+
+test('a Proxy does not yet check a trap result against a typed own property (documents the gap)', () => {
+  // Object Typing: a Proxy over an object carrying a typed own property should
+  // check each trap result against the property's type. Today the trap result is
+  // returned unchecked, so a get trap may return a value the property's type
+  // would reject (999 is outside uint8) with no error.
+  expect(evaluated('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return 999; } }); String(p.x);')).toBe('999');
+  expect(evaluated('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return 999; } }); String(p.x instanceof uint8);')).toBe('false');
+});

@@ -52,3 +52,15 @@ test('standard library: the Promise combinators are present', () => {
   expect(evaluated('typeof Promise.any;')).toBe('function');
   expect(evaluated('typeof Array.fromAsync;')).toBe('function');
 });
+
+// ── The built-in method signatures are not yet typed ──────────────────────────
+test('standard library: an array method does not carry a typed signature (documents the gap)', () => {
+  // standardlibrary.md: the built-in signatures should be typed, so a callback
+  // parameter and the result element type follow the receiver's element type.
+  // Today the methods are the ordinary untyped ones: a callback returning a plain
+  // value out of the element type's range is neither rejected nor coerced, so the
+  // result holds a plain number rather than a value of the element type.
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let good = "no-throw"; try { a.map((x) => 999); } catch { good = "throws"; } good;')).toBe('no-throw');
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0]);')).toBe('999');
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0] instanceof uint8);')).toBe('false');
+});

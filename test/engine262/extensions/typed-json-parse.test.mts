@@ -112,3 +112,14 @@ test('typed json: untyped JSON.parse is unchanged', () => {
 test('typed json: with the feature off, JSON.parse.<T> is a syntax error', () => {
   expectErrorFlagOff('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); o.a;');
 });
+
+// -- The type argument may itself be an indexed-access type -------------------
+test('typed json: the type argument may be an indexed-access type', () => {
+  // serialization.md's parse resolves its type argument the same way any type
+  // position does, so an indexed-access type naming a property's type is a valid
+  // argument and the parsed value is converted to that property type.
+  expect(evaluated('let v = JSON.parse.<{ a: uint8 }["a"]>("5"); String(v instanceof uint8);')).toBe('true');
+  expect(evaluated('let v = JSON.parse.<{ a: uint8 }["a"]>("5"); String(v);')).toBe('5');
+  // the resolved element type still enforces its range on the parsed value
+  expectThrown('JSON.parse.<{ a: uint8 }["a"]>("999");');
+});

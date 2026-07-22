@@ -19,6 +19,42 @@ export function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
+/** Extract the string-ish value of a normal completion (shared by the evaluators). */
+function normalValueString(completion: unknown, source: string): string {
+  expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
+  const v = (completion as { Value: { stringValue?(): string, numberValue?(): number } }).Value;
+  if (v?.stringValue) { return v.stringValue(); }
+  if (v?.numberValue) { return String(v.numberValue()); }
+  return String(v);
+}
+
+/**
+ * Run a script under a fixed pseudorandom seed (via HostDefined.randomSeed) and
+ * return its string value. Two calls with the same seed start from the same
+ * stream, so a sequence of draws is reproducible.
+ */
+export function evaluatedSeeded(seed: string, source: string): string {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm({ randomSeed: () => seed });
+  return normalValueString(realm.evaluateScriptSkipDebugger(source), source);
+}
+
+/**
+ * Evaluate several scripts in order on ONE realm and return the last one's
+ * string value. Because the automatic job queue drains between evaluations, an
+ * earlier script may schedule microtasks (an async function's continuation, a
+ * settled promise) whose effects a later reader script then observes.
+ */
+export function evaluatedSequence(sources: readonly string[]): string {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  let last = '';
+  for (const source of sources) {
+    last = normalValueString(realm.evaluateScriptSkipDebugger(source), source);
+  }
+  return last;
+}
+
 /** Run with the feature OFF (to check flag-gating and backwards compatibility). */
 export function runFlagOff(source: string) {
   setSurroundingAgent(new Agent({ features: [] }));
@@ -28,12 +64,7 @@ export function runFlagOff(source: string) {
 
 /** Evaluate to the string value of a normal completion (asserts normal). */
 export function evaluated(source: string): string {
-  const completion = run(source);
-  expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
-  const v = (completion as unknown as { Value: { stringValue?(): string, numberValue?(): number } }).Value;
-  if (v?.stringValue) { return v.stringValue(); }
-  if (v?.numberValue) { return String(v.numberValue()); }
-  return String(v);
+  return normalValueString(run(source), source);
 }
 
 /** True iff `source` runs to a normal completion. */
