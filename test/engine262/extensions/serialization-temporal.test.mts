@@ -2,12 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown } from '../readme/harness.mts';
 
 /**
- * Extension coverage — serialization.md, dependentrecordtypes.md, temporal.md.
+ * Extension coverage - serialization.md, dependentrecordtypes.md, temporal.md.
  *
- * These extensions are largely deferred (capabilities T, U, V). The typed-JSON and
- * `where`-clause SYNTAX parses, but the validating/converting semantics are not
- * implemented; Temporal is not exposed in this configuration. Untyped JSON works.
- * This file records the boundaries and verifies the untyped baseline.
+ * Typed JSON parsing (`JSON.parse.<T>`) now converts and validates: see the
+ * dedicated typed-json-parse test file for the full coverage. The `where`-clause
+ * SYNTAX parses but the predicate is not enforced (dependent record types are
+ * deferred), Temporal is not exposed in this configuration, and `structuredClone`
+ * is absent from the base engine. This file records those boundaries and verifies
+ * the untyped JSON baseline.
  */
 
 // ── Serialization: untyped baseline works ─────────────────────────────────────
@@ -18,12 +20,11 @@ test('serialization: untyped JSON.parse and JSON.stringify work', () => {
   expect(evaluated('JSON.stringify(JSON.parse(\'{"a":5,"b":"x"}\'));')).toBe('{"a":5,"b":"x"}');
 });
 
-test('serialization: JSON.parse.<T> parses but does not yet validate or convert (documents the gap)', () => {
-  // Target (serialization.md): JSON.parse.<T> converts leaves to T and validates.
-  // Today the type argument is accepted but ignored: the value is a plain number,
-  // not a uint8, and an out-of-range value is not rejected.
-  expect(evaluated('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":5}\'); o.a === (5 := uint8) ? "typed" : "untyped";')).toBe('untyped');
-  expect(evaluated('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":300}\'); String(o.a);')).toBe('300');
+test('serialization: JSON.parse.<T> converts leaves and validates', () => {
+  // JSON.parse.<T> now threads T through the parse: a numeric leaf becomes its
+  // target type, and an out-of-range value is rejected with a TypeError.
+  expect(evaluated('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":5}\'); o.a === (5 := uint8) ? "typed" : "untyped";')).toBe('typed');
+  expectThrown('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":300}\'); String(o.a);');
 });
 
 // ── Dependent record types: where clauses parse but do not validate ───────────

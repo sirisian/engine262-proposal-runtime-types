@@ -5,7 +5,14 @@ import {
   ObjectValue,
   JSStringValue,
   UndefinedValue,
+  TypedNumberValue,
   Value, isTypedNumber, unwrapToNumber } from '../value.mts';
+import {
+  IsOfType,
+  DefaultValueOf,
+  fitsNumericType,
+} from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   CodePointsToString,
   PropName,
@@ -13,6 +20,7 @@ import {
 } from '../static-semantics/all.mts';
 import {
   NormalCompletion,
+  EnsureCompletion,
   Q, X,
 } from '../completion.mts';
 import { kInternal } from '../utils/internal.mts';
@@ -42,15 +50,18 @@ import {
   surroundingAgent,
   Assert,
   Call,
+  CreateArrayFromList,
   CreateDataProperty,
   CreateDataPropertyOrThrow,
   EnumerableOwnProperties,
   Get,
   GetV,
+  HasProperty,
   IsArray,
   IsCallable,
   OrdinaryObjectCreate,
   LengthOfArrayLike,
+  R,
   ToIntegerOrInfinity,
   ToNumber,
   ToString,
@@ -391,6 +402,230 @@ function* JSON_parse([text = Value.undefined, reviver = Value.undefined]: Argume
     return Q(yield* InternalizeJSONProperty(root, rootName, reviver, snapshot));
   } else {
     return unfiltered;
+  }
+}
+
+// proposal-runtime-types (serialization.md): `JSON.parse.<T>(text)` parses and
+// validates in one pass, converting each JSON leaf into its target type. This
+// spec-level implementation parses the text into the ordinary JSON value graph
+// (so a malformed document still throws a SyntaxError) and then walks it against
+// the target Type Record, converting numbers into their numeric value types,
+// filling object and array targets, validating refinements, and rejecting unknown
+// keys, with a TypeError naming the JSON path on any mismatch. The physical fusion
+// the extension describes (writing straight into contiguous typed memory with no
+// intermediate graph) is an implementation strategy, not an observable, so the
+// two-pass form here matches the specified behavior.
+export function* TypedJSONParse(text: Value, typeRecord: TypeRecord): ValueEvaluator {
+  const jsonString = Q(yield* ToString(text));
+  const parseResult = Q(ParseJSON(jsonString.stringValue()));
+  const unfiltered = parseResult.Value;
+  return Q(yield* CoerceJSON(unfiltered, typeRecord, ''));
+}
+
+function describeType(t: TypeRecord): string {
+  switch (t.Kind) {
+    case 'primitive':
+      if (t.Name === 'uint' || t.Name === 'int') {
+        const bits = typeof t.Arguments[0] === 'number' ? String(t.Arguments[0]) : '';
+        return `${t.Name}${bits}`;
+      }
+      return t.Name;
+    case 'literal':
+      return 'a literal value';
+    case 'array':
+      return t.Extent === 'dynamic' ? 'an array' : `an array of length ${t.Extent}`;
+    case 'object':
+      return 'an object';
+    case 'union':
+      return t.Members.map(describeType).join(' or ');
+    case 'reference':
+      return describeType(t.Target);
+    case 'parameterized':
+      return describeType(t.Base);
+    case 'nominal': {
+      const bi = (t.Declaration as { BindingIdentifier?: { name?: string } }).BindingIdentifier;
+      return bi && bi.name ? bi.name : 'a type';
+    }
+    case 'any':
+      return 'any';
+    default:
+      return t.Kind;
+  }
+}
+
+function describeValue(v: Value): string {
+  if (v instanceof NumberValue) {
+    return String(R(v));
+  }
+  if (v instanceof JSStringValue) {
+    return `"${v.stringValue()}"`;
+  }
+  if (v instanceof BooleanValue) {
+    return v === Value.true ? 'true' : 'false';
+  }
+  if (v instanceof NullValue) {
+    return 'null';
+  }
+  if (v instanceof ObjectValue) {
+    return 'an object or array';
+  }
+  return 'a value';
+}
+
+function jsonTypeError(path: string, t: TypeRecord, value: Value): ThrowCompletion {
+  const where = path === '' ? '' : `at ${path}: `;
+  return Throw.TypeError('$1', Value(`${where}expected ${describeType(t)}, got ${describeValue(value)}`));
+}
+
+// The recursive converter. Returns the typed value or a TypeError completion.
+function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator {
+  switch (t.Kind) {
+    case 'any':
+      return value;
+    case 'reference':
+      return Q(yield* CoerceJSON(value, t.Target, path));
+    case 'primitive': {
+      const name = t.Name;
+      if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
+        if (!(value instanceof NumberValue)) {
+          return jsonTypeError(path, t, value);
+        }
+        const v = R(value);
+        // A number token that does not fit its integer target, or a fractional
+        // token targeting an integer type, is a TypeError (the range check).
+        if (name !== 'number' && !fitsNumericType(v, name, t.Arguments)) {
+          return jsonTypeError(path, t, value);
+        }
+        // A plain `number` field stays an ordinary Number; a sized type carries
+        // its type tag.
+        return name === 'number' ? value : new TypedNumberValue(v, t);
+      }
+      if (name === 'string') {
+        return value instanceof JSStringValue ? value : jsonTypeError(path, t, value);
+      }
+      if (name === 'boolean') {
+        return value instanceof BooleanValue ? value : jsonTypeError(path, t, value);
+      }
+      // bigint, symbol, and the exact wide types (decimal128, the 64-bit
+      // integers) need digit-level parsing to preserve exactness and are not
+      // handled by this core.
+      return jsonTypeError(path, t, value);
+    }
+    case 'literal':
+      return SameValue(value, t.Value as Value) ? value : jsonTypeError(path, t, value);
+    case 'union': {
+      // Resolve by trying each member; the first that accepts the value wins.
+      // For distinguishable unions this agrees with token-type/structure
+      // discrimination, and it naturally routes null to a null member.
+      for (const m of t.Members) {
+        const attempt = EnsureCompletion(yield* CoerceJSON(value, m, path));
+        if (attempt.Type === 'normal') {
+          return attempt.Value;
+        }
+      }
+      return jsonTypeError(path, t, value);
+    }
+    case 'array': {
+      if (!(value instanceof ObjectValue)) {
+        return jsonTypeError(path, t, value);
+      }
+      const valueIsArray = X(IsArray(value));
+      if (valueIsArray !== Value.true) {
+        return jsonTypeError(path, t, value);
+      }
+      const len = Q(yield* LengthOfArrayLike(value));
+      // A `[N].<T>` field requires the length to equal N.
+      if (t.Extent !== 'dynamic' && t.Extent !== len) {
+        return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}expected ${describeType(t)}, got an array of length ${len}`));
+      }
+      const elements: Value[] = [];
+      for (let i = 0; i < len; i += 1) {
+        const el = Q(yield* Get(value, Value(String(i))));
+        elements.push(Q(yield* CoerceJSON(el, t.Element, `${path}[${i}]`)));
+      }
+      return X(CreateArrayFromList(elements));
+    }
+    case 'object': {
+      if (!(value instanceof ObjectValue)) {
+        return jsonTypeError(path, t, value);
+      }
+      const valueIsArray = X(IsArray(value));
+      if (valueIsArray === Value.true) {
+        return jsonTypeError(path, t, value);
+      }
+      const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
+      const named = new Set(t.Properties.map((p) => p.key));
+      // Typed objects are sealed: a key with no corresponding field is a
+      // TypeError unless an index signature admits it.
+      const keys = Q(yield* value.OwnPropertyKeys());
+      for (const k of keys) {
+        if (!(k instanceof JSStringValue) || named.has(k.stringValue())) {
+          continue;
+        }
+        let admitted = false;
+        for (const ix of t.IndexSignatures) {
+          if (Q(yield* IsOfType(k, ix.Key))) {
+            const kv = Q(yield* Get(value, k));
+            const coerced = Q(yield* CoerceJSON(kv, ix.Value, `${path}.${k.stringValue()}`));
+            X(CreateDataPropertyOrThrow(result, k, coerced));
+            admitted = true;
+            break;
+          }
+        }
+        if (!admitted) {
+          return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}unknown key "${k.stringValue()}"`));
+        }
+      }
+      // Each declared field is filled from its JSON value, or takes its default
+      // when it is an absent optional; an absent required field is a TypeError.
+      for (const p of t.Properties) {
+        const key = Value(p.key);
+        const present = Q(yield* HasProperty(value, key));
+        if (present === Value.true) {
+          const pv = Q(yield* Get(value, key));
+          const coerced = Q(yield* CoerceJSON(pv, p.type, `${path}.${p.key}`));
+          X(CreateDataPropertyOrThrow(result, key, coerced));
+        } else if (p.optional) {
+          const def = DefaultValueOf(p.type);
+          if (def !== undefined) {
+            X(CreateDataPropertyOrThrow(result, key, def));
+          }
+        } else {
+          return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}missing required key "${p.key}"`));
+        }
+      }
+      return result;
+    }
+    case 'parameterized': {
+      // Convert against the base type, then run the refinement as a boundary
+      // check (its metadata `validate` hook), the same layering as any other
+      // typed boundary in the proposal.
+      const coerced = Q(yield* CoerceJSON(value, t.Base, path));
+      const ok = Q(yield* IsOfType(coerced, t));
+      return ok ? coerced : jsonTypeError(path, t, value);
+    }
+    case 'nominal': {
+      if (t.EnumMembers) {
+        // A JSON value equal to one of the enumerators' values parses to it.
+        for (const m of t.EnumMembers) {
+          if (SameValue(value, m)) {
+            return m;
+          }
+        }
+        return jsonTypeError(path, t, value);
+      }
+      if (t.Structure) {
+        // A type alias for a structural type (the common `type X = { ... }`
+        // form) converts against that structure.
+        return Q(yield* CoerceJSON(value, t.Structure, path));
+      }
+      // A class target allocates the sealed layout and fills it without running
+      // the constructor; that path ties into the memory-layout work and is not
+      // handled by this core.
+      return jsonTypeError(path, t, value);
+    }
+    default:
+      return jsonTypeError(path, t, value);
   }
 }
 

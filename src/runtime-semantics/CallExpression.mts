@@ -3,6 +3,8 @@ import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import {
   surroundingAgent,
@@ -27,6 +29,23 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   const ref = Q(yield* Evaluate(memberExpr));
   // 5. Let func be ? GetValue(ref).
   const func = Q(yield* GetValue(ref));
+  // proposal-runtime-types (serialization.md): `JSON.parse.<T>(text)` is the
+  // typed parse. Its type argument rides on the callee, which is a
+  // TypeArgumentsExpression, so it is intercepted here where both the callee node
+  // and the resolved function are in hand. The type argument becomes a Type
+  // Record and the validating, converting parse runs in place of the untyped
+  // call. With the feature off this path is never taken and the call is ordinary.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && SameValue(func, surroundingAgent.intrinsic('%JSON.parse%'))) {
+    const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
+    if (typeArgs.length === 1) {
+      const typeRecord = Q(yield* TypeNodeToTypeRecord(typeArgs[0]));
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      const text = argList.length > 0 ? argList[0]! : Value.undefined;
+      return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
   // 6. If Type(ref) is Reference, IsPropertyReference(ref) is false, and GetReferencedName(ref) is "eval", then
   if (ref instanceof ReferenceRecord
       && IsPropertyReference(ref) === Value.false
