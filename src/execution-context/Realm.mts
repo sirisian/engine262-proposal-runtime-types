@@ -29,6 +29,7 @@ import { bootstrapFinalizationRegistry } from '../intrinsics/FinalizationRegistr
 import { bootstrapFinalizationRegistryPrototype } from '../intrinsics/FinalizationRegistryPrototype.mts';
 import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorPrototype.mts';
 import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
+import { bootstrapRational, bootstrapRationalPrototype } from '../intrinsics/Rational.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
 import { bootstrapFunctionPrototype } from '../intrinsics/FunctionPrototype.mts';
 import { bootstrapGeneratorFunction } from '../intrinsics/GeneratorFunction.mts';
@@ -284,6 +285,15 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // extension's deferred remainder.
     bootstrapRangeIteratorPrototype(realmRec);
     bootstrapRangePrototype(realmRec);
+    // proposal-runtime-types (rational.md): the rational value type and its global.
+    bootstrapRationalPrototype(realmRec);
+    bootstrapRational(realmRec);
+    X(global.DefineOwnProperty(Value('rational'), Descriptor({
+      Value: realmRec.Intrinsics['%rational%'],
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
     const rangeGlobal = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
     X(rangeGlobal.DefineOwnProperty(Value('prototype'), Descriptor({
       Value: realmRec.Intrinsics['%Range.prototype%'],

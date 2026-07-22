@@ -153,6 +153,8 @@ const libraryTypeNames = new Set([
   'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
   // proposal-runtime-types (ranges.md): the Range value type is a usable type name.
   'Range',
+  // proposal-runtime-types (rational.md): the rational value type is a usable type name.
+  'rational',
 ]);
 
 /**

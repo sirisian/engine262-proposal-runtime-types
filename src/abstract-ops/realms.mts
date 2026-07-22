@@ -145,6 +145,9 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%RegExp.prototype%': ObjectValue;
   // proposal-runtime-types (ranges.md)
   '%Range.prototype%': ObjectValue;
+  // proposal-runtime-types (rational.md)
+  '%rational.prototype%': ObjectValue;
+  '%rational%': FunctionObject;
   '%RangeIteratorPrototype%': ObjectValue;
   '%Set.prototype%': ObjectValue;
   '%ShadowRealm%': FunctionObject;

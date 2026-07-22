@@ -5,6 +5,9 @@ import { ObjectValue,
   SameType,
 } from '../value.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
+import {
+  isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
+} from '../intrinsics/Rational.mts';
 import { Q } from '../completion.mts';
 import {
   Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator } from '#self';
@@ -32,6 +35,40 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       && !(lval instanceof JSStringValue)
       && !(rval instanceof JSStringValue)) {
     return typedBinary(opText as never, lval, rval);
+  }
+  // proposal-runtime-types (rational.md): exact rational arithmetic. When both
+  // operands are rationals, +, -, *, /, and ** are exact and canonical; a zero
+  // divisor or a zero base to a negative power is a RangeError, and an operator
+  // with no rational meaning is a TypeError.
+  if (surroundingAgent.feature('runtime-types') && isRationalObject(lval) && isRationalObject(rval)) {
+    const realmRec = surroundingAgent.currentRealmRecord;
+    switch (opText) {
+      case '+':
+        return rationalAdd(lval, rval, realmRec);
+      case '-':
+        return rationalSub(lval, rval, realmRec);
+      case '*':
+        return rationalMul(lval, rval, realmRec);
+      case '/': {
+        const q = rationalDiv(lval, rval, realmRec);
+        if ('zero' in q) {
+          return Throw.RangeError('division of a rational by zero');
+        }
+        return q;
+      }
+      case '**': {
+        if (rval.RationalDenominator !== 1n) {
+          return Throw.TypeError('a rational exponent must be an integer');
+        }
+        const p = rationalPow(lval, rval.RationalNumerator, realmRec);
+        if ('zero' in p) {
+          return Throw.RangeError('a zero rational to a negative power');
+        }
+        return p;
+      }
+      default:
+        return Throw.TypeError('this operator is not defined for a rational');
+    }
   }
   // 1. If opText is +, then
   if (opText === '+') {

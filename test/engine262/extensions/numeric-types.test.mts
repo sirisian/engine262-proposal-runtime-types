@@ -46,10 +46,12 @@ test('numeric types: a literal in a decimal or float128 type does not convert (d
   expectThrown('let a: float128 = 1.5;');
 });
 
-test('numeric types: complex and rational are not registered as usable type names (documents the gap)', () => {
-  // Target (complex.md/rational.md): complex.<T> and rational.<T> value types.
+test('numeric types: rational is a registered value type; complex remains deferred', () => {
+  // rational.md is implemented as a value type: `rational` is a global and a
+  // usable type name. complex.md is its deferred sibling.
+  expect(evaluated('typeof rational;')).toBe('function');
+  expect(evaluated('let r: rational = rational(1, 2); typeof r;')).toBe('object');
   expect(evaluated('typeof complex;')).toBe('undefined');
-  expect(evaluated('typeof rational;')).toBe('undefined');
 });
 
 test('numeric types: the imaginary literal does not parse (documents the gap)', () => {
