@@ -1,4 +1,4 @@
-import { JSStringValue, ReferenceRecord, Value } from '../value.mts';
+import { JSStringValue, ObjectValue, ReferenceRecord, Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import {
   IsAnonymousFunctionDefinition,
@@ -15,9 +15,12 @@ import {
   DestructuringAssignmentEvaluation,
 } from './all.mts';
 import {
+  Call,
   GetValue,
+  LookupClassOperator,
   PutValue,
   ToBoolean,
+  surroundingAgent,
 } from '#self';
 
 
@@ -259,6 +262,18 @@ export function* Evaluate_AssignmentExpression({
     const rval = Q(yield* GetValue(rref));
     // 5. Let assignmentOpText be the source text matched by AssignmentOperator.
     const assignmentOpText = AssignmentOperator;
+    // proposal-runtime-types (operatoroverloading.md): an explicit compound
+    // assignment operator declared on the left operand's class updates the
+    // receiver and returns the result, taking precedence over the desugaring to
+    // the binary operator below. A value type uses this to update in place.
+    if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
+      const compoundOp = LookupClassOperator(lval, assignmentOpText);
+      if (compoundOp) {
+        const updated = Q(yield* Call(compoundOp, lval, [rval]));
+        Q(yield* PutValue(lref, updated));
+        return updated;
+      }
+    }
     // 6. Let opText be the sequence of Unicode code points associated with assignmentOpText in the following table:
     const opText = ({
       '**=': '**',

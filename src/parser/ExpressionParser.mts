@@ -1495,6 +1495,15 @@ export abstract class ExpressionParser extends FunctionParser {
       case Token.GT: case Token.LTE: case Token.GTE: case Token.BIT_AND:
       case Token.BIT_OR: case Token.BIT_XOR: case Token.BIT_NOT:
       case Token.SHL: case Token.SAR: case Token.SHR:
+      // proposal-runtime-types (operatoroverloading.md): the unary logical not,
+      // increment, and decrement operators.
+      case Token.NOT: case Token.INC: case Token.DEC:
+      // proposal-runtime-types (operatoroverloading.md): the arithmetic compound
+      // assignment operators, declarable so a value type can update in place.
+      case Token.ASSIGN_ADD: case Token.ASSIGN_SUB: case Token.ASSIGN_MUL:
+      case Token.ASSIGN_DIV: case Token.ASSIGN_MOD: case Token.ASSIGN_EXP:
+      case Token.ASSIGN_SHL: case Token.ASSIGN_SAR: case Token.ASSIGN_SHR:
+      case Token.ASSIGN_BIT_AND: case Token.ASSIGN_BIT_OR: case Token.ASSIGN_BIT_XOR:
       case Token.LBRACK:
       case Token.LBRACE:
         return true;

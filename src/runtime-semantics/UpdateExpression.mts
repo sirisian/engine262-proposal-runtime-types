@@ -1,13 +1,15 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
-import { BigIntValue, NumberValue, TypedNumberValue, isTypedNumber } from '../value.mts';
+import { BigIntValue, NumberValue, ObjectValue, TypedNumberValue, Value, isTypedNumber } from '../value.mts';
 import { typedBinary } from '../type-system/arithmetic.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent,
   Assert,
+  Call,
   F,
   GetValue,
+  LookupClassOperator,
   PutValue,
   ToNumeric,
   Z,
@@ -16,6 +18,20 @@ import { surroundingAgent,
 // proposal-runtime-types R6 (Option A): a typed number is a numeric value, so
 // ++/-- produce and consume it alongside Number and BigInt.
 type AnyNumericValue = BigIntValue | NumberValue | TypedNumberValue;
+
+// proposal-runtime-types (operatoroverloading.md): the increment and decrement
+// operators are overloadable. A class `operator++()` or `operator--()` takes no
+// parameter, so it is registered under a `unary ` key like the other unary
+// operators. When the operand is an instance carrying such an operator, it
+// produces the updated value, which is then stored back into the operand's
+// location; the prefix forms yield the updated value and the postfix forms the
+// original. The lookup is synchronous, so the caller performs the call.
+function findUnaryClassOperator(operand: Value, opText: string): Value | null {
+  if (!surroundingAgent.feature('runtime-types') || !(operand instanceof ObjectValue)) {
+    return null;
+  }
+  return LookupClassOperator(operand, `unary ${opText}`);
+}
 // UpdateExpression :
 //   LeftHandSideExpression `++`
 //   LeftHandSideExpression `--`
@@ -31,6 +47,13 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
+      // proposal-runtime-types (operatoroverloading.md): a class increment operator.
+      const incOp = findUnaryClassOperator(rawOld, '++');
+      if (incOp !== null) {
+        const updated = Q(yield* Call(incOp, rawOld, []));
+        Q(yield* PutValue(lhs, updated));
+        return rawOld;
+      }
       let newValue: AnyNumericValue;
       let oldValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
@@ -61,6 +84,13 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
+      // proposal-runtime-types (operatoroverloading.md): a class decrement operator.
+      const decOp = findUnaryClassOperator(rawOld, '--');
+      if (decOp !== null) {
+        const updated = Q(yield* Call(decOp, rawOld, []));
+        Q(yield* PutValue(lhs, updated));
+        return rawOld;
+      }
       let newValue: AnyNumericValue;
       let oldValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
@@ -91,6 +121,13 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through prefix ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));
+      // proposal-runtime-types (operatoroverloading.md): a class increment operator.
+      const incOp = findUnaryClassOperator(rawOld, '++');
+      if (incOp !== null) {
+        const updated = Q(yield* Call(incOp, rawOld, []));
+        Q(yield* PutValue(expr, updated));
+        return updated;
+      }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
         newValue = typedBinary('+', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));
@@ -119,6 +156,13 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through prefix -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));
+      // proposal-runtime-types (operatoroverloading.md): a class decrement operator.
+      const decOp = findUnaryClassOperator(rawOld, '--');
+      if (decOp !== null) {
+        const updated = Q(yield* Call(decOp, rawOld, []));
+        Q(yield* PutValue(expr, updated));
+        return updated;
+      }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
         newValue = typedBinary('-', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));

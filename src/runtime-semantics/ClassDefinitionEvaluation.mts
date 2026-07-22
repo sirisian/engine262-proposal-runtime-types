@@ -298,7 +298,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+          RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
         }
         continue;
       }
@@ -452,7 +452,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+          RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
         }
         continue;
       }
@@ -624,7 +624,7 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-        RegisterClassOperator(e.static ? F : proto, e.OperatorName, opFn);
+        RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
       }
       continue;
     }

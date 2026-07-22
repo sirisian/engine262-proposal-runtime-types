@@ -13,8 +13,10 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent, EnvironmentRecord } from '#self';
 import {
   Assert,
+  Call,
   GetValue,
   IsCallable,
+  LookupClassOperator,
   IsPropertyReference,
   IsSuperReference,
   IsUnresolvableReference,
@@ -151,8 +153,14 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
 function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
+  const rawValue = Q(yield* GetValue(expr));
+  // proposal-runtime-types (operatoroverloading.md): a class unary-plus operator.
+  const unaryOp = findUnaryClassOperator(rawValue, '+');
+  if (unaryOp !== null) {
+    return Q(yield* Call(unaryOp, rawValue, []));
+  }
   // 2. Return ? ToNumber(? GetValue(expr)).
-  return Q(yield* ToNumber(Q(yield* GetValue(expr))));
+  return Q(yield* ToNumber(rawValue));
 }
 
 /** https://tc39.es/ecma262/#sec-unary-minus-operator-runtime-semantics-evaluation */
@@ -165,6 +173,11 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   const rawValue = Q(yield* GetValue(expr));
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('-', rawValue as TypedNumberValue);
+  }
+  // proposal-runtime-types (operatoroverloading.md): a class unary operator.
+  const unaryOp = findUnaryClassOperator(rawValue, '-');
+  if (unaryOp !== null) {
+    return Q(yield* Call(unaryOp, rawValue, []));
   }
   // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
   const oldValue = Q(yield* ToNumeric(rawValue));
@@ -180,6 +193,19 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   }
 }
 
+// proposal-runtime-types (operatoroverloading.md): a unary class operator has no
+// parameter and its receiver is the operand, so it is registered and looked up
+// under a key distinct from the binary operator of the same spelling. When the
+// operand is an instance carrying such an operator, the operator supplies the
+// result; otherwise the caller falls back to the built-in meaning. The lookup is
+// synchronous, so the caller performs the call.
+function findUnaryClassOperator(operand: Value, opText: string): Value | null {
+  if (!surroundingAgent.feature('runtime-types') || !(operand instanceof ObjectValue)) {
+    return null;
+  }
+  return LookupClassOperator(operand, `unary ${opText}`);
+}
+
 /** https://tc39.es/ecma262/#sec-bitwise-not-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `~` UnaryExpression
 function* Evaluate_UnaryExpression_Tilde({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
@@ -190,6 +216,11 @@ function* Evaluate_UnaryExpression_Tilde({ UnaryExpression }: ParseNode.UnaryExp
   const rawValue = Q(yield* GetValue(expr));
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('~', rawValue as TypedNumberValue);
+  }
+  // proposal-runtime-types (operatoroverloading.md): a class unary operator.
+  const unaryOp = findUnaryClassOperator(rawValue, '~');
+  if (unaryOp !== null) {
+    return Q(yield* Call(unaryOp, rawValue, []));
   }
   // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
   const oldValue = Q(yield* ToNumeric(rawValue));
@@ -210,8 +241,14 @@ function* Evaluate_UnaryExpression_Tilde({ UnaryExpression }: ParseNode.UnaryExp
 function* Evaluate_UnaryExpression_Bang({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
+  const rawValue = Q(yield* GetValue(expr));
+  // proposal-runtime-types (operatoroverloading.md): a class logical-not operator.
+  const unaryOp = findUnaryClassOperator(rawValue, '!');
+  if (unaryOp !== null) {
+    return Q(yield* Call(unaryOp, rawValue, []));
+  }
   // 2. Let oldValue be ! ToBoolean(? GetValue(expr)).
-  const oldValue = ToBoolean(Q(yield* GetValue(expr)));
+  const oldValue = ToBoolean(rawValue);
   // 3. If oldValue is true, return false.
   if (oldValue === Value.true) {
     return Value.false;

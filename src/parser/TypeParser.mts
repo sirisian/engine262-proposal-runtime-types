@@ -682,7 +682,17 @@ export abstract class TypeParser extends ExpressionParser {
       case Token.MOD: case Token.EXP: case Token.EQ: case Token.LT:
       case Token.GT: case Token.LTE: case Token.GTE: case Token.BIT_AND:
       case Token.BIT_OR: case Token.BIT_XOR: case Token.BIT_NOT:
-      case Token.SHL: case Token.SAR: case Token.SHR: {
+      case Token.SHL: case Token.SAR: case Token.SHR:
+      // proposal-runtime-types (operatoroverloading.md): the unary operators
+      // logical not, increment, and decrement. A zero-parameter declaration of
+      // these (or of a spelling that is also binary, like `-`) is the unary form.
+      case Token.NOT: case Token.INC: case Token.DEC:
+      // proposal-runtime-types (operatoroverloading.md): the arithmetic compound
+      // assignment operators. These take one parameter and mutate the receiver.
+      case Token.ASSIGN_ADD: case Token.ASSIGN_SUB: case Token.ASSIGN_MUL:
+      case Token.ASSIGN_DIV: case Token.ASSIGN_MOD: case Token.ASSIGN_EXP:
+      case Token.ASSIGN_SHL: case Token.ASSIGN_SAR: case Token.ASSIGN_SHR:
+      case Token.ASSIGN_BIT_AND: case Token.ASSIGN_BIT_OR: case Token.ASSIGN_BIT_XOR: {
         node.OperatorName = TokenValues[this.next().type] as string;
         if (this.test(Token.PERIOD_LT)) {
           // OperatorTypeParameters : `.<` TypeParameterList `>`
