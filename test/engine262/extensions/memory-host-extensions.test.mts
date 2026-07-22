@@ -61,13 +61,22 @@ test('primitive metadata: the metadata is not fully carried or validated (docume
   expect(evaluated('type Meter = float32.<{ unit: "m" }>; let m: Meter = (5 := Meter); typeof m;')).toBe('number');
 });
 
-// ── random: typed and seeded Math.random ──────────────────────────────────────
-test('random: untyped Math.random works; the typed/seeded generic is deferred', () => {
+// ── random: the typed no-argument Math.random ─────────────────────────────────
+test('random: untyped Math.random works, and the typed no-argument form carries its value type', () => {
   // untyped baseline
   expect(ok('let r = Math.random(); r >= 0 && r < 1;')).toBe(true);
-  // Target (random.md): Math.random.<float32>() is a typed generator, and
-  // Math.PRNG names the algorithm for seeded generators. Today the type argument
-  // parses but is not specialized, and Math.PRNG is absent.
-  expect(evaluated('let r = Math.random.<float32>(); typeof r;')).toBe('number');
+  // random.md: Math.random.<float32>() is a value in [0, 1) at the float value type
+  expect(evaluated('let r = Math.random.<float32>(); (r is float32) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('Reflect.typeOf(Math.random.<float32>()) === float32 ? "f32" : "num";')).toBe('f32');
+  expect(ok('let r = Math.random.<float32>(); r >= 0 && r < 1;')).toBe(true);
+  // an integer value type draws across its full range, inclusive, at that type
+  expect(evaluated('let r = Math.random.<uint8>(); (r is uint8) ? "yes" : "no";')).toBe('yes');
+  expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let r = Math.random.<uint8>(); if (!(r >= 0 && r <= 255)) good = false; } good;')).toBe(true);
+  expect(evaluated('let r = Math.random.<int8>(); (r is int8) ? "yes" : "no";')).toBe('yes');
+  // Deferred: the array-fill and range overloads, wider integers, a plain number
+  // or bigint type argument, and the seeded PRNG named by Math.PRNG. These fall
+  // through to the ordinary untyped call or are absent.
+  expect(evaluated('typeof Math.random.<number>();')).toBe('number');
+  expect(evaluated('typeof Math.random.<uint64>();')).toBe('number');
   expect(evaluated('typeof Math.PRNG;')).toBe('undefined');
 });

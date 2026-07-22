@@ -1,9 +1,11 @@
 import {
   Value,
   NumberValue,
+  TypedNumberValue,
   type Arguments,
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -343,9 +345,8 @@ function fmix64(h: bigint) {
 
 const floatView = new Float64Array(1);
 const big64View = new BigUint64Array(floatView.buffer);
-/** https://tc39.es/ecma262/#sec-math.random */
-function Math_random() {
-  const realm = surroundingAgent.currentRealmRecord;
+/** The next value of the realm's PRNG stream, a Number in the interval [0, 1). */
+function nextRandomDouble(realm: Realm): number {
   if (realm.randomState === undefined) {
     const seed = realm.HostDefined.randomSeed
       ? BigInt(X(realm.HostDefined.randomSeed()))
@@ -369,8 +370,53 @@ function Math_random() {
 
   // Convert to double in [0, 1) range
   big64View[0] = (s0 >> 12n) | 0x3FF0000000000000n;
-  const result = floatView[0] - 1;
-  return F(result);
+  return floatView[0] - 1;
+}
+
+/** https://tc39.es/ecma262/#sec-math.random */
+function Math_random() {
+  return F(nextRandomDouble(surroundingAgent.currentRealmRecord));
+}
+
+/**
+ * proposal-runtime-types (random.md): the no-argument typed form
+ * `Math.random.<T>()`. For a float value type it is a value in [0, 1); for an
+ * integer value type it is an integer across the type's full range, inclusive.
+ * The result carries the value type T. Returns undefined when T is not a float or
+ * integer value type this form supports (a plain `number`, a `bigint`, a 64- or
+ * 128-bit integer, or a non-numeric type), so the caller falls back to the
+ * ordinary untyped call. The array-fill and range overloads and the seeded PRNG
+ * (`Math.PRNG`) are the extension's deferred remainder.
+ */
+export function TypedRandom(t: TypeRecord, realm: Realm): Value | undefined {
+  if (t.Kind !== 'primitive') {
+    return undefined;
+  }
+  const name = t.Name;
+  const isFloat = name === 'float16' || name === 'float32' || name === 'float64';
+  const isUint = name === 'uint';
+  const isInt = name === 'int';
+  if (!isFloat && !isUint && !isInt) {
+    return undefined;
+  }
+  const d = nextRandomDouble(realm);
+  if (isFloat) {
+    // The engine's typed float values hold a Number, so a random float is that
+    // draw carried at the float value type; `Math.random.<float32>()` is
+    // `Math.random.<float32>(0..1)`.
+    return new TypedNumberValue(d, t);
+  }
+  // An integer draw covers the whole type range inclusively. Only widths whose
+  // cardinality is an exact Number (<= 32 bits) are produced here; wider integer
+  // types are deferred with the range forms.
+  const bits = t.Arguments[0] as number;
+  if (typeof bits !== 'number' || bits > 32) {
+    return undefined;
+  }
+  const cardinality = 2 ** bits;
+  const draw = Math.floor(d * cardinality);
+  const value = isUint ? draw : draw - (2 ** (bits - 1));
+  return new TypedNumberValue(value, t);
 }
 
 /** https://tc39.es/ecma262/#sec-math.round */

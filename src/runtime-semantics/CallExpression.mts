@@ -5,10 +5,12 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
+import { TypedRandom } from '../intrinsics/Math.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import {
   surroundingAgent,
   GetValue,
+  Get,
   IsPropertyReference,
   PerformEval,
   SameValue,
@@ -44,6 +46,25 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const argList = Q(yield* ArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
+  // proposal-runtime-types (random.md): the no-argument typed form
+  // `Math.random.<T>()`, whose type argument likewise rides on the callee. Only
+  // the zero-argument form is intercepted here; the array-fill and range
+  // overloads and a second (PRNG method) type argument fall through to the
+  // ordinary call. TypedRandom returns undefined for a type it does not produce
+  // (a plain number, a bigint, a wide integer), so that call is ordinary too.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && args.length === 0
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const mathRandom = Q(yield* Get(surroundingAgent.intrinsic('%Math%'), Value('random')));
+    if (SameValue(func, mathRandom)) {
+      const typeRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const produced = TypedRandom(typeRecord, surroundingAgent.currentRealmRecord);
+      if (produced !== undefined) {
+        return produced;
+      }
     }
   }
   // 6. If Type(ref) is Reference, IsPropertyReference(ref) is false, and GetReferencedName(ref) is "eval", then
