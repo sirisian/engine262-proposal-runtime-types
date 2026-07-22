@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from '../readme/harness.mts';
+import { evaluated, expectThrown } from '../readme/harness.mts';
 
 /**
  * Extension coverage - serialization.md, dependentrecordtypes.md, temporal.md.
@@ -27,17 +27,20 @@ test('serialization: JSON.parse.<T> converts leaves and validates', () => {
   expectThrown('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":300}\'); String(o.a);');
 });
 
-// ── Dependent record types: where clauses parse but do not validate ───────────
-test('dependent records: a where clause parses and the type resolves', () => {
+// ── Dependent record types: where clauses are enforced at boundaries ──────────
+test('dependent records: a where clause makes the alias a dependent record type', () => {
   expect(evaluated('type Pos = { a: uint8 } where this.a > 0; typeof Pos;')).toBe('object');
-  // the type is still an object type structurally
-  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('object');
+  // A where clause gives the alias declaration identity, so it resolves to a
+  // nominal type (which reflects as 'primitive', as every nominal type does)
+  // rather than the transparent structural object a plain alias resolves to.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('primitive');
+  expect(evaluated('type Plain = { a: uint8 }; Reflect.getReflection(Plain).kind;')).toBe('object');
 });
 
-test('dependent records: the where predicate is not enforced (documents the gap)', () => {
-  // Target (dependentrecordtypes.md): a value violating the predicate is rejected.
-  // Today the predicate is not evaluated, so a: 0 is accepted despite `a > 0`.
-  expect(ok('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (0 := uint8) }; p.a === (0 := uint8);')).toBe(true);
+test('dependent records: the where predicate is enforced at a boundary', () => {
+  // A value satisfying the predicate is accepted; one violating it is rejected.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (5 := uint8) }; String(p.a);')).toBe('5');
+  expectThrown('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (0 := uint8) }; p.a;');
 });
 
 // ── Temporal: not exposed here ────────────────────────────────────────────────

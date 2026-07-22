@@ -31,7 +31,18 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     } else {
       // #sec-gettypeobject: the alias binds the interned Type Object of its Type.
       const record = Q(yield* TypeNodeToTypeRecord(node.Type));
-      value = GetTypeObject(record);
+      if (node.WhereClauses && node.WhereClauses.length > 0) {
+        // proposal-runtime-types (dependentrecordtypes.md): a `where` clause
+        // makes this a dependent record type. Its identity is the declaration's
+        // (two textually identical `where` blocks are two types), so it binds as
+        // a nominal type whose structure is the base record; the predicates ride
+        // on the declaration and are checked at every boundary by IsOfType.
+        value = GetTypeObject({
+          Kind: 'nominal', Declaration: node, Arguments: [], Structure: record,
+        });
+      } else {
+        value = GetTypeObject(record);
+      }
     }
   } else if (node.type === 'EnumDeclaration') {
     // Enum members take their initializer's value, or the previous numeric

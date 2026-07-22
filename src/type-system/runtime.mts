@@ -4,7 +4,7 @@ import {
   TypedNumberValue, TypedStringValue, ReferenceValue,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
-import { Q } from '../completion.mts';
+import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, LookupClassType } from '../abstract-ops/runtime-types.mts';
@@ -15,7 +15,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { IsAssignable } from './relations.mts';
 import {
-  Call, Get, GetValue, HasProperty, IsCallable, R, ResolveBinding, SameValue, Throw,
+  Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
 
 /**
@@ -399,6 +399,71 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
   }
 }
 
+/**
+ * proposal-runtime-types (dependentrecordtypes.md): a `where` clause is a
+ * predicate over a value, evaluated at a typed boundary with `this` bound to the
+ * value. The design describes the predicate as a function value, and it is
+ * realized as one here: the predicate expression becomes the body of a
+ * non-lexical-this function, so calling that function with the value as the
+ * this-argument evaluates the predicate against the value. This reuses the same
+ * machinery a class field initializer uses to evaluate an expression with `this`
+ * bound to the instance.
+ */
+function* EvaluatePredicateExpression(expression: ParseNode.AssignmentExpressionOrHigher, value: Value): PlainEvaluator<Value> {
+  const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  const privateScope = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+  const fn = X(OrdinaryFunctionCreate(
+    surroundingAgent.intrinsic('%Function.prototype%'),
+    '',
+    [] as unknown as ParseNode.FormalParameters,
+    expression as unknown as ParseNode.AsyncConciseBody,
+    'non-lexical-this',
+    scope,
+    privateScope,
+  ));
+  // Evaluating an expression body asserts a class-field initializer name is
+  // present. A dummy satisfies it; it is read only when the body is an anonymous
+  // function definition, which a boolean predicate is not.
+  (fn as { ClassFieldInitializerName: Value }).ClassFieldInitializerName = Value('');
+  return Q(yield* Call(fn, value, []));
+}
+
+/**
+ * A `RefinementPredicate` is either a boolean expression or an
+ * `if (test) { ... } else { ... }` over further predicates. The conditional is
+ * control flow: its test selects the branch to check, and an `if` with no `else`
+ * imposes no constraint when the test is false.
+ */
+function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPredicate, value: Value): PlainEvaluator<boolean> {
+  if (predicate.type === 'ConditionalRefinement') {
+    const testResult = Q(yield* EvaluatePredicateExpression(predicate.Test, value));
+    const testHolds = ToBoolean(testResult) === Value.true;
+    if (testHolds) {
+      return Q(yield* EvaluateRefinementPredicate(predicate.Consequent, value));
+    }
+    if (predicate.Alternate) {
+      return Q(yield* EvaluateRefinementPredicate(predicate.Alternate, value));
+    }
+    return true;
+  }
+  const result = Q(yield* EvaluatePredicateExpression(predicate, value));
+  return ToBoolean(result) === Value.true;
+}
+
+/**
+ * A dependent record type holds when every `where` clause's predicate holds of
+ * the value. Multiple clauses compose as a conjunction.
+ */
+export function* EvaluateWhereClauses(value: Value, whereClauses: readonly ParseNode.WhereClause[]): PlainEvaluator<boolean> {
+  for (const clause of whereClauses) {
+    const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, value));
+    if (!holds) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
   switch (t.Kind) {
     case 'any':
@@ -486,7 +551,20 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         return t.EnumMembers.some((m) => SameValue(value, m));
       }
       if (t.Structure) {
-        return Q(yield* IsOfType(value, t.Structure));
+        const structurallyMatches = Q(yield* IsOfType(value, t.Structure));
+        if (!structurallyMatches) {
+          return false;
+        }
+        // proposal-runtime-types (dependentrecordtypes.md): a dependent record
+        // type's `where` clauses ride on its declaration. They are the boundary
+        // check: the value is of the type only when every predicate holds. A
+        // declaration with no `where` clauses (an interface, a plain alias) skips
+        // this and costs nothing.
+        const whereClauses = (t.Declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+        if (whereClauses && whereClauses.length > 0) {
+          return Q(yield* EvaluateWhereClauses(value, whereClauses));
+        }
+        return true;
       }
       // #sec-isoftype nominal: a class type's members are the instances whose
       // prototype chain reaches the constructor bound by [[Declaration]].
@@ -934,6 +1012,13 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
   }
   if (t.Kind === 'parameterized') {
     return KeyTypesOf(t.Base);
+  }
+  // proposal-runtime-types (dependentrecordtypes.md, keyof): a dependent record
+  // type and an interface are nominal types with a resolved structure; keyof
+  // sees through to that structure's keys, as it sees through a refinement to
+  // its base.
+  if (t.Kind === 'nominal' && t.Structure) {
+    return KeyTypesOf(t.Structure);
   }
   return KEY_TYPES_EMPTY;
 }
