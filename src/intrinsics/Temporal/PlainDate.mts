@@ -12,6 +12,7 @@ import {
   type CalendarType,
   CanonicalizeCalendar,
   type Integer,
+  withValueTypeReturn,
 } from '#self';
 
 export interface TemporalPlainDateObject extends OrdinaryObject {
@@ -71,7 +72,7 @@ export function bootstrapTemporalPlainDate(realmRec: Realm) {
 
   const constructor = bootstrapConstructor(realmRec, PlainDateConstructor, 'PlainDate', 3, prototype, [
     ['from', PlainDate_From, 1],
-    ['compare', PlainDate_Compare, 2],
+    ['compare', withValueTypeReturn(PlainDate_Compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.PlainDate%'] = constructor;
 

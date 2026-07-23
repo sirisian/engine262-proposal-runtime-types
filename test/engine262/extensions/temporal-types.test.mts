@@ -7,8 +7,9 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * With the temporal feature on, Temporal's classes become nominal class types
  * (membership walks the prototype chain to the class constructor) and Temporal.Unit
  * becomes a string enum. Values flow through typed bindings, annotations, `is`, and
- * dependent record types. The dimensioned-duration overloads (which need the
- * Dimensions primitive-metadata meta type), the typed method signatures, the
+ * dependent record types, and each class's `compare` carries its signature's
+ * int32 return. The dimensioned-duration overloads (which need the Dimensions
+ * primitive-metadata meta type), the remaining typed method signatures, the
  * from-string cast operators, and the ordering operator sugar are deferred.
  */
 
@@ -101,4 +102,42 @@ test('temporal: with the temporal feature off, Temporal is not defined', () => {
   const c = new ManagedRealm().evaluateScriptSkipDebugger('typeof Temporal;') as unknown as { Type: string, Value: { stringValue?(): string } };
   expect(c.Type).toBe('normal');
   expect(c.Value.stringValue?.()).toBe('undefined');
+});
+
+// -- A built-in's signature carries its value-type return ----------------------
+test('temporal: each class comparison returns its signature int32 rather than a plain number', () => {
+  // temporal.md and standardlibrary.md: a built-in whose signature gives it a
+  // value-type return carries that type on its result. A comparison answers with
+  // an int32, so the result satisfies `is int32` while keeping the ordinary
+  // negative, zero, positive readings.
+  expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); (Temporal.Instant.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); String(Number(Temporal.Instant.compare(a, b)));')).toBe('-1');
+  expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(5); String(Number(Temporal.Instant.compare(a, a)));')).toBe('0');
+  expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(9); let b = Temporal.Instant.fromEpochMilliseconds(1); String(Number(Temporal.Instant.compare(a, b)));')).toBe('1');
+  // every class that declares a comparison carries the same return type
+  expect(evaluated('let a = Temporal.PlainDate.from("2020-01-01"); let b = Temporal.PlainDate.from("2021-01-01"); (Temporal.PlainDate.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.PlainTime.from("01:00"); let b = Temporal.PlainTime.from("02:00"); (Temporal.PlainTime.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.PlainDateTime.from("2020-01-01T01:00"); let b = Temporal.PlainDateTime.from("2021-01-01T01:00"); (Temporal.PlainDateTime.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.PlainYearMonth.from("2020-01"); let b = Temporal.PlainYearMonth.from("2021-01"); (Temporal.PlainYearMonth.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.ZonedDateTime.from("2020-01-01T00:00[UTC]"); let b = Temporal.ZonedDateTime.from("2021-01-01T00:00[UTC]"); (Temporal.ZonedDateTime.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  // a duration comparison reaches its answer by several routes and each carries
+  // the type, including the early equal-durations path
+  expect(evaluated('let a = Temporal.Duration.from({ seconds: 1 }); let b = Temporal.Duration.from({ seconds: 2 }); (Temporal.Duration.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
+  expect(evaluated('let a = Temporal.Duration.from({ seconds: 1 }); String(Number(Temporal.Duration.compare(a, a)));')).toBe('0');
+});
+
+test('temporal: a typed comparison result is still an ordinary comparison answer', () => {
+  // the carried type does not change how the answer is used: it orders with the
+  // relational operators and serves as a sort comparator
+  expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); (Temporal.Instant.compare(a, b) < 0) ? "lt" : "not";')).toBe('lt');
+  expect(evaluated('let arr = [Temporal.Instant.fromEpochMilliseconds(2), Temporal.Instant.fromEpochMilliseconds(1)]; arr.sort(Temporal.Instant.compare); String(arr[0].epochMilliseconds);')).toBe('1');
+});
+
+test('temporal: with the type system off, a comparison is an ordinary number', () => {
+  // the value-type return is part of the type system: with only the temporal
+  // feature on, the built-in returns exactly what it always did
+  setSurroundingAgent(new Agent({ features: ['temporal'] }));
+  const c = new ManagedRealm().evaluateScriptSkipDebugger('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); typeof Temporal.Instant.compare(a, b) + ":" + String(Temporal.Instant.compare(a, b));') as unknown as { Type: string, Value: { stringValue?(): string } };
+  expect(c.Type).toBe('normal');
+  expect(c.Value.stringValue?.()).toBe('number:-1');
 });

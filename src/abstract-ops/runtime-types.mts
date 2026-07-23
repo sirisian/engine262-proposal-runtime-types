@@ -1,8 +1,8 @@
-import { Q, X, EnsureCompletion } from '../completion.mts';
-import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue } from '../value.mts';
+import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
+import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
@@ -358,6 +358,41 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
     return value;
   }
   return Q(yield* EnforceAnnotation(annotation, value));
+}
+
+/**
+ * proposal-runtime-types (standardlibrary.md and temporal.md): the runtime half
+ * of a typed signature on a built-in function. Where a built-in's signature gives
+ * it a value-type return, this wraps its native steps so the result is carried at
+ * that value type, through the same checked conversion a typed binding uses (so
+ * `Temporal.Instant.compare` returns an int32 rather than a plain number). With
+ * the feature off, or when the type name does not resolve, the wrapper returns the
+ * built-in's own result unchanged, so a program that does not use the type system
+ * sees the built-in exactly as before. This covers a fixed value-type return only;
+ * the generic, element-type-flowing signatures of standardlibrary.md (a mapped
+ * result's element type, a callback's inferred parameter) are compile-time and are
+ * not part of this.
+ */
+export function withValueTypeReturn(steps: NativeSteps, typeName: string): NativeSteps {
+  const wrapped: NativeSteps = function* withValueTypeReturn(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext) {
+    let result = steps.call(this, args, context);
+    if (isEvaluator(result)) {
+      result = yield* result;
+    }
+    if (!surroundingAgent.feature('runtime-types')) {
+      return result;
+    }
+    const record = builtinTypeRecord(typeName);
+    if (record === null) {
+      return result;
+    }
+    const value = Q(result);
+    if (!value) {
+      return value;
+    }
+    return Q(yield* CheckedConvertValue(value, record));
+  };
+  return wrapped;
 }
 
 // proposal-runtime-types M21: class Type Objects. Each class constructor is

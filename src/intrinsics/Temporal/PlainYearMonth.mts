@@ -23,6 +23,7 @@ import {
   CreateTemporalYearMonth,
   IsValidISODate,
   ToTemporalYearMonth,
+  withValueTypeReturn,
 } from '#self';
 
 /** https://tc39.es/proposal-temporal/#sec-properties-of-temporal-plainyearmonth-instances */
@@ -89,7 +90,7 @@ export function bootstrapTemporalPlainYearMonth(realmRec: Realm) {
 
   const constructor = bootstrapConstructor(realmRec, PlainYearMonthConstructor, 'PlainYearMonth', 2, prototype, [
     ['from', PlainYearMonth_from, 1],
-    ['compare', PlainYearMonth_compare, 2],
+    ['compare', withValueTypeReturn(PlainYearMonth_compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.PlainYearMonth%'] = constructor;
   return constructor;

@@ -22,6 +22,7 @@ import {
   AddZonedDateTime,
   isDateUnit,
   GetOptionsObject,
+  withValueTypeReturn,
 } from '#self';
 
 /** https://tc39.es/proposal-temporal/#sec-properties-of-temporal-duration-instances */
@@ -133,7 +134,7 @@ export function bootstrapTemporalDuration(realmRec: Realm) {
 
   const constructor = bootstrapConstructor(realmRec, DurationConstructor, 'Duration', 0, prototype, [
     ['from', Duration_From, 1],
-    ['compare', Duration_Compare, 2],
+    ['compare', withValueTypeReturn(Duration_Compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.Duration%'] = constructor;
   return constructor;

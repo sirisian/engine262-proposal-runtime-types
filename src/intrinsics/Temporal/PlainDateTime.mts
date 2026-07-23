@@ -27,6 +27,7 @@ import {
   IsValidTime,
   ToTemporalDateTime,
   type TimeRecord,
+  withValueTypeReturn,
 } from '#self';
 
 /** https://tc39.es/proposal-temporal/#sec-properties-of-temporal-plaindatetime-instances */
@@ -106,7 +107,7 @@ export function bootstrapTemporalPlainDateTime(realmRec: Realm) {
 
   const constructor = bootstrapConstructor(realmRec, PlainDateTimeConstructor, 'PlainDateTime', 3, prototype, [
     ['from', PlainDateTime_from, 1],
-    ['compare', PlainDateTime_compare, 2],
+    ['compare', withValueTypeReturn(PlainDateTime_compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.PlainDateTime%'] = constructor;
   return constructor;

@@ -29,6 +29,7 @@ import {
   R,
   CompareEpochNanoseconds,
   IsValidEpochNanoseconds,
+  withValueTypeReturn,
 } from '#self';
 
 /** https://tc39.es/proposal-temporal/#sec-properties-of-temporal-zoneddatetime-instances */
@@ -96,7 +97,7 @@ export function bootstrapTemporalZonedDateTime(realmRec: Realm) {
 
   const constructor = bootstrapConstructor(realmRec, ZonedDateTimeConstructor, 'ZonedDateTime', 2, prototype, [
     ['from', ZonedDateTime_from, 1],
-    ['compare', ZonedDateTime_compare, 2],
+    ['compare', withValueTypeReturn(ZonedDateTime_compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.ZonedDateTime%'] = constructor;
   return constructor;

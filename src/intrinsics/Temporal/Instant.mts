@@ -20,6 +20,7 @@ import {
   CreateTemporalInstant,
   IsValidEpochNanoseconds,
   ToTemporalInstant,
+  withValueTypeReturn,
 } from '#self';
 
 /** https://tc39.es/proposal-temporal/#sec-properties-of-temporal-instant-instances */
@@ -83,7 +84,7 @@ export function bootstrapTemporalInstant(realmRec: Realm) {
     ['from', Instant_from, 1],
     ['fromEpochMilliseconds', Instant_fromEpochMilliseconds, 1],
     ['fromEpochNanoseconds', Instant_fromEpochNanoseconds, 1],
-    ['compare', Instant_compare, 2],
+    ['compare', withValueTypeReturn(Instant_compare, 'int32'), 2],
   ]);
   realmRec.Intrinsics['%Temporal.Instant%'] = constructor;
   return constructor;
