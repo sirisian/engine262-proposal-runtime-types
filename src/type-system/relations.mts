@@ -13,6 +13,48 @@ function assumed(assumptions: readonly Assumption[], s: TypeRecord, t: TypeRecor
 }
 
 /** #sec-sametype */
+
+/**
+ * proposal-runtime-types (primitivemetadata.md): two metadata parameterizations are
+ * the same type when their metadata AGREE, field for field, rather than when they
+ * are the same object. Comparing by identity would have made every written
+ * `float32.<{ unit: "m" }>` a fresh type, which would defeat interning: the point of
+ * an interned type is that two mentions of one shape are one object.
+ */
+function SameMetadata(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
+    return false;
+  }
+  const ak = Object.keys(a as object);
+  const bk = Object.keys(b as object);
+  if (ak.length !== bk.length) {
+    return false;
+  }
+  return ak.every((k) => {
+    const av = (a as Record<string, unknown>)[k];
+    const bv = (b as Record<string, unknown>)[k];
+    if (av === bv) {
+      return true;
+    }
+    // Field values are Values, whose sameness is their own; a literal String or
+    // Number Value compares by the value it holds.
+    const an = (av as { numberValue?(): number, stringValue?(): string });
+    const bn = (bv as { numberValue?(): number, stringValue?(): string });
+    /* eslint-disable @engine262/mathematical-value -- R asserts a NumberValue, and a metadata field may be a String or any other literal Value */
+    if (an?.numberValue && bn?.numberValue) {
+      return an.numberValue() === bn.numberValue();
+    }
+    if (an?.stringValue && bn?.stringValue) {
+      return an.stringValue() === bn.stringValue();
+    }
+    /* eslint-enable @engine262/mathematical-value */
+    return false;
+  });
+}
+
 export function SameType(s: TypeRecord, t: TypeRecord): boolean {
   return SameTypeWithAssumptions(s, t, []);
 }
@@ -67,7 +109,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'literal':
       return t.Kind === 'literal' && SameValue(s.Value, t.Value) && SameTypeWithAssumptions(s.Base, t.Base, next);
     case 'parameterized':
-      return t.Kind === 'parameterized' && s.Metadata === t.Metadata && SameTypeWithAssumptions(s.Base, t.Base, next);
+      return t.Kind === 'parameterized' && SameMetadata(s.Metadata, t.Metadata) && SameTypeWithAssumptions(s.Base, t.Base, next);
     case 'nominal':
       // A library generic type is identified by [[LibraryName]] and arguments;
       // all library types share one sentinel [[Declaration]], so compare the name

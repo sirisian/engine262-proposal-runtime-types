@@ -739,6 +739,27 @@ function toNumericArgument(record: TypeRecord): TypeRecord | number {
  * names, generic aliases, and the remaining forms arrive with the checker
  * milestone; they throw a TypeError for now.
  */
+
+/**
+ * proposal-runtime-types (primitivemetadata.md): the metadata VALUE a metadata
+ * parameterization carries, built from the object type written as its argument.
+ * Each field's type is a literal, and the value is that literal's value, so
+ * `{ unit: "m" }` yields an object with a `unit` of `"m"`. The object is frozen and
+ * null-prototyped: a meta type's hooks read it, and the specification requires them
+ * to be pure functions of their arguments.
+ */
+export function MetadataObjectFromType(t: TypeRecord): Value {
+  const fields: Record<string, Value> = Object.create(null);
+  if (t.Kind === 'object') {
+    for (const p of t.Properties) {
+      if (p.type.Kind === 'literal') {
+        fields[p.key] = p.type.Value;
+      }
+    }
+  }
+  return Object.freeze(fields) as unknown as Value;
+}
+
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   switch (node.type) {
     case 'TypeReference': {
@@ -784,6 +805,26 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (node.TypeArguments) {
         for (const argNode of node.TypeArguments.TypeArgumentList) {
           argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+        }
+      }
+      // proposal-runtime-types (primitivemetadata.md, the metadata protocol): a
+      // primitive given an OBJECT type argument is a metadata parameterization,
+      // `float32.<{ unit: "m" }>`, not an argument to the primitive itself. The
+      // metadata is carried on a ~parameterized~ record wrapping the base, which is
+      // what lets the validate judgment of IsOfType see it and what keeps two
+      // different metadata apart. Without this the argument was dropped and every
+      // parameterization interned back to its bare base.
+      const metadataRecord = argRecords.length === 1 && argRecords[0]!.Kind === 'object'
+        ? argRecords[0]!
+        : null;
+      if (metadataRecord) {
+        const base = builtinTypeRecord(name);
+        if (base) {
+          return {
+            Kind: 'parameterized',
+            Base: base,
+            Metadata: MetadataObjectFromType(metadataRecord),
+          } as TypeRecord;
         }
       }
       const builtin = builtinTypeRecord(name, argRecords.map(toNumericArgument));
