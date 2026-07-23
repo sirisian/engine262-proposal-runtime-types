@@ -148,3 +148,27 @@ test('named arithmetic: the forms are gated, so flag-off is unchanged', () => {
     expect(evaluatedFlagOff(`String(typeof Math.${fn});`), `${fn} flag-off`).toBe('undefined');
   }
 });
+
+// -- The two rules the clause now states explicitly (finding F19) --------------
+// Both were ambiguous in the original text and were settled by implementation
+// before being written down. Pinned here because a reader of the table alone
+// could reasonably have concluded either the opposite.
+test('named arithmetic: "the exact result" of a division is the operator\'s result', () => {
+  // Read as an operation in the rationals, 7 divided by 2 is 3.5 and no integer
+  // type represents it, which would make every inexact division a RangeError.
+  // The forms perform what their operator performs, and `/` truncates.
+  expect(evaluated('String(Number(Math.divChecked((7 := int32), (2 := int32))));')).toBe('3');
+  expect(evaluated('String(Number(Math.divSaturating((7 := int32), (2 := int32))));')).toBe('3');
+  expect(evaluated('String(Number(Math.divChecked(((0 - 7) := int32), (2 := int32))));')).toBe('-3');
+  // which is the same answer the operator gives
+  expect(evaluated('String(Number((7 := int32) / (2 := int32)));')).toBe('3');
+});
+
+test('named arithmetic: a saturating form CAN raise, for one reason only', () => {
+  // it is not an overflow. Every case that is an overflow saturates:
+  expect(evaluated('String(Number(Math.divSaturating(((0 - 128) := int8), ((0 - 1) := int8))));')).toBe('127');
+  expect(evaluated('String(Number(Math.addSaturating((255 := uint8), (99 := uint8))));')).toBe('255');
+  // a division by zero has no result to be nearest to, so it raises
+  expectThrownKind('Math.divSaturating((7 := int32), (0 := int32));', 'RangeError');
+  expectThrownKind('Math.divChecked((7 := int32), (0 := int32));', 'RangeError');
+});
