@@ -1,4 +1,5 @@
 import { NumberValue, TypedNumberValue, type Value, BigIntValue, ObjectValue } from '../value.mts';
+import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 
@@ -24,15 +25,33 @@ function widthOf(t: TypeRecord): number | null {
 }
 
 /** Applies the target numeric type's representation rule to a mathematical value. */
+/**
+ * proposal-runtime-types: round to the nearest value the binary16 format holds.
+ * float16 previously borrowed float32's rounding, which is a coarser grid, so a
+ * float16 kept more precision than its own format allows and a value could differ
+ * from the one a binary16 store and load would give. The host's Math.f16round is
+ * used where it exists, and the format round trip otherwise, matching how the
+ * Math.f16round built-in itself is implemented. NaN, the zeroes, and the
+ * infinities are returned as they are, so a signed zero keeps its sign.
+ */
+function roundToFloat16(math: number): number {
+  if (Number.isNaN(math) || math === 0 || !Number.isFinite(math)) {
+    return math;
+  }
+  if ('f16round' in Math) {
+    return (Math as unknown as { f16round(x: number): number }).f16round(math);
+  }
+  return decodeFloat16(encodeFloat16(math));
+}
+
 export function wrapToType(math: number, t: TypeRecord): number {
   if (t.Kind !== 'primitive') {
     return math;
   }
   if (t.Name === 'float16' || t.Name === 'float32') {
-    // Round to the nearest representable float of the width. float32 uses the
-    // engine's Math.fround; float16 falls back to float32 rounding, which is a
-    // superset (exact for all float16 values) until a dedicated rounder lands.
-    return t.Name === 'float32' ? Math.fround(math) : Math.fround(math);
+    // Round to the nearest float the width can represent: float32 through the
+    // host's Math.fround, float16 through the rounder below.
+    return t.Name === 'float32' ? Math.fround(math) : roundToFloat16(math);
   }
   if (t.Name === 'float64' || t.Name === 'number') {
     return math;

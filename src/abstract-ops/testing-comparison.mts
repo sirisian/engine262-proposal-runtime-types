@@ -352,7 +352,63 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
 }
 
 /** https://tc39.es/ecma262/#sec-islooselyequal */
+/**
+ * proposal-runtime-types: the mathematical value of a numeric operand for the
+ * loose equality above, or undefined when the operand is not numeric (a String,
+ * Boolean, or Object keeps the ordinary algorithm's coercion steps). A typed
+ * number always carries a Number payload, wide integer types included, so a
+ * bigint here only ever comes from a plain BigInt operand.
+ */
+function mathematicalValueForLooseEquality(v: Value): number | bigint | undefined {
+  if (v instanceof TypedNumberValue) {
+    return (v as TypedNumberValue).numberValue();
+  }
+  if (v instanceof NumberValue) {
+    return (v as NumberValue).numberValue();
+  }
+  if (v instanceof BigIntValue) {
+    return (v as BigIntValue).bigintValue();
+  }
+  return undefined;
+}
+
+/** Exact mathematical comparison, including across a Number and a BigInt. */
+function sameMathematicalValue(a: number | bigint, b: number | bigint): boolean {
+  if (typeof a === 'bigint' && typeof b === 'bigint') {
+    return a === b;
+  }
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a === b;
+  }
+  // One of each: a NaN or a non-integral Number equals no BigInt, and otherwise
+  // the comparison is exact once the Number is taken to a BigInt.
+  const n = typeof a === 'number' ? a : (b as number);
+  const big = typeof a === 'bigint' ? a : (b as bigint);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    return false;
+  }
+  return BigInt(n) === big;
+}
+
 export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
+  // proposal-runtime-types (spec, the equality operators): `==` and `!=` between
+  // typed values, and between a typed value and a plain Number or BigInt, compare
+  // MATHEMATICAL values, so `uint8(1) == uint16(1)` is true even though
+  // `uint8(1) === uint16(1)` is false. `===` keeps identity semantics and the
+  // values of distinct value types are distinct, while equality asks a question
+  // and produces a Boolean whatever its operands' types, so it has no result type
+  // to fix and no information to lose by answering. Arithmetic across two value
+  // types remains an error; the two are deliberately not aligned. This runs ahead
+  // of the SameType step below, which would otherwise route two typed numbers of
+  // different types into the strict comparison and answer false.
+  if (surroundingAgent.feature('runtime-types')
+      && (x instanceof TypedNumberValue || y instanceof TypedNumberValue)) {
+    const xm = mathematicalValueForLooseEquality(x);
+    const ym = mathematicalValueForLooseEquality(y);
+    if (xm !== undefined && ym !== undefined) {
+      return sameMathematicalValue(xm, ym);
+    }
+  }
   // 1. If SameType(x, y) is true, then
   if (SameType(x, y)) {
     // a. Return the result of performing Strict Equality Comparison x === y.
