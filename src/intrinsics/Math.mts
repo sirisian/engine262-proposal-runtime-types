@@ -3,9 +3,14 @@ import {
   NumberValue,
   TypedNumberValue,
   type Arguments,
+  type NativeSteps,
+  type FunctionCallContext,
 } from '../value.mts';
-import { Q, X, type ValueEvaluator } from '../completion.mts';
+import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { SameType } from '../type-system/relations.mts';
+import { fitsNumericType } from '../type-system/runtime.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -599,6 +604,71 @@ function* Math_trunc([x = Value.undefined]: Arguments): ValueEvaluator {
 }
 
 /** https://tc39.es/ecma262/#sec-math-object */
+
+/**
+ * proposal-runtime-types (spec, the numeric library): the functions of the Math
+ * object are overloaded for the numeric types so that they PRESERVE THE TYPE THEY
+ * ARE GIVEN, and a signature taking a value of a numeric type T returns a value of
+ * T where its result is a number of the same kind, so no conversion is written at
+ * a call. This wraps a Math function's native steps to do that at run time.
+ *
+ * The qualification matters and is enforced rather than assumed. For a float type
+ * every real result is a value of that type once rounded to its width, so the
+ * result is carried there. For an integer type it is only a number of the same kind
+ * when it is an integer in range: `Math.abs` of an int32 is an int32, while
+ * `Math.sqrt` of one is generally not, and that result stays a plain Number rather
+ * than being forced into a type it does not belong to.
+ *
+ * Preservation needs one typed argument and no disagreement among the typed ones. A
+ * plain numeric argument alongside them does not block it, since a literal written
+ * at a call is the case literal propagation already covers (`Math.pow(x, 3)` where
+ * x is a float32).
+ */
+function withNumericTypePreserved(steps: NativeSteps): NativeSteps {
+  const wrapped: NativeSteps = function* withNumericTypePreserved(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext) {
+    let result = steps.call(this, args, context);
+    if (isEvaluator(result)) {
+      result = yield* result;
+    }
+    if (!surroundingAgent.feature('runtime-types')) {
+      return result;
+    }
+    let carried: TypeRecord | undefined;
+    for (const arg of args) {
+      if (arg instanceof TypedNumberValue) {
+        const record = (arg as TypedNumberValue).TypeRecord as TypeRecord;
+        if (carried === undefined) {
+          carried = record;
+        } else if (!SameType(carried, record)) {
+          return result;
+        }
+      }
+    }
+    if (carried === undefined || carried.Kind !== 'primitive') {
+      return result;
+    }
+    const value = Q(result);
+    if (!(value instanceof NumberValue)) {
+      return result;
+    }
+    const n = value.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the plain result is read to decide whether it belongs to the argument's type
+    const name = carried.Name;
+    if (name === 'float16' || name === 'float32' || name === 'float64') {
+      return new TypedNumberValue(wrapToType(n, carried), carried);
+    }
+    if ((name === 'int' || name === 'uint') && Number.isInteger(n) && fitsNumericType(n, name, carried.Arguments)) {
+      return new TypedNumberValue(n, carried);
+    }
+    return result;
+  };
+  // The wrapper stands in for the function it wraps, so it carries that function's
+  // name and specification section: the suites check that every built-in has both,
+  // and a wrapper that reported its own would make the built-in look undocumented.
+  Object.defineProperty(wrapped, 'name', { value: steps.name, configurable: true });
+  wrapped.section = steps.section;
+  return wrapped;
+}
+
 export function bootstrapMath(realmRec: Realm) {
   /** https://tc39.es/ecma262/#sec-value-properties-of-the-math-object */
   const readonly = { Writable: Value.false, Configurable: Value.false };
@@ -613,43 +683,43 @@ export function bootstrapMath(realmRec: Realm) {
     ['PI', F(3.141592653589793), undefined, readonly],
     ['SQRT1_2', F(0.7071067811865476), undefined, readonly],
     ['SQRT2', F(1.4142135623730951), undefined, readonly],
-    ['abs', Math_abs, 1],
-    ['acos', Math_acos, 1],
-    ['acosh', Math_acosh, 1],
-    ['asin', Math_asin, 1],
-    ['asinh', Math_asinh, 1],
-    ['atan', Math_atan, 1],
-    ['atan2', Math_atan2, 2],
-    ['atanh', Math_atanh, 1],
-    ['cbrt', Math_cbrt, 1],
-    ['ceil', Math_ceil, 1],
+    ['abs', withNumericTypePreserved(Math_abs), 1],
+    ['acos', withNumericTypePreserved(Math_acos), 1],
+    ['acosh', withNumericTypePreserved(Math_acosh), 1],
+    ['asin', withNumericTypePreserved(Math_asin), 1],
+    ['asinh', withNumericTypePreserved(Math_asinh), 1],
+    ['atan', withNumericTypePreserved(Math_atan), 1],
+    ['atan2', withNumericTypePreserved(Math_atan2), 2],
+    ['atanh', withNumericTypePreserved(Math_atanh), 1],
+    ['cbrt', withNumericTypePreserved(Math_cbrt), 1],
+    ['ceil', withNumericTypePreserved(Math_ceil), 1],
     ['clz32', Math_clz32, 1],
-    ['cos', Math_cos, 1],
-    ['cosh', Math_cosh, 1],
-    ['exp', Math_exp, 1],
-    ['expm1', Math_expm1, 1],
-    ['f16round', Math_f16round, 1],
-    ['floor', Math_floor, 1],
-    ['fround', Math_fround, 1],
-    ['hypot', Math_hypot, 2],
+    ['cos', withNumericTypePreserved(Math_cos), 1],
+    ['cosh', withNumericTypePreserved(Math_cosh), 1],
+    ['exp', withNumericTypePreserved(Math_exp), 1],
+    ['expm1', withNumericTypePreserved(Math_expm1), 1],
+    ['f16round', withNumericTypePreserved(Math_f16round), 1],
+    ['floor', withNumericTypePreserved(Math_floor), 1],
+    ['fround', withNumericTypePreserved(Math_fround), 1],
+    ['hypot', withNumericTypePreserved(Math_hypot), 2],
     ['imul', Math_imul, 2],
-    ['log', Math_log, 1],
-    ['log10', Math_log10, 1],
-    ['log1p', Math_log1p, 1],
-    ['log2', Math_log2, 1],
-    ['max', Math_max, 2],
-    ['min', Math_min, 2],
-    ['pow', Math_pow, 2],
-    ['random', Math_random, 0],
-    ['round', Math_round, 1],
-    ['sign', Math_sign, 1],
-    ['sin', Math_sin, 1],
-    ['sinh', Math_sinh, 1],
-    ['sqrt', Math_sqrt, 1],
-    ['sumPrecise', Math_sumPrecise, 1],
-    ['tan', Math_tan, 1],
-    ['tanh', Math_tanh, 1],
-    ['trunc', Math_trunc, 1],
+    ['log', withNumericTypePreserved(Math_log), 1],
+    ['log10', withNumericTypePreserved(Math_log10), 1],
+    ['log1p', withNumericTypePreserved(Math_log1p), 1],
+    ['log2', withNumericTypePreserved(Math_log2), 1],
+    ['max', withNumericTypePreserved(Math_max), 2],
+    ['min', withNumericTypePreserved(Math_min), 2],
+    ['pow', withNumericTypePreserved(Math_pow), 2],
+    ['random', withNumericTypePreserved(Math_random), 0],
+    ['round', withNumericTypePreserved(Math_round), 1],
+    ['sign', withNumericTypePreserved(Math_sign), 1],
+    ['sin', withNumericTypePreserved(Math_sin), 1],
+    ['sinh', withNumericTypePreserved(Math_sinh), 1],
+    ['sqrt', withNumericTypePreserved(Math_sqrt), 1],
+    ['sumPrecise', withNumericTypePreserved(Math_sumPrecise), 1],
+    ['tan', withNumericTypePreserved(Math_tan), 1],
+    ['tanh', withNumericTypePreserved(Math_tanh), 1],
+    ['trunc', withNumericTypePreserved(Math_trunc), 1],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Math');
 
   realmRec.Intrinsics['%Math%'] = mathObj;

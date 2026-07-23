@@ -64,3 +64,36 @@ test('standard library: an array method does not carry a typed signature (docume
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0]);')).toBe('999');
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0] instanceof uint8);')).toBe('false');
 });
+
+// ── The numeric library: a Math function preserves the type it is given ───────
+test('standard library: a Math function preserves a float argument type', () => {
+  // the numeric library overloads the existing functions so that they preserve the
+  // type they are given, so no conversion is written at a call
+  expect(evaluated('(Math.sqrt((4 := float32)) is float32) ? "f32" : "plain";')).toBe('f32');
+  expect(evaluated('String(Number(Math.sqrt((4 := float32))));')).toBe('2');
+  expect(evaluated('(Math.floor((1.7 := float32)) is float32) ? "f32" : "plain";')).toBe('f32');
+  // and the carried result is a value of that width, rounded to it
+  expect(evaluated('let x = Math.sqrt((2 := float32)); String(Number(x) - Math.fround(Number(x)));')).toBe('0');
+});
+
+test('standard library: an integer type is preserved only where the result is one', () => {
+  // the rule holds where the result is a number of the same kind
+  expect(evaluated('(Math.abs(((0 - 5) := int32)) is int32) ? "i32" : "plain";')).toBe('i32');
+  expect(evaluated('(Math.sign(((0 - 5) := int32)) is int32) ? "i32" : "plain";')).toBe('i32');
+  expect(evaluated('(Math.max((1 := uint8), (2 := uint8)) is uint8) ? "u8" : "plain";')).toBe('u8');
+  // a square root is generally not an integer, so it stays a plain Number rather
+  // than being forced into a type it does not belong to
+  expect(evaluated('(Math.sqrt((2 := int32)) is int32) ? "i32" : "plain";')).toBe('plain');
+  expect(evaluated('String(Math.sqrt((2 := int32)) > 1.41);')).toBe('true');
+  expect(evaluated('String(Number.isNaN(Math.sqrt(((0 - 1) := int32))));')).toBe('true');
+});
+
+test('standard library: preservation needs agreement, and a plain literal does not block it', () => {
+  // a literal written at a call is the case literal propagation already covers
+  expect(evaluated('(Math.pow((2 := float32), 3) is float32) ? "f32" : "plain";')).toBe('f32');
+  // two typed arguments of different types have no one type to preserve
+  expect(evaluated('(Math.max((1 := uint8), (2 := uint16)) is uint8) ? "u8" : "plain";')).toBe('plain');
+  // and an untyped call is untouched
+  expect(evaluated('String(Math.sqrt(4));')).toBe('2');
+  expect(evaluated('String(Math.max(1, 2));')).toBe('2');
+});
