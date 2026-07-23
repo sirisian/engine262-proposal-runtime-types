@@ -95,9 +95,19 @@ test('ToBoolean: a typed zero or NaN is falsy', () => {
   expect(evaluated('Boolean(0/0 := float64) ? "t" : "f";')).toBe('f');
 });
 
-test('Number.isInteger/isFinite do not coerce a typed number (BigInt precedent)', () => {
-  // These methods return false for any non-Number, including BigInt and typed.
-  expect(evaluated('Number.isInteger(5 := uint8) ? "yes" : "no";')).toBe('no');
-  expect(evaluated('Number.isFinite(5 := uint8) ? "yes" : "no";')).toBe('no');
-  expect(evaluated('Number.isInteger(5n) ? "yes" : "no";')).toBe('no');
+test('Number.isInteger/isFinite answer for a numeric type, not for a representation', () => {
+  // SUPERSEDED BY sec-numeric-predicates. This test used to pin the opposite, on
+  // the BigInt precedent: these methods return false for any non-Number, and a
+  // typed number is not a Number, so false. The precedent is real and is still
+  // what the flag-off engine does (pinned in numeric-predicates.test.mts), but
+  // the clause judges it the wrong answer HERE: a predicate whose name promises
+  // a question about a value should not quietly answer about a representation,
+  // and `Number.isInteger` of an int32 saying false is the hazard it names.
+  expect(evaluated('Number.isInteger(5 := uint8) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('Number.isFinite(5 := uint8) ? "yes" : "no";')).toBe('yes');
+  // The bigint row goes the same way, and this one is a deliberate divergence
+  // from base-language behaviour rather than an extension of it: `5n` is a value
+  // of the `bigint` type, which is exact and unbounded, so it is an integer.
+  // Flag-off keeps the base-language answer.
+  expect(evaluated('Number.isInteger(5n) ? "yes" : "no";')).toBe('yes');
 });

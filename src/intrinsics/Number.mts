@@ -9,6 +9,7 @@ import {
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import type { Mutable } from '../utils/language.mts';
+import { numericPredicate } from '../type-system/predicates.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   IsIntegralNumber,
@@ -16,6 +17,7 @@ import {
   ToNumeric,
   F, R,
   Realm,
+  surroundingAgent,
   type OrdinaryObject,
 } from '#self';
 
@@ -49,6 +51,16 @@ function* NumberConstructor([value]: Arguments, { NewTarget }: FunctionCallConte
 
 /** https://tc39.es/ecma262/#sec-number.isfinite */
 function Number_isFinite([number = Value.undefined]: Arguments) {
+  // proposal-runtime-types (spec, the numeric predicates): these statics do not
+  // coerce, so without a numeric-type overload every one of them answers false
+  // for every typed value, testing the representation where the name promises a
+  // test of the value.
+  if (surroundingAgent.feature('runtime-types')) {
+    const answer = numericPredicate(number, 'isFinite');
+    if (answer !== undefined) {
+      return answer ? Value.true : Value.false;
+    }
+  }
   if (!(number instanceof NumberValue)) {
     return Value.false;
   }
@@ -61,11 +73,31 @@ function Number_isFinite([number = Value.undefined]: Arguments) {
 
 /** https://tc39.es/ecma262/#sec-number.isinteger */
 function Number_isInteger([number = Value.undefined]: Arguments) {
+  // proposal-runtime-types (spec, the numeric predicates): these statics do not
+  // coerce, so without a numeric-type overload every one of them answers false
+  // for every typed value, testing the representation where the name promises a
+  // test of the value.
+  if (surroundingAgent.feature('runtime-types')) {
+    const answer = numericPredicate(number, 'isInteger');
+    if (answer !== undefined) {
+      return answer ? Value.true : Value.false;
+    }
+  }
   return X(IsIntegralNumber(number));
 }
 
 /** https://tc39.es/ecma262/#sec-number.isnan */
 function Number_isNaN([number = Value.undefined]: Arguments) {
+  // proposal-runtime-types (spec, the numeric predicates): these statics do not
+  // coerce, so without a numeric-type overload every one of them answers false
+  // for every typed value, testing the representation where the name promises a
+  // test of the value.
+  if (surroundingAgent.feature('runtime-types')) {
+    const answer = numericPredicate(number, 'isNaN');
+    if (answer !== undefined) {
+      return answer ? Value.true : Value.false;
+    }
+  }
   if (!(number instanceof NumberValue)) {
     return Value.false;
   }
@@ -78,6 +110,16 @@ function Number_isNaN([number = Value.undefined]: Arguments) {
 
 /** https://tc39.es/ecma262/#sec-number.issafeinteger */
 function Number_isSafeInteger([number = Value.undefined]: Arguments) {
+  // proposal-runtime-types (spec, the numeric predicates): these statics do not
+  // coerce, so without a numeric-type overload every one of them answers false
+  // for every typed value, testing the representation where the name promises a
+  // test of the value.
+  if (surroundingAgent.feature('runtime-types')) {
+    const answer = numericPredicate(number, 'isSafeInteger');
+    if (answer !== undefined) {
+      return answer ? Value.true : Value.false;
+    }
+  }
   if (!(number instanceof NumberValue)) {
     return Value.false;
   }

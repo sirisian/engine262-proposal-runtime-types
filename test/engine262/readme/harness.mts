@@ -88,6 +88,11 @@ export function evaluatedFlagOff(source: string): string {
   return normalValueString(runFlagOff(source), source);
 }
 
+/** Assert `source` throws with the feature OFF (a runtime rejection, not a parse error). */
+export function expectThrownFlagOff(source: string) {
+  expect(runFlagOff(source), `expected flag-off throw for: ${source}`).toMatchObject({ Type: 'throw' });
+}
+
 /** Assert `source` is an error with the feature OFF (syntax stays invalid). */
 export function expectErrorFlagOff(source: string) {
   const c = runFlagOff(source) as { Type: string };
