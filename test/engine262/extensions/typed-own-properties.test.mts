@@ -95,18 +95,36 @@ test('with the feature off, a type key is an ordinary own property key with no e
   expect(c.Value.stringValue?.()).toBe('300');
 });
 
-test('the object-literal typed-property form does not parse yet (documents the gap)', () => {
-  // Object Typing: `{ (a: uint8): 1 }` declares a typed own property at creation,
-  // routing to the same recording as the defineProperty path. That member syntax
-  // is not parsed today.
-  expectThrown('let o = { (a: uint8): 1 }; o.a;');
+test('an object literal declares a typed own property at creation', () => {
+  // Object Typing: `{ (a: uint8): 1 }` gives the property a declared type as it is
+  // created, routing to the same recording the defineProperty path uses. The value
+  // is written in a typed position, so it takes the checked conversion a typed
+  // binding takes and the property holds a value of the declared type.
+  expect(evaluated('let o = { (a: uint8): 1 }; String(Number(o.a));')).toBe('1');
+  expect(evaluated('let o = { (a: uint8): 1 }; String(o.a instanceof uint8);')).toBe('true');
+  // an initial value the type cannot represent is refused
+  expectThrown('let o = { (a: uint8): 999 }; o.a;');
+  // and the property behaves as a typed own property thereafter
+  expect(evaluated('let o = { (a: uint8): 1 }; o.a = (7 := uint8); String(Number(o.a));')).toBe('7');
+  expectThrown('let o = { (a: uint8): 1 }; o.a = 999;');
+  expectThrown('let o = { (a: uint8): 1 }; delete o.a;');
+  // it sits alongside ordinary members, which are unchanged
+  expect(evaluated('let o = { x: 1, (a: uint8): 2, y: 3 }; String(o.x) + String(Number(o.a)) + String(o.y);')).toBe('123');
+  expect(evaluated('let o = { (s: string): "hi" }; o.s;')).toBe('hi');
 });
 
-test('a Proxy does not yet check a trap result against a typed own property (documents the gap)', () => {
-  // Object Typing: a Proxy over an object carrying a typed own property should
-  // check each trap result against the property's type. Today the trap result is
-  // returned unchecked, so a get trap may return a value the property's type
-  // would reject (999 is outside uint8) with no error.
-  expect(evaluated('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return 999; } }); String(p.x);')).toBe('999');
-  expect(evaluated('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return 999; } }); String(p.x instanceof uint8);')).toBe('false');
+test('a Proxy checks a trap result against the target typed own property', () => {
+  // Object Typing: a Proxy over an object carrying a typed own property checks
+  // each trap result against that property's declared type. Without it a Proxy
+  // would be a hole in the guarantee, handing back a value the property itself
+  // would have refused.
+  expectThrown('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return 999; } }); p.x;');
+  expect(evaluated('let t = {}; Object.defineProperty(t, "x", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); let p = new Proxy(t, { get() { return (7 := uint8); } }); String(Number(p.x));')).toBe('7');
+  // the same guarantee on the way in, for a write the trap reports as succeeding
+  expectThrown('let t = { (a: uint8): 1 }; let p = new Proxy(t, { set() { return true; } }); p.a = 999;');
+  expect(evaluated('let t = { (a: uint8): 1 }; let p = new Proxy(t, { set() { return true; } }); p.a = (7 := uint8); "done";')).toBe('done');
+  // an ordinary property, and a Proxy over a target with no typed property, are
+  // untouched
+  expect(evaluated('let t = { x: 1 }; let p = new Proxy(t, { get() { return 999; } }); String(p.x);')).toBe('999');
+  expect(evaluated('let t = { (a: uint8): 1 }; let p = new Proxy(t, {}); String(Number(p.a));')).toBe('1');
 });

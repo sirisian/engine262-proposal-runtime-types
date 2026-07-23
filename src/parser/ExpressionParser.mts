@@ -1907,6 +1907,23 @@ export abstract class ExpressionParser extends FunctionParser {
       return this.finishNode(node, 'PropertyDefinition');
     }
 
+    // proposal-runtime-types (spec, object types): an object literal may declare a
+    // typed own property at creation, `{ (a: uint8): 1 }`, giving the property a
+    // declared type the same way Object.defineProperty's `type` key does. A
+    // property definition cannot otherwise begin with `(`, so the form is
+    // unambiguous, and it is claimed only under the feature.
+    if (type === 'property'
+        && this.feature('runtime-types')
+        && this.test(Token.LPAREN)) {
+      this.expect(Token.LPAREN);
+      node.PropertyName = this.parsePropertyName();
+      node.TypeAnnotation = this.parseTypeAnnotation();
+      this.expect(Token.RPAREN);
+      this.expect(Token.COLON);
+      node.AssignmentExpression = this.parseAssignmentExpression();
+      return this.finishNode(node, 'PropertyDefinition');
+    }
+
     let staticOrAccessorButNotKeyword;
     let isAccessorField = false;
     if (type === 'class element') {

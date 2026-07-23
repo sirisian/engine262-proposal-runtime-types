@@ -1,13 +1,15 @@
 import {
   UndefinedValue, NullValue, ObjectValue, Value,
   type ObjectInternalMethods,
+  type PropertyKeyValue,
+  JSStringValue,
 } from '../value.mts';
 import {
   Q, X,
   type ValueCompletion,
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
-import { surroundingAgent } from '#self';
+import { surroundingAgent, RequireType } from '#self';
 import { PropertyKeyMap } from '../utils/container.mts';
 import type { ProxyObject } from '../intrinsics/Proxy.mts';
 import {
@@ -32,6 +34,21 @@ import {
   IsAccessorDescriptor,
 } from './all.mts';
 import { Throw } from '#self';
+
+/**
+ * proposal-runtime-types (spec, object types): the declared type of a typed own
+ * property carried by an object, or undefined where the property is not one. A
+ * Proxy consults its TARGET's declared types, since the type belongs to the object
+ * the property is on, not to the Proxy in front of it.
+ */
+function typedOwnPropertyType(target: ObjectValue, P: PropertyKeyValue): { TypeRecord: unknown } | undefined {
+  const typedProperties = (target as { TypedProperties?: Map<unknown, { TypeRecord: unknown }> }).TypedProperties;
+  if (typedProperties === undefined) {
+    return undefined;
+  }
+  return typedProperties.get(P instanceof JSStringValue ? P.stringValue() : P);
+}
+
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-getprototypeof */
@@ -349,6 +366,16 @@ const InternalMethods = {
         }
       }
     }
+    // proposal-runtime-types (spec, object types): a trap result standing in for a
+    // typed own property of the target must satisfy that property's declared type.
+    // Without this a Proxy is a hole in the guarantee, handing back a value the
+    // property itself would have refused.
+    if (surroundingAgent.feature('runtime-types')) {
+      const declared = typedOwnPropertyType(target, P);
+      if (declared !== undefined) {
+        Q(yield* RequireType(trapResult, declared.TypeRecord as never));
+      }
+    }
     return trapResult;
   },
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-set-p-v-receiver */
@@ -381,6 +408,14 @@ const InternalMethods = {
         if (targetDesc.Setter === Value.undefined) {
           return Throw.TypeError("'set' on proxy: trap returned truthy for property $1 which exists in the proxy target as a non-configurable and non-writable accessor property without a setter", P);
         }
+      }
+    }
+    // The same guarantee on the way in: a write the trap reports as having
+    // succeeded must be a value the target's declared type admits.
+    if (surroundingAgent.feature('runtime-types')) {
+      const declared = typedOwnPropertyType(target, P);
+      if (declared !== undefined) {
+        Q(yield* RequireType(V, declared.TypeRecord as never));
       }
     }
     return Value.true;

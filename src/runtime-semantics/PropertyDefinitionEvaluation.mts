@@ -1,5 +1,5 @@
 import {
-  Value, NullValue, ObjectValue, type PropertyKeyValue, JSStringValue, BooleanValue,
+  Value, NullValue, ObjectValue, type PropertyKeyValue, JSStringValue, BooleanValue, Descriptor,
 } from '../value.mts';
 import {
   StringValue,
@@ -15,10 +15,14 @@ import {
 import { kInternal } from '../utils/internal.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
 import {
   surroundingAgent,
   Assert,
+  CheckedConvertValue,
+  DefinePropertyOrThrow,
   GetValue,
   CreateDataPropertyOrThrow,
   CopyDataProperties,
@@ -106,6 +110,30 @@ function* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition: Pa
     }
     // b. Return NormalCompletion(empty).
     return NormalCompletion(undefined);
+  }
+  // proposal-runtime-types (spec, object types): the typed own property form
+  // `{ (a: uint8): 1 }` declares the property's type at creation. It is defined
+  // through the ordinary [[DefineOwnProperty]] carrying the declared type, which
+  // is the same path Object.defineProperty's `type` key takes, so the initial
+  // value is checked against the type and the property is recorded as typed. A
+  // later write is then checked and a delete refused, exactly as for a property
+  // declared the other way.
+  const annotation = (PropertyDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+  if (annotation) {
+    const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+    const typeObject = GetTypeObject(record);
+    // The value is written in a typed position, so it crosses a typed boundary and
+    // takes the checked conversion a typed binding takes: an in-range literal
+    // becomes a value of the declared type, and one that cannot be represented
+    // exactly is an error rather than a silent wrap.
+    const converted = Q(yield* CheckedConvertValue(X(propValue), record));
+    return Q(yield* DefinePropertyOrThrow(object, propKey as PropertyKeyValue, Descriptor({
+      Type: typeObject,
+      Value: converted,
+      Writable: Value.true,
+      Enumerable: Value.true,
+      Configurable: Value.true,
+    }) as Descriptor));
   }
   // 8. Assert: enumerable is true.
   Assert(enumerable === Value.true);

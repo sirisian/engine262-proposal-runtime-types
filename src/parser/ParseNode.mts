@@ -271,6 +271,9 @@ export namespace ParseNode {
     readonly type: 'PropertyDefinition';
     readonly PropertyName: PropertyNameLike | null;
     readonly AssignmentExpression: AssignmentExpressionOrHigher;
+    // proposal-runtime-types: present for the typed own property form,
+    // `{ (a: uint8): 1 }`, which declares the property's type at creation.
+    readonly TypeAnnotation?: TypeAnnotation;
   }
 
   // PropertyName :
