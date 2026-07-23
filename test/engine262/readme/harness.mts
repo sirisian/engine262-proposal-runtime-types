@@ -88,6 +88,28 @@ export function evaluatedFlagOff(source: string): string {
   return normalValueString(runFlagOff(source), source);
 }
 
+/**
+ * Assert `source` throws, and throws the SPECIFIED KIND of error.
+ *
+ * Use this wherever the specification names the error, and `expectThrown` where
+ * it only requires a rejection. The distinction matters: much of what the suite
+ * pins is that a construct is refused, and there the kind is incidental and
+ * asserting it would over-fit. But at a boundary the kind IS the specified
+ * behaviour, and a test that only asks whether something threw cannot tell a
+ * conforming engine from one that reports a range failure as a type failure.
+ *
+ * The check runs in the script rather than reading the thrown object from the
+ * completion, because the error's constructor is the thing being asserted and
+ * the script is where it is visible.
+ */
+export function expectThrownKind(source: string, kind: 'TypeError' | 'RangeError' | 'SyntaxError' | 'ReferenceError') {
+  const completion = run(`try { ${source} "__did_not_throw__" } catch (e) { e.constructor.name }`) as { Type: string, Value?: { stringValue?(): string } };
+  if (completion.Type !== 'normal') {
+    expect.fail(`expected a catchable ${kind}, but the script did not run (an early error?): ${source}`);
+  }
+  expect(completion.Value?.stringValue?.(), `expected ${kind} for: ${source}`).toBe(kind);
+}
+
 /** Assert `source` throws with the feature OFF (a runtime rejection, not a parse error). */
 export function expectThrownFlagOff(source: string) {
   expect(runFlagOff(source), `expected flag-off throw for: ${source}`).toMatchObject({ Type: 'throw' });

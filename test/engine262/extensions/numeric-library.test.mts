@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, evaluatedFlagOff, expectThrown } from '../readme/harness.mts';
+import { evaluated, evaluatedFlagOff, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * Extension coverage - the numeric library, read as generics over the numeric types.
@@ -68,7 +68,7 @@ test('numeric library: a root at an integer type is the integer root', () => {
   expect(evaluated('String(Number(Math.sqrt((1048576 := uint32))));')).toBe('1024');
   // a negative square root has no integer answer, so it raises rather than
   // returning a NaN the family has no value for
-  expect(evaluated('try { Math.sqrt(((0 - 1) := int32)); "none" } catch (e) { e.constructor.name }')).toBe('RangeError');
+  expectThrownKind('Math.sqrt(((0 - 1) := int32));', 'RangeError');
   // cbrt is defined for a negative and truncates toward zero
   expect(evaluated('String(Number(Math.cbrt(((0 - 9) := int32))));')).toBe('-2');
   expect(evaluated('String(Number(Math.cbrt((27 := int32))));')).toBe('3');
@@ -83,9 +83,10 @@ test('numeric library: a root at an integer type is the integer root', () => {
 test('numeric library: a transcendental has no integer row', () => {
   // sin of an integer is not integer mathematics, so resolution fails and the
   // program writes the promotion it means
-  expectThrown('Math.sin((1 := int32));');
-  expectThrown('Math.exp((1 := uint8));');
-  expectThrown('Math.atan2((1 := int32), (1 := int32));');
+  // no signature at this family is a resolution failure, which is a type error
+  expectThrownKind('Math.sin((1 := int32));', 'TypeError');
+  expectThrownKind('Math.exp((1 := uint8));', 'TypeError');
+  expectThrownKind('Math.atan2((1 := int32), (1 := int32));', 'TypeError');
   // the conversion is what makes it work
   expect(evaluated('String(Math.sin(Number((0 := int32))));')).toBe('0');
   // and the float rows are untouched
@@ -108,14 +109,14 @@ test('numeric library: an out-of-range integer result raises rather than wrappin
   // A named function declares a return, and a declared return is checked, so the
   // same arithmetic raises. The asymmetry is the design's own: the operator is the
   // cheap wrapping form and the function the checked one.
-  expect(evaluated('try { Math.pow((2 := uint8), (10 := uint8)); "none" } catch (e) { e.constructor.name }')).toBe('RangeError');
+  expectThrownKind('Math.pow((2 := uint8), (10 := uint8));', 'RangeError');
   // the same shape at the signed boundary, where the magnitude of the most
   // negative value is not representable
-  expect(evaluated('try { Math.abs(((0 - 128) := int8)); "none" } catch (e) { e.constructor.name }')).toBe('RangeError');
+  expectThrownKind('Math.abs(((0 - 128) := int8));', 'RangeError');
   // and one width up it is simply the answer
   expect(evaluated('String(Number(Math.abs(((0 - 128) := int16))));')).toBe('128');
   // an exponent a negative integer cannot answer raises before any result exists
-  expect(evaluated('try { Math.pow((2 := int32), ((0 - 1) := int32)); "none" } catch (e) { e.constructor.name }')).toBe('RangeError');
+  expectThrownKind('Math.pow((2 := int32), ((0 - 1) := int32));', 'RangeError');
   // a result that fits is just the value, carrying the type
   expect(evaluated('String(Number(Math.pow((2 := uint8), (5 := uint8))));')).toBe('32');
   expect(evaluated('(Math.pow((2 := uint8), (5 := uint8)) is uint8) ? "yes" : "no";')).toBe('yes');
@@ -125,7 +126,7 @@ test('numeric library: an out-of-range integer result raises rather than wrappin
 test('numeric library: a mixed-type call matches no signature', () => {
   // no numeric value type is assignable to another, so two typed arguments of
   // different types are viable at no signature at all
-  expect(evaluated('try { Math.max((1 := uint8), (2 := uint16)); "none" } catch (e) { e.constructor.name }')).toBe('TypeError');
+  expectThrownKind('Math.max((1 := uint8), (2 := uint16));', 'TypeError');
   // the program states the conversion
   expect(evaluated('String(Number(Math.max(uint16((1 := uint8)), (2 := uint16))));')).toBe('2');
   // a plain literal alongside a typed argument is ranked, not typed: it takes the
@@ -134,7 +135,7 @@ test('numeric library: a mixed-type call matches no signature', () => {
   expect(evaluated('(Math.max((1 := uint8), 3) is uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('String(Number(Math.max((1 := uint8), 3)));')).toBe('3');
   // and a literal the parameter type cannot represent matches no signature either
-  expect(evaluated('try { Math.max((1 := uint8), 300); "none" } catch (e) { e.constructor.name }')).toBe('TypeError');
+  expectThrownKind('Math.max((1 := uint8), 300);', 'TypeError');
 });
 
 // -- DIVERGENCE 3: a width wider than a Number cannot carry its value exactly ----
@@ -188,10 +189,10 @@ test('numeric library: clz counts in the argument own width', () => {
 
 test('numeric library: clz has no untyped and no float signature', () => {
   // the width is the whole of the meaning, so there is no untyped signature
-  expectThrown('Math.clz(1);');
-  expectThrown('Math.clz((1 := float32));');
+  expectThrownKind('Math.clz(1);', 'TypeError');
+  expectThrownKind('Math.clz((1 := float32));', 'TypeError');
   // and no bigint signature: a bigint has no width to count from the top of
-  expectThrown('Math.clz(1n);');
+  expectThrownKind('Math.clz(1n);', 'TypeError');
 });
 
 test('numeric library: clz is gated, so the flag-off engine is unchanged', () => {
@@ -215,8 +216,8 @@ test('numeric library: the format functions take only the float families', () =>
   expect(evaluated('(Math.fround((1.5 := float64)) is float64) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('(Math.f16round((1.5 := float32)) is float32) ? "yes" : "no";')).toBe('yes');
   // rounding an integer through binary32 is a conversion, which is written
-  expectThrown('Math.fround((1 := int32));');
-  expectThrown('Math.f16round((1 := uint8));');
+  expectThrownKind('Math.fround((1 := int32));', 'TypeError');
+  expectThrownKind('Math.f16round((1 := uint8));', 'TypeError');
 });
 
 test('numeric library: the rounding family is identity at an integer type', () => {

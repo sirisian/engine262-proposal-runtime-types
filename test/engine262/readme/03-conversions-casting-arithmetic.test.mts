@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, expectThrown } from './harness.mts';
+import { evaluated, bool, expectThrown, expectThrownKind } from './harness.mts';
 
 /**
  * README feature coverage — conversions, casting, and arithmetic.
@@ -41,24 +41,23 @@ test('Conversions: an out-of-range literal in a typed position is rejected', () 
 // separates them, and the distinction is worth pinning because both used to
 // arrive as a TypeError.
 test('Conversions: a checked boundary reports range and type failures differently', () => {
-  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
   // numeric source, numeric target, value out of range: a RangeError
-  expect(thrown('function g(){return 300;} let a: uint8 = g();')).toBe('RangeError');
-  expect(thrown('function g(){return 0-1;} let a: uint8 = g();')).toBe('RangeError');
+  expectThrownKind('function g(){return 300;} let a: uint8 = g();', 'RangeError');
+  expectThrownKind('function g(){return 0-1;} let a: uint8 = g();', 'RangeError');
   // a value that would have to be truncated to fit is unrepresentable too
-  expect(thrown('function g(){return 1.5;} let a: uint8 = g();')).toBe('RangeError');
+  expectThrownKind('function g(){return 1.5;} let a: uint8 = g();', 'RangeError');
   // a typed value narrowing to a width that cannot hold it
-  expect(thrown('function g(){return (300 := uint16);} let a: uint8 = g();')).toBe('RangeError');
+  expectThrownKind('function g(){return (300 := uint16);} let a: uint8 = g();', 'RangeError');
   // a finite value that a float width could only represent as an infinity is
   // unrepresentable, rather than silently becoming that infinity
-  expect(thrown('function g(){return 1e300;} let a: float32 = g();')).toBe('RangeError');
+  expectThrownKind('function g(){return 1e300;} let a: float32 = g();', 'RangeError');
   // the same boundary at a parameter and at a declared return
-  expect(thrown('function f(a: uint8){return a;} function g(){return 300;} f(g());')).toBe('RangeError');
-  expect(thrown('function g(){return 300;} function f(): uint8 { return g(); } f();')).toBe('RangeError');
+  expectThrownKind('function f(a: uint8){return a;} function g(){return 300;} f(g());', 'RangeError');
+  expectThrownKind('function g(){return 300;} function f(): uint8 { return g(); } f();', 'RangeError');
   // a non-numeric source has no conversion to attempt: still a TypeError
-  expect(thrown('function g(){return {};} let a: uint8 = g();')).toBe('TypeError');
-  expect(thrown('function g(){return "abc";} let a: uint8 = g();')).toBe('TypeError');
-  expect(thrown('function g(){return undefined;} let a: uint8 = g();')).toBe('TypeError');
+  expectThrownKind('function g(){return {};} let a: uint8 = g();', 'TypeError');
+  expectThrownKind('function g(){return "abc";} let a: uint8 = g();', 'TypeError');
+  expectThrownKind('function g(){return undefined;} let a: uint8 = g();', 'TypeError');
   // and a value that fits is simply the value
   expect(evaluated('function g(){return 5;} let a: uint8 = g(); String(Number(a));')).toBe('5');
   expect(evaluated('function g(){return 1e300;} let a: float64 = g(); String(Number(a));')).toBe('1e+300');
@@ -188,24 +187,23 @@ test('Integer Division and Remainder: integer / truncates, % is the remainder', 
 // Parsing clause settles it: a string is deliberately not a conversion source
 // for a numeric type, and the parse is always written.
 test('Conversions: a numeric annotation accepts only a numeric value', () => {
-  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
   for (const t of ['uint8', 'int32', 'float64']) {
     // a well-formed numeric string is refused along with a malformed one
-    expect(thrown(`function g(){return "5";} let a: ${t} = g();`)).toBe('TypeError');
-    expect(thrown(`function g(){return "abc";} let a: ${t} = g();`)).toBe('TypeError');
+    expectThrownKind(`function g(){return "5";} let a: ${t} = g();`, 'TypeError');
+    expectThrownKind(`function g(){return "abc";} let a: ${t} = g();`, 'TypeError');
     // the quiet ones this closes
-    expect(thrown(`function g(){return "";} let a: ${t} = g();`)).toBe('TypeError');
-    expect(thrown(`function g(){return null;} let a: ${t} = g();`)).toBe('TypeError');
-    expect(thrown(`function g(){return true;} let a: ${t} = g();`)).toBe('TypeError');
-    expect(thrown(`function g(){return [7];} let a: ${t} = g();`)).toBe('TypeError');
-    expect(thrown(`function g(){return {valueOf(){return 7;}};} let a: ${t} = g();`)).toBe('TypeError');
+    expectThrownKind(`function g(){return "";} let a: ${t} = g();`, 'TypeError');
+    expectThrownKind(`function g(){return null;} let a: ${t} = g();`, 'TypeError');
+    expectThrownKind(`function g(){return true;} let a: ${t} = g();`, 'TypeError');
+    expectThrownKind(`function g(){return [7];} let a: ${t} = g();`, 'TypeError');
+    expectThrownKind(`function g(){return {valueOf(){return 7;}};} let a: ${t} = g();`, 'TypeError');
     // a numeric value still works, and still range-checks
     expect(evaluated(`function g(){return 5;} let a: ${t} = g(); String(Number(a));`)).toBe('5');
   }
   // THE SILENT NaN this closes: a float annotation could not fail before, so a
   // missing value or an object simply became NaN
-  expect(thrown('function g(){return undefined;} let a: float64 = g();')).toBe('TypeError');
-  expect(thrown('function g(){return {};} let a: float64 = g();')).toBe('TypeError');
+  expectThrownKind('function g(){return undefined;} let a: float64 = g();', 'TypeError');
+  expectThrownKind('function g(){return {};} let a: float64 = g();', 'TypeError');
 });
 
 test('Conversions: the parse is the written form, and it composes', () => {
@@ -225,16 +223,15 @@ test('Conversions: the parse is the written form, and it composes', () => {
 // BigInt, and a Boolean each have exactly one canonical text and lose nothing.
 // undefined, null, an object, and a Symbol have only a diagnostic text.
 test('Conversions: a string annotation accepts what has a canonical text', () => {
-  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
   expect(evaluated('function g(){return 5;} let s: string = g(); s;')).toBe('5');
   expect(evaluated('function g(){return 5n;} let s: string = g(); s;')).toBe('5');
   expect(evaluated('function g(){return true;} let s: string = g(); s;')).toBe('true');
   expect(evaluated('function g(){return "x";} let s: string = g(); s;')).toBe('x');
   // and refuses the ones whose text is a diagnostic
-  expect(thrown('function g(){return undefined;} let s: string = g();')).toBe('TypeError');
-  expect(thrown('function g(){return null;} let s: string = g();')).toBe('TypeError');
-  expect(thrown('function g(){return {};} let s: string = g();')).toBe('TypeError');
-  expect(thrown('function g(){return [1,2];} let s: string = g();')).toBe('TypeError');
+  expectThrownKind('function g(){return undefined;} let s: string = g();', 'TypeError');
+  expectThrownKind('function g(){return null;} let s: string = g();', 'TypeError');
+  expectThrownKind('function g(){return {};} let s: string = g();', 'TypeError');
+  expectThrownKind('function g(){return [1,2];} let s: string = g();', 'TypeError');
   // String(v) remains the written form for those
   expect(evaluated('function g(){return undefined;} let s: string = String(g()); s;')).toBe('undefined');
 });

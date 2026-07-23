@@ -17,6 +17,19 @@ function expectThrown(source: string) {
   expect(run(source)).toMatchObject({ Type: 'throw' });
 }
 
+/**
+ * Assert the SPECIFIED KIND of error, for the boundary sites where the
+ * specification names it. This file predates the shared harness and keeps its
+ * own runner, so the helper is restated here rather than imported.
+ */
+function expectThrownKind(source: string, kind: 'TypeError' | 'RangeError' | 'SyntaxError') {
+  const completion = run(`try { ${source} "__did_not_throw__" } catch (e) { e.constructor.name }`) as unknown as { Type: string, Value?: { stringValue?(): string } };
+  if (completion.Type !== 'normal') {
+    expect.fail(`expected a catchable ${kind}, but the script did not run: ${source}`);
+  }
+  expect(completion.Value?.stringValue?.(), `expected ${kind} for: ${source}`).toBe(kind);
+}
+
 test('is evaluates to the membership test', () => {
   expect(evaluated('((5 := uint8) is uint8) === true && (5 is uint8) === false ? "ok" : "no";')).toBe('ok');
   expect(evaluated('type T = uint8 | string; ("s" is T) === true ? "ok" : "no";')).toBe('ok');
@@ -32,12 +45,12 @@ test(':= applies the conversion rule', () => {
   // SUPERSEDED: a string to a SIZED numeric type is not a cast. A cast discards
   // information from a numeric value; reading a number out of text is a parse,
   // with its own name and its own two failures.
-  expectThrown('("7" := uint8);');
+  expectThrownKind('("7" := uint8);', 'TypeError');
   expect(evaluated('uint8.parse("7") === (7 := uint8) ? "ok" : "no";')).toBe('ok');
   // and the written promotion still composes, since Number(s) is a numeric value
   expect(evaluated('(Number("7") := uint8) === (7 := uint8) ? "ok" : "no";')).toBe('ok');
-  expectThrown('("300" := uint8);');
-  expectThrown('({} := uint8);');
+  expectThrownKind('("300" := uint8);', 'TypeError');
+  expectThrownKind('({} := uint8);', 'TypeError');
 });
 
 test('the type operator produces the interned Type Object', () => {

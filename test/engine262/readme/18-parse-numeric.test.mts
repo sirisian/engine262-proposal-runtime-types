@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from './harness.mts';
+import { evaluated, ok, expectThrown, expectThrownKind } from './harness.mts';
 
 /**
  * README feature coverage — parseFloat and parseInt for each new type.
@@ -49,19 +49,33 @@ test('parse: a float type parses a float literal', () => {
 
 // ── Errors: no trailing garbage, throw not NaN ────────────────────────────────
 test('parse: a malformed string is a SyntaxError, not NaN', () => {
+  // The clause distinguishes the two failures deliberately: "distinguishing the
+  // two errors is what makes the failure legible". A test that only asked
+  // whether something threw could not tell them apart, which is the whole point.
   // trailing garbage is not consumed
-  expectThrown('uint8.parse("12abc");');
+  expectThrownKind('uint8.parse("12abc");', 'SyntaxError');
   // trailing whitespace-separated text is rejected
-  expectThrown('uint8.parse("1 2");');
+  expectThrownKind('uint8.parse("1 2");', 'SyntaxError');
   // an empty string is not a literal
-  expectThrown('uint8.parse("");');
+  expectThrownKind('uint8.parse("");', 'SyntaxError');
+  // nor is a non-string argument
+  expectThrownKind('uint8.parse(5);', 'SyntaxError');
+  // a bad radix is a malformed request, not an out-of-range value
+  expectThrownKind('uint8.parse("5", 99);', 'SyntaxError');
+  // separators in invalid positions are not a literal of the type
+  expectThrownKind('uint16.parse("1__000");', 'SyntaxError');
+  // a float literal is not an integer literal
+  expectThrownKind('uint8.parse("1.9");', 'SyntaxError');
 });
 
 test('parse: a well-formed literal out of range is a RangeError', () => {
-  // 256 is a valid literal but out of uint8 range
-  expectThrown('uint8.parse("256");');
+  // 256 is a valid literal but out of uint8 range: the string IS a literal of
+  // the type's grammar, so the failure is the value, not the text
+  expectThrownKind('uint8.parse("256");', 'RangeError');
   // a negative into an unsigned type is out of range
-  expectThrown('uint8.parse("-1");');
+  expectThrownKind('uint8.parse("-1");', 'RangeError');
+  expectThrownKind('int8.parse("-200");', 'RangeError');
+  expectThrownKind('int8.parse("128");', 'RangeError');
 });
 
 // ── tryParse: the same parse, reporting failure beside the type ───────────────
@@ -142,4 +156,19 @@ test('tryParse: the failure is handled by narrowing', () => {
 
 test('tryParse: it is gated with the rest of the feature', () => {
   expect(ok('typeof uint8.tryParse;')).toBe(true);
+});
+
+// The two failures must stay distinguishable, which is the property the clause
+// names and the one a kind-blind assertion cannot check. Pinned as a pair so a
+// change that collapsed them into one error would fail here rather than pass.
+test('parse: the two failures are reported as different errors', () => {
+  expect(evaluated(`
+    let syntax = "";
+    let range = "";
+    try { uint8.parse("12abc"); } catch (e) { syntax = e.constructor.name; }
+    try { uint8.parse("256"); } catch (e) { range = e.constructor.name; }
+    String(syntax !== range);
+  `)).toBe('true');
+  // and tryParse collapses both to null, which is its whole contract
+  expect(evaluated('String(uint8.tryParse("12abc") === null && uint8.tryParse("256") === null);')).toBe('true');
 });
