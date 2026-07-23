@@ -83,6 +83,11 @@ export function expectError(source: string) {
   expect(c.Type, `expected error (throw) for: ${source}`).toBe('throw');
 }
 
+/** Evaluate to the string value of a normal completion with the feature OFF. */
+export function evaluatedFlagOff(source: string): string {
+  return normalValueString(runFlagOff(source), source);
+}
+
 /** Assert `source` is an error with the feature OFF (syntax stays invalid). */
 export function expectErrorFlagOff(source: string) {
   const c = runFlagOff(source) as { Type: string };

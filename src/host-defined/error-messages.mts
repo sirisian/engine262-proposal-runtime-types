@@ -464,6 +464,7 @@ export interface Throw {
   | '$1 cannot be used before initialization'
   | '$1 cannot be weakly referenced'
   | '$1 does not look like a TemporalTimeLike object'
+  | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a typed class and cannot be proxied'
   | '$1 is a typed property and cannot be deleted'
@@ -513,6 +514,9 @@ export interface Throw {
   | '$1 is out of range for the type'
   | '$1 is too large'
   | '$1 is too small'
+  | '$1 of a negative value is not defined'
+  | '$1 requires an argument of a sized integer type'
+  | '$1 with a negative exponent is not defined for an integer type'
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 that is incompatible with the existing property in the proxy target"
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 to the non-extensible proxy target"
   | "'defineProperty' on proxy: trap returned truthy for defining non-configurable property $1 which cannot be non-writable, unless there exists a corresponding non-configurable, non-writable own property of the target object"
@@ -659,11 +663,13 @@ export interface Throw {
   | '$1 called on invalid receiver: $2'
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'
+  | '$1 has no signature taking a value of type $2'
   | '$1 is a required on object $2'
   | '$1 is not a $2'
   | '$1 is not a $2 object'
   | '$1 is not a case of enum $2'
   | '$1 is not assignable to $2'
+  | '$1 is not in the range of $2'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'
   | 'Cannot set property $1 on $2'

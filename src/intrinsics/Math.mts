@@ -2,12 +2,13 @@ import {
   Value,
   NumberValue,
   TypedNumberValue,
+  isTypedNumber,
   type Arguments,
   type NativeSteps,
   type FunctionCallContext,
 } from '../value.mts';
 import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
-import type { TypeRecord } from '../type-system/records.mts';
+import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -607,59 +608,230 @@ function* Math_trunc([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /**
  * proposal-runtime-types (spec, the numeric library): the functions of the Math
- * object are overloaded for the numeric types so that they PRESERVE THE TYPE THEY
- * ARE GIVEN, and a signature taking a value of a numeric type T returns a value of
- * T where its result is a number of the same kind, so no conversion is written at
- * a call. This wraps a Math function's native steps to do that at run time.
+ * object are overloaded for the numeric types, and the signature listing states
+ * which functions have a row at which family, what each returns, and what happens
+ * when a result does not fit. This implements the listing at run time: the wrapper
+ * selects the row from the argument types, evaluates it, and applies the return
+ * rule for the family.
  *
- * The qualification matters and is enforced rather than assumed. For a float type
- * every real result is a value of that type once rounded to its width, so the
- * result is carried there. For an integer type it is only a number of the same kind
- * when it is an integer in range: `Math.abs` of an int32 is an int32, while
- * `Math.sqrt` of one is generally not, and that result stays a plain Number rather
- * than being forced into a type it does not belong to.
+ * Three properties of the listing shape the code below.
  *
- * Preservation needs one typed argument and no disagreement among the typed ones. A
- * plain numeric argument alongside them does not block it, since a literal written
- * at a call is the case literal propagation already covers (`Math.pow(x, 3)` where
- * x is a float32).
+ * A row exists where the operation has an answer in the family's own mathematics.
+ * The integer roots do (`Math.sqrt` of a uint8 is the integer square root, truncated
+ * toward zero as integer division truncates), the transcendentals do not, so an
+ * integer-typed argument to one fails resolution rather than promoting silently.
+ *
+ * Every signature takes its numeric parameters at ONE type, because no numeric value
+ * type is assignable to another. Two typed arguments of different types match no
+ * signature. A plain numeric argument beside a typed one is a literal, which takes
+ * the parameter's type where it can represent it and is an error where it cannot.
+ *
+ * A declared return is a boundary. For an integer type the exact result is checked
+ * and an unrepresentable one raises, which is why `Math.pow` and `**` deliberately
+ * part ways: the operator wraps because it is the cheap form, and the named function
+ * checks because it declares a return. For a float type the result rounds to the
+ * width and overflows to an infinity, which is what float arithmetic already does.
  */
-function withNumericTypePreserved(steps: NativeSteps): NativeSteps {
-  const wrapped: NativeSteps = function* withNumericTypePreserved(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext) {
+
+/**
+ * The row a function has at the integer family. Every other listed function has no
+ * integer row, which is `undefined` here and is a type error at a typed call.
+ */
+type IntegerRow =
+  /** The exact result, checked at T: abs, sign, min, max, pow. */
+  | 'checked'
+  /** The argument unchanged: floor, ceil, round, trunc. */
+  | 'identity'
+  /** The integer root truncated toward zero: sqrt, cbrt. */
+  | 'root'
+  /** N less the bit length of the value modulo 2**N, checked at T: clz32, clz. */
+  | 'leadingZeros'
+  /** The low 32 bits of the product as an int32, whatever T the arguments carry. */
+  | 'imul';
+
+/** The rows of <emu-xref href="#table-numeric-library-signatures">, by function name. */
+const numericLibraryRows: ReadonlyMap<string, { integer?: IntegerRow, float: boolean }> = new Map([
+  ['abs', { integer: 'checked' as IntegerRow, float: true }],
+  ['sign', { integer: 'checked' as IntegerRow, float: true }],
+  ['min', { integer: 'checked' as IntegerRow, float: true }],
+  ['max', { integer: 'checked' as IntegerRow, float: true }],
+  ['pow', { integer: 'checked' as IntegerRow, float: true }],
+  ['floor', { integer: 'identity' as IntegerRow, float: true }],
+  ['ceil', { integer: 'identity' as IntegerRow, float: true }],
+  ['round', { integer: 'identity' as IntegerRow, float: true }],
+  ['trunc', { integer: 'identity' as IntegerRow, float: true }],
+  ['sqrt', { integer: 'root' as IntegerRow, float: true }],
+  ['cbrt', { integer: 'root' as IntegerRow, float: true }],
+  ['clz32', { integer: 'leadingZeros' as IntegerRow, float: false }],
+  ['clz', { integer: 'leadingZeros' as IntegerRow, float: false }],
+  ['imul', { integer: 'imul' as IntegerRow, float: false }],
+  // The transcendentals, the two-argument approximations, and the format and
+  // iterable functions: a float row and no integer row.
+  ['exp', { float: true }],
+  ['expm1', { float: true }],
+  ['log', { float: true }],
+  ['log1p', { float: true }],
+  ['log2', { float: true }],
+  ['log10', { float: true }],
+  ['sin', { float: true }],
+  ['cos', { float: true }],
+  ['tan', { float: true }],
+  ['asin', { float: true }],
+  ['acos', { float: true }],
+  ['atan', { float: true }],
+  ['sinh', { float: true }],
+  ['cosh', { float: true }],
+  ['tanh', { float: true }],
+  ['asinh', { float: true }],
+  ['acosh', { float: true }],
+  ['atanh', { float: true }],
+  ['atan2', { float: true }],
+  ['hypot', { float: true }],
+  ['fround', { float: true }],
+  ['f16round', { float: true }],
+  ['sumPrecise', { float: true }],
+]);
+
+function isIntegerTypeName(name: string): boolean {
+  return name === 'int' || name === 'uint';
+}
+
+function isFloatTypeName(name: string): boolean {
+  return name === 'float16' || name === 'float32' || name === 'float64';
+}
+
+/** The declared width of a sized integer type. */
+function integerWidth(t: TypeRecord & { Kind: 'primitive' }): number {
+  const first = t.Arguments[0];
+  return typeof first === 'number' ? first : 0;
+}
+
+/**
+ * The exact integer square root: the greatest r with r*r <= n. The host's square
+ * root is a double, so its floor can be off by one near a perfect square; the
+ * corrections settle it exactly.
+ */
+function integerSqrt(n: number): number {
+  if (n < 2) {
+    return n;
+  }
+  let r = Math.floor(Math.sqrt(n));
+  while (r > 0 && r * r > n) {
+    r -= 1;
+  }
+  while ((r + 1) * (r + 1) <= n) {
+    r += 1;
+  }
+  return r;
+}
+
+/** The exact integer cube root, truncated toward zero, so it is defined for a negative. */
+function integerCbrt(n: number): number {
+  const sign = n < 0 ? -1 : 1;
+  const a = Math.abs(n);
+  if (a < 2) {
+    return sign * a;
+  }
+  let r = Math.floor(Math.cbrt(a));
+  while (r > 0 && r * r * r > a) {
+    r -= 1;
+  }
+  while ((r + 1) * (r + 1) * (r + 1) <= a) {
+    r += 1;
+  }
+  return sign * r;
+}
+
+/**
+ * The leading-zero count of a value at a width: the width less the bit length of
+ * the value taken modulo 2**width, so a negative value counts in its two's
+ * complement encoding.
+ */
+function countLeadingZeros(value: number, bits: number): number {
+  const modulus = 2 ** bits;
+  let v = ((value % modulus) + modulus) % modulus;
+  let length = 0;
+  while (v >= 1) {
+    v = Math.floor(v / 2);
+    length += 1;
+  }
+  return bits - length;
+}
+
+/**
+ * The numeric library's dispatch. It wraps a Math function's native steps: with no
+ * typed argument the ordinary steps run and mean what they mean today, and with one
+ * the row of the listing is selected and its return rule applied.
+ */
+function withNumericLibrarySignatures(steps: NativeSteps, functionName: string): NativeSteps {
+  const wrapped: NativeSteps = function* withNumericLibrarySignatures(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext) {
+    if (!surroundingAgent.feature('runtime-types')) {
+      let plain = steps.call(this, args, context);
+      if (isEvaluator(plain)) {
+        plain = yield* plain;
+      }
+      return plain;
+    }
+    // Every signature takes its numeric parameters at one type. Two typed
+    // arguments of different types are viable at no signature.
+    let carried: (TypeRecord & { Kind: 'primitive' }) | undefined;
+    for (const arg of args) {
+      if (arg !== undefined && isTypedNumber(arg)) {
+        const record = arg.TypeRecord as TypeRecord;
+        if (record.Kind !== 'primitive') {
+          continue;
+        }
+        if (carried === undefined) {
+          carried = record as TypeRecord & { Kind: 'primitive' };
+        } else if (!SameType(carried, record)) {
+          return Throw.TypeError(
+            '$1 has no signature taking values of two numeric types',
+            Value(`Math.${functionName}`),
+          );
+        }
+      }
+    }
+    if (carried === undefined) {
+      // No typed argument: the existing signature over the Number type, unchanged.
+      let plain = steps.call(this, args, context);
+      if (isEvaluator(plain)) {
+        plain = yield* plain;
+      }
+      return plain;
+    }
+    const row = numericLibraryRows.get(functionName);
+    const name = carried.Name;
+    const integer = isIntegerTypeName(name);
+    if (!row || (integer ? row.integer === undefined : !(isFloatTypeName(name) && row.float))) {
+      return Throw.TypeError(
+        '$1 has no signature taking a value of type $2',
+        Value(`Math.${functionName}`),
+        Value(displayType(carried)),
+      );
+    }
+    // A plain numeric argument beside a typed one is a literal and takes the
+    // parameter's type, so one it cannot represent matches no signature.
+    for (const arg of args) {
+      if (arg !== undefined && arg instanceof NumberValue && !fitsNumericType(R(arg) as number, name, carried.Arguments)) {
+        return Throw.TypeError('$1 is not assignable to $2', arg, Value(displayType(carried)));
+      }
+    }
+    if (integer) {
+      return yield* evaluateIntegerRow(row.integer!, functionName, args, carried, steps, this, context);
+    }
+    // A float row: the ordinary steps compute the approximation, and the result is
+    // rounded to the width, which is the conversion table's float rule and keeps
+    // float values wrapToType-stable.
     let result = steps.call(this, args, context);
     if (isEvaluator(result)) {
       result = yield* result;
     }
-    if (!surroundingAgent.feature('runtime-types')) {
-      return result;
-    }
-    let carried: TypeRecord | undefined;
-    for (const arg of args) {
-      if (arg instanceof TypedNumberValue) {
-        const record = (arg as TypedNumberValue).TypeRecord as TypeRecord;
-        if (carried === undefined) {
-          carried = record;
-        } else if (!SameType(carried, record)) {
-          return result;
-        }
-      }
-    }
-    if (carried === undefined || carried.Kind !== 'primitive') {
-      return result;
-    }
     const value = Q(result);
     if (!(value instanceof NumberValue)) {
-      return result;
+      return value;
     }
-    const n = value.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the plain result is read to decide whether it belongs to the argument's type
-    const name = carried.Name;
-    if (name === 'float16' || name === 'float32' || name === 'float64') {
-      return new TypedNumberValue(wrapToType(n, carried), carried);
-    }
-    if ((name === 'int' || name === 'uint') && Number.isInteger(n) && fitsNumericType(n, name, carried.Arguments)) {
-      return new TypedNumberValue(n, carried);
-    }
-    return result;
+    const payload = value.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the payload is stored as given, so a negative zero survives
+    return new TypedNumberValue(wrapToType(payload, carried), carried);
   };
   // The wrapper stands in for the function it wraps, so it carries that function's
   // name and specification section: the suites check that every built-in has both,
@@ -668,6 +840,96 @@ function withNumericTypePreserved(steps: NativeSteps): NativeSteps {
   wrapped.section = steps.section;
   return wrapped;
 }
+
+/** Evaluate the integer row of the listing and apply its return rule. */
+function* evaluateIntegerRow(
+  row: IntegerRow,
+  functionName: string,
+  args: Arguments,
+  t: TypeRecord & { Kind: 'primitive' },
+  steps: NativeSteps,
+  thisArg: ThisParameterType<NativeSteps>,
+  context: FunctionCallContext,
+) {
+  const width = integerWidth(t);
+  // The row's own domain errors are raised before any result exists.
+  const first = args[0] ?? Value.undefined;
+  if (functionName === 'sqrt' && isTypedNumber(first) && first.value < 0) {
+    return Throw.RangeError('$1 of a negative value is not defined', Value('Math.sqrt'));
+  }
+  if (functionName === 'pow') {
+    const exponent = args[1] ?? Value.undefined;
+    const exponentValue = isTypedNumber(exponent)
+      ? exponent.value
+      : (exponent instanceof NumberValue ? (R(exponent) as number) : 0);
+    if (exponentValue < 0) {
+      return Throw.RangeError('$1 with a negative exponent is not defined for an integer type', Value('Math.pow'));
+    }
+  }
+  if (row === 'identity') {
+    // The floor, ceiling, and roundings of an integer are that integer.
+    return first as Value;
+  }
+  if (row === 'imul') {
+    // The result is fixed by the function's own definition rather than by the
+    // argument's type, so it is an int32 whatever T the arguments carry.
+    const a = Q(yield* ToUint32(args[0] ?? Value.undefined));
+    const b = Q(yield* ToUint32(args[1] ?? Value.undefined));
+    const product = ((R(a) as number) * (R(b) as number)) % (2 ** 32);
+    const int32 = product >= 2 ** 31 ? product - 2 ** 32 : product;
+    return new TypedNumberValue(int32, int32TypeRecord);
+  }
+  if (row === 'leadingZeros') {
+    // clz32 counts in a 32-bit field whatever the argument's width; clz counts in
+    // the argument's own. Both check their count at the return.
+    const bits = functionName === 'clz32' ? 32 : width;
+    const value = isTypedNumber(first)
+      ? first.value
+      : (R(Q(yield* ToNumber(first))) as number);
+    const count = countLeadingZeros(Math.trunc(value), bits);
+    return checkedIntegerResult(count, t);
+  }
+  if (row === 'root') {
+    const value = isTypedNumber(first) ? first.value : 0;
+    const result = functionName === 'sqrt' ? integerSqrt(value) : integerCbrt(value);
+    return checkedIntegerResult(result, t);
+  }
+  // 'checked': the exact result of the ordinary steps, checked at T.
+  let computed = steps.call(thisArg, args, context);
+  if (isEvaluator(computed)) {
+    computed = yield* computed;
+  }
+  const value = Q(computed);
+  if (!(value instanceof NumberValue)) {
+    return value;
+  }
+  return checkedIntegerResult(R(value) as number, t);
+}
+
+/**
+ * The checked return of an integer row: a representable result is a value of the
+ * type, and one the type cannot represent raises rather than wrapping, which is
+ * what separates the named function from the operator.
+ */
+function checkedIntegerResult(result: number, t: TypeRecord & { Kind: 'primitive' }) {
+  if (!Number.isInteger(result) || !fitsNumericType(result, t.Name, t.Arguments)) {
+    return Throw.RangeError('$1 is not in the range of $2', Value(String(result)), Value(displayType(t)));
+  }
+  // An integer type has no signed zero.
+  return new TypedNumberValue(result === 0 ? 0 : result, t);
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-counting-leading-zeros */
+function* Math_clz([x = Value.undefined]: Arguments): ValueEvaluator {
+  // The wrapper evaluates the typed rows. Reaching the native steps means the
+  // argument carried no numeric type, and `clz` has no untyped signature: the
+  // width is the whole of its meaning, and `Math.clz32` is the 32-bit count.
+  Q(yield* ToNumber(x));
+  return Throw.TypeError('$1 requires an argument of a sized integer type', Value('Math.clz'));
+}
+
+/** The int32 type `Math.imul` returns, whatever type its arguments carry. */
+const int32TypeRecord: TypeRecord & { Kind: 'primitive' } = { Kind: 'primitive', Name: 'int', Arguments: [32] };
 
 export function bootstrapMath(realmRec: Realm) {
   /** https://tc39.es/ecma262/#sec-value-properties-of-the-math-object */
@@ -683,43 +945,48 @@ export function bootstrapMath(realmRec: Realm) {
     ['PI', F(3.141592653589793), undefined, readonly],
     ['SQRT1_2', F(0.7071067811865476), undefined, readonly],
     ['SQRT2', F(1.4142135623730951), undefined, readonly],
-    ['abs', withNumericTypePreserved(Math_abs), 1],
-    ['acos', withNumericTypePreserved(Math_acos), 1],
-    ['acosh', withNumericTypePreserved(Math_acosh), 1],
-    ['asin', withNumericTypePreserved(Math_asin), 1],
-    ['asinh', withNumericTypePreserved(Math_asinh), 1],
-    ['atan', withNumericTypePreserved(Math_atan), 1],
-    ['atan2', withNumericTypePreserved(Math_atan2), 2],
-    ['atanh', withNumericTypePreserved(Math_atanh), 1],
-    ['cbrt', withNumericTypePreserved(Math_cbrt), 1],
-    ['ceil', withNumericTypePreserved(Math_ceil), 1],
-    ['clz32', withNumericTypePreserved(Math_clz32), 1],
-    ['cos', withNumericTypePreserved(Math_cos), 1],
-    ['cosh', withNumericTypePreserved(Math_cosh), 1],
-    ['exp', withNumericTypePreserved(Math_exp), 1],
-    ['expm1', withNumericTypePreserved(Math_expm1), 1],
-    ['f16round', withNumericTypePreserved(Math_f16round), 1],
-    ['floor', withNumericTypePreserved(Math_floor), 1],
-    ['fround', withNumericTypePreserved(Math_fround), 1],
-    ['hypot', withNumericTypePreserved(Math_hypot), 2],
-    ['imul', withNumericTypePreserved(Math_imul), 2],
-    ['log', withNumericTypePreserved(Math_log), 1],
-    ['log10', withNumericTypePreserved(Math_log10), 1],
-    ['log1p', withNumericTypePreserved(Math_log1p), 1],
-    ['log2', withNumericTypePreserved(Math_log2), 1],
-    ['max', withNumericTypePreserved(Math_max), 2],
-    ['min', withNumericTypePreserved(Math_min), 2],
-    ['pow', withNumericTypePreserved(Math_pow), 2],
-    ['random', withNumericTypePreserved(Math_random), 0],
-    ['round', withNumericTypePreserved(Math_round), 1],
-    ['sign', withNumericTypePreserved(Math_sign), 1],
-    ['sin', withNumericTypePreserved(Math_sin), 1],
-    ['sinh', withNumericTypePreserved(Math_sinh), 1],
-    ['sqrt', withNumericTypePreserved(Math_sqrt), 1],
-    ['sumPrecise', withNumericTypePreserved(Math_sumPrecise), 1],
-    ['tan', withNumericTypePreserved(Math_tan), 1],
-    ['tanh', withNumericTypePreserved(Math_tanh), 1],
-    ['trunc', withNumericTypePreserved(Math_trunc), 1],
+    ['abs', withNumericLibrarySignatures(Math_abs, 'abs'), 1],
+    ['acos', withNumericLibrarySignatures(Math_acos, 'acos'), 1],
+    ['acosh', withNumericLibrarySignatures(Math_acosh, 'acosh'), 1],
+    ['asin', withNumericLibrarySignatures(Math_asin, 'asin'), 1],
+    ['asinh', withNumericLibrarySignatures(Math_asinh, 'asinh'), 1],
+    ['atan', withNumericLibrarySignatures(Math_atan, 'atan'), 1],
+    ['atan2', withNumericLibrarySignatures(Math_atan2, 'atan2'), 2],
+    ['atanh', withNumericLibrarySignatures(Math_atanh, 'atanh'), 1],
+    ['cbrt', withNumericLibrarySignatures(Math_cbrt, 'cbrt'), 1],
+    ['ceil', withNumericLibrarySignatures(Math_ceil, 'ceil'), 1],
+    ['clz32', withNumericLibrarySignatures(Math_clz32, 'clz32'), 1],
+    // proposal-runtime-types (spec, counting leading zeros): the width-relative
+    // count. Gated, so the flag-off engine is unchanged.
+    surroundingAgent.feature('runtime-types')
+      ? ['clz', withNumericLibrarySignatures(Math_clz, 'clz'), 1] as const
+      : undefined,
+    ['cos', withNumericLibrarySignatures(Math_cos, 'cos'), 1],
+    ['cosh', withNumericLibrarySignatures(Math_cosh, 'cosh'), 1],
+    ['exp', withNumericLibrarySignatures(Math_exp, 'exp'), 1],
+    ['expm1', withNumericLibrarySignatures(Math_expm1, 'expm1'), 1],
+    ['f16round', withNumericLibrarySignatures(Math_f16round, 'f16round'), 1],
+    ['floor', withNumericLibrarySignatures(Math_floor, 'floor'), 1],
+    ['fround', withNumericLibrarySignatures(Math_fround, 'fround'), 1],
+    ['hypot', withNumericLibrarySignatures(Math_hypot, 'hypot'), 2],
+    ['imul', withNumericLibrarySignatures(Math_imul, 'imul'), 2],
+    ['log', withNumericLibrarySignatures(Math_log, 'log'), 1],
+    ['log10', withNumericLibrarySignatures(Math_log10, 'log10'), 1],
+    ['log1p', withNumericLibrarySignatures(Math_log1p, 'log1p'), 1],
+    ['log2', withNumericLibrarySignatures(Math_log2, 'log2'), 1],
+    ['max', withNumericLibrarySignatures(Math_max, 'max'), 2],
+    ['min', withNumericLibrarySignatures(Math_min, 'min'), 2],
+    ['pow', withNumericLibrarySignatures(Math_pow, 'pow'), 2],
+    ['random', Math_random, 0],
+    ['round', withNumericLibrarySignatures(Math_round, 'round'), 1],
+    ['sign', withNumericLibrarySignatures(Math_sign, 'sign'), 1],
+    ['sin', withNumericLibrarySignatures(Math_sin, 'sin'), 1],
+    ['sinh', withNumericLibrarySignatures(Math_sinh, 'sinh'), 1],
+    ['sqrt', withNumericLibrarySignatures(Math_sqrt, 'sqrt'), 1],
+    ['sumPrecise', withNumericLibrarySignatures(Math_sumPrecise, 'sumPrecise'), 1],
+    ['tan', withNumericLibrarySignatures(Math_tan, 'tan'), 1],
+    ['tanh', withNumericLibrarySignatures(Math_tanh, 'tanh'), 1],
+    ['trunc', withNumericLibrarySignatures(Math_trunc, 'trunc'), 1],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Math');
 
   realmRec.Intrinsics['%Math%'] = mathObj;

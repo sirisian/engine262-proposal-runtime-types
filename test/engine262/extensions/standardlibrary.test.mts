@@ -76,23 +76,24 @@ test('standard library: a Math function preserves a float argument type', () => 
   expect(evaluated('let x = Math.sqrt((2 := float32)); String(Number(x) - Math.fround(Number(x)));')).toBe('0');
 });
 
-test('standard library: an integer type is preserved only where the result is one', () => {
+test('standard library: an integer row returns the integer answer', () => {
   // the rule holds where the result is a number of the same kind
   expect(evaluated('(Math.abs(((0 - 5) := int32)) is int32) ? "i32" : "plain";')).toBe('i32');
   expect(evaluated('(Math.sign(((0 - 5) := int32)) is int32) ? "i32" : "plain";')).toBe('i32');
   expect(evaluated('(Math.max((1 := uint8), (2 := uint8)) is uint8) ? "u8" : "plain";')).toBe('u8');
-  // a square root is generally not an integer, so it stays a plain Number rather
-  // than being forced into a type it does not belong to
-  expect(evaluated('(Math.sqrt((2 := int32)) is int32) ? "i32" : "plain";')).toBe('plain');
-  expect(evaluated('String(Math.sqrt((2 := int32)) > 1.41);')).toBe('true');
-  expect(evaluated('String(Number.isNaN(Math.sqrt(((0 - 1) := int32))));')).toBe('true');
+  // a root has an integer row: the exact root truncated toward zero, the way
+  // integer division truncates, so it is an int32 and not a plain Number
+  expect(evaluated('(Math.sqrt((2 := int32)) is int32) ? "i32" : "plain";')).toBe('i32');
+  expect(evaluated('String(Number(Math.sqrt((2 := int32))));')).toBe('1');
+  // a negative root has no integer answer and raises
+  expect(evaluated('try { Math.sqrt(((0 - 1) := int32)); "none" } catch (e) { e.constructor.name }')).toBe('RangeError');
 });
 
-test('standard library: preservation needs agreement, and a plain literal does not block it', () => {
+test('standard library: one type per signature, and a literal is ranked into it', () => {
   // a literal written at a call is the case literal propagation already covers
   expect(evaluated('(Math.pow((2 := float32), 3) is float32) ? "f32" : "plain";')).toBe('f32');
-  // two typed arguments of different types have no one type to preserve
-  expect(evaluated('(Math.max((1 := uint8), (2 := uint16)) is uint8) ? "u8" : "plain";')).toBe('plain');
+  // two typed arguments of different types are viable at no signature
+  expect(evaluated('try { Math.max((1 := uint8), (2 := uint16)); "none" } catch (e) { e.constructor.name }')).toBe('TypeError');
   // and an untyped call is untouched
   expect(evaluated('String(Math.sqrt(4));')).toBe('2');
   expect(evaluated('String(Math.max(1, 2));')).toBe('2');
