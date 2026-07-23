@@ -127,6 +127,21 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     Q(yield* Set(globalObj, V.ReferencedName as JSStringValue, W, Value.false));
     return undefined;
   }
+  // proposal-runtime-types (operatoroverloading.md): a write through an index
+  // accessor goes to the class's own `set operator[]`, with the index first and the
+  // value last. Without this the write created an ordinary property while the read
+  // kept dispatching, so the value written was never the value read back.
+  if (V.IndexSetOperator !== undefined) {
+    Q(yield* Call(V.IndexSetOperator, V.Base as Value, [V.ReferencedName as Value, W]));
+    return undefined;
+  }
+  // Where the class declares the read half and no write half, the write reaches
+  // nothing the read will ever look at, so it is reported rather than silently
+  // stored on an ordinary property. The design's other way to make such a write
+  // work, a `get operator[]` that returns a reference, is not implemented yet.
+  if (V.IndexOperator !== undefined) {
+    return Throw.TypeError('this index accessor has no set operator[], so the write would not be read back');
+  }
   // 5. If IsPropertyReference(V) is true, then
   if (IsPropertyReference(V) === Value.true) {
     // a. Let baseObj be ? ToObject(V.[[Base]]).

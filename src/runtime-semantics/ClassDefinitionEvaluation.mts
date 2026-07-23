@@ -123,6 +123,21 @@ export interface DefaultConstructorBuiltinFunction extends BuiltinFunctionObject
 // ClassTail : ClassHeritage? `{` ClassBody? `}`
 /** https://tc39.es/ecma262/#sec-runtime-semantics-classdefinitionevaluation */
 /** https://arai-a.github.io/ecma262-compare/snapshot.html?pr=2417#sec-runtime-semantics-classdefinitionevaluation */
+
+/**
+ * proposal-runtime-types (operatoroverloading.md): the key an operator declaration
+ * takes in the class operator table. A no-parameter declaration is the unary form,
+ * and a `set operator[]` is the write half of the index accessor, kept apart from
+ * the read half so a write dispatches to its own declaration.
+ */
+function operatorTableKey(e: ParseNode.OperatorDefinition): string {
+  const name = e.OperatorName ?? '';
+  if (name === '[]' && e.AccessorKind === 'set') {
+    return '[]=';
+  }
+  return (e.FormalParameters?.length ?? 0) === 0 ? `unary ${name}` : name;
+}
+
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
@@ -298,7 +313,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
+          RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
         }
         continue;
       }
@@ -452,7 +467,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
+          RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
         }
         continue;
       }
@@ -624,7 +639,7 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-        RegisterClassOperator(e.static ? F : proto, e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName, opFn);
+        RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
       }
       continue;
     }

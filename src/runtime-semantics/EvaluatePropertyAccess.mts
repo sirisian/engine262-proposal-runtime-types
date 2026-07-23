@@ -22,12 +22,21 @@ export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expre
   // A non-numeric key, such as a string method name, is left to ordinary access so
   // an index-defining class keeps its methods reachable.
   let indexOperator: Value | undefined;
+  let indexSetOperator: Value | undefined;
   if (surroundingAgent.feature('runtime-types')
       && baseValue instanceof ObjectValue
       && (propertyNameValue instanceof NumberValue || propertyNameValue instanceof TypedNumberValue)) {
     const op = LookupClassOperator(baseValue, '[]');
     if (op) {
       indexOperator = op;
+    }
+    // proposal-runtime-types (operatoroverloading.md): the write half. Carried on
+    // the reference beside the read half so that `m[i] = v` reaches the class's own
+    // declaration rather than quietly creating an ordinary property the dispatching
+    // read would never look at.
+    const setOp = LookupClassOperator(baseValue, '[]=');
+    if (setOp) {
+      indexSetOperator = setOp;
     }
   }
   // 3. Return the Reference Record { [[Base]]: bv, [[ReferencedName]]: propertyKey, [[Strict]]: strict, [[ThisValue]]: empty }.
@@ -37,6 +46,7 @@ export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expre
     Strict: strict ? Value.true : Value.false,
     ThisValue: undefined,
     IndexOperator: indexOperator,
+    IndexSetOperator: indexSetOperator,
   });
 }
 

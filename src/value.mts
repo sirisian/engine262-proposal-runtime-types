@@ -1017,6 +1017,7 @@ export class ReferenceRecord {
   // place of the ordinary property [[Get]]/[[Set]]. The value is the index
   // operator function.
   readonly IndexOperator?: Value;
+  readonly IndexSetOperator?: Value;
 
   constructor({
     Base,
@@ -1024,12 +1025,14 @@ export class ReferenceRecord {
     Strict,
     ThisValue,
     IndexOperator,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator'>) {
+    IndexSetOperator,
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
     this.ThisValue = ThisValue;
     this.IndexOperator = IndexOperator;
+    this.IndexSetOperator = IndexSetOperator;
   }
 
   // NON-SPEC

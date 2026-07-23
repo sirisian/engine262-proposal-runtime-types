@@ -1524,6 +1524,17 @@ export abstract class ExpressionParser extends FunctionParser {
       const ahead = this.peekAhead();
       return this.tokenStartsOperatorTail(ahead.type, ahead.hadLineTerminatorBefore);
     }
+    // proposal-runtime-types (operatoroverloading.md): the index accessor may be
+    // written `get operator[]` or `set operator[]`, the pair that makes a read
+    // dispatch and a write dispatch to different declarations.
+    if ((this.test('get') || this.test('set')) && this.testAhead('operator')) {
+      const checkpoint = this.getLexerCheckpoint();
+      this.next();
+      const ahead = this.peekAhead();
+      const result = this.test('operator') && this.tokenStartsOperatorTail(ahead.type, ahead.hadLineTerminatorBefore);
+      this.restoreLexerCheckpoint(checkpoint);
+      return result;
+    }
     if (this.test('static') && this.testAhead('operator')) {
       // `static operator = 1` is a static field named `operator`; look past
       // `static` to decide.

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, runFlagOff } from '../readme/harness.mts';
+import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
 
 /**
  * User-defined index operator dispatch (read direction).
@@ -13,7 +13,7 @@ import { evaluated, runFlagOff } from '../readme/harness.mts';
  * property access, so an index-defining class keeps its methods reachable. A class
  * with no index operator is unaffected, and the dispatch is gated on the feature.
  *
- * Deferred and not covered here: the write direction (`set operator[]`), the
+ * The write direction is covered below. Deferred and not covered here: the
  * multi-argument form `m[x, y]` (which needs the comma-index grammar of the ranges
  * extension), and overload resolution among several index operators.
  */
@@ -60,4 +60,33 @@ test('with the feature off, a numeric access is an ordinary property read', () =
   const c = runFlagOff('let o = { 0: 7 }; String(o[0]);') as { Type: string, Value: { stringValue?(): string } };
   expect(c.Type).toBe('normal');
   expect(c.Value.stringValue?.()).toBe('7');
+});
+
+// -- The write half of the index accessor --------------------------------------
+const PAIR = 'class M { constructor() { this.v = []; } get operator[](i) { return this.v[i] ?? 0; } set operator[](i, val) { this.v[i] = val * 2; } } ';
+
+test('index operator: a write dispatches to the class set operator[]', () => {
+  // the setter takes the index first and the value last, so the write reaches the
+  // class rather than creating an ordinary property
+  expect(evaluated(PAIR + 'let m = new M(); m[1] = 5; String(m.v[1]);')).toBe('10');
+  // and the read half reads back what the write half stored
+  expect(evaluated(PAIR + 'let m = new M(); m[2] = 7; String(m[2]);')).toBe('14');
+  // the read half still works on its own
+  expect(evaluated(PAIR + 'let m = new M(); m.v[3] = 30; String(m[3]);')).toBe('30');
+});
+
+test('index operator: a read accessor with no write half reports the write', () => {
+  // the write would reach nothing the read will ever look at, so it is reported
+  // rather than silently stored on an ordinary property
+  expectThrown('class R { constructor() { this.v = []; } get operator[](i) { return this.v[i] ?? 0; } } let x = new R(); x[0] = 5;');
+  // a plain operator[] with no prefix is the read half, and behaves the same way
+  expectThrown('class M { operator[](i) { return i * 10; } } let m = new M(); m[0] = 5;');
+  // reading is unaffected
+  expect(evaluated('class M { operator[](i) { return i * 10; } } let m = new M(); String(m[4]);')).toBe('40');
+});
+
+test('index operator: ordinary indexing is untouched', () => {
+  expect(evaluated('let a = [1, 2, 3]; a[1] = 9; String(a[1]);')).toBe('9');
+  expect(evaluated('let o = {}; o[0] = 5; String(o[0]);')).toBe('5');
+  expect(evaluated('String("abc"[1]);')).toBe('b');
 });

@@ -438,6 +438,7 @@ export interface Throw {
   | 'the type in a property descriptor must be a type'
   | 'this has already been initialized'
   | 'this has not been initialized'
+  | 'this index accessor has no set operator[], so the write would not be read back'
   | 'this operator is not defined for a rational'
   | 'timeZone is not a string'
   | 'totalOf is required'

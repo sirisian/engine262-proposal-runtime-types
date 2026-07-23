@@ -2692,6 +2692,9 @@ export namespace ParseNode {
   //   `*` `operator` `...` `(` `)` TypeAnnotation? `;`
   export interface OperatorDefinition extends BaseParseNode {
     readonly type: 'OperatorDefinition';
+    // proposal-runtime-types: 'get' or 'set' for the index accessor pair, absent
+    // for every other operator and for a plain `operator[]`.
+    readonly AccessorKind?: 'get' | 'set';
     readonly static: boolean;
     readonly OperatorGenerator: boolean;
     readonly OperatorName: string | null;

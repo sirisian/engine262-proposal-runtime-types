@@ -678,6 +678,13 @@ export abstract class TypeParser extends ExpressionParser {
       this.next();
       node.static = true;
     }
+    // proposal-runtime-types (operatoroverloading.md): `get operator[]` reads and
+    // `set operator[]` writes, whose last parameter is the value being written. A
+    // plain `operator[]` with no prefix is the read, as it always was.
+    if ((this.test('get') || this.test('set')) && this.testAhead('operator')) {
+      node.AccessorKind = this.test('get') ? 'get' : 'set';
+      this.next();
+    }
     this.expect('operator');
     // proposal-runtime-types (spec sec-class-operators): the index accessors are
     // overloadable. `operator[]` names the index accessor; the `[` `]` pair is the
