@@ -7,6 +7,10 @@ function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
+function expectThrown(source: string) {
+  expect(run(source)).toMatchObject({ Type: 'throw' });
+}
+
 function evaluated(source: string): string {
   const completion = run(source);
   expect(completion).toMatchObject({ Type: 'normal' });
@@ -79,18 +83,78 @@ test('meta: a base with no hook admits any metadata', () => {
   expect(evaluated('String((1 := float64) is float64.<{ a: 1 }>);')).toBe('true');
 });
 
-// GAP PIN. What remains of the keystone, stated precisely so it is not
-// re-diagnosed as the larger problem it was recorded as.
-test('meta: a meta declaration on a META TYPE does not yet govern a parameterization', () => {
-  // The design (primitivemetadata.md) writes `meta Dimensions { ... }`, where
-  // Dimensions is the METADATA type, and expects it to govern any parameterization
-  // whose metadata has that shape. Registration keys hooks on the named type's
-  // own Type Object and IsOfType looks them up on the parameterization's BASE, so
-  // the two never meet, and nothing selects a meta type from a metadata shape.
-  // The hook below is therefore not consulted and the judgment answers true.
+// CLOSED. This pinned the last hole in the keystone: a meta declaration against
+// a METADATA type reached nothing, because registration keyed on that type's own
+// Type Object while IsOfType looked up on the parameterization's base. The
+// claiming rule of sec-primitive-metadata is what connects them, and the hook
+// below is now consulted.
+test('meta: a meta declaration on a META TYPE governs a parameterization', () => {
   expect(evaluated(`
     type Dimensions = { m: int32 };
     meta Dimensions { default = 0; validate(v, m) { return false; } }
     String((1 := float32) is float32.<{ m: 1 }>);
+  `)).toBe('false');
+});
+
+// -- Claiming: how a metadata value finds the meta type that governs it --------
+// "A meta type claims the property keys of its constraint shape. Claiming is
+// global and flat: it is an early error, reported at the second MetaDeclaration
+// rather than at any use, for two meta types to claim one key."
+//
+// This is what makes the design's own form work. `meta Bounds { ... }` is
+// declared against the METADATA type and never names a base, and it governs every
+// parameterization whose metadata uses the keys Bounds declares.
+test('meta: a meta type governs a parameterization through the keys it claims', () => {
+  expect(evaluated(`
+    type Bounds = { min: float64, max: float64 };
+    meta Bounds { default = 0; validate(v, m) { return Number(v) >= m.min && Number(v) <= m.max; } }
+    String(((5 := float32) is float32.<{ min: 0, max: 10 }>) + "/" + ((50 := float32) is float32.<{ min: 0, max: 10 }>));
+  `)).toBe('true/false');
+});
+
+test('meta: one meta type governs every base that uses its keys', () => {
+  // the claim is on the KEYS, so the same meta type judges a different base
+  expect(evaluated(`
+    type Bounds = { min: float64, max: float64 };
+    meta Bounds { default = 0; validate(v, m) { return Number(v) <= m.max; } }
+    String((5 := int32) is int32.<{ min: 0, max: 10 }>);
   `)).toBe('true');
+});
+
+test('meta: two meta types both govern when the metadata uses both their keys', () => {
+  expect(evaluated(`
+    type Lower = { lo: float64 };
+    type Upper = { hi: float64 };
+    meta Lower { default = 0; validate(v, m) { return Number(v) >= m.lo; } }
+    meta Upper { default = 0; validate(v, m) { return Number(v) <= m.hi; } }
+    String(((5 := float32) is float32.<{ lo: 0, hi: 10 }>) + "/" + ((50 := float32) is float32.<{ lo: 0, hi: 10 }>));
+  `)).toBe('true/false');
+});
+
+test('meta: two meta types may not claim one key', () => {
+  // reported at the second declaration, which is where the collision is, and not
+  // at the unlucky program that parameterized on the key last
+  expectThrown(`
+    type A = { unit: float64, a: int32 };
+    type B = { unit: float64, b: int32 };
+    meta A { default = 0; }
+    meta B { default = 0; }
+  `);
+  // distinct keys are fine
+  expect(evaluated(`
+    type P = { pp: float64 };
+    type Q2 = { qq: float64 };
+    meta P { default = 0; }
+    meta Q2 { default = 0; }
+    "ok";
+  `)).toBe('ok');
+});
+
+test('meta: a hook declared against the base still applies', () => {
+  // the two routes coexist: a meta declared against the base judges by the base,
+  // and one declared against a metadata type judges by its claimed keys
+  expect(evaluated(`
+    meta float32 { default = 0; validate(v, m) { return false; } }
+    String((1 := float32) is float32.<{ zzz: 1 }>);
+  `)).toBe('false');
 });

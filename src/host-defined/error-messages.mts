@@ -469,6 +469,7 @@ export interface Throw {
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a typed class and cannot be proxied'
   | '$1 is a typed property and cannot be deleted'
+  | '$1 is already claimed by another meta type'
   | '$1 is already declared'
   | '$1 is an abstract class and cannot be instantiated'
   | '$1 is not a Promise constructor'

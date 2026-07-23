@@ -10,7 +10,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
-import { CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -158,6 +158,20 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   }
   if (!typeObject) {
     return undefined;
+  }
+  // #sec-primitive-metadata: a meta type claims the property keys of its
+  // constraint shape, and it is an error at the SECOND declaration for two meta
+  // types to claim one key. The claim is what lets a metadata value select the
+  // meta type that governs it, which is how `meta Dimensions` reaches a
+  // `float32.<{ m, s }>` it never names.
+  const shape = record ?? (isTypeObject(typeObject) ? (typeObject as { TypeRecord?: TypeRecord }).TypeRecord : undefined);
+  if (shape && shape.Kind === 'object') {
+    for (const property of shape.Properties) {
+      const conflict = ClaimMetaKey(property.key, typeObject as object);
+      if (conflict !== undefined) {
+        return Throw.TypeError('$1 is already claimed by another meta type', Value(property.key));
+      }
+    }
   }
   let sawDefault = false;
   for (const hook of node.MetaHookList) {

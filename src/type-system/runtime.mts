@@ -7,7 +7,7 @@ import {
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, LookupClassType } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, GoverningMetaTypes, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType,
@@ -492,6 +492,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // metadata. The base's Type Object carries the hook.
       if (!Q(yield* IsOfType(value, t.Base))) {
         return false;
+      }
+      // #sec-primitive-metadata: the metadata's own keys select the meta types
+      // that govern it, and those supply the validation judgment. A hook declared
+      // against the BASE is consulted too, which is how `meta float32 { validate }`
+      // works, but the design's own form declares against the METADATA type and
+      // reaches the parameterization through the claim rather than by naming it.
+      const { types: governing } = GoverningMetaTypes(t.Metadata);
+      for (const metaType of governing) {
+        const verdict = Q(yield* ApplyValidateHook(metaType, value, t.Metadata));
+        if (verdict === false) {
+          return false;
+        }
       }
       const baseObject = GetTypeObject(t.Base);
       const verdict = Q(yield* ApplyValidateHook(baseObject, value, t.Metadata));

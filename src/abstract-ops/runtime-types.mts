@@ -359,6 +359,55 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
 // IsOfType; the remaining hooks register here for their consumers.
 const metaHooks = new WeakMap<object, Map<string, Value>>();
 
+/**
+ * proposal-runtime-types (spec, the metadata protocol): "A meta type claims the
+ * property keys of its constraint shape. Claiming is global and flat: it is an
+ * early error, reported at the second MetaDeclaration rather than at any use, for
+ * two meta types to claim one key. A metadata object whose own key no meta type
+ * claims is a type error at the parameterization that writes it."
+ *
+ * This registry is that claim. It is what selects a GOVERNING meta type for a
+ * metadata value: a parameterization's metadata carries keys, each key is claimed
+ * by at most one meta type, and that meta type's hooks judge the parameterization.
+ * Without it a hook could only be declared against the BASE, which is not what the
+ * design writes: `meta Dimensions { ... }` is declared against the metadata type
+ * and is meant to govern every `float32.<{ m, s }>` that uses those keys.
+ *
+ * "Global" is the specification's word about the KEY SPACE, not about process
+ * lifetime: two meta types may not claim one key within a program. The registry is
+ * therefore held per agent, so that one agent's declarations cannot decide another
+ * agent's judgments. Holding it in a module-level Map instead made a claim outlive
+ * the program that wrote it, which showed up immediately as one test's meta type
+ * governing the next test's parameterization.
+ */
+const metaKeyClaimsByAgent = new WeakMap<object, Map<string, object>>();
+
+function claimsForAgent(): Map<string, object> {
+  const agent = surroundingAgent as unknown as object;
+  let claims = metaKeyClaimsByAgent.get(agent);
+  if (!claims) {
+    claims = new Map();
+    metaKeyClaimsByAgent.set(agent, claims);
+  }
+  return claims;
+}
+
+/** Record a meta type's claim over a key. Returns the prior claimant, if any. */
+export function ClaimMetaKey(key: string, typeObject: object): object | undefined {
+  const claims = claimsForAgent();
+  const existing = claims.get(key);
+  if (existing !== undefined && existing !== typeObject) {
+    return existing;
+  }
+  claims.set(key, typeObject);
+  return undefined;
+}
+
+/** The meta type claiming a key, or *undefined* where none does. */
+export function MetaTypeClaiming(key: string): object | undefined {
+  return claimsForAgent().get(key);
+}
+
 export function RegisterMetaHook(typeObject: object, name: string, fn: Value): void {
   let table = metaHooks.get(typeObject);
   if (!table) {
@@ -370,6 +419,29 @@ export function RegisterMetaHook(typeObject: object, name: string, fn: Value): v
 
 export function LookupMetaHook(typeObject: object, name: string): Value | undefined {
   return metaHooks.get(typeObject)?.get(name);
+}
+
+/**
+ * The meta types governing a metadata value: one per own key, deduplicated. A key
+ * no meta type claims is reported by the caller, since the specification places
+ * that error at the parameterization rather than here.
+ */
+export function GoverningMetaTypes(metadata: Value): { types: object[], unclaimed: string[] } {
+  const types: object[] = [];
+  const unclaimed: string[] = [];
+  if (!metadata || typeof metadata !== 'object') {
+    return { types, unclaimed };
+  }
+  const claims = claimsForAgent();
+  for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
+    const claimant = claims.get(key);
+    if (claimant === undefined) {
+      unclaimed.push(key);
+    } else if (!types.includes(claimant)) {
+      types.push(claimant);
+    }
+  }
+  return { types, unclaimed };
 }
 
 export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value): PlainEvaluator<boolean | undefined> {
