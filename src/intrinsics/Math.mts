@@ -1,6 +1,7 @@
 import {
   Value,
   NumberValue,
+  BigIntValue,
   TypedNumberValue,
   isTypedNumber,
   type Arguments,
@@ -478,6 +479,11 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
   Q(RequireObjectCoercible(items));
   const iteratorRecord = Q(yield* GetIterator(items, 'sync'));
   let state: 'minus-zero' | 'not-a-number' | 'minus-infinity' | 'plus-infinity' | 'finite' = 'minus-zero';
+  // proposal-runtime-types (the listing's sumPrecise row): for an iterable of
+  // values of one float type T, the exact sum rounded ONCE to T. The types are
+  // inside the iterable rather than on an argument, so they are read here rather
+  // than by the signature wrapper, which sees no typed argument at all.
+  let carriedFloat: (TypeRecord & { Kind: 'primitive' }) | undefined;
   const sums: number[] = [];
   let count = 0;
   let next: 'not-started' | 'done' | Value = 'not-started';
@@ -488,11 +494,30 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
         const error = Throw.RangeError('$1 is out of range', '');
         return Q(yield* IteratorClose(iteratorRecord, error));
       }
-      if (!(next instanceof NumberValue)) {
-        const error = Throw.TypeError('$1 is not a number', next);
+      let element = next;
+      if (surroundingAgent.feature('runtime-types') && isTypedNumber(element)) {
+        const record = element.TypeRecord as TypeRecord;
+        if (record.Kind !== 'primitive' || !isFloatTypeName(record.Name)) {
+          // The listing gives sumPrecise a float row and no other, so an integer
+          // or other typed element is viable at no signature.
+          const error = Throw.TypeError('$1 has no signature taking a value of type $2', Value('Math.sumPrecise'), Value(displayType(record)));
+          return Q(yield* IteratorClose(iteratorRecord, error));
+        }
+        if (carriedFloat === undefined) {
+          carriedFloat = record as TypeRecord & { Kind: 'primitive' };
+        } else if (!SameType(carriedFloat, record)) {
+          // An iterable mixing two float types is the mixing error, stated at
+          // the element rather than at an argument.
+          const error = Throw.TypeError('$1 has no signature taking values of two numeric types', Value('Math.sumPrecise'));
+          return Q(yield* IteratorClose(iteratorRecord, error));
+        }
+        element = F(element.value);
+      }
+      if (!(element instanceof NumberValue)) {
+        const error = Throw.TypeError('$1 is not a number', element);
         return Q(yield* IteratorClose(iteratorRecord, error));
       }
-      const n = next.value;
+      const n = element.value;
       if (state !== 'not-a-number') {
         if (Number.isNaN(n)) {
           state = 'not-a-number';
@@ -516,19 +541,22 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
       count += 1;
     }
   }
+  // The exact sum is formed over every element and rounded ONCE, here, which is
+  // the property the row promises and what distinguishes it from adding at T.
+  const settle = (v: number) => (carriedFloat === undefined ? F(v) : new TypedNumberValue(wrapToType(v, carriedFloat), carriedFloat));
   if (state === 'not-a-number') {
-    return F(NaN);
+    return settle(NaN);
   }
   if (state === 'plus-infinity') {
-    return F(Infinity);
+    return settle(Infinity);
   }
   if (state === 'minus-infinity') {
-    return F(-Infinity);
+    return settle(-Infinity);
   }
   if (state === 'minus-zero') {
-    return F(-0);
+    return settle(-0);
   }
-  return F(sum(sums));
+  return settle(sum(sums));
 
   function sum(items: number[]) {
     if ('sumPrecise' in Math) {
@@ -793,6 +821,12 @@ function withNumericLibrarySignatures(steps: NativeSteps, functionName: string):
       }
     }
     if (carried === undefined) {
+      // A BigInt is a value of the `bigint` type, so it selects that column of
+      // the listing rather than falling through to the Number signature, which
+      // would reach ToNumber and refuse it.
+      if (args.some((arg) => arg instanceof BigIntValue)) {
+        return yield* evaluateBigIntRow(functionName, args);
+      }
       // No typed argument: the existing signature over the Number type, unchanged.
       let plain = steps.call(this, args, context);
       if (isEvaluator(plain)) {
@@ -930,6 +964,115 @@ function* Math_clz([x = Value.undefined]: Arguments): ValueEvaluator {
 }
 
 /** The int32 type `Math.imul` returns, whatever type its arguments carry. */
+/**
+ * proposal-runtime-types (spec, table-numeric-library-signatures, the `bigint`
+ * column): the rows the listing gives the bigint type.
+ *
+ * They are the seven functions of the TC39 BigInt Math proposal plus the rounding
+ * family as the identity, and they agree with that proposal value for value: the
+ * roots truncate toward zero, a negative square root raises, and exponentiation
+ * refuses a negative exponent. That agreement is deliberate, so that if the
+ * proposal advances, `BigInt.sqrt(x)` and `Math.sqrt` of a bigint are one
+ * mathematics with two spellings rather than two answers.
+ *
+ * A bigint is exact and unbounded, so unlike the sized integer rows nothing here
+ * checks a return: every result these produce is a value of the type. The
+ * arithmetic is done on BigInt throughout for the same reason it has to be.
+ */
+function* evaluateBigIntRow(functionName: string, args: Arguments): ValueEvaluator {
+  const operands: bigint[] = [];
+  for (const arg of args) {
+    if (arg === undefined) {
+      continue;
+    }
+    if (!(arg instanceof BigIntValue)) {
+      // Mixing a bigint with a value of another numeric type is viable at no
+      // signature, exactly as mixing two sized widths is.
+      return Throw.TypeError('$1 has no signature taking values of two numeric types', Value(`Math.${functionName}`));
+    }
+    operands.push(arg.value);
+  }
+  const a = operands[0];
+  if (a === undefined) {
+    return Throw.TypeError('$1 requires an argument', Value(`Math.${functionName}`));
+  }
+  switch (functionName) {
+    case 'abs':
+      return Value(a < 0n ? -a : a);
+    case 'sign':
+      return Value(a > 0n ? 1n : (a < 0n ? -1n : 0n));
+    case 'floor': case 'ceil': case 'round': case 'trunc':
+      // A bigint is already an integer, so each of these is the argument.
+      return Value(a);
+    case 'min': case 'max': {
+      let best = a;
+      for (const v of operands) {
+        if (functionName === 'min' ? v < best : v > best) {
+          best = v;
+        }
+      }
+      return Value(best);
+    }
+    case 'sqrt': {
+      if (a < 0n) {
+        return Throw.RangeError('$1 of a negative value is not defined', Value('Math.sqrt'));
+      }
+      return Value(bigIntSqrt(a));
+    }
+    case 'cbrt':
+      return Value(bigIntCbrt(a));
+    case 'pow': {
+      const b = operands[1];
+      if (b === undefined) {
+        return Throw.TypeError('$1 requires an argument', Value('Math.pow'));
+      }
+      if (b < 0n) {
+        // BigInt::exponentiate's own rule, and the sized integer rows follow it.
+        return Throw.RangeError('$1 with a negative exponent is not defined for an integer type', Value('Math.pow'));
+      }
+      return Value(a ** b);
+    }
+    default:
+      // Every other row of the listing gives the bigint column no signature.
+      return Throw.TypeError('$1 has no signature taking a value of type $2', Value(`Math.${functionName}`), Value('bigint'));
+  }
+}
+
+/** The exact integer square root of a non-negative bigint, by Newton's method. */
+function bigIntSqrt(n: bigint): bigint {
+  if (n < 2n) {
+    return n;
+  }
+  let x = n;
+  let y = (x + 1n) / 2n;
+  while (y < x) {
+    x = y;
+    y = (x + n / x) / 2n;
+  }
+  return x;
+}
+
+/** The exact integer cube root, truncated toward zero, so it is defined for a negative. */
+function bigIntCbrt(n: bigint): bigint {
+  const sign = n < 0n ? -1n : 1n;
+  const a = n < 0n ? -n : n;
+  if (a < 2n) {
+    return sign * a;
+  }
+  // Bisect on the magnitude: the root is at most the value itself.
+  let low = 0n;
+  let high = a;
+  while (low < high) {
+    const mid = (low + high + 1n) / 2n;
+    if (mid * mid * mid <= a) {
+      low = mid;
+    } else {
+      high = mid - 1n;
+    }
+  }
+  return sign * low;
+}
+
 const int32TypeRecord: TypeRecord & { Kind: 'primitive' } = { Kind: 'primitive', Name: 'int', Arguments: [32] };
 
 /**

@@ -516,6 +516,7 @@ export interface Throw {
   | '$1 is too large'
   | '$1 is too small'
   | '$1 of a negative value is not defined'
+  | '$1 requires an argument'
   | '$1 requires an argument of a sized integer type'
   | '$1 with a negative exponent is not defined for an integer type'
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 that is incompatible with the existing property in the proxy target"

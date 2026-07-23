@@ -227,3 +227,67 @@ test('numeric library: the rounding family is identity at an integer type', () =
     expect(evaluated(`String(Number(Math.${fn}(((0 - 5) := int32))));`)).toBe('-5');
   }
 });
+
+// -- The bigint column of the listing -------------------------------------------
+// A BigInt is a value of the `bigint` type, so it selects that column rather than
+// reaching the Number signature, which would call ToNumber and refuse it. The
+// rows are the seven functions of the TC39 BigInt Math proposal plus the rounding
+// family as the identity, and they agree with it value for value.
+test('numeric library: the bigint rows are exact and unbounded', () => {
+  expect(evaluated('String(Math.abs(-5n));')).toBe('5');
+  expect(evaluated('String(Math.sign(-5n));')).toBe('-1');
+  expect(evaluated('String(Math.sign(0n));')).toBe('0');
+  expect(evaluated('String(Math.min(3n, 1n, 2n));')).toBe('1');
+  expect(evaluated('String(Math.max(3n, 1n, 2n));')).toBe('3');
+  // a bigint is already an integer, so the rounding family is the argument
+  for (const fn of ['floor', 'ceil', 'round', 'trunc']) {
+    expect(evaluated(`String(Math.${fn}(7n));`)).toBe('7');
+    expect(evaluated(`String(Math.${fn}(-7n));`)).toBe('-7');
+  }
+  // the result is a bigint, not a Number
+  expect(evaluated('String(typeof Math.abs(-5n));')).toBe('bigint');
+  // and nothing here can overflow, so no row checks a return
+  expect(evaluated('String(Math.pow(2n, 70n));')).toBe('1180591620717411303424');
+});
+
+test('numeric library: the bigint roots truncate toward zero and are exact', () => {
+  expect(evaluated('String(Math.sqrt(17n));')).toBe('4');
+  expect(evaluated('String(Math.sqrt(16n));')).toBe('4');
+  expect(evaluated('String(Math.cbrt(27n));')).toBe('3');
+  // defined for a negative, truncating toward zero
+  expect(evaluated('String(Math.cbrt(-9n));')).toBe('-2');
+  // EXACT at a magnitude no double could answer for: the square root of 10**40
+  expect(evaluated('String(Math.sqrt(10n ** 40n));')).toBe('100000000000000000000');
+  expect(evaluated('String(Math.sqrt(10n ** 40n) * Math.sqrt(10n ** 40n) === 10n ** 40n);')).toBe('true');
+  // a negative square root has no answer in the family
+  expectThrownKind('Math.sqrt(-1n);', 'RangeError');
+  // and exponentiation refuses a negative exponent, BigInt::exponentiate's rule
+  expectThrownKind('Math.pow(2n, -1n);', 'RangeError');
+});
+
+test('numeric library: the bigint column has no other rows', () => {
+  // the transcendentals, the format functions, and the bit functions all give
+  // the bigint column no signature
+  for (const fn of ['sin', 'cos', 'exp', 'log', 'log2', 'log10', 'fround', 'f16round', 'clz32', 'clz']) {
+    expectThrownKind(`Math.${fn}(1n);`, 'TypeError');
+  }
+  expectThrownKind('Math.imul(1n, 1n);', 'TypeError');
+  expectThrownKind('Math.atan2(1n, 1n);', 'TypeError');
+  // and mixing a bigint with another numeric type is viable at no signature
+  expectThrownKind('Math.max(1n, 2);', 'TypeError');
+  expectThrownKind('Math.max(1n, (2 := uint8));', 'TypeError');
+});
+
+// -- sumPrecise reads the types INSIDE its iterable ------------------------------
+test('numeric library: sumPrecise rounds once to the element type', () => {
+  expect(evaluated('(Math.sumPrecise([(1 := float32), (2 := float32)]) is float32) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('String(Number(Math.sumPrecise([(1 := float32), (2 := float32)])));')).toBe('3');
+  expect(evaluated('(Math.sumPrecise([(1 := float64), (2 := float64)]) is float64) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('(Math.sumPrecise([(1 := float16)]) is float16) ? "yes" : "no";')).toBe('yes');
+  // the mixing error, stated at the element rather than at an argument
+  expectThrownKind('Math.sumPrecise([(1 := float32), (2 := float64)]);', 'TypeError');
+  // the row is a float row and no other
+  expectThrownKind('Math.sumPrecise([(1 := uint8)]);', 'TypeError');
+  // and an untyped iterable is untouched
+  expect(evaluated('String(Math.sumPrecise([1, 2, 3]));')).toBe('6');
+});

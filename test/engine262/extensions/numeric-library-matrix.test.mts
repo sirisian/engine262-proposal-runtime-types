@@ -173,3 +173,27 @@ test('numeric library matrix: the named arithmetic forms exist and are integer-t
     }
   }
 });
+
+// -- The bigint column, swept from the same table ------------------------------
+test('numeric library matrix: the bigint column matches the listing', () => {
+  // the rows the listing gives bigint, and the shape of each
+  const BIGINT_ROWS: Record<string, 'value' | 'identity' | 'root' | 'none'> = {
+    abs: 'value', sign: 'value', min: 'value', max: 'value', pow: 'value',
+    floor: 'identity', ceil: 'identity', round: 'identity', trunc: 'identity',
+    sqrt: 'root', cbrt: 'root',
+  };
+  for (const row of ROWS) {
+    const shape = BIGINT_ROWS[row.fn] ?? 'none';
+    const args = Array.from({ length: row.arity }, () => '8n').join(', ');
+    if (shape === 'none') {
+      expectThrownKind(`Math.${row.fn}(${args});`, 'TypeError');
+    } else {
+      // every bigint row answers with a bigint, exact and unbounded
+      expect(evaluated(`String(typeof Math.${row.fn}(${args}));`), `${row.fn} at bigint`).toBe('bigint');
+    }
+  }
+  // and the identity rows really are the identity
+  for (const fn of ['floor', 'ceil', 'round', 'trunc']) {
+    expect(evaluated(`String(Math.${fn}(8n) === 8n);`)).toBe('true');
+  }
+});
