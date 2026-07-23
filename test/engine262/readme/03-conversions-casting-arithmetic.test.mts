@@ -100,13 +100,23 @@ test('Explicit Casting: := wraps a numeric value to the target width', () => {
 });
 
 test('Explicit Casting: := also performs the ordinary primitive conversions', () => {
+  // `number` is the type ToNumber produces, so this cast IS that conversion
   expect(bool('String(("5" := number) === 5);')).toBe(true);
+  // to `string`, the sources that have one canonical text convert
   expect(bool('String((5 := string) === "5");')).toBe(true);
+  expect(bool('String((5n := string) === "5");')).toBe(true);
+  expect(bool('String((true := string) === "true");')).toBe(true);
   expect(bool('String((0 := boolean) === false);')).toBe(true);
-  // a String in range of the numeric type converts; out of range it is rejected
-  // (a String is not a numeric family the wrap rule covers)
-  expect(bool('String(("7" := uint8) === (7 := uint8));')).toBe(true);
+  // but the sources that have only a DIAGNOSTIC text do not, which is what stops
+  // "undefined" and "[object Object]" reaching a user through an annotation
+  expectThrown('(undefined := string);');
+  expectThrown('(null := string);');
+  expectThrown('({} := string);');
+  expectThrown('([1, 2] := string);');
+  // a string to a sized numeric type is a parse, not a cast
+  expectThrown('("7" := uint8);');
   expectThrown('("300" := uint8);');
+  expect(bool('String(uint8.parse("7") === (7 := uint8));')).toBe(true);
   // an object cannot convert to a numeric type
   expectThrown('({} := uint8);');
 });
@@ -169,4 +179,70 @@ test('Integer Division and Remainder: integer / truncates, % is the remainder', 
   expect(bool('String((10 := uint8) / (3 := uint8) === (3 := uint8));')).toBe(true);
   expect(bool('String((10 := uint8) % (3 := uint8) === (1 := uint8));')).toBe(true);
   expect(bool('String((17 := uint8) / (5 := uint8) === (3 := uint8));')).toBe(true);
+});
+
+// A typed annotation is a CHECK, not a coercion. It used to reach for ToNumber
+// before checking anything, which made it accept a string, a Boolean, null, and
+// any object with a valueOf; at a float width there is no range check to catch
+// anything, so a missing field became a NaN that surfaced somewhere else. The
+// Parsing clause settles it: a string is deliberately not a conversion source
+// for a numeric type, and the parse is always written.
+test('Conversions: a numeric annotation accepts only a numeric value', () => {
+  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
+  for (const t of ['uint8', 'int32', 'float64']) {
+    // a well-formed numeric string is refused along with a malformed one
+    expect(thrown(`function g(){return "5";} let a: ${t} = g();`)).toBe('TypeError');
+    expect(thrown(`function g(){return "abc";} let a: ${t} = g();`)).toBe('TypeError');
+    // the quiet ones this closes
+    expect(thrown(`function g(){return "";} let a: ${t} = g();`)).toBe('TypeError');
+    expect(thrown(`function g(){return null;} let a: ${t} = g();`)).toBe('TypeError');
+    expect(thrown(`function g(){return true;} let a: ${t} = g();`)).toBe('TypeError');
+    expect(thrown(`function g(){return [7];} let a: ${t} = g();`)).toBe('TypeError');
+    expect(thrown(`function g(){return {valueOf(){return 7;}};} let a: ${t} = g();`)).toBe('TypeError');
+    // a numeric value still works, and still range-checks
+    expect(evaluated(`function g(){return 5;} let a: ${t} = g(); String(Number(a));`)).toBe('5');
+  }
+  // THE SILENT NaN this closes: a float annotation could not fail before, so a
+  // missing value or an object simply became NaN
+  expect(thrown('function g(){return undefined;} let a: float64 = g();')).toBe('TypeError');
+  expect(thrown('function g(){return {};} let a: float64 = g();')).toBe('TypeError');
+});
+
+test('Conversions: the parse is the written form, and it composes', () => {
+  // the boundary refuses the string; the parse states what was meant
+  expect(evaluated('let a: uint16 = uint16.parse("8080"); String(Number(a));')).toBe('8080');
+  // tryParse gives the same reading with the failure handled by narrowing
+  expect(evaluated(`
+    let p = uint16.tryParse("nope");
+    let a: uint16 = p !== null ? p : uint16.parse("3000");
+    String(Number(a));
+  `)).toBe('3000');
+  // and Number(s) is still a written promotion, so this path stays open too
+  expect(evaluated('function g(){return "7";} let a: uint8 = Number(g()); String(Number(a));')).toBe('7');
+});
+
+// The string arm splits by SOURCE rather than by primitiveness. A Number, a
+// BigInt, and a Boolean each have exactly one canonical text and lose nothing.
+// undefined, null, an object, and a Symbol have only a diagnostic text.
+test('Conversions: a string annotation accepts what has a canonical text', () => {
+  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
+  expect(evaluated('function g(){return 5;} let s: string = g(); s;')).toBe('5');
+  expect(evaluated('function g(){return 5n;} let s: string = g(); s;')).toBe('5');
+  expect(evaluated('function g(){return true;} let s: string = g(); s;')).toBe('true');
+  expect(evaluated('function g(){return "x";} let s: string = g(); s;')).toBe('x');
+  // and refuses the ones whose text is a diagnostic
+  expect(thrown('function g(){return undefined;} let s: string = g();')).toBe('TypeError');
+  expect(thrown('function g(){return null;} let s: string = g();')).toBe('TypeError');
+  expect(thrown('function g(){return {};} let s: string = g();')).toBe('TypeError');
+  expect(thrown('function g(){return [1,2];} let s: string = g();')).toBe('TypeError');
+  // String(v) remains the written form for those
+  expect(evaluated('function g(){return undefined;} let s: string = String(g()); s;')).toBe('undefined');
+});
+
+// The boolean arm is deliberately UNCHANGED: ToBoolean is total, every value has
+// a defined truthiness, and `if (x)` is the language's own idiom for it.
+test('Conversions: a boolean annotation still takes any value', () => {
+  expect(evaluated('function g(){return {};} let b: boolean = g(); String(b);')).toBe('true');
+  expect(evaluated('function g(){return undefined;} let b: boolean = g(); String(b);')).toBe('false');
+  expect(evaluated('function g(){return "";} let b: boolean = g(); String(b);')).toBe('false');
 });

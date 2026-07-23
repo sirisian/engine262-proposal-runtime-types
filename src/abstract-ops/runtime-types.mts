@@ -1,5 +1,5 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
-import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
@@ -45,6 +45,43 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
 }
 
 /** #sec-the-conversion-rule */
+/**
+ * proposal-runtime-types #sec-conversions: the numeric conversions are keyed on
+ * NUMERIC families, so a numeric target has a conversion available only when the
+ * value is itself numeric. Anything else is not a conversion this specification
+ * describes, and reading a number out of it is a different operation with a
+ * different name (`uint8.parse` for a string).
+ */
+function isNumericConversionSource(value: Value): boolean {
+  return value instanceof NumberValue || value instanceof TypedNumberValue;
+}
+
+/**
+ * proposal-runtime-types: which values convert to a `string`. The rule splits by
+ * SOURCE rather than by primitiveness, because primitiveness is not what makes a
+ * conversion safe here.
+ *
+ * A Number, a BigInt, and a Boolean each have exactly one canonical text, and
+ * ToString of them is total and loses nothing: `5` is `'5'` and round-trips. That
+ * is worth having implicitly, and it is why this is not simply the mirror of the
+ * numeric rule (ToNumber of a string is partial and lossy, so it is refused; a
+ * ToString of a number is neither).
+ *
+ * *undefined*, *null*, an object, and a Symbol are refused. They have no
+ * canonical text, only a diagnostic one, and the results are the classic silent
+ * failures: `'undefined'` reaching a user interface, `'[object Object]'`, and an
+ * array quietly becoming its comma-joined elements. A program that wants those
+ * writes `String(v)` and says so.
+ */
+function isStringConversionSource(value: Value): boolean {
+  return value instanceof JSStringValue
+    || value instanceof TypedStringValue
+    || value instanceof NumberValue
+    || value instanceof TypedNumberValue
+    || value instanceof BigIntValue
+    || value instanceof BooleanValue;
+}
+
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   const already = Q(yield* IsOfType(value, t));
   if (already) {
@@ -64,6 +101,13 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   if (t.Kind === 'primitive') {
     switch (t.Name) {
       case 'string':
+        // Split by source rather than by primitiveness: a Number, a BigInt, and a
+        // Boolean each have one canonical text and lose nothing, while *undefined*,
+        // *null*, an object, and a Symbol have only a diagnostic text and produce
+        // the classic silent failures. A program that wants those writes String(v).
+        if (!isStringConversionSource(value)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
         return Q(yield* ToString(value));
       case 'number':
         return Q(yield* ToNumber(value));
@@ -81,7 +125,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // `uint8(300)` is 44. The conversion table is keyed on numeric families,
         // so a non-numeric source (a String, an object) is not a family the wrap
         // covers and takes the checked path, which throws when it cannot fit.
-        if (value instanceof NumberValue || value instanceof TypedNumberValue) {
+        if (isNumericConversionSource(value)) {
           const n = Q(yield* ToNumber(value));
           // The payload stored on a typed value is the NUMBER, not its
           // mathematical value: R maps a negative zero to positive zero, which is
@@ -91,11 +135,15 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           const payload = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
           return new TypedNumberValue(wrapToType(payload, t), t);
         }
-        const n = Q(yield* ToNumber(value));
-        if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
-          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        // A cast means "discard information from a numeric value", so a source
+        // that is not numeric has no cast to perform. Reading a number out of a
+        // string is a PARSE, a different operation with its own name and its own
+        // two failures, and the Parsing clause says so: a string is deliberately
+        // not a conversion source for a numeric type.
+        if (value instanceof JSStringValue || value instanceof TypedStringValue) {
+          return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
         }
-        return new TypedNumberValue(R(n) as number, t);
+        return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
       default:
         break;
@@ -144,6 +192,13 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (t.Kind === 'primitive') {
     switch (t.Name) {
       case 'string':
+        // Split by source rather than by primitiveness: a Number, a BigInt, and a
+        // Boolean each have one canonical text and lose nothing, while *undefined*,
+        // *null*, an object, and a Symbol have only a diagnostic text and produce
+        // the classic silent failures. A program that wants those writes String(v).
+        if (!isStringConversionSource(value)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
         return Q(yield* ToString(value));
       case 'number':
         return Q(yield* ToNumber(value));
@@ -155,12 +210,23 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       case 'float32':
       case 'float64': {
         // #sec-requiretype separates the two ways a checked conversion fails, and
-        // they are different errors. When the source is itself a numeric value the
-        // question is one of RANGE: the conversion is available and the only issue
-        // is whether this value survives it, so an unrepresentable one is a
-        // RangeError. When the source is of some other type there is no numeric
-        // conversion to attempt at all, and that is a TypeError.
-        const sourceIsNumeric = value instanceof NumberValue || value instanceof TypedNumberValue;
+        // they are different errors. Step 2 applies only when the value is ITSELF
+        // numeric: a conversion is available and the only question is one of
+        // RANGE, so an unrepresentable value is a RangeError. Step 3 is everything
+        // else, where there is no numeric conversion to attempt at all, and that
+        // is a TypeError raised before any coercion is tried.
+        //
+        // Reaching for ToNumber first, as this once did, made the annotation a
+        // coercion rather than a check: it accepted a string, a Boolean, *null*,
+        // and any object with a `valueOf`, and at a float width it could not even
+        // fail, so a missing field became a NaN that surfaced somewhere else.
+        if (!isNumericConversionSource(value)) {
+          if (value instanceof JSStringValue || value instanceof TypedStringValue) {
+            return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
+          }
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        const sourceIsNumeric = true;
         const n = Q(yield* ToNumber(value));
         const math = R(n) as number;
         // The range check asks a question about the mathematical value, where a

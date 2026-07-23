@@ -23,10 +23,19 @@ test('is evaluates to the membership test', () => {
 });
 
 test(':= applies the conversion rule', () => {
+  // `number` is the type ToNumber produces, so a cast to it IS that conversion
+  // written out, and it still converts a string.
   expect(evaluated('("5" := number) === 5 ? "ok" : "no";')).toBe('ok');
+  // a Number, a BigInt, and a Boolean each have one canonical text
   expect(evaluated('(5 := string) === "5" ? "ok" : "no";')).toBe('ok');
   expect(evaluated('(0 := boolean) === false ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('("7" := uint8) === (7 := uint8) ? "ok" : "no";')).toBe('ok');
+  // SUPERSEDED: a string to a SIZED numeric type is not a cast. A cast discards
+  // information from a numeric value; reading a number out of text is a parse,
+  // with its own name and its own two failures.
+  expectThrown('("7" := uint8);');
+  expect(evaluated('uint8.parse("7") === (7 := uint8) ? "ok" : "no";')).toBe('ok');
+  // and the written promotion still composes, since Number(s) is a numeric value
+  expect(evaluated('(Number("7") := uint8) === (7 := uint8) ? "ok" : "no";')).toBe('ok');
   expectThrown('("300" := uint8);');
   expectThrown('({} := uint8);');
 });

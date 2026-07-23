@@ -18,12 +18,16 @@ function expectThrown(source: string) {
 }
 
 test('annotated parameters convert at the call boundary', () => {
-  // A string argument to a uint8 parameter is out of range: TypeError.
+  // A string argument to a uint8 parameter has no conversion: TypeError.
   expectThrown('function f(a: uint8) { return a; } f("s");');
   // An in-range Number is converted to the numeric value type inside.
   expect(evaluated('function f(a: uint8) { return a is uint8 ? "typed" : "plain"; } f(5);')).toBe('typed');
-  // A convertible string becomes the typed value.
-  expect(evaluated('function f(a: uint8) { return a === (7 := uint8) ? "ok" : "no"; } f("7");')).toBe('ok');
+  // SUPERSEDED: a "convertible" string used to become the typed value, the
+  // boundary reaching for ToNumber before checking anything. The Parsing clause
+  // says a string is deliberately not a conversion source for a numeric type, so
+  // even a well-formed one is refused and the parse is written.
+  expectThrown('function f(a: uint8) { return a; } f("7");');
+  expect(evaluated('function f(a: uint8) { return a === (7 := uint8) ? "ok" : "no"; } f(uint8.parse("7"));')).toBe('ok');
 });
 
 test('return annotations enforce on the way out', () => {
