@@ -7,7 +7,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import {
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow,
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate,
 } from '#self';
 
 /**
@@ -377,8 +377,32 @@ export function* ApplyValidateHook(typeObject: object, value: Value, metadata: V
   if (!fn) {
     return undefined;
   }
-  const result = Q(yield* Call(fn as never, Value.undefined, [value, metadata]));
+  const result = Q(yield* Call(fn as never, Value.undefined, [value, MetadataAsObject(metadata)]));
   return result === Value.true;
+}
+
+/**
+ * proposal-runtime-types: a parameterization's metadata is STORED as a host
+ * record, a frozen null-prototype object whose values are ECMAScript values, so
+ * that SameMetadata can compare two parameterizations structurally without
+ * allocating an object or running user code on an interning path.
+ *
+ * A hook is user code and must receive an ECMAScript object instead. Handing it
+ * the host record put a non-Value into an argument list, which failed Call's own
+ * assertion and brought the engine down rather than throwing: `(1 := float32) is
+ * float32.<{ a: 1 }>` with a `validate` hook declared crashed the host. The
+ * conversion belongs here, at the one boundary where the record reaches a
+ * program, and not in the storage, which the comparison path depends on.
+ */
+function MetadataAsObject(metadata: Value): Value {
+  if (metadata instanceof ObjectValue || metadata === null || typeof metadata !== 'object') {
+    return metadata;
+  }
+  const obj = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  for (const [key, v] of Object.entries(metadata as unknown as Record<string, Value>)) {
+    X(CreateDataPropertyOrThrow(obj, Value(key), v));
+  }
+  return obj;
 }
 
 // proposal-runtime-types M19: parameter and return boundaries. Both read the
