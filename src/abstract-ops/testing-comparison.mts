@@ -361,13 +361,13 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
  */
 function mathematicalValueForLooseEquality(v: Value): number | bigint | undefined {
   if (v instanceof TypedNumberValue) {
-    return (v as TypedNumberValue).numberValue();
+    return (v as TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
   if (v instanceof NumberValue) {
-    return (v as NumberValue).numberValue();
+    return R(v as NumberValue);
   }
   if (v instanceof BigIntValue) {
-    return (v as BigIntValue).bigintValue();
+    return R(v as BigIntValue);
   }
   return undefined;
 }

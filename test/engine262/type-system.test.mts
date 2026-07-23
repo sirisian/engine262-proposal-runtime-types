@@ -41,7 +41,9 @@ test('instanceof is IsOfType membership', () => {
   // value's own type.
   expect(evaluated(`type T = uint8;
     ((5 := T) instanceof T) && !(5 instanceof T) && !("x" instanceof T) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('((7 := uint8) instanceof uint16) ? "no" : "ok";')).toBe('ok');
+  // asked as a question rather than as a guard: a test that decides a branch and
+  // can never succeed is dead code and is rejected by the checker
+  expect(evaluated('String((7 := uint8) instanceof uint16);')).toBe('false');
   expect(evaluated('type S = string; ("hi" instanceof S) && !(5 instanceof S) ? "ok" : "no";')).toBe('ok');
   expect(evaluated('type L = "on"; ("on" instanceof L) && !("off" instanceof L) ? "ok" : "no";')).toBe('ok');
   expect(evaluated('type U = uint8 | string; ((7 := uint8) instanceof U) && ("s" instanceof U) && !(true instanceof U) ? "ok" : "no";')).toBe('ok');

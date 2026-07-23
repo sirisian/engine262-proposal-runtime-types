@@ -102,6 +102,9 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
     return body;
   }
 
+  // The parent links are wired before the checker runs, since the checker reads
+  // the shape a node sits in (whether a test decides a branch, for instance).
+  setNodeParent(body, undefined);
   // proposal-runtime-types #sec-type-errors: the static checker's type errors
   // join the early-error list, as TypeError objects rather than SyntaxError
   // objects, which is the specification's deliberate divergence.
@@ -113,7 +116,6 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
       return typeErrors;
     }
   }
-  setNodeParent(body, undefined);
   // 4. Return Script Record { [[Realm]]: realm, [[ECMAScriptCode]]: body, [[HostDefined]]: hostDefined }.
   const script = new ScriptRecord({
     Realm: realm,
@@ -143,6 +145,9 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
     body.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
     return body;
   }
+  // The parent links are wired before the checker runs, since the checker reads
+  // the shape a node sits in (whether a test decides a branch, for instance).
+  setNodeParent(body, undefined);
   // proposal-runtime-types #sec-type-errors: the same checker gate as the
   // script goal, over module items.
   if (surroundingAgent.feature('runtime-types')) {
@@ -153,7 +158,6 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       return typeErrors;
     }
   }
-  setNodeParent(body, undefined);
   // 4. Let requestedModules be the ModuleRequests of body.
   const requestedModules = ModuleRequests(body);
   // 5. Let importEntries be ImportEntries of body.

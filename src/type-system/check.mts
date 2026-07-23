@@ -5,6 +5,9 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord,
 } from './records.mts';
 import { IsAssignable } from './relations.mts';
+import {
+  NarrowTo, NarrowFrom, nullishType, empty,
+} from './narrowing.mts';
 import { fitsNumericType } from './runtime.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { R, Throw } from '#self';
@@ -392,6 +395,79 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
     }
   };
 
+  /**
+   * The type an expression in a narrowing position DENOTES, when it denotes one.
+   * The right operand of `instanceof` is an expression, so it may name a built-in
+   * type or a type alias, in which case the narrowing rows apply, or it may be an
+   * ordinary constructor, in which case there is no Static Type to narrow against
+   * and the form is left alone.
+   */
+  const typeDenotedBy = (node: ParseNode | null | undefined): Known => {
+    if (!node || node.type !== 'IdentifierReference') {
+      return null;
+    }
+    const name = (node as { name: string }).name;
+    return lookupAlias(name) ?? builtinTypeRecord(name);
+  };
+
+  /**
+   * Whether a test sits where it decides a branch: the condition of `if`, `while`,
+   * `do`, or `for`, the test of a conditional expression, or inside a parenthesis
+   * or a `!` over one of those. The operands of `&&` and `||` guard in a weaker
+   * sense and the specification does not name them, so they are left out of this
+   * pass along with a test written as an ordinary Boolean value.
+   */
+  const guardsABranch = (node: ParseNode): boolean => {
+    let child: ParseNode = node;
+    let parent = (child as { parent?: ParseNode }).parent;
+    while (parent) {
+      switch (parent.type) {
+        case 'IfStatement':
+        case 'WhileStatement':
+        case 'DoWhileStatement':
+        case 'ConditionalExpression':
+          return (parent as unknown as Record<string, unknown>).Expression === child
+            || (parent as unknown as Record<string, unknown>).ShortCircuitExpression === child;
+        case 'ForStatement':
+          return (parent as unknown as Record<string, unknown>).Expression_b === child;
+        case 'ParenthesizedExpression':
+        case 'UnaryExpression':
+          child = parent;
+          parent = (parent as { parent?: ParseNode }).parent;
+          continue;
+        default:
+          return false;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Report a narrowing form whose test cannot succeed, or cannot fail. Both are
+   * type errors: the branch guarded is dead code the program did not intend. A
+   * type the checker does not know is ~any~, which narrows to itself in both
+   * directions and so never reports.
+   */
+  const reportImpossibleTest = (s: TypeRecord, t: TypeRecord, form: string, isGuard: boolean) => {
+    // The specification states this rule about the BRANCHES a narrowing form
+    // decides: a test that can never succeed, or can never fail, leaves a branch
+    // that can never be taken, and that is dead code the program did not intend.
+    // Where the form decides no branch, the same test is merely a question with a
+    // constant answer, which a program may legitimately ask, so it is left alone.
+    if (!isGuard) {
+      return;
+    }
+    if (NarrowTo(s, t) === empty) {
+      const completion = Throw.TypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
+      errors.push(completion.Value as ObjectValue);
+      return;
+    }
+    if (NarrowFrom(s, t) === empty) {
+      const completion = Throw.TypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
+      errors.push(completion.Value as ObjectValue);
+    }
+  };
+
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node) {
       return;
@@ -402,6 +478,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
     }
     const n = node as ParseNode;
     switch (n.type) {
+      // proposal-runtime-types (spec, narrowing): it is a type error to apply a
+      // narrowing form whose test can never succeed or can never fail, those being
+      // the branches for which NarrowTo or NarrowFrom is ~empty~, since the branch
+      // guarded is dead code the program did not intend.
+      case 'RelationalExpression': {
+        const rel = n as ParseNode.RelationalExpression;
+        if (rel.operator === 'instanceof' && rel.RelationalExpression) {
+          const s = staticType(rel.RelationalExpression as ParseNode);
+          const t = typeDenotedBy(rel.ShiftExpression as ParseNode);
+          if (s && t) {
+            reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode));
+          }
+        }
+        break;
+      }
+      case 'CoalesceExpression': {
+        const co = n as ParseNode.CoalesceExpression;
+        const s = staticType(co.CoalesceExpressionHead as ParseNode);
+        if (s) {
+          reportImpossibleTest(s, nullishType(), '??', true);
+        }
+        break;
+      }
       case 'Block':
       case 'CaseBlock':
         pushBlock(() => {

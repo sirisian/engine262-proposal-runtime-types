@@ -640,6 +640,8 @@ export interface Throw {
   | 'super ($1) is not a constructor'
   | 'targetOffset ($1) cannot be negative'
   | 'temporalCalendarLike must be a string or a Temporal object, but got $1'
+  | 'the $1 test can never fail, so the branch it guards is dead code'
+  | 'the $1 test can never succeed, so the branch it guards is dead code'
   | 'the argument bound by ref to $1 does not satisfy its type annotation'
   | 'the call to $1 is ambiguous between overloads'
   | 'the value bound by ref to $1 does not satisfy its type annotation'
