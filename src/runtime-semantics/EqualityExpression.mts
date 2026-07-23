@@ -12,6 +12,8 @@ import {
   ToBoolean,
   surroundingAgent,
   LookupClassOperator,
+  RightOperandDeclaresOperator,
+  Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-equality-operators-runtime-semantics-evaluation */
@@ -47,6 +49,13 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
       }
       return truthy ? Value.false : Value.true;
     }
+  }
+  // proposal-runtime-types (operatoroverloading.md): an equality operator declared
+  // by the RIGHT operand is not reached, since dispatch keys on the left. Report it
+  // rather than falling through to the abstract equality comparison.
+  if ((operator === '==' || operator === '!=')
+      && RightOperandDeclaresOperator(lval, rval, '==')) {
+    return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', '==');
   }
   switch (operator) {
     case '==':

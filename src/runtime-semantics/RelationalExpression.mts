@@ -22,6 +22,7 @@ import {
   Throw,
   surroundingAgent,
   LookupClassOperator,
+  RightOperandDeclaresOperator,
 } from '#self';
 import { ResolvePrivateIdentifier, type PrivateEnvironmentRecord } from '#self';
 
@@ -107,6 +108,14 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
     if (opFn) {
       return Q(yield* Call(opFn as Value, lval, [rval]));
     }
+  }
+  // proposal-runtime-types (operatoroverloading.md): the same operator declared by
+  // the RIGHT operand is not reached, since dispatch keys on the left. Report it
+  // rather than falling through to the abstract comparison, whose answer would not
+  // be the one the declared operator gives.
+  if ((operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
+      && RightOperandDeclaresOperator(lval, rval, operator)) {
+    return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', operator);
   }
   switch (operator) {
     case '<': {

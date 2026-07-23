@@ -219,6 +219,29 @@ export function LookupClassOperator(value: Value, opText: string): Value | null 
   return null;
 }
 
+/**
+ * proposal-runtime-types (operatoroverloading.md): operator dispatch keys on the
+ * LEFT operand, so a class operator declared by the value on the RIGHT is never
+ * reached when the left operand is not an Object. The design closes this with a
+ * `primitive` block on the number type, which belongs to the primitive metadata
+ * extension and is not implemented. Until it is, such an expression falls through
+ * to the ordinary coercion path and quietly produces a value the program did not
+ * ask for: a NaN for most operators, a concatenated String for `+`, and, where the
+ * class also has a `valueOf`, a plain Number in place of the instance the operator
+ * would have returned. Reporting it is better than any of those, so the binary
+ * evaluation sites consult this and throw.
+ *
+ * A String on the left is deliberately excluded: concatenation and string
+ * comparison are the defined meanings there and a program may well want them.
+ */
+export function RightOperandDeclaresOperator(lval: Value, rval: Value, opText: string): boolean {
+  return surroundingAgent.feature('runtime-types')
+    && !(lval instanceof ObjectValue)
+    && !(lval instanceof JSStringValue)
+    && rval instanceof ObjectValue
+    && LookupClassOperator(rval, opText) !== null;
+}
+
 // proposal-runtime-types M13 #sec-meta-hooks: the `default` hook. A meta
 // declaration registers the type's default, and an annotated binding without
 // an initializer takes it. The method hooks (subtype, validate, narrow,

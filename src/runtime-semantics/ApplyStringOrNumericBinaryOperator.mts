@@ -10,7 +10,7 @@ import {
 } from '../intrinsics/Rational.mts';
 import { Q } from '../completion.mts';
 import {
-  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator } from '#self';
+  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, RightOperandDeclaresOperator } from '#self';
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
@@ -25,6 +25,12 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       // the right operand. Dispatch with this = lval and arguments = [rval].
       return Q(yield* Call(opFn as never, lval, [rval]));
     }
+  }
+  // proposal-runtime-types (operatoroverloading.md): the mirror image, where the
+  // operator is declared by the RIGHT operand. Dispatch keys on the left, so this
+  // would otherwise coerce and produce a value the program did not ask for.
+  if (RightOperandDeclaresOperator(lval, rval, opText)) {
+    return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', opText);
   }
   // proposal-runtime-types R3: typed-number arithmetic. When either operand is
   // a numeric value type and neither is a string, compute and wrap into the

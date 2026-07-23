@@ -628,6 +628,7 @@ export interface Throw {
   | 'no parameter named $1 for this call'
   | 'offset option is invalid ($1), only "auto" and "never" are accepted'
   | 'offset option is invalid ($1), only "prefer", "use", "ignore" and "reject" are accepted'
+  | 'operator $1 is declared by the right operand, but operator dispatch keys on the left operand'
   | 'option $1 is required'
   | 'option.padding $1 is not an object'
   | 'options.padding $1 is not an object'

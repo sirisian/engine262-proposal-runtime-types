@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { evaluated, expectThrown } from '../readme/harness.mts';
 
 /**
  * Extension coverage - operatoroverloading.md.
@@ -134,24 +134,40 @@ test('operators: objects without an operator keep default behaviour', () => {
   expect(evaluated('const r = {} + 1; typeof r;')).toBe('string');
 });
 
-// -- Documented gap: scalar-on-the-left ---------------------------------------
-test('operators: scalar-on-the-left is deferred (documents the gap)', () => {
-  // Target: `2 * v` dispatches to the vector's operator through a `primitive`
+// -- An operator declared only by the right operand is reported ----------------
+const V_MUL = 'class V { constructor(x) { this.x = x; } operator*(rhs) { return new V(this.x * 2); } operator+(rhs) { return new V(99); } } ';
+const C_CMP = 'class C { constructor(x) { this.x = x; } operator<(rhs) { return true; } operator==(rhs) { return true; } } ';
+
+test('operators: a value on the left that is not an object does not reach the right operand operator, and says so', () => {
+  // Target: `2 * v` dispatches to the object's operator through a `primitive`
   // block on the number type. That block belongs to the primitive metadata
-  // extension, so today a number on the left does not find the object operator
-  // (dispatch keys on the left operand) and the reverse operation numifies the
-  // object. Division does not commute, so `2 / v` would remain a TypeError even
-  // once the block exists.
-  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs) { return this; } } let v = new V(3); let r = 2 * v; typeof r;')).toBe('number');
+  // extension and is not implemented, so dispatch still keys on the left operand.
+  // What the expression must not do is quietly coerce and answer anyway, which is
+  // what it did before: a NaN here, and for `+` a concatenated string.
+  expectThrown(V_MUL + 'let v = new V(3); 2 * v;');
+  expectThrown(V_MUL + 'let v = new V(3); (2 := uint32) * v;');
+  expectThrown(V_MUL + 'let v = new V(3); 2 + v;');
+  // a compound assignment desugars to the binary operator and is reported too
+  expectThrown(V_MUL + 'let v = new V(3); let x = 2; x *= v;');
+  // the relational and equality operators key on the left operand in the same way
+  expectThrown(C_CMP + 'let c = new C(1); 2 < c;');
+  expectThrown(C_CMP + 'let c = new C(1); 2 == c;');
+  expectThrown(C_CMP + 'let c = new C(1); 2 != c;');
+  // the report names the operator and why it was not reached
+  expect(evaluated(V_MUL + 'let v = new V(3); let m = ""; try { 2 * v; } catch (e) { m = String(e.message.includes("dispatch keys on the left operand")); } m;')).toBe('true');
 });
 
-// -- Documented gap: a typed scalar on the left silently numifies --------------
-test('operators: a typed value on the left of an operator does not dispatch either', () => {
-  // Even a typed scalar on the left takes the numeric path rather than the
-  // object's operator: dispatch keys on the left operand, the object numifies to
-  // NaN, and the result is a plain NaN with no dispatch and no throw. This is the
-  // sharper form of the scalar-on-the-left gap; the primitive block that would
-  // fix it belongs to the primitive metadata extension.
-  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); let r = (2 := uint32) * v; typeof r;')).toBe('number');
-  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); let r = (2 := uint32) * v; String(r);')).toBe('NaN');
+test('operators: reporting the right operand case leaves every neighbouring case alone', () => {
+  // the ordinary direction still dispatches
+  expect(evaluated(V_MUL + 'let v = new V(3); String((v * 2).x);')).toBe('6');
+  expect(evaluated(C_CMP + 'let c = new C(1); String(c < 2);')).toBe('true');
+  // an object that declares no operator for this operation keeps its ordinary
+  // JavaScript meaning, coercion and all
+  expect(evaluated(V_MUL + 'let v = new V(3); String(2 - v);')).toBe('NaN');
+  expect(evaluated('String(2 * {});')).toBe('NaN');
+  expect(evaluated('let o = { valueOf() { return 5; } }; String(2 * o);')).toBe('10');
+  // a String on the left keeps concatenation and string comparison, which are the
+  // defined meanings there and may well be what the program wants
+  expect(evaluated(V_MUL + 'let v = new V(3); ("a" + v).slice(0, 1);')).toBe('a');
+  expect(evaluated(C_CMP + 'let c = new C(1); String("a" < c);')).toBe('false');
 });
