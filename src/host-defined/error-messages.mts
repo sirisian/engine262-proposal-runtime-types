@@ -647,6 +647,7 @@ export interface Throw {
   | 'the argument bound by ref to $1 does not satisfy its type annotation'
   | 'the call to $1 is ambiguous between overloads'
   | 'the value bound by ref to $1 does not satisfy its type annotation'
+  | 'this type has no layout, so it has no $1'
   | 'this value $1 is not an object'
   | 'this.add ($1) is not a function'
   | 'timeZoneName option is invalid ($1), only "auto", "never" and "critical" are accepted'

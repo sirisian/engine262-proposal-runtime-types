@@ -1,6 +1,8 @@
 import { Q } from '../completion.mts';
 import { Value, JSStringValue, NumberValue, TypedNumberValue, type Arguments, type FunctionCallContext } from '../value.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
+import { LayoutOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols } from '#self';
@@ -129,10 +131,47 @@ function parseFloatLiteral(text: string): number {
   return Number(text);
 }
 
+
+/**
+ * proposal-runtime-types (memorylayout.md): the three layout properties every laid
+ * out type exposes. Reading one from a type that has no layout, a `string` or a
+ * union of value types, is a TypeError rather than a number, which is the point: a
+ * program asking for the size of a `string` has made a mistake a returned number
+ * would hide.
+ */
+function layoutOfThis(thisValue: Value, which: 'bitLength' | 'byteLength' | 'alignment') {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const layout = LayoutOf(thisValue.TypeRecord);
+  if (layout === null) {
+    return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
+  }
+  return Value(layout[which]);
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+function* TypeProto_bitLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return layoutOfThis(thisValue, 'bitLength');
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+function* TypeProto_byteLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return layoutOfThis(thisValue, 'byteLength');
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+function* TypeProto_alignmentGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return layoutOfThis(thisValue, 'alignment');
+}
+
 export function bootstrapTypePrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [
     [wellKnownSymbols.hasInstance, TypeProto_hasInstance, 1],
     ['parse', TypeProto_parse, 1],
+    ['bitLength', [TypeProto_bitLengthGetter]],
+    ['byteLength', [TypeProto_byteLengthGetter]],
+    ['alignment', [TypeProto_alignmentGetter]],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Type');
   realmRec.Intrinsics['%Type.prototype%'] = proto;
 }

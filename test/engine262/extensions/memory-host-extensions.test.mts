@@ -19,9 +19,11 @@ test('memory layout: field layout decorators do not parse under the feature (doc
   expectThrown('@packed class A { x: uint8; } typeof A;');
 });
 
-test('memory layout: byteLength/alignment on a type are not present (documents the gap)', () => {
-  // Target: uint32.byteLength === 4, and alignment/bitLength on types.
-  expect(evaluated('typeof uint32.byteLength;')).toBe('undefined');
+test('memory layout: a type reports its own byteLength', () => {
+  expect(evaluated('String(uint32.byteLength);')).toBe('4');
+  // The buffer-backed value runtime these sizes describe, the view constructor
+  // over a buffer and the instance byteLength that goes with it, is still to come.
+  expectThrown('let b = new ArrayBuffer(4); [].<uint8>(b);');
 });
 
 // ── soa: structure of arrays ──────────────────────────────────────────────────
@@ -117,4 +119,47 @@ test('random: each integer value type draws an in-range value at that type', () 
   expect(evaluated('let r = Math.random.<uint32>(); (r is uint32) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('let r = Math.random.<int32>(); (r is int32) ? "yes" : "no";')).toBe('yes');
   expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let r = Math.random.<int32>(); if (!(r >= -2147483648 && r <= 2147483647)) good = false; } good;')).toBe(true);
+});
+
+// ── memorylayout: the three layout properties a laid-out type exposes ─────────
+test('memory layout: a laid out type reports its size, bit width, and alignment', () => {
+  // memorylayout.md's own examples
+  expect(evaluated('String(uint8.byteLength);')).toBe('1');
+  expect(evaluated('String(uint8.bitLength);')).toBe('8');
+  expect(evaluated('type U = uint.<4>; String(U.bitLength);')).toBe('4');
+  // the bits rounded up to a byte
+  expect(evaluated('type U = uint.<4>; String(U.byteLength);')).toBe('1');
+  expect(evaluated('String(float64.byteLength);')).toBe('8');
+  expect(evaluated('String(float64.alignment);')).toBe('8');
+  expect(evaluated('String(float32.byteLength);')).toBe('4');
+  expect(evaluated('String(boolean.byteLength);')).toBe('1');
+});
+
+test('memory layout: an unnamed width takes the natural alignment rule', () => {
+  // the smallest power of two at least the byte length, capped at eight
+  expect(evaluated('type U = uint.<4>; String(U.alignment);')).toBe('1');
+  expect(evaluated('type U = uint.<24>; String(U.byteLength);')).toBe('3');
+  expect(evaluated('type U = uint.<24>; String(U.alignment);')).toBe('4');
+  // the cap: a sixteen byte integer still aligns to eight
+  expect(evaluated('String(int128.byteLength);')).toBe('16');
+  expect(evaluated('String(int128.alignment);')).toBe('8');
+});
+
+test('memory layout: a fixed length array lays out as its element repeated', () => {
+  expect(evaluated('type A = [4].<uint8>; String(A.byteLength);')).toBe('4');
+  expect(evaluated('type A = [3].<float32>; String(A.byteLength);')).toBe('12');
+  expect(evaluated('type A = [3].<float32>; String(A.alignment);')).toBe('4');
+});
+
+test('memory layout: asking a type with no layout for its size is an error', () => {
+  // the point of the rule: a program asking for the size of a string has made a
+  // mistake a returned number would hide
+  expectThrown('string.byteLength;');
+  expectThrown('bigint.byteLength;');
+  expectThrown('type A = any; A.byteLength;');
+  // a union of value types has no single layout
+  expectThrown('type U = uint8 | uint16; U.byteLength;');
+  // and an array with no length is not a laid out type, though its instances have
+  // a byteLength once the buffer-backed runtime lands
+  expectThrown('type A = [].<uint8>; A.byteLength;');
 });
