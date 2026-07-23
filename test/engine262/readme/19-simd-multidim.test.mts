@@ -78,10 +78,12 @@ test('Vectors: a malformed vector is a type error', () => {
   expectThrown('type V = vector.<uint32, -1>; typeof V;');
 });
 
-test('SIMD: the named SIMD lane types are not registered (documents the gap)', () => {
-  // Target (README/spec): the named lane types (float32x4, uint32x4) are SIMD
-  // specializations of vector.<T, N> with broadcast constructors and operators.
-  // The named aliases, broadcast, and operators are the SIMD extension.
-  expectThrown('let a: float32x4;');
-  expectThrown('let a: uint32x4;');
+test('SIMD: the named lane types are registered and are the long form', () => {
+  // The shorthand names are aliases, not new types, so each is the same interned
+  // type as the vector it abbreviates.
+  expect(evaluated('type A = float32x4; type B = vector.<float32, 4>; (A === B) ? "same" : "diff";')).toBe('same');
+  expect(evaluated('type A = uint32x4; String(A.byteLength);')).toBe('16');
+  // Still to come: the broadcast cast from the lane type, the operators over
+  // matching vector types, and lane access.
+  expectThrown('let a: float32x4 = float32x4(1, 2, 3, 4);');
 });

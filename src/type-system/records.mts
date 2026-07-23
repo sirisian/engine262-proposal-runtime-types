@@ -195,6 +195,33 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'int': case 'uint': case 'rational': case 'complex': case 'vector':
       return args.length > 0 ? makePrimitive(name, args) : null;
     default:
+      break;
+  }
+  // proposal-runtime-types (simd.md, and the shorthand table in the README): the
+  // named SIMD lane types. `boolean8` and its siblings are bit vectors of
+  // `boolean1`; the `NxM` names are the register-width vectors, and a name exists
+  // exactly where the lanes fill a register, so `float32x4` has one and a
+  // three-lane float vector does not.
+  const bitVector = /^boolean(8|16|32|64)$/.exec(name);
+  if (bitVector) {
+    return makePrimitive('vector', [makePrimitive('uint', [1]), Number(bitVector[1])]);
+  }
+  const shorthand = /^(boolean|int|uint|float)(\d+)x(\d+)$/.exec(name);
+  if (shorthand) {
+    const [, base, widthText, lanesText] = shorthand;
+    const laneBits = Number(widthText);
+    const lanes = Number(lanesText);
+    if (laneBits * lanes !== 128 && laneBits * lanes !== 256) {
+      return null;
+    }
+    const lane = builtinTypeRecord(`${base}${laneBits}`);
+    if (lane === null) {
+      return null;
+    }
+    return makePrimitive('vector', [lane, lanes]);
+  }
+  switch (name) {
+    default:
       return null;
   }
 }

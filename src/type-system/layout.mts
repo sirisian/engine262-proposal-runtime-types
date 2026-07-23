@@ -80,8 +80,15 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     if (!laneLayout) {
       return null;
     }
-    const width = laneLayout.byteLength * lanes;
-    return { bitLength: width * 8, byteLength: width, alignment: naturalAlignment(width) };
+    // A vector's width is counted in BITS, not in whole lane bytes, so a bit
+    // vector packs: `boolean8` is eight one-bit lanes in a single byte, which is
+    // what makes it a usable bitfield rather than a name for a byte.
+    const bitLength = laneLayout.bitLength * lanes;
+    const byteLength = Math.ceil(bitLength / 8);
+    // A SIMD vector aligns to its WHOLE width rather than the capped natural rule,
+    // which memorylayout.md states for a width no named type has: float32x4 is 16
+    // bytes at alignment 16, because the register it occupies is addressed that way.
+    return { bitLength, byteLength, alignment: byteLength };
   }
   switch (name) {
     case 'float16': return fromBits(16);
