@@ -656,6 +656,7 @@ export interface Throw {
   | 'this value $1 is not an object'
   | 'this.add ($1) is not a function'
   | 'timeZoneName option is invalid ($1), only "auto", "never" and "critical" are accepted'
+  | 'tryParse is not defined for $1'
   , $1: Formattable): ThrowCompletion;
   (m:
 '"add" property ($1) of object $2 is not a function'

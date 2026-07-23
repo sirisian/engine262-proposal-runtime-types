@@ -1,4 +1,4 @@
-import { Q } from '../completion.mts';
+import { EnsureCompletion, Q } from '../completion.mts';
 import { Value, JSStringValue, NumberValue, TypedNumberValue, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
@@ -131,6 +131,44 @@ function parseFloatLiteral(text: string): number {
   return Number(text);
 }
 
+/**
+ * proposal-runtime-types (spec, the Parsing clause): every numeric type that has
+ * `parse` also has `tryParse`, with the same parameters, returning a value of the
+ * type where `parse` would return one and *null* where `parse` would fail. Its
+ * return type is the union of the type and the null type.
+ *
+ * The union is the point of it. A sentinel would have to be a value of the type,
+ * and an integer type has none to spare (`parse` throws rather than returning NaN
+ * for exactly that reason), so the failure is reported beside the type instead of
+ * inside it and is then handled by narrowing: the result is a `uint8` in the
+ * branch that has tested it against *null*, and needs no cast there.
+ *
+ * This delegates to `parse` rather than restating its grammar, so the two cannot
+ * drift: whatever `parse` accepts, `tryParse` accepts, and every rejection
+ * becomes *null*. What does NOT become *null* is misuse of the method itself. A
+ * receiver that is not a type, or a type with no parse at all, is a mistake in
+ * the program rather than a string that failed to parse, and answering *null*
+ * there would report a bad call as a bad input.
+ */
+/** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
+function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arguments, context: FunctionCallContext): ValueEvaluator {
+  const { thisValue } = context;
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const t = thisValue.TypeRecord;
+  const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
+  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64');
+  if (!isInteger && !isFloat) {
+    return Throw.TypeError('tryParse is not defined for $1', thisValue);
+  }
+  const attempt = EnsureCompletion(yield* TypeProto_parse([S, radix], context));
+  if (attempt.Type === 'normal') {
+    return attempt.Value;
+  }
+  return Value.null;
+}
+
 
 /**
  * proposal-runtime-types (memorylayout.md): the three layout properties every laid
@@ -169,6 +207,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [
     [wellKnownSymbols.hasInstance, TypeProto_hasInstance, 1],
     ['parse', TypeProto_parse, 1],
+    ['tryParse', TypeProto_tryParse, 1],
     ['bitLength', [TypeProto_bitLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
