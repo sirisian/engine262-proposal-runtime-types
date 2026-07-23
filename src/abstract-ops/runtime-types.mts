@@ -154,14 +154,36 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       case 'float16':
       case 'float32':
       case 'float64': {
+        // #sec-requiretype separates the two ways a checked conversion fails, and
+        // they are different errors. When the source is itself a numeric value the
+        // question is one of RANGE: the conversion is available and the only issue
+        // is whether this value survives it, so an unrepresentable one is a
+        // RangeError. When the source is of some other type there is no numeric
+        // conversion to attempt at all, and that is a TypeError.
+        const sourceIsNumeric = value instanceof NumberValue || value instanceof TypedNumberValue;
         const n = Q(yield* ToNumber(value));
+        const math = R(n) as number;
         // The range check asks a question about the mathematical value, where a
         // signed zero is immaterial; the payload keeps the Number as given.
-        if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
-          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        if (!fitsNumericType(math, t.Name, t.Arguments)) {
+          return sourceIsNumeric
+            ? Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)))
+            : Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
         }
         const payload = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
-        return new TypedNumberValue(wrapToType(payload, t), t);
+        const converted = wrapToType(payload, t);
+        // A float width rounds, and rounding a FINITE value to an infinity loses
+        // the value rather than approximating it, which #sec-requiretype calls
+        // unrepresentable. (This is the checked boundary; a Math function's
+        // declared return applies float arithmetic's own rule and does overflow
+        // to an infinity, which is the same checked-versus-cheap split the
+        // operators have.)
+        if (Number.isFinite(math) && !Number.isFinite(converted)) {
+          return sourceIsNumeric
+            ? Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)))
+            : Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        return new TypedNumberValue(converted, t);
       }
       default:
         break;

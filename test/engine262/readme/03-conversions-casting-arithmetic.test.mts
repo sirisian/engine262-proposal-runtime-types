@@ -34,6 +34,45 @@ test('Conversions: an out-of-range literal in a typed position is rejected', () 
   expect(bool('let a: uint8 = 200; String(a === (200 := uint8));')).toBe(true);
 });
 
+// A checked boundary fails in two ways and they are different errors. When the
+// value is already numeric the conversion exists and only this value fails it,
+// which is a question of RANGE; when the value is of some other type there is no
+// numeric conversion to attempt, which is a question of TYPE. #sec-requiretype
+// separates them, and the distinction is worth pinning because both used to
+// arrive as a TypeError.
+test('Conversions: a checked boundary reports range and type failures differently', () => {
+  const thrown = (src: string) => evaluated(`try { ${src} "none" } catch (e) { e.constructor.name }`);
+  // numeric source, numeric target, value out of range: a RangeError
+  expect(thrown('function g(){return 300;} let a: uint8 = g();')).toBe('RangeError');
+  expect(thrown('function g(){return 0-1;} let a: uint8 = g();')).toBe('RangeError');
+  // a value that would have to be truncated to fit is unrepresentable too
+  expect(thrown('function g(){return 1.5;} let a: uint8 = g();')).toBe('RangeError');
+  // a typed value narrowing to a width that cannot hold it
+  expect(thrown('function g(){return (300 := uint16);} let a: uint8 = g();')).toBe('RangeError');
+  // a finite value that a float width could only represent as an infinity is
+  // unrepresentable, rather than silently becoming that infinity
+  expect(thrown('function g(){return 1e300;} let a: float32 = g();')).toBe('RangeError');
+  // the same boundary at a parameter and at a declared return
+  expect(thrown('function f(a: uint8){return a;} function g(){return 300;} f(g());')).toBe('RangeError');
+  expect(thrown('function g(){return 300;} function f(): uint8 { return g(); } f();')).toBe('RangeError');
+  // a non-numeric source has no conversion to attempt: still a TypeError
+  expect(thrown('function g(){return {};} let a: uint8 = g();')).toBe('TypeError');
+  expect(thrown('function g(){return "abc";} let a: uint8 = g();')).toBe('TypeError');
+  expect(thrown('function g(){return undefined;} let a: uint8 = g();')).toBe('TypeError');
+  // and a value that fits is simply the value
+  expect(evaluated('function g(){return 5;} let a: uint8 = g(); String(Number(a));')).toBe('5');
+  expect(evaluated('function g(){return 1e300;} let a: float64 = g(); String(Number(a));')).toBe('1e+300');
+});
+
+// A CAST is not a boundary: it is an instruction to discard information, so it
+// wraps and rounds where the checked boundary above raises. The pair is the
+// whole of the distinction.
+test('Conversions: a cast wraps where the checked boundary raises', () => {
+  expect(evaluated('function g(){return 300;} String(Number(uint8(g())));')).toBe('44');
+  expect(evaluated('function g(){return 1.5;} String(Number(uint8(g())));')).toBe('1');
+  expect(evaluated('function g(){return 1e300;} String(Number(float32(g())));')).toBe('Infinity');
+});
+
 // ── Conversions: untyped bindings are dynamic (any) ───────────────────────────
 // A binding without an annotation has the `any` static type and converts at
 // runtime with a check, exactly as today. `Reflect.typeOf` reads the runtime
