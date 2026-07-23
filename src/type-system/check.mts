@@ -411,6 +411,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
   };
 
   /**
+   * proposal-runtime-types (README, explicit resource management): a `using`
+   * declaration's declared type must be one whose values can carry a disposal
+   * method, since the declaration promises to dispose what it binds. A value type
+   * and `void` never can, so annotating a resource with one is a mistake the
+   * checker reports; `never` is the empty union and falls out of the union arm. `null` and `undefined` ARE admitted, because the
+   * declaration permits them at runtime and registers nothing.
+   *
+   * This is the direction of the README's rule rather than its exact form. The
+   * precise statement is that the declared type must include `[Symbol.dispose]`,
+   * which cannot be checked yet because the type grammar has no symbol-keyed
+   * member: `{ [Symbol.dispose](): void }` is rejected with "a computed member name
+   * is not supported yet", so no type can declare the method to be looked for.
+   * Rejecting every object type instead would make the annotation unusable, so the
+   * checker catches what it provably can and the exact membership check waits on
+   * that grammar.
+   */
+  const canCarryDisposal = (t: TypeRecord): boolean => {
+    switch (t.Kind) {
+      case 'any':
+        return true;
+      case 'union':
+        return (t as { Members: readonly TypeRecord[] }).Members.some(canCarryDisposal);
+      case 'literal': {
+        const v = (t as { Value: unknown }).Value;
+        return v === Value.null || v === Value.undefined;
+      }
+      case 'primitive':
+      case 'void':
+        return false;
+      default:
+        return true;
+    }
+  };
+
+  /**
    * Whether a test sits where it decides a branch: the condition of `if`, `while`,
    * `do`, or `for`, the test of a conditional expression, or inside a parenthesis
    * or a `!` over one of those. The operands of `&&` and `||` guard in a weaker
@@ -482,6 +517,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
       // narrowing form whose test can never succeed or can never fail, those being
       // the branches for which NarrowTo or NarrowFrom is ~empty~, since the branch
       // guarded is dead code the program did not intend.
+      case 'LexicalDeclaration': {
+        // proposal-runtime-types (README, explicit resource management): the type
+        // declared for a resource must be one that can be disposed.
+        const decl = n as ParseNode.LexicalDeclaration;
+        if (decl.LetOrConst === 'using') {
+          for (const binding of decl.BindingList) {
+            const ann = (binding as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+            if (!ann) {
+              continue;
+            }
+            const declared = resolveType(ann.Type);
+            if (declared && !canCarryDisposal(declared)) {
+              const completion = Throw.TypeError('a using declaration cannot be typed $1, whose values carry no disposal method', Value(displayType(declared))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        walk(decl.BindingList);
+        return;
+      }
       case 'RelationalExpression': {
         const rel = n as ParseNode.RelationalExpression;
         if (rel.operator === 'instanceof' && rel.RelationalExpression) {
@@ -491,7 +546,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
             reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode));
           }
         }
-        break;
+        walk(rel.RelationalExpression as ParseNode);
+        walk(rel.ShiftExpression as ParseNode);
+        return;
       }
       case 'CoalesceExpression': {
         const co = n as ParseNode.CoalesceExpression;
@@ -499,7 +556,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
         if (s) {
           reportImpossibleTest(s, nullishType(), '??', true);
         }
-        break;
+        walk(co.CoalesceExpressionHead as ParseNode);
+        walk(co.BitwiseORExpression as ParseNode);
+        return;
       }
       case 'Block':
       case 'CaseBlock':

@@ -8,10 +8,12 @@ import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
  * is left, in reverse order of acquisition, whether the block completed normally
  * or abruptly. This is the base feature the typed-resource capability was blocked
  * on, and it is deliberately partial: the synchronous form, `Symbol.dispose`, and
- * block scope are here. Not yet: `await using` and `Symbol.asyncDispose`,
- * DisposableStack and AsyncDisposableStack, SuppressedError aggregation when
- * several dispose calls throw, `using` in a for-of head, and disposal at the scope
- * of a function body or module rather than a block.
+ * block scope are here, together with the type-system slice: a resource binding
+ * takes the same annotations a `const` does, and a declared type whose values could
+ * never carry a disposal method is a compile-time error. Not yet: `await using` and
+ * `Symbol.asyncDispose`, DisposableStack and AsyncDisposableStack, SuppressedError
+ * aggregation when several dispose calls throw, `using` in a for-of head, and
+ * disposal at the scope of a function body or module rather than a block.
  */
 
 test('resources: a using declaration disposes its resource when the block is left', () => {
@@ -57,4 +59,41 @@ test('resources: with the feature off the engine is the base engine', () => {
   // a using declaration is a Syntax Error, and `using` is just a name
   expect((runFlagOff('{ using r = { [Symbol.dispose]() { } }; } "ok";') as { Type: string }).Type).toBe('throw');
   expect((runFlagOff('let using = 5; String(using);') as { Type: string }).Type).toBe('normal');
+});
+
+// -- The type system slice: annotations on a resource binding ------------------
+test('resources: a resource binding takes the same annotations a const does', () => {
+  // the annotation is threaded onto the binding and applies at the boundary, as it
+  // does for any other declaration
+  expect(evaluated('{ using r: object = { x: 7, [Symbol.dispose]() { } }; String(r.x); } "ok";')).toBe('ok');
+  expect(evaluated('class F { [Symbol.dispose]() { } } { using r: F = new F(); } "ok";')).toBe('ok');
+  // and the resource still has to be disposable at run time whatever the annotation
+  expectThrown('{ using r: object = {}; } "ok";');
+});
+
+test('resources: a declared type that could carry no disposal method is rejected', () => {
+  // the declaration promises to dispose what it binds, so a type whose values can
+  // never carry a disposal method is a mistake, caught before the program runs
+  expectThrown('{ using r: string = "x"; } "ok";');
+  expectThrown('{ using r: uint8 = (5 := uint8); } "ok";');
+  expectThrown('{ using r: number = 5; } "ok";');
+  expectThrown('{ using r: boolean = true; } "ok";');
+  expectThrown('{ using r: void = undefined; } "ok";');
+});
+
+test('resources: a type that can be disposed is accepted', () => {
+  expect(evaluated('{ using r: object = { [Symbol.dispose]() { } }; } "ok";')).toBe('ok');
+  expect(evaluated('{ using r: any = { [Symbol.dispose]() { } }; } "ok";')).toBe('ok');
+  // null and undefined are admitted, since the declaration permits them at run
+  // time and registers nothing
+  expect(evaluated('{ using r: null = null; } "ok";')).toBe('ok');
+  expect(evaluated('{ using r: object | null = null; } "ok";')).toBe('ok');
+  // an unannotated resource is unaffected
+  expect(evaluated('{ using r = { [Symbol.dispose]() { } }; } "ok";')).toBe('ok');
+});
+
+test('resources: the rule applies to using declarations only', () => {
+  // let and const take the same annotations and are not resource declarations
+  expect(evaluated('let x: string = "x"; x;')).toBe('x');
+  expect(evaluated('const y: uint8 = (5 := uint8); String(Number(y));')).toBe('5');
 });

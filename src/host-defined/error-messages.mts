@@ -611,6 +611,7 @@ export interface Throw {
   | 'Unsupported import attribute "$1"'
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
+  | 'a using declaration cannot be typed $1, whose values carry no disposal method'
   | 'addInitializer must be called with a function, but $1 was passed'
   | 'arguments[0] ($1) is not a symbol'
   | 'arguments[1] ($1) is not a function'
