@@ -64,17 +64,26 @@ test('numeric predicates: float16 and float64 answer alike', () => {
 });
 
 // -- The bigint family ----------------------------------------------------------
-test('numeric predicates: a bigint answers as the exact unbounded integer it is', () => {
-  expect(evaluated('String(Number.isNaN(1n));')).toBe('false');
-  expect(evaluated('String(Number.isFinite(1n));')).toBe('true');
-  expect(evaluated('String(Number.isInteger(1n));')).toBe('true');
-  expect(evaluated('String(Number.isSafeInteger(5n));')).toBe('true');
-  // safety is a question about magnitude, which a bigint can exceed
-  expect(evaluated('String(Number.isSafeInteger(9007199254740993n));')).toBe('false');
-  expect(evaluated('String(Number.isSafeInteger(-9007199254740993n));')).toBe('false');
-  // the globals threw on a BigInt before, ToNumber refusing it; now they answer
+test('numeric predicates: the bigint rows are for the GLOBALS only', () => {
+  // The globals reach ToNumber, which REFUSES a BigInt, so answering where they
+  // used to throw adds meaning to no program that ran.
   expect(evaluated('String(isNaN(1n));')).toBe('false');
   expect(evaluated('String(isFinite(1n));')).toBe('true');
+});
+
+test('numeric predicates: the Number statics keep the base language answer for a BigInt', () => {
+  // DECIDED: no breaking change. Every other row of the table answers about a
+  // value no existing program can write, since a typed number needs syntax this
+  // proposal adds. A BigInt needs no new syntax, `Number.isInteger(5n)` is false
+  // in deployed code, and turning that true would change a program that never
+  // opted in.
+  expect(evaluated('String(Number.isInteger(5n));')).toBe('false');
+  expect(evaluated('String(Number.isFinite(5n));')).toBe('false');
+  expect(evaluated('String(Number.isSafeInteger(5n));')).toBe('false');
+  expect(evaluated('String(Number.isNaN(5n));')).toBe('false');
+  // and the same with the flag off, so the two agree
+  expect(evaluatedFlagOff('String(Number.isInteger(5n));')).toBe('false');
+  expect(evaluatedFlagOff('String(Number.isFinite(5n));')).toBe('false');
 });
 
 // -- The rational family --------------------------------------------------------

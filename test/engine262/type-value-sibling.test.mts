@@ -105,9 +105,10 @@ test('Number.isInteger/isFinite answer for a numeric type, not for a representat
   // and `Number.isInteger` of an int32 saying false is the hazard it names.
   expect(evaluated('Number.isInteger(5 := uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('Number.isFinite(5 := uint8) ? "yes" : "no";')).toBe('yes');
-  // The bigint row goes the same way, and this one is a deliberate divergence
-  // from base-language behaviour rather than an extension of it: `5n` is a value
-  // of the `bigint` type, which is exact and unbounded, so it is an integer.
-  // Flag-off keeps the base-language answer.
-  expect(evaluated('Number.isInteger(5n) ? "yes" : "no";')).toBe('yes');
+  // A BigInt does NOT go the same way, and the difference is compatibility rather
+  // than principle. A typed number needs syntax this proposal adds, so no
+  // deployed program can produce one and defining it breaks nothing. `5n` needs
+  // no new syntax: `Number.isInteger(5n)` is false in code running today, and the
+  // BigInt precedent this test was originally written for is exactly right there.
+  expect(evaluated('Number.isInteger(5n) ? "yes" : "no";')).toBe('no');
 });

@@ -127,7 +127,8 @@ test('named arithmetic: every form works at every integer width', () => {
 });
 
 test('named arithmetic: one type per signature, and no untyped call', () => {
-  const FORMS = ['addChecked', 'addSaturating', 'divFloor', 'mod'];
+  // divFloor and mod are excluded: they have a Number signature, decided in F20.
+  const FORMS = ['addChecked', 'addSaturating', 'mulChecked', 'subSaturating'];
   for (const fn of FORMS) {
     // two typed arguments of different types are viable at no signature
     expectThrownKind(`Math.${fn}((1 := uint8), (1 := uint16));`, 'TypeError');
@@ -171,4 +172,39 @@ test('named arithmetic: a saturating form CAN raise, for one reason only', () =>
   // a division by zero has no result to be nearest to, so it raises
   expectThrownKind('Math.divSaturating((7 := int32), (0 := int32));', 'RangeError');
   expectThrownKind('Math.divChecked((7 := int32), (0 := int32));', 'RangeError');
+});
+
+// -- The floored pair over the Number type (finding F20, decided) --------------
+// Unlike the eight checked and saturating forms, this pair is not restricted to
+// the integer types: it is about rounding direction rather than overflow, and its
+// motivating use is written in untyped code.
+test('floored division: the pair also takes plain Numbers', () => {
+  // the design document's own examples, which used to throw
+  expect(evaluated('String(Math.mod(-5, 3));')).toBe('1');
+  expect(evaluated('String(Math.divFloor(-5, 3));')).toBe('-2');
+  expect(evaluated('String(Math.divFloor(7, 2));')).toBe('3');
+  expect(evaluated('String(Math.mod(7, -3));')).toBe('-2');
+  // and its motivating use, where both operands are plain
+  expect(evaluated('let a = [1, 2, 3]; String(a[Math.mod(-1, a.length)]);')).toBe('3');
+  // the identity holds over Numbers too
+  expect(evaluated('String(Math.divFloor(-5, 3) * 3 + Math.mod(-5, 3) === -5);')).toBe('true');
+});
+
+test('floored division: a zero divisor follows the family', () => {
+  // at an integer type there is nothing to return, as in Python, Java, Kotlin,
+  // Rust, and Haskell
+  expectThrownKind('Math.mod((5 := int32), (0 := int32));', 'RangeError');
+  expectThrownKind('Math.divFloor((5 := int32), (0 := int32));', 'RangeError');
+  // over Numbers the operators already answer, and this agrees with them
+  expect(evaluated('String(Math.mod(5, 0));')).toBe('NaN');
+  expect(evaluated('String(Math.divFloor(5, 0));')).toBe('Infinity');
+  expect(evaluated('String(Math.divFloor(-5, 0));')).toBe('-Infinity');
+  expect(evaluated('String(Number.isNaN(Math.mod(5, 0)) === Number.isNaN(5 % 0));')).toBe('true');
+});
+
+test('floored division: the checked and saturating forms stay integer-only', () => {
+  // the restriction there has a stated reason that does not transfer to this pair
+  for (const fn of ['addChecked', 'addSaturating', 'mulChecked', 'divSaturating']) {
+    expectThrownKind(`Math.${fn}(1, 2);`, 'TypeError');
+  }
 });

@@ -56,7 +56,7 @@ function Number_isFinite([number = Value.undefined]: Arguments) {
   // for every typed value, testing the representation where the name promises a
   // test of the value.
   if (surroundingAgent.feature('runtime-types')) {
-    const answer = numericPredicate(number, 'isFinite');
+    const answer = numericPredicate(number, 'isFinite', 'number-static');
     if (answer !== undefined) {
       return answer ? Value.true : Value.false;
     }
@@ -78,7 +78,7 @@ function Number_isInteger([number = Value.undefined]: Arguments) {
   // for every typed value, testing the representation where the name promises a
   // test of the value.
   if (surroundingAgent.feature('runtime-types')) {
-    const answer = numericPredicate(number, 'isInteger');
+    const answer = numericPredicate(number, 'isInteger', 'number-static');
     if (answer !== undefined) {
       return answer ? Value.true : Value.false;
     }
@@ -93,7 +93,7 @@ function Number_isNaN([number = Value.undefined]: Arguments) {
   // for every typed value, testing the representation where the name promises a
   // test of the value.
   if (surroundingAgent.feature('runtime-types')) {
-    const answer = numericPredicate(number, 'isNaN');
+    const answer = numericPredicate(number, 'isNaN', 'number-static');
     if (answer !== undefined) {
       return answer ? Value.true : Value.false;
     }
@@ -115,7 +115,7 @@ function Number_isSafeInteger([number = Value.undefined]: Arguments) {
   // for every typed value, testing the representation where the name promises a
   // test of the value.
   if (surroundingAgent.feature('runtime-types')) {
-    const answer = numericPredicate(number, 'isSafeInteger');
+    const answer = numericPredicate(number, 'isSafeInteger', 'number-static');
     if (answer !== undefined) {
       return answer ? Value.true : Value.false;
     }

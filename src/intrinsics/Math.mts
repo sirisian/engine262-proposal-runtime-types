@@ -1189,8 +1189,42 @@ function flooredQuotient(a: bigint, b: bigint): bigint {
   return (a % b !== 0n && ((a < 0n) !== (b < 0n))) ? q - 1n : q;
 }
 
+/**
+ * proposal-runtime-types (spec, floored division): the floored pair also has a
+ * signature over the Number type, unlike the checked and saturating forms.
+ *
+ * Those exist only for the integer types for a stated reason, that only there is
+ * wrapping the default, and a checked form at `number` would have nothing to
+ * check. That reasoning does not transfer here: this pair is not about overflow
+ * at all but about ROUNDING DIRECTION, which is meaningful for any real. The
+ * three precedents the clause names, Python's `%` and the `mod` of Kotlin and
+ * Haskell, are ordinary-number operations, and the pair's own motivating use,
+ * wrapping an index with `array[Math.mod(i, array.length)]`, is written in
+ * untyped code where both operands are plain Numbers.
+ *
+ * A zero divisor follows the family, as every other rule in this specification
+ * does. At an integer type it raises, because an integer type has no infinity and
+ * no NaN and so has nothing to return, which is what Python, Java, Kotlin, Rust,
+ * and Haskell all do for integer division by zero. At `number` there IS something
+ * to return, and the answer is the one the operators already give: `Math.mod(_a_,
+ * 0)` is *NaN*, as `_a_ % 0` is, and `Math.divFloor(_a_, 0)` is an infinity, as
+ * `Math.floor(_a_ / 0)` is. That is also what C, Java, Rust, and every IEEE 754
+ * host do for a floating-point remainder by zero.
+ */
+function plainFloored(args: Arguments, which: 'divFloor' | 'mod'): ValueEvaluator {
+  return (function* plainFloored(): ValueEvaluator {
+    const a = R(Q(yield* ToNumber(args[0] ?? Value.undefined))) as number;
+    const b = R(Q(yield* ToNumber(args[1] ?? Value.undefined))) as number;
+    const quotient = Math.floor(a / b);
+    return F(which === 'divFloor' ? quotient : a - (b * quotient));
+  }());
+}
+
 /** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
 function* Math_divFloor(args: Arguments): ValueEvaluator {
+  if (!args.some((arg) => arg !== undefined && isTypedNumber(arg))) {
+    return Q(yield* plainFloored(args, 'divFloor'));
+  }
   const { t, a, b } = Q(yield* resolveIntegerOperands(args, 'divFloor'));
   if (b === 0n) {
     return Throw.RangeError('$1 by zero is not defined', Value('Math.divFloor'));
@@ -1202,6 +1236,9 @@ function* Math_divFloor(args: Arguments): ValueEvaluator {
 
 /** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
 function* Math_mod(args: Arguments): ValueEvaluator {
+  if (!args.some((arg) => arg !== undefined && isTypedNumber(arg))) {
+    return Q(yield* plainFloored(args, 'mod'));
+  }
   const { t, a, b } = Q(yield* resolveIntegerOperands(args, 'mod'));
   if (b === 0n) {
     return Throw.RangeError('$1 by zero is not defined', Value('Math.mod'));

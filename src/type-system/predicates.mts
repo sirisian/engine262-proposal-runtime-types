@@ -64,7 +64,7 @@ function bigIntMagnitude(v: bigint): bigint {
  * second group: the existing signatures over the Number type are unchanged, and
  * an untyped call must go on meaning what it means.
  */
-export function numericPredicate(value: Value, which: NumericPredicate): boolean | undefined {
+export function numericPredicate(value: Value, which: NumericPredicate, surface: 'global' | 'number-static' = 'global'): boolean | undefined {
   if (isTypedNumber(value)) {
     const t = value.TypeRecord as TypeRecord;
     if (t.Kind !== 'primitive') {
@@ -98,7 +98,22 @@ export function numericPredicate(value: Value, which: NumericPredicate): boolean
     return undefined;
   }
   if (value instanceof BigIntValue) {
-    // A BigInt is a value of the `bigint` type, which is exact and unbounded.
+    // A BigInt is a value of the `bigint` type, which is exact and unbounded, and
+    // the listing gives that type rows for all four questions. It supplies them
+    // to the GLOBAL functions only.
+    //
+    // The `Number` statics keep the base language's answer for a BigInt, which is
+    // *false*, because they already have one. Every other row of this table
+    // answers about a value that NO EXISTING PROGRAM CAN WRITE: a typed number
+    // needs syntax this proposal adds, so defining it breaks nothing. A BigInt
+    // needs no new syntax at all, `Number.isInteger(5n)` is *false* in deployed
+    // code today, and turning that into *true* would change the meaning of a
+    // program that never opted in. The globals are a different case: they reach
+    // ToNumber, which REFUSES a BigInt, so answering where they used to throw is
+    // the compatible direction and adds no meaning to any program that ran.
+    if (surface === 'number-static') {
+      return undefined;
+    }
     const v = value.value;
     switch (which) {
       case 'isNaN': return false;
