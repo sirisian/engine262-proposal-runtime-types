@@ -8,6 +8,7 @@ import {
   type FunctionCallContext,
 } from '../value.mts';
 import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
@@ -931,6 +932,145 @@ function* Math_clz([x = Value.undefined]: Arguments): ValueEvaluator {
 /** The int32 type `Math.imul` returns, whatever type its arguments carry. */
 const int32TypeRecord: TypeRecord & { Kind: 'primitive' } = { Kind: 'primitive', Name: 'int', Arguments: [32] };
 
+/**
+ * proposal-runtime-types (spec, checked and saturating arithmetic, and floored
+ * division): the named arithmetic forms.
+ *
+ * The operators wrap, because an operator has to be cheap and a bit pattern wants
+ * wrapping. That is the right answer when the value is a bit pattern and the wrong
+ * one when it is a count, and since neither is right always, the operator takes
+ * the case that has to be cheap and these take the rest. `a + 1` on a `uint8`
+ * holding 255 is 0, `Math.addChecked(a, 1)` raises, and `Math.addSaturating(a, 1)`
+ * is 255.
+ *
+ * They exist only for the integer types, because only there is wrapping the
+ * default: a float already saturates to an infinity, and a decimal and a rational
+ * already raise. Each family's overflow behaviour is the one its values make
+ * available, and these give the integer types the two the others have built in.
+ *
+ * The arithmetic is done on BigInt rather than on the Number payload. That is not
+ * incidental: `Math.mulChecked` at `uint32` has to decide whether a product near
+ * 2**64 is representable, and a double cannot answer that question about itself.
+ */
+const enum OverflowMode { Checked, Saturating }
+
+/** The inclusive range of an integer type, as exact integers. */
+function integerRange(t: TypeRecord & { Kind: 'primitive' }): { low: bigint, high: bigint } {
+  const bits = BigInt(integerWidth(t));
+  if (t.Name === 'uint') {
+    return { low: 0n, high: (1n << bits) - 1n };
+  }
+  return { low: -(1n << (bits - 1n)), high: (1n << (bits - 1n)) - 1n };
+}
+
+/**
+ * Resolve the one integer type a named form's operands share, or report why they
+ * do not. These have NO untyped signature: the forms exist for the integer types,
+ * and a call with no typed operand names no type to work in.
+ */
+function* resolveIntegerOperands(args: Arguments, functionName: string): PlainEvaluator<{ t: TypeRecord & { Kind: 'primitive' }, a: bigint, b: bigint }> {
+  let carried: (TypeRecord & { Kind: 'primitive' }) | undefined;
+  for (const arg of args.slice(0, 2)) {
+    if (arg !== undefined && isTypedNumber(arg)) {
+      const record = arg.TypeRecord as TypeRecord;
+      if (record.Kind !== 'primitive' || !isIntegerTypeName(record.Name)) {
+        return Throw.TypeError('$1 has no signature taking a value of type $2', Value(`Math.${functionName}`), Value(displayType(record)));
+      }
+      if (carried === undefined) {
+        carried = record as TypeRecord & { Kind: 'primitive' };
+      } else if (!SameType(carried, record)) {
+        return Throw.TypeError('$1 has no signature taking values of two numeric types', Value(`Math.${functionName}`));
+      }
+    }
+  }
+  if (carried === undefined) {
+    return Throw.TypeError('$1 requires an argument of a sized integer type', Value(`Math.${functionName}`));
+  }
+  const read = function* read(arg: Value | undefined): PlainEvaluator<bigint> {
+    if (arg !== undefined && isTypedNumber(arg)) {
+      return BigInt(arg.value);
+    }
+    // A plain operand beside a typed one is a literal and takes the parameter's
+    // type, so one the type cannot represent matches no signature.
+    const n = R(Q(yield* ToNumber(arg ?? Value.undefined))) as number;
+    if (!Number.isInteger(n) || !fitsNumericType(n, carried!.Name, carried!.Arguments)) {
+      return Throw.TypeError('$1 is not assignable to $2', arg ?? Value.undefined, Value(displayType(carried!)));
+    }
+    return BigInt(n);
+  };
+  const a = Q(yield* read(args[0]));
+  const b = Q(yield* read(args[1]));
+  return { t: carried, a, b };
+}
+
+/** Apply the family's out-of-range treatment to an exact result. */
+function settleInteger(exact: bigint, t: TypeRecord & { Kind: 'primitive' }, mode: OverflowMode) {
+  const { low, high } = integerRange(t);
+  if (exact >= low && exact <= high) {
+    return new TypedNumberValue(Number(exact), t);
+  }
+  if (mode === OverflowMode.Checked) {
+    return Throw.RangeError('$1 is not in the range of $2', Value(String(exact)), Value(displayType(t)));
+  }
+  // Saturating: the nearest value of the type, which is its greatest when the
+  // exact result exceeds it and its least when the exact result falls below.
+  return new TypedNumberValue(Number(exact > high ? high : low), t);
+}
+
+/** The eight checked and saturating forms, which differ only in that treatment. */
+function namedArithmetic(functionName: string, mode: OverflowMode, combine: (a: bigint, b: bigint) => bigint | 'divide-by-zero'): NativeSteps {
+  const steps: NativeSteps = function* namedArithmetic(args: Arguments): ValueEvaluator {
+    const operands = Q(yield* resolveIntegerOperands(args, functionName));
+    const exact = combine(operands.a, operands.b);
+    if (exact === 'divide-by-zero') {
+      // A division by zero has no exact result at all, so there is nothing for
+      // either treatment to act on: saturation is about a result the type cannot
+      // hold, and here there is no result. Both forms raise.
+      return Throw.RangeError('$1 by zero is not defined', Value(`Math.${functionName}`));
+    }
+    return settleInteger(exact, operands.t, mode);
+  };
+  Object.defineProperty(steps, 'name', { value: `Math_${functionName}`, configurable: true });
+  steps.section = 'https://sirisian.github.io/ecmascript-types/#sec-checked-and-saturating-arithmetic';
+  return steps;
+}
+
+/** Integer division truncating toward zero, as the `/` operator rounds. */
+function truncatedQuotient(a: bigint, b: bigint): bigint | 'divide-by-zero' {
+  return b === 0n ? 'divide-by-zero' : a / b;
+}
+
+/** The quotient rounded toward negative infinity. */
+function flooredQuotient(a: bigint, b: bigint): bigint {
+  const q = a / b;
+  return (a % b !== 0n && ((a < 0n) !== (b < 0n))) ? q - 1n : q;
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
+function* Math_divFloor(args: Arguments): ValueEvaluator {
+  const { t, a, b } = Q(yield* resolveIntegerOperands(args, 'divFloor'));
+  if (b === 0n) {
+    return Throw.RangeError('$1 by zero is not defined', Value('Math.divFloor'));
+  }
+  // The floored quotient overflows in exactly one case, the most negative value
+  // divided by -1, and it is checked like any other declared return.
+  return settleInteger(flooredQuotient(a, b), t, OverflowMode.Checked);
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
+function* Math_mod(args: Arguments): ValueEvaluator {
+  const { t, a, b } = Q(yield* resolveIntegerOperands(args, 'mod'));
+  if (b === 0n) {
+    return Throw.RangeError('$1 by zero is not defined', Value('Math.mod'));
+  }
+  // The remainder whose sign follows the DIVISOR, which is the `%` of Python and
+  // the `mod` of Kotlin and Haskell, and is what makes it usable for wrapping an
+  // index: for a positive divisor the result is never negative. The operator `%`
+  // follows the dividend instead, which is why both exist.
+  const r = a - flooredQuotient(a, b) * b;
+  return settleInteger(r, t, OverflowMode.Checked);
+}
+
 export function bootstrapMath(realmRec: Realm) {
   /** https://tc39.es/ecma262/#sec-value-properties-of-the-math-object */
   const readonly = { Writable: Value.false, Configurable: Value.false };
@@ -945,6 +1085,21 @@ export function bootstrapMath(realmRec: Realm) {
     ['PI', F(3.141592653589793), undefined, readonly],
     ['SQRT1_2', F(0.7071067811865476), undefined, readonly],
     ['SQRT2', F(1.4142135623730951), undefined, readonly],
+    // proposal-runtime-types (spec, checked and saturating arithmetic, and
+    // floored division): the named arithmetic forms. Gated, so the flag-off
+    // engine is unchanged.
+    ...(surroundingAgent.feature('runtime-types') ? [
+      ['addChecked', namedArithmetic('addChecked', OverflowMode.Checked, (a, b) => a + b), 2],
+      ['subChecked', namedArithmetic('subChecked', OverflowMode.Checked, (a, b) => a - b), 2],
+      ['mulChecked', namedArithmetic('mulChecked', OverflowMode.Checked, (a, b) => a * b), 2],
+      ['divChecked', namedArithmetic('divChecked', OverflowMode.Checked, truncatedQuotient), 2],
+      ['addSaturating', namedArithmetic('addSaturating', OverflowMode.Saturating, (a, b) => a + b), 2],
+      ['subSaturating', namedArithmetic('subSaturating', OverflowMode.Saturating, (a, b) => a - b), 2],
+      ['mulSaturating', namedArithmetic('mulSaturating', OverflowMode.Saturating, (a, b) => a * b), 2],
+      ['divSaturating', namedArithmetic('divSaturating', OverflowMode.Saturating, truncatedQuotient), 2],
+      ['divFloor', Math_divFloor, 2],
+      ['mod', Math_mod, 2],
+    ] as [string, NativeSteps, number][] : []),
     ['abs', withNumericLibrarySignatures(Math_abs, 'abs'), 1],
     ['acos', withNumericLibrarySignatures(Math_acos, 'acos'), 1],
     ['acosh', withNumericLibrarySignatures(Math_acosh, 'acosh'), 1],

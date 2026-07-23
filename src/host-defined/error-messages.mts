@@ -452,6 +452,7 @@ export interface Throw {
   ): ThrowCompletion;
   (m:
 '$1'
+  | '$1 by zero is not defined'
   | '$1 can only be used with v flag'
   | '$1 cannot be bound by ref here'
   | '$1 cannot be extended by a partial class'

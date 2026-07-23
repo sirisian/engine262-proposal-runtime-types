@@ -145,62 +145,31 @@ test('numeric library matrix: every listed function exists', () => {
 });
 
 /**
- * GAP PIN. The specification declares these and the engine does not implement
- * them. They were found by an inventory pass comparing the operations the spec
- * names against the operations the suite refers to, after the error-kind audit
- * turned up `Math.divFloor` by accident.
+ * CLOSED. The ten functions this file used to pin as ABSENT are implemented, and
+ * the pin has become its own opposite: the matrix now asserts they exist, and
+ * named-arithmetic.test.mts covers their behaviour.
  *
- * The checked and saturating forms are a normative table in
- * sec-checked-and-saturating-arithmetic, each "overloaded for every integer type",
- * with exact semantics: the checked forms raise a *RangeError* where the type
- * cannot represent the result, and the saturating forms return the nearest value
- * of the type instead. The floored pair is sec-floored-division, with an
- * emu-note deriving the identity that relates them.
- *
- * This test asserts that they are ABSENT, so implementing one makes it fail and
- * whoever does the work is told to move the name out of this list and into the
- * matrix above. It is a reminder, not an endorsement.
+ * Keeping the existence check here rather than deleting it is the point of the
+ * original pin. These were specified from the start, with a normative table and a
+ * worked note, and were missing for as long as the suite had no test that would
+ * notice. An existence assertion is cheap and it is what turns "nobody wrote a
+ * test for that" from a silent condition into a failing one.
  */
-test('numeric library matrix: the named arithmetic forms are specified and NOT implemented', () => {
-  const specifiedButAbsent = [
+test('numeric library matrix: the named arithmetic forms exist and are integer-typed', () => {
+  const NAMED_FORMS = [
     'addChecked', 'subChecked', 'mulChecked', 'divChecked',
     'addSaturating', 'subSaturating', 'mulSaturating', 'divSaturating',
     'divFloor', 'mod',
   ];
-  for (const fn of specifiedButAbsent) {
-    expect(evaluated(`String(typeof Math.${fn});`), `Math.${fn} is specified; if this now exists, move it into the matrix`).toBe('undefined');
-  }
-});
-
-// -- The predicates table, swept the same way ----------------------------------
-// <emu-xref href="#table-numeric-predicates"></emu-xref> gives four questions
-// across five families. The integer and rational columns are constants, which is
-// exactly the kind of cell nobody writes an individual test for.
-test('numeric predicates matrix: the constant columns are constant at every width', () => {
-  const PREDICATES = ['isNaN', 'isFinite', 'isInteger', 'isSafeInteger'] as const;
-  const EXPECTED_AT_INTEGER = { isNaN: 'false', isFinite: 'true', isInteger: 'true', isSafeInteger: 'true' };
-  for (const t of INTEGER_TYPES) {
-    for (const p of PREDICATES) {
-      expect(evaluated(`String(Number.${p}((4 := ${t})));`), `Number.${p} at ${t}`)
-        .toBe(EXPECTED_AT_INTEGER[p]);
+  for (const fn of NAMED_FORMS) {
+    expect(evaluated(`String(typeof Math.${fn});`), `Math.${fn}`).toBe('function');
+    // each is overloaded for every integer type and returns its operands' type
+    for (const t of INTEGER_TYPES) {
+      expect(evaluated(`(Math.${fn}((4 := ${t}), (2 := ${t})) is ${t}) ? "yes" : "no";`), `${fn} at ${t}`).toBe('yes');
     }
-    // the globals answer alike for the two questions they ask
-    expect(evaluated(`String(isNaN((4 := ${t})));`)).toBe('false');
-    expect(evaluated(`String(isFinite((4 := ${t})));`)).toBe('true');
-  }
-});
-
-test('numeric predicates matrix: the float columns ask the value at every width', () => {
-  for (const t of FLOAT_TYPES) {
-    // a finite ordinary value
-    expect(evaluated(`String(Number.isNaN((4 := ${t})));`)).toBe('false');
-    expect(evaluated(`String(Number.isFinite((4 := ${t})));`)).toBe('true');
-    expect(evaluated(`String(Number.isInteger((4 := ${t})));`)).toBe('true');
-    // a NaN of the width, reached through a row that produces one
-    expect(evaluated(`String(Number.isNaN(Math.sqrt(((0 - 1) := ${t}))));`), `NaN at ${t}`).toBe('true');
-    expect(evaluated(`String(Number.isFinite(Math.sqrt(((0 - 1) := ${t}))));`)).toBe('false');
-    expect(evaluated(`String(Number.isInteger(Math.sqrt(((0 - 1) := ${t}))));`)).toBe('false');
-    // an infinity of the width
-    expect(evaluated(`String(Number.isFinite(Math.exp((10000 := ${t}))));`), `infinity at ${t}`).toBe('false');
+    // and for no other family, which is why they exist at all
+    for (const t of FLOAT_TYPES) {
+      expectThrownKind(`Math.${fn}((4 := ${t}), (2 := ${t}));`, 'TypeError');
+    }
   }
 });
