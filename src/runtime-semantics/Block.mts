@@ -6,6 +6,7 @@ import {
 } from '../static-semantics/all.mts';
 import { X, NormalCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { DisposeResources } from '../abstract-ops/disposal.mts';
 import { Evaluate_StatementList, InstantiateFunctionObject } from './all.mts';
 import { surroundingAgent, Assert, DeclarativeEnvironmentRecord } from '#self';
 
@@ -63,7 +64,11 @@ export function* Evaluate_Block({ StatementList }: ParseNode.Block) {
   // 4. Set the running execution context's LexicalEnvironment to blockEnv.
   surroundingAgent.runningExecutionContext.LexicalEnvironment = blockEnv;
   // 5. Let blockValue be the result of evaluating StatementList.
-  const blockValue = yield* Evaluate_StatementList(StatementList);
+  let blockValue = yield* Evaluate_StatementList(StatementList);
+  // proposal-runtime-types (explicit resource management): the resources a `using`
+  // declaration registered in this block are disposed as the block is left, in
+  // reverse order, whether the block completed normally or abruptly.
+  blockValue = (yield* DisposeResources(blockEnv, blockValue)) as typeof blockValue;
   // 6. Set the running execution context's LexicalEnvironment to oldEnv.
   surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
   // 7. Return blockValue.

@@ -11,6 +11,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
+import { AddDisposableResource } from '../abstract-ops/disposal.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import { RequireBorrowableReference } from './RefExpression.mts';
 import {
@@ -157,7 +158,24 @@ export function* Evaluate_BindingList(BindingList: ParseNode.BindingList) {
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalDeclaration : LetOrConst BindingList `;`
-export function* Evaluate_LexicalDeclaration({ BindingList }: ParseNode.LexicalDeclaration): PlainEvaluator {
+export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst }: ParseNode.LexicalDeclaration): PlainEvaluator {
+  // proposal-runtime-types (explicit resource management): each binding of a
+  // `using` declaration registers its value as a resource of the running
+  // environment, to be disposed when that environment is left.
+  if (LetOrConst === 'using') {
+    const next = yield* Evaluate_BindingList(BindingList);
+    Q(next);
+    for (const binding of BindingList) {
+      const name = (binding as { BindingIdentifier?: { name: string } }).BindingIdentifier;
+      if (!name) {
+        continue;
+      }
+      const ref = X(ResolveBinding(Value(name.name), undefined, false));
+      const value = Q(yield* GetValue(ref));
+      Q(yield* AddDisposableResource(surroundingAgent.runningExecutionContext.LexicalEnvironment, value));
+    }
+    return NormalCompletion(undefined);
+  }
   // 1. Let next be the result of evaluating BindingList.
   Q(yield* Evaluate_BindingList(BindingList));
   // 3. Return NormalCompletion(empty).

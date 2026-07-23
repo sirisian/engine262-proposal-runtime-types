@@ -36,10 +36,12 @@ test('Generators: a typed generator iterates with for-of', () => {
   expect(ok('function* f(): int32 { yield (1 := int32); yield (2 := int32); } let a = [...f()]; a.length === 2;')).toBe(true);
 });
 
-// ── Documented gap: explicit resource management ──────────────────────────────
-test('Explicit Resource Management: using declarations are not in the base engine (documents the gap)', () => {
-  // Target (README): `using f: File = open();` accepts const-style annotations.
-  // The base engine262 does not implement `using` at all, so it does not parse.
-  expectThrown('let disposed = false; { using r = { [Symbol.dispose]() { disposed = true; } }; } disposed;');
-  expectThrown('using f = { [Symbol.dispose]() {} };');
+// ── Explicit resource management ──────────────────────────────────────────────
+test('Explicit Resource Management: a using declaration disposes its resource', () => {
+  // A resource is disposed when the block is left, so the flag is set by the time
+  // the block's value is read.
+  expect(evaluated('let disposed = false; { using r = { [Symbol.dispose]() { disposed = true; } }; } String(disposed);')).toBe('true');
+  // Still to come (README): the const-style annotation `using f: File = open()`,
+  // with the rule that the declared type must carry the disposal method.
+  expect(evaluated('typeof Symbol.dispose;')).toBe('symbol');
 });

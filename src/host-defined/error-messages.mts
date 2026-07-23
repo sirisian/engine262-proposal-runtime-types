@@ -403,6 +403,7 @@ export interface Throw {
   | 'a rational numerator must be an integer'
   | 'a ref for-of loop requires an array whose elements can be referenced'
   | 'a typed own property cannot be added to an instance of a non-dynamic typed class'
+  | 'a using declaration requires an object with a Symbol.dispose method'
   | 'a zero rational to a negative power'
   | 'an array may not be resized while a reference into it is live'
   | 'argument[0] must be a string'

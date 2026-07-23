@@ -1119,7 +1119,11 @@ export namespace ParseNode {
   //   `const`
   export type LetOrConst =
     | 'let'
-    | 'const';
+    | 'const'
+    // proposal-runtime-types (explicit resource management): a `using`
+    // declaration binds immutably and registers its value for disposal when the
+    // enclosing block is left.
+    | 'using';
 
   // BindingList :
   //   LexicalBinding

@@ -89,6 +89,12 @@ export abstract class StatementParser extends TypeParser {
         }
         return this.parseStatement();
       default:
+        // proposal-runtime-types (explicit resource management): a `using`
+        // declaration, recognized only where the contextual keyword is followed by
+        // an identifier on the same line.
+        if (this.test('using') && this.startsUsingDeclaration()) {
+          return this.parseLexicalDeclaration();
+        }
         if (this.test('let')) {
           switch (this.peekAhead().type) {
             case Token.LBRACE:
@@ -316,10 +322,40 @@ export abstract class StatementParser extends TypeParser {
     return this.finishNode(node, 'PrimitiveOperatorDeclaration');
   }
 
+  /**
+   * proposal-runtime-types (explicit resource management): `using` is a valid
+   * identifier, so it opens a declaration only when an identifier follows it on the
+   * same line. A line break between them means the `using` was an expression
+   * statement of its own, and a `[` or `{` after it is not a using declaration
+   * either, since a resource is bound to a single name rather than destructured.
+   */
+  startsUsingDeclaration(): boolean {
+    // Gated with the rest of this work: with the feature off the engine is the
+    // base engine, where `using` is an ordinary identifier and a using
+    // declaration is a Syntax Error. Upstream this belongs behind a feature of
+    // its own, since explicit resource management is a base-language proposal
+    // rather than part of the type system.
+    if (!this.feature('runtime-types')) {
+      return false;
+    }
+    const ahead = this.peekAhead();
+    return !ahead.hadLineTerminatorBefore
+      && (ahead.type === Token.IDENTIFIER || ahead.type === Token.YIELD || ahead.type === Token.AWAIT);
+  }
+
   // LexicalDeclaration : LetOrConst BindingList `;`
   parseLexicalDeclaration(): ParseNode.LexicalDeclarationLike {
     const node = this.startNode<ParseNode.LexicalDeclaration>();
-    const letOrConst = this.eat('let') ? 'let' : this.expect(Token.CONST) && 'const';
+    // proposal-runtime-types (explicit resource management): `using` is a
+    // contextual keyword, so it begins a declaration only when the next token is an
+    // identifier on the same line; anywhere else it stays an ordinary identifier.
+    let letOrConst: ParseNode.LetOrConst;
+    if (this.test('using') && this.startsUsingDeclaration()) {
+      this.eat('using');
+      letOrConst = 'using';
+    } else {
+      letOrConst = this.eat('let') ? 'let' : this.expect(Token.CONST) && 'const';
+    }
     node.LetOrConst = letOrConst;
     node.BindingList = this.parseBindingList();
     this.semicolon();
