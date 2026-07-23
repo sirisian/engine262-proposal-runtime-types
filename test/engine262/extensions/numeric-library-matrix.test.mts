@@ -197,3 +197,35 @@ test('numeric library matrix: the bigint column matches the listing', () => {
     expect(evaluated(`String(Math.${fn}(8n) === 8n);`)).toBe('true');
   }
 });
+
+/**
+ * GAP PINS for the operations a spec-coverage inventory finds specified and
+ * absent. Each is a DELIBERATE deferral, verified against the clause and the
+ * subsystem it belongs to, and pinned so that the next inventory pass does not
+ * rediscover it as a possible oversight, and so that implementing one fails here
+ * and prompts moving it into real coverage.
+ *
+ * The precedent for taking this seriously is that `Math.divFloor` looked exactly
+ * as deferred as these and was not: it was simply missing, along with the eight
+ * checked and saturating forms, and nothing noticed for as long as no test
+ * mentioned them.
+ */
+test('inventory: the specified-but-absent operations are the deferrals they should be', () => {
+  const DEFERRED: Record<string, string> = {
+    // The complex value level is deferred entire: `complex` is not yet a usable
+    // type, so its Math additions have nothing to operate on.
+    'Math.conj': 'complex extension, value level deferred',
+    'Math.arg': 'complex extension, value level deferred',
+    // Recorded in the decorators sequence: the reflection surface lands before
+    // the syntax gate, and the by-index form is a step of it.
+    'Reflect.getReflectionByIndex': 'decorators, reflection surface step 2',
+    // Structural matching. The clause itself calls it optional rather than
+    // load-bearing: "the design's own catalog needed this operation exactly zero
+    // times, which is the measurement that makes it optional".
+    'Reflect.inferSlot': 'typeprogramming, structural matching',
+    'Reflect.matchType': 'typeprogramming, structural matching',
+  };
+  for (const [name, why] of Object.entries(DEFERRED)) {
+    expect(evaluated(`String(typeof ${name});`), `${name} is deferred: ${why}. If this now exists, move it into real coverage.`).toBe('undefined');
+  }
+});

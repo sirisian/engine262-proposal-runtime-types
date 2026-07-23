@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool } from '../readme/harness.mts';
+import { evaluated, ok, bool, evaluatedFlagOff } from '../readme/harness.mts';
 
 /**
  * Extension coverage — typeobjects.md (Type Objects and Reflection).
@@ -94,4 +94,32 @@ test('type objects: getReflection exposes a function type\u2019s signatures', ()
 test('type objects: a type object is opaque to ordinary property access', () => {
   // nothing exposes an array's element via a plain property
   expect(evaluated('type A = [].<uint32>; typeof A.element;')).toBe('undefined');
+});
+
+// ── Reflect.never ─────────────────────────────────────────────────────────────
+// A name for the empty union, so that code need not spell it as a construction.
+// Found absent by a clause-level inventory pass: the function-level pass missed
+// it because the specification names it in a clause heading rather than in
+// backticks, which is the false-negative class that pass documents.
+test('Reflect.never is the Type Object of the never type', () => {
+  expect(evaluated('String(typeof Reflect.never);')).toBe('object');
+  // the same object the type expression gives, because types are interned
+  expect(evaluated('String(Reflect.never === (type never));')).toBe('true');
+  // and the same object the construction gives, which is the point of the name
+  expect(evaluated('String(Reflect.never === Reflect.makeType({ kind: "union", arms: [] }));')).toBe('true');
+  // no value is of it
+  expect(evaluated('String((1 is never) === false && ("s" is never) === false);')).toBe('true');
+});
+
+test('Reflect.never has the attributes the clause gives it', () => {
+  expect(evaluated(`
+    let d = Object.getOwnPropertyDescriptor(Reflect, "never");
+    String(d.writable === false && d.enumerable === false && d.configurable === false);
+  `)).toBe('true');
+});
+
+test('Reflect.never is gated, so flag-off Reflect is unchanged', () => {
+  expect(evaluatedFlagOff('String(typeof Reflect.never);')).toBe('undefined');
+  expect(evaluatedFlagOff('String(typeof Reflect.typeOf);')).toBe('undefined');
+  expect(evaluatedFlagOff('String(typeof Reflect.get);')).toBe('function');
 });

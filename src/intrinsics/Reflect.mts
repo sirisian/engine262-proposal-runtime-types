@@ -1,6 +1,7 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { neverType } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -13,6 +14,7 @@ import {
   Construct,
   CreateArrayFromList,
   CreateListFromArrayLike,
+  Descriptor,
   FromPropertyDescriptor,
   CreateDataProperty,
   Get,
@@ -576,4 +578,26 @@ export function bootstrapReflect(realmRec: Realm) {
   ], realmRec.Intrinsics['%Object.prototype%'], 'Reflect');
 
   realmRec.Intrinsics['%Reflect%'] = reflect;
+}
+
+/**
+ * proposal-runtime-types (spec, Reflect.never): a name for the empty union, so
+ * that code need not spell it as a construction. It is the same object
+ * `Reflect.makeType({ kind: 'union', arms: [] })` returns, because the empty
+ * union is interned like every other type.
+ *
+ * Defined in its own pass rather than in the Reflect table, because a Type Object
+ * needs %Type.prototype% and Reflect is bootstrapped before it.
+ */
+export function bootstrapReflectNever(realmRec: Realm) {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const reflect = realmRec.Intrinsics['%Reflect%'];
+  X(reflect.DefineOwnProperty(Value('never'), Descriptor({
+    Value: GetTypeObject(neverType, realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
 }
