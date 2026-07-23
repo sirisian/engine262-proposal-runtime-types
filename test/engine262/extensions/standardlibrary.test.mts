@@ -97,3 +97,11 @@ test('standard library: preservation needs agreement, and a plain literal does n
   expect(evaluated('String(Math.sqrt(4));')).toBe('2');
   expect(evaluated('String(Math.max(1, 2));')).toBe('2');
 });
+
+test('standard library: clz32 preserves its argument type, as the clause names it', () => {
+  // the numeric library clause gives this as one of its own examples of the rule
+  expect(evaluated('(Math.clz32((1 := uint32)) is uint32) ? "u32" : "plain";')).toBe('u32');
+  expect(evaluated('String(Number(Math.clz32((1 := uint32))));')).toBe('31');
+  // an untyped call is untouched
+  expect(evaluated('String(Math.clz32(1));')).toBe('31');
+});

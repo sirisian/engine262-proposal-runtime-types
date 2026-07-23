@@ -72,6 +72,11 @@ export function wrapToType(math: number, t: TypeRecord): number {
   if (reduced < 0) {
     reduced += modulus;
   }
+  // An integer type has no signed zero, so a negative zero reaching one becomes
+  // positive zero rather than carrying a sign the type cannot represent.
+  if (reduced === 0) {
+    return 0;
+  }
   if (t.Name === 'int') {
     // Signed: values at or above 2**(bits-1) wrap to their two's-complement
     // negative counterpart.

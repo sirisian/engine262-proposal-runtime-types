@@ -115,3 +115,20 @@ test('numeric types: a float16 value is rounded at its own width, not at float32
   expect(evaluated('let x = (0.1 := float32); String(Number(x) - Math.fround(0.1));')).toBe('0');
   expect(evaluated('let x = (0.1 := float64); String(Number(x) - 0.1);')).toBe('0');
 });
+
+test('numeric types: a typed float keeps a negative zero', () => {
+  // A float type has a signed zero and the specification makes the distinction
+  // observable through SameValue, so a conversion must hand the value back as it
+  // was given. The payload is the Number; taking its mathematical value instead
+  // would normalize the sign away, since the real number negative zero is zero.
+  expect(evaluated('let z = -0; String(1 / Number((z := float16)));')).toBe('-Infinity');
+  expect(evaluated('let z = -0; String(1 / Number((z := float32)));')).toBe('-Infinity');
+  expect(evaluated('let z = -0; String(1 / Number((z := float64)));')).toBe('-Infinity');
+  // the same at an annotation boundary, which takes the checked conversion
+  expect(evaluated('let z = -0; let x: float32 = z; String(1 / Number(x));')).toBe('-Infinity');
+  // a positive zero is unaffected
+  expect(evaluated('String(1 / Number((0 := float32)));')).toBe('Infinity');
+  // an integer type has no signed zero, so a negative zero reaching one becomes
+  // positive zero rather than carrying a sign the type cannot represent
+  expect(evaluated('let z = -0; String(1 / Number((z := int32)));')).toBe('Infinity');
+});

@@ -83,7 +83,13 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // covers and takes the checked path, which throws when it cannot fit.
         if (value instanceof NumberValue || value instanceof TypedNumberValue) {
           const n = Q(yield* ToNumber(value));
-          return new TypedNumberValue(wrapToType(R(n) as number, t), t);
+          // The payload stored on a typed value is the NUMBER, not its
+          // mathematical value: R maps a negative zero to positive zero, which is
+          // right for arithmetic over the reals and wrong for a value that has to
+          // be handed back as it was given. A float type has a signed zero and the
+          // specification makes the distinction observable through SameValue.
+          const payload = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+          return new TypedNumberValue(wrapToType(payload, t), t);
         }
         const n = Q(yield* ToNumber(value));
         if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
@@ -149,10 +155,13 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       case 'float32':
       case 'float64': {
         const n = Q(yield* ToNumber(value));
+        // The range check asks a question about the mathematical value, where a
+        // signed zero is immaterial; the payload keeps the Number as given.
         if (!fitsNumericType(R(n) as number, t.Name, t.Arguments)) {
           return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
         }
-        return new TypedNumberValue(R(n) as number, t);
+        const payload = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+        return new TypedNumberValue(wrapToType(payload, t), t);
       }
       default:
         break;
