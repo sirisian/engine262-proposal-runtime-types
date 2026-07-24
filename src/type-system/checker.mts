@@ -2,7 +2,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import {
-  anyType, makePrimitive, voidType, displayType, type TypeRecord,
+  anyType, builtinTypeRecord, makePrimitive, voidType, displayType, type TypeRecord,
 } from './records.mts';
 import { TypeNodeToTypeRecord } from './runtime.mts';
 import { surroundingAgent } from '#self';
@@ -48,6 +48,13 @@ export interface Diagnostic {
 export class TypeEnvironment {
   private readonly names = new Map<string, TypeRecord>();
 
+  /**
+   * Declared TYPES, in their own namespace. A type and a value may share a name,
+   * `type Point = ...` beside `const Point = ...`, and a type annotation reads
+   * the first while an expression reads the second, so one map cannot serve both.
+   */
+  private readonly typeNames = new Map<string, TypeRecord>();
+
   readonly parent: TypeEnvironment | undefined;
 
   constructor(parent?: TypeEnvironment) {
@@ -61,6 +68,14 @@ export class TypeEnvironment {
   /** The type bound to a name, or *undefined* where the checker knows of none. */
   lookup(name: string): TypeRecord | undefined {
     return this.names.get(name) ?? this.parent?.lookup(name);
+  }
+
+  declareType(name: string, type: TypeRecord): void {
+    this.typeNames.set(name, type);
+  }
+
+  lookupType(name: string): TypeRecord | undefined {
+    return this.typeNames.get(name) ?? this.parent?.lookupType(name);
   }
 }
 
@@ -163,6 +178,83 @@ class Checker {
     }
   }
 
+  /**
+   * Collect every type a program declares before typing anything in it.
+   *
+   * This is what lets the checker resolve a type NAME at all. The runtime's
+   * `TypeNodeToTypeRecord` resolves one through `ResolveBinding`, against the
+   * runtime lexical environment, which does not exist yet when the checker runs;
+   * reaching for it asserts rather than failing catchably. So the checker keeps
+   * its own type namespace and fills it here.
+   *
+   * The pre-pass is separate from the walk, and must be, because a type may be
+   * used before it is declared: `let a: Later = ...; type Later = ...` is legal,
+   * and a single-pass walk would resolve the annotation against an empty
+   * namespace. Collecting first is the whole reason this is two passes.
+   */
+  collectTypes(node: ParseNode | null | undefined, env: TypeEnvironment): void {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    const binding = (node as { BindingIdentifier?: { name?: string } }).BindingIdentifier;
+    if (binding?.name) {
+      if (node.type === 'TypeAliasDeclaration') {
+        const aliased = (node as { Type?: ParseNode }).Type;
+        env.declareType(binding.name, aliased ? this.resolveTypeNode(aliased, env) : anyType);
+      } else if (node.type === 'InterfaceDeclaration' || node.type === 'EnumDeclaration') {
+        // Both are nominal: the declaration IS the identity, so the record can be
+        // built without resolving the members, which is what lets a self-referring
+        // interface be collected without recursing forever.
+        env.declareType(binding.name, { Kind: 'nominal', Declaration: node, Arguments: [] } as TypeRecord);
+      }
+    }
+    for (const child of childNodes(node)) {
+      this.collectTypes(child, env);
+    }
+  }
+
+  /**
+   * The checker's own Type node to Type Record, consulting the type namespace
+   * rather than the runtime environment. Deliberately partial in the same way
+   * `staticTypeOf` is: a form it does not handle is `any`, which admits
+   * everything and so cannot make the checker wrong, only imprecise.
+   */
+  resolveTypeNode(node: ParseNode | null | undefined, env: TypeEnvironment): TypeRecord {
+    if (!node) {
+      return anyType;
+    }
+    switch (node.type) {
+      case 'TypeReference': {
+        const typeName = (node as ParseNode.TypeReference).TypeName as {
+          IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[],
+        };
+        if (typeName?.MemberNames?.length) {
+          return anyType;
+        }
+        const name = typeName?.IdentifierReference?.name;
+        if (!name) {
+          return anyType;
+        }
+        // A declared type first, then the builtin table. That order matters: a
+        // program may shadow a builtin name, and the declaration wins.
+        return env.lookupType(name) ?? builtinTypeRecord(name) ?? anyType;
+      }
+      case 'LiteralType':
+        return anyType;
+      case 'UnionType':
+      case 'IntersectionType': {
+        const members = childNodes(node)
+          .filter((c) => c.type.endsWith('Type') || c.type === 'TypeReference')
+          .map((c) => this.resolveTypeNode(c, env));
+        return members.length
+          ? ({ Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members: members } as TypeRecord)
+          : anyType;
+      }
+      default:
+        return anyType;
+    }
+  }
+
   private* bindDeclaration(node: ParseNode, env: TypeEnvironment): PlainEvaluator {
     const annotation = (node as { TypeAnnotation?: { Type?: ParseNode } | null }).TypeAnnotation;
     const binding = (node as { BindingIdentifier?: { name?: string } }).BindingIdentifier;
@@ -178,27 +270,21 @@ class Checker {
     // pass that stops cannot make the claim Phase 1 rests on, that it walks a
     // whole program and reports what it finds.
     //
-    // KNOWN LIMITATION, and the finding this conversion produced.
-    // TypeNodeToTypeRecord resolves a type NAME through the RUNTIME lexical
-    // environment, by ResolveBinding. The checker runs before evaluation, so
-    // those bindings do not exist yet and ResolveBinding asserts rather than
-    // failing catchably. A type expression naming nothing, `uint8` and the other
-    // builtins among them, resolves without one; anything naming a declared type
-    // does not. The guard below keeps the pass usable while that stands, and the
-    // real answer is that the checker must resolve type names against its OWN
-    // scope chain, which is what TypeEnvironment exists to become. That is the
-    // next piece of Phase 2 and it is larger than the conversion was.
-    if (!hasUsableEnvironment()) {
-      env.declare(binding.name, anyType);
-      return undefined;
-    }
-    const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type as never));
-    if (attempt.Type === 'throw') {
+    // Resolved against the CHECKER's type namespace, filled by collectTypes.
+    // The runtime's TypeNodeToTypeRecord is not usable here: it resolves a type
+    // name through ResolveBinding against the runtime lexical environment, which
+    // does not exist when the checker runs, and it asserts rather than failing
+    // catchably. Where a running environment does happen to exist, it is still
+    // preferred, because it handles every form this one does not.
+    if (hasUsableEnvironment()) {
+      const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type as never));
+      if (attempt.Type !== 'throw') {
+        env.declare(binding.name, attempt.Value as TypeRecord);
+        return undefined;
+      }
       this.report(node, `the annotation on ${binding.name} could not be resolved`);
-      env.declare(binding.name, anyType);
-      return undefined;
     }
-    env.declare(binding.name, attempt.Value as TypeRecord);
+    env.declare(binding.name, this.resolveTypeNode(annotation.Type as ParseNode, env));
     return undefined;
   }
 }
@@ -268,6 +354,9 @@ function isExpressionish(node: ParseNode): boolean {
 export function* CheckProgram(program: ParseNode): PlainEvaluator<CheckResult> {
   const checker = new Checker();
   const env = new TypeEnvironment();
+  // Two passes: collect every declared type, then walk. A type may be used
+  // before it is declared, so one pass would resolve against an empty namespace.
+  checker.collectTypes(program, env);
   Q(yield* checker.statement(program, env));
   return { diagnostics: checker.diagnostics, types: checker.types };
 }

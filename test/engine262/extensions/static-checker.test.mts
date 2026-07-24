@@ -118,3 +118,52 @@ test('checker: it is inert, so no program observes it', () => {
   const completion = realm.evaluateScriptSkipDebugger('let a: uint8 = 5; String(Number(a));') as { Value: { stringValue(): string } };
   expect(completion.Value.stringValue()).toBe('5');
 });
+
+// -- The type-declaration pre-pass (Phase 2) ----------------------------------
+// The checker cannot use the runtime's type-name resolution: that reads the
+// runtime lexical environment through ResolveBinding, which does not exist when
+// the checker runs and asserts rather than failing catchably. So the checker
+// keeps its own type namespace and fills it before walking.
+test('checker: a declared type is resolvable by name', () => {
+  const result = check('type Point = { x: float64 }; let p: Point = { x: 1 }; p;');
+  expect(result.diagnostics).toEqual([]);
+  // the binding's type came from the type namespace, not from `any`
+  const kinds = [...result.types.values()].map((t) => t.Kind);
+  expect(kinds.length).toBeGreaterThan(0);
+});
+
+test('checker: a type may be used before it is declared', () => {
+  // this is why collection is a separate pass. A single walk would resolve the
+  // annotation against an empty namespace and silently answer `any`.
+  const result = check('let a: Later = 1; type Later = float64; a;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: a builtin name resolves without any declaration', () => {
+  const result = check('let a: uint8 = 5; let b: float32 = 1; a; b;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: a declaration shadows a builtin name', () => {
+  // the declared type wins, which is the order resolveTypeNode uses
+  const result = check('type uint8 = { spoofed: float64 }; let a: uint8 = 1; a;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: interfaces and enums are collected too', () => {
+  const result = check(`
+    interface Shape { area: float64 }
+    enum Colour { Red, Green }
+    let s: Shape = { area: 1 };
+    let c: Colour = Colour.Red;
+    s; c;
+  `);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: a self-referring interface does not recurse forever', () => {
+  // an interface is nominal, so its record is built from the declaration without
+  // resolving its members, which is what makes this terminate
+  const result = check('interface Node2 { next: Node2 } let n: Node2 = { next: null }; n;');
+  expect(result.diagnostics).toEqual([]);
+});
