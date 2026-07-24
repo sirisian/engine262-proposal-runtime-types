@@ -772,12 +772,61 @@ function toNumericArgument(record: TypeRecord): TypeRecord | number {
  * null-prototyped: a meta type's hooks read it, and the specification requires them
  * to be pure functions of their arguments.
  */
+/**
+ * #sec-primitive-metadata, table-metadata-values: a metadata value is drawn from
+ * a closed language. The top level is a flat record of claimed keys, and the
+ * values under them may nest freely, so this reads a nested record and a list as
+ * well as a primitive.
+ *
+ * Dropping the forms it could not read was not a limitation but a defect: a
+ * property whose value did not survive simply vanished, and since interning
+ * compares what survives, `float32.<{ q: { a: 1 } }>` and `float32.<{ q: { a: 2 }
+ * }>` both reduced to the empty record and were ONE TYPE. Two distinct types
+ * silently becoming one is the sharpest failure this design has, because nothing
+ * about it looks wrong at the site that wrote it.
+ *
+ * A form the language does not admit is still omitted, which is correct: the
+ * clause says nothing else is a metadata value, and the parameterization that
+ * writes one is a type error the checker is to report at the site.
+ */
+function metadataValueFromType(t: TypeRecord): unknown {
+  if (t.Kind === 'literal') {
+    return t.Value;
+  }
+  if (t.Kind === 'object') {
+    const nested: Record<string, unknown> = Object.create(null);
+    for (const p of t.Properties) {
+      const v = metadataValueFromType(p.type);
+      if (v !== METADATA_NOT_A_VALUE) {
+        nested[p.key] = v;
+      }
+    }
+    return Object.freeze(nested);
+  }
+  if (t.Kind === 'tuple') {
+    const list: unknown[] = [];
+    for (const e of t.Elements) {
+      const v = metadataValueFromType(e.Type);
+      if (v === METADATA_NOT_A_VALUE) {
+        return METADATA_NOT_A_VALUE;
+      }
+      list.push(v);
+    }
+    return Object.freeze(list);
+  }
+  return METADATA_NOT_A_VALUE;
+}
+
+/** Distinguishes "this form is not a metadata value" from a value of *undefined*. */
+const METADATA_NOT_A_VALUE = Symbol('not-a-metadata-value');
+
 export function MetadataObjectFromType(t: TypeRecord): Value {
-  const fields: Record<string, Value> = Object.create(null);
+  const fields: Record<string, unknown> = Object.create(null);
   if (t.Kind === 'object') {
     for (const p of t.Properties) {
-      if (p.type.Kind === 'literal') {
-        fields[p.key] = p.type.Value;
+      const v = metadataValueFromType(p.type);
+      if (v !== METADATA_NOT_A_VALUE) {
+        fields[p.key] = v;
       }
     }
   }

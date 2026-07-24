@@ -33,11 +33,22 @@ function SameMetadata(a: unknown, b: unknown): boolean {
   if (ak.length !== bk.length) {
     return false;
   }
+  if (Array.isArray(a) !== Array.isArray(b)) {
+    return false;
+  }
   return ak.every((k) => {
     const av = (a as Record<string, unknown>)[k];
     const bv = (b as Record<string, unknown>)[k];
     if (av === bv) {
       return true;
+    }
+    // table-metadata-values: a nested record compares by the same keys and
+    // equivalent values without regard to order, and a list by length and by
+    // each index in order. Object.keys gives a list's indices, so one recursion
+    // serves both, with the array check above keeping the two forms apart.
+    if (av && bv && typeof av === 'object' && typeof bv === 'object'
+      && !('numberValue' in av) && !('stringValue' in av)) {
+      return SameMetadata(av, bv);
     }
     // Field values are Values, whose sameness is their own; a literal String or
     // Number Value compares by the value it holds.

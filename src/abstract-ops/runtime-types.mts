@@ -467,12 +467,31 @@ export function* ApplyValidateHook(typeObject: object, value: Value, metadata: V
  * program, and not in the storage, which the comparison path depends on.
  */
 function MetadataAsObject(metadata: Value): Value {
-  if (metadata instanceof ObjectValue || metadata === null || typeof metadata !== 'object') {
+  if (metadata === null || typeof metadata !== 'object') {
     return metadata;
+  }
+  // An engine Value is a host object too, so the two are told apart by shape
+  // rather than by typeof: a nested metadata record is built with a null
+  // prototype and a list is a real Array, and everything else reaching here is
+  // already a Value and is handed over untouched. Recursing into a Value instead
+  // would rebuild it out of its own internal fields.
+  if (!Array.isArray(metadata) && Object.getPrototypeOf(metadata) !== null) {
+    return metadata;
+  }
+  // A metadata value nests (table-metadata-values), so the conversion must too.
+  // Converting only the top level left host records and host arrays sitting in
+  // the properties, and the first thing a hook did with one, even `typeof`,
+  // reached a value the engine has no case for.
+  if (Array.isArray(metadata)) {
+    const arr = X(ArrayCreate(metadata.length));
+    for (let i = 0; i < metadata.length; i += 1) {
+      X(CreateDataPropertyOrThrow(arr, Value(String(i)), MetadataAsObject(metadata[i] as Value)));
+    }
+    return arr;
   }
   const obj = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
   for (const [key, v] of Object.entries(metadata as unknown as Record<string, Value>)) {
-    X(CreateDataPropertyOrThrow(obj, Value(key), v));
+    X(CreateDataPropertyOrThrow(obj, Value(key), MetadataAsObject(v)));
   }
   return obj;
 }

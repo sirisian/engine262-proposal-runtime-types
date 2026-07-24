@@ -196,3 +196,39 @@ test('meta: a metadata key no meta type claims is still admitted', () => {
   // above is not mistaken for it
   expect(evaluated('String((1 := float64) is float64.<{ claimedByNobody: 1 }>);')).toBe('true');
 });
+
+// -- The metadata value language: nested records and lists --------------------
+// table-metadata-values admits a nested record and a list under a claimed key.
+// They PARSED before this and were then silently dropped, and since interning
+// compares what survives, two parameterizations with different nested metadata
+// reduced to the same empty record and were ONE TYPE.
+test('meta: nested metadata discriminates types', () => {
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ q: { a: 1 } }>, type float32.<{ q: { a: 2 } }>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ q: { a: 1 } }>, type float32.<{ q: { a: 1 } }>));')).toBe('true');
+});
+
+test('meta: a list is compared by length and by index in order', () => {
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ u: [1, 2] }>, type float32.<{ u: [1, 2] }>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ u: [1, 2] }>, type float32.<{ u: [2, 1] }>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ u: [1] }>, type float32.<{ u: [1, 2] }>));')).toBe('false');
+});
+
+test('meta: a hook receives nested metadata as ordinary values', () => {
+  // the conversion at the hook boundary nests too; handing a hook the host
+  // record left values the engine has no case for, and `typeof` alone hit one
+  expect(evaluated(`
+    type N = { rr: float64 };
+    meta N { default = 0; validate(v, m) { return typeof m.rr === "object" && m.rr.lo === 0; } }
+    String((1 := float32) is float32.<{ rr: { lo: 0 } }>);
+  `)).toBe('true');
+  expect(evaluated(`
+    type L = { ll: float64 };
+    meta L { default = 0; validate(v, m) { return Array.isArray(m.ll) && m.ll.length === 2 && m.ll[1] === 2; } }
+    String((1 := float32) is float32.<{ ll: [1, 2] }>);
+  `)).toBe('true');
+});
+
+test('meta: flat metadata is unchanged', () => {
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 2 }>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 1 }>));')).toBe('true');
+});
