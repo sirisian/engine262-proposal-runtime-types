@@ -158,3 +158,41 @@ test('meta: a hook declared against the base still applies', () => {
     String((1 := float32) is float32.<{ zzz: 1 }>);
   `)).toBe('false');
 });
+
+// -- The brand rule: a constraining meta type with no `validate` admits nothing -
+// "The validation judgment holds of a value v and a metadata value m when, for
+// every meta type M whose portion is not M's default, M DEFINES `validate` and it
+// holds of v and that portion. A meta type that constrains and defines no
+// `validate` therefore admits no bare value of the base at all, which is what
+// makes a brand a brand."
+//
+// Cycle 14 skipped a meta type that offered no judgment, which admitted the bare
+// value and made a brand a comment.
+test('meta: a meta type that claims a key and defines no validate refuses bare values', () => {
+  expect(evaluated(`
+    type Brand = { tag: float64 };
+    meta Brand { default = 0; }
+    String((1 := float32) is float32.<{ tag: 7 }>);
+  `)).toBe('false');
+  // it refuses at every base, since the claim is on the key
+  expect(evaluated(`
+    type Brand2 = { tag2: float64 };
+    meta Brand2 { default = 0; }
+    String((1 := int32) is int32.<{ tag2: 7 }>);
+  `)).toBe('false');
+});
+
+test('meta: a meta type that defines validate still decides normally', () => {
+  expect(evaluated(`
+    type Bound = { atLeast: float64 };
+    meta Bound { default = 0; validate(v, m) { return Number(v) >= m.atLeast; } }
+    String(((5 := float32) is float32.<{ atLeast: 0 }>) + "/" + (((0 - 5) := float32) is float32.<{ atLeast: 0 }>));
+  `)).toBe('true/false');
+});
+
+test('meta: a metadata key no meta type claims is still admitted', () => {
+  // the specification places THAT error at the parameterization rather than in
+  // the membership judgment, and it is not implemented; pinned so the brand rule
+  // above is not mistaken for it
+  expect(evaluated('String((1 := float64) is float64.<{ claimedByNobody: 1 }>);')).toBe('true');
+});

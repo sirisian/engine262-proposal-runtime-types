@@ -498,9 +498,21 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // against the BASE is consulted too, which is how `meta float32 { validate }`
       // works, but the design's own form declares against the METADATA type and
       // reaches the parameterization through the claim rather than by naming it.
+      // #sec-primitive-metadata, the validation judgment: it holds "when, for
+      // every meta type M whose portion is not M's default, M DEFINES `validate`
+      // and it holds of v and that portion". Both halves matter. A meta type that
+      // constrains and defines no `validate` therefore admits NO bare value of
+      // the base, "which is what makes a brand a brand": a brand's whole purpose
+      // is that its base cannot arrive at it except through the construction
+      // boundary, and admitting bare values would make it a comment.
       const { types: governing } = GoverningMetaTypes(t.Metadata);
       for (const metaType of governing) {
         const verdict = Q(yield* ApplyValidateHook(metaType, value, t.Metadata));
+        if (verdict === undefined) {
+          // The meta type claims a key here and offers no judgment, so it
+          // constrains without admitting. This is the brand case.
+          return false;
+        }
         if (verdict === false) {
           return false;
         }
