@@ -86,6 +86,21 @@ test('numeric predicates: the Number statics keep the base language answer for a
   expect(evaluatedFlagOff('String(Number.isFinite(5n));')).toBe('false');
 });
 
+test('numeric predicates: the visible cost of the split, pinned where it can be seen', () => {
+  // The two halves of the decision meet here: `isFinite` and `Number.isFinite`
+  // disagree about a BigInt under the flag. That is the price of declaring a
+  // row only where it displaces an error, and the specification now owns it
+  // (F39). The pair is asserted in ONE program so the divergence cannot be
+  // read as two unrelated answers.
+  expect(evaluated('String(isFinite(1n)) + "," + String(Number.isFinite(1n));')).toBe('true,false');
+  // isNaN's two surfaces coincide at *false*, so the split is invisible there.
+  expect(evaluated('String(isNaN(1n)) + "," + String(Number.isNaN(1n));')).toBe('false,false');
+  // The two statics with no global counterpart: no surface takes a BigInt for
+  // those questions at all, which is why the specification's table declares
+  // nothing for them rather than stating an answer no call can obtain.
+  expect(evaluated('typeof isInteger + "," + typeof isSafeInteger;')).toBe('undefined,undefined');
+});
+
 // -- The rational family --------------------------------------------------------
 test('numeric predicates: a rational is never NaN and integral at a unit denominator', () => {
   expect(evaluated('String(Number.isNaN(rational(1, 2)));')).toBe('false');
