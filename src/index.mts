@@ -23,6 +23,15 @@ export * from './evaluator.mts';
 // because an unrelated module declared the same shape.
 export { TypeOrigins, type TypeOrigin } from './type-system/provenance.mts';
 
+// proposal-runtime-types: the static checker (STATIC-CHECKER-PLAN.md Phase 1).
+// Host-facing and inert: it assigns Static Types and collects diagnostics, and
+// nothing in the engine consults it yet, so it can be judged on whether it reads
+// the language correctly before anything depends on its answers.
+export {
+  CheckProgram, StaticTypeOfExpression, TypeEnvironment,
+  type CheckResult, type Diagnostic,
+} from './type-system/checker.mts';
+
 export {
   gc, type ManagedRealmHostDefined, ManagedRealm,
 } from './api.mts';
