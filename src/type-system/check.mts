@@ -1,4 +1,4 @@
-import { NumberValue, Value, type ObjectValue } from '../value.mts';
+import { BigIntValue, NumberValue, Value, type ObjectValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
@@ -9,6 +9,7 @@ import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
+import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { R, Throw } from '#self';
@@ -163,6 +164,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // assignable; the run-time boundary constructs the typed value.
     if (literalFitsNumericType(erasedSource, erasedTarget)) {
       return;
+    }
+    // A BigInt literal at a FLOAT family follows the checked rule the runtime
+    // applies (F38): admitted exactly where the width represents it exactly,
+    // an Early Error where it would round. An integer family stays reported:
+    // exactness at the wide widths is the pinned prerequisite.
+    // (Discriminated by the VALUE: staticType currently labels a BigInt
+    // literal's Base as `number`, a mislabel F38 pins, so the Base name is
+    // not the reliable half here.)
+    if (erasedSource && erasedSource.Kind === 'literal'
+        && erasedTarget && erasedTarget.Kind === 'primitive' && isFloatTypeName(erasedTarget.Name)
+        && erasedSource.Value instanceof BigIntValue) {
+      const big = R(erasedSource.Value) as bigint;
+      const rounded = wrapToType(Number(big), erasedTarget);
+      if (Number.isFinite(rounded) && BigInt(rounded) === big) {
+        return;
+      }
     }
     if (!IsAssignable(erasedSource, erasedTarget)) {
       report(erasedSource, erasedTarget);

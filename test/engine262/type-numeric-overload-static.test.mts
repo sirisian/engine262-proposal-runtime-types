@@ -90,10 +90,14 @@ test('cast placement: converting the result and converting the operand differ', 
   // The numeric library plan's distinction, stated over the integer and float
   // rows: converting the RESULT keeps the integer row's exact square root,
   // converting the OPERAND selects the float row's approximation. The plan's
-  // own literals use 10n, and that exact pair still cannot be asserted: no
+  // own literals use 10n, and that exact pair could not be asserted before F38: no
   // conversion admits a bigint source to a float target yet
   // (`float64(3n)` and `(3n := float64)` both refuse), which is
   // conversion-table work adjacent to F14, not this phase's; F37 pins it.
   expect(evaluated('String((Math.sqrt((10 := uint8)) := float64));')).toBe('3');
   expect(evaluated('String(Math.sqrt((10 := float64)));')).toBe('3.1622776601683795');
+  // The plan's own literals, over the bigint row: assertable since the
+  // bigint-to-float conversion source landed (F38; F37 had pinned it).
+  expect(evaluated('String(float64(Math.sqrt(10n)));')).toBe('3');
+  expect(evaluated('String(Math.sqrt(float64(10n)));')).toBe('3.1622776601683795');
 });

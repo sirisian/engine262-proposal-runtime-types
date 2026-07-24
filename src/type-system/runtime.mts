@@ -719,7 +719,14 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
       if (!(value instanceof TypedNumberValue)) {
         return false;
       }
-      const r = (value as TypedNumberValue).TypeRecord as TypeRecord;
+      let r = (value as TypedNumberValue).TypeRecord as TypeRecord;
+      // #sec-primitive-metadata, the branding rule: a parameterized type is a
+      // subtype of its base, so a value carrying `float64.<{ min: 0 }>` IS a
+      // float64 — which is what lets a constructed value satisfy its own
+      // type's base check, and what F33's construction boundary produces.
+      if (r.Kind === 'parameterized') {
+        r = r.Base;
+      }
       return r.Kind === 'primitive' && r.Name === name
         && r.Arguments.length === args.length
         && r.Arguments.every((a, i) => a === args[i]);

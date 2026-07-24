@@ -5,6 +5,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
+import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import {
@@ -84,26 +85,32 @@ function isStringConversionSource(value: Value): boolean {
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // #sec-parameterized-types: the crossing between two parameterizations of one
+  // base is ConvertParameterization, which each meta type gates independently —
+  // and it must be consulted BEFORE the value-level membership shortcut below,
+  // because `is` is deliberately provenance-blind (a raw value the validation
+  // judgment admits IS of the target), while the crossing is exactly the
+  // provenance question: `Kilometer` to `Velocity` refuses on `subtype` and
+  // `Kilometer` to `Meter` scales by the factor, even though `validate` would
+  // wave the raw value through either. Shedding a parameterization UPWARD to
+  // its base needs no gate at all, since a parameterized type is a subtype of
+  // its base, which is the branding rule.
+  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
+    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+    if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {
+      return Q(yield* ConvertParameterization(value, carried, t));
+    }
+    if (t.Kind !== 'parameterized' && SameType(carried.Base, t)) {
+      // "A parameterized type is a subtype of its base, so the brand is shed
+      // freely on the way up." No meta type gates this direction.
+      return new TypedNumberValue(value.value, t);
+    }
+  }
   const already = Q(yield* IsOfType(value, t));
   if (already) {
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
-  }
-  // #sec-parameterized-types: the crossing between two parameterizations of one
-  // base is ConvertParameterization, which each meta type gates independently.
-  // Shedding a parameterization UPWARD to its base needs no gate at all, since a
-  // parameterized type is a subtype of its base, which is the branding rule.
-  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
-    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
-    if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base)) {
-      return Q(yield* ConvertParameterization(value, carried, t));
-    }
-    if (SameType(carried.Base, t)) {
-      // "A parameterized type is a subtype of its base, so the brand is shed
-      // freely on the way up." No meta type gates this direction.
-      return new TypedNumberValue(value.value, t);
-    }
   }
   if (t.Kind === 'parameterized') {
     // "The base is not a subtype of the parameterization, so the way down is a
@@ -153,6 +160,14 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // `uint8(300)` is 44. The conversion table is keyed on numeric families,
         // so a non-numeric source (a String, an object) is not a family the wrap
         // covers and takes the checked path, which throws when it cannot fit.
+        if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
+          // #sec-conversions: a BigInt is a numeric family, and the float rule
+          // is the one that has an answer for it — round to the width, overflow
+          // to an infinity. (An INTEGER target stays refused below: exactness at
+          // the wide widths is the pinned prerequisite, F11's third divergence.)
+          const payload = Number(R(value) as bigint);
+          return new TypedNumberValue(wrapToType(payload, t), t);
+        }
         if (isNumericConversionSource(value)) {
           const n = Q(yield* ToNumber(value));
           // The payload stored on a typed value is the NUMBER, not its
@@ -202,6 +217,18 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
  * (a RangeError in the spec) rather than discarding information.
  */
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // The crossing between two parameterizations gates and scales here exactly as
+  // at the cast: the checked rule differs from ConvertValue only in what a
+  // LOSSY numeric conversion does, and a crossing is a conversion, not a loss.
+  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
+    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+    if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {
+      return Q(yield* ConvertParameterization(value, carried, t));
+    }
+    if (t.Kind !== 'parameterized' && SameType(carried.Base, t)) {
+      return new TypedNumberValue(value.value, t);
+    }
+  }
   const already = Q(yield* IsOfType(value, t));
   if (already) {
     // proposal-runtime-types (Capability B): even when the value already
@@ -248,6 +275,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // coercion rather than a check: it accepted a string, a Boolean, *null*,
         // and any object with a `valueOf`, and at a float width it could not even
         // fail, so a missing field became a NaN that surfaced somewhere else.
+        if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
+          // The checked rule: a conversion that would round throws rather than
+          // discarding, so a BigInt is admitted exactly where the float width
+          // represents it exactly.
+          const payload = Number(R(value) as bigint);
+          const rounded = wrapToType(payload, t);
+          if (!Number.isFinite(rounded) || BigInt(rounded) !== (R(value) as bigint)) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return new TypedNumberValue(rounded, t);
+        }
         if (!isNumericConversionSource(value)) {
           if (value instanceof JSStringValue || value instanceof TypedStringValue) {
             return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
@@ -562,10 +600,15 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
       converted = q;
     }
   }
-  // The result is a value of the target parameterization, so it carries the
-  // target's base as its runtime type; the metadata rides the static type.
+  // The result is a value of the target parameterization and CARRIES it, so a
+  // chained crossing still has a `from` to gate on and `is` sees the
+  // parameterization; membership treats the carried record as its base (the
+  // branding rule), so the value is a value of the base everywhere the base is
+  // asked for.
   if (converted instanceof NumberValue) {
-    converted = new TypedNumberValue(R(converted) as number, to.Base);
+    converted = new TypedNumberValue(R(converted) as number, to);
+  } else if (isTypedNumber(converted)) {
+    converted = new TypedNumberValue(converted.value, to);
   }
   return converted;
 }

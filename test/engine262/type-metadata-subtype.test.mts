@@ -39,6 +39,7 @@ const dimensions = `
     default = { m: 0, s: 0, ratio: 1 };
     subtype(a, b) { return a.m === b.m && a.s === b.s; }
     validate(v, c) { return true; }
+    conversionFactor(a, b) { return a.ratio / b.ratio; }
   }
   type Meter = float32.<{ m: 1, ratio: 1 }>;
   type Kilometer = float32.<{ m: 1, ratio: 1000 }>;
@@ -54,17 +55,20 @@ test('metadata subtype judgment: equal exponents admit a crossing between ratios
   `)).toBe('ok');
   // The same crossing stated between a parameter and a return annotation, at
   // the top level, is deferred from the return site and admitted by the pass.
-  // What is deliberately NOT asserted anywhere here is a RUN crossing: a bare
-  // value cannot yet be constructed into a parameterization at run time
-  // (ConvertParameterization's first guard refuses a non-parameterized `from`,
-  // so the clause's "a cast supplies what the value lacks" arm, and the
-  // ratio's conversionFactor with it, is unimplemented). That is F33's open
-  // item; when it lands, a top-level `let m: Meter = (2 := Kilometer)` variant
-  // asserting the scaled value belongs in this test.
   expect(evaluated(`${dimensions}
     function convert(km: Kilometer): Meter { return km; }
     "ok";
   `)).toBe('ok');
+  // And the RUN crossing this test once pinned as impossible (the note here
+  // used to blame ConvertParameterization's first guard, which was the wrong
+  // mechanism: the construction path existed and mis-carried its record; F38
+  // has the correction). The pass admits the pair, the construction admits the
+  // value, and the ratio's factor scales it: two kilometres are two thousand
+  // metres, at run time, through the annotation.
+  expect(evaluated(`${dimensions}
+    let m: Meter = (2 := Kilometer);
+    String(m);
+  `)).toBe('2000');
 });
 
 test('metadata subtype judgment: differing exponents refuse, before the body runs', () => {
