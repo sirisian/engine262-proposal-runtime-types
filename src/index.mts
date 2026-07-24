@@ -16,6 +16,13 @@ export { performDevtoolsEval } from './host-defined/devtoolsEval.mts';
 export { type Formattable, Throw } from './host-defined/error-messages.mts';
 export * from './evaluator.mts';
 
+// proposal-runtime-types (spec, Provenance): the host-facing channel. A tool
+// resolves a doc comment or a go-to-definition through this; no program can read
+// it, deliberately, because origins union across structurally identical
+// declarations and a program observing that would see its own type change
+// because an unrelated module declared the same shape.
+export { TypeOrigins, type TypeOrigin } from './type-system/provenance.mts';
+
 export {
   gc, type ManagedRealmHostDefined, ManagedRealm,
 } from './api.mts';

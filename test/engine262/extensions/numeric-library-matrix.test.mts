@@ -231,28 +231,16 @@ test('inventory: the specified-but-absent operations are the deferrals they shou
 });
 
 /**
- * GAP PIN for provenance (sec-provenance). A Type Record may carry an [[Origin]],
- * reflected as an `origin` property and accepted by construction. None of that
- * exists, and unlike the deferrals above nothing had recorded it, which is the
- * condition this pin removes.
- *
- * It is pinned as absent rather than half-built on purpose. The channel could be
- * added in an afternoon, but populating it needs declaration sites from the
- * parser, and a channel without a source would make `origin` present and always
- * *undefined*: a feature that looks implemented and answers nothing. That is the
- * "inexact answer looking authoritative" failure this project keeps finding, and
- * an honest absence is better than a hollow presence.
+ * CLOSED. Provenance is implemented as a HOST-FACING channel (TypeOrigins,
+ * exported from the engine, covered in provenance.test.mts). The half that stays
+ * absent by design is the reflected `origin` property: the specification was
+ * changed to make the channel host-facing, because origins union across
+ * structurally identical declarations and a program reading one would see its own
+ * type change when a stranger declared the same shape.
  */
-test('inventory: provenance is specified and not implemented', () => {
-  // no reflected origin
+test('inventory: provenance is a host channel and not a program-visible property', () => {
   expect(evaluated('let r = Reflect.getReflection(type uint8); String("origin" in r);')).toBe('false');
-  // and construction does not accept one
-  expect(evaluated(`
-    let m = "";
-    try { Reflect.makeType({ kind: "primitive", name: "uint", arguments: [8], origin: "x" }); m = "accepted"; }
-    catch (e) { m = "refused"; }
-    m;
-  `)).toBe('refused');
-  // the expansion artifact of the same clause group is likewise absent
+  expect(evaluated('String(typeof Reflect.getOrigin);')).toBe('undefined');
+  // the expansion artifact of the same clause group is still absent
   expect(evaluated('String(typeof Reflect.expansionArtifact);')).toBe('undefined');
 });

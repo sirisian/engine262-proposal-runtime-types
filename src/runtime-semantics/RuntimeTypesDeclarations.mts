@@ -6,6 +6,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { GetValue } from '../abstract-ops/all.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
@@ -110,6 +111,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Structure: { Kind: 'object', Properties, IndexSignatures: [] },
     };
     value = GetTypeObject(record);
+  }
+  // #sec-provenance: record the declaration site this type came from. Interning
+  // has already merged structurally identical shapes, so recording here IS the
+  // union the clause specifies: `type A = { x: number }` and `type B = { x:
+  // number }` reach one Type Object and both sites land on it. Nothing about the
+  // type's identity reads this, and no program can: it is the host's channel.
+  if (value !== Value.undefined) {
+    RecordTypeOrigin(value as object, OriginOfNode(node, node.type, name.stringValue()));
   }
   Q(yield* InitializeBoundName(name, value, env));
   return undefined;
