@@ -232,3 +232,43 @@ test('meta: flat metadata is unchanged', () => {
   expect(evaluated('String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 2 }>));')).toBe('false');
   expect(evaluated('String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 1 }>));')).toBe('true');
 });
+
+// -- The pattern form of the metadata value language --------------------------
+// The last form of table-metadata-values, and the one that needed the lexer: a
+// `/` is division or the start of a pattern depending on what precedes it, and
+// in type position there is no division to be ambiguous with.
+test('meta: a pattern is a metadata value', () => {
+  expect(evaluated('String((1 := float32) is float32.<{ p: /^a/ }>);')).toBe('true');
+  expect(evaluated('String(("x" := string) is string.<{ p: /^a/i }>);')).toBe('true');
+});
+
+test('meta: a pattern is compared by source and flags, not by object identity', () => {
+  // this is the reason it is carried structurally. Two RegExp objects are never
+  // equal, so one pattern written twice would otherwise be two types.
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^a/ }>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^b/ }>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^a/i }>));')).toBe('false');
+});
+
+test('meta: a hook is handed a RegExp built from the carried pattern', () => {
+  expect(evaluated(`
+    type SP = { pat: float64 };
+    meta SP { default = 0; validate(v, m) { return m.pat instanceof RegExp && m.pat.source === "^a" && m.pat.flags === "i"; } }
+    String(("ab" := string) is string.<{ pat: /^a/i }>);
+  `)).toBe('true');
+});
+
+test('meta: the whole-string match a StringPattern meta type would perform', () => {
+  // the validation judgment the clause gives StringPattern, written as an
+  // ordinary meta type now that the pattern reaches the hook
+  expect(evaluated(`
+    type SP2 = { rex: float64 };
+    meta SP2 { default = 0; validate(v, m) { let re = new RegExp("^(?:" + m.rex.source + ")$", m.rex.flags); return re.test(String(v)); } }
+    String((("abc" := string) is string.<{ rex: /a.c/ }>) + "/" + (("xbc" := string) is string.<{ rex: /a.c/ }>));
+  `)).toBe('true/false');
+});
+
+test('meta: a pattern nests with the other forms', () => {
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^a/ } }>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^b/ } }>));')).toBe('false');
+});

@@ -36,6 +36,15 @@ function SameMetadata(a: unknown, b: unknown): boolean {
   if (Array.isArray(a) !== Array.isArray(b)) {
     return false;
   }
+  // table-metadata-values: a pattern is equivalent to a pattern with identical
+  // source and identical flags. This is why a pattern is carried structurally
+  // rather than as a RegExp: two objects are never equal, so one pattern written
+  // in two modules would otherwise be two types.
+  const ap = a as { __pattern?: boolean, source?: string, flags?: string };
+  const bp = b as { __pattern?: boolean, source?: string, flags?: string };
+  if (ap.__pattern || bp.__pattern) {
+    return ap.__pattern === bp.__pattern && ap.source === bp.source && ap.flags === bp.flags;
+  }
   return ak.every((k) => {
     const av = (a as Record<string, unknown>)[k];
     const bv = (b as Record<string, unknown>)[k];

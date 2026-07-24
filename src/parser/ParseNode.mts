@@ -2609,6 +2609,7 @@ export namespace ParseNode {
     | IndexedAccessType
     | PredefinedType
     | LiteralType
+    | PatternType
     | TypeReference
     | ComputedType
     | ArrayType
@@ -2804,6 +2805,19 @@ export namespace ParseNode {
   export interface PredefinedType extends BaseParseNode {
     readonly type: 'PredefinedType';
     readonly keyword: 'void' | 'null';
+  }
+
+  // PatternType : RegularExpressionLiteral
+  //
+  // proposal-runtime-types (table-metadata-values): a pattern is a metadata
+  // value, carried as its SOURCE and FLAGS rather than as a RegExp object, so
+  // that one pattern written in two modules is one type. It is a sibling of
+  // LiteralType rather than a kind of it, because a literal type's identity is
+  // SameValue over a Value and a pattern's is its source and flags.
+  export interface PatternType extends BaseParseNode {
+    readonly type: 'PatternType';
+    readonly Source: string;
+    readonly Flags: string;
   }
 
   // LiteralType : NumericLiteral / `-` NumericLiteral / StringLiteral / `true` / `false`
@@ -3434,6 +3448,7 @@ export type ParseNode =
   | ParseNode.IndexedAccessType
   | ParseNode.PredefinedType
   | ParseNode.LiteralType
+  | ParseNode.PatternType
   | ParseNode.TypeName
   | ParseNode.TypeReference
   | ParseNode.TypeArguments

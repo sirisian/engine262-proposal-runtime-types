@@ -158,6 +158,12 @@ export abstract class TypeParser extends ExpressionParser {
       case Token.IMAGINARY:
       case Token.SUB:
         return this.parseLiteralType();
+      case Token.DIV:
+        // proposal-runtime-types (table-metadata-values): a pattern in type
+        // position. A `/` is division or the start of a pattern depending on
+        // what precedes it, and in a type there is no division to be ambiguous
+        // with, so the pattern reading is the only one.
+        return this.parsePatternType();
       case Token.LBRACK:
         return this.parseArrayOrTupleType();
       case Token.LBRACE:
@@ -193,6 +199,20 @@ export abstract class TypeParser extends ExpressionParser {
       default:
         return false;
     }
+  }
+
+  // PatternType :
+  //   RegularExpressionLiteral
+  //
+  // Carried as source and flags: a pattern's identity is those two being
+  // identical, which is what makes one pattern written in two modules one type.
+  // A RegExp object is materialized only where a hook receives the metadata.
+  private parsePatternType(): ParseNode.PatternType {
+    const node = this.startNode<ParseNode.PatternType>();
+    const literal = this.parseRegularExpressionLiteral();
+    node.Source = literal.RegularExpressionBody;
+    node.Flags = literal.RegularExpressionFlags;
+    return this.finishNode(node, 'PatternType');
   }
 
   // LiteralType :

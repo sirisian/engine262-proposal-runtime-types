@@ -40,6 +40,10 @@ export type TypeRecord =
   | { readonly Kind: 'void' }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
   | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
+  // proposal-runtime-types (table-metadata-values): a pattern, carried as its
+  // source and flags so that one pattern written in two modules is one type. A
+  // RegExp object is materialized only where a hook receives the metadata.
+  | { readonly Kind: 'pattern', readonly Source: string, readonly Flags: string }
   | { readonly Kind: 'parameterized', readonly Base: TypeRecord, readonly Metadata: Value }
   | {
     readonly Kind: 'nominal',

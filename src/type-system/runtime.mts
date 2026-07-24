@@ -793,6 +793,15 @@ function metadataValueFromType(t: TypeRecord): unknown {
   if (t.Kind === 'literal') {
     return t.Value;
   }
+  if (t.Kind === 'pattern') {
+    // A leaf of the metadata language, carried structurally. The marker is what
+    // lets the comparison and the hook boundary tell it from a nested record.
+    const marker: Record<string, unknown> = Object.create(null);
+    marker.__pattern = true;
+    marker.source = t.Source;
+    marker.flags = t.Flags;
+    return Object.freeze(marker);
+  }
   if (t.Kind === 'object') {
     const nested: Record<string, unknown> = Object.create(null);
     for (const p of t.Properties) {
@@ -1014,6 +1023,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       }
       return { Kind: 'tuple', Elements };
     }
+    case 'PatternType':
+      // table-metadata-values: source and flags, never a RegExp object.
+      return { Kind: 'pattern', Source: node.Source, Flags: node.Flags };
     case 'LiteralType': {
       const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
       if (node.kind === 'imaginary') {

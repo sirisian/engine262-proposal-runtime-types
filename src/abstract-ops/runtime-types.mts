@@ -7,7 +7,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import {
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate,
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
 
 /**
@@ -475,6 +475,15 @@ function MetadataAsObject(metadata: Value): Value {
   // prototype and a list is a real Array, and everything else reaching here is
   // already a Value and is handed over untouched. Recursing into a Value instead
   // would rebuild it out of its own internal fields.
+  // table-metadata-values: a pattern is carried as source and flags, and a hook
+  // that reads one is handed a RegExp built from those. Materializing here, at
+  // the one boundary where metadata reaches a program, is what keeps the carried
+  // form structural and therefore comparable. The test precedes the shape guard
+  // below because a pattern IS one of the host records that guard lets through.
+  const pattern = metadata as unknown as { __pattern?: boolean, source?: string, flags?: string };
+  if (pattern.__pattern === true) {
+    return X(RegExpCreate(Value(pattern.source ?? ''), Value(pattern.flags ?? '')));
+  }
   if (!Array.isArray(metadata) && Object.getPrototypeOf(metadata) !== null) {
     return metadata;
   }
