@@ -31,6 +31,7 @@ import type { PromiseObject } from '../intrinsics/Promise.mts';
 import type { FinalizationRegistryObject } from '../intrinsics/FinalizationRegistry.mts';
 import type { ShadowRealmObject } from '../intrinsics/ShadowRealm.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
+import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
 import {
   FinishLoadingImportedModule,
   type FunctionObject,
@@ -206,6 +207,14 @@ export function* ScriptEvaluation(scriptRecord: ScriptRecord): ValueEvaluator {
   surroundingAgent.executionContextStack.push(scriptContext);
   const scriptBody = scriptRecord.ECMAScriptCode;
   let result: NormalCompletion<void | Value> | ThrowCompletion = EnsureCompletion(yield* GlobalDeclarationInstantiation(scriptBody, globalEnv));
+
+  // proposal-runtime-types #sec-type-errors: the checking pass runs after parse
+  // and before the source text is evaluated. A rejection here rejects the
+  // script before its first statement, the Early Error discipline applied from
+  // the phase where a `subtype` hook is callable.
+  if (result.Type === 'normal' && surroundingAgent.feature('runtime-types')) {
+    result = EnsureCompletion(yield* RunPreEvaluationTypeCheck(scriptBody)) as NormalCompletion<void | Value> | ThrowCompletion;
+  }
 
   if (result.Type === 'normal') {
     result = EnsureCompletion(yield* (Evaluate(scriptBody))) as NormalCompletion<void | Value>;

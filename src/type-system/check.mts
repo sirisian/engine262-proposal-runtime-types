@@ -8,7 +8,7 @@ import { IsAssignable } from './relations.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
-import { fitsNumericType } from './runtime.mts';
+import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { R, Throw } from '#self';
 
@@ -24,6 +24,27 @@ import { R, Throw } from '#self';
  */
 
 type Known = TypeRecord | null;
+
+/**
+ * proposal-runtime-types #sec-primitive-metadata: two parameterizations of one
+ * base with different metadata are related only as the metadata subtype
+ * judgment admits, and the judgment consults `subtype` hooks, which are user
+ * code. This pass is synchronous and runs at parse, so it does not decide such
+ * a pair; it DEFERS it, and the checking pass (check-pass.mts), which runs
+ * after parse and before the source text evaluates (#sec-type-errors), judges
+ * the deferred pairs where an effectful context exists. The obligations are
+ * keyed by the root Parse Node so that pass retrieves exactly its own source
+ * text's pairs.
+ */
+export interface DeferredMetadataCheck {
+  readonly source: TypeRecord & { readonly Kind: 'parameterized' };
+  readonly target: TypeRecord & { readonly Kind: 'parameterized' };
+}
+const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
+
+export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
+  return deferredMetadataChecks.get(root) ?? [];
+}
 
 // proposal-runtime-types (spec sec-enums): what the checker records about an enum
 // declaration so a switch over an enum value can be checked: the member names in
@@ -47,17 +68,18 @@ function widen(t: TypeRecord): TypeRecord {
 }
 
 export function CheckScript(script: ParseNode.Script): ObjectValue[] {
-  return CheckStatementList(script.ScriptBody?.StatementList ?? null);
+  return CheckStatementList(script.ScriptBody?.StatementList ?? null, script);
 }
 
 export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
   // walked structurally, and their inner declarations checked as usual.
-  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null);
+  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module);
 }
 
-function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectValue[] {
+function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode): ObjectValue[] {
   const errors: ObjectValue[] = [];
+  const deferred: DeferredMetadataCheck[] = [];
   const frames: Frame[] = [{ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
   const returnTypes: Known[] = [];
 
@@ -83,18 +105,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
     return false;
   };
 
+  // Metadata erased: a ~parameterized~ record replaced by its base, through
+  // unions and intersections. This is exactly the view resolveType gave before
+  // it learnt to build ~parameterized~ records, and judging non-deferred shapes
+  // on it keeps this pass's diagnostics byte-identical to what they were: the
+  // one new judgment this cycle adds, the metadata subtype judgment, is the
+  // checking pass's, not this one's.
+  const eraseMetadata = (t: TypeRecord): TypeRecord => {
+    if (t.Kind === 'parameterized') {
+      return eraseMetadata(t.Base);
+    }
+    if (t.Kind === 'union' || t.Kind === 'intersection') {
+      return { Kind: t.Kind, Members: t.Members.map(eraseMetadata) };
+    }
+    return t;
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
     }
+    // #sec-primitive-metadata: two parameterizations of one base. Structurally
+    // equivalent metadata is one type and passes below; different metadata is
+    // the metadata subtype judgment's question, which consults `subtype` hooks
+    // (user code), so this synchronous pass defers the pair to the checking
+    // pass rather than deciding it. A mixed position, a parameterization
+    // meeting its bare base, is the construction boundary (F33) and stays
+    // outside this pass, which the erasure below preserves.
+    if (source.Kind === 'parameterized' && target.Kind === 'parameterized'
+        && displayType(source.Base) === displayType(target.Base)) {
+      if (!IsAssignable(source, target)) {
+        deferred.push({ source, target } as DeferredMetadataCheck);
+      }
+      return;
+    }
+    const erasedSource = eraseMetadata(source);
+    const erasedTarget = eraseMetadata(target);
     // #sec-contextual-types: a numeric literal within a numeric value type's
     // range converts losslessly at the boundary, so it is statically
     // assignable; the run-time boundary constructs the typed value.
-    if (literalFitsNumericType(source, target)) {
+    if (literalFitsNumericType(erasedSource, erasedTarget)) {
       return;
     }
-    if (!IsAssignable(source, target)) {
-      report(source, target);
+    if (!IsAssignable(erasedSource, erasedTarget)) {
+      report(erasedSource, erasedTarget);
     }
   };
 
@@ -160,6 +214,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
               arg = R(r.Value);
             }
             args.push(arg);
+          }
+          // #sec-parameterized-types: a primitive whose one type argument is an
+          // object type is a metadata parameterization, `float32.<{ m: 1 }>`.
+          // Mirrors TypeNodeToTypeRecord so the checker and the runtime agree on
+          // what the annotation means; before this, builtinTypeRecord dropped the
+          // object argument and every parameterization looked to this pass like
+          // its bare base, which is why the metadata subtype judgment had no
+          // static site.
+          if (args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
+            const base = builtinTypeRecord(node.TypeName.IdentifierReference.name);
+            if (base && base.Kind === 'primitive') {
+              return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(args[0] as TypeRecord) };
+            }
           }
           // proposal-runtime-types: a parameterized type reference is a builtin
           // numeric (`int.<8>`) or a library type (`RegExp.<C, G>`, `Promise.<T>`,
@@ -746,5 +813,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null): ObjectV
   };
 
   walk(statementList);
+  deferredMetadataChecks.set(root, deferred);
   return errors;
 }

@@ -26,6 +26,7 @@ import {
   Evaluate, type Evaluator, type PlainEvaluator, type ValueEvaluator,
 } from './evaluator.mts';
 import type { ParseNode } from './parser/ParseNode.mts';
+import { RunPreEvaluationTypeCheck } from './type-system/check-pass.mts';
 import {
   surroundingAgent, type GCMarker,
   type ImportAttributeRecord,
@@ -834,6 +835,18 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
       Assert(capability === undefined);
       // 4. Push moduleContext onto the execution context stack; moduleContext is now the running execution context.
       surroundingAgent.executionContextStack.push(moduleContext);
+      // proposal-runtime-types #sec-type-errors: the checking pass runs per
+      // module, after its dependencies have evaluated (InnerModuleEvaluation
+      // reaches this module in evaluation order) and before its own body. A
+      // rejection rejects the module before its first statement. The TLA
+      // branch below is not yet wired to the pass.
+      if (surroundingAgent.feature('runtime-types')) {
+        const check = EnsureCompletion(yield* RunPreEvaluationTypeCheck(module.ECMAScriptCode as ParseNode.Module));
+        if (check.Type !== 'normal') {
+          surroundingAgent.executionContextStack.pop(moduleContext);
+          return check;
+        }
+      }
       // 5. Let result be the result of evaluating module.[[ECMAScriptCode]].
       const result = EnsureCompletion(yield* (Evaluate(module.ECMAScriptCode)));
       // 6. Suspend moduleContext and remove it from the execution context stack.

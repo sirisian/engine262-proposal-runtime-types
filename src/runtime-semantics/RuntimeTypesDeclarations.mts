@@ -20,7 +20,19 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, Reg
  * evaluates to an empty completion. The type registry semantics that give the
  * bindings their values arrive with a later milestone.
  */
+/**
+ * proposal-runtime-types #sec-type-errors: the checking pass processes a source
+ * text's type declarations before its body evaluates, which is what makes a
+ * declaration visible to the judgments of the same source. A node the pass
+ * evaluated is marked here, and its body-position evaluation becomes a no-op,
+ * so registration and binding initialization happen exactly once.
+ */
+export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
+
 export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration): PlainEvaluator {
+  if (preEvaluatedTypeDeclarations.has(node)) {
+    return undefined;
+  }
   const name = StringValue(node.BindingIdentifier);
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   let value: Value = Value.undefined;
@@ -154,6 +166,9 @@ export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperato
  * register it against the named type's interned Type Object.
  */
 export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): PlainEvaluator {
+  if (preEvaluatedTypeDeclarations.has(node)) {
+    return undefined;
+  }
   if (node.TypeName.MemberNames.length > 0) {
     return undefined;
   }

@@ -264,6 +264,35 @@ export function displayType(t: TypeRecord): string {
     case 'intersection': return t.Members.map(displayType).join(' & ');
     case 'array': return `[${t.Extent === 'dynamic' ? '' : t.Extent}].<${displayType(t.Element)}>`;
     case 'tuple': return `[${t.Elements.map((e) => displayType(e.Type)).join(', ')}]`;
+    // #sec-parameterized-types: printed as written, base and metadata, so the
+    // checking pass's diagnostic ("$1 is not assignable to $2") names the two
+    // parameterizations rather than the word "parameterized".
+    case 'parameterized': return `${displayType(t.Base)}.<${displayMetadataValue(t.Metadata)}>`;
     default: return t.Kind;
   }
+}
+
+function displayMetadataValue(m: unknown): string {
+  if (m === null || m === undefined) {
+    return String(m);
+  }
+  const leaf = m as { numberValue?(): number, stringValue?(): string, booleanValue?(): boolean };
+  /* eslint-disable @engine262/mathematical-value -- R asserts a NumberValue, and a metadata field may be a String or any other literal Value; this prints, it does not compute */
+  if (typeof leaf.numberValue === 'function') {
+    return String(leaf.numberValue());
+  }
+  /* eslint-enable @engine262/mathematical-value */
+  if (typeof leaf.stringValue === 'function') {
+    return JSON.stringify(leaf.stringValue());
+  }
+  if (typeof leaf.booleanValue === 'function') {
+    return String(leaf.booleanValue());
+  }
+  if (Array.isArray(m)) {
+    return `[${m.map(displayMetadataValue).join(', ')}]`;
+  }
+  if (typeof m === 'object') {
+    return `{ ${Object.entries(m as Record<string, unknown>).map(([k, v]) => `${k}: ${displayMetadataValue(v)}`).join(', ')} }`;
+  }
+  return String(m);
 }
