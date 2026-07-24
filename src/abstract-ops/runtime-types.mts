@@ -1,8 +1,9 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
-import { NumberValue, TypedNumberValue, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { NumberValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
+import { SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
@@ -88,6 +89,33 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
+  }
+  // #sec-parameterized-types: the crossing between two parameterizations of one
+  // base is ConvertParameterization, which each meta type gates independently.
+  // Shedding a parameterization UPWARD to its base needs no gate at all, since a
+  // parameterized type is a subtype of its base, which is the branding rule.
+  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
+    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+    if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base)) {
+      return Q(yield* ConvertParameterization(value, carried, t));
+    }
+    if (SameType(carried.Base, t)) {
+      // "A parameterized type is a subtype of its base, so the brand is shed
+      // freely on the way up." No meta type gates this direction.
+      return new TypedNumberValue(value.value, t);
+    }
+  }
+  if (t.Kind === 'parameterized') {
+    // "The base is not a subtype of the parameterization, so the way down is a
+    // crossing: calling the Type Object, as `UserId(7)`, is the construction
+    // boundary, and the metadata's validation judgment runs there." A meta type
+    // that defines no `validate` therefore admits nothing here, which is what
+    // makes a brand reachable only by construction.
+    const atBase = Q(yield* ConvertValue(value, t.Base));
+    if (!Q(yield* IsOfType(atBase, t))) {
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    }
+    return isTypedNumber(atBase) ? new TypedNumberValue(atBase.value, t) : atBase;
   }
   if (t.Kind === 'union') {
     for (const m of t.Members) {
@@ -442,6 +470,104 @@ export function GoverningMetaTypes(metadata: Value): { types: object[], unclaime
     }
   }
   return { types, unclaimed };
+}
+
+/**
+ * #sec-primitive-metadata: MetadataPortion(_m_, _M_), the part of a metadata
+ * value that a meta type governs, being its own keys that _M_ claims. Every
+ * judgment of the protocol is stated over portions rather than over whole
+ * metadata, because a metadata value may be governed by several meta types at
+ * once and each must see only what it claims.
+ */
+export function MetadataPortion(metadata: Value, metaType: object): Value {
+  const portion: Record<string, unknown> = Object.create(null);
+  if (metadata && typeof metadata === 'object') {
+    for (const [key, v] of Object.entries(metadata as unknown as Record<string, unknown>)) {
+      if (MetaTypeClaiming(key) === metaType) {
+        portion[key] = v;
+      }
+    }
+  }
+  return Object.freeze(portion) as unknown as Value;
+}
+
+/** Apply a named hook of a meta type, or *undefined* where it defines none. */
+export function* ApplyMetaHook(typeObject: object, name: string, args: readonly Value[]): PlainEvaluator<Value | undefined> {
+  const fn = metaHooks.get(typeObject)?.get(name);
+  if (!fn) {
+    return undefined;
+  }
+  return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+}
+
+/**
+ * #sec-primitive-metadata: ConvertParameterization. The crossing between two
+ * parameterizations of one base.
+ *
+ * Each meta type gates the crossing independently, and the clause gives exactly
+ * two ways through: `subtype` admits it, or the value carries nothing of that
+ * meta type and a cast supplies what it lacks. `Meter` reaches `Kilometer` by the
+ * first, the exponents agreeing and only the ratio differing; a bare value
+ * reaches a bounds meta type only by the second, which is where a bound is
+ * actually enforced, since `subtype` cannot prove an unconstrained value
+ * non-negative.
+ *
+ * NOTE that `subtype` IS callable here, unlike from IsSubtype. A conversion is
+ * already an effectful operation, so running a hook inside it costs nothing
+ * structurally; it is the synchronous subtype RELATION that cannot call one.
+ */
+export function* ConvertParameterization(value: Value, from: TypeRecord, to: TypeRecord): ValueEvaluator {
+  if (from.Kind !== 'parameterized' || to.Kind !== 'parameterized') {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
+  }
+  const governing = new Set<object>([
+    ...GoverningMetaTypes(from.Metadata).types,
+    ...GoverningMetaTypes(to.Metadata).types,
+  ]);
+  for (const metaType of governing) {
+    const fp = MetadataPortion(from.Metadata, metaType);
+    const tp = MetadataPortion(to.Metadata, metaType);
+    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp]));
+    if (admits === Value.true) {
+      continue;
+    }
+    // The clause's second way through is an implicit cast operator declared on
+    // the base, which this engine has no declaration form for yet. Until it does,
+    // a meta type that does not admit the crossing refuses it.
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
+  }
+  // The factor is the product over every meta type that defines one, so two
+  // independent scalings compose rather than one winning.
+  let factor = 1;
+  for (const metaType of governing) {
+    const f = Q(yield* ApplyMetaHook(metaType, 'conversionFactor', [
+      MetadataPortion(from.Metadata, metaType),
+      MetadataPortion(to.Metadata, metaType),
+    ]));
+    if (f !== undefined && f instanceof NumberValue) {
+      factor *= R(f) as number;
+    }
+  }
+  let converted = value;
+  if (factor !== 1 && (converted instanceof NumberValue || isTypedNumber(converted))) {
+    const scaled = (isTypedNumber(converted) ? converted.value : (R(converted as NumberValue) as number)) * factor;
+    converted = new TypedNumberValue(wrapToType(scaled, to.Base), to.Base);
+  }
+  for (const metaType of governing) {
+    const q = Q(yield* ApplyMetaHook(metaType, 'quantize', [
+      converted,
+      MetadataPortion(to.Metadata, metaType),
+    ]));
+    if (q !== undefined) {
+      converted = q;
+    }
+  }
+  // The result is a value of the target parameterization, so it carries the
+  // target's base as its runtime type; the metadata rides the static type.
+  if (converted instanceof NumberValue) {
+    converted = new TypedNumberValue(R(converted) as number, to.Base);
+  }
+  return converted;
 }
 
 export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value): PlainEvaluator<boolean | undefined> {

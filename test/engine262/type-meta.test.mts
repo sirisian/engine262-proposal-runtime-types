@@ -307,3 +307,38 @@ test('StringPattern: it claims `pattern` globally, as any meta type does', () =>
     meta MyPattern { default = 0; }
   `);
 });
+
+// -- The construction boundary and the branding rule --------------------------
+// "A parameterized type is a subtype of its base, so the brand is shed freely on
+// the way up; the base is not a subtype of the parameterization, so the way down
+// is a crossing: calling the Type Object is the construction boundary, and the
+// metadata's validation judgment runs there."
+test('meta: a bare value enters a parameterization only through construction', () => {
+  // the judgment runs at the crossing, so a hook that admits lets the value in
+  expect(evaluated(`
+    type U = { unit: float64 };
+    meta U { default = 0; subtype(a, b) { return true; } validate(v, m) { return true; } }
+    String(Number(float32.<{ unit: 1 }>(7)));
+  `)).toBe('7');
+  // OPEN, pinned as it behaves rather than as it should: a hook that REFUSES does
+  // not yet keep the value out on this path. The judgment is reached and answers
+  // correctly through `is` (covered above), so the gap is between the Type Object
+  // call and the construction boundary rather than in the judgment. Recorded in
+  // the next-phase document as the open half of ConvertParameterization.
+  expect(evaluated(`
+    type U2 = { u2: float64 };
+    meta U2 { default = 0; subtype(a, b) { return true; } validate(v, m) { return Number(v) > 0; } }
+    let m = "";
+    try { float32.<{ u2: 1 }>(0 - 5); m = "admitted"; } catch (e) { m = "refused"; }
+    m;
+  `)).toBe('admitted');
+});
+
+test('meta: the brand is shed freely on the way up', () => {
+  // no meta type gates the upward direction, which is the branding rule
+  expect(evaluated(`
+    type U3 = { u3: float64 };
+    meta U3 { default = 0; subtype(a, b) { return true; } validate(v, m) { return true; } }
+    String(Number(float32(float32.<{ u3: 1 }>(7))));
+  `)).toBe('7');
+});
