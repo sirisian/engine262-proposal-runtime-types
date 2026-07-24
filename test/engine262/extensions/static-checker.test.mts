@@ -71,7 +71,7 @@ test('checker: it walks real typed programs without inventing a complaint', () =
     'let a: uint8 = 5; a;',
     'function f(x: int32): int32 { return x; } f(1);',
     'type T = { a: float64 }; let t: T = { a: 1 }; t;',
-    'meta float32 { default = 0; validate(v, m) { return true; } } 1;',
+    'meta float32 { subtype(a, b) { return true; } default = 0; validate(v, m) { return true; } } 1;',
     'let r = uint8.tryParse("5"); if (r !== null) { r; }',
     'enum E { A, B } E.A;',
     'interface I { z: float64 } 1;',

@@ -183,6 +183,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     }
   }
   let sawDefault = false;
+  let sawSubtype = false;
   for (const hook of node.MetaHookList) {
     if (hook.type === 'MetaDefaultHook') {
       const ref = Q(yield* Evaluate(hook.AssignmentExpression));
@@ -193,6 +194,9 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;
       const body = (hook as { FunctionBody?: ParseNode.FunctionBody | null }).FunctionBody;
       const params = (hook as { UniqueFormalParameters?: ParseNode.FormalParameters }).UniqueFormalParameters;
+      if (hookName === 'subtype') {
+        sawSubtype = true;
+      }
       if (typeof hookName === 'string' && body && params) {
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
@@ -201,9 +205,18 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       }
     }
   }
-  // #sec-meta-hooks: `default` is required.
+  // #sec-primitive-metadata: "it is an early error ... a missing `default` or
+  // `subtype`". Both are required, and `subtype` is required for a reason the
+  // brand makes plain: it is the meta type's half of the metadata subtype
+  // judgment, so a meta type without one states no relation between two of its
+  // parameterizations at all, and the crossing between them has nothing to
+  // consult. `validate` stays optional, because a meta type that defines none
+  // deliberately admits no bare value, which is what a brand is.
   if (!sawDefault) {
     return Throw.TypeError('$1 is not supported yet', Value(`a meta declaration for ${name} without a default hook`));
+  }
+  if (!sawSubtype) {
+    return Throw.TypeError('a meta declaration requires a $1 hook', Value('subtype'));
   }
   return undefined;
 }

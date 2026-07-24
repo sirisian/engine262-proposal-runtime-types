@@ -91,10 +91,14 @@ test('enum declarations', () => {
 });
 
 test('meta declarations', () => {
-  expect(statements('meta Point { default = 0; validate(v, c) { return v; } }')[0]).toMatchObject({
+  expect(statements('meta Point { subtype(a, b) { return true; } default = 0; validate(v, c) { return v; } }')[0]).toMatchObject({
     type: 'MetaDeclaration',
     TypeName: { type: 'TypeName' },
     MetaHookList: [
+      // `subtype` is required by #sec-primitive-metadata, so a well-formed
+      // declaration carries it; the parser records hooks in source order and
+      // leaves the requirement to evaluation, which is where the error is raised.
+      { type: 'MethodDefinition' },
       { type: 'MetaDefaultHook', AssignmentExpression: { type: 'NumericLiteral' } },
       { type: 'MethodDefinition' },
     ],

@@ -19,7 +19,7 @@ function expectThrown(source: string) {
 
 test('the default hook is required', () => {
   expectThrown('meta uint8 { validate(v, c) { return true; } }');
-  expect(run('meta uint8 { default = 0; validate(v, c) { return true; } }')).toMatchObject({ Type: 'normal' });
+  expect(run('meta uint8 { subtype(a, b) { return true; } default = 0; validate(v, c) { return true; } }')).toMatchObject({ Type: 'normal' });
 });
 
 test('method hooks register and compile', () => {
@@ -34,18 +34,18 @@ test('method hooks register and compile', () => {
 });
 
 test('hook names and signatures are checked', () => {
-  expectThrown('meta uint8 { default = 0; frobnicate(v) { return v; } }');
+  expectThrown('meta uint8 { subtype(a, b) { return true; } default = 0; frobnicate(v) { return v; } }');
   // Wrong arity for a known hook.
-  expectThrown('meta uint8 { default = 0; validate(v) { return true; } }');
-  expectThrown('meta uint8 { default = 0; narrow(a, b) { return a; } }');
+  expectThrown('meta uint8 { subtype(a, b) { return true; } default = 0; validate(v) { return true; } }');
+  expectThrown('meta uint8 { subtype(a, b) { return true; } default = 0; narrow(a, b) { return a; } }');
 });
 
 test('at most one meta declaration per type', () => {
-  expectThrown('meta uint8 { default = 0; } meta uint8 { default = 1; }');
+  expectThrown('meta uint8 { subtype(a, b) { return true; } default = 0; } meta uint8 { subtype(a, b) { return true; } default = 1; }');
   // Distinct types are independent.
-  expect(run('meta uint8 { default = 0; } meta uint16 { default = 1; }')).toMatchObject({ Type: 'normal' });
+  expect(run('meta uint8 { subtype(a, b) { return true; } default = 0; } meta uint16 { subtype(a, b) { return true; } default = 1; }')).toMatchObject({ Type: 'normal' });
 });
 
 test('the default hook still supplies bindings (regression)', () => {
-  expect(evaluated('meta uint8 { default = 7; } let x: uint8; x === (7 := uint8) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8; x === (7 := uint8) ? "ok" : "no";')).toBe('ok');
 });

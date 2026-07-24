@@ -619,6 +619,7 @@ export interface Throw {
   | 'Unsupported import attribute "$1"'
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
+  | 'a meta declaration requires a $1 hook'
   | 'a string is not a conversion source for $1; use its parse or tryParse'
   | 'a using declaration cannot be typed $1, whose values carry no disposal method'
   | 'addInitializer must be called with a function, but $1 was passed'
