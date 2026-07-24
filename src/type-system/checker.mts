@@ -1,7 +1,11 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { EnsureCompletion, Q } from '../completion.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 import {
   anyType, makePrimitive, voidType, displayType, type TypeRecord,
 } from './records.mts';
+import { TypeNodeToTypeRecord } from './runtime.mts';
+import { surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types: the static checker, Phase 1 of STATIC-CHECKER-PLAN.md.
@@ -87,16 +91,16 @@ class Checker {
    * a form this phase does not understand is `any` rather than an error, since a
    * checker that reports what it has not implemented is a checker nobody can run.
    */
-  staticTypeOf(node: ParseNode | null | undefined, env: TypeEnvironment): TypeRecord {
+  * staticTypeOf(node: ParseNode | null | undefined, env: TypeEnvironment): PlainEvaluator<TypeRecord> {
     if (!node) {
       return anyType;
     }
-    const type = this.computeStaticType(node, env);
+    const type = Q(yield* this.computeStaticType(node, env));
     this.types.set(node, type);
     return type;
   }
 
-  private computeStaticType(node: ParseNode, env: TypeEnvironment): TypeRecord {
+  private* computeStaticType(node: ParseNode, env: TypeEnvironment): PlainEvaluator<TypeRecord> {
     switch (node.type) {
       // A literal has the literal type of its value, whose base is the primitive
       // the literal denotes. The literal RULE, that a literal takes the type its
@@ -117,13 +121,13 @@ class Checker {
         return env.lookup(name) ?? anyType;
       }
       case 'ParenthesizedExpression':
-        return this.staticTypeOf((node as { Expression?: ParseNode }).Expression, env);
+        return Q(yield* this.staticTypeOf((node as { Expression?: ParseNode }).Expression, env));
       case 'CommaOperator': {
         // The type of a comma expression is the type of its last operand.
         const list = (node as { ExpressionList?: readonly ParseNode[] }).ExpressionList ?? [];
         let last: TypeRecord = anyType;
         for (const e of list) {
-          last = this.staticTypeOf(e, env);
+          last = Q(yield* this.staticTypeOf(e, env));
         }
         return last;
       }
@@ -139,7 +143,7 @@ class Checker {
    */
   private readonly visited = new WeakSet<object>();
 
-  statement(node: ParseNode | null | undefined, env: TypeEnvironment): void {
+  * statement(node: ParseNode | null | undefined, env: TypeEnvironment): PlainEvaluator {
     if (!node || typeof node !== 'object' || this.visited.has(node)) {
       return;
     }
@@ -148,27 +152,54 @@ class Checker {
     // is the reason the environment exists at all before Phase 2.
     if (node.type === 'LexicalDeclaration' || node.type === 'VariableStatement') {
       for (const decl of childNodes(node)) {
-        this.bindDeclaration(decl, env);
+        Q(yield* this.bindDeclaration(decl, env));
       }
     }
     for (const child of childNodes(node)) {
       if (isExpressionish(child)) {
-        this.staticTypeOf(child, env);
+        Q(yield* this.staticTypeOf(child, env));
       }
-      this.statement(child, env);
+      Q(yield* this.statement(child, env));
     }
   }
 
-  private bindDeclaration(node: ParseNode, env: TypeEnvironment): void {
+  private* bindDeclaration(node: ParseNode, env: TypeEnvironment): PlainEvaluator {
     const annotation = (node as { TypeAnnotation?: { Type?: ParseNode } | null }).TypeAnnotation;
     const binding = (node as { BindingIdentifier?: { name?: string } }).BindingIdentifier;
-    if (binding?.name && annotation?.Type) {
-      // The annotation's Type Record needs TypeNodeToTypeRecord, which is an
-      // evaluator because a type expression may run a builder. Phase 1 records
-      // the ANNOTATION's presence and defers resolving it, so the environment is
-      // real and its contents arrive with Phase 2, where a judgment consumes them.
-      env.declare(binding.name, anyType);
+    if (!binding?.name || !annotation?.Type) {
+      return undefined;
     }
+    // This is the line the whole generator conversion exists for.
+    // TypeNodeToTypeRecord is an evaluator, because a type expression may run a
+    // builder, so resolving an annotation makes the pass effectful.
+    //
+    // A malformed annotation is COLLECTED rather than propagated. Letting the
+    // completion escape would stop the pass at the first bad annotation, and a
+    // pass that stops cannot make the claim Phase 1 rests on, that it walks a
+    // whole program and reports what it finds.
+    //
+    // KNOWN LIMITATION, and the finding this conversion produced.
+    // TypeNodeToTypeRecord resolves a type NAME through the RUNTIME lexical
+    // environment, by ResolveBinding. The checker runs before evaluation, so
+    // those bindings do not exist yet and ResolveBinding asserts rather than
+    // failing catchably. A type expression naming nothing, `uint8` and the other
+    // builtins among them, resolves without one; anything naming a declared type
+    // does not. The guard below keeps the pass usable while that stands, and the
+    // real answer is that the checker must resolve type names against its OWN
+    // scope chain, which is what TypeEnvironment exists to become. That is the
+    // next piece of Phase 2 and it is larger than the conversion was.
+    if (!hasUsableEnvironment()) {
+      env.declare(binding.name, anyType);
+      return undefined;
+    }
+    const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type as never));
+    if (attempt.Type === 'throw') {
+      this.report(node, `the annotation on ${binding.name} could not be resolved`);
+      env.declare(binding.name, anyType);
+      return undefined;
+    }
+    env.declare(binding.name, attempt.Value as TypeRecord);
+    return undefined;
   }
 }
 
@@ -201,6 +232,20 @@ function childNodes(node: ParseNode): ParseNode[] {
   return out;
 }
 
+/**
+ * Whether a running execution context with a real lexical environment exists.
+ * See the limitation noted in `bindDeclaration`: without one, resolving a type
+ * name asserts inside ResolveBinding rather than failing catchably, so the pass
+ * declines to try rather than taking the host down.
+ */
+function hasUsableEnvironment(): boolean {
+  const context = (surroundingAgent as unknown as {
+    runningExecutionContext?: { LexicalEnvironment?: unknown },
+  }).runningExecutionContext;
+  const env = context?.LexicalEnvironment;
+  return !!env && typeof env === 'object' && 'HasBinding' in (env as object);
+}
+
 function isNode(v: unknown): v is ParseNode {
   return !!v && typeof v === 'object' && typeof (v as { type?: unknown }).type === 'string'
     && 'location' in (v as object);
@@ -220,16 +265,16 @@ function isExpressionish(node: ParseNode): boolean {
  * Error or a warning a host may ignore, is the one the plan leaves open, and
  * this signature does not prejudge it.
  */
-export function CheckProgram(program: ParseNode): CheckResult {
+export function* CheckProgram(program: ParseNode): PlainEvaluator<CheckResult> {
   const checker = new Checker();
   const env = new TypeEnvironment();
-  checker.statement(program, env);
+  Q(yield* checker.statement(program, env));
   return { diagnostics: checker.diagnostics, types: checker.types };
 }
 
 /** The Static Type of one expression in a fresh environment, for a tool or a test. */
-export function StaticTypeOfExpression(node: ParseNode, env = new TypeEnvironment()): TypeRecord {
-  return new Checker().staticTypeOf(node, env);
+export function* StaticTypeOfExpression(node: ParseNode, env = new TypeEnvironment()): PlainEvaluator<TypeRecord> {
+  return Q(yield* new Checker().staticTypeOf(node, env));
 }
 
 export { displayType, voidType };

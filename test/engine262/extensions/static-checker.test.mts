@@ -1,6 +1,7 @@
 import { test, expect } from 'vitest';
 import {
-  Agent, ManagedRealm, ParseScript, setSurroundingAgent, CheckProgram, StaticTypeOfExpression, TypeEnvironment,
+  Agent, EnsureCompletion, ManagedRealm, ParseScript, setSurroundingAgent, skipDebugger,
+  CheckProgram, StaticTypeOfExpression, TypeEnvironment,
 } from '#self';
 
 /**
@@ -18,7 +19,16 @@ function check(source: string) {
   const realm = new ManagedRealm();
   const parsed = ParseScript(source, realm) as { ECMAScriptCode?: unknown };
   expect(Array.isArray(parsed), `expected ${source} to parse`).toBe(false);
-  return CheckProgram(parsed.ECMAScriptCode as never);
+  // Resolving an annotation runs TypeNodeToTypeRecord, which reads the running
+  // execution context's LexicalEnvironment, so the pass needs one. That the pass
+  // needs a context at all is the visible consequence of Phase 2: a checker that
+  // may run a builder is a checker that runs inside the machine.
+  const pop = realm.pushTopContext();
+  try {
+    return EnsureCompletion(skipDebugger(CheckProgram(parsed.ECMAScriptCode as never))).Value as never;
+  } finally {
+    pop?.();
+  }
 }
 
 test('checker: the pass runs and collects rather than throws', () => {
@@ -61,7 +71,7 @@ test('checker: an expression can be typed on its own', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
   const parsed = ParseScript('42;', realm) as { ECMAScriptCode?: unknown };
-  const t = StaticTypeOfExpression(parsed.ECMAScriptCode as never);
+  const t = EnsureCompletion(skipDebugger(StaticTypeOfExpression(parsed.ECMAScriptCode as never))).Value as { Kind: string };
   expect(t.Kind).toBe('any');
 });
 
