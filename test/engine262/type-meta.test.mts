@@ -272,3 +272,38 @@ test('meta: a pattern nests with the other forms', () => {
   expect(evaluated('String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^a/ } }>));')).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^b/ } }>));')).toBe('false');
 });
+
+// -- StringPattern: a meta type the specification declares --------------------
+// The clause names three meta types declared by this specification rather than
+// by a program, and says "nothing about them is special-cased": they claim a key
+// and supply hooks exactly as a program's would. This is one of them, and it is
+// the first to be declared, the brand and `where` both waiting on `subtype`.
+test('StringPattern: the whole String must match, not a part of it', () => {
+  expect(evaluated('String(("abc" := string) is string.<{ pattern: /a.c/ }>);')).toBe('true');
+  // the whole-string discipline: a search would accept this and the judgment does not
+  expect(evaluated('String(("xabcx" := string) is string.<{ pattern: /a.c/ }>);')).toBe('false');
+  expect(evaluated('String(("xyz" := string) is string.<{ pattern: /a.c/ }>);')).toBe('false');
+  // and the anchoring groups the source, so an alternation does not bind one arm
+  expect(evaluated('String((("a" := string) is string.<{ pattern: /a|b/ }>) + "/" + (("ax" := string) is string.<{ pattern: /a|b/ }>));')).toBe('true/false');
+});
+
+test('StringPattern: flags are part of the pattern', () => {
+  expect(evaluated('String(("ABC" := string) is string.<{ pattern: /a.c/i }>);')).toBe('true');
+  expect(evaluated('String(("ABC" := string) is string.<{ pattern: /a.c/ }>);')).toBe('false');
+  // and part of the identity, so two flag sets are two types
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ pattern: /^a/ }>, type string.<{ pattern: /^a/i }>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type string.<{ pattern: /^a/ }>, type string.<{ pattern: /^a/ }>));')).toBe('true');
+});
+
+test('StringPattern: a value that is not a String is not of the type', () => {
+  expect(evaluated('String((1 := float32) is float32.<{ pattern: /1/ }>);')).toBe('false');
+});
+
+test('StringPattern: it claims `pattern` globally, as any meta type does', () => {
+  // claiming is global and flat, so a program declaring its own meta type over
+  // the same key collides with this one and is told at its declaration
+  expectThrown(`
+    type MyPattern = { pattern: float64 };
+    meta MyPattern { default = 0; }
+  `);
+});

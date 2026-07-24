@@ -56,6 +56,7 @@ import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
+import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
@@ -208,6 +209,9 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapTypePrototype(realmRec);
   // proposal-runtime-types: needs %Type.prototype%, so it follows it.
   bootstrapReflectNever(realmRec);
+  // proposal-runtime-types: a meta type this specification declares rather than
+  // a program. Needs %Type.prototype% too, so it follows it.
+  bootstrapStringPattern(realmRec);
 
   bootstrapMath(realmRec);
 
