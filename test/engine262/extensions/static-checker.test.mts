@@ -167,3 +167,44 @@ test('checker: a self-referring interface does not recurse forever', () => {
   const result = check('interface Node2 { next: Node2 } let n: Node2 = { next: null }; n;');
   expect(result.diagnostics).toEqual([]);
 });
+
+// -- The structural type forms (Phase 2) --------------------------------------
+// `resolveTypeNode` answered `any` for everything but a type reference and a
+// union, so the environment held coarse types. These are the forms filled in.
+test('checker: the structural type forms resolve', () => {
+  const programs = [
+    'type O = { a: float64, b: string }; let v: O = { a: 1, b: "x" }; v;',
+    'type A = [].<uint8>; let v: A = [1]; v;',
+    'type T = [uint8, string]; let v: T = [1, "x"]; v;',
+    'type L = 5; let v: L = 5; v;',
+    'type U = uint8 | string; let v: U = "x"; v;',
+    'type N = { nested: { deep: float64 } }; let v: N = { nested: { deep: 1 } }; v;',
+  ];
+  for (const source of programs) {
+    const result = check(source);
+    expect(result.diagnostics, `unexpected diagnostics for: ${source}`).toEqual([]);
+  }
+});
+
+test('checker: an optional and a readonly member are carried', () => {
+  const result = check('type M = { a?: float64, readonly b: string }; let v: M = { b: "x" }; v;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: a literal type keeps its value and its base', () => {
+  // a negated numeric literal is one literal type, not a negation of one
+  const result = check('type L = -5; let v: L = -5; v;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: a pattern in a type position resolves', () => {
+  const result = check('type P = { pattern: /^a/ }; let v: P = { pattern: /^a/ }; v;');
+  expect(result.diagnostics).toEqual([]);
+});
+
+test('checker: an array extent is read where literal and dynamic where computed', () => {
+  // a computed extent would have to evaluate, and the checker declines: dynamic
+  // is the conservative answer and the budget question is an open one
+  const result = check('type A2 = [].<uint8, 4>; let v: A2 = [1, 2, 3, 4]; v;');
+  expect(result.diagnostics).toEqual([]);
+});

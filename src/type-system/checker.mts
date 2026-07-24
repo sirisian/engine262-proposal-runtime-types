@@ -5,7 +5,7 @@ import {
   anyType, builtinTypeRecord, makePrimitive, voidType, displayType, type TypeRecord,
 } from './records.mts';
 import { TypeNodeToTypeRecord } from './runtime.mts';
-import { surroundingAgent } from '#self';
+import { surroundingAgent, Value } from '#self';
 
 /**
  * proposal-runtime-types: the static checker, Phase 1 of STATIC-CHECKER-PLAN.md.
@@ -239,8 +239,69 @@ class Checker {
         // program may shadow a builtin name, and the declaration wins.
         return env.lookupType(name) ?? builtinTypeRecord(name) ?? anyType;
       }
-      case 'LiteralType':
-        return anyType;
+      case 'LiteralType': {
+        const literal = node as ParseNode.LiteralType;
+        if (literal.kind === 'imaginary') {
+          // The runtime refuses this form; the checker declines to invent one.
+          return anyType;
+        }
+        const raw = literal.negated && typeof literal.value === 'number' ? -literal.value : literal.value;
+        return { Kind: 'literal', Value: Value(raw as never), Base: literalBaseOf(literal.kind) } as TypeRecord;
+      }
+      case 'PatternType': {
+        const pattern = node as ParseNode.PatternType;
+        return { Kind: 'pattern', Source: pattern.Source, Flags: pattern.Flags } as TypeRecord;
+      }
+      case 'ObjectType': {
+        const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+        const members = (node as { TypeMemberList?: readonly ParseNode[] }).TypeMemberList ?? [];
+        for (const member of members) {
+          if (member.type === 'IndexSignature') {
+            // An index signature does not name a property, and the checker's
+            // consumers read Properties; carrying it needs the same shape the
+            // runtime builds and is left with the rest of the structural work.
+            continue;
+          }
+          const m = member as unknown as {
+            TypeMemberName?: { name?: string, value?: unknown },
+            TypeAnnotation?: { Type?: ParseNode } | null,
+            Optional?: boolean, Readonly?: boolean,
+          };
+          const rawKey = m.TypeMemberName?.name ?? m.TypeMemberName?.value;
+          const key = typeof rawKey === 'number' || typeof rawKey === 'bigint' ? String(rawKey) : rawKey;
+          if (typeof key !== 'string') {
+            continue;
+          }
+          Properties.push({
+            key,
+            type: m.TypeAnnotation?.Type ? this.resolveTypeNode(m.TypeAnnotation.Type, env) : anyType,
+            optional: !!m.Optional,
+            readonly: !!m.Readonly,
+          });
+        }
+        return { Kind: 'object', Properties, IndexSignatures: [] } as TypeRecord;
+      }
+      case 'ArrayType': {
+        const args = (node as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null }).TypeArguments;
+        const first = args?.TypeArgumentList?.[0];
+        const Element = first ? this.resolveTypeNode(first, env) : anyType;
+        const extentNode = (node as { ArrayExtent?: ParseNode | null }).ArrayExtent;
+        // A literal extent is read directly. A computed one evaluates, which the
+        // checker will not do here: `dynamic` is the conservative answer and the
+        // evaluation budget question belongs with the plan's open items.
+        const Extent = extentNode && extentNode.type === 'NumericLiteral'
+          ? (extentNode as unknown as { value: number }).value
+          : 'dynamic';
+        return { Kind: 'array', Element, Extent } as TypeRecord;
+      }
+      case 'TupleType': {
+        const elements = (node as { TypeList?: readonly ParseNode[], Elements?: readonly ParseNode[] });
+        const list = elements.TypeList ?? elements.Elements ?? [];
+        return {
+          Kind: 'tuple',
+          Elements: list.map((e) => ({ Type: this.resolveTypeNode(e, env), Rest: false, Initial: 'none' })),
+        } as TypeRecord;
+      }
       case 'UnionType':
       case 'IntersectionType': {
         const members = childNodes(node)
@@ -330,6 +391,17 @@ function hasUsableEnvironment(): boolean {
   }).runningExecutionContext;
   const env = context?.LexicalEnvironment;
   return !!env && typeof env === 'object' && 'HasBinding' in (env as object);
+}
+
+/** The base of a literal type, mirroring the runtime's own mapping. */
+function literalBaseOf(kind: string): TypeRecord {
+  switch (kind) {
+    case 'number': return makePrimitive('number');
+    case 'string': return makePrimitive('string');
+    case 'boolean': return makePrimitive('boolean');
+    case 'bigint': return makePrimitive('bigint');
+    default: return anyType;
+  }
 }
 
 function isNode(v: unknown): v is ParseNode {
