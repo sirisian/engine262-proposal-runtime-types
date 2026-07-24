@@ -1,8 +1,10 @@
 import {
-  ObjectValue, Value, ReferenceRecord, ReferenceValue,
+  NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
 } from '../value.mts';
 import { Q, Completion, AbruptCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
+import { TakeStaticCallResolution } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import {
   Assert,
@@ -15,6 +17,7 @@ import {
   surroundingAgent,
   Throw,
   GetValue,
+  R,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
@@ -48,6 +51,21 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   let argList;
   if (!argsIsNamed) {
     argList = Q(yield* ArgumentListEvaluation(args));
+    // proposal-runtime-types #sec-overload-resolution: the checking side
+    // resolved this call to a numeric value family from its CONTEXT
+    // (TakeStaticCallResolution records only calls whose every argument is a
+    // numeric literal proven to fit), so the literal arguments take the chosen
+    // parameter type here and the dispatch wrapper of the numeric library
+    // selects that family's row. An unrecorded call, the ~any~ path included,
+    // dispatches on its runtime argument types exactly as before.
+    if (surroundingAgent.feature('runtime-types') && callExpression) {
+      const resolved = TakeStaticCallResolution(callExpression);
+      if (resolved) {
+        argList = argList.map((arg) => (arg instanceof NumberValue && !isTypedNumber(arg)
+          ? new TypedNumberValue(wrapToType(R(arg) as number, resolved), resolved)
+          : arg)) as typeof argList;
+      }
+    }
   }
   // 4. If Type(func) is not Object, throw a TypeError exception.
   // 5. If IsCallable(func) is false, throw a TypeError exception.

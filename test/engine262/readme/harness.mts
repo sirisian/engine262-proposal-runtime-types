@@ -77,6 +77,18 @@ export function expectThrown(source: string) {
   expect(run(source), `expected throw for: ${source}`).toMatchObject({ Type: 'throw' });
 }
 
+/**
+ * Assert `source` is rejected STATICALLY: wrapped in a try/catch that would
+ * swallow any runtime throw, the script must still fail, which only a
+ * rejection before evaluation can produce. Phase 3 moved the numeric
+ * library's resolution failures here from catchable runtime TypeErrors; the
+ * ~any~ path keeps the runtime dispatch as the backstop, asserted separately.
+ */
+export function expectStaticTypeError(source: string) {
+  const completion = run(`try { ${source} } catch (e) {} "ran";`) as { Type: string };
+  expect(completion.Type, `expected a static rejection for: ${source}`).toBe('throw');
+}
+
 /** Assert `source` is a parse/early error under the feature (does not run). */
 export function expectError(source: string) {
   const c = run(source) as { Type: string };

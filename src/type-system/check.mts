@@ -9,6 +9,7 @@ import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
+import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { R, Throw } from '#self';
 
@@ -44,6 +45,22 @@ const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataChec
 
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
+}
+
+/**
+ * proposal-runtime-types #sec-overload-resolution: a call the checker resolved
+ * to a numeric value family FROM ITS CONTEXT ALONE must execute that family's
+ * row at run time, so the resolution is recorded per CallExpression node and
+ * EvaluateCall reads it to type the literal arguments before the dispatch
+ * wrapper selects a row. Recorded only where every argument is a numeric
+ * literal the checker proved to fit, so the runtime wrap is lossless by
+ * construction; everything else stays on the runtime's own dispatch, which is
+ * the ~any~ path's backstop.
+ */
+const staticCallResolutions = new WeakMap<object, TypeRecord & { Kind: 'primitive' }>();
+
+export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'primitive' }) | undefined {
+  return staticCallResolutions.get(node);
 }
 
 // proposal-runtime-types (spec sec-enums): what the checker records about an enum
@@ -150,6 +167,161 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!IsAssignable(erasedSource, erasedTarget)) {
       report(erasedSource, erasedTarget);
     }
+  };
+
+  // #sec-overload-resolution over the numeric library's listing
+  // (table-numeric-library-signatures), driven statically. The listing's
+  // structure collapses the general algorithm: every signature takes its
+  // numeric parameters at ONE type and no numeric value type is assignable to
+  // another, so a typed argument names the only viable family, two different
+  // typed arguments are viable at no signature, and with no typed argument the
+  // contextual type (#sec-contextual-types) selects the family through the
+  // return filter, which is R8's specialized call. The Number signature is
+  // every listed function's default: resolution to it types nothing and
+  // records nothing, so an untyped program stays exactly as silent as before.
+  const numericFamilyOf = (t: Known): (TypeRecord & { Kind: 'primitive' }) | 'bigint' | null => {
+    if (!t || t.Kind !== 'primitive') {
+      return null;
+    }
+    if (isIntegerTypeName(t.Name) || isFloatTypeName(t.Name) || t.Name === 'number') {
+      return t;
+    }
+    return t.Name === 'bigint' ? 'bigint' : null;
+  };
+
+  const mathCallName = (call: ParseNode): string | null => {
+    const m = (call as { CallExpression?: ParseNode }).CallExpression as { type?: string, MemberExpression?: ParseNode, IdentifierName?: { name: string } | null } | undefined;
+    if (!m || m.type !== 'MemberExpression' || !m.MemberExpression || !m.IdentifierName) {
+      return null;
+    }
+    if (m.MemberExpression.type !== 'IdentifierReference' || (m.MemberExpression as unknown as { name: string }).name !== 'Math') {
+      return null;
+    }
+    // A locally bound `Math` shadows the intrinsic and is not the listing's; a
+    // REPLACED global `Math` is not detectable here, the same corner the
+    // name-based builtin type resolution already lives with.
+    if (lookup('Math')) {
+      return null;
+    }
+    const name = m.IdentifierName.name;
+    return numericLibraryRows.has(name) ? name : null;
+  };
+
+  const pushCallError = (message: string, ...values: Value[]) => {
+    const raise = Throw.TypeError as unknown as (m: string, ...vs: Value[]) => ThrowCompletion;
+    const completion = raise(message, ...values);
+    errors.push(completion.Value as ObjectValue);
+  };
+
+  const resolvedNumericCalls = new WeakSet<object>();
+  const checkNumericCall = (call: ParseNode, contextual: Known): Known => {
+    const name = mathCallName(call);
+    if (!name) {
+      return null;
+    }
+    if (resolvedNumericCalls.has(call)) {
+      return (staticCallResolutions.get(call) as Known) ?? null;
+    }
+    resolvedNumericCalls.add(call);
+    const allArgs = (call as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+    const argNodes = allArgs.filter((a) => a.type !== 'AssignmentRestElement');
+    let family: (TypeRecord & { Kind: 'primitive' }) | null = null;
+    let sawBigint = false;
+    let mixed = false;
+    const literals: { value: number, record: TypeRecord }[] = [];
+    let everyArgProven = allArgs.length === argNodes.length;
+    for (const a of argNodes) {
+      const t = staticType(a);
+      if (t && t.Kind === 'literal') {
+        const base = t.Base;
+        if (base.Kind === 'primitive' && base.Name === 'number' && t.Value instanceof NumberValue) {
+          literals.push({ value: R(t.Value) as number, record: t });
+        } else if (base.Kind === 'primitive' && base.Name === 'bigint') {
+          sawBigint = true;
+        } else {
+          everyArgProven = false;
+        }
+        continue;
+      }
+      const fam = numericFamilyOf(t);
+      if (fam === 'bigint') {
+        sawBigint = true;
+      } else if (fam && fam.Name !== 'number') {
+        if (family && displayType(family) !== displayType(fam)) {
+          mixed = true;
+        } else {
+          family = fam;
+        }
+      } else {
+        // A `number`-typed value belongs to the untyped signature, and an
+        // unknown argument is ~any~: neither names a family nor proves the
+        // call for recording.
+        everyArgProven = false;
+      }
+    }
+    if (sawBigint) {
+      // The bigint column resolves at run time this cycle; F37 pins it.
+      return null;
+    }
+    if (mixed) {
+      // "Every signature takes its numeric parameters at one type."
+      pushCallError('$1 has no signature taking values of two numeric types', Value(`Math.${name}`));
+      return null;
+    }
+    const ctxCandidate = numericFamilyOf(contextual);
+    const ctxFamily = ctxCandidate === 'bigint' ? null : ctxCandidate;
+    const row = numericLibraryRows.get(name)!;
+    const chosen = family ?? (ctxFamily && ctxFamily.Name !== 'number' ? ctxFamily : null);
+    if (!chosen) {
+      // The Number signature: silent and unrecorded, as today.
+      return null;
+    }
+    const rowExists = isIntegerTypeName(chosen.Name) ? row.integer !== undefined : (isFloatTypeName(chosen.Name) && row.float);
+    if (!rowExists) {
+      if (family) {
+        pushCallError('$1 has no signature taking a value of type $2', Value(`Math.${name}`), Value(displayType(chosen)));
+      } else {
+        pushCallError('$1 has no signature returning $2', Value(`Math.${name}`), Value(displayType(chosen)));
+      }
+      return null;
+    }
+    const returned: TypeRecord = row.integer === 'imul' && isIntegerTypeName(chosen.Name)
+      ? (builtinTypeRecord('int32') as TypeRecord)
+      : chosen;
+    if (ctxFamily && displayType(returned) !== displayType(ctxFamily)) {
+      // The contextual filter of ResolveOverload: no viable signature returns
+      // what the position requires. This also covers a `number` context over a
+      // value-typed argument, since `number` is assignable from no value type.
+      pushCallError('$1 has no signature returning $2', Value(`Math.${name}`), Value(displayType(ctxFamily)));
+      return null;
+    }
+    let literalsFit = true;
+    for (const lit of literals) {
+      // #sec-literal-overload-ranking: a literal argument takes the chosen
+      // parameter's type where it can represent it, and is a type error where
+      // it cannot; the plan's out-of-range-literal Early Error, uniformly.
+      if (!fitsNumericType(lit.value, chosen.Name, chosen.Arguments)) {
+        report(lit.record, chosen);
+        literalsFit = false;
+      }
+    }
+    if (!family && everyArgProven && literalsFit && argNodes.length > 0 && literals.length === argNodes.length) {
+      staticCallResolutions.set(call, chosen);
+    }
+    return returned;
+  };
+
+  const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
+    if (!node) {
+      return null;
+    }
+    if (node.type === 'CallExpression') {
+      const resolved = checkNumericCall(node, contextual);
+      if (resolved) {
+        return resolved;
+      }
+    }
+    return staticType(node);
   };
 
   const lookup = (name: string): Known => {
@@ -426,7 +598,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         frames[frames.length - 1].enumBindings.set(b.BindingIdentifier.name, boundEnum);
       }
       if (b.Initializer) {
-        requireAssignable(staticType(b.Initializer), declared);
+        requireAssignable(staticTypeIn(b.Initializer, declared), declared);
         walk(b.Initializer);
       }
       declare(b.BindingIdentifier.name, declared);
@@ -726,7 +898,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
           if (n.Initializer) {
-            requireAssignable(staticType(n.Initializer), declared);
+            requireAssignable(staticTypeIn(n.Initializer, declared), declared);
             walk(n.Initializer);
           }
           declare(n.BindingIdentifier.name, declared);
@@ -736,13 +908,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'CallExpression': {
+        // With no context from the position: the diagnostics of the numeric
+        // resolution (mixed families, a family with no row, an unfitting
+        // literal beside a typed argument) apply at every call site.
+        checkNumericCall(n, null);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = staticType(c.CallExpression);
         if (callee && callee.Kind === 'function' && callee.Signatures.length === 1 && Array.isArray(c.Arguments)) {
           const sig = callee.Signatures[0];
           c.Arguments.forEach((arg, i) => {
             if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
-              requireAssignable(staticType(arg), sig.Parameters[i]);
+              requireAssignable(staticTypeIn(arg, sig.Parameters[i]), sig.Parameters[i]);
             }
           });
         }
@@ -753,7 +929,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'AssignmentExpression': {
         const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
         if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
-          requireAssignable(staticType(a.AssignmentExpression), lookup((a.LeftHandSideExpression as { name: string }).name));
+          const target = lookup((a.LeftHandSideExpression as { name: string }).name);
+          requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
         }
         walk(a.LeftHandSideExpression);
         walk(a.AssignmentExpression);
@@ -762,14 +939,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ReturnStatement': {
         const expr = (n as { Expression?: ParseNode | null }).Expression;
         if (expr) {
-          requireAssignable(staticType(expr), returnTypes[returnTypes.length - 1] ?? null);
+          const context = returnTypes[returnTypes.length - 1] ?? null;
+          requireAssignable(staticTypeIn(expr, context), context);
           walk(expr);
         }
         return;
       }
       case 'FieldDefinition': {
         if (n.Initializer && n.TypeAnnotation) {
-          requireAssignable(staticType(n.Initializer), resolveType(n.TypeAnnotation.Type));
+          const declared = resolveType(n.TypeAnnotation.Type);
+          requireAssignable(staticTypeIn(n.Initializer, declared), declared);
         }
         walk(n.Initializer);
         return;

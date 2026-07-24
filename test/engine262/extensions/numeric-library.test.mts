@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, evaluatedFlagOff, expectThrownKind } from '../readme/harness.mts';
+import { expectStaticTypeError, evaluated, evaluatedFlagOff, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * Extension coverage - the numeric library, read as generics over the numeric types.
@@ -84,9 +84,9 @@ test('numeric library: a transcendental has no integer row', () => {
   // sin of an integer is not integer mathematics, so resolution fails and the
   // program writes the promotion it means
   // no signature at this family is a resolution failure, which is a type error
-  expectThrownKind('Math.sin((1 := int32));', 'TypeError');
-  expectThrownKind('Math.exp((1 := uint8));', 'TypeError');
-  expectThrownKind('Math.atan2((1 := int32), (1 := int32));', 'TypeError');
+  expectStaticTypeError('Math.sin((1 := int32));');
+  expectStaticTypeError('Math.exp((1 := uint8));');
+  expectStaticTypeError('Math.atan2((1 := int32), (1 := int32));');
   // the conversion is what makes it work
   expect(evaluated('String(Math.sin(Number((0 := int32))));')).toBe('0');
   // and the float rows are untouched
@@ -126,7 +126,7 @@ test('numeric library: an out-of-range integer result raises rather than wrappin
 test('numeric library: a mixed-type call matches no signature', () => {
   // no numeric value type is assignable to another, so two typed arguments of
   // different types are viable at no signature at all
-  expectThrownKind('Math.max((1 := uint8), (2 := uint16));', 'TypeError');
+  expectStaticTypeError('Math.max((1 := uint8), (2 := uint16));');
   // the program states the conversion
   expect(evaluated('String(Number(Math.max(uint16((1 := uint8)), (2 := uint16))));')).toBe('2');
   // a plain literal alongside a typed argument is ranked, not typed: it takes the
@@ -135,7 +135,7 @@ test('numeric library: a mixed-type call matches no signature', () => {
   expect(evaluated('(Math.max((1 := uint8), 3) is uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('String(Number(Math.max((1 := uint8), 3)));')).toBe('3');
   // and a literal the parameter type cannot represent matches no signature either
-  expectThrownKind('Math.max((1 := uint8), 300);', 'TypeError');
+  expectStaticTypeError('Math.max((1 := uint8), 300);');
 });
 
 // -- DIVERGENCE 3: a width wider than a Number cannot carry its value exactly ----
@@ -190,7 +190,7 @@ test('numeric library: clz counts in the argument own width', () => {
 test('numeric library: clz has no untyped and no float signature', () => {
   // the width is the whole of the meaning, so there is no untyped signature
   expectThrownKind('Math.clz(1);', 'TypeError');
-  expectThrownKind('Math.clz((1 := float32));', 'TypeError');
+  expectStaticTypeError('Math.clz((1 := float32));');
   // and no bigint signature: a bigint has no width to count from the top of
   expectThrownKind('Math.clz(1n);', 'TypeError');
 });
@@ -216,8 +216,8 @@ test('numeric library: the format functions take only the float families', () =>
   expect(evaluated('(Math.fround((1.5 := float64)) is float64) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('(Math.f16round((1.5 := float32)) is float32) ? "yes" : "no";')).toBe('yes');
   // rounding an integer through binary32 is a conversion, which is written
-  expectThrownKind('Math.fround((1 := int32));', 'TypeError');
-  expectThrownKind('Math.f16round((1 := uint8));', 'TypeError');
+  expectStaticTypeError('Math.fround((1 := int32));');
+  expectStaticTypeError('Math.f16round((1 := uint8));');
 });
 
 test('numeric library: the rounding family is identity at an integer type', () => {

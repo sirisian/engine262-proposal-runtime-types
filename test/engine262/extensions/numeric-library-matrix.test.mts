@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrownKind } from '../readme/harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * proposal-runtime-types: a CONFORMANCE MATRIX for the numeric library.
@@ -85,8 +85,9 @@ test('numeric library matrix: the integer column matches the listing', () => {
     for (const t of INTEGER_TYPES) {
       const expr = call(row.fn, row.arity, t, row.sample);
       if (row.int === 'none') {
-        // no signature at this family: resolution fails, which is a type error
-        expectThrownKind(`${expr};`, 'TypeError');
+        // no signature at this family: resolution fails, and since Phase 3
+        // it fails statically, before the script runs
+        expectStaticTypeError(`${expr};`);
       } else {
         const want = row.int === 'int32' ? 'int32' : t;
         expect(evaluated(`(${expr} is ${want}) ? "yes" : "no";`), `${row.fn} at ${t}`).toBe('yes');
@@ -100,7 +101,7 @@ test('numeric library matrix: the float column matches the listing', () => {
     for (const t of FLOAT_TYPES) {
       const expr = call(row.fn, row.arity, t, row.sample);
       if (row.float === 'none') {
-        expectThrownKind(`${expr};`, 'TypeError');
+        expectStaticTypeError(`${expr};`);
       } else {
         expect(evaluated(`(${expr} is ${t}) ? "yes" : "no";`), `${row.fn} at ${t}`).toBe('yes');
       }
@@ -113,10 +114,10 @@ test('numeric library matrix: no listed row accepts a mixed-type call', () => {
   // at no signature at all. Only the two-argument rows can express the mistake.
   for (const row of ROWS.filter((r) => r.arity === 2)) {
     if (row.int !== 'none') {
-      expectThrownKind(`Math.${row.fn}((4 := uint8), (4 := uint16));`, 'TypeError');
+      expectStaticTypeError(`Math.${row.fn}((4 := uint8), (4 := uint16));`);
     }
     if (row.float !== 'none') {
-      expectThrownKind(`Math.${row.fn}((4 := float32), (4 := float64));`, 'TypeError');
+      expectStaticTypeError(`Math.${row.fn}((4 := float32), (4 := float64));`);
     }
   }
 });
@@ -132,6 +133,17 @@ test('numeric library matrix: every listed row leaves the untyped call alone', (
     const args = Array.from({ length: row.arity }, () => '4').join(', ');
     expect(evaluated(`(Math.${row.fn}(${args}) is number) ? "yes" : "no";`), `untyped ${row.fn}`).toBe('yes');
   }
+});
+
+
+// -- The ~any~ path: the runtime dispatch stays the backstop -------------------
+test('numeric library matrix: the runtime dispatch is the backstop for the any path', () => {
+  // An argument the checker cannot see reaches the same misuses at run time,
+  // where the dispatch wrapper still refuses them, kind and all: the static
+  // rejection did not replace the runtime rule, it fronted it.
+  expectThrownKind('const via = (f, ...xs) => f(...xs); via(Math.exp, (4 := uint8));', 'TypeError');
+  expectThrownKind('const via = (f, ...xs) => f(...xs); via(Math.clz32, (4 := float16));', 'TypeError');
+  expectThrownKind('const via = (f, ...xs) => f(...xs); via(Math.min, (4 := uint8), (4 := uint16));', 'TypeError');
 });
 
 // -- Existence: every operation the numeric library clause names ---------------

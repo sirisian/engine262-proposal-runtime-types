@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { expectStaticTypeError, evaluated } from '../readme/harness.mts';
 
 /**
  * Extension coverage — standardlibrary.md (Standard Library Signatures).
@@ -92,8 +92,9 @@ test('standard library: an integer row returns the integer answer', () => {
 test('standard library: one type per signature, and a literal is ranked into it', () => {
   // a literal written at a call is the case literal propagation already covers
   expect(evaluated('(Math.pow((2 := float32), 3) is float32) ? "f32" : "plain";')).toBe('f32');
-  // two typed arguments of different types are viable at no signature
-  expect(evaluated('try { Math.max((1 := uint8), (2 := uint16)); "none" } catch (e) { e.constructor.name }')).toBe('TypeError');
+  // two typed arguments of different types are viable at no signature, and
+  // since Phase 3 the checker says so before the script runs
+  expectStaticTypeError('Math.max((1 := uint8), (2 := uint16));');
   // and an untyped call is untouched
   expect(evaluated('String(Math.sqrt(4));')).toBe('2');
   expect(evaluated('String(Math.max(1, 2));')).toBe('2');
