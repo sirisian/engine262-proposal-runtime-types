@@ -435,6 +435,7 @@ export interface Throw {
   | 'smallestUnit cannot be auto'
   | 'smallestUnit cannot be hour'
   | 'smallestUnit cannot be hour or minute'
+  | 'the default of a meta type must be a value of its constraint shape'
   | 'the reciprocal of zero is undefined'
   | 'the type in a property descriptor must be a type'
   | 'this has already been initialized'

@@ -218,6 +218,14 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         if (!(v instanceof ObjectValue)) {
           return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
         }
+        // The full C5 rule, relocated here from Phase 2 with the spec's
+        // sentence (the plan's edit 5): `default: T` means the default is a
+        // VALUE OF the constraint shape, checked by ordinary membership so
+        // the optional-key form (NumberBounds' `default = {}`) survives, per
+        // P1f's green run.
+        if (!Q(yield* IsOfType(v, shape))) {
+          return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
+        }
         RegisterMetaDefaultSnapshot(typeObject, Q(yield* SnapshotMetadataValue(v)));
       }
       sawDefault = true;

@@ -820,6 +820,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(decl.BindingList);
         return;
       }
+      case 'IsExpression': {
+        // The type OPERAND is resolved so an expression-position
+        // parameterization is collected for the unclaimed-key adjudication:
+        // `x is T.<{ ... }>` writes the parameterization as surely as an
+        // annotation does. F44 claimed the type-meta pin had flipped; it had
+        // not, because this position was never resolved, and F45 closes that
+        // by resolving it here and at the bare cast below.
+        const ie = n as ParseNode.IsExpression;
+        walk(ie.Expression as ParseNode);
+        resolveType(ie.Type);
+        return;
+      }
+      case 'TypedConversionExpression': {
+        const tc = n as ParseNode.TypedConversionExpression;
+        walk(tc.Expression as ParseNode);
+        resolveType(tc.Type);
+        return;
+      }
       case 'RelationalExpression': {
         const rel = n as ParseNode.RelationalExpression;
         if (rel.operator === 'instanceof' && rel.RelationalExpression) {

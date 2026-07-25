@@ -77,10 +77,14 @@ test('meta: bounded numerics, the case six capabilities were waiting on', () => 
   `)).toBe('true/false');
 });
 
-test('meta: a base with no hook admits any metadata', () => {
-  // no hook means no constraint, which is the right default: the parameterization
-  // still keeps two metadata apart for identity, it just judges nothing
-  expect(evaluated('String((1 := float64) is float64.<{ a: 1 }>);')).toBe('true');
+test('meta: a base-form meta with no validate admits any metadata of its base', () => {
+  // The surviving form of "no hook means no constraint": absence of `validate`
+  // judges nothing, so every value of the base is admitted, while the
+  // parameterization still keeps two metadata apart for identity. The
+  // base-form declaration is ALSO what keeps the program legal since Phase 3:
+  // without it, `a` is an unclaimed key and the pass rejects the
+  // parameterization that writes it (the C9 waiver, F44/F45).
+  expect(evaluated('meta float64 { default = {}; subtype(a, b) { return true; } } String((1 := float64) is float64.<{ a: 1 }>);')).toBe('true');
 });
 
 // CLOSED. This pinned the last hole in the keystone: a meta declaration against
@@ -90,8 +94,8 @@ test('meta: a base with no hook admits any metadata', () => {
 // below is now consulted.
 test('meta: a meta declaration on a META TYPE governs a parameterization', () => {
   expect(evaluated(`
-    type Dimensions = { m: int32 };
-    meta Dimensions { subtype(a, b) { return true; } default = {}; validate(v, m) { return false; } }
+    type Dimensions = { m: number };
+    meta Dimensions { subtype(a, b) { return true; } default = { m: 0 }; validate(v, m) { return false; } }
     String((1 := float32) is float32.<{ m: 1 }>);
   `)).toBe('false');
 });
@@ -106,8 +110,8 @@ test('meta: a meta declaration on a META TYPE governs a parameterization', () =>
 // parameterization whose metadata uses the keys Bounds declares.
 test('meta: a meta type governs a parameterization through the keys it claims', () => {
   expect(evaluated(`
-    type Bounds = { min: float64, max: float64 };
-    meta Bounds { subtype(a, b) { return true; } default = {}; validate(v, m) { return Number(v) >= m.min && Number(v) <= m.max; } }
+    type Bounds = { min: number, max: number };
+    meta Bounds { subtype(a, b) { return true; } default = { min: 0, max: 0 }; validate(v, m) { return Number(v) >= m.min && Number(v) <= m.max; } }
     String(((5 := float32) is float32.<{ min: 0, max: 10 }>) + "/" + ((50 := float32) is float32.<{ min: 0, max: 10 }>));
   `)).toBe('true/false');
 });
@@ -115,18 +119,18 @@ test('meta: a meta type governs a parameterization through the keys it claims', 
 test('meta: one meta type governs every base that uses its keys', () => {
   // the claim is on the KEYS, so the same meta type judges a different base
   expect(evaluated(`
-    type Bounds = { min: float64, max: float64 };
-    meta Bounds { subtype(a, b) { return true; } default = {}; validate(v, m) { return Number(v) <= m.max; } }
+    type Bounds = { min: number, max: number };
+    meta Bounds { subtype(a, b) { return true; } default = { min: 0, max: 0 }; validate(v, m) { return Number(v) <= m.max; } }
     String((5 := int32) is int32.<{ min: 0, max: 10 }>);
   `)).toBe('true');
 });
 
 test('meta: two meta types both govern when the metadata uses both their keys', () => {
   expect(evaluated(`
-    type Lower = { lo: float64 };
-    type Upper = { hi: float64 };
-    meta Lower { subtype(a, b) { return true; } default = {}; validate(v, m) { return Number(v) >= m.lo; } }
-    meta Upper { subtype(a, b) { return true; } default = {}; validate(v, m) { return Number(v) <= m.hi; } }
+    type Lower = { lo: number };
+    type Upper = { hi: number };
+    meta Lower { subtype(a, b) { return true; } default = { lo: 0 }; validate(v, m) { return Number(v) >= m.lo; } }
+    meta Upper { subtype(a, b) { return true; } default = { hi: 0 }; validate(v, m) { return Number(v) <= m.hi; } }
     String(((5 := float32) is float32.<{ lo: 0, hi: 10 }>) + "/" + ((50 := float32) is float32.<{ lo: 0, hi: 10 }>));
   `)).toBe('true/false');
 });
@@ -135,17 +139,17 @@ test('meta: two meta types may not claim one key', () => {
   // reported at the second declaration, which is where the collision is, and not
   // at the unlucky program that parameterized on the key last
   expectThrown(`
-    type A = { unit: float64, a: int32 };
-    type B = { unit: float64, b: int32 };
-    meta A { subtype(a, b) { return true; } default = {}; }
-    meta B { subtype(a, b) { return true; } default = {}; }
+    type A = { unit: number, a: number };
+    type B = { unit: number, b: number };
+    meta A { subtype(a, b) { return true; } default = { unit: 0, a: 0 }; }
+    meta B { subtype(a, b) { return true; } default = { unit: 0, b: 0 }; }
   `);
   // distinct keys are fine
   expect(evaluated(`
-    type P = { pp: float64 };
-    type Q2 = { qq: float64 };
-    meta P { subtype(a, b) { return true; } default = {}; }
-    meta Q2 { subtype(a, b) { return true; } default = {}; }
+    type P = { pp: number };
+    type Q2 = { qq: number };
+    meta P { subtype(a, b) { return true; } default = { pp: 0 }; }
+    meta Q2 { subtype(a, b) { return true; } default = { qq: 0 }; }
     "ok";
   `)).toBe('ok');
 });
@@ -170,31 +174,34 @@ test('meta: a hook declared against the base still applies', () => {
 // value and made a brand a comment.
 test('meta: a meta type that claims a key and defines no validate refuses bare values', () => {
   expect(evaluated(`
-    type Brand = { tag: float64 };
-    meta Brand { subtype(a, b) { return true; } default = {}; }
+    type Brand = { tag: number };
+    meta Brand { subtype(a, b) { return true; } default = { tag: 0 }; }
     String((1 := float32) is float32.<{ tag: 7 }>);
   `)).toBe('false');
   // it refuses at every base, since the claim is on the key
   expect(evaluated(`
-    type Brand2 = { tag2: float64 };
-    meta Brand2 { subtype(a, b) { return true; } default = {}; }
+    type Brand2 = { tag2: number };
+    meta Brand2 { subtype(a, b) { return true; } default = { tag2: 0 }; }
     String((1 := int32) is int32.<{ tag2: 7 }>);
   `)).toBe('false');
 });
 
 test('meta: a meta type that defines validate still decides normally', () => {
   expect(evaluated(`
-    type Bound = { atLeast: float64 };
-    meta Bound { subtype(a, b) { return true; } default = {}; validate(v, m) { return Number(v) >= m.atLeast; } }
-    String(((5 := float32) is float32.<{ atLeast: 0 }>) + "/" + (((0 - 5) := float32) is float32.<{ atLeast: 0 }>));
+    type Bound = { atLeast: number };
+    meta Bound { subtype(a, b) { return true; } default = { atLeast: 0 }; validate(v, m) { return Number(v) >= m.atLeast; } }
+    String(((5 := float32) is float32.<{ atLeast: 1 }>) + "/" + (((0 - 5) := float32) is float32.<{ atLeast: 1 }>));
   `)).toBe('true/false');
 });
 
-test('meta: a metadata key no meta type claims is still admitted', () => {
-  // the specification places THAT error at the parameterization rather than in
-  // the membership judgment, and it is not implemented; pinned so the brand rule
-  // above is not mistaken for it
-  expect(evaluated('String((1 := float64) is float64.<{ claimedByNobody: 1 }>);')).toBe('true');
+test('meta: a metadata key no meta type claims is a type error at the parameterization', () => {
+  // "A metadata object whose own key no meta type claims is a type error at
+  // the parameterization that writes it" - landed in the checking pass by the
+  // metadata plan's Phase 3 (F44), and covering this EXPRESSION position since
+  // Phase 4 (F45): the `is` operand writes the parameterization as surely as
+  // an annotation does, so the walk resolves it and the pass rejects it,
+  // naming the key.
+  expect(run('String((1 := float64) is float64.<{ claimedByNobody: 1 }>);')).toMatchObject({ Type: 'throw' });
 });
 
 // -- The metadata value language: nested records and lists --------------------
@@ -217,13 +224,13 @@ test('meta: a hook receives nested metadata as ordinary values', () => {
   // the conversion at the hook boundary nests too; handing a hook the host
   // record left values the engine has no case for, and `typeof` alone hit one
   expect(evaluated(`
-    type N = { rr: float64 };
-    meta N { subtype(a, b) { return true; } default = {}; validate(v, m) { return typeof m.rr === "object" && m.rr.lo === 0; } }
+    type N = { rr: number };
+    meta N { subtype(a, b) { return true; } default = { rr: 0 }; validate(v, m) { return typeof m.rr === "object" && m.rr.lo === 0; } }
     String((1 := float32) is float32.<{ rr: { lo: 0 } }>);
   `)).toBe('true');
   expect(evaluated(`
-    type L = { ll: float64 };
-    meta L { subtype(a, b) { return true; } default = {}; validate(v, m) { return Array.isArray(m.ll) && m.ll.length === 2 && m.ll[1] === 2; } }
+    type L = { ll: number };
+    meta L { subtype(a, b) { return true; } default = { ll: 0 }; validate(v, m) { return Array.isArray(m.ll) && m.ll.length === 2 && m.ll[1] === 2; } }
     String((1 := float32) is float32.<{ ll: [1, 2] }>);
   `)).toBe('true');
 });
@@ -252,8 +259,8 @@ test('meta: a pattern is compared by source and flags, not by object identity', 
 
 test('meta: a hook is handed a RegExp built from the carried pattern', () => {
   expect(evaluated(`
-    type SP = { pat: float64 };
-    meta SP { subtype(a, b) { return true; } default = {}; validate(v, m) { return m.pat instanceof RegExp && m.pat.source === "^a" && m.pat.flags === "i"; } }
+    type SP = { pat: number };
+    meta SP { subtype(a, b) { return true; } default = { pat: 0 }; validate(v, m) { return m.pat instanceof RegExp && m.pat.source === "^a" && m.pat.flags === "i"; } }
     String(("ab" := string) is string.<{ pat: /^a/i }>);
   `)).toBe('true');
 });
@@ -262,8 +269,8 @@ test('meta: the whole-string match a StringPattern meta type would perform', () 
   // the validation judgment the clause gives StringPattern, written as an
   // ordinary meta type now that the pattern reaches the hook
   expect(evaluated(`
-    type SP2 = { rex: float64 };
-    meta SP2 { subtype(a, b) { return true; } default = {}; validate(v, m) { let re = new RegExp("^(?:" + m.rex.source + ")$", m.rex.flags); return re.test(String(v)); } }
+    type SP2 = { rex: number };
+    meta SP2 { subtype(a, b) { return true; } default = { rex: 0 }; validate(v, m) { let re = new RegExp("^(?:" + m.rex.source + ")$", m.rex.flags); return re.test(String(v)); } }
     String((("abc" := string) is string.<{ rex: /a.c/ }>) + "/" + (("xbc" := string) is string.<{ rex: /a.c/ }>));
   `)).toBe('true/false');
 });
@@ -303,8 +310,8 @@ test('StringPattern: it claims `pattern` globally, as any meta type does', () =>
   // claiming is global and flat, so a program declaring its own meta type over
   // the same key collides with this one and is told at its declaration
   expectThrown(`
-    type MyPattern = { pattern: float64 };
-    meta MyPattern { subtype(a, b) { return true; } default = {}; }
+    type MyPattern = { pattern: number };
+    meta MyPattern { subtype(a, b) { return true; } default = { pattern: 0 }; }
   `);
 });
 
@@ -316,8 +323,8 @@ test('StringPattern: it claims `pattern` globally, as any meta type does', () =>
 test('meta: a bare value enters a parameterization only through construction', () => {
   // the judgment runs at the crossing, so a hook that admits lets the value in
   expect(evaluated(`
-    type U = { unit: float64 };
-    meta U { default = {}; subtype(a, b) { return true; } validate(v, m) { return true; } }
+    type U = { unit: number };
+    meta U { default = { unit: 0 }; subtype(a, b) { return true; } validate(v, m) { return true; } }
     String(Number(float32.<{ unit: 1 }>(7)));
   `)).toBe('7');
   // OPEN, pinned as it behaves rather than as it should: a hook that REFUSES does
@@ -326,8 +333,8 @@ test('meta: a bare value enters a parameterization only through construction', (
   // call and the construction boundary rather than in the judgment. Recorded in
   // the next-phase document as the open half of ConvertParameterization.
   expect(evaluated(`
-    type U2 = { u2: float64 };
-    meta U2 { default = {}; subtype(a, b) { return true; } validate(v, m) { return Number(v) > 0; } }
+    type U2 = { u2: number };
+    meta U2 { default = { u2: 0 }; subtype(a, b) { return true; } validate(v, m) { return Number(v) > 0; } }
     let m = "";
     try { float32.<{ u2: 1 }>(0 - 5); m = "admitted"; } catch (e) { m = "refused"; }
     m;
@@ -337,8 +344,8 @@ test('meta: a bare value enters a parameterization only through construction', (
 test('meta: the brand is shed freely on the way up', () => {
   // no meta type gates the upward direction, which is the branding rule
   expect(evaluated(`
-    type U3 = { u3: float64 };
-    meta U3 { default = {}; subtype(a, b) { return true; } validate(v, m) { return true; } }
+    type U3 = { u3: number };
+    meta U3 { default = { u3: 0 }; subtype(a, b) { return true; } validate(v, m) { return true; } }
     String(Number(float32(float32.<{ u3: 1 }>(7))));
   `)).toBe('7');
 });
@@ -350,11 +357,11 @@ test('meta: the brand is shed freely on the way up', () => {
 // meta type without one states no relation between two of its parameterizations
 // and the crossing between them has nothing to consult.
 test('meta: a declaration without a subtype hook is refused', () => {
-  expectThrown('type NoSub = { nosub: float64 }; meta NoSub { default = {}; }');
+  expectThrown('type NoSub = { nosub: number }; meta NoSub { default = { nosub: 0 }; }');
   // and one with it is accepted
   expect(evaluated(`
-    type WithSub = { withsub: float64 };
-    meta WithSub { subtype(a, b) { return true; } default = {}; }
+    type WithSub = { withsub: number };
+    meta WithSub { subtype(a, b) { return true; } default = { withsub: 0 }; }
     "ok";
   `)).toBe('ok');
 });
@@ -363,8 +370,8 @@ test('meta: `validate` stays optional, which is what a brand needs', () => {
   // a meta type that defines no `validate` deliberately admits no bare value of
   // the base, so requiring `validate` too would make a brand inexpressible
   expect(evaluated(`
-    type Brandish = { brandish: float64 };
-    meta Brandish { subtype(a, b) { return true; } default = {}; }
+    type Brandish = { brandish: number };
+    meta Brandish { subtype(a, b) { return true; } default = { brandish: 0 }; }
     String((1 := float32) is float32.<{ brandish: 7 }>);
   `)).toBe('false');
 });
