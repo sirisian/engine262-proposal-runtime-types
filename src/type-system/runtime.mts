@@ -1256,6 +1256,15 @@ export function fitsNumericType(v: number, name: string, args: readonly (TypeRec
     const bits = typeof args[0] === 'number' ? args[0] : 0;
     return name === 'uint' ? v >= 0 && v < 2 ** bits : v >= -(2 ** (bits - 1)) && v < 2 ** (bits - 1);
   }
+  if (name === 'bigint') {
+    // A plain integer literal fits `bigint`. It did not, so `let x: bigint = 65`
+    // was a TypeError while `let x: uint64 = 65` worked - the literal rule
+    // covering the sixteen numeric types and excluding the one that predates
+    // them (F66). The `n` suffix exists because BigInt arrived before there was
+    // a type to take the literal's type FROM; where a type is written, the
+    // suffix is redundant and typed code should not need it.
+    return Number.isInteger(v);
+  }
   return name === 'float16' || name === 'float32' || name === 'float64';
 }
 

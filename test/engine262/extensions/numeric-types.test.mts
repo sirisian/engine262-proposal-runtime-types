@@ -60,6 +60,27 @@ test('numeric types: the imaginary literal does not parse (documents the gap)', 
   expectThrown('let a = 3i; typeof a;');
 });
 
+test('numeric types: a plain integer literal takes the bigint type from its context', () => {
+  // The `n` suffix exists because BigInt arrived before there was a type system
+  // to take a literal's type FROM. Where a type is written the suffix is
+  // redundant, and the literal rule should reach `bigint` as it reaches the
+  // sixteen types this proposal adds - it did not, and worse, `let x: bigint =
+  // 65n` was itself a TypeError, so the type could not be used with an
+  // annotation at all (F66).
+  expect(evaluated('let x: bigint = 65; String(x) + "/" + String(typeof x);')).toBe('65/bigint');
+  expect(evaluated('function f(v: bigint) { return typeof v; } String(f(65));')).toBe('bigint');
+  expect(evaluated('function g(): bigint { return 7; } String(typeof g());')).toBe('bigint');
+  expect(evaluated('let x: bigint = 65; let y: bigint = 1; String(x + y);')).toBe('66');
+  // The suffix keeps working, and is now a choice rather than a requirement.
+  expect(evaluated('let x: bigint = 65n; String(x);')).toBe('65');
+  // A literal with a fraction has no BigInt, and an `any` value with one is a
+  // RangeError at the boundary rather than a silent truncation.
+  expect(evaluated('let r = "no"; try { eval("function nc() { let x: bigint = 1.5; }"); } catch (e) { r = "rejected"; } r;')).toBe('rejected');
+  expect(evaluated('function anyv() { return 1.5; } let r = "no"; try { let x: bigint = anyv(); } catch (e) { r = String(e.constructor.name); } r;')).toBe('RangeError');
+  // Untyped code is untouched: a bare literal is still a Number.
+  expect(evaluated('String(65 + 1) + "/" + String(typeof 65) + "/" + String(65n + 1n);')).toBe('66/number/66');
+});
+
 test('numeric types: a typed value is never strictly equal to a plain number of equal magnitude', () => {
   // Strict equality keeps identity semantics, and the values of distinct value
   // types are distinct, so a typed value is never `===` a plain number of the

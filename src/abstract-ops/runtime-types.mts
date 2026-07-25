@@ -171,6 +171,17 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);
+      case 'bigint': {
+        // An integral Number is exactly a BigInt, so it converts. This is what
+        // lets typed code write `65` where a `bigint` is wanted rather than
+        // `65n`: the suffix exists because BigInt predates a type system that
+        // could take a literal's type from its context (F66). The cast rule
+        // truncates toward zero, as the other integer targets do.
+        if (value instanceof NumberValue) {
+          return Value(BigInt(Math.trunc(R(value) as number)));
+        }
+        break;
+      }
       case 'uint':
       case 'int':
       case 'float16':
@@ -282,6 +293,19 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);
+      case 'bigint': {
+        // The checked rule for the same source: exact where the Number is an
+        // integer, a RangeError where it is not, since a BigInt has no
+        // fraction to round into (F66).
+        if (value instanceof NumberValue) {
+          const bn = R(value) as number;
+          if (!Number.isInteger(bn)) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return Value(BigInt(bn));
+        }
+        break;
+      }
       case 'uint':
       case 'int':
       case 'float16':

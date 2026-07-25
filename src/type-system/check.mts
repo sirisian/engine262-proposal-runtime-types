@@ -133,9 +133,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // space is genuinely distinct, and this is how a plain literal enters it.
   const literalFitsNumericType = (source: TypeRecord, target: TypeRecord): boolean => {
     if (source.Kind === 'literal' && target.Kind === 'primitive'
-        && ['uint', 'int', 'float16', 'float32', 'float64'].includes(target.Name)
+        && ['uint', 'int', 'float16', 'float32', 'float64', 'bigint'].includes(target.Name)
         && source.Value instanceof NumberValue
         && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {
+      return true;
+    }
+    // A BigInt literal at `bigint` is the same rule with the other literal
+    // kind: the value is already of the target type (F66).
+    if (source.Kind === 'literal' && target.Kind === 'primitive' && target.Name === 'bigint'
+        && source.Value instanceof BigIntValue) {
       return true;
     }
     if (target.Kind === 'union') {
@@ -634,8 +640,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const staticType = (node: ParseNode): Known => {
     switch (node.type) {
-      case 'NumericLiteral':
-        return { Kind: 'literal', Value: Value((node as { value: number }).value), Base: makePrimitive('number') };
+      case 'NumericLiteral': {
+        // A BIGINT literal is a literal of `bigint`, not of `number`. It was
+        // labelled `number`, which F38 pinned as cosmetic - it is not: with
+        // the base wrong, `let x: bigint = 65n` failed as "a literal type of
+        // number is not assignable to bigint", so the `bigint` type could not
+        // be used with an annotation AT ALL (F66).
+        const v = (node as { value: number | bigint }).value;
+        return typeof v === 'bigint'
+          ? { Kind: 'literal', Value: Value(v), Base: makePrimitive('bigint') }
+          : { Kind: 'literal', Value: Value(v), Base: makePrimitive('number') };
+      }
       case 'StringLiteral':
         return { Kind: 'literal', Value: Value((node as { value: string }).value), Base: makePrimitive('string') };
       case 'BooleanLiteral':
