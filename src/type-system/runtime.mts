@@ -7,7 +7,7 @@ import {
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType,
@@ -507,6 +507,14 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // boundary, and admitting bare values would make it a comment.
       const { types: governing } = GoverningMetaTypes(t.Metadata);
       for (const metaType of governing) {
+        if (!MetaTypeGoverns(t.Metadata, metaType)) {
+          // The sit-out (the judgment's "whose portion is not M's default"): a
+          // portion equal to the default constrains nothing, so the meta type
+          // takes no part, and a brand written at its own default admits every
+          // bare value of the base while remaining a distinct type, the plan's
+          // section 2, third consequence.
+          continue;
+        }
         // "it holds of v and THAT PORTION": each meta type judges its own
         // portion, completed from its default, never the whole metadata. This
         // call site bypassed MetadataPortion entirely until the plan's Phase 1

@@ -1,7 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -100,6 +100,13 @@ function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<b
     ...GoverningMetaTypes(t).types,
   ]);
   for (const metaType of governing) {
+    if (!MetaTypeGoverns(s, metaType) && !MetaTypeGoverns(t, metaType)) {
+      // Participation (plan section 2): both portions at the default means no
+      // part taken. `subtype(default, default)` is never consulted, so a
+      // hostile or throwing hook cannot veto a crossing carrying none of its
+      // metadata, and no hook need be reflexive at its own default.
+      continue;
+    }
     const verdict = Q(yield* ApplyMetaHook(metaType, 'subtype', [
       MetadataPortion(s, metaType),
       MetadataPortion(t, metaType),

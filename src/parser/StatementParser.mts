@@ -288,6 +288,12 @@ export abstract class StatementParser extends TypeParser {
         const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;
         const hookArity: Record<string, number> = {
           subtype: 2, validate: 2, narrow: 3, conversionFactor: 2,
+          // #table-meta-hooks names seven, and the parser must match it (the
+          // plan's C4: `quantize` was undeclarable while its consumer ran on
+          // every crossing). `rescale` and `describe` become declarable and
+          // stay pinned-unconsumed: rescale's consumer is the operator-block
+          // conversion path that does not exist yet, describe's is reflection.
+          quantize: 2, rescale: 2, describe: 1,
         };
         if (typeof hookName !== 'string' || !(hookName in hookArity)) {
           this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);

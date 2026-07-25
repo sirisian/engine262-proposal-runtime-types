@@ -21,7 +21,7 @@ function assumed(assumptions: readonly Assumption[], s: TypeRecord, t: TypeRecor
  * `float32.<{ unit: "m" }>` a fresh type, which would defeat interning: the point of
  * an interned type is that two mentions of one shape are one object.
  */
-function SameMetadata(a: unknown, b: unknown): boolean {
+export function SameMetadata(a: unknown, b: unknown): boolean {
   if (a === b) {
     return true;
   }

@@ -390,6 +390,7 @@ export interface Throw {
   | 'WeakMap cannot be invoked without new'
   | 'WeakRef cannot be invoked without new'
   | 'WeakSet cannot be invoked without new'
+  | 'a meta type whose constraint shape is an object type requires an object default'
   | 'a range endpoint must be a number'
   | 'a range step must be a nonzero number'
   | 'a range step must be a number'

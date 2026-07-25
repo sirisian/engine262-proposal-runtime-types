@@ -3,7 +3,7 @@ import { NumberValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStrin
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
-import { SameType } from '../type-system/relations.mts';
+import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
@@ -467,6 +467,23 @@ export function LookupMetaDefaultSnapshot(typeObject: object): Value | undefined
   return metaDefaultSnapshots.get(typeObject);
 }
 
+const EMPTY_METADATA_RECORD: Value = Object.freeze(Object.create(null)) as unknown as Value;
+
+/**
+ * The participation rule's predicate (METADATA-PROTOCOL-PLAN.md section 2): a
+ * meta type GOVERNS a metadata value when MetadataPortion of it differs from
+ * the meta type's `default`, compared STRUCTURALLY via SameMetadata; identity
+ * cannot be meant, since MetadataPortion returns a fresh copy every call, so
+ * an identity test would make every meta type participate always and a brand
+ * refuse its own default. A meta type with no snapshot claims no keys, so its
+ * portion is always empty and it governs nothing, which the empty record makes
+ * literal.
+ */
+export function MetaTypeGoverns(metadata: Value, metaType: object): boolean {
+  const snapshot = LookupMetaDefaultSnapshot(metaType) ?? EMPTY_METADATA_RECORD;
+  return !SameMetadata(MetadataPortion(metadata, metaType), snapshot);
+}
+
 // proposal-runtime-types M20 #sec-meta-hooks: the meta-type method hooks are
 // user closures registered per Type Object. `validate` is the meta type's half
 // of the validation judgment, consulted from the ~parameterized~ arm of
@@ -625,7 +642,17 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     ...GoverningMetaTypes(from.Metadata).types,
     ...GoverningMetaTypes(to.Metadata).types,
   ]);
-  for (const metaType of governing) {
+  // The participation rule (the plan's section 2, replacing the former
+  // all-declared quantifier, its C1): a meta type takes part in the crossing
+  // when it GOVERNS either side, its portion differing structurally from its
+  // default. `quantize` keys on the TARGET alone, since it maps a value onto
+  // the representation the target's constraint requires and a default
+  // constraint requires nothing. With completion in place only a meta type
+  // with a written claimed key can govern, so the key union above stays the
+  // iteration and these are filters, provably equivalent to the rule.
+  const participating = [...governing].filter((m) => MetaTypeGoverns(from.Metadata, m) || MetaTypeGoverns(to.Metadata, m));
+  const quantizing = [...governing].filter((m) => MetaTypeGoverns(to.Metadata, m));
+  for (const metaType of participating) {
     const fp = MetadataPortion(from.Metadata, metaType);
     const tp = MetadataPortion(to.Metadata, metaType);
     const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp]));
@@ -640,7 +667,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // The factor is the product over every meta type that defines one, so two
   // independent scalings compose rather than one winning.
   let factor = 1;
-  for (const metaType of governing) {
+  for (const metaType of participating) {
     const f = Q(yield* ApplyMetaHook(metaType, 'conversionFactor', [
       MetadataPortion(from.Metadata, metaType),
       MetadataPortion(to.Metadata, metaType),
@@ -654,7 +681,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     const scaled = (isTypedNumber(converted) ? converted.value : (R(converted as NumberValue) as number)) * factor;
     converted = new TypedNumberValue(wrapToType(scaled, to.Base), to.Base);
   }
-  for (const metaType of governing) {
+  for (const metaType of quantizing) {
     const q = Q(yield* ApplyMetaHook(metaType, 'quantize', [
       converted,
       MetadataPortion(to.Metadata, metaType),
