@@ -33,6 +33,11 @@ function evaluated(source: string): string {
   return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
 }
 
+/** A program whose error is an Early Error: it is rejected before anything runs. */
+function expectStatic(source: string) {
+  expect(run(`${source} "unreachable";`)).toMatchObject({ Type: 'throw' });
+}
+
 function thrownKind(source: string): string {
   const completion = run(source);
   expect(completion).toMatchObject({ Type: 'throw' });
@@ -103,8 +108,14 @@ test('row 5: a store to an element of an array of element type t', () => {
   // and every later store went unchecked, so the array degraded to plain
   // Numbers even on a store that fit.
   expect(evaluated(`${a} a[0] = 7; String(a[0]) + "/" + String(a[0] is uint8);`)).toBe('7/true');
-  expect(thrownKind(`${a} a[0] = 300;`)).toBe('RangeError');
+  // A LITERAL store is now rejected statically, which is what the clause asks
+  // for in as many words: "a literal element store follows the literal rule
+  // and is rejected" (F56). The run-time check remains the backstop for a
+  // value whose type the checker cannot settle, and reports a RangeError
+  // there, so both paths are asserted rather than one standing for the other.
+  expect(thrownKind(`${a} a[0] = 300;`)).toBe('TypeError');
   expect(thrownKind(`${a} a[0] = "nope";`)).toBe('TypeError');
+  expect(thrownKind(`${a} function anyv() { return 300; } a[0] = anyv();`)).toBe('RangeError');
   // Growing the array is a store like any other.
   expect(evaluated(`${a} a[3] = 4; String(a[3] is uint8) + "/" + String(a.length);`)).toBe('true/4');
   // A library push reaches the same [[Set]], so it is checked too.
@@ -114,6 +125,46 @@ test('row 5: a store to an element of an array of element type t', () => {
   expect(evaluated(`${a} a.custom = "x"; String(a.custom);`)).toBe('x');
   // An untyped array is untouched.
   expect(evaluated('const b = [1]; b[0] = "x"; String(b[0]);')).toBe('x');
+});
+
+test('the checker reports what the static types settle, at the store rows', () => {
+  // #table-check-sites rows 4 and 5, STATICALLY (F56). These are Early Errors
+  // in never-called functions, so nothing runs; the run-time check stays the
+  // backstop for values the checker cannot settle.
+  expectStatic('function nc(a: [].<uint8>) { a[0] = 300; }');
+  expectStatic('function nc(a: [].<uint8>) { a[0] = "s"; }');
+  expectStatic('function nc(o: { x: uint8 }) { o.x = 300; }');
+  // Valid stores are untouched, and so are untyped targets.
+  expect(evaluated('function nc(a: [].<uint8>) { a[0] = 7; } "ok";')).toBe('ok');
+  expect(evaluated('function nc(o: { x: uint8 }) { o.x = 7; } "ok";')).toBe('ok');
+  expect(evaluated('function nc(a) { a[0] = 300; } "ok";')).toBe('ok');
+  // A CLASS field store is still run-time only: a class instance has no
+  // structural type in the checker, so `c.x = 300` waits on class field types.
+  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; } "ok";')).toBe('ok');
+});
+
+test('a call to a declared function is argument-checked', () => {
+  // The site was wired all along; what was missing is that the checker never
+  // learned a DECLARED function's signature, so no call to one was checked at
+  // all (F55 measured it, F56 fixed it).
+  expectStatic('function f(v: uint8) {} function nc() { f(300); }');
+  expectStatic('function f(v: uint8) {} function nc() { f("s"); }');
+  expectStatic('function f(a, b: uint8) {} function nc() { f(999, 300); }');
+  // Hoisting: a call may precede the declaration, as JavaScript allows.
+  expectStatic('function nc() { f(300); } function f(v: uint8) {}');
+  // Untyped parameters, rest parameters, and destructuring parameters leave
+  // the name unchecked rather than half-described.
+  expect(evaluated('function f(v) {} function nc() { f(300); } "ok";')).toBe('ok');
+  expect(evaluated('function f(...xs: uint8) {} function nc() { f(300); } "ok";')).toBe('ok');
+  expect(evaluated('function d({ a }) {} function nc() { d(300); } "ok";')).toBe('ok');
+  // An OVERLOADED name keeps resolving at run time, where it did before: the
+  // argument check fires only for a single-signature type, and collecting the
+  // overloads is what stops the last declaration from clobbering the rest.
+  expect(evaluated('function g(v: uint8) {} function g(v: string) {} function nc() { g(300); } "ok";')).toBe('ok');
+  expect(evaluated('function h(v: uint8) { return "u8"; } function h(v: string) { return "s"; } String(h("x"));')).toBe('s');
+  // And a valid call still runs, with the return type now known to the caller.
+  expect(evaluated('function f(v: uint8) { return v; } String(f((7 := uint8)));')).toBe('7');
+  expectStatic('function f(): uint8 { return (7 := uint8); } function nc() { let x: uint16 = f(); }');
 });
 
 // -- Row 6: an `any` value read into an operator whose operands are typed -----
@@ -242,6 +293,9 @@ test('deleting a typed field, a typed element, or an interface-required member t
 test('the same operation runs at every row: one value, seven boundaries, one verdict', () => {
   // 300 is not a uint8 anywhere, and the report is a RangeError everywhere,
   // because every row runs RequireType and RequireType has one definition.
+  // Each case routes the value through an ~any~ position where the checker
+  // would otherwise reject the literal earlier and statically, which is a
+  // different (and better) answer but not the one this test is about.
   // Row 6 joins the list as of F52, with its own kind: a value of the `any`
   // type meeting a typed operand is a MIX rather than an out-of-range value,
   // so it is a TypeError where the storage rows give a RangeError. The
@@ -252,7 +306,7 @@ test('the same operation runs at every row: one value, seven boundaries, one ver
     'function anyv() { return 300; } function g(): uint8 { return anyv(); } g();',
     'class C { x: uint8 = 1; } const c = new C(); c.x = 300;',
     'class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);',
-    'let a: [].<uint8> = [1]; a[0] = 300;',
+    'let a: [].<uint8> = [1]; function anyv() { return 300; } a[0] = anyv();',
     'class C { x: uint8 = 1; } const c = new C(); Reflect.set(c, "x", 300);',
   ];
   // Row 6's own form, asserted beside them: same operation, different fault.

@@ -584,6 +584,68 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * A DECLARED function's signature, which the checker did not have: function
+   * types were built only from FunctionType annotations, so `function f(v:
+   * uint8) {}` put nothing in scope and no call to it was argument-checked at
+   * all (F55 measured this; F56 fixes it). A parameter with no annotation is
+   * ~any~, which makes the signature usable even when only some parameters are
+   * typed, and a rest parameter suppresses the signature entirely rather than
+   * inviting an arity mistake.
+   */
+  const declareFunctionSignatures = (list: readonly ParseNode[]) => {
+    // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
+    // this proposal's function overloading - so the signatures are collected
+    // per name and declared together. Declaring one at a time let the last
+    // declaration clobber the earlier ones, which turned every call matching
+    // an earlier overload into a spurious Early Error (measured, cycle 50).
+    // The argument check at a call site fires only for a SINGLE-signature
+    // type, so an overloaded name keeps resolving where it did before, at run
+    // time, until the checker learns to rank signatures.
+    const collected = new Map<string, { Parameters: Known[], Return: Known }[]>();
+    const rejected = new Set<string>();
+    for (const n of list) {
+      if (n.type !== 'FunctionDeclaration') {
+        continue;
+      }
+      const fn = n as unknown as {
+        BindingIdentifier?: { name: string } | null,
+        FormalParameters?: readonly ParseNode[] | null,
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+      };
+      const name = fn.BindingIdentifier?.name;
+      if (!name) {
+        continue;
+      }
+      const Parameters: Known[] = [];
+      let usable = true;
+      for (const p of fn.FormalParameters ?? []) {
+        if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+          // A rest or destructuring parameter: no arity to check against, so
+          // the whole name is left untyped rather than half-described.
+          usable = false;
+          break;
+        }
+        const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        Parameters.push(ann ? resolveType(ann.Type) : null);
+      }
+      if (!usable) {
+        rejected.add(name);
+        continue;
+      }
+      const Return = fn.TypeAnnotation ? resolveType(fn.TypeAnnotation.Type) : null;
+      const signatures = collected.get(name) ?? [];
+      signatures.push({ Parameters, Return });
+      collected.set(name, signatures);
+    }
+    for (const [name, Signatures] of collected) {
+      if (rejected.has(name)) {
+        continue;
+      }
+      declare(name, { Kind: 'function', Signatures } as unknown as Known);
+    }
+  };
+
   const declare = (name: string, t: Known) => {
     if (t) {
       frames[frames.length - 1].bindings.set(name, t);
@@ -791,6 +853,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (Array.isArray(node)) {
+      // Function declarations are hoisted, so a call may precede the
+      // declaration. Their signatures are declared over the whole list before
+      // any of it is walked, which is what lets `f(300)` above `function
+      // f(v: uint8) {}` be the Early Error it should be (F56).
+      declareFunctionSignatures(node as readonly ParseNode[]);
       node.forEach((n) => walk(n));
       return;
     }
@@ -993,6 +1060,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
           const target = lookup((a.LeftHandSideExpression as { name: string }).name);
           requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+        } else if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'MemberExpression') {
+          // #table-check-sites rows 4 and 5, statically: a store whose target
+          // has a known typed property or element type is the same shape as a
+          // store to an annotated binding, so it is an Early Error where the
+          // static types settle it and the run-time check remains the backstop
+          // for the ~any~ path (F56). A class instance has no structural type
+          // here, so `c.x = 300` for a class-typed `c` still waits on the
+          // checker learning class field types.
+          const m = a.LeftHandSideExpression as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
+          const objType = m.MemberExpression ? staticType(m.MemberExpression) : null;
+          let target: Known = null;
+          if (objType && objType.Kind === 'object' && m.IdentifierName) {
+            const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
+            target = prop ? prop.type : null;
+          } else if (objType && objType.Kind === 'array' && m.Expression) {
+            target = objType.Element;
+          }
+          if (target) {
+            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          }
         }
         walk(a.LeftHandSideExpression);
         walk(a.AssignmentExpression);
