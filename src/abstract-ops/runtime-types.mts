@@ -299,7 +299,10 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // fraction to round into (F66).
         if (value instanceof NumberValue) {
           const bn = R(value) as number;
-          if (!Number.isInteger(bn)) {
+          // Beyond 2**53 a Number no longer distinguishes adjacent integers, so
+          // converting one would report a value the source may never have
+          // written (F67). Refuse rather than guess.
+          if (!Number.isSafeInteger(bn)) {
             return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
           }
           return Value(BigInt(bn));

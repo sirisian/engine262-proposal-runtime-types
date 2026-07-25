@@ -79,6 +79,16 @@ test('numeric types: a plain integer literal takes the bigint type from its cont
   expect(evaluated('function anyv() { return 1.5; } let r = "no"; try { let x: bigint = anyv(); } catch (e) { r = String(e.constructor.name); } r;')).toBe('RangeError');
   // Untyped code is untouched: a bare literal is still a Number.
   expect(evaluated('String(65 + 1) + "/" + String(typeof 65) + "/" + String(65n + 1n);')).toBe('66/number/66');
+  // AND THE BOUNDARY OF THE RULE (F67): only up to 2**53. The specification
+  // converts a literal from "the mathematical value denoted by the literal",
+  // which is exact, and this engine cannot honour that, because the lexer turns
+  // a NumericLiteral into a double at scan time - so by the time a contextual
+  // type is known, the digits beyond 2**53 are gone. Refusing is the honest
+  // boundary: `let x: bigint = 9007199254740993` would otherwise become ...992,
+  // a silent wrong value, which is worse than requiring the suffix.
+  expect(evaluated('let r = "no"; try { eval("function nc() { let x: bigint = 9007199254740993; }"); } catch (e) { r = "refused"; } r;')).toBe('refused');
+  expect(evaluated('let x: bigint = 9007199254740993n; String(x);')).toBe('9007199254740993');
+  expect(evaluated('let x: bigint = 9007199254740991; String(x);')).toBe('9007199254740991');
 });
 
 test('numeric types: a typed value is never strictly equal to a plain number of equal magnitude', () => {

@@ -1257,13 +1257,18 @@ export function fitsNumericType(v: number, name: string, args: readonly (TypeRec
     return name === 'uint' ? v >= 0 && v < 2 ** bits : v >= -(2 ** (bits - 1)) && v < 2 ** (bits - 1);
   }
   if (name === 'bigint') {
-    // A plain integer literal fits `bigint`. It did not, so `let x: bigint = 65`
-    // was a TypeError while `let x: uint64 = 65` worked - the literal rule
-    // covering the sixteen numeric types and excluding the one that predates
-    // them (F66). The `n` suffix exists because BigInt arrived before there was
-    // a type to take the literal's type FROM; where a type is written, the
-    // suffix is redundant and typed code should not need it.
-    return Number.isInteger(v);
+    // A plain integer literal fits `bigint`, so `let x: bigint = 65` works and
+    // the `n` suffix is redundant where a type is written (F66) - but only up
+    // to 2**53. #sec-literalvalueintype converts from "the mathematical value
+    // denoted by the literal", which is EXACT, and this engine cannot honour
+    // that: the lexer turns a NumericLiteral into a double at scan time, so by
+    // the time a contextual type is known the digits beyond 2**53 are already
+    // gone. `let x: bigint = 9007199254740993` would silently become
+    // ...992 (F67). Refusing beyond the safe range is the honest boundary: it
+    // never corrupts, and the suffix stays available for the large values,
+    // which is where it was always earning its keep. Retaining the literal's
+    // source text on the parse node would lift the restriction.
+    return Number.isSafeInteger(v);
   }
   return name === 'float16' || name === 'float32' || name === 'float64';
 }
