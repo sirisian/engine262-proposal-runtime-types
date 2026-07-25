@@ -739,7 +739,7 @@ export function* ApplyValidateHook(typeObject: object, value: Value, metadata: V
  * conversion belongs here, at the one boundary where the record reaches a
  * program, and not in the storage, which the comparison path depends on.
  */
-function MetadataAsObject(metadata: Value): Value {
+export function MetadataAsObject(metadata: Value): Value {
   if (metadata === null || typeof metadata !== 'object') {
     return metadata;
   }

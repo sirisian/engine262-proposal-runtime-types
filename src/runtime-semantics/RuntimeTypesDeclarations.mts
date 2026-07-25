@@ -11,7 +11,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -218,15 +218,20 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         if (!(v instanceof ObjectValue)) {
           return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
         }
-        // The full C5 rule, relocated here from Phase 2 with the spec's
-        // sentence (the plan's edit 5): `default: T` means the default is a
-        // VALUE OF the constraint shape, checked by ordinary membership so
-        // the optional-key form (NumberBounds' `default = {}`) survives, per
-        // P1f's green run.
-        if (!Q(yield* IsOfType(v, shape))) {
+        // The full C5 rule (the plan's relocated edit 5): `default: T` means
+        // the default is a VALUE OF the constraint shape, checked by ordinary
+        // membership so the optional-key form (NumberBounds' `default = {}`)
+        // survives, per P1f. The membership is judged over the SNAPSHOT, not
+        // the live object: the snapshot is what every portion is built from,
+        // so it is the artifact the rule protects, and judging it keeps a
+        // getter on the default to exactly ONE read, at declaration - the
+        // matrix's P1c caught the live-object check reading it a second time,
+        // which the pre-Phase-4 probes structurally could not see (F46).
+        const snapshot = Q(yield* SnapshotMetadataValue(v));
+        if (!Q(yield* IsOfType(MetadataAsObject(snapshot), shape))) {
           return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
         }
-        RegisterMetaDefaultSnapshot(typeObject, Q(yield* SnapshotMetadataValue(v)));
+        RegisterMetaDefaultSnapshot(typeObject, snapshot);
       }
       sawDefault = true;
     } else {
