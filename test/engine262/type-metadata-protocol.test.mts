@@ -35,7 +35,7 @@ const bounds = `
   meta B {
     default = { min: 0, max: 100 };
     subtype(a, b) { return b.min <= a.min && a.max <= b.max; }
-    validate(v, c) { return v >= c.min && v <= c.max; }
+    validate(v, c) { return Number(v) >= c.min && Number(v) <= c.max; }
   }
 `;
 
@@ -67,7 +67,7 @@ const qs = `
     default = { step: 0 };
     subtype(a, b) { return true; }
     validate(v, c) { return true; }
-    quantize(v, c) { const step = (c.step := float64); return c.step > 0 ? (Math.round(v / step) := float64) * step : v; }
+    quantize(v, c) { return c.step > 0 ? (Math.round(Number(v) / c.step) * c.step := float64) : v; }
   }
 `;
 
@@ -124,7 +124,7 @@ test('P1f: the optional-key form survives the full shape rule', () => {
   expect(evaluated(`
     type Nb = { minimum?: number };
     meta Nb { default = {}; subtype(a, b) { return true; }
-      validate(v, c) { return c.minimum === undefined || v >= c.minimum; } }
+      validate(v, c) { return c.minimum === undefined || Number(v) >= c.minimum; } }
     String(((5 := float64.<{ minimum: 1 }>)) is float64.<{ minimum: 1 }>);
   `)).toBe('true');
 });

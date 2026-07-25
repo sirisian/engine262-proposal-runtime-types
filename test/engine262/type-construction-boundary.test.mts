@@ -49,7 +49,7 @@ const bounds = `
   meta B {
     default = { min: -Infinity };
     subtype(a, b) { return b.min <= a.min; }
-    validate(v, c) { return v >= c.min; }
+    validate(v, c) { return Number(v) >= c.min; }
   }
   type NonNeg = float64.<{ min: 0 }>;
 `;

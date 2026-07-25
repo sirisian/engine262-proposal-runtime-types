@@ -139,6 +139,30 @@ test('row 6: a value of the any type reaching a typed operator', () => {
   expect(evaluated('function anyv() { return "s"; } const t = (1 := uint8); String(t + anyv());')).toBe('1s');
 });
 
+test('the relational operators take the same rule as the arithmetic ones', () => {
+  // "an arithmetic, bitwise, shift, or RELATIONAL operator" - the clause names
+  // them together, and comparison does not route through
+  // ApplyStringOrNumericBinaryOperator, so it needed the rule separately and
+  // did not have it: `(1 := uint8) < (2 := uint16)` answered true (F53).
+  expect(thrownKind('(1 := uint8) < (2 := uint16);')).toBe('TypeError');
+  expect(thrownKind('(1 := uint8) >= (2 := uint16);')).toBe('TypeError');
+  expect(thrownKind('function anyv() { return 2; } (1 := uint8) < anyv();')).toBe('TypeError');
+  expect(thrownKind('(1 := uint8) < 300;')).toBe('RangeError');
+  // A typed value does not compare with a BigInt either, which the comparison
+  // path would otherwise do by its own BigInt cases.
+  expect(thrownKind('(1 := uint8) < 2n;')).toBe('TypeError');
+  expect(thrownKind('2n < (1 := uint8);')).toBe('TypeError');
+  // Same type compares; a literal takes the type; untyped and BigInt-only and
+  // string comparisons are untouched.
+  expect(evaluated('String((1 := uint8) < (2 := uint8));')).toBe('true');
+  expect(evaluated('String((1 := uint8) < 2);')).toBe('true');
+  expect(evaluated('String(1 < (2 := uint8));')).toBe('true');
+  expect(evaluated('String(1 < 2) + "/" + String(1n < 2n) + "/" + String(1n < 2) + "/" + String("a" < "b");')).toBe('true/true/true/true');
+  // A String operand is not a numeric type, so the clause does not reach it and
+  // the existing coercion governs - the same reason `+` keeps concatenating.
+  expect(evaluated('String((1 := uint8) < "2");')).toBe('true');
+});
+
 test('two typed operands of different types do not mix, exactly as BigInt does not', () => {
   // "`uint8(1) + uint16(1)` throws for exactly the same reason `1n + 1` does,
   // by the same step, with no rule specific to it." The engine promoted

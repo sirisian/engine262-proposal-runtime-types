@@ -14,7 +14,7 @@ import { GetValue } from '#self';
  * throws. So the operand nodes answer the question and the answer travels with
  * the values (F52). A parenthesized literal and a negated one are literals.
  */
-function isNumericLiteralOperand(node: ParseNode): boolean {
+export function isNumericLiteralOperand(node: ParseNode): boolean {
   let n = node;
   for (;;) {
     if (n.type === 'ParenthesizedExpression') {

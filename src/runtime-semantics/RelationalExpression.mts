@@ -8,6 +8,10 @@ import { Q, X } from '../completion.mts';
 import { Evaluate } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { AbruptCompletion } from '../completion.mts';
+import { JSStringValue, TypedNumberValue } from '../value.mts';
+import { TypedOperandType } from '../type-system/arithmetic.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   IsLessThan,
   Call,
@@ -116,6 +120,30 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   if ((operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
       && RightOperandDeclaresOperator(lval, rval, operator)) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', operator);
+  }
+  // proposal-runtime-types (#sec-arithmetic-never-promotes): the clause names
+  // "an arithmetic, bitwise, shift, or RELATIONAL operator", so two operands of
+  // different numeric types do not compare any more than they add, and a
+  // literal takes the type of the other operand here too. The comparison path
+  // does not route through ApplyStringOrNumericBinaryOperator, so it asked for
+  // the rule separately and, until F53, did not get it: `(1 := uint8) <
+  // (2 := uint16)` answered true. Literalness is syntactic, as it is for
+  // arithmetic, so the operand nodes decide it.
+  if (surroundingAgent.feature('runtime-types')
+      && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
+      && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue)
+      // A String operand is not a numeric type, so the clause does not reach
+      // it and the existing coercion governs, exactly as the string behaviour
+      // of `+` is left alone.
+      && !(lval instanceof JSStringValue)
+      && !(rval instanceof JSStringValue)) {
+    const decided = TypedOperandType(lval, rval, {
+      left: isNumericLiteralOperand(RelationalExpression as ParseNode),
+      right: isNumericLiteralOperand(ShiftExpression as ParseNode),
+    });
+    if (decided instanceof AbruptCompletion) {
+      return decided;
+    }
   }
   switch (operator) {
     case '<': {

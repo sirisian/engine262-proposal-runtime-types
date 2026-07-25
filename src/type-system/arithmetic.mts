@@ -4,7 +4,7 @@ import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
-import { Throw, type ThrowCompletion } from '#self';
+import { AbruptCompletion, Throw, type ThrowCompletion } from '#self';
 
 /**
  * proposal-runtime-types R3 #sec-numeric-types: arithmetic over numeric value
@@ -168,8 +168,34 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * other's type while any other untyped operand is a mix and throws.
  */
 export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean }): TypedNumberValue | ThrowCompletion {
+  const target = TypedOperandType(x, y, literals);
+  if (target instanceof AbruptCompletion) {
+    return target as ThrowCompletion;
+  }
+  const math = mathOp(op, payload(x), payload(y));
+  return new TypedNumberValue(wrapToType(math, target), target);
+}
+
+/**
+ * The operand rule of #sec-arithmetic-never-promotes, shared by every operator
+ * the clause names: "an arithmetic, bitwise, shift, or RELATIONAL operator".
+ * Returns the type the operation is in, or the completion that says why the
+ * operands do not mix. Relational operators reach it through the same door as
+ * arithmetic ones, because it is the same rule and a second copy would drift
+ * (F53).
+ */
+export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean }): TypeRecord | ThrowCompletion {
   const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
   const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  // `bigint` is a numeric type like any other here, so a typed value does not
+  // mix with one. The arithmetic operators reach the same verdict by a
+  // different road - they fall through to the standard path, which raises the
+  // existing "cannot mix BigInt" TypeError - but the comparison path has BigInt
+  // cases of its own that would otherwise compare the payloads and answer
+  // (F53).
+  if ((xt && y instanceof BigIntValue) || (yt && x instanceof BigIntValue)) {
+    return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType((xt ?? yt)!)), Value('bigint'));
+  }
   if (xt && yt && !SameType(xt, yt)) {
     return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType(xt)), Value(displayType(yt)));
   }
@@ -188,8 +214,7 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
       return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(target)));
     }
   }
-  const math = mathOp(op, payload(x), payload(y));
-  return new TypedNumberValue(wrapToType(math, target), target);
+  return target;
 }
 
 /** Unary minus and bitwise NOT over a typed number. */
