@@ -228,6 +228,29 @@ test('numeric library matrix: the bigint column matches the listing', () => {
  * checked and saturating forms, and nothing noticed for as long as no test
  * mentioned them.
  */
+test('a function with no numeric parameter is NOT overloaded, and untyped code is unchanged', () => {
+  // The clause overloads functions that TAKE a value of a numeric type: an
+  // argument's type selects the signature, so a call written without one is
+  // unchanged. A function that merely RETURNS a number has nothing to select
+  // on, and typing its result would change what every existing call returns
+  // (F64). This was carried as work for many cycles - "apply the rules to
+  // charCodeAt, indexOf, the Date getters" - and applying them is not
+  // mechanical but forbidden.
+  expect(evaluated('String("A".charCodeAt(0) === 65);')).toBe('true');
+  expect(evaluated('String("abc".indexOf("b") === 1);')).toBe('true');
+  expect(evaluated('String("abc".lastIndexOf("b") === 1);')).toBe('true');
+  expect(evaluated('String(new Date(0).getFullYear() === 1970);')).toBe('true');
+  // The reason those matter: a typed value and a plain Number are NOT equal,
+  // so a typed result would silently break every one of these comparisons.
+  expect(evaluated('String((65 := uint16) === 65);')).toBe('false');
+  // parseInt and parseFloat are excluded by the same rule, and by name.
+  expect(evaluated('String(parseInt("42px") === 42) + "/" + String(parseFloat("1.5x") === 1.5);')).toBe('true/true');
+  // What IS overloaded dispatches on an argument: Math's rows, and an array's
+  // length, which is typed only for a TYPED array.
+  expect(evaluated('String(Math.abs((5 := int32)) is int32);')).toBe('true');
+  expect(evaluated('let a: [].<uint8> = [1]; const b = [1]; String(a.length is uint32) + "/" + String(b.length is uint32);')).toBe('true/false');
+});
+
 test('inventory: the specified-but-absent operations are the deferrals they should be', () => {
   const DEFERRED: Record<string, string> = {
     // The complex value level is deferred entire: `complex` is not yet a usable
