@@ -669,6 +669,7 @@ export interface Throw {
   (m:
 '"add" property ($1) of object $2 is not a function'
   | '"set" property ($1) of object $2 is not a function'
+  | '$1 and $2 are different numeric types and do not mix; convert one of them'
   | '$1 called on invalid receiver: $2'
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'
@@ -696,6 +697,7 @@ export interface Throw {
   | 'The return value ($1) of the next() on an iterator ($2) must be an object'
   | 'The return value ($1) of the return() on an iterator ($2) must be an object'
   | 'The return value ($1) of the throw() on an iterator ($2) must be an object'
+  | 'a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them'
   | 'getter ($1) in a property descriptor $2 must be a function'
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'

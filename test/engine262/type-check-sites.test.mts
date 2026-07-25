@@ -118,21 +118,39 @@ test('row 5: a store to an element of an array of element type t', () => {
 
 // -- Row 6: an `any` value read into an operator whose operands are typed -----
 
-test('row 6: a value of the any type reaching a typed operator - UNIMPLEMENTED, pinned', () => {
-  // The THIRD unimplemented row, found by writing this file (F51). The table
-  // says an `any` value read into an operator whose operands are typed is
-  // RequireType'd to the operand type, so both of these should throw: the
-  // string has no conversion to uint8, and 300 is not representable in one.
-  // Neither does. The current answers are pinned here so that implementing the
-  // row FAILS this test and its author updates it deliberately.
+test('row 6: a value of the any type reaching a typed operator', () => {
+  // Implemented in F52, and the specification turned out to say something
+  // stronger than this row alone: #sec-arithmetic-never-promotes makes two
+  // operands of different numeric types a type error outright, and defers the
+  // check to run time only where an operand has the `any` type - which is this
+  // row. So an `any` value meeting a typed operand throws when their types
+  // differ, rather than being converted into the typed operand's type.
+  expect(thrownKind('function anyv() { return 300; } const t = (1 := uint8); t + anyv();')).toBe('TypeError');
+  expect(thrownKind('function anyv() { return 2; } const t = (1 := uint8); t + anyv();')).toBe('TypeError');
+  // A literal is not an `any` value: it TAKES the type of the other operand,
+  // so it never forces a conversion and never reaches this row.
+  expect(evaluated('String((1 := uint8) + 1) + "/" + String(((1 := uint8) + 1) is uint8);')).toBe('2/true');
+  // A literal that cannot take that type is out of range, and the run-time
+  // backstop reports it as one.
+  expect(thrownKind('(1 := uint8) + 300;')).toBe('RangeError');
+  // The string behaviour of `+` is explicitly unchanged and applies FIRST:
+  // uint8(1) + "x" is "1x" by #sec-operator-dispatch, which is why this line
+  // is an assertion rather than a gap.
   expect(evaluated('function anyv() { return "s"; } const t = (1 := uint8); String(t + anyv());')).toBe('1s');
-  expect(evaluated('function anyv() { return 300; } const t = (1 := uint8); String(t + anyv());')).toBe('45');
-  // What the row should produce, kept here as the expectation to switch to:
-  //   thrownKind(... "s" ...) === 'TypeError'
-  //   thrownKind(... 300 ...) === 'RangeError'
-  // The second is the interesting one: 45 is 301 wrapped, which is the CAST
-  // rule applied at a boundary the table says is checked. A cast wraps and a
-  // boundary throws, and this site is currently taking the wrong one.
+});
+
+test('two typed operands of different types do not mix, exactly as BigInt does not', () => {
+  // "`uint8(1) + uint16(1)` throws for exactly the same reason `1n + 1` does,
+  // by the same step, with no rule specific to it." The engine promoted
+  // instead, silently, at every arithmetic operator (F52).
+  expect(thrownKind('(1 := uint8) + (1 := uint16);')).toBe('TypeError');
+  expect(thrownKind('(1 := int32) * (2 := float64);')).toBe('TypeError');
+  expect(thrownKind('(5 := uint8) + 5n;')).toBe('TypeError');
+  // The same type is fine, and stays that type.
+  expect(evaluated('String((1 := uint8) + (2 := uint8)) + "/" + String(((1 := uint8) + (2 := uint8)) is uint8);')).toBe('3/true');
+  // Untyped arithmetic is untouched.
+  expect(evaluated('String(1 + 2);')).toBe('3');
+  expect(evaluated('String(1 + "s");')).toBe('1s');
 });
 
 // -- Row 7: a value crossing into a typed position through reflection ---------
@@ -168,8 +186,10 @@ test('deleting a typed field, a typed element, or an interface-required member t
 test('the same operation runs at every row: one value, seven boundaries, one verdict', () => {
   // 300 is not a uint8 anywhere, and the report is a RangeError everywhere,
   // because every row runs RequireType and RequireType has one definition.
-  // Row 6 is absent from this list because it is not implemented; see its own
-  // test above, where the gap is pinned.
+  // Row 6 joins the list as of F52, with its own kind: a value of the `any`
+  // type meeting a typed operand is a MIX rather than an out-of-range value,
+  // so it is a TypeError where the storage rows give a RangeError. The
+  // operation is the same; what differs is what went wrong.
   const cases = [
     'function anyv() { return 300; } let x: uint8 = anyv();',
     'function f(v: uint8) {} function anyv() { return 300; } f(anyv());',
@@ -179,6 +199,8 @@ test('the same operation runs at every row: one value, seven boundaries, one ver
     'let a: [].<uint8> = [1]; a[0] = 300;',
     'class C { x: uint8 = 1; } const c = new C(); Reflect.set(c, "x", 300);',
   ];
+  // Row 6's own form, asserted beside them: same operation, different fault.
+  expect(thrownKind('function anyv() { return 300; } (1 := uint8) + anyv();')).toBe('TypeError');
   for (const source of cases) {
     expect(thrownKind(source)).toBe('RangeError');
   }

@@ -56,13 +56,18 @@ const dims = `
   type Kilometer = float32.<{ m: 1, ratio: 1000 }>;
 `;
 
+// The quantize hook receives a TYPED value and plain metadata numbers, so the
+// arithmetic between them must say which type it is in - the same rule that
+// forbids uint8 + uint16 (F52). Casting the metadata is the shortest honest
+// spelling, and it is worth seeing here: every hook that computes with both a
+// value and its constraint pays this.
 const qs = `
   type Qs = { step: number };
   meta Qs {
     default = { step: 0 };
     subtype(a, b) { return true; }
     validate(v, c) { return true; }
-    quantize(v, c) { return c.step > 0 ? Math.round(v / c.step) * c.step : v; }
+    quantize(v, c) { const step = (c.step := float64); return c.step > 0 ? (Math.round(v / step) := float64) * step : v; }
   }
 `;
 

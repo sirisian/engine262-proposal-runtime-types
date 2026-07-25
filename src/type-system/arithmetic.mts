@@ -1,7 +1,10 @@
-import { NumberValue, TypedNumberValue, type Value, BigIntValue, ObjectValue } from '../value.mts';
+import { NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue } from '../value.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
+import { displayType } from './records.mts';
+import { fitsNumericType } from './runtime.mts';
+import { Throw, type ThrowCompletion } from '#self';
 
 /**
  * proposal-runtime-types R3 #sec-numeric-types: arithmetic over numeric value
@@ -148,14 +151,43 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
 }
 
 /**
- * Computes a binary numeric operation where at least one operand is typed.
- * The result type is the typed operand's type (or the shared type when both are
- * typed); the mathematical result is wrapped into that type.
+ * #sec-arithmetic-never-promotes: "Two operands of the same value type produce a
+ * result of that type. Two operands of different value types are a type error,
+ * since neither is assignable to the other. WHERE ONE OPERAND IS A LITERAL IT
+ * TAKES THE TYPE OF THE OTHER, so a literal never forces a conversion." And
+ * #sec-operator-dispatch: the TypeError for operands of different numeric types
+ * "applies to every numeric type", so `uint8(1) + uint16(1)` throws for exactly
+ * the reason `1n + 1` does.
+ *
+ * The engine promoted instead: it wrapped the other operand into the typed
+ * operand's type, so `uint8(1) + uint16(1)` was 2 and `uint8(1) + any(300)` was
+ * 45 - a silent conversion across value types at every arithmetic operator,
+ * which is the one thing this proposal's arithmetic is most emphatic about
+ * (F52). LITERALNESS IS SYNTACTIC, so the operand nodes decide it: the caller
+ * passes which side was written as a numeric literal, and a literal adopts the
+ * other's type while any other untyped operand is a mix and throws.
  */
-export function typedBinary(op: BinOp, x: Value, y: Value): TypedNumberValue {
+export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean }): TypedNumberValue | ThrowCompletion {
   const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
   const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
-  const target = xt && yt ? resultType(xt, yt) : (xt ?? yt)!;
+  if (xt && yt && !SameType(xt, yt)) {
+    return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType(xt)), Value(displayType(yt)));
+  }
+  const target = (xt ?? yt)!;
+  // The untyped side, if there is one, must be a literal to take the type.
+  if (!xt || !yt) {
+    const untypedIsLiteral = xt ? literals?.right : literals?.left;
+    if (!untypedIsLiteral) {
+      return Throw.TypeError('a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them', Value('number'), Value(displayType(target)));
+    }
+    const literalValue = payload(xt ? y : x);
+    if (!fitsNumericType(literalValue, (target as TypeRecord & { Kind: 'primitive' }).Name, (target as TypeRecord & { Kind: 'primitive' }).Arguments)) {
+      // "A literal that does not fit its type" is an Early Error where the
+      // checker sees it; this is the run-time backstop, the same RangeError a
+      // parameter boundary raises.
+      return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(target)));
+    }
+  }
   const math = mathOp(op, payload(x), payload(y));
   return new TypedNumberValue(wrapToType(math, target), target);
 }

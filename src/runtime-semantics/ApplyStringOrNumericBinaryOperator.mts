@@ -14,7 +14,7 @@ import {
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
-export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value) {
+export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean }) {
   // proposal-runtime-types: class operator dispatch. Consulted only when the
   // left operand is an Object, so the untyped fast path is unaffected.
   if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
@@ -40,7 +40,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       && isTypedArithmetic(lval, rval)
       && !(lval instanceof JSStringValue)
       && !(rval instanceof JSStringValue)) {
-    return typedBinary(opText as never, lval, rval);
+    return typedBinary(opText as never, lval, rval, literals);
   }
   // proposal-runtime-types (rational.md): exact rational arithmetic. When both
   // operands are rationals, +, -, *, /, and ** are exact and canonical; a zero

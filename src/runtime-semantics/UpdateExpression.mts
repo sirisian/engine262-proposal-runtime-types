@@ -2,7 +2,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
 import { BigIntValue, NumberValue, ObjectValue, TypedNumberValue, Value, isTypedNumber } from '../value.mts';
 import { typedBinary } from '../type-system/arithmetic.mts';
-import { Q } from '../completion.mts';
+import { Q, X } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent,
   Assert,
@@ -58,7 +58,9 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       let oldValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
         oldValue = rawOld;
-        newValue = typedBinary('+', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));
+        // Both operands are of the same type here, so the mixed-type check of
+        // typedBinary cannot fire; X records that.
+        newValue = X(typedBinary('+', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never)));
       } else {
         // 2. Let oldValue be ? ToNumeric(? GetValue(lhs)).
         oldValue = Q(yield* ToNumeric(rawOld));
@@ -95,7 +97,9 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       let oldValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
         oldValue = rawOld;
-        newValue = typedBinary('-', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));
+        // Both operands are of the same type here, so the mixed-type check of
+        // typedBinary cannot fire; X records that.
+        newValue = X(typedBinary('-', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never)));
       } else {
         // 2. Let oldValue be ? ToNumeric(? GetValue(lhs)).
         oldValue = Q(yield* ToNumeric(rawOld));
@@ -130,7 +134,9 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
-        newValue = typedBinary('+', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));
+        // Both operands are of the same type here, so the mixed-type check of
+        // typedBinary cannot fire; X records that.
+        newValue = X(typedBinary('+', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never)));
       } else {
         // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
         const oldValue = Q(yield* ToNumeric(rawOld));
@@ -165,7 +171,9 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
-        newValue = typedBinary('-', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never));
+        // Both operands are of the same type here, so the mixed-type check of
+        // typedBinary cannot fire; X records that.
+        newValue = X(typedBinary('-', rawOld, new TypedNumberValue(1, rawOld.TypeRecord as never)));
       } else {
         // 2. Let oldValue be ? ToNumeric(? GetValue(expr)).
         const oldValue = Q(yield* ToNumeric(rawOld));

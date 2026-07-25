@@ -31,7 +31,7 @@ test('Generators: the full Generator.<Y, R, N> form parses', () => {
 });
 
 test('Generators: a typed generator iterates with for-of', () => {
-  expect(evaluated('function* f(): int32 { yield (1 := int32); yield (2 := int32); yield (3 := int32); } let sum = 0; for (const x of f()) { sum += x; } String(sum);')).toBe('6');
+  expect(evaluated('function* f(): int32 { yield (1 := int32); yield (2 := int32); yield (3 := int32); } let sum = (0 := int32); for (const x of f()) { sum += x; } String(sum);')).toBe('6');
   // spread of a typed generator
   expect(ok('function* f(): int32 { yield (1 := int32); yield (2 := int32); } let a = [...f()]; a.length === 2;')).toBe(true);
 });

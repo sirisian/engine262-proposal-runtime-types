@@ -17,12 +17,12 @@ import { evaluated, expectThrown } from '../readme/harness.mts';
 
 // -- Binary arithmetic with typed parameters ----------------------------------
 test('operators: a binary operator with a typed parameter dispatches', () => {
-  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); String((v * (2 := uint32)).x);')).toBe('6');
+  expect(evaluated('class V { constructor(x) { this.x = (x := uint32); } operator*(rhs: uint32) { return new V(this.x * rhs); } } let v = new V(3); String((v * (2 := uint32)).x);')).toBe('6');
 });
 
 test('operators: overload resolution selects among operators of one symbol', () => {
   // two operator* declarations, V*uint32 and V*V; V*V is selected here
-  expect(evaluated('class V { constructor(x) { this.x = x; } operator*(rhs: uint32) { return new V(this.x * rhs); } operator*(rhs: V) { return new V(this.x * rhs.x); } } let a = new V(3); let b = new V(4); String((a * b).x);')).toBe('12');
+  expect(evaluated('class V { constructor(x) { this.x = (x := uint32); } operator*(rhs: uint32) { return new V(this.x * rhs); } operator*(rhs: V) { return new V(this.x * rhs.x); } } let a = new V(3); let b = new V(4); String((a * b).x);')).toBe('12');
 });
 
 // -- Bitwise and shift --------------------------------------------------------
