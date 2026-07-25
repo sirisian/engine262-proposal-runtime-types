@@ -495,6 +495,27 @@ test('a typed Set takes its element positions at the element type', () => {
   expect(evaluated('const u = new Set(); u.add(300); u.add("x"); String(u.size);')).toBe('2');
 });
 
+test('a test narrows the binding it guards', () => {
+  // Phase 4 of the checker plan: the checker rejected the very idiom the `is`
+  // operator exists for, because a binding kept its union type inside the
+  // branch the test guarded (F75). The narrowing operations already existed;
+  // nothing consulted them for a binding.
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string | boolean) { if (x is uint8) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  // The ELSE branch takes the complement, and a negated test swaps the two.
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8) { } else { let y: string = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { if (!(x is uint8)) { let y: string = x; } } "ok";')).toBe('ok');
+  // The narrowing is still a TYPE: the other arm is rejected in each branch.
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8) { let y: string = x; } }');
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8) { } else { let y: uint8 = x; } }');
+  // And it does not leak past the statement it guards.
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8) { } let y: uint8 = x; }');
+  // Nesting works, which is what makes a chain of tests usable.
+  expect(evaluated('function nc(x: uint8 | string | boolean) { if (x is uint8) { let y: uint8 = x; } else { if (x is string) { let z: string = x; } } } "ok";')).toBe('ok');
+  // The run time is untouched: `is` decides the same branch it always did.
+  expect(evaluated('function f(x: uint8 | string) { if (x is uint8) { return "u8"; } return "s"; } String(f((5 := uint8))) + "/" + String(f("a"));')).toBe('u8/s');
+});
+
 test('the literal rule reaches equality and case labels', () => {
   // DECISION TAKEN by the proposal's author (F74): the literal rule covers
   // equality as it covers arithmetic, bitwise, shift, and relational

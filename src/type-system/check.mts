@@ -945,6 +945,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * check only their first argument, which is worse than leaving them to the
    * run time that already enforces them correctly (F70).
    */
+  /**
+   * The narrowing forms of sec-narrowing that speak about a BINDING, read off a
+   * test expression. Returns the binding's name, the type the test establishes,
+   * and whether the sense is inverted, or undefined where the test says nothing
+   * the checker can use (F75).
+   */
+  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean } | undefined => {
+    let e = expr;
+    let negated = false;
+    // `!(...)` inverts the sense; a parenthesized test is the test.
+    for (;;) {
+      if (e.type === 'ParenthesizedExpression') {
+        e = (e as unknown as { Expression: ParseNode }).Expression;
+        continue;
+      }
+      if (e.type === 'UnaryExpression' && (e as unknown as { operator?: string }).operator === '!') {
+        negated = !negated;
+        e = (e as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+        continue;
+      }
+      break;
+    }
+    if (e.type === 'IsExpression') {
+      const ie = e as unknown as { Expression: ParseNode, Type: ParseNode };
+      if (ie.Expression.type !== 'IdentifierReference') {
+        return undefined;
+      }
+      const t = resolveType(ie.Type as ParseNode.Type);
+      return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated } : undefined;
+    }
+    return undefined;
+  };
+
   const arrayMethodSignature = (name: string, element: TypeRecord): Known => {
     const anyType = { Kind: 'any' as const };
     const numberType = makePrimitive('number');
@@ -1524,6 +1557,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(ne.MemberExpression);
         walk(ne.Arguments);
+        return;
+      }
+      case 'IfStatement': {
+        // PHASE 4 of the checker plan: a test refines a binding's type in the
+        // branch it guards. Without this the checker rejected the very idiom
+        // the `is` operator exists for - `if (x is uint8) { let y: uint8 = x; }`
+        // was a type error, because `x` kept its union type inside the branch
+        // (F75). The narrowing operations themselves already existed; nothing
+        // consulted them for a BINDING.
+        const s = n as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
+        const fact = narrowingFactOf(s.Expression);
+        walk(s.Expression);
+        if (fact) {
+          const current = lookup(fact.name);
+          const source = current ?? ({ Kind: 'any' } as TypeRecord);
+          const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+          const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+          pushBlock(() => {
+            if (whenTrue !== empty) {
+              declare(fact.name, whenTrue as Known);
+            }
+            walk(s.Statement_a);
+          });
+          if (s.Statement_b) {
+            pushBlock(() => {
+              if (whenFalse !== empty) {
+                declare(fact.name, whenFalse as Known);
+              }
+              walk(s.Statement_b as ParseNode);
+            });
+          }
+          return;
+        }
+        walk(s.Statement_a);
+        walk(s.Statement_b);
         return;
       }
       case 'AssignmentExpression': {
