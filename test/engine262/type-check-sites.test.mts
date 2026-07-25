@@ -532,6 +532,33 @@ test('every narrowing form the checker reads, and where it applies', () => {
   expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 ? ((y: uint8) => y)(x) : 0; } "ok";')).toBe('ok');
 });
 
+test('the short-circuit operators narrow, in the branch each one implies', () => {
+  // `a && b` implies its left only where the whole is TRUE, and `a || b`
+  // implies the left is false only where the whole is FALSE. Each narrows the
+  // branch it implies and says nothing about the other (F77).
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8 && true) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8 || false) { } else { let y: string = x; } } "ok";')).toBe('ok');
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8 && true) { } else { let y: uint8 = x; } }');
+  // The RIGHT operand runs only where the left decided, so it sees the binding
+  // narrowed - `x !== null && x.f` is the idiom this exists for.
+  expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 && ((y: uint8) => y)(x); } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 || ((y: string) => y)(x); } "ok";')).toBe('ok');
+});
+
+test('a discriminant narrows the object, which is what makes a tagged union usable', () => {
+  // `x.kind === "a"` over a union of records keeps the members whose `kind`
+  // admits that literal. What narrows is the OBJECT, not the property (F77).
+  const u = 'type A = { kind: "a", v: uint8 }; type B = { kind: "b", v: string }; ';
+  expect(evaluated(`${u} function nc(x: A | B) { if (x.kind === "a") { let n: uint8 = x.v; } } "ok";`)).toBe('ok');
+  expect(evaluated(`${u} function nc(x: A | B) { if (x.kind === "a") { } else { let s: string = x.v; } } "ok";`)).toBe('ok');
+  // Each branch has the OTHER member's field type rejected, which is the
+  // evidence that the union was actually filtered rather than widened away.
+  expectStatic(`${u} function nc(x: A | B) { if (x.kind === "a") { let s: string = x.v; } }`);
+  expectStatic(`${u} function nc(x: A | B) { if (x.kind === "a") { } else { let n: uint8 = x.v; } }`);
+  // The run time is untouched.
+  expect(evaluated(`${u} function f(x) { return x.kind === "a" ? "A" : "B"; } String(f({ kind: "a", v: 1 }));`)).toBe('A');
+});
+
 test('a test that can never succeed or never fail is dead code, where that is decidable', () => {
   // sec-narrowing: the branch such a test guards "is then dead code the program
   // did not intend". The checker had the rule and never reached it for a

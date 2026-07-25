@@ -952,7 +952,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * and whether the sense is inverted, or undefined where the test says nothing
    * the checker can use (F75).
    */
-  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean } | undefined => {
+  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false' } | undefined => {
     let e = expr;
     let negated = false;
     // `!(...)` inverts the sense; a parenthesized test is the test.
@@ -975,6 +975,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = resolveType(ie.Type as ParseNode.Type);
       return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated } : undefined;
+    }
+    // `a && b` implies its LEFT operand only where the whole is true, and
+    // `a || b` implies the left is false only where the whole is false. So a
+    // conjunction narrows the branch it guards and a disjunction narrows the
+    // other one, and neither says anything about the branch it does not imply
+    // (F77).
+    if (e.type === 'LogicalANDExpression') {
+      const l = narrowingFactOf((e as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression);
+      return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'false' : 'true' } : undefined;
+    }
+    if (e.type === 'LogicalORExpression') {
+      const l = narrowingFactOf((e as unknown as { LogicalORExpression: ParseNode }).LogicalORExpression);
+      return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'true' : 'false' } : undefined;
     }
     if (e.type === 'EqualityExpression') {
       const eq = e as unknown as { operator: string, EqualityExpression: ParseNode, RelationalExpression: ParseNode };
@@ -1022,6 +1035,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+      // A DISCRIMINANT: `x.kind === 'a'` over a union of object types keeps the
+      // members whose `kind` admits that literal. The subject is a property
+      // access rather than a binding, and what narrows is the OBJECT, which is
+      // what makes a tagged union usable (F77).
+      for (const [subject, against] of sides) {
+        if (subject.type !== 'MemberExpression') {
+          continue;
+        }
+        const me = subject as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+        if (!me.MemberExpression || me.MemberExpression.type !== 'IdentifierReference' || !me.IdentifierName) {
+          continue;
+        }
+        const objName = (me.MemberExpression as unknown as { name: string }).name;
+        const key = me.IdentifierName.name;
+        const objType = lookup(objName);
+        if (!objType || objType.Kind !== 'union') {
+          continue;
+        }
+        const discriminant = staticType(against);
+        if (!discriminant) {
+          continue;
+        }
+        const kept = objType.Members.filter((m) => {
+          const shape = structureOf(m as Known);
+          if (!shape || shape.Kind !== 'object') {
+            return false;
+          }
+          const prop = shape.Properties.find((pp) => pp.key === key);
+          return prop ? IsAssignable(discriminant as TypeRecord, prop.type) : false;
+        });
+        if (kept.length === 0 || kept.length === objType.Members.length) {
+          continue;
+        }
+        return {
+          name: objName,
+          type: CanonicalizeType({ Kind: 'union', Members: kept }),
+          negated: inverted !== false ? inverted : false,
+        };
+      }
     }
     return undefined;
   };
@@ -1059,7 +1111,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // fires for the kinds whose membership a value cannot lose.
     const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
       || (t.Kind === 'union' && t.Members.every(decidable));
-    if (source.Kind !== 'any' && decidable(source) && decidable(fact.type)) {
+    if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
       if (whenTrue === empty) {
         const completion = Throw.TypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
@@ -1070,7 +1122,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (whenTrueNode) {
       pushBlock(() => {
-        if (whenTrue !== empty) {
+        if (whenTrue !== empty && fact.sense !== 'false') {
           declare(fact.name, whenTrue as Known);
         }
         walk(whenTrueNode);
@@ -1078,7 +1130,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (whenFalseNode) {
       pushBlock(() => {
-        if (whenFalse !== empty) {
+        if (whenFalse !== empty && fact.sense !== 'true') {
           declare(fact.name, whenFalse as Known);
         }
         walk(whenFalseNode);
@@ -1688,6 +1740,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(ne.MemberExpression);
         walk(ne.Arguments);
+        return;
+      }
+      case 'LogicalANDExpression':
+      case 'LogicalORExpression': {
+        // The RIGHT operand is evaluated only where the left decided a way, so
+        // it sees the binding narrowed - `x !== null && x.f` is the idiom this
+        // exists for (F77). A disjunction narrows by the complement, since its
+        // right operand runs where the left was false.
+        const lg = n as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode, LogicalANDExpression_b?: ParseNode };
+        const isAnd = n.type === 'LogicalANDExpression';
+        const left = (isAnd ? lg.LogicalANDExpression : lg.LogicalORExpression) as ParseNode;
+        const right = (isAnd
+          ? lg.BitwiseORExpression
+          : (n as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression) as ParseNode;
+        walkGuarded(left, isAnd ? right : null, isAnd ? null : right);
         return;
       }
       case 'ConditionalExpression': {
