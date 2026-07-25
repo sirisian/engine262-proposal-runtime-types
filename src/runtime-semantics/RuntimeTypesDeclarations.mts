@@ -1,4 +1,4 @@
-import { NumberValue, Value } from '../value.mts';
+import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -11,7 +11,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -204,6 +204,22 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       const ref = Q(yield* Evaluate(hook.AssignmentExpression));
       const v = Q(yield* GetValue(ref));
       RegisterTypeDefault(typeObject, v);
+      // sec-metadataportion copies the default, so where the constraint shape
+      // is an OBJECT type the default must be an object, and it is snapshotted
+      // here, once, into the host metadata-record shape: a getter on it runs
+      // at declaration and never again, and MetadataPortion starts from the
+      // snapshot (the plan's Phase 1). A declaration over a non-object shape,
+      // the suite's `meta uint8 { default = 0 }`, keeps its scalar default for
+      // the annotated-binding path and registers no snapshot: it claims no
+      // keys, so no portion of it exists to complete. The full C5 rule, that
+      // the default is a VALUE OF the constraint shape, waits on the plan's
+      // P1f verdict about optional-key membership.
+      if (shape && shape.Kind === 'object') {
+        if (!(v instanceof ObjectValue)) {
+          return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
+        }
+        RegisterMetaDefaultSnapshot(typeObject, Q(yield* SnapshotMetadataValue(v)));
+      }
       sawDefault = true;
     } else {
       const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;

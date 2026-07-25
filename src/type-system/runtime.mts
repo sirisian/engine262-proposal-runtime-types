@@ -7,7 +7,7 @@ import {
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, GoverningMetaTypes, LookupClassType } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType,
@@ -507,7 +507,13 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // boundary, and admitting bare values would make it a comment.
       const { types: governing } = GoverningMetaTypes(t.Metadata);
       for (const metaType of governing) {
-        const verdict = Q(yield* ApplyValidateHook(metaType, value, t.Metadata));
+        // "it holds of v and THAT PORTION": each meta type judges its own
+        // portion, completed from its default, never the whole metadata. This
+        // call site bypassed MetadataPortion entirely until the plan's Phase 1
+        // (the audit's C2 named three call sites; this was the unlisted
+        // fourth, and the reason a two-key `validate` saw undefined where the
+        // defaulted key should be).
+        const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType)));
         if (verdict === undefined) {
           // The meta type claims a key here and offers no judgment, so it
           // constrains without admitting. This is the brand case.

@@ -419,6 +419,54 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
   return typeDefaults.get(typeObject);
 }
 
+/**
+ * sec-metadataportion, step 1's prerequisite: the snapshot of a meta type's
+ * `default`, taken ONCE at declaration, in the host metadata-record shape
+ * MetadataObjectFromType produces (frozen, null-prototype, engine Values at
+ * the leaves, nested records and lists recursed), so a later structural
+ * comparison of a portion against it cannot be defeated by a shape mismatch.
+ * A getter on the default object therefore runs at declaration and never
+ * again, and MetadataPortion stays synchronous, which its callers require.
+ * Symbol-keyed properties are skipped (the plan's C8 pin), and a RegExp
+ * default would snapshot by its own enumerable keys rather than as the
+ * pattern form, pinned beside StringPattern (F27).
+ */
+export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
+  if (!(value instanceof ObjectValue)) {
+    return value;
+  }
+  const isList = Q(IsArray(value)) === Value.true;
+  const out: unknown[] | Record<string, unknown> = isList ? [] : Object.create(null);
+  const keys = Q(yield* value.OwnPropertyKeys());
+  for (const key of keys) {
+    if (!(key instanceof JSStringValue)) {
+      continue;
+    }
+    const desc = Q(yield* value.GetOwnProperty(key)) as { Enumerable?: unknown };
+    if (!desc || desc.Enumerable !== Value.true) {
+      continue;
+    }
+    const snapped = Q(yield* SnapshotMetadataValue(Q(yield* Get(value, key))));
+    if (isList) {
+      (out as unknown[]).push(snapped);
+    } else {
+      (out as Record<string, unknown>)[key.stringValue()] = snapped;
+    }
+  }
+  return Object.freeze(out) as unknown as Value;
+}
+
+const metaDefaultSnapshots = new WeakMap<object, Value>();
+
+/** The declaration-time snapshot of a meta type's `default` (the plan's Phase 1). */
+export function RegisterMetaDefaultSnapshot(typeObject: object, snapshot: Value): void {
+  metaDefaultSnapshots.set(typeObject, snapshot);
+}
+
+export function LookupMetaDefaultSnapshot(typeObject: object): Value | undefined {
+  return metaDefaultSnapshots.get(typeObject);
+}
+
 // proposal-runtime-types M20 #sec-meta-hooks: the meta-type method hooks are
 // user closures registered per Type Object. `validate` is the meta type's half
 // of the validation judgment, consulted from the ~parameterized~ arm of
@@ -518,7 +566,22 @@ export function GoverningMetaTypes(metadata: Value): { types: object[], unclaime
  * once and each must see only what it claims.
  */
 export function MetadataPortion(metadata: Value, metaType: object): Value {
+  // sec-metadataportion, as written: start from a copy of the meta type's
+  // `default` and overwrite with the metadata's own claimed keys, so every
+  // judgment of the protocol sees a COMPLETE portion. The missing completion
+  // was the plan's C2, a live defect: a { min, max } meta type parameterized
+  // as `<{ min: 0 }>` handed `validate` a portion whose `max` was undefined,
+  // and the units suite noticed nothing because undefined === undefined is
+  // the right verdict for the wrong reason. A meta type with no snapshot
+  // (declared over a non-object shape, or never declared) starts empty, the
+  // old behaviour, right for a type that claims no keys.
   const portion: Record<string, unknown> = Object.create(null);
+  const snapshot = metaDefaultSnapshots.get(metaType);
+  if (snapshot && typeof snapshot === 'object') {
+    for (const [key, v] of Object.entries(snapshot as unknown as Record<string, unknown>)) {
+      portion[key] = v;
+    }
+  }
   if (metadata && typeof metadata === 'object') {
     for (const [key, v] of Object.entries(metadata as unknown as Record<string, unknown>)) {
       if (MetaTypeClaiming(key) === metaType) {
