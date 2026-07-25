@@ -21,7 +21,11 @@ test('annotated parameters convert at the call boundary', () => {
   // A string argument to a uint8 parameter has no conversion: TypeError.
   expectThrown('function f(a: uint8) { return a; } f("s");');
   // An in-range Number is converted to the numeric value type inside.
-  expect(evaluated('function f(a: uint8) { return a is uint8 ? "typed" : "plain"; } f(5);')).toBe('typed');
+  // Asserted as a BOOLEAN rather than through a ternary: `a is uint8` where
+  // `a` is declared `uint8` can never fail, so guarding a branch on it is the
+  // dead code sec-narrowing forbids (F76). Reading the boolean guards nothing
+  // and says exactly what this test means - the value arrived typed.
+  expect(evaluated('function f(a: uint8) { return String(a is uint8); } f(5);')).toBe('true');
   // SUPERSEDED: a "convertible" string used to become the typed value, the
   // boundary reaching for ToNumber before checking anything. The Parsing clause
   // says a string is deliberately not a conversion source for a numeric type, so
@@ -32,9 +36,9 @@ test('annotated parameters convert at the call boundary', () => {
 
 test('return annotations enforce on the way out', () => {
   expectThrown('function f(): uint8 { return "s"; } f();');
-  expect(evaluated('function f(): uint8 { return 5; } f() is uint8 ? "typed" : "plain";')).toBe('typed');
+  expect(evaluated('function f(): uint8 { return 5; } String(f() is uint8);')).toBe('true');
   // Arrow concise bodies too.
-  expect(evaluated('const f = (): uint8 => 9; f() is uint8 ? "typed" : "plain";')).toBe('typed');
+  expect(evaluated('const f = (): uint8 => 9; String(f() is uint8);')).toBe('true');
   expectThrown('const f = (): uint8 => "s"; f();');
 });
 

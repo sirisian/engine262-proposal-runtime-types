@@ -516,6 +516,44 @@ test('a test narrows the binding it guards', () => {
   expect(evaluated('function f(x: uint8 | string) { if (x is uint8) { return "u8"; } return "s"; } String(f((5 := uint8))) + "/" + String(f("a"));')).toBe('u8/s');
 });
 
+test('every narrowing form the checker reads, and where it applies', () => {
+  // The forms of sec-narrowing that speak about a binding (F76), each in both
+  // branches. `typeof`, a null or undefined test, and an equality against a
+  // literal join the `is` form of F75.
+  expect(evaluated('function nc(x: uint8 | string) { if (typeof x === "string") { let y: string = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { if (typeof x === "string") { } else { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { if (typeof x !== "string") { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | null) { if (x !== null) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | null) { if (x != null) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: 1 | 2) { if (x === 1) { let y: 1 = x; } } "ok";')).toBe('ok');
+  // And the forms that guard something other than an `if`: a `while` body and
+  // the arms of a conditional.
+  expect(evaluated('function nc(x: uint8 | string) { while (x is uint8) { let y: uint8 = x; } } "ok";')).toBe('ok');
+  expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 ? ((y: uint8) => y)(x) : 0; } "ok";')).toBe('ok');
+});
+
+test('a test that can never succeed or never fail is dead code, where that is decidable', () => {
+  // sec-narrowing: the branch such a test guards "is then dead code the program
+  // did not intend". The checker had the rule and never reached it for a
+  // BINDING (F76).
+  expectStatic('function nc(x: uint8) { if (x is string) { } }');
+  expectStatic('function nc(x: uint8) { if (x is uint8) { } }');
+  // A genuine union test is not dead in either direction.
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8) { } } "ok";')).toBe('ok');
+  // WHERE IT DOES NOT APPLY, and this is the part worth keeping: the rule
+  // reasons from the static type, so it fires only where membership is a fact a
+  // value cannot lose. An OBJECT type is checked at the boundary and not
+  // afterwards, and a `where` predicate is re-evaluated on every test, so a
+  // binding of either can stop satisfying its own declared type - the suite's
+  // own dependent-record case proves it. Reporting those as dead branches would
+  // contradict a documented behaviour.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (5 := uint8) }; p.a = (0 := uint8); (p is Pos) ? "y" : "n";')).toBe('n');
+  expect(evaluated('function nc(o: { a: uint8 }) { if (o is { a: uint8 }) { } } "ok";')).toBe('ok');
+  // An OPTIONAL parameter includes `undefined`, so testing for it is a live
+  // branch - the checker had the bare annotation, which this rule exposed.
+  expect(evaluated('function g(a: uint8, b?: string) { return b === undefined ? "short" : "long"; } String(g((1 := uint8)));')).toBe('short');
+});
+
 test('the literal rule reaches equality and case labels', () => {
   // DECISION TAKEN by the proposal's author (F74): the literal rule covers
   // equality as it covers arithmetic, bitwise, shift, and relational

@@ -3,6 +3,7 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord } from './records.mts';
+import { CanonicalizeType } from './intern.mts';
 import { IsAssignable } from './relations.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -975,7 +976,128 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = resolveType(ie.Type as ParseNode.Type);
       return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated } : undefined;
     }
+    if (e.type === 'EqualityExpression') {
+      const eq = e as unknown as { operator: string, EqualityExpression: ParseNode, RelationalExpression: ParseNode };
+      // `!==` and `!=` are the same fact with the sense inverted, which is why
+      // the forms below need writing only once.
+      const inverted = eq.operator === '!==' || eq.operator === '!=';
+      const loose = eq.operator === '==' || eq.operator === '!=';
+      const sides: [ParseNode, ParseNode][] = [
+        [eq.EqualityExpression, eq.RelationalExpression],
+        [eq.RelationalExpression, eq.EqualityExpression],
+      ];
+      for (const [subject, against] of sides) {
+        // `typeof x === "string"`: the string names the type.
+        if (subject.type === 'UnaryExpression' && (subject as unknown as { operator?: string }).operator === 'typeof') {
+          const operand = (subject as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+          if (operand.type !== 'IdentifierReference' || against.type !== 'StringLiteral') {
+            continue;
+          }
+          const t = typeofStringToType((against as unknown as { value: string }).value);
+          if (t) {
+            return { name: (operand as unknown as { name: string }).name, type: t, negated: negated !== inverted };
+          }
+          continue;
+        }
+        if (subject.type !== 'IdentifierReference') {
+          continue;
+        }
+        const name = (subject as unknown as { name: string }).name;
+        // `x === null` and `x === undefined`, and the LOOSE forms, which test
+        // for either: `x == null` is the idiom for "nullish" and narrows to
+        // both, which is what nullishType is for.
+        if (against.type === 'NullLiteral' || (against.type === 'IdentifierReference' && (against as unknown as { name: string }).name === 'undefined')) {
+          const t = loose
+            ? nullishType()
+            : (against.type === 'NullLiteral'
+              ? { Kind: 'literal' as const, Value: Value.null, Base: makePrimitive('object') }
+              : makePrimitive('undefined'));
+          return { name, type: t as TypeRecord, negated: negated !== inverted };
+        }
+        // `x === 5` and `x === 'a'`: the literal names a literal type.
+        if (against.type === 'NumericLiteral' || against.type === 'StringLiteral' || against.type === 'BooleanLiteral') {
+          const lit = staticType(against);
+          if (lit) {
+            return { name, type: lit as TypeRecord, negated: negated !== inverted };
+          }
+        }
+      }
+    }
     return undefined;
+  };
+
+  /**
+   * Walk a test and the two branches it guards, with the binding the test
+   * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
+   * operator, which differ only in what they guard (F76).
+   */
+  const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
+    const fact = narrowingFactOf(test);
+    walk(test);
+    if (!fact) {
+      walk(whenTrueNode);
+      walk(whenFalseNode);
+      return;
+    }
+    const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
+    const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+    const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+    // sec-narrowing: "It is a type error to apply a narrowing form where the
+    // test can never succeed or can never fail, since the branch it guards is
+    // then dead code the program did not intend." The checker had this rule and
+    // reached it only for a test over a TYPE, never for one over a binding,
+    // which is the shape a program writes (F76).
+    // The dead-branch rule reasons from the STATIC type, so it applies only
+    // where membership is a stable fact about the value. It is not, for an
+    // object type or a refinement: sec-isoftype says in as many words that the
+    // object case "is checked at the boundary but not afterwards", so a binding
+    // of an object type can stop satisfying it through mutation, and a `where`
+    // predicate is re-evaluated on every test. The suite has the case that
+    // proves it - `let p: Pos = ...; p.a = 0; p is Pos` is *false* at run time
+    // while the static type still says `Pos` - and reporting that branch as
+    // dead would have contradicted a documented behaviour (F76). So the rule
+    // fires for the kinds whose membership a value cannot lose.
+    const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
+      || (t.Kind === 'union' && t.Members.every(decidable));
+    if (source.Kind !== 'any' && decidable(source) && decidable(fact.type)) {
+      if (whenTrue === empty) {
+        const completion = Throw.TypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      } else if (whenFalse === empty) {
+        const completion = Throw.TypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
+    }
+    if (whenTrueNode) {
+      pushBlock(() => {
+        if (whenTrue !== empty) {
+          declare(fact.name, whenTrue as Known);
+        }
+        walk(whenTrueNode);
+      });
+    }
+    if (whenFalseNode) {
+      pushBlock(() => {
+        if (whenFalse !== empty) {
+          declare(fact.name, whenFalse as Known);
+        }
+        walk(whenFalseNode);
+      });
+    }
+  };
+
+  /** The type a `typeof` string names, for the narrowing form that tests one. */
+  const typeofStringToType = (s: string): TypeRecord | null => {
+    switch (s) {
+      case 'string': return makePrimitive('string');
+      case 'number': return makePrimitive('number');
+      case 'boolean': return makePrimitive('boolean');
+      case 'bigint': return makePrimitive('bigint');
+      case 'symbol': return makePrimitive('symbol');
+      case 'undefined': return makePrimitive('undefined');
+      case 'object': return makePrimitive('object');
+      default: return null;
+    }
   };
 
   const arrayMethodSignature = (name: string, element: TypeRecord): Known => {
@@ -1140,7 +1262,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         requireAssignable(staticTypeIn(b.Initializer, declared), declared);
         walk(b.Initializer);
       }
-      declare(b.BindingIdentifier.name, declared);
+      // An OPTIONAL parameter may not be supplied, so its type includes
+      // `undefined`. The checker had it as the bare annotation, which made
+      // `b === undefined` a test that can never succeed - invisible until the
+      // dead-branch diagnostic started reporting such tests, and then reported
+      // against a program that was right (F76). A parameter with a DEFAULT is
+      // not optional in this sense: it is always bound to something.
+      const optional = (b as unknown as { Optional?: boolean }).Optional === true && !b.Initializer;
+      declare(b.BindingIdentifier.name, optional && declared
+        ? (CanonicalizeType({ Kind: 'union', Members: [declared, makePrimitive('undefined')] }) as Known)
+        : declared);
     } else if (b.Initializer) {
       walk(b.Initializer);
     }
@@ -1559,6 +1690,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(ne.Arguments);
         return;
       }
+      case 'ConditionalExpression': {
+        // `t ? a : b` guards its two arms exactly as an `if` guards two
+        // statements, so the same fact applies (F76).
+        const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
+        walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
+        return;
+      }
+      case 'WhileStatement': {
+        // A `while` test guards its body on every iteration.
+        const w = n as unknown as { Expression: ParseNode, Statement: ParseNode };
+        walkGuarded(w.Expression, w.Statement, null);
+        return;
+      }
       case 'IfStatement': {
         // PHASE 4 of the checker plan: a test refines a binding's type in the
         // branch it guards. Without this the checker rejected the very idiom
@@ -1567,31 +1711,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // (F75). The narrowing operations themselves already existed; nothing
         // consulted them for a BINDING.
         const s = n as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
-        const fact = narrowingFactOf(s.Expression);
-        walk(s.Expression);
-        if (fact) {
-          const current = lookup(fact.name);
-          const source = current ?? ({ Kind: 'any' } as TypeRecord);
-          const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-          const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
-          pushBlock(() => {
-            if (whenTrue !== empty) {
-              declare(fact.name, whenTrue as Known);
-            }
-            walk(s.Statement_a);
-          });
-          if (s.Statement_b) {
-            pushBlock(() => {
-              if (whenFalse !== empty) {
-                declare(fact.name, whenFalse as Known);
-              }
-              walk(s.Statement_b as ParseNode);
-            });
-          }
-          return;
-        }
-        walk(s.Statement_a);
-        walk(s.Statement_b);
+        walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
         return;
       }
       case 'AssignmentExpression': {
