@@ -495,6 +495,39 @@ test('a typed Set takes its element positions at the element type', () => {
   expect(evaluated('const u = new Set(); u.add(300); u.add("x"); String(u.size);')).toBe('2');
 });
 
+test('a typed Map takes its key and value positions at their declared types', () => {
+  // The value position (F73), mirroring the Set element position.
+  const m = 'let m: Map.<string, uint8> = new Map(); ';
+  expect(evaluated(`${m} m.set("a", 65); String(m.get("a") is uint8);`)).toBe('true');
+  expect(thrownKind(`${m} m.set("a", 300);`)).toBe('RangeError');
+  expect(thrownKind(`${m} m.set("a", {});`)).toBe('TypeError');
+  // And the KEY position, which is the same rule at index 0.
+  const k = 'let k: Map.<uint8, string> = new Map(); ';
+  expect(evaluated(`${k} k.set(65, "v"); String(k.get(65));`)).toBe('v');
+  expect(evaluated(`${k} k.set(65, "v"); String(k.has(65)) + "/" + String(k.delete(65));`)).toBe('true/true');
+  expect(thrownKind(`${k} k.set(300, "v");`)).toBe('RangeError');
+  // An untyped Map constrains nothing.
+  expect(evaluated('const u = new Map(); u.set("a", 300); String(u.get("a"));')).toBe('300');
+});
+
+test('a collection constructed with type arguments carries them', () => {
+  // `new Set.<uint8>()` writes its type arguments on the construction, and
+  // nothing carried them to the object: the specialization form handles a
+  // generic ALIAS and returns the plain constructor for a library generic, so
+  // the collection came back unstamped and every method went unchecked. An
+  // ANNOTATION made this unnecessary by stamping at the binding boundary
+  // instead, which is why the common spelling worked and the direct one did
+  // not (F73).
+  expect(evaluated('const s = new Set.<uint8>(); s.add(65); String([...s][0] is uint8);')).toBe('true');
+  expect(thrownKind('const s = new Set.<uint8>(); s.add(300);')).toBe('RangeError');
+  expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 65); String(m.get("a") is uint8);')).toBe('true');
+  expect(thrownKind('const m = new Map.<string, uint8>(); m.set("a", 300);')).toBe('RangeError');
+  expect(evaluated('const m = new Map.<string, uint8>([["a", 65]]); String(m.get("a"));')).toBe('65');
+  // A plain construction and an ordinary class are untouched.
+  expect(evaluated('const u = new Set(); u.add(300); String(u.size);')).toBe('1');
+  expect(evaluated('class K { constructor(x) { this.x = x; } } String(new K(5).x);')).toBe('5');
+});
+
 test('an EMPTY typed array carries its element type', () => {
   // An empty array satisfies any element type VACUOUSLY, so the membership
   // shortcut in the conversion returned it unchanged and it never acquired the
