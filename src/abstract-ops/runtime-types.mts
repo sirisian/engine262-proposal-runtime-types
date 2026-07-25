@@ -142,6 +142,18 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
     }
+    // A typed COLLECTION needs the same stamp for the same reason, and needs it
+    // more: an array acquires its element type from the conversion that builds
+    // it, but `new Set()` is a CONSTRUCTION rather than a conversion, so
+    // nothing ever gave a `Set.<uint8>` its type. Its membership test is the
+    // prototype chain, which any Set passes, so this shortcut returned it
+    // unstamped and every method went unchecked - `s.add(300)` was accepted and
+    // stored a plain Number (F72).
+    if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
+        && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
+          || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
+      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+    }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
@@ -286,6 +298,18 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+    }
+    // A typed COLLECTION needs the same stamp for the same reason, and needs it
+    // more: an array acquires its element type from the conversion that builds
+    // it, but `new Set()` is a CONSTRUCTION rather than a conversion, so
+    // nothing ever gave a `Set.<uint8>` its type. Its membership test is the
+    // prototype chain, which any Set passes, so this shortcut returned it
+    // unstamped and every method went unchecked - `s.add(300)` was accepted and
+    // stored a plain Number (F72).
+    if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
+        && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
+          || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
+      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.

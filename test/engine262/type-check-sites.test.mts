@@ -473,6 +473,28 @@ test('row 7b: Reflect.defineProperty checks the value against the declared type'
   expect(evaluated('const o = {}; Reflect.defineProperty(o, "x", { value: 7, type: uint8, writable: true, enumerable: true, configurable: true }); String(o.x is uint8);')).toBe('true');
 });
 
+test('a typed Set takes its element positions at the element type', () => {
+  // A collection's type arguments were carried syntactically and dropped
+  // semantically: `Set.<uint8>` parsed, constructed, and checked nothing, so
+  // `s.add(300)` was accepted and stored a plain Number (F72). An array gets
+  // its element type from the conversion that builds it; a collection needs
+  // the same stamp, because `new Set()` is a construction rather than a
+  // conversion.
+  const s = 'let s: Set.<uint8> = new Set(); ';
+  expect(evaluated(`${s} s.add(65); String([...s][0] is uint8);`)).toBe('true');
+  expect(thrownKind(`${s} s.add(300);`)).toBe('RangeError');
+  expect(thrownKind(`${s} s.add("x");`)).toBe('TypeError');
+  // A literal needle finds what the set holds, and so does a typed one, and one
+  // of another family converts through the same boundary.
+  expect(evaluated(`${s} s.add(65); String(s.has(65));`)).toBe('true');
+  expect(evaluated(`${s} s.add(65); String(s.has((65 := uint8)));`)).toBe('true');
+  expect(evaluated(`${s} s.add(65); String(s.has((65 := uint16)));`)).toBe('true');
+  expect(evaluated(`${s} s.add(65); String(s.delete(65)) + "/" + String(s.size);`)).toBe('true/0');
+  expect(evaluated(`${s} s.add(65); s.add(65); String(s.size);`)).toBe('1');
+  // An untyped Set constrains nothing, exactly as an untyped array does not.
+  expect(evaluated('const u = new Set(); u.add(300); u.add("x"); String(u.size);')).toBe('2');
+});
+
 test('an EMPTY typed array carries its element type', () => {
   // An empty array satisfies any element type VACUOUSLY, so the membership
   // shortcut in the conversion returned it unchanged and it never acquired the

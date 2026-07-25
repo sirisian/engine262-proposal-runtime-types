@@ -1,6 +1,7 @@
 import {
   Descriptor,
   NumberValue,
+  TypedNumberValue,
   Value,
   wellKnownSymbols,
   ObjectValue,
@@ -12,9 +13,14 @@ import {
   EnsureCompletion, NormalCompletion, Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { displayType } from '../type-system/records.mts';
+import { fitsNumericType } from '../type-system/runtime.mts';
+import { SameType } from '../type-system/relations.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { CreateSetIterator } from './SetIteratorPrototype.mts';
 import type { SetObject } from './Set.mts';
+import { isTypedNumber } from '#self';
 import {
   surroundingAgent,
   Call,
@@ -40,12 +46,52 @@ import type {
   PlainEvaluator,
 } from '#self';
 
+/**
+ * proposal-runtime-types: a typed collection's element positions take the
+ * declared type, which #sec-array-defaults-and-stores states for the array and
+ * for `Set.<T>` and `Map.<K, V>` alike. The collection carries its type
+ * arguments from the boundary that produced it (F72).
+ *
+ * Synchronous, and therefore scoped to the NUMERIC element types: those are
+ * the ones where a value's type is part of its identity, so a `Set.<uint8>`
+ * holding a plain Number is the defect worth fixing. A non-numeric element
+ * type needs the full conversion and is left to the pass that gives these
+ * methods real signatures.
+ */
+function collectionValueAtType(O: Value, value: Value, index: number): ValueCompletion {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return NormalCompletion(value);
+  }
+  const args = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+  const t = args?.[index];
+  if (t === undefined || typeof t === 'number' || t.Kind !== 'primitive' || !['uint', 'int', 'float16', 'float32', 'float64', 'number'].includes(t.Name)) {
+    return NormalCompletion(value);
+  }
+  if (isTypedNumber(value)) {
+    if (SameType((value as TypedNumberValue).TypeRecord as TypeRecord, t)) {
+      return NormalCompletion(value);
+    }
+    const carried = (value as TypedNumberValue).value;
+    return fitsNumericType(carried, t.Name, t.Arguments)
+      ? NormalCompletion(new TypedNumberValue(carried, t))
+      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+  }
+  if (value instanceof NumberValue) {
+    const n = R(value) as number;
+    return fitsNumericType(n, t.Name, t.Arguments)
+      ? NormalCompletion(new TypedNumberValue(n, t))
+      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+  }
+  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+}
+
 /** https://tc39.es/ecma262/#sec-set.prototype.add */
 function SetProto_add([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   // 1. Let S be the this value.
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
+  value = Q(collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. For each e that is an element of entries, do
@@ -93,6 +139,7 @@ function SetProto_delete([value = Value.undefined]: Arguments, { thisValue }: Fu
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
+  value = Q(collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. For each e that is an element of entries, do
@@ -225,6 +272,7 @@ function SetProto_has([value = Value.undefined]: Arguments, { thisValue }: Funct
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
+  value = Q(collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. Let entries be the List that is S.[[SetData]].
