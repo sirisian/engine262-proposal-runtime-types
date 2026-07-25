@@ -196,6 +196,32 @@ test('a class method is checked like a call, and an overloaded one ranks', () =>
   expect(evaluated('class C { m(v) { return v; } } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
 });
 
+test('a subclass instance carries what it inherits', () => {
+  const base = 'class A { x: uint8 = 1; m(v: uint8) { return v; } } class B extends A { y: uint8 = 2; } ';
+  // Inherited fields and methods are part of the subclass's shape (F60), which
+  // is what the prototype chain gives at run time.
+  expectStatic(`${base} function nc(b: B) { b.x = 300; }`);
+  expectStatic(`${base} function nc(b: B) { b.m(300); }`);
+  expectStatic(`${base} function nc(b: B) { let z: uint16 = b.x; }`);
+  expect(evaluated(`${base} function nc(b: B) { b.x = 7; b.m(7); } "ok";`)).toBe('ok');
+  // Through more than one level, and regardless of declaration order: the
+  // instance types are built lazily, so a class may name a superclass declared
+  // later in the list.
+  expectStatic('class A { x: uint8 = 1; } class B extends A {} class C extends B {} function nc(c: C) { c.x = 300; }');
+  expectStatic('function nc(b: B) { b.x = 300; } class B extends A { } class A { x: uint8 = 1; }');
+  // An OVERRIDE wins over what it overrides, which is again what the prototype
+  // chain does.
+  expect(evaluated('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m("s"); } "ok";')).toBe('ok');
+  expectStatic('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m(300); }');
+  // A heritage clause that is not a class name leaves the base unknown, which
+  // contributes nothing rather than guessing; and a heritage CYCLE must not
+  // hang the checker, though it is a ReferenceError when the program runs.
+  expect(evaluated('function mixin(x) { return x; } class A { x: uint8 = 1; } class B extends mixin(A) {} function nc(b: B) { b.x = 300; } "ok";')).toBe('ok');
+  expect(run('class A extends B {} class B extends A {} "ok";')).toMatchObject({ Type: 'throw' });
+  // The run time is untouched: inherited values are still typed.
+  expect(evaluated(`${base} String(new B().x is uint8) + "/" + String(new B().y);`)).toBe('true/2');
+});
+
 test('a constructor is a construct signature, not a member of the instance', () => {
   // `new C(...)` is checked against the constructor's parameters (F59)...
   expectStatic('class C { constructor(v: uint8) {} } function nc() { new C(300); }');

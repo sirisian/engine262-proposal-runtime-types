@@ -388,8 +388,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return t;
   };
 
-  /** Class instance types by name (F57), consulted when a type names a class. */
-  const classTypes = new Map<string, Known>();
+  /**
+   * Class DECLARATIONS by name (F57), and their instance types built lazily and
+   * memoized (F60). Lazily, because a class's structure now includes what it
+   * INHERITS, and resolving heritage eagerly in declaration order would miss a
+   * superclass declared later in the list or in an enclosing scope. The
+   * in-progress set guards a heritage cycle, which is a ReferenceError at run
+   * time but must not hang the checker.
+   */
+  const classNodes = new Map<string, ParseNode>();
+  const classTypeMemo = new Map<ParseNode, Known>();
+  const classTypesInProgress = new Set<ParseNode>();
+  const classTypeOf = (name: string): Known => {
+    const node = classNodes.get(name);
+    return node ? instanceTypeOf(node) : null;
+  };
   /** Construct signatures by class node, for checking `new C(...)` (F59). */
   const constructSignatures = new Map<ParseNode, { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] }>();
 
@@ -473,7 +486,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? (classTypes.get(name) ?? null);
+        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
@@ -602,7 +615,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // field's declared type (F59).
         const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
         if (target && target.type === 'IdentifierReference') {
-          return classTypes.get((target as { name: string }).name) ?? null;
+          return classTypeOf((target as { name: string }).name);
         }
         return null;
       }
@@ -635,6 +648,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * not reachable through a member expression from outside, and the store to
    * one is checked at run time by its own path.
    */
+  const instanceTypeOf = (n: ParseNode): Known => {
+    const memo = classTypeMemo.get(n);
+    if (memo !== undefined) {
+      return memo;
+    }
+    if (classTypesInProgress.has(n)) {
+      return null;
+    }
+    classTypesInProgress.add(n);
+    try {
+      const built = classInstanceType(n);
+      classTypeMemo.set(n, built);
+      return built;
+    } finally {
+      classTypesInProgress.delete(n);
+    }
+  };
+
   const classInstanceType = (n: ParseNode): Known => {
     const cls = n as unknown as {
       BindingIdentifier?: { name: string } | null,
@@ -744,11 +775,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       Properties.push({ key, type: { Kind: 'function', Signatures } as unknown as TypeRecord, optional: false });
     }
+    // #sec-typed-classes: a subclass's instances have their superclass's
+    // members too, so the inherited shape is merged UNDER the class's own
+    // declarations - an override wins, which is what the prototype chain does
+    // at run time (F60). Only a heritage clause naming a class is followed; an
+    // expression like `class B extends mixin(A)` leaves the base unknown, and
+    // an unknown base contributes nothing rather than guessing.
+    const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
+    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
+      ? (heritage as { name: string }).name
+      : null;
+    const base = baseName ? classTypeOf(baseName) : null;
+    const baseStructure = base && base.Kind === 'nominal'
+      ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
+      : null;
+    const merged = baseStructure && baseStructure.Kind === 'object'
+      ? [...baseStructure.Properties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
+      : Properties;
     const instance = {
       Kind: 'nominal',
       Declaration: n,
       Arguments: [],
-      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+      Structure: { Kind: 'object', Properties: merged, IndexSignatures: [] },
     } as unknown as Known;
     if (construct) {
       constructSignatures.set(n, construct);
@@ -824,7 +872,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (n.type === 'ClassDeclaration') {
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
-          classTypes.set(name, classInstanceType(n));
+          classNodes.set(name, n);
         }
       }
     }
@@ -1290,7 +1338,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
         const target = ne.MemberExpression;
         if (target && target.type === 'IdentifierReference' && Array.isArray(ne.Arguments)) {
-          const instance = classTypes.get((target as { name: string }).name);
+          const instance = classTypeOf((target as { name: string }).name);
           const decl = instance && instance.Kind === 'nominal'
             ? (instance as unknown as { Declaration: ParseNode }).Declaration
             : null;
