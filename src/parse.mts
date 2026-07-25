@@ -242,7 +242,7 @@ export function ParseJSONModule(source: JSStringValue): PlainCompletion<Syntheti
   return CreateDefaultExportSyntheticModule(parseResult.Value);
 }
 
-function setNodeParent(node: ParseNode, parent: ParseNode | undefined) {
+export function setNodeParent(node: ParseNode, parent: ParseNode | undefined) {
   (node as Mutable<ParseNode.BaseParseNode>).parent = parent;
   for (const child of avoid_using_children(node)) {
     if (!child.parent) {

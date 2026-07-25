@@ -249,12 +249,26 @@ test('P3c: a parameterization above its meta type is legal', () => {
   `)).toBe('ok');
 });
 
-test('P3d: direct eval is the pinned boundary — the pass does not run there', () => {
-  // One boundary written down beats two half-boundaries with different
-  // ordering rules (the plan's D4): a runtime throw in TypeNodeToTypeRecord
-  // would fire on eval text whose meta declaration has not run yet, while
-  // the static check never sees that text at all.
-  expect(evaluated(`String(eval('type E = float32.<{ zzz: 1 }>; (1 := float32) is E'));`)).toBe('true');
+test('P3d: direct eval is checked like any other Script', () => {
+  // Formerly the pinned BOUNDARY: the pass ran at ScriptEvaluation and
+  // ExecuteModule, and direct eval went through neither, so an unclaimed key
+  // inside eval was admitted. F44 called that one written boundary beating two
+  // half-boundaries, and said the resting place was wrong. It was: the checker
+  // itself runs in ParseScript, and eval parses through wrappedParse, so eval'd
+  // source was never checked at all - not the pass, not the walk (F55).
+  // Both run there now, and eval is a Script like any other.
+  expectThrown(`eval('type E = float32.<{ zzz: 1 }>; (1 := float32) is E');`);
+  // A meta declaration and a use of it inside ONE eval still work, because the
+  // pass pre-evaluates that text's own declarations before adjudicating it.
+  expect(evaluated(`
+    String(eval('type K = { k: number }; meta K { default = { k: 0 }; subtype(a, b) { return true; } } typeof float32.<{ k: 1 }>'));
+  `)).toBe('object');
+  // And claims registered by the enclosing script are visible to the eval.
+  expect(evaluated(`
+    type K3 = { qk: number };
+    meta K3 { default = { qk: 0 }; subtype(a, b) { return true; } }
+    String(eval('typeof float32.<{ qk: 1 }>'));
+  `)).toBe('object');
 });
 
 test('P3f: expression positions are collected too — is and the bare cast (F45)', () => {

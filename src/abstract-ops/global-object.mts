@@ -18,11 +18,13 @@ import {
   ThrowCompletion,
   type PlainCompletion,
 } from '../completion.mts';
-import { Parser, wrappedParse } from '../parse.mts';
+import { Parser, setNodeParent, wrappedParse } from '../parse.mts';
+import { CheckScript } from '../type-system/check.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
 import { Assert } from './all.mts';
 import {
   HostEnsureCanCompileStrings, surroundingAgent,
@@ -122,6 +124,20 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   if (!script.ScriptBody) {
     return Value.undefined;
   }
+  // proposal-runtime-types #sec-type-errors: the static checker runs in
+  // ParseScript, and direct eval parses through wrappedParse instead, so
+  // eval'd source was never checked - `eval('let x: uint8 = 300')` reported at
+  // run time what the same text rejects statically at script scope (F55). The
+  // parent links are wired first, exactly as ParseScript does, because the
+  // checker reads the shape a node sits in.
+  if (surroundingAgent.feature('runtime-types')) {
+    setNodeParent(script, undefined);
+    const typeErrors = CheckScript(script);
+    if (typeErrors.length > 0) {
+      Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);
+      return ThrowCompletion(typeErrors[0]);
+    }
+  }
   const body = script.ScriptBody;
   if (inClassFieldInitializer && ContainsArguments(body)) {
     return Throw.SyntaxError('arguments cannot be referenced in a class field initializer');
@@ -182,6 +198,19 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   surroundingAgent.executionContextStack.push(evalContext);
   // 27. Let result be EvalDeclarationInstantiation(body, varEnv, lexEnv, privateEnv, strictEval).
   let result: PlainCompletion<void | Value> = EnsureCompletion(yield* EvalDeclarationInstantiation(body, varEnv, lexEnv, privateEnv, strictEval));
+  // proposal-runtime-types #sec-type-errors: the checking pass runs for eval'd
+  // source too. It was wired at ScriptEvaluation and ExecuteModule only, and
+  // direct eval goes through neither, so `eval('type E = float32.<{ zzz: 1 }>;
+  // ...')` admitted an unclaimed key that the same text rejects at script
+  // scope. F44 pinned that as one written boundary beating two half-boundaries,
+  // which was right for that cycle and is the wrong resting place: eval text is
+  // a Script, and there is no principled reason for the two surfaces to
+  // disagree (F55). The pass is idempotent over declarations it has already
+  // pre-evaluated, and an eval'd `meta` declaration registers claims that
+  // outlive the eval, which is the per-agent behaviour claiming already has.
+  if (result.Type === 'normal' && surroundingAgent.feature('runtime-types')) {
+    result = EnsureCompletion(yield* RunPreEvaluationTypeCheck(script)) as NormalCompletion<void | Value> | ThrowCompletion;
+  }
   // 28. If result.[[Type]] is normal, then
   if (result.Type === 'normal') {
     // a. Set result to the result of evaluating body.
