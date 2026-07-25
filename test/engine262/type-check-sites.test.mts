@@ -196,6 +196,52 @@ test('a class method is checked like a call, and an overloaded one ranks', () =>
   expect(evaluated('class C { m(v) { return v; } } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
 });
 
+test('a refused crossing names the meta type and uses its describe hook', () => {
+  // #sec-primitive-metadata requires both failure arms to throw a TypeError
+  // "whose message names M and, where M defines `describe`, its descriptions".
+  // The hook was declarable since cycle 37 and called by nothing: the engine
+  // threw its generic "$1 is not assignable to $2" (F62).
+  const dims = `
+    type Dim = { m: number, s: number };
+    meta Dim {
+      default = { m: 0, s: 0 };
+      subtype(a, b) { return a.m === b.m && a.s === b.s; }
+      validate(v, c) { return true; }
+      describe(c) { return "metres^" + c.m + " seconds^" + c.s; }
+    }
+  `;
+  const message = thrownMessage(`${dims} ((2 := float32.<{ m: 1 }>) := float32.<{ m: 2 }>); "unreachable";`);
+  expect(message).toContain('Dim');
+  expect(message).toContain('metres^1');
+  expect(message).toContain('metres^2');
+  // Without a describe hook the message still names the meta type, falling
+  // back to the type displays for the portions.
+  const bare = `
+    type D2 = { m: number };
+    meta D2 { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return true; } }
+  `;
+  expect(thrownMessage(`${bare} ((2 := float32.<{ m: 1 }>) := float32.<{ m: 2 }>); "unreachable";`)).toContain('D2');
+  // An admitted crossing is untouched.
+  expect(evaluated(`${dims} String((2 := float32.<{ m: 1 }>) := float32.<{ m: 1, s: 0 }>);`)).toBe('2');
+});
+
+test('an enum is a subtype of its underlying type, and reflects as an enum', () => {
+  // sec-enums says an enum type is a subtype of its underlying type; the
+  // relation held nowhere, because the enum's record did not carry the
+  // underlying type to relate it to (F62).
+  expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(C, uint8));')).toBe('true');
+  expect(evaluated('enum D { A, B }; String(Reflect.isAssignable(D, number));')).toBe('true');
+  // The relation is one-directional and does not reach unrelated types.
+  expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(uint8, C));')).toBe('false');
+  expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(C, string));')).toBe('false');
+  // A member is still a value of its own enum, and flows to the underlying.
+  expect(evaluated('enum C: uint8 { A, B }; String(C.B is C);')).toBe('true');
+  expect(evaluated('enum C: uint8 { A, B }; let x: uint8 = C.B; String(x);')).toBe('1');
+  // And an enum reflects AS an enum rather than as an indistinguishable
+  // primitive leaf, so a walker can read its members and its underlying type.
+  expect(evaluated('enum C: uint8 { A, B, E }; const r = Reflect.getReflection(C); String(r.kind) + "/" + String(r.size) + "/" + String(r.underlying.kind);')).toBe('enum/3/primitive');
+});
+
 test('an interface is a type, and a class picks up what it implements', () => {
   // The checker resolved an interface name in a type position to NOTHING, so a
   // parameter typed by an interface was ~any~ and nothing about it was checked

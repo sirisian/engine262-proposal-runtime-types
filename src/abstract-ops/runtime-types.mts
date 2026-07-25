@@ -586,6 +586,35 @@ export function MetaTypeClaiming(key: string): object | undefined {
   return claimsForAgent().get(key);
 }
 
+const metaTypeNames = new WeakMap<object, string>();
+
+/**
+ * The declared NAME of a meta type. #sec-primitive-metadata requires the
+ * TypeError of a refused crossing to "name _M_", and nothing recorded the name
+ * to give (F62).
+ */
+export function RegisterMetaTypeName(typeObject: object, name: string): void {
+  metaTypeNames.set(typeObject, name);
+}
+
+export function LookupMetaTypeName(typeObject: object): string | undefined {
+  return metaTypeNames.get(typeObject);
+}
+
+/**
+ * A meta type's own description of a portion, where it defines `describe`.
+ * The clause asks for it in both failure messages, and the hook has been
+ * declarable since cycle 37 with no consumer at all: the engine threw its
+ * generic "$1 is not assignable to $2" and never called it (F62).
+ */
+export function* DescribePortion(metaType: object, portion: Value): PlainEvaluator<string | undefined> {
+  if (metaHooks.get(metaType)?.get('describe') === undefined) {
+    return undefined;
+  }
+  const described = Q(yield* ApplyMetaHook(metaType, 'describe', [portion]));
+  return described instanceof JSStringValue ? described.stringValue() : undefined;
+}
+
 export function RegisterMetaHook(typeObject: object, name: string, fn: Value): void {
   let table = metaHooks.get(typeObject);
   if (!table) {
@@ -708,8 +737,17 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     }
     // The clause's second way through is an implicit cast operator declared on
     // the base, which this engine has no declaration form for yet. Until it does,
-    // a meta type that does not admit the crossing refuses it.
-    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
+    // a meta type that does not admit the crossing refuses it - and the message
+    // "names _M_ and, where _M_ defines `describe`, its descriptions of _fp_
+    // and _tp_", which is the difference between a units error that says what
+    // it means and one that dumps a record (F62).
+    const named = LookupMetaTypeName(metaType) ?? 'a meta type';
+    const fd = Q(yield* DescribePortion(metaType, fp));
+    const td = Q(yield* DescribePortion(metaType, tp));
+    if (fd !== undefined && td !== undefined) {
+      return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(fd), Value(td));
+    }
+    return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(displayType(from)), Value(displayType(to)));
   }
   // The factor is the product over every meta type that defines one, so two
   // independent scalings compose rather than one winning.

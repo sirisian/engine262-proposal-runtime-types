@@ -222,6 +222,17 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (t.Kind === 'union') {
     return t.Members.some((m) => IsSubtype(s, m, next));
   }
+  // #sec-enums: "An enum type is a subtype of its underlying type, so a value
+  // of an enum type is usable wherever the underlying type is required and no
+  // conversion is written." The relation held nowhere, because the enum's
+  // record did not carry the underlying type to relate it to (F62). Placed
+  // before the switch on `t` so it answers for any target the underlying type
+  // is a subtype of, which is usually a primitive.
+  if (s.Kind === 'nominal' && s.EnumMembers !== undefined && s.Underlying !== undefined) {
+    if (IsSubtype(s.Underlying, t, next)) {
+      return true;
+    }
+  }
   if (t.Kind === 'intersection') {
     return t.Members.every((m) => IsSubtype(s, m, next));
   }

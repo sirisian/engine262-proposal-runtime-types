@@ -53,6 +53,13 @@ export type TypeRecord =
     // resolved structural shape of an interface, attached at declaration
     // evaluation. SameType compares by [[Declaration]] identity only.
     readonly EnumMembers?: readonly Value[],
+    // proposal-runtime-types (#sec-enums): "An enum type is a subtype of its
+    // underlying type, so a value of an enum type is usable wherever the
+    // underlying type is required and no conversion is written." The record
+    // carried its members and NOT its underlying type, so that subtype
+    // relation could not be answered and Reflect.isAssignable said *false*
+    // (F62).
+    readonly Underlying?: TypeRecord,
     readonly Structure?: TypeRecord,
     // proposal-runtime-types M21: the class constructor whose instances the
     // class type contains. Identity is still by [[Declaration]]; this is the

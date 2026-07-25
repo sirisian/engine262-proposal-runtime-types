@@ -11,7 +11,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -80,8 +80,11 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);
     }
+    const underlying = node.TypeAnnotation
+      ? Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type))
+      : builtinTypeRecord('number') ?? undefined;
     const record: TypeRecord = {
-      Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues,
+      Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues, Underlying: underlying ?? undefined,
     };
     const obj = GetTypeObject(record);
     for (let i = 0; i < memberNames.length; i += 1) {
@@ -246,6 +249,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const fn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'meta hook', params, body, 'non-lexical-this', env, privEnv);
         RegisterMetaHook(typeObject, hookName, fn);
+        RegisterMetaTypeName(typeObject as object, name);
       }
     }
   }

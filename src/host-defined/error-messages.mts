@@ -706,6 +706,7 @@ export interface Throw {
   , $1: Formattable, $2: Formattable): ThrowCompletion;
   (m:
 '"roundingMode" on object $1 is not valid ($2), only $3 are accepted'
+  | '$1 does not admit converting $2 to $3'
   | '$1 is not a function. (In "$2", it is $3)'
   | '$1-$2-$3 is not a valid date'
   | 'Duration($1, $2, $3, $4) is not a valid duration'

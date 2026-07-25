@@ -423,6 +423,18 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // Type Object itself, so a leaf stays opaque to a walker.
       set('kind', Value('primitive'));
       set('type', typeObj(t));
+      // ...except an ENUM, which reflected as an indistinguishable "primitive"
+      // leaf, so the enum-ness was erased and a reflection walker could not see
+      // its members or its underlying type at all (F62). The design leans on
+      // that member count being readable.
+      if (t.Kind === 'nominal' && t.EnumMembers !== undefined) {
+        set('kind', Value('enum'));
+        set('members', CreateArrayFromList([...t.EnumMembers]));
+        set('size', Value(t.EnumMembers.length));
+        if (t.Underlying !== undefined) {
+          set('underlying', recordToNode(t.Underlying, realm));
+        }
+      }
       // proposal-runtime-types: a generic instantiation additionally exposes its
       // base (the bare declaration's type) and arguments, so a builder can read
       // `node.generic.base` and `node.generic.arguments` (spec ~nominal~
