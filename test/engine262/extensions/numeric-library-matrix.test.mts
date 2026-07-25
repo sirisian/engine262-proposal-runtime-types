@@ -240,9 +240,15 @@ test('a function with no numeric parameter is NOT overloaded, and untyped code i
   expect(evaluated('String("abc".indexOf("b") === 1);')).toBe('true');
   expect(evaluated('String("abc".lastIndexOf("b") === 1);')).toBe('true');
   expect(evaluated('String(new Date(0).getFullYear() === 1970);')).toBe('true');
-  // The reason those matter: a typed value and a plain Number are NOT equal,
-  // so a typed result would silently break every one of these comparisons.
-  expect(evaluated('String((65 := uint16) === 65);')).toBe('false');
+  // The reason those matter has CHANGED with F74 and the argument is weaker
+  // than it was, which is worth recording rather than quietly repairing. A
+  // literal now adopts the other operand's type, so `x === 65` would survive a
+  // typed `charCodeAt`; what would not survive is the comparison against a
+  // VARIABLE, which adopts nothing, and the arithmetic that silently changes
+  // width. F65 measured both. So these functions stay untyped for the
+  // variable-facing reasons, not for the literal-facing one.
+  expect(evaluated('String((65 := uint16) === 65);')).toBe('true');
+  expect(evaluated('const n = 65; String((65 := uint16) === n);')).toBe('false');
   // parseInt and parseFloat are excluded by the same rule, and by name.
   expect(evaluated('String(parseInt("42px") === 42) + "/" + String(parseFloat("1.5x") === 1.5);')).toBe('true/true');
   // What IS overloaded dispatches on an argument: Math's rows, and an array's

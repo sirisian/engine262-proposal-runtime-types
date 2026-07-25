@@ -18,7 +18,11 @@ import {
 test('typed json: a numeric leaf converts to its target type', () => {
   // the parsed field is a uint8, equal to the cast and distinct from a plain 5
   expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); o.a === (5 := uint8) ? "typed" : "untyped";')).toBe('typed');
-  expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); (o.a === 5) ? "plain" : "not-plain";')).toBe('not-plain');
+  // A LITERAL adopts since F74, so this reads "plain"; the test that the leaf
+  // is genuinely typed is the one above, against a typed value, and the one
+  // below, against a variable.
+  expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); (o.a === 5) ? "plain" : "not-plain";')).toBe('plain');
+  expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); const n = 5; (o.a === n) ? "plain" : "not-plain";')).toBe('not-plain');
 });
 
 test('typed json: a plain number field stays an ordinary Number', () => {

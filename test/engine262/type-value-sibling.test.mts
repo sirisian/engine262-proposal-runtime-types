@@ -49,7 +49,11 @@ test('the distinct type tag is observable', () => {
 test('identity across the sibling boundary (behavioural, via the engine)', () => {
   // The sibling structure is what makes these correct: a typed number compares
   // distinctly because it is genuinely a different value type.
-  expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('neq');
+  // A LITERAL adopts the typed operand's type since F74, so this is "eq"; the
+  // sibling distinction R1 states is asserted with a variable below, which
+  // adopts nothing.
+  expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
+  expect(evaluated('const n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(5 := uint8) === (5 := uint8) ? "eq" : "neq";')).toBe('eq');
   expect(evaluated('(5 := uint8) === (5 := uint16) ? "eq" : "neq";')).toBe('neq');
 });

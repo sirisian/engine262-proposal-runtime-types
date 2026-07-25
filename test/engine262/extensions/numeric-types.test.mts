@@ -97,9 +97,18 @@ test('numeric types: a typed value is never strictly equal to a plain number of 
   // same magnitude, nor a value of another numeric type. The plain magnitude is
   // recovered with Number(), which does compare equal. This underlies why
   // comparisons in these tests extract with Number() before asserting a value.
-  expect(evaluated('String((5 := uint8) === 5);')).toBe('false');
-  expect(evaluated('String((0 := uint8) === 0);')).toBe('false');
-  expect(evaluated('String((0.5 := float32) === 0.5);')).toBe('false');
+  // DECISION CHANGED (F74): the literal rule reaches equality, so a LITERAL in
+  // one of these positions takes the other operand's type and the comparison
+  // is uint8 against uint8. R1 is untouched by that - what changed is that a
+  // literal is no longer a Number here - and the assertions below hold it,
+  // using a VARIABLE, which adopts nothing.
+  expect(evaluated('String((5 := uint8) === 5);')).toBe('true');
+  expect(evaluated('String((0 := uint8) === 0);')).toBe('true');
+  expect(evaluated('String((0.5 := float32) === 0.5);')).toBe('true');
+  // R1 itself: a typed value is not strictly equal to a plain Number, nor to a
+  // value of another numeric type.
+  expect(evaluated('const n = 5; String((5 := uint8) === n);')).toBe('false');
+  expect(evaluated('function anyv() { return 5; } String((5 := uint8) === anyv());')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint8));')).toBe('true');
   expect(evaluated('String(Number((5 := uint8)) === 5);')).toBe('true');

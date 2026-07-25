@@ -10,8 +10,10 @@ import {
   UpdateEmpty,
   Q,
 } from '../completion.mts';
+import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   BlockDeclarationInstantiation,
   Evaluate_StatementList,
@@ -30,6 +32,19 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
   // 3. Let clauseSelector be ? GetValue(exprRef).
   const clauseSelector = Q(yield* GetValue(exprRef));
   // 4. Return the result of performing Strict Equality Comparison input === clauseSelector.
+  // A `case` label is compared by strict equality, so the literal rule reaches
+  // it for the same reason it reaches `===` (F65): without this a `switch` over
+  // a typed value matched no numeric label, which is the form an enum-like
+  // dispatch over a `uint8` takes.
+  if (surroundingAgent.feature('runtime-types')) {
+    const adopted = AdoptLiteralOperand(input, clauseSelector, {
+      left: false,
+      right: isNumericLiteralOperand(constructor.Expression as ParseNode),
+    });
+    if (adopted) {
+      return IsStrictlyEqual(adopted.left, adopted.right);
+    }
+  }
   return IsStrictlyEqual(input, clauseSelector);
 }
 

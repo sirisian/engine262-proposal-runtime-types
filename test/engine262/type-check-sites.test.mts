@@ -495,6 +495,37 @@ test('a typed Set takes its element positions at the element type', () => {
   expect(evaluated('const u = new Set(); u.add(300); u.add("x"); String(u.size);')).toBe('2');
 });
 
+test('the literal rule reaches equality and case labels', () => {
+  // DECISION TAKEN by the proposal's author (F74): the literal rule covers
+  // equality as it covers arithmetic, bitwise, shift, and relational
+  // operators. A literal takes the other operand's type, so the comparison is
+  // uint16 against uint16 rather than a typed value against a Number.
+  expect(evaluated('String((65 := uint16) === 65);')).toBe('true');
+  expect(evaluated('String(65 === (65 := uint16));')).toBe('true');
+  expect(evaluated('String((65 := uint16) !== 65);')).toBe('false');
+  expect(evaluated('const c = (65 := uint16); let r = "none"; switch (c) { case 65: r = "hit"; break; } r;')).toBe('hit');
+  // R1 IS UNTOUCHED, and this is where it lives: a VARIABLE adopts nothing, so
+  // it still asks whether a typed value and a Number are the same value.
+  expect(evaluated('const n = 65; String((65 := uint16) === n);')).toBe('false');
+  expect(evaluated('function anyv() { return 65; } String((65 := uint16) === anyv());')).toBe('false');
+  expect(evaluated('String((65 := uint16) === (65 := uint8));')).toBe('false');
+  // A literal the type cannot hold is simply not equal to any value of it - a
+  // comparison asks a question, so it answers rather than throwing.
+  expect(evaluated('String((65 := uint8) === 300);')).toBe('false');
+  // A BIGINT literal does not adopt a Number-family type: a BigInt is a numeric
+  // type of its own, and reading its payload as a Number was a host crash.
+  expect(evaluated('String((5 := uint8) === 5n) + "/" + String((5 := uint8) == 5n);')).toBe('false/true');
+  // What this buys, and what made the decision worth taking: a callback that
+  // compares an element against a literal now works over a typed array, which
+  // is the ordinary way to use one.
+  expect(evaluated('let a: [].<uint16> = [65, 66]; String(a.find(x => x === 65));')).toBe('65');
+  expect(evaluated('let a: [].<uint16> = [65, 66]; String(a.filter(x => x === 65).length);')).toBe('1');
+  expect(evaluated('let a: [].<uint16> = [65]; String(a.some(x => x === 65)) + "/" + String(a.every(x => x === 65));')).toBe('true/true');
+  // Untyped code is untouched, including the identity edges.
+  expect(evaluated('String(65 === 65) + "/" + String("a" === "a") + "/" + String(NaN === NaN) + "/" + String(65n === 65);')).toBe('true/true/false/false');
+  expect(evaluated('const o = {}; String(o === o) + "/" + String({} === {});')).toBe('true/false');
+});
+
 test('a typed Map takes its key and value positions at their declared types', () => {
   // The value position (F73), mirroring the Set element position.
   const m = 'let m: Map.<string, uint8> = new Map(); ';
@@ -621,7 +652,11 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   // And strict equality against a plain literal is false, because a typed value
   // and a Number are different types (R1) - the same reason (3 := uint8) === 3
   // is false. Loose equality still coerces.
-  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length === 3) + "/" + String(a.length == 3);')).toBe('false/true');
+  // Since F74 a literal adopts, so `a.length === 3` is *true* - one of the two
+  // costs this test was pinning has been paid off by that decision. The
+  // remaining cost is the comparison against a variable.
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length === 3) + "/" + String(a.length == 3);')).toBe('true/true');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; const n = 3; String(a.length === n);')).toBe('false');
 });
 
 // -- The deletion rule of the same clause ----------------------------------

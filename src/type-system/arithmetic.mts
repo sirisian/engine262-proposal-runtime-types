@@ -177,6 +177,46 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
 }
 
 /**
+ * The literal rule alone, for the operators that ADOPT but do not otherwise
+ * constrain their operands: equality compares rather than computes, so a
+ * literal takes the other operand's type and a mismatch is an ordinary
+ * *false* rather than a type error (F65). Returns the operand pair to use, or
+ * undefined where neither side needs adopting.
+ */
+export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean }): { left: Value, right: Value } | undefined {
+  const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  if ((xt && yt) || (!xt && !yt)) {
+    return undefined;
+  }
+  const target = (xt ?? yt)!;
+  const literalIsRight = !!xt;
+  if (literalIsRight ? !literals.right : !literals.left) {
+    return undefined;
+  }
+  const untyped = literalIsRight ? y : x;
+  // A BIGINT literal is written `5n` and is a NumericLiteral node like any
+  // other, but it is not a Number and must not adopt a Number-family type: a
+  // BigInt is a numeric type of its own, so `(5 := uint8) === 5n` stays false
+  // rather than becoming a uint8 comparison. Reading its payload as a Number
+  // was a host crash rather than a wrong answer, which is how it was found
+  // (F74).
+  if (!(untyped instanceof NumberValue)) {
+    return undefined;
+  }
+  const literalValue = payload(untyped);
+  const prim = target as TypeRecord & { Kind: 'primitive' };
+  if (!fitsNumericType(literalValue, prim.Name, prim.Arguments)) {
+    // A literal the type cannot represent is simply not equal to any value of
+    // it, which is the answer a comparison wants. Adoption declines and the
+    // ordinary comparison reports *false*.
+    return undefined;
+  }
+  const adopted = new TypedNumberValue(wrapToType(literalValue, target), target);
+  return literalIsRight ? { left: x, right: adopted } : { left: adopted, right: y };
+}
+
+/**
  * The operand rule of #sec-arithmetic-never-promotes, shared by every operator
  * the clause names: "an arithmetic, bitwise, shift, or RELATIONAL operator".
  * Returns the type the operation is in, or the completion that says why the

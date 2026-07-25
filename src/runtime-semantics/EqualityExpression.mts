@@ -1,8 +1,10 @@
 import { Q, X } from '../completion.mts';
+import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   IsLooselyEqual,
   GetValue,
@@ -26,11 +28,11 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   // 1. Let lref be the result of evaluating EqualityExpression.
   const lref = Q(yield* Evaluate(EqualityExpression));
   // 2. Let lval be ? GetValue(lref).
-  const lval = Q(yield* GetValue(lref));
+  let lval = Q(yield* GetValue(lref));
   // 3. Let rref be the result of evaluating RelationalExpression.
   const rref = Q(yield* Evaluate(RelationalExpression));
   // 4. Let rval be ? GetValue(rref).
-  const rval = Q(yield* GetValue(rref));
+  let rval = Q(yield* GetValue(rref));
   // proposal-runtime-types (spec sec-class-operators): the equality operators are
   // overloadable. When the left operand is an Object whose class declares
   // `operator==`, `==` dispatches to it (receiver is the left operand, parameter
@@ -56,6 +58,26 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   if ((operator === '==' || operator === '!=')
       && RightOperandDeclaresOperator(lval, rval, '==')) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', '==');
+  }
+  // proposal-runtime-types (#sec-arithmetic-never-promotes, the literal rule):
+  // "where one operand is a literal it takes the type of the other, so a
+  // literal never forces a conversion". The clause names arithmetic, bitwise,
+  // shift, and relational operators, and EQUALITY was left out - so
+  // `(65 := uint16) < 66` compared but `(65 := uint16) === 65` was *false*, the
+  // same literal adopting in one operator and not the next (F65). The BigInt
+  // precedent does not govern: a BigInt has its own literal syntax, `1n`, so it
+  // never needed adoption, while these types have none and `65` is the only way
+  // to write sixty-five. Adopting here is what Rust, Go, Swift, and Haskell do
+  // with an untyped numeric literal.
+  if (surroundingAgent.feature('runtime-types')) {
+    const adopted = AdoptLiteralOperand(lval, rval, {
+      left: isNumericLiteralOperand(EqualityExpression as ParseNode),
+      right: isNumericLiteralOperand(RelationalExpression as ParseNode),
+    });
+    if (adopted) {
+      lval = adopted.left;
+      rval = adopted.right;
+    }
   }
   switch (operator) {
     case '==':
