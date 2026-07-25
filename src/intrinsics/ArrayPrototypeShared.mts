@@ -5,11 +5,14 @@ import {
 } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import {
-  NullValue, NumberValue, ObjectValue, UndefinedValue, Value, type Arguments, type FunctionCallContext,
+  NullValue, NumberValue, ObjectValue, TypedNumberValue, UndefinedValue, Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { sort } from '../host-defined/sort.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { fitsNumericType } from '../type-system/runtime.mts';
 import { assignProps } from './bootstrap.mts';
 import { ValidateTypedArray } from './TypedArray.mts';
+import { surroundingAgent } from '#self';
 import {
   Assert,
   Call,
@@ -248,11 +251,45 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
     return Value.undefined;
   }
 
+  /**
+   * proposal-runtime-types: a search over a TYPED array takes its needle at the
+   * array's element type. The design gives a typed collection element-typed
+   * method signatures - `has(value: T)` on a `WeakSet<T>`, and the same shape
+   * for `[].<T>` - so `a.includes(65)` is a literal at a parameter of type
+   * `uint16` and adopts by the ordinary literal rule; the comparison that
+   * follows is uint16 against uint16, which already worked. Without it a
+   * correctly typed array could not find a literal it contains (F68).
+   *
+   * A search parameter is NOT a store parameter, and the difference is
+   * deliberate: a store commits a value and throws on one the type cannot hold,
+   * while a search asks a membership question, and a value outside the element
+   * type is simply not a member. `a.includes(70000)` on a `[].<uint16>` is
+   * *false*, not a RangeError.
+   */
+  function searchNeedleAtElementType(O: Value, needle: Value): Value {
+    if (!surroundingAgent.feature('runtime-types')) {
+      return needle;
+    }
+    const element = (O as { TypedElement?: TypeRecord }).TypedElement;
+    if (element === undefined || needle instanceof TypedNumberValue || !(needle instanceof NumberValue)) {
+      return needle;
+    }
+    const prim = element as TypeRecord & { Kind: 'primitive' };
+    const v = R(needle) as number;
+    if (!fitsNumericType(v, prim.Name, prim.Arguments)) {
+      // Not representable, so no element equals it. The caller's comparison
+      // will simply not match, which is the answer a search wants.
+      return needle;
+    }
+    return new TypedNumberValue(v, element);
+  }
+
   /** https://tc39.es/ecma262/#sec-array.prototype.includes */
   /** https://tc39.es/ecma262/#sec-%typedarray%.prototype.includes */
   function* ArrayProto_includes([searchElement = Value.undefined, fromIndex = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
     Q(Validate?.(thisValue));
     const O = Q(ToObject(thisValue));
+    searchElement = searchNeedleAtElementType(O, searchElement);
     const len = Q(yield* ToLength(O));
     if (len === 0) {
       return Value.false;
@@ -286,6 +323,7 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
   function* ArrayProto_indexOf([searchElement = Value.undefined, fromIndex = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
     Q(Validate?.(thisValue));
     const O = Q(ToObject(thisValue));
+    searchElement = searchNeedleAtElementType(O, searchElement);
     const len = Q(yield* ToLength(O));
     if (len === 0) {
       return F(-1);
@@ -358,6 +396,7 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
   function* ArrayProto_lastIndexOf([searchElement = Value.undefined, fromIndex]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
     Q(Validate?.(thisValue));
     const O = Q(ToObject(thisValue));
+    searchElement = searchNeedleAtElementType(O, searchElement);
     const len = Q(yield* ToLength(O));
     if (len === 0) {
       return F(-1);

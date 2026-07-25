@@ -473,6 +473,36 @@ test('row 7b: Reflect.defineProperty checks the value against the declared type'
   expect(evaluated('const o = {}; Reflect.defineProperty(o, "x", { value: 7, type: uint8, writable: true, enumerable: true, configurable: true }); String(o.x is uint8);')).toBe('true');
 });
 
+test('a typed array finds a literal it contains, and a search does not throw', () => {
+  // A typed collection takes its needle at the element type, which is the
+  // design's own shape for a typed collection (`has(value: T)` on a
+  // `WeakSet<T>`). Without it a correctly typed array could not find a literal
+  // it contains - `a.includes(65)` was *false* on a `[].<uint16>` holding 65,
+  // in fully typed code with no mixing anywhere (F68).
+  const a = 'let a: [].<uint16> = [65, 66]; ';
+  expect(evaluated(`${a} String(a.includes(65));`)).toBe('true');
+  expect(evaluated(`${a} String(a.indexOf(66));`)).toBe('1');
+  expect(evaluated(`${a} String(a.lastIndexOf(65));`)).toBe('0');
+  // A SEARCH is not a STORE, and the difference is deliberate: a store commits
+  // a value and throws on one the type cannot hold, while a search asks a
+  // membership question and a value outside the element type is simply not a
+  // member. Asserted side by side so the split reads as a decision.
+  expect(evaluated(`${a} String(a.includes(70000));`)).toBe('false');
+  expect(evaluated(`${a} String(a.includes("hello"));`)).toBe('false');
+  expect(evaluated(`${a} let r = "no"; try { a.push(70000); } catch (e) { r = String(e.constructor.name); } r;`)).toBe('RangeError');
+  // Exactness is respected: a fraction is not a member of an integer array.
+  expect(evaluated('let a2: [].<uint8> = [1]; String(a2.includes(1.5));')).toBe('false');
+  expect(evaluated('let f: [].<float32> = [1.5]; String(f.includes(1.5));')).toBe('true');
+  // A typed needle worked already and still does.
+  expect(evaluated(`${a} const c = (65 := uint16); String(a.includes(c));`)).toBe('true');
+  // An UNTYPED array is unchanged, and asking whether it contains a typed value
+  // is still *false* - the array holds plain Numbers, and the values of
+  // distinct value types are distinct. The BigInt precedent is the same and
+  // already shipped in the language, so this is a decision rather than a gap.
+  expect(evaluated('const b = [65]; String(b.includes(65)) + "/" + String(b.includes((65 := uint16)));')).toBe('true/false');
+  expect(evaluated('String([1n].includes(1));')).toBe('false');
+});
+
 test('a typed array reads its length at uint32, and an untyped one does not', () => {
   // "`length` is a `uint32`" (sec-array-defaults-and-stores). The STORED length
   // stays a plain Number - the array exotic object asserts that it is one and
