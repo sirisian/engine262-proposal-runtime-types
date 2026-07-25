@@ -2,8 +2,7 @@ import { BigIntValue, NumberValue, Value, type ObjectValue } from '../value.mts'
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
-  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord,
-} from './records.mts';
+  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord } from './records.mts';
 import { IsAssignable } from './relations.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -550,7 +549,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name);
+        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };

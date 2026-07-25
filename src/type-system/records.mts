@@ -1,4 +1,4 @@
-import type { Value } from '../value.mts';
+import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 
 /**
@@ -183,6 +183,28 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
     Arguments: args,
     LibraryName: name,
   };
+}
+
+/**
+ * #table-metadata-values admits "a Number" as a metadata value, and says in as
+ * many words that "a NaN is equivalent to a NaN" - so the two Numbers that have
+ * NAMES rather than numeric literals are metadata values like any other, and
+ * `float64.<{ max: Infinity }>` should be writable. It was not: `Infinity` and
+ * `NaN` resolved as type NAMES, found nothing, and failed with "Infinity is not
+ * a type", which left a bounds-shaped meta type unable to state its own default
+ * and the suite writing `1e400` instead - a workaround that produces the very
+ * same value, as its own error messages showed by printing it back as Infinity
+ * (F63). They resolve as LITERAL types, which the language already has and
+ * already writes: `let x: 1` is a literal type today.
+ */
+export function namedNumericLiteralRecord(name: string): TypeRecord | null {
+  if (name === 'Infinity') {
+    return { Kind: 'literal', Value: Value(Infinity), Base: makePrimitive('number') };
+  }
+  if (name === 'NaN') {
+    return { Kind: 'literal', Value: Value(NaN), Base: makePrimitive('number') };
+  }
+  return null;
 }
 
 export function builtinTypeRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {

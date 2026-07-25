@@ -10,8 +10,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType,
-} from './records.mts';
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { IsAssignable } from './relations.mts';
 import {
@@ -992,6 +991,10 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return { ...baseRecord, Arguments: argRecords };
         }
         return baseRecord;
+      }
+      const named = namedNumericLiteralRecord(name);
+      if (named) {
+        return named;
       }
       return Throw.TypeError('$1 is not a type', Value(name));
     }

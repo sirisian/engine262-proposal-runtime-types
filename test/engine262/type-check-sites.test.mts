@@ -196,6 +196,37 @@ test('a class method is checked like a call, and an overloaded one ranks', () =>
   expect(evaluated('class C { m(v) { return v; } } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
 });
 
+test('Infinity and NaN are metadata values, so a bound can state its own default', () => {
+  // #table-metadata-values admits "a Number" and says "a NaN is equivalent to a
+  // NaN", so the two Numbers written with a NAME rather than a numeral are
+  // metadata values like any other. They resolved as type names, found nothing,
+  // and failed with "Infinity is not a type" - which left a bounds-shaped meta
+  // type unable to state its own default and the suite writing `1e400`, a
+  // workaround producing the very same value (F63).
+  const bounds = `
+    type B = { min: number, max: number };
+    meta B {
+      default = { min: -Infinity, max: Infinity };
+      subtype(a, b) { return b.min <= a.min && a.max <= b.max; }
+      validate(v, c) { return Number(v) >= c.min && Number(v) <= c.max; }
+    }
+  `;
+  expect(evaluated(`${bounds} String((5 := float64.<{ min: 0, max: Infinity }>) is float64.<{ min: 0, max: Infinity }>);`)).toBe('true');
+  // Writing the default explicitly is what was impossible, and it makes the
+  // sit-out reachable: a portion equal to the default takes no part, so any
+  // value is admitted.
+  expect(evaluated(`${bounds} String((99999 := float64.<{ min: -Infinity, max: Infinity }>));`)).toBe('99999');
+  // A real bound still enforces.
+  expect(run(`${bounds} (5 := float64.<{ min: 10, max: Infinity }>); "admitted";`)).toMatchObject({ Type: 'throw' });
+  // NaN is a metadata value and interns by SameValue, so two NaN metadata are
+  // ONE type - which is what the table promises and what interning needs.
+  const nan = 'type N = { n: number }; meta N { default = { n: 0 }; subtype(a, b) { return true; } validate(v, c) { return true; } } ';
+  expect(evaluated(`${nan} String(float64.<{ n: NaN }> === float64.<{ n: NaN }>);`)).toBe('true');
+  // A bare identifier in a type position is still a type reference, and only
+  // these two names are numerals behind a minus.
+  expect(run('type T = float64.<{ n: -Other }>; "ok";')).toMatchObject({ Type: 'throw' });
+});
+
 test('a refused crossing names the meta type and uses its describe hook', () => {
   // #sec-primitive-metadata requires both failure arms to throw a TypeError
   // "whose message names M and, where M defines `describe`, its descriptions".

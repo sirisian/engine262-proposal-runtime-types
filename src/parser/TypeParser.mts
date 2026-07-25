@@ -248,12 +248,26 @@ export abstract class TypeParser extends ExpressionParser {
         }
         node.kind = 'boolean';
         break;
+      case Token.IDENTIFIER:
+        // `-Infinity` is a NEGATED numeric literal whose numeral has a name.
+        // Only reachable behind `-`, because a bare identifier in a type
+        // position is a type reference and resolves as one - `Infinity` and
+        // `NaN` are handled there (F63). Without this a bounds-shaped meta type
+        // could not state its own default, since `-Infinity` was a SyntaxError
+        // where `Infinity` had just become writable.
+        if (!negated || (tok.value !== 'Infinity' && tok.value !== 'NaN')) {
+          return this.unexpected();
+        }
+        node.kind = 'number';
+        break;
       default:
         return this.unexpected();
     }
     node.value = tok.type === Token.TRUE || tok.type === Token.FALSE
       ? tok.type === Token.TRUE
-      : tok.value as number | bigint | string;
+      : (tok.type === Token.IDENTIFIER
+        ? (tok.value === 'NaN' ? NaN : Infinity)
+        : tok.value as number | bigint | string);
     node.negated = negated;
     this.next();
     return this.finishNode(node, 'LiteralType');
