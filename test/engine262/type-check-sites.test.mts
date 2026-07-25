@@ -473,6 +473,24 @@ test('row 7b: Reflect.defineProperty checks the value against the declared type'
   expect(evaluated('const o = {}; Reflect.defineProperty(o, "x", { value: 7, type: uint8, writable: true, enumerable: true, configurable: true }); String(o.x is uint8);')).toBe('true');
 });
 
+test('an EMPTY typed array carries its element type', () => {
+  // An empty array satisfies any element type VACUOUSLY, so the membership
+  // shortcut in the conversion returned it unchanged and it never acquired the
+  // element type the store check reads. `let a: [].<uint8> = []` therefore
+  // produced an array on which the entire typed surface was switched off -
+  // for the most common way to build one (F71).
+  expect(evaluated('let a: [].<uint8> = []; a.push(65); String(a[0] is uint8);')).toBe('true');
+  expect(evaluated('let a: [].<uint8> = []; a[0] = 65; String(a[0] is uint8);')).toBe('true');
+  // The build-a-list idiom end to end.
+  expect(evaluated('let a: [].<uint8> = []; for (let i = (0 := uint8); i < (3 := uint8); i++) { a.push(i); } String(a.length) + "/" + String(a[2] is uint8);')).toBe('3/true');
+  // And the checks it was missing now fire on it.
+  expect(thrownKind('let a: [].<uint8> = []; function anyv() { return 300; } a[0] = anyv();')).toBe('RangeError');
+  expect(evaluated('function f(a: [].<uint8>) { a.push(65); return a[0] is uint8; } String(f([]));')).toBe('true');
+  // A non-empty one was always right, and an untyped array is untouched.
+  expect(evaluated('let a: [].<uint8> = [1]; a.push(65); String(a[1] is uint8);')).toBe('true');
+  expect(evaluated('const b = []; b.push(65); String(b[0] is uint8);')).toBe('false');
+});
+
 test('a typed collection takes its needle at the element type', () => {
   // A typed collection's search methods take the element type, which is the
   // design's own shape for one (`has(value: T)` on a `WeakSet<T>`). Without it

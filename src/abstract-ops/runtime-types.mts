@@ -131,6 +131,17 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   }
   const already = Q(yield* IsOfType(value, t));
   if (already) {
+    // An array that is ALREADY of the type still has to carry its element type,
+    // or the store check has nothing to read. This matters most for the EMPTY
+    // array, which satisfies any element type vacuously and so always took this
+    // shortcut: `let a: [].<uint8> = []` produced an array with no element
+    // type, so `a.push(65)` stored a plain Number and the typed surface
+    // silently switched off for the most common way to build an array (F71).
+    // The same shape as F38's crossing, swallowed by the same provenance-blind
+    // shortcut.
+    if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+    }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
@@ -265,6 +276,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   }
   const already = Q(yield* IsOfType(value, t));
   if (already) {
+    // An array that is ALREADY of the type still has to carry its element type,
+    // or the store check has nothing to read. This matters most for the EMPTY
+    // array, which satisfies any element type vacuously and so always took this
+    // shortcut: `let a: [].<uint8> = []` produced an array with no element
+    // type, so `a.push(65)` stored a plain Number and the typed surface
+    // silently switched off for the most common way to build an array (F71).
+    // The same shape as F38's crossing, swallowed by the same provenance-blind
+    // shortcut.
+    if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+    }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
