@@ -268,6 +268,16 @@ export function displayType(t: TypeRecord): string {
     // checking pass's diagnostic ("$1 is not assignable to $2") names the two
     // parameterizations rather than the word "parameterized".
     case 'parameterized': return `${displayType(t.Base)}.<${displayMetadataValue(t.Metadata)}>`;
+    case 'nominal': {
+      // A class or interface prints by its declared NAME. It fell through to
+      // the default before, so a rejected assignment between two classes read
+      // "nominal is not assignable to nominal", which names neither party and
+      // is useless to whoever has to fix the program (F57).
+      const declared = (t.Declaration as { BindingIdentifier?: { name?: string } | null, TypeName?: { IdentifierReference?: { name?: string } } | null } | undefined);
+      const name = t.LibraryName ?? declared?.BindingIdentifier?.name ?? declared?.TypeName?.IdentifierReference?.name;
+      const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')}>` : '';
+      return name ? `${name}${args}` : `nominal${args}`;
+    }
     default: return t.Kind;
   }
 }

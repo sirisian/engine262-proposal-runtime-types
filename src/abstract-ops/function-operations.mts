@@ -29,7 +29,7 @@ import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { EnforceAnnotation, LookupTypeDefault } from './runtime-types.mts';
+import { EnforceAnnotation, LookupTypeDefault, RequireType } from './runtime-types.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
@@ -270,8 +270,19 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   } else { // 6. Else,
     // a. Assert: ! IsPropertyKey(fieldName) is true.
     Assert(X(IsPropertyKey(fieldName)));
+    // proposal-runtime-types (#table-check-sites, row "a value stored to a
+    // property or field of declared type t"): the INITIALIZER is such a store,
+    // and it was the one path that skipped the conversion - a field with no
+    // initializer got a typed default, a field written after construction got
+    // a typed value, and a field with an initializer kept whatever the
+    // initializer produced, so `class C { x: uint8 = 1 }` made `new C().x is
+    // uint8` FALSE until something wrote to it (F57).
+    let stored = initValue;
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
+    }
     // b. Perform ? CreateDataPropertyOrThrow(receiver, fieldName, initValue).
-    Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, initValue));
+    Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, stored));
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       const map = ((receiver as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
       map.set(fieldName instanceof JSStringValue ? fieldName.stringValue() : fieldName, fieldTypeObject);

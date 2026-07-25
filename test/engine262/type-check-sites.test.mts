@@ -38,6 +38,12 @@ function expectStatic(source: string) {
   expect(run(`${source} "unreachable";`)).toMatchObject({ Type: 'throw' });
 }
 
+function thrownMessage(source: string): string {
+  const completion = run(source);
+  expect(completion).toMatchObject({ Type: 'throw' });
+  return ((completion as { Value?: { HostDefinedMessageString?: string } }).Value?.HostDefinedMessageString) ?? '';
+}
+
 function thrownKind(source: string): string {
   const completion = run(source);
   expect(completion).toMatchObject({ Type: 'throw' });
@@ -138,9 +144,51 @@ test('the checker reports what the static types settle, at the store rows', () =
   expect(evaluated('function nc(a: [].<uint8>) { a[0] = 7; } "ok";')).toBe('ok');
   expect(evaluated('function nc(o: { x: uint8 }) { o.x = 7; } "ok";')).toBe('ok');
   expect(evaluated('function nc(a) { a[0] = 300; } "ok";')).toBe('ok');
-  // A CLASS field store is still run-time only: a class instance has no
-  // structural type in the checker, so `c.x = 300` waits on class field types.
-  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; } "ok";')).toBe('ok');
+  // A CLASS field store is checked too since F57: a class name in a type
+  // position now resolves to a nominal instance type carrying its declared
+  // fields, so the target's type is visible here exactly as an object type's
+  // is. Assignability stays NOMINAL - two classes with identical fields are
+  // not interchangeable - which is what the [[Structure]] channel keeps
+  // separate from identity.
+  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; }');
+  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = "s"; }');
+  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 7; } "ok";')).toBe('ok');
+  expect(evaluated('class C { y = 1; } function nc(c: C) { c.y = "anything"; } "ok";')).toBe('ok');
+  expectStatic('class A { x: uint8 = 1; } class B { x: uint8 = 1; } function nc(a: A) { let b: B = a; }');
+});
+
+test('a class instance carries its declared fields into the checker', () => {
+  // Until F57 a class name in a type position resolved to nothing, so every
+  // value of a class type was ~any~: no field's type was visible, no store to
+  // one was diagnosed, and no call passing one was checked.
+  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { let y: uint16 = c.x; }');
+  expectStatic('function nc(c: C) { c.x = 300; } class C { x: uint8 = 1; }');
+  // Fields that are not instance fields of the public shape stay invisible:
+  // a static field is not on the instance, and a private field is not
+  // reachable through a member expression at all.
+  expect(evaluated('class C { static s: uint8 = 1; } function nc(c: C) { c.s = 300; } "ok";')).toBe('ok');
+  expect(evaluated('class C { #p: uint8 = 1; } function nc(c: C) { c.q = 300; } "ok";')).toBe('ok');
+  // And the diagnostic names the classes, which it could not do while nominal
+  // types printed as the word "nominal".
+  const message = thrownMessage('class Apple { x: uint8 = 1; } class Orange { x: uint8 = 1; } function nc(a: Apple) { let b: Orange = a; } "unreachable";');
+  expect(message).toContain('Apple');
+  expect(message).toContain('Orange');
+});
+
+test('a field initializer is a store to that field, and is converted like one', () => {
+  // The one check site that skipped the conversion (F57): a field with NO
+  // initializer got a typed default and a field written after construction got
+  // a typed value, but a field with an initializer kept whatever the
+  // initializer produced - so `new C().x is uint8` was FALSE until something
+  // wrote to it, and became true afterwards.
+  expect(evaluated('class C { x: uint8 = 1; } String(new C().x is uint8);')).toBe('true');
+  expect(evaluated('class C { x: uint8 = 7; } String(new C().x);')).toBe('7');
+  expect(evaluated('class C { x: uint8; } String(new C().x is uint8);')).toBe('true');
+  expect(evaluated('function g() { return 5; } class C { x: uint8 = g(); } String(new C().x is uint8);')).toBe('true');
+  // An initializer whose value the type cannot represent is reported where the
+  // initializer runs, and an untyped field is untouched.
+  expect(thrownKind('function g() { return 300; } class C { x: uint8 = g(); } new C();')).toBe('RangeError');
+  expect(evaluated('class C { y = "s"; } String(new C().y);')).toBe('s');
 });
 
 test('a call to a declared function is argument-checked', () => {

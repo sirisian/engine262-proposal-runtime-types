@@ -372,6 +372,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  /**
+   * The structural shape behind a type, where it has one: an object type is its
+   * own, and a nominal type - a class or an interface - carries one in
+   * [[Structure]]. Reading a member goes through here so that a class's fields
+   * are visible WITHOUT making class assignability structural, which stays by
+   * [[Declaration]] identity.
+   */
+  const structureOf = (t: Known): Known => {
+    if (t && t.Kind === 'nominal') {
+      const s = (t as unknown as { Structure?: TypeRecord }).Structure;
+      return s ?? null;
+    }
+    return t;
+  };
+
+  /** Class instance types by name (F57), consulted when a type names a class. */
+  const classTypes = new Map<string, Known>();
+
   const lookupAlias = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
@@ -452,7 +470,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name);
+        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? (classTypes.get(name) ?? null);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
@@ -567,7 +585,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.IdentifierName && m.MemberExpression) {
-          const objType = staticType(m.MemberExpression);
+          const objType = structureOf(staticType(m.MemberExpression));
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             return prop ? prop.type : null;
@@ -593,6 +611,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * typed, and a rest parameter suppresses the signature entirely rather than
    * inviting an arity mistake.
    */
+  /**
+   * A class's INSTANCE type. Until now a class name in a type position resolved
+   * to nothing, so `function f(c: C) { c.x = 300 }` was unchecked, no field's
+   * type was visible, and every value of a class type was ~any~ to the checker
+   * (F57). The record is NOMINAL - assignability compares [[Declaration]]
+   * identity, so two classes with the same fields stay distinct - and it
+   * carries the declared fields as its [[Structure]], which is the same channel
+   * an interface already uses. Private fields are deliberately absent: they are
+   * not reachable through a member expression from outside, and the store to
+   * one is checked at run time by its own path.
+   */
+  const classInstanceType = (n: ParseNode): Known => {
+    const cls = n as unknown as {
+      BindingIdentifier?: { name: string } | null,
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+    };
+    const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    for (const el of cls.ClassTail?.ClassBody ?? []) {
+      if (el.type !== 'FieldDefinition') {
+        continue;
+      }
+      const f = el as unknown as {
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        static?: boolean,
+        ClassElementName?: { type?: string, name?: string, value?: string } | null,
+      };
+      if (f.static || !f.TypeAnnotation) {
+        continue;
+      }
+      const key = f.ClassElementName?.name ?? f.ClassElementName?.value;
+      if (typeof key !== 'string' || f.ClassElementName?.type === 'PrivateIdentifier') {
+        continue;
+      }
+      const t = resolveType(f.TypeAnnotation.Type);
+      if (t) {
+        Properties.push({ key, type: t, optional: false });
+      }
+    }
+    return {
+      Kind: 'nominal',
+      Declaration: n,
+      Arguments: [],
+      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+    } as unknown as Known;
+  };
+
   const declareFunctionSignatures = (list: readonly ParseNode[]) => {
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
@@ -643,6 +707,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       declare(name, { Kind: 'function', Signatures } as unknown as Known);
+    }
+    // Class instance types are recorded over the same list, so a class may be
+    // named as a type anywhere in it.
+    for (const n of list) {
+      if (n.type === 'ClassDeclaration') {
+        const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (name) {
+          classTypes.set(name, classInstanceType(n));
+        }
+      }
     }
   };
 
@@ -1069,7 +1143,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // here, so `c.x = 300` for a class-typed `c` still waits on the
           // checker learning class field types.
           const m = a.LeftHandSideExpression as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
-          const objType = m.MemberExpression ? staticType(m.MemberExpression) : null;
+          const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
           let target: Known = null;
           if (objType && objType.Kind === 'object' && m.IdentifierName) {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
