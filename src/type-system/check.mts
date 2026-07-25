@@ -390,6 +390,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Class instance types by name (F57), consulted when a type names a class. */
   const classTypes = new Map<string, Known>();
+  /** Construct signatures by class node, for checking `new C(...)` (F59). */
+  const constructSignatures = new Map<ParseNode, { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] }>();
 
   const lookupAlias = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -594,6 +596,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return null;
       }
+      case 'NewExpression': {
+        // `new C()` produces an instance of C, so the class's instance type is
+        // the expression's type - which is what lets `new C().x` be read at the
+        // field's declared type (F59).
+        const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
+        if (target && target.type === 'IdentifierReference') {
+          return classTypes.get((target as { name: string }).name) ?? null;
+        }
+        return null;
+      }
       case 'IsExpression':
         return makePrimitive('boolean');
       case 'TemplateLiteral':
@@ -629,7 +641,83 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
     const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    // Methods, accumulated per name because a method may be OVERLOADED exactly
+    // as a function may (F59). A getter contributes its return type as the
+    // property's type, since that is what reading the property yields; a setter
+    // contributes nothing yet, and is the natural next step for checking a
+    // store through an accessor.
+    const methods = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
+    const unusable = new Set<string>();
+    let construct: { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] } | null = null;
     for (const el of cls.ClassTail?.ClassBody ?? []) {
+      if (el.type === 'MethodDefinition') {
+        const md = el as unknown as {
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          static?: boolean,
+          ClassElementName?: { type?: string, name?: string, value?: string } | null,
+          UniqueFormalParameters?: readonly ParseNode[] | null,
+          PropertySetParameterList?: readonly ParseNode[] | null,
+        };
+        const key = md.ClassElementName?.name ?? md.ClassElementName?.value;
+        if (md.static || typeof key !== 'string' || md.ClassElementName?.type === 'PrivateIdentifier') {
+          continue;
+        }
+        if (key === 'constructor') {
+          // The constructor is the class's CONSTRUCT signature, not a member of
+          // the instance shape: `c.constructor` is the class, and typing it as
+          // a method taking the constructor's parameters would be wrong twice
+          // over. It is collected separately, for `new C(...)` (F59).
+          const cparams: Known[] = [];
+          const cshapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+          let cusable = true;
+          for (const p of md.UniqueFormalParameters ?? []) {
+            if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+              cusable = false;
+              break;
+            }
+            const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
+            cparams.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
+            cshapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
+          }
+          if (cusable) {
+            construct = { Parameters: cparams, Shapes: cshapes };
+          }
+          continue;
+        }
+        if (md.PropertySetParameterList) {
+          continue;
+        }
+        if (!md.UniqueFormalParameters) {
+          // A getter: the property reads at its declared return type.
+          const t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+          if (t) {
+            Properties.push({ key, type: t, optional: false });
+          }
+          continue;
+        }
+        const Parameters: Known[] = [];
+        const shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+        let usable = true;
+        for (const p of md.UniqueFormalParameters) {
+          if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+            usable = false;
+            break;
+          }
+          const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
+          Parameters.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
+          shapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
+        }
+        if (!usable) {
+          unusable.add(key);
+          continue;
+        }
+        const Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+        const Untyped = !md.TypeAnnotation && Parameters.every((t) => t === null);
+        const sigs = methods.get(key) ?? [];
+        sigs.push({ Parameters, Return, Shapes: shapes, Untyped });
+        methods.set(key, sigs);
+        continue;
+      }
       if (el.type !== 'FieldDefinition') {
         continue;
       }
@@ -650,12 +738,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Properties.push({ key, type: t, optional: false });
       }
     }
-    return {
+    for (const [key, Signatures] of methods) {
+      if (unusable.has(key) || Properties.some((p) => p.key === key)) {
+        continue;
+      }
+      Properties.push({ key, type: { Kind: 'function', Signatures } as unknown as TypeRecord, optional: false });
+    }
+    const instance = {
       Kind: 'nominal',
       Declaration: n,
       Arguments: [],
       Structure: { Kind: 'object', Properties, IndexSignatures: [] },
     } as unknown as Known;
+    if (construct) {
+      constructSignatures.set(n, construct);
+    }
+    return instance;
   };
 
   const declareFunctionSignatures = (list: readonly ParseNode[]) => {
@@ -1186,6 +1284,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(c.CallExpression);
         walk(c.Arguments);
+        return;
+      }
+      case 'NewExpression': {
+        const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
+        const target = ne.MemberExpression;
+        if (target && target.type === 'IdentifierReference' && Array.isArray(ne.Arguments)) {
+          const instance = classTypes.get((target as { name: string }).name);
+          const decl = instance && instance.Kind === 'nominal'
+            ? (instance as unknown as { Declaration: ParseNode }).Declaration
+            : null;
+          const sig = decl ? constructSignatures.get(decl) : undefined;
+          if (sig) {
+            ne.Arguments.forEach((arg, i) => {
+              if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
+                const p = sig.Parameters[i];
+                if (p) {
+                  requireAssignable(staticTypeIn(arg, p), p);
+                }
+              }
+            });
+          }
+        }
+        walk(ne.MemberExpression);
+        walk(ne.Arguments);
         return;
       }
       case 'AssignmentExpression': {

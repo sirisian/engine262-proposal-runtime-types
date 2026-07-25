@@ -175,6 +175,44 @@ test('a class instance carries its declared fields into the checker', () => {
   expect(message).toContain('Orange');
 });
 
+test('a class method is checked like a call, and an overloaded one ranks', () => {
+  // Methods join the class's [[Structure]] as function types (F59), so the
+  // call site's existing argument checking covers them.
+  expectStatic('class C { m(v: uint8) { return v; } } function nc(c: C) { c.m(300); }');
+  expectStatic('class C { m(v: uint8) { return v; } } function nc(c: C) { c.m("s"); }');
+  expect(evaluated('class C { m(v: uint8) { return v; } } function nc(c: C) { c.m(7); } "ok";')).toBe('ok');
+  // A method's return type flows to the caller.
+  expectStatic('class C { m(): uint8 { return (1 := uint8); } } function nc(c: C) { let x: uint16 = c.m(); }');
+  // Methods are overloadable, so their signatures accumulate and rank exactly
+  // as a function's do.
+  expect(evaluated('class C { m(v: uint8) { return "u8"; } m(v: string) { return "s"; } } String(new C().m("x"));')).toBe('s');
+  expectStatic('class C { m(v: uint8) { return "u8"; } m(v: string) { return "s"; } } function nc(c: C) { c.m(300); }');
+  // A getter reads at its declared return type.
+  expectStatic('class C { get g(): uint8 { return (1 := uint8); } } function nc(c: C) { let x: uint16 = c.g; }');
+  // Static and private members are not part of the instance shape, and an
+  // untyped method leaves its call unchecked.
+  expect(evaluated('class C { static m(v: uint8) {} } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
+  expect(evaluated('class C { #m(v: uint8) {} } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
+  expect(evaluated('class C { m(v) { return v; } } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
+});
+
+test('a constructor is a construct signature, not a member of the instance', () => {
+  // `new C(...)` is checked against the constructor's parameters (F59)...
+  expectStatic('class C { constructor(v: uint8) {} } function nc() { new C(300); }');
+  expect(evaluated('class C { constructor(v: uint8) {} } function nc() { new C(7); } "ok";')).toBe('ok');
+  // ...and the constructor is NOT an instance method: `c.constructor` is the
+  // class, so typing it as a method taking the constructor's parameters would
+  // be wrong twice over.
+  expect(evaluated('class C { constructor(v: uint8) {} } function nc(c: C) { c.constructor(300); } "ok";')).toBe('ok');
+  // `new C()` has the class's instance type, so a field read through it flows.
+  expectStatic('class C { x: uint8 = 1; } function nc() { let y: uint16 = new C().x; }');
+  // An untyped or absent constructor leaves the call unchecked, and the
+  // construction still runs.
+  expect(evaluated('class C { constructor(v) {} } function nc() { new C(300); } "ok";')).toBe('ok');
+  expect(evaluated('class C { x: uint8 = 1; } function nc() { new C(300); } "ok";')).toBe('ok');
+  expect(evaluated('class C { constructor(v: uint8) { this.v = v; } } String(new C((7 := uint8)).v);')).toBe('7');
+});
+
 test('a field initializer is a store to that field, and is converted like one', () => {
   // The one check site that skipped the conversion (F57): a field with NO
   // initializer got a typed default and a field written after construction got
