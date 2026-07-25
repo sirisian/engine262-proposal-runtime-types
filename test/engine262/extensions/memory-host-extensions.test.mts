@@ -48,19 +48,26 @@ test('decorators: @decorator does not parse under the runtime-types feature (doc
   // (The type-object half of reflection is implemented; see typeobjects.test.mts.)
   expectThrown('function d(x) { return x; } @d class A {} typeof A;');
 });
+// Phase 3's unclaimed-key error adjudicates these programs' keys, and none of
+// these tests is ABOUT the metadata protocol, so each waives adjudication
+// through the base-form route: a meta registered against the base speaks for
+// every key of its parameterizations (the C9 waiver, F44). The interning and
+// carrying assertions are untouched.
+const waive = 'meta float32 { default = {}; subtype(a, b) { return true; } } meta float64 { default = {}; subtype(a, b) { return true; } } ';
+
 
 // ── primitive metadata: parses and interns, does not carry/validate ───────────
 test('primitive metadata: a metadata-parameterized primitive parses and interns', () => {
-  expect(evaluated('type Meter = float32.<{ unit: "m" }>; typeof Meter;')).toBe('object');
+  expect(evaluated(waive + 'type Meter = float32.<{ unit: "m" }>; typeof Meter;')).toBe('object');
   // it reflects as a parameterization of its base, and interns
-  expect(evaluated('type Meter = float32.<{ unit: "m" }>; Reflect.getReflection(Meter).kind;')).toBe('parameterized');
-  expect(ok('type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "m" }>; A === B;')).toBe(true);
+  expect(evaluated(waive + 'type Meter = float32.<{ unit: "m" }>; Reflect.getReflection(Meter).kind;')).toBe('parameterized');
+  expect(ok(waive + 'type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "m" }>; A === B;')).toBe(true);
 });
 
 test('primitive metadata: the metadata is carried; the meta hooks are still to come', () => {
   // The metadata is carried on the type and the parameterization is distinct from
   // its base, which is what the validate judgment needs to have anything to read.
-  expect(evaluated('type Meter = float32.<{ unit: "m" }>; (Meter === float32) ? "same" : "distinct";')).toBe('distinct');
+  expect(evaluated(waive + 'type Meter = float32.<{ unit: "m" }>; (Meter === float32) ? "same" : "distinct";')).toBe('distinct');
   // Still to come: a meta declaration binding its name so its hooks reach the
   // judgments, and the dimension, bound, and scale semantics written over them.
   expectThrown('meta Bounds { subtype(a, b) { return true; } validate(v, c) { return true; } } Bounds;');
@@ -205,25 +212,25 @@ test('simd: a name exists only where the lanes fill a register', () => {
 test('primitive metadata: a metadata parameterization is carried, not dropped', () => {
   // the argument is an object type written on a primitive, which the metadata
   // protocol reads as metadata rather than as an argument to the primitive
-  expect(evaluated('type A = float32.<{ unit: "m" }>; Reflect.getReflection(A).kind;')).toBe('parameterized');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; Reflect.getReflection(A).kind;')).toBe('parameterized');
   // it is a distinct type from its bare base, where before it interned back to it
-  expect(evaluated('type A = float32.<{ unit: "m" }>; (A === float32) ? "same" : "distinct";')).toBe('distinct');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; (A === float32) ? "same" : "distinct";')).toBe('distinct');
   // and two different metadata are two different types
-  expect(evaluated('type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "s" }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
-  expect(evaluated('type A = float32.<{ minimum: 0 }>; type B = float32.<{ minimum: 1 }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
-  expect(evaluated('type A = float32.<{ unit: "m" }>; type B = float64.<{ unit: "m" }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "s" }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
+  expect(evaluated(waive + 'type A = float32.<{ minimum: 0 }>; type B = float32.<{ minimum: 1 }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; type B = float64.<{ unit: "m" }>; (A === B) ? "same" : "distinct";')).toBe('distinct');
 });
 
 test('primitive metadata: metadata that agrees interns to one type', () => {
   // interning compares the metadata field for field rather than by identity, since
   // two mentions of one shape must be one type
-  expect(evaluated('type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "m" }>; (A === B) ? "same" : "distinct";')).toBe('same');
-  expect(evaluated('type A = float32.<{ m: 1, s: -2 }>; type B = float32.<{ m: 1, s: -2 }>; (A === B) ? "same" : "distinct";')).toBe('same');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; type B = float32.<{ unit: "m" }>; (A === B) ? "same" : "distinct";')).toBe('same');
+  expect(evaluated(waive + 'type A = float32.<{ m: 1, s: -2 }>; type B = float32.<{ m: 1, s: -2 }>; (A === B) ? "same" : "distinct";')).toBe('same');
 });
 
 test('primitive metadata: a parameterization still sheds upward to its base', () => {
   // the default meaning of a parameterization is a brand, shed upward freely
-  expect(evaluated('type A = float32.<{ unit: "m" }>; String(Reflect.isAssignable(A, float32));')).toBe('true');
+  expect(evaluated(waive + 'type A = float32.<{ unit: "m" }>; String(Reflect.isAssignable(A, float32));')).toBe('true');
 });
 
 test('primitive metadata: a numeric type argument is unaffected', () => {

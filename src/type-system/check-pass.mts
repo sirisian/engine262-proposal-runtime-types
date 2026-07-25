@@ -1,14 +1,14 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
-import { TakeDeferredMetadataChecks, type DeferredMetadataCheck } from './check.mts';
+import { TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, type DeferredMetadataCheck } from './check.mts';
 import { Throw } from '#self';
 
 /**
@@ -71,6 +71,29 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
       const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item));
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
+      }
+    }
+  }
+  // The unclaimed-key error, adjudicated HERE and not in the walk: claims
+  // register when a MetaDeclaration evaluates, and the loop above has just
+  // pre-evaluated this source text's own, so a parameterization written above
+  // its meta type is legal while a key claimed nowhere in the agent is the
+  // clause's type error, named at the parameterization that writes it.
+  // Adjudicated BEFORE the pairwise judgment below, so a deferred pair riding
+  // only on unclaimed keys is rejected earlier and for the right reason,
+  // which closes cycle 26's vacuous-admit rider by the plan's own prediction.
+  for (const check of TakeUnclaimedKeyChecks(root)) {
+    if (HasMetaHooks(GetTypeObject(check.base) as unknown as object)) {
+      // The base-form waiver (C9, found while landing this phase): a meta
+      // registered against the BASE receives the whole metadata, so it speaks
+      // for every key of a parameterization of that base, and the brand and
+      // where-shaped programs of the base-form route stay legal. The route
+      // and its waiver are one engine affordance, pinned together.
+      continue;
+    }
+    for (const key of check.keys) {
+      if (MetaTypeClaiming(key) === undefined) {
+        return Throw.TypeError('$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
       }
     }
   }

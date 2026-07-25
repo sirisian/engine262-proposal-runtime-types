@@ -676,6 +676,7 @@ export interface Throw {
   | '$1 is not a $2 object'
   | '$1 is not a case of enum $2'
   | '$1 is not assignable to $2'
+  | '$1 is not claimed by any meta type, in $2'
   | '$1 is not in the range of $2'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'

@@ -491,6 +491,20 @@ export function MetaTypeGoverns(metadata: Value, metaType: object): boolean {
 const metaHooks = new WeakMap<object, Map<string, Value>>();
 
 /**
+ * Whether any meta hooks are registered against a type object. The
+ * unclaimed-key adjudication uses this for the BASE-FORM WAIVER (the plan's
+ * C9, F44): a meta registered against the base itself receives the whole
+ * metadata, so it speaks for every key of a parameterization of that base,
+ * and without the waiver the unclaimed-key sentence would outlaw the very
+ * route the judgment's base fallback consults. The base-form route is an
+ * engine affordance the specification does not yet describe; this predicate
+ * is part of that same pin.
+ */
+export function HasMetaHooks(typeObject: object): boolean {
+  return metaHooks.has(typeObject);
+}
+
+/**
  * proposal-runtime-types (spec, the metadata protocol): "A meta type claims the
  * property keys of its constraint shape. Claiming is global and flat: it is an
  * early error, reported at the second MetaDeclaration rather than at any use, for

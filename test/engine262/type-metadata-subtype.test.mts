@@ -172,17 +172,19 @@ test('a meta declaration from an earlier script governs a later script\'s judgme
   expect(second).toMatchObject({ Type: 'throw' });
 });
 
-test('with no meta type declared, a deferred pair is vacuously admitted (rides F24)', () => {
-  // The judgment quantifies over the declared meta types; with none declared
-  // it holds vacuously, and the runtime admits the same pair today for the
-  // same reason (empty governing set, no base hook). The spec closes this by
-  // making an unclaimed metadata key a type error at the parameterization,
-  // which is F24's not-yet-enforced item; when that lands, this program is
-  // rejected earlier and for that reason, and this test should move with it.
-  expect(evaluated(`
+test('an unclaimed-key pair is rejected at the parameterization, earlier and for the right reason', () => {
+  // Formerly the vacuous-admit pin (rides F24): with no meta type declared,
+  // the judgment held vacuously and this pair was admitted. The unclaimed-key
+  // error landed (the plan's Phase 3, F44), adjudicated in the checking pass
+  // BEFORE the pairwise judgment, so this program is now rejected at the
+  // parameterization that writes `zork` and never reaches the judgment at
+  // all, which is what this test's own note predicted. The vacuous case that
+  // REMAINS admitted is the metadata-equivalent pair, whose portions all
+  // equal their defaults, asserted in the crossing tests above.
+  expectThrown(`
     type A = float32.<{ zork: 1 }>;
     type B = float32.<{ zork: 2 }>;
     function neverCalled() { let a: A = (0 := A); let b: B = a; }
-    "ok";
-  `)).toBe('ok');
+    "unreachable";
+  `);
 });

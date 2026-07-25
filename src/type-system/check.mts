@@ -49,6 +49,26 @@ export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetad
 }
 
 /**
+ * #sec-primitive-metadata: "a metadata object whose own key no meta type
+ * claims is a type error at the parameterization that writes it". The keys
+ * are COLLECTED during the walk and adjudicated by the checking pass, because
+ * claims register when a MetaDeclaration EVALUATES: deciding here would
+ * reject a parameterization written above its meta type, which is legal.
+ * Mirrors the deferred-metadata channel above (the plan's Phase 3, F44).
+ */
+export interface UnclaimedKeyCheck {
+  readonly node: ParseNode;
+  readonly display: string;
+  readonly base: TypeRecord;
+  readonly keys: readonly string[];
+}
+const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
+
+export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
+  return unclaimedKeyChecks.get(root) ?? [];
+}
+
+/**
  * proposal-runtime-types #sec-overload-resolution: a call the checker resolved
  * to a numeric value family FROM ITS CONTEXT ALONE must execute that family's
  * row at run time, so the resolution is recorded per CallExpression node and
@@ -98,6 +118,7 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode): ObjectValue[] {
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
+  const unclaimed: UnclaimedKeyCheck[] = [];
   const frames: Frame[] = [{ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
   const returnTypes: Known[] = [];
 
@@ -414,7 +435,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
             const base = builtinTypeRecord(node.TypeName.IdentifierReference.name);
             if (base && base.Kind === 'primitive') {
-              return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(args[0] as TypeRecord) };
+              const metadata = MetadataObjectFromType(args[0] as TypeRecord);
+              const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata };
+              const keys = Object.keys(metadata as unknown as Record<string, unknown>);
+              if (keys.length > 0) {
+                unclaimed.push({ node, display: displayType(record), base, keys });
+              }
+              return record;
             }
           }
           // proposal-runtime-types: a parameterized type reference is a builtin
@@ -1010,5 +1037,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
+  unclaimedKeyChecks.set(root, unclaimed);
   return errors;
 }
