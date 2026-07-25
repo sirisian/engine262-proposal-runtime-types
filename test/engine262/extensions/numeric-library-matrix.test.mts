@@ -80,6 +80,12 @@ function call(fn: string, arity: number, t: string, sample: number = 4): string 
 }
 
 // -- The matrix: every listed row against every family -------------------------
+// These matrix tests evaluate one program per listed function per numeric type
+// - roughly forty functions across each column - so they are legitimately slow
+// rather than wrong, and vitest's default 5s timeout sits right at their
+// runtime under full-suite load. The project's vitest config raises the
+// default for exactly this reason (F61); the note stays here because this is
+// the file that made it obvious.
 test('numeric library matrix: the integer column matches the listing', () => {
   for (const row of ROWS) {
     for (const t of INTEGER_TYPES) {

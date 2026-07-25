@@ -196,6 +196,36 @@ test('a class method is checked like a call, and an overloaded one ranks', () =>
   expect(evaluated('class C { m(v) { return v; } } function nc(c: C) { c.m(300); } "ok";')).toBe('ok');
 });
 
+test('an interface is a type, and a class picks up what it implements', () => {
+  // The checker resolved an interface name in a type position to NOTHING, so a
+  // parameter typed by an interface was ~any~ and nothing about it was checked
+  // (F61) - a larger gap than the one this cycle set out to close.
+  expectStatic('interface I { k: uint8 } function nc(i: I) { i.k = 300; }');
+  expectStatic('interface I { k: uint8 } function nc(i: I) { let x: uint16 = i.k; }');
+  expectStatic('interface I { m(v: uint8): void } function nc(i: I) { i.m(300); }');
+  expect(evaluated('interface I { k: uint8, m(v: uint8): void } function nc(i: I) { i.k = 7; i.m(7); } "ok";')).toBe('ok');
+  // A class has the members of the interfaces it implements, even one it does
+  // not declare itself...
+  expectStatic('interface I { k: uint8 } class C implements I { } function nc(c: C) { c.k = 300; }');
+  // ...and its OWN declaration wins where both describe a member.
+  expectStatic('interface I { k: string } class C implements I { k: uint8 = 1; } function nc(c: C) { c.k = 300; }');
+  expect(evaluated('interface I { k: uint8 } class C implements I { k: uint8 = 1; } String(new C().k is uint8);')).toBe('true');
+});
+
+test('a setter gives a property its write type', () => {
+  // A store through an accessor was unchecked while a store to a FIELD of the
+  // same name was caught (F61). The write type is kept apart from the read
+  // type, because a getter and setter pair may legitimately differ.
+  expectStatic('class C { set s(v: uint8) {} } function nc(c: C) { c.s = 300; }');
+  expect(evaluated('class C { set s(v: uint8) {} } function nc(c: C) { c.s = 7; } "ok";')).toBe('ok');
+  // Differing pair: the store satisfies the SETTER's type and the read yields
+  // the GETTER's.
+  expectStatic('class C { get p(): string { return "a"; } set p(v: uint8) {} } function nc(c: C) { c.p = 300; }');
+  expectStatic('class C { get p(): string { return "a"; } set p(v: uint8) {} } function nc(c: C) { let x: uint8 = c.p; }');
+  // The run time is untouched: the setter still converts what it receives.
+  expect(evaluated('class C { set s(v: uint8) { this.q = v; } } const c = new C(); c.s = 7; String(c.q is uint8);')).toBe('true');
+});
+
 test('a subclass instance carries what it inherits', () => {
   const base = 'class A { x: uint8 = 1; m(v: uint8) { return v; } } class B extends A { y: uint8 = 2; } ';
   // Inherited fields and methods are part of the subclass's shape (F60), which

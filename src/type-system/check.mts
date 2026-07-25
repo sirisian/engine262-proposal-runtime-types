@@ -397,6 +397,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * time but must not hang the checker.
    */
   const classNodes = new Map<string, ParseNode>();
+  /**
+   * Interface declarations by name, and their structures (F61). The checker
+   * resolved an interface name in a type position to NOTHING, so
+   * `function f(i: I) { i.k = 300 }` was unchecked entirely - a bigger gap than
+   * the one this cycle set out to close, which was only that a class did not
+   * pick up the members of an interface it implements.
+   */
+  const interfaceNodes = new Map<string, ParseNode>();
+  const interfaceTypeMemo = new Map<ParseNode, Known>();
+  const interfaceTypeOf = (name: string): Known => {
+    const node = interfaceNodes.get(name);
+    if (!node) {
+      return null;
+    }
+    const memo = interfaceTypeMemo.get(node);
+    if (memo !== undefined) {
+      return memo;
+    }
+    const decl = node as unknown as { InterfaceMemberList?: readonly ParseNode[] | null };
+    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord }[] = [];
+    for (const member of decl.InterfaceMemberList ?? []) {
+      if (member.type !== 'TypeMember') {
+        continue;
+      }
+      const tm = member as unknown as {
+        PropertyName?: { name?: string, value?: string } | null,
+        Optional?: boolean,
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        MethodSignature?: { FunctionTypeParameterList?: readonly ParseNode[] | null, TypeAnnotation?: ParseNode.TypeAnnotation | null } | null,
+      };
+      const key = tm.PropertyName?.name ?? tm.PropertyName?.value;
+      if (typeof key !== 'string') {
+        continue;
+      }
+      if (tm.MethodSignature) {
+        const Parameters: Known[] = [];
+        const Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+        for (const p of tm.MethodSignature.FunctionTypeParameterList ?? []) {
+          const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          Parameters.push(ann ? resolveType(ann.Type) : null);
+          Shapes.push({ Optional: false, Rest: false, HasDefault: false });
+        }
+        const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
+        Properties.push({
+          key,
+          type: { Kind: 'function', Signatures: [{ Parameters, Return, Shapes, Untyped: false }] } as unknown as TypeRecord,
+          optional: tm.Optional === true,
+        });
+        continue;
+      }
+      const t = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
+      if (t) {
+        Properties.push({ key, type: t, optional: tm.Optional === true });
+      }
+    }
+    const built = {
+      Kind: 'nominal',
+      Declaration: node,
+      Arguments: [],
+      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+    } as unknown as Known;
+    interfaceTypeMemo.set(node, built);
+    return built;
+  };
   const classTypeMemo = new Map<ParseNode, Known>();
   const classTypesInProgress = new Set<ParseNode>();
   const classTypeOf = (name: string): Known => {
@@ -486,7 +550,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name);
+        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
@@ -671,7 +735,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
-    const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may (F59). A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
@@ -680,6 +744,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const methods = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
     const unusable = new Set<string>();
     let construct: { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] } | null = null;
+    const setterTypes = new Map<string, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
       if (el.type === 'MethodDefinition') {
         const md = el as unknown as {
@@ -716,6 +781,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         if (md.PropertySetParameterList) {
+          // A setter gives the property its WRITE type, which is what a store
+          // through the accessor must satisfy. It is kept apart from the read
+          // type because a getter and setter pair may legitimately differ, and
+          // before this a store through a setter was unchecked entirely while a
+          // store to a field of the same name was caught (F61).
+          const sp = md.PropertySetParameterList[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
+          const t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
+          if (t) {
+            setterTypes.set(key, t);
+          }
           continue;
         }
         if (!md.UniqueFormalParameters) {
@@ -769,6 +844,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Properties.push({ key, type: t, optional: false });
       }
     }
+    for (const [key, writeType] of setterTypes) {
+      const existing = Properties.find((p) => p.key === key);
+      if (existing) {
+        (existing as { writeType?: TypeRecord }).writeType = writeType;
+      } else {
+        // Setter with no getter: the property is write-only as far as the
+        // checker can see, so its read type is its write type.
+        Properties.push({ key, type: writeType, optional: false, writeType });
+      }
+    }
     for (const [key, Signatures] of methods) {
       if (unusable.has(key) || Properties.some((p) => p.key === key)) {
         continue;
@@ -781,6 +866,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // at run time (F60). Only a heritage clause naming a class is followed; an
     // expression like `class B extends mixin(A)` leaves the base unknown, and
     // an unknown base contributes nothing rather than guessing.
+    // An `implements` clause contributes members too: a class that satisfies an
+    // interface has that interface's members, and the checker could not see one
+    // the class did not also declare itself (F61). Merged UNDER both the class's
+    // own declarations and its heritage, since either is more specific.
+    const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
+    for (const ref of implemented) {
+      const iname = (ref as { TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } }).TypeName;
+      const nm = iname?.MemberNames && iname.MemberNames.length > 0 ? undefined : iname?.IdentifierReference?.name;
+      if (typeof nm !== 'string') {
+        continue;
+      }
+      const it = interfaceTypeOf(nm);
+      const istruct = it && it.Kind === 'nominal'
+        ? (it as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
+        : null;
+      if (istruct && istruct.Kind === 'object') {
+        for (const p of istruct.Properties) {
+          if (!Properties.some((own) => own.key === p.key)) {
+            Properties.push(p);
+          }
+        }
+      }
+    }
     const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
     const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
       ? (heritage as { name: string }).name
@@ -873,6 +981,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
           classNodes.set(name, n);
+        }
+      } else if (n.type === 'InterfaceDeclaration') {
+        const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (name) {
+          interfaceNodes.set(name, n);
         }
       }
     }
@@ -1376,7 +1489,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let target: Known = null;
           if (objType && objType.Kind === 'object' && m.IdentifierName) {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
-            target = prop ? prop.type : null;
+            // A store satisfies the property's WRITE type where one is declared
+            // separately, which is what a setter's parameter gives (F61).
+            target = prop ? ((prop as { writeType?: TypeRecord }).writeType ?? prop.type) : null;
           } else if (objType && objType.Kind === 'array' && m.Expression) {
             target = objType.Element;
           }
