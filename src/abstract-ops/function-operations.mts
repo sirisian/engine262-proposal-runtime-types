@@ -27,8 +27,8 @@ import {
 } from '../runtime-semantics/all.mts';
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { GetTypeObject } from '../type-system/intern.mts';
+import { DefaultValueOf } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { EnforceAnnotation, LookupTypeDefault } from './runtime-types.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
@@ -218,6 +218,15 @@ export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, arguments
 export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefinitionRecord): PlainEvaluator {
   // 1. Let fieldName be fieldRecord.[[Name]].
   const fieldName = fieldRecord.Name;
+  // proposal-runtime-types (#table-check-sites, row "a value stored to a
+  // property or field of declared type t"): the store check reads the declared
+  // type off the object, and only the reflection route (a defineProperty
+  // descriptor carrying a type) ever recorded it, so every write to a DECLARED
+  // typed field went unchecked - `c.x = "str"` on a `x: uint8` field stored the
+  // string (F49). Recording it here is what closes that, since the ordinary
+  // [[Set]] already performs the check for anything it finds.
+  const fieldAnnotation = (fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  const fieldTypeObject = (fieldRecord as { TypeObject?: object }).TypeObject;
   // 2. Let initializer be fieldRecord.[[Initializer]].
   const initializer = fieldRecord.Initializer;
   // 3. If initializer is not empty, then
@@ -225,15 +234,18 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   if (initializer !== undefined) {
     // a. Let initValue be ? Call(initializer, receiver).
     initValue = Q(yield* Call(initializer, receiver));
-  } else if ((fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation) {
+  } else if (fieldAnnotation) {
     // proposal-runtime-types (spec sec-typed-classes): a typed field declared
     // without an initializer takes its type's default rather than undefined, the
     // same rule a typed binding follows (#sec-default-values). A registered
     // meta-type default wins; otherwise the structural default. A type with no
     // default leaves the field undefined.
-    const annotation = (fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation!;
-    const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
-    let dflt = LookupTypeDefault(GetTypeObject(record));
+    const annotation = fieldAnnotation;
+    // Resolved at class definition time, not here: this runs inside the
+    // constructor, which for a default constructor is a builtin with no
+    // lexical environment to resolve a named type against (F51).
+    const record = (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord;
+    let dflt = LookupTypeDefault(fieldTypeObject!);
     if (dflt === undefined) {
       dflt = DefaultValueOf(record);
     }
@@ -249,11 +261,21 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   if (fieldName instanceof PrivateName) {
     // a. Perform ? PrivateFieldAdd(fieldName, receiver, initValue).
     Q(yield* PrivateFieldAdd(receiver, fieldName, initValue));
+    // A private field with a declared type is a typed field: the same row of
+    // #table-check-sites, stored elsewhere. PrivateSet reads the type from the
+    // Private Name, which is per-class and so shared by every instance (F51).
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      (fieldName as { TypeObject?: object }).TypeObject = fieldTypeObject;
+    }
   } else { // 6. Else,
     // a. Assert: ! IsPropertyKey(fieldName) is true.
     Assert(X(IsPropertyKey(fieldName)));
     // b. Perform ? CreateDataPropertyOrThrow(receiver, fieldName, initValue).
     Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, initValue));
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      const map = ((receiver as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
+      map.set(fieldName instanceof JSStringValue ? fieldName.stringValue() : fieldName, fieldTypeObject);
+    }
   }
 }
 

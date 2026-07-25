@@ -27,6 +27,7 @@ import {
   type DefaultConstructorBuiltinFunction, EnvironmentRecord,
   Throw,
   RequireType,
+  isArrayIndex,
   surroundingAgent,
 } from '#self';
 
@@ -932,12 +933,22 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       // RequireType a typed field's write performs. The declared type was recorded
       // on the object when the property was defined; objects with no typed own
       // property (the vast majority) skip this.
+      // An element store on an array carrying an element type: the same
+      // boundary and the same operation as a typed property, keyed on the
+      // array rather than on a property name.
+      const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
+      if (elementType !== undefined && isArrayIndex(P)) {
+        V = Q(yield* RequireType(V, elementType as never));
+      }
       const typedProperties = (Receiver as { TypedProperties?: Map<unknown, { TypeRecord: unknown }> }).TypedProperties;
       if (typedProperties !== undefined) {
         const propKey = P instanceof JSStringValue ? P.stringValue() : P;
         const typeObject = typedProperties.get(propKey);
         if (typeObject !== undefined) {
-          Q(yield* RequireType(V, typeObject.TypeRecord as never));
+          // The store boundary of #table-check-sites, and it uses what
+          // RequireType returns: `o.x = 7` on a uint8 property stores that
+          // property's uint8 value, not the plain Number (F51).
+          V = Q(yield* RequireType(V, typeObject.TypeRecord as never));
         }
       }
     }

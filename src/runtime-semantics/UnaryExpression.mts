@@ -29,6 +29,7 @@ import {
   IsPrivateReference,
   ToPropertyKey,
   Throw,
+  isArrayIndex,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
@@ -63,6 +64,18 @@ function* Evaluate_UnaryExpression_Delete({ UnaryExpression }: ParseNode.UnaryEx
     if (!IsPropertyKey(ref.ReferencedName)) {
       // Set ref.[[ReferencedName]] to ? ToPropertyKey(ref.[[ReferencedName]]).
       ref.ReferencedName = Q(yield* ToPropertyKey(ref.ReferencedName as Value));
+    }
+    // proposal-runtime-types (spec sec-array-defaults-and-stores): "Deleting a
+    // typed field, A TYPED ELEMENT, or a member required by an implemented
+    // interface throws a TypeError." A hole in a typed array is not a value of
+    // the element type. This lives on the OPERATOR rather than in [[Delete]],
+    // because ArraySetLength truncates by deleting from the top and asserts
+    // that those deletes are infallible: shortening an array removes elements
+    // without leaving a hole, and it is the hole this rule is about (F51).
+    if (surroundingAgent.feature('runtime-types')
+        && (baseObj as { TypedElement?: unknown }).TypedElement !== undefined
+        && isArrayIndex(ref.ReferencedName as Value)) {
+      return Throw.TypeError('$1 is a typed element and cannot be deleted', ref.ReferencedName as Value);
     }
     // e. Let deleteStatus be ? baseObj.[[Delete]](ref.[[ReferencedName]]).
     const deleteStatus = Q(yield* baseObj.Delete(ref.ReferencedName as JSStringValue));

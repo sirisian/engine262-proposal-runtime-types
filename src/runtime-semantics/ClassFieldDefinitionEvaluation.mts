@@ -1,4 +1,6 @@
 import { X, Q } from '../completion.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
@@ -24,6 +26,14 @@ export interface ClassFieldDefinitionRecord {
   // declared without an initializer can take its type's default (spec
   // sec-typed-classes: "a typed field takes its type's default").
   readonly TypeAnnotation?: ParseNode.TypeAnnotation | null;
+  // proposal-runtime-types: the annotation RESOLVED, at class definition time,
+  // where the class's lexical environment is still the running one. Resolving
+  // it per instance instead crashed the host for any annotation needing a
+  // binding lookup - `class C { k: K; }` asserted `env instanceof
+  // EnvironmentRecord` inside the default (builtin) constructor - and it is
+  // also what the store check needs, since a field's declared type must be
+  // recorded on the instance for #table-check-sites to enforce it (F51).
+  readonly TypeObject?: object;
   // proposal-runtime-types: whether the field is declared `readonly`, so it may
   // be assigned only in its own initializer and in the declaring class's
   // constructors (spec sec-typed-classes).
@@ -71,10 +81,17 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     initializer = undefined;
   }
   // 5. Return the ClassFieldDefinition Record { [[Name]]: name, [[Initializer]]: initializer }.
+  const typeAnnotation = (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  let typeObject;
+  if (typeAnnotation && surroundingAgent.feature('runtime-types')) {
+    const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
+    typeObject = GetTypeObject(record);
+  }
   return ClassFieldDefinitionRecord({
     Name: name,
     Initializer: initializer,
-    TypeAnnotation: (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation,
+    TypeAnnotation: typeAnnotation,
+    TypeObject: typeObject,
     Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
   });
 }

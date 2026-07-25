@@ -148,7 +148,11 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     }
     let applied = Desc;
     if (Desc.Value !== undefined) {
-      Q(yield* RequireType(Desc.Value, record));
+      // RequireType RETURNS the value of the type to be used (F51): a plain 7
+      // reaching a uint8 property becomes that property's uint8 value, and the
+      // descriptor must carry the converted value rather than the raw one.
+      const converted = Q(yield* RequireType(Desc.Value, record));
+      applied = Descriptor({ ...Desc, Value: converted });
     } else {
       let dflt = LookupTypeDefault(typeObject);
       if (dflt === undefined) {

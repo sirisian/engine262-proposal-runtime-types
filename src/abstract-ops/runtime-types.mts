@@ -38,12 +38,35 @@ function carryStringType(value: Value, t: TypeRecord): Value {
 }
 
 /** #sec-requiretype */
-export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
+/** The specification's last step of #sec-requiretype, and the last step of the
+ * checked conversion: a value already of the type passes, anything else is a
+ * TypeError. Kept private so that RequireType has exactly one meaning. */
+function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
   const ok = Q(yield* IsOfType(value, t));
   if (!ok) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   return value;
+}
+
+/**
+ * #sec-requiretype: "It enforces the type _t_ on _value_ at a boundary,
+ * RETURNING THE VALUE OF THE TYPE _t_ TO BE USED." The specification's steps
+ * are: return the value where it is already of the type; convert it where the
+ * target is numeric and the value is numeric, throwing a RangeError where that
+ * conversion would wrap, truncate, or round to an infinity; convert it where
+ * the target is `string` or `boolean`; and otherwise throw a TypeError.
+ *
+ * That is exactly CheckedConvertValue, which is why this operation delegates
+ * rather than reimplementing. It did NOT until F51: this function was a bare
+ * membership test, so the two sites wired to it - the typed-property store and
+ * the typed defineProperty - refused `o.x = 7` for a uint8 property while the
+ * binding boundary two lines away converted the same 7, and both sites
+ * DISCARDED the return value the operation is defined to produce. One
+ * operation at every boundary is the invariant here; the engine had two.
+ */
+export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
+  return Q(yield* CheckedConvertValue(value, t));
 }
 
 /** #sec-the-conversion-rule */
@@ -341,12 +364,22 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           const converted = Q(yield* CheckedConvertValue(el, t.Element));
           X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
         }
+        // #table-check-sites, row "a value stored to an element of an array of
+        // element type t": the store check reads the element type off the
+        // array, so the array must carry it. Without this the elements were
+        // converted once at the boundary and every later store went unchecked,
+        // so a `[].<uint8>` accepted a string and degraded to plain Numbers as
+        // it was written to (F49, F51).
+        (out as { TypedElement?: TypeRecord }).TypedElement = t.Element;
         return out;
       }
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
-  return Q(yield* RequireType(value, t));
+  // The specification's final step: a target this rule has no conversion for
+  // admits only a value already of the type, and otherwise is a TypeError.
+  // (This must NOT call RequireType, which delegates here - F51.)
+  return Q(yield* requireMembership(value, t));
 }
 
 export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluator<boolean> {

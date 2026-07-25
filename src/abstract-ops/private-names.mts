@@ -4,7 +4,7 @@ import { ClassElementDefinitionRecord, PrivateElementRecord } from '../runtime-s
 import {
   Assert, Call, IsExtensible,
 } from './all.mts';
-import { Throw, type PlainEvaluator } from '#self';
+import { RequireType, Throw, surroundingAgent, type PlainEvaluator } from '#self';
 
 /** https://tc39.es/ecma262/#sec-privateelementfind */
 export function PrivateElementFind(P: PrivateName, O: ObjectValue) {
@@ -53,6 +53,14 @@ export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value) {
   }
   // 3. If entry.[[Kind]] is field, then
   if (entry.Kind === 'field') {
+    // proposal-runtime-types (#table-check-sites): a store to a typed field is
+    // checked against its declared type, and a private field is a field.
+    const typeObject = (P as { TypeObject?: { TypeRecord: unknown } }).TypeObject;
+    if (surroundingAgent.feature('runtime-types') && typeObject !== undefined) {
+      // a. Set entry.[[Value]] to the value of the type to be used.
+      entry.Value = Q(yield* RequireType(value, typeObject.TypeRecord as never));
+      return;
+    }
     // a. Set entry.[[Value]] to value.
     entry.Value = value;
   } else if (entry.Kind === 'method') { // 4. Else if entry.[[Kind]] is method, then

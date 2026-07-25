@@ -470,6 +470,7 @@ export interface Throw {
   | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a typed class and cannot be proxied'
+  | '$1 is a typed element and cannot be deleted'
   | '$1 is a typed property and cannot be deleted'
   | '$1 is already claimed by another meta type'
   | '$1 is already declared'
