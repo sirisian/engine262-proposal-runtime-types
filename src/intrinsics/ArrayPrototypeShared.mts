@@ -5,7 +5,7 @@ import {
 } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import {
-  NullValue, NumberValue, ObjectValue, TypedNumberValue, UndefinedValue, Value, type Arguments, type FunctionCallContext,
+  NullValue, NumberValue, ObjectValue, UndefinedValue, Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { sort } from '../host-defined/sort.mts';
 import type { TypeRecord } from '../type-system/records.mts';

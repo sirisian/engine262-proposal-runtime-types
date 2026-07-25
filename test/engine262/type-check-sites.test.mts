@@ -492,10 +492,20 @@ test('a typed collection takes its needle at the element type', () => {
   // can never succeed... the branch it guards is then dead code the program did
   // not intend" (F69). A search is a parameter like any other, so it behaves
   // like one, and the store beside it reports the same way.
-  expect(thrownKind(`${a} a.includes(70000);`)).toBe('RangeError');
-  expect(thrownKind(`${a} a.push(70000);`)).toBe('RangeError');
-  expect(thrownKind(`${a} a.includes("hello");`)).toBe('TypeError');
-  expect(thrownKind('let a2: [].<uint8> = [1]; a2.includes(1.5);')).toBe('RangeError');
+  // A LITERAL needle is caught statically, by the literal rule, because the
+  // checker knows the method's signature (F70) - and the run-time check remains
+  // the backstop for a needle whose type it cannot settle. Both paths asserted,
+  // as they are for the element-store rows.
+  expectStatic(`${a} a.includes(70000);`);
+  expectStatic(`${a} a.includes("hello");`);
+  expectStatic('let a2: [].<uint8> = [1]; a2.includes(1.5);');
+  expectStatic(`${a} a.indexOf(70000);`);
+  expectStatic(`${a} a.fill(70000);`);
+  expect(thrownKind(`${a} function anyv() { return 70000; } a.includes(anyv());`)).toBe('RangeError');
+  expect(thrownKind(`${a} function anyv() { return "hello"; } a.includes(anyv());`)).toBe('TypeError');
+  // The store beside it reports identically, which is the point: there is no
+  // search-versus-store split, only a parameter of a declared type.
+  expect(thrownKind(`${a} function anyv() { return 70000; } a.push(anyv());`)).toBe('RangeError');
   // A typed needle works, and one of another family converts through the same
   // boundary rather than failing to match.
   expect(evaluated(`${a} const c = (65 := uint16); String(a.includes(c));`)).toBe('true');

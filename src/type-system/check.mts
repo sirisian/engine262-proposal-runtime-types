@@ -679,7 +679,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.IdentifierName && m.MemberExpression) {
-          const objType = structureOf(staticType(m.MemberExpression));
+          const receiver = staticType(m.MemberExpression);
+          // A method of a TYPED ARRAY takes the element type. The design gives a
+          // typed collection element-typed method signatures, and the run time
+          // enforces them (F68/F69); the checker knowing them is what turns
+          // `a.includes(70000)` from a run-time RangeError into the Early Error
+          // a statically determinable mistake deserves (F70).
+          if (receiver && receiver.Kind === 'array') {
+            const sig = arrayMethodSignature((m.IdentifierName as { name: string }).name, receiver.Element);
+            if (sig) {
+              return sig;
+            }
+          }
+          const objType = structureOf(receiver);
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             return prop ? prop.type : null;
@@ -924,6 +936,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       constructSignatures.set(n, construct);
     }
     return instance;
+  };
+
+  /**
+   * The signatures of the array methods that take or return the ELEMENT type.
+   * Only the ones with a fixed leading parameter are given here: `push` and
+   * `unshift` take a rest parameter, and the checker's argument loop would
+   * check only their first argument, which is worse than leaving them to the
+   * run time that already enforces them correctly (F70).
+   */
+  const arrayMethodSignature = (name: string, element: TypeRecord): Known => {
+    const anyType = { Kind: 'any' as const };
+    const numberType = makePrimitive('number');
+    const boolType = makePrimitive('boolean');
+    const shapes = (n: number, optionalFrom: number) => Array.from({ length: n }, (_unused, i) => ({
+      Optional: i >= optionalFrom, Rest: false, HasDefault: false,
+    }));
+    switch (name) {
+      case 'includes':
+        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType], Return: boolType, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+      case 'indexOf':
+      case 'lastIndexOf':
+        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType], Return: numberType, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+      case 'fill':
+        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType, numberType], Return: anyType, Shapes: shapes(3, 1), Untyped: false }] } as unknown as Known;
+      case 'at':
+        return { Kind: 'function', Signatures: [{ Parameters: [numberType], Return: element, Shapes: shapes(1, 1), Untyped: false }] } as unknown as Known;
+      default:
+        return null;
+    }
   };
 
   const declareFunctionSignatures = (list: readonly ParseNode[]) => {
