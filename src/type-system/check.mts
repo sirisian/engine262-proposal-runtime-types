@@ -9,6 +9,7 @@ import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
+import { resolveOverloadByTypes } from './overloads.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -666,7 +667,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The argument check at a call site fires only for a SINGLE-signature
     // type, so an overloaded name keeps resolving where it did before, at run
     // time, until the checker learns to rank signatures.
-    const collected = new Map<string, { Parameters: Known[], Return: Known }[]>();
+    const collected = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
     const rejected = new Set<string>();
     for (const n of list) {
       if (n.type !== 'FunctionDeclaration') {
@@ -682,6 +683,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const Parameters: Known[] = [];
+      const shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
       let usable = true;
       for (const p of fn.FormalParameters ?? []) {
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
@@ -690,8 +692,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           usable = false;
           break;
         }
-        const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        Parameters.push(ann ? resolveType(ann.Type) : null);
+        const pp = p as {
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          Initializer?: ParseNode | null,
+          Optional?: boolean,
+        };
+        Parameters.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
+        shapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
       }
       if (!usable) {
         rejected.add(name);
@@ -699,7 +706,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const Return = fn.TypeAnnotation ? resolveType(fn.TypeAnnotation.Type) : null;
       const signatures = collected.get(name) ?? [];
-      signatures.push({ Parameters, Return });
+      // #sec-overload-resolution's [[Untyped]]: a signature with no annotation
+      // anywhere is the catch-all that ranks last. Declaring a return type is
+      // what makes a zero-parameter function typed, which the clause spells
+      // out.
+      const Untyped = !fn.TypeAnnotation && Parameters.every((t) => t === null);
+      signatures.push({ Parameters, Return, Shapes: shapes, Untyped });
       collected.set(name, signatures);
     }
     for (const [name, Signatures] of collected) {
@@ -1117,13 +1129,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkNumericCall(n, null);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = staticType(c.CallExpression);
-        if (callee && callee.Kind === 'function' && callee.Signatures.length === 1 && Array.isArray(c.Arguments)) {
-          const sig = callee.Signatures[0];
-          c.Arguments.forEach((arg, i) => {
-            if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
-              requireAssignable(staticTypeIn(arg, sig.Parameters[i]), sig.Parameters[i]);
+        if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
+          let sig: { Parameters: readonly Known[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
+          if (!sig && callee.Signatures.length > 1) {
+            // #sec-overload-resolution, statically: rank the declared
+            // signatures against the argument types by the SHARED resolver, so
+            // the checker selects the row the run time would (F58). An
+            // argument whose static type is unknown is ~any~, and the clause
+            // says such a resolution is performed at run time, so the whole
+            // call is left to the run time rather than guessed at.
+            // A LITERAL type never reaches the run time - `7` is a plain
+            // Number there - so the static types are erased to what the
+            // resolver would see before ranking, and the literal's own fit
+            // against the chosen parameter is then the ordinary assignability
+            // check below. Without this every literal argument resolved to
+            // ~none~ (F58).
+            const argTypes = c.Arguments.map((a) => {
+              if (a.type === 'AssignmentRestElement') {
+                return null;
+              }
+              const t = staticType(a);
+              return t && t.Kind === 'literal' ? t.Base : t;
+            });
+            if (argTypes.every((t) => t !== null)) {
+              const candidates = callee.Signatures.map((s) => ({
+                Parameters: ((s as unknown as { Shapes?: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] }).Shapes ?? []).map((shape, i) => ({
+                  Type: (s.Parameters[i] ?? { Kind: 'any' }) as TypeRecord,
+                  ...shape,
+                })),
+                Function: Value.undefined as unknown as Value,
+                Untyped: (s as unknown as { Untyped?: boolean }).Untyped === true,
+              }));
+              const resolution = resolveOverloadByTypes(candidates as never, argTypes as TypeRecord[]);
+              if (resolution.Kind === 'none') {
+                // "It is a type error if ResolveOverload returns ~none~."
+                const completion = Throw.TypeError('no declared signature accepts an argument of type $1', Value(displayType(argTypes[0] as TypeRecord))) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              } else if (resolution.Kind === 'ambiguous') {
+                // "and it is a type error if it returns ~ambiguous~."
+                const completion = Throw.TypeError('the call is ambiguous between two declared signatures') as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              } else if (resolution.Kind === 'resolved') {
+                const index = candidates.indexOf(resolution.Signature as never);
+                sig = index >= 0 ? callee.Signatures[index] : null;
+              }
             }
-          });
+          }
+          if (sig) {
+            const chosen = sig;
+            c.Arguments.forEach((arg, i) => {
+              if (i < chosen.Parameters.length && arg.type !== 'AssignmentRestElement') {
+                requireAssignable(staticTypeIn(arg, chosen.Parameters[i]), chosen.Parameters[i]);
+              }
+            });
+          }
         }
         walk(c.CallExpression);
         walk(c.Arguments);

@@ -985,7 +985,10 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
     }
     return resolved.values().next().value ?? ({ Kind: 'any' } as TypeRecord);
   });
-  return { Parameters: params, Function: fn };
+  // [[Untyped]]: no parameter annotation and no return annotation anywhere.
+  const untyped = resolved.size === 0
+    && !((fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation);
+  return { Parameters: params, Function: fn, Untyped: untyped };
 }
 
 /**

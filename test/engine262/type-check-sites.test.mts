@@ -205,11 +205,24 @@ test('a call to a declared function is argument-checked', () => {
   expect(evaluated('function f(v) {} function nc() { f(300); } "ok";')).toBe('ok');
   expect(evaluated('function f(...xs: uint8) {} function nc() { f(300); } "ok";')).toBe('ok');
   expect(evaluated('function d({ a }) {} function nc() { d(300); } "ok";')).toBe('ok');
-  // An OVERLOADED name keeps resolving at run time, where it did before: the
-  // argument check fires only for a single-signature type, and collecting the
-  // overloads is what stops the last declaration from clobbering the rest.
-  expect(evaluated('function g(v: uint8) {} function g(v: string) {} function nc() { g(300); } "ok";')).toBe('ok');
+  // An OVERLOADED name is resolved statically since F58, by the same ranker the
+  // run time uses: the row is selected first, then its parameter is checked, so
+  // a literal that cannot take the chosen row's type is reported against it.
+  expectStatic('function g(v: uint8) {} function g(v: string) {} function nc() { g(300); }');
   expect(evaluated('function h(v: uint8) { return "u8"; } function h(v: string) { return "s"; } String(h("x"));')).toBe('s');
+  expect(evaluated('function h(v: uint8) { return "u8"; } function h(v: string) { return "s"; } String(h(7));')).toBe('u8');
+  // No viable signature is a type error, as the clause says in as many words.
+  expectStatic('function g(v: uint8) {} function g(v: string) {} function nc() { g(true); }');
+  // An argument whose static type is unknown is ~any~, and the clause defers
+  // such a resolution to run time rather than guessing.
+  expect(evaluated('function h(v: uint8) { return "u8"; } function h(v: string) { return "s"; } function anyv() { return "x"; } String(h(anyv()));')).toBe('s');
+  // The untyped catch-all: the clause's own example, which NEITHER the run
+  // time nor the checker implemented before (F58).
+  expect(evaluated('function g() { return "none"; } function g(a: uint8) { return "u8"; } String(g(1)) + "/" + String(g(1, 2));')).toBe('u8/none');
+  expect(evaluated('function g() { return "none"; } function g(a: uint8) { return "u8"; } function anyv() { return 1; } String(g(anyv(), anyv()));')).toBe('none');
+  // Declaring a return type is what makes a zero-parameter function typed, so
+  // it stops being a catch-all.
+  expectStatic('function h(): void { } function h(a: uint8) { return "u8"; } function nc() { h(1, 2); }');
   // And a valid call still runs, with the return type now known to the caller.
   expect(evaluated('function f(v: uint8) { return v; } String(f((7 := uint8)));')).toBe('7');
   expectStatic('function f(): uint8 { return (7 := uint8); } function nc() { let x: uint16 = f(); }');

@@ -35,6 +35,18 @@ export interface OverloadParameter {
 export interface OverloadSignature {
   readonly Parameters: readonly OverloadParameter[];
   readonly Function: Value;
+  /**
+   * #sec-overload-resolution: a signature with no annotation anywhere is a
+   * CATCH-ALL. It ranks last and, being untyped, is viable for any argument
+   * list - the clause's own example is that with `function f() {}` beside
+   * `function f(a: uint8) {}`, `f(1)` takes the typed row on rank while
+   * `f(1, 2)` takes the untyped one, "since the typed signature's arity does
+   * not accept two arguments and it is not viable". Neither the run time nor
+   * the checker implemented that: both answered "no overload matches" for the
+   * two-argument call (F58). Declaring a return type is what makes a
+   * zero-parameter function typed.
+   */
+  readonly Untyped?: boolean;
 }
 
 /**
@@ -180,6 +192,10 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
  * position's tier, which is the catch-all `any` where no element type is read).
  */
 function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[]): Tier[] | null {
+  if (sig.Untyped) {
+    // A catch-all takes any argument list, at the tier that ranks last.
+    return argTypes.map(() => Tier.CatchAll);
+  }
   if (!arityAdmits(sig.Parameters, argTypes.length)) {
     return null;
   }
@@ -241,7 +257,18 @@ export type OverloadResolution =
  * equally-best is `ambiguous`; exactly one best is `resolved`.
  */
 export function resolveOverload(signatures: readonly OverloadSignature[], argValues: readonly Value[]): OverloadResolution {
-  const argTypes = argValues.map((v) => RuntimeTypeOf(v));
+  return resolveOverloadByTypes(signatures, argValues.map((v) => RuntimeTypeOf(v)));
+}
+
+/**
+ * #sec-overload-resolution over argument TYPES rather than argument values, so
+ * the checker can resolve a call the same way the run time does instead of
+ * carrying a second copy of #table-argument-match-ranks. The run-time entry
+ * above is this one with RuntimeTypeOf applied first; F53 is the reason they
+ * share rather than mirror - a rule this subtle drifts within a cycle or two of
+ * being written twice (F58).
+ */
+export function resolveOverloadByTypes(signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[]): OverloadResolution {
   const viable: { sig: OverloadSignature, tiers: Tier[] }[] = [];
   for (const sig of signatures) {
     const tiers = signatureTiers(sig, argTypes);
