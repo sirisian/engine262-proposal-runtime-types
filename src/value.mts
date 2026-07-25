@@ -31,6 +31,9 @@ import {
   surroundingAgent,
 } from '#self';
 
+/** #sec-array-defaults-and-stores: the type a typed array's `length` reads at. */
+const ARRAY_LENGTH_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [32] }) as unknown as never;
+
 let createStringValue: (value: string) => JSStringValue; // set by static block in StringValue for privileged access to constructor
 // proposal-runtime-types (Capability B): privileged factory for a String value carrying an inferred Type Record, set by the StringValue static block.
 let createTypedStringValue: (value: string, typeRecord: unknown) => JSStringValue;
@@ -905,7 +908,20 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
   }
 
   * Get(P: PropertyKeyValue, Receiver: Value): ObjectSlotReturn['Get'] {
-    return yield* OrdinaryGet(this as unknown as OrdinaryObject, P, Receiver);
+    const result = Q(yield* OrdinaryGet(this as unknown as OrdinaryObject, P, Receiver));
+    // proposal-runtime-types (spec sec-array-defaults-and-stores): "`length` is
+    // a `uint32`" - for a TYPED array, whose element type this object carries.
+    // The STORED length stays a plain Number, because the array exotic object's
+    // own [[DefineOwnProperty]] asserts that it is one and ArraySetLength
+    // computes with it; what the clause constrains is the value a read yields,
+    // so the typing is applied at the read (F54).
+    if (surroundingAgent.feature('runtime-types')
+        && (this as { TypedElement?: unknown }).TypedElement !== undefined
+        && P instanceof JSStringValue && P.stringValue() === 'length'
+        && result instanceof NumberValue) {
+      return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
+    }
+    return result;
   }
 
   * Set(P: PropertyKeyValue, V: Value, Receiver: Value): ObjectSlotReturn['Set'] {

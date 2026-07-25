@@ -190,6 +190,38 @@ test('row 7b: Reflect.defineProperty checks the value against the declared type'
   expect(evaluated('const o = {}; Reflect.defineProperty(o, "x", { value: 7, type: uint8, writable: true, enumerable: true, configurable: true }); String(o.x is uint8);')).toBe('true');
 });
 
+test('a typed array reads its length at uint32, and an untyped one does not', () => {
+  // "`length` is a `uint32`" (sec-array-defaults-and-stores). The STORED length
+  // stays a plain Number - the array exotic object asserts that it is one and
+  // ArraySetLength computes with it - so the typing is applied at the read
+  // (F54).
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length is uint32) + "/" + String(a.length);')).toBe('true/3');
+  expect(evaluated('const b = [1,2,3]; String(b.length is uint32) + "/" + String(b.length);')).toBe('false/3');
+  // Everything that computes with the length still works: growing, truncating,
+  // the library methods, and iteration.
+  expect(evaluated('let a: [].<uint8> = [1]; a.push((2 := uint8)); String(a.length) + "/" + String(a.length is uint32);')).toBe('2/true');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; a.length = 2; String(a.length) + "/" + String(a.join(","));')).toBe('2/1,2');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.slice(1).length) + "/" + String(a.join(","));')).toBe('2/1,2,3');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (const x of a) { n += 1; } String(n);')).toBe('3');
+});
+
+test('the price of a typed length, pinned so it is a decision and not a surprise', () => {
+  // TWO idioms change for a typed array, and both follow from rules this
+  // proposal states elsewhere rather than from anything about length.
+  //
+  // The canonical counting loop needs a typed counter, because i declared as
+  // let i = 0 is a Number and a Number does not mix with a uint32
+  // (sec-arithmetic-never-promotes). Every statically typed language asks for
+  // this - it is size_t in C - but it is the most common loop in JavaScript,
+  // so it is pinned here rather than left to be discovered.
+  expect(thrownKind('let a: [].<uint8> = [1,2,3]; for (let i = 0; i < a.length; ++i) { }')).toBe('TypeError');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (let i = (0 := uint32); i < a.length; ++i) { n += 1; } String(n);')).toBe('3');
+  // And strict equality against a plain literal is false, because a typed value
+  // and a Number are different types (R1) - the same reason (3 := uint8) === 3
+  // is false. Loose equality still coerces.
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length === 3) + "/" + String(a.length == 3);')).toBe('false/true');
+});
+
 // -- The deletion rule of the same clause ----------------------------------
 
 test('deleting a typed field, a typed element, or an interface-required member throws', () => {
