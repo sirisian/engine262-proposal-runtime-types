@@ -1,3 +1,4 @@
+import { propertyKeyValue } from '../type-system/records.mts';
 import {
   BooleanValue,
   NullValue,
@@ -579,7 +580,7 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
       // Each declared field is filled from its JSON value, or takes its default
       // when it is an absent optional; an absent required field is a TypeError.
       for (const p of t.Properties) {
-        const key = Value(p.key);
+        const key = propertyKeyValue(p.key);
         const present = Q(yield* HasProperty(value, key));
         if (present === Value.true) {
           const pv = Q(yield* Get(value, key));

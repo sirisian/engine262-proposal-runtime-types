@@ -94,3 +94,24 @@ test('computed types call their builder', () => {
   expect(evaluated('function pick() { return uint8; } type C = pick(); C === uint8 ? "same" : "different";')).toBe('same');
   expect(evaluated('function bad() { return 5; } try { type C = bad(); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
+
+test('a type member may have a computed name', () => {
+  // |TypeMember| takes a |PropertyName|, which includes a
+  // |ComputedPropertyName|, so the grammar has always admitted this form and
+  // the parser has always built it - the EVALUATION refused it with "a computed
+  // member name is not supported yet". A Property Type Record's [[Key]] is a
+  // property key, a String or a Symbol, and it was a `string` in this engine,
+  // so a symbol-valued name had nowhere to go.
+  expect(evaluated('type S = { ["a"]: number }; ({ a: 1 } is S) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('const k = "a"; type S = { [k]: number }; ({ a: 1 } is S) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type S = { [Symbol.iterator]: number }; "ok";')).toBe('ok');
+  // The member behaves as a named one does at a boundary: it is converted and
+  // then checked, and a value the type cannot hold is refused.
+  expect(evaluated('const k = "dyn"; function a() { return { dyn: 5 }; } let w: { [k]: uint8 } = a(); String(w.dyn is uint8);')).toBe('true');
+  expect(evaluated('const k = "dyn"; function a() { return { dyn: 300 }; } try { let w: { [k]: uint8 } = a(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // A computed name that evaluates to neither a String nor a Symbol is refused
+  // rather than coerced: ToPropertyKey would accept anything, and a key that
+  // came from coercing a number or an object is a key the program did not
+  // write.
+  expect(evaluated('function t() { try { eval("type S = { [{}]: number };"); return "no"; } catch (e) { return "caught"; } } t();')).toBe('caught');
+});

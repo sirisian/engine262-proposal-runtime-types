@@ -6,11 +6,12 @@ import {
 } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
+import { EnsureCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord } from './records.mts';
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { IsAssignable } from './relations.mts';
 import {
@@ -673,7 +674,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         return false;
       }
       for (const p of t.Properties) {
-        const key = Value(p.key);
+        const key = propertyKeyValue(p.key);
         const present = Q(yield* HasProperty(value, key));
         if (present === Value.false) {
           if (!p.optional) {
@@ -826,7 +827,12 @@ function metadataValueFromType(t: TypeRecord): unknown {
     const nested: Record<string, unknown> = Object.create(null);
     for (const p of t.Properties) {
       const v = metadataValueFromType(p.type);
-      if (v !== METADATA_NOT_A_VALUE) {
+      // A SYMBOL-keyed member is skipped in this projection rather than
+      // stringified: the projection is the plain object a hook receives, and
+      // giving it a key spelled "Symbol(x)" would let two distinct symbols
+      // collide on one string, which is the collision the symbol key exists to
+      // avoid. A hook that needs one reads it through the reflection.
+      if (v !== METADATA_NOT_A_VALUE && typeof p.key === 'string') {
         nested[p.key] = v;
       }
     }
@@ -854,7 +860,8 @@ export function MetadataObjectFromType(t: TypeRecord): Value {
   if (t.Kind === 'object') {
     for (const p of t.Properties) {
       const v = metadataValueFromType(p.type);
-      if (v !== METADATA_NOT_A_VALUE) {
+      // Symbol-keyed members are skipped here for the reason given above.
+      if (v !== METADATA_NOT_A_VALUE && typeof p.key === 'string') {
         fields[p.key] = v;
       }
     }
@@ -1073,9 +1080,38 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // canonicalizes to its string form, as an object key does in JavaScript
         // (`{ 1: x }` has key `"1"`).
         const rawKey = rawName.name ?? rawName.value;
-        const key = typeof rawKey === 'number' || typeof rawKey === 'bigint' ? String(rawKey) : rawKey;
-        if (typeof key !== 'string') {
-          return Throw.TypeError('$1 is not supported yet', Value('a computed member name'));
+        let key: string | SymbolValue;
+        if (typeof rawKey === 'number' || typeof rawKey === 'bigint') {
+          key = String(rawKey);
+        } else if (typeof rawKey === 'string') {
+          key = rawKey;
+        } else {
+          // proposal-runtime-types: |TypeMember| takes a |PropertyName|, which
+          // includes a |ComputedPropertyName|, so the grammar has always
+          // admitted `{ [`Symbol.iterator`]: T }` - the evaluation refused it.
+          // A Property Type Record's [[Key]] is a property key, a String or a
+          // Symbol, and this is where it becomes one.
+          //
+          // The expression is evaluated under #sec-compile-time-evaluability,
+          // which confines evaluation to checking and reads declarations rather
+          // than run-time bindings: `Symbol.iterator` resolves, and a binding
+          // whose value is only known at run time does not.
+          const computed = (member.PropertyName as { ComputedPropertyName?: ParseNode }).ComputedPropertyName;
+          if (!computed) {
+            return Throw.TypeError('$1 is not supported yet', Value('a computed member name'));
+          }
+          const reference = Q(EnsureCompletion(yield* Evaluate(computed as never)));
+          const evaluated = Q(yield* GetValue(reference as never));
+          if (evaluated instanceof SymbolValue) {
+            key = evaluated;
+          } else if (evaluated instanceof JSStringValue) {
+            key = evaluated.stringValue();
+          } else {
+            // ToPropertyKey would accept anything; a member key that came from
+            // coercing a number or an object is a key the program did not
+            // write, so it is refused rather than guessed at.
+            return Throw.TypeError('$1 is not a valid member key', evaluated);
+          }
         }
         let type: TypeRecord;
         if (member.TypeAnnotation) {
@@ -1194,7 +1230,7 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
       // The engine's object property keys are Strings; a literal key type has
       // the String type as its base. (Symbol keys are not yet representable in
       // object types, so no Symbol base arises here.)
-      keys.push({ Kind: 'literal', Value: Value(p.key), Base: makePrimitive('string') });
+      keys.push({ Kind: 'literal', Value: propertyKeyValue(p.key), Base: makePrimitive('string') });
     }
     for (const x of t.IndexSignatures) {
       keys.push(x.Key);

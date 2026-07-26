@@ -1,4 +1,4 @@
-import { Value } from '../value.mts';
+import { JSStringValue, Value, type SymbolValue } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 
 /**
@@ -9,7 +9,14 @@ import type { ParseNode } from '../parser/ParseNode.mts';
  * ~function~, ~application~) are declared for the later milestones.
  */
 export interface PropertyTypeRecord {
-  readonly key: string;
+  /**
+   * proposal-runtime-types: a Property Type Record's [[Key]] is "a property
+   * key", which is a String OR a Symbol. It was a `string` here, so a computed
+   * member name that produced a symbol had nowhere to go and the whole form was
+   * refused - which is what blocked symbol metadata keys, the collision escape
+   * hatch primitivemetadata.md promises third-party libraries.
+   */
+  readonly key: string | SymbolValue;
   readonly type: TypeRecord;
   readonly optional: boolean;
   readonly readonly: boolean;
@@ -334,4 +341,19 @@ function displayMetadataValue(m: unknown): string {
     return `{ ${Object.entries(m as Record<string, unknown>).map(([k, v]) => `${k}: ${displayMetadataValue(v)}`).join(', ')} }`;
   }
   return String(m);
+}
+
+/**
+ * A Property Type Record's [[Key]] as a property key VALUE. The key is a String
+ * or a Symbol, and every site that reaches into an object with one needs the
+ * Value rather than the raw key, so the conversion lives here rather than at
+ * each of them.
+ */
+export function propertyKeyValue(key: string | SymbolValue): JSStringValue | SymbolValue {
+  return typeof key === 'string' ? Value(key) : key;
+}
+
+/** A Property Type Record's [[Key]] as display text. */
+export function displayPropertyKey(key: string | SymbolValue): string {
+  return typeof key === 'string' ? key : `[${key.Description instanceof JSStringValue ? key.Description.stringValue() : ''}]`;
 }

@@ -502,6 +502,7 @@ export interface Throw {
   | '$1 is not a valid array length'
   | '$1 is not a valid epoch nanoseconds'
   | '$1 is not a valid literal'
+  | '$1 is not a valid member key'
   | '$1 is not a valid modifier'
   | '$1 is not a valid month code'
   | '$1 is not a valid property name'

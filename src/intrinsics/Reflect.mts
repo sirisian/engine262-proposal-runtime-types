@@ -1,7 +1,7 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
-import { neverType } from '../type-system/records.mts';
+import { neverType, propertyKeyValue } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -492,7 +492,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       set('kind', Value('object'));
       const properties = t.Properties.map((p) => {
         const pr = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-        X(CreateDataProperty(pr, Value('name'), Value(p.key)));
+        X(CreateDataProperty(pr, Value('name'), propertyKeyValue(p.key)));
         X(CreateDataProperty(pr, Value('type'), typeObj(p.type)));
         X(CreateDataProperty(pr, Value('optional'), p.optional ? Value.true : Value.false));
         X(CreateDataProperty(pr, Value('readonly'), p.readonly ? Value.true : Value.false));

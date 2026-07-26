@@ -1,10 +1,10 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
-import { NumberValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
-import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
+import { displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
@@ -485,7 +485,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // declared members become values of their declared types - which is what
     // the sentence above asks a boundary to do.
     for (const prop of objectShape.Properties) {
-      const key = Value(prop.key);
+      const key = propertyKeyValue(prop.key);
       const has = Q(yield* HasProperty(value, key));
       if (has === Value.false) {
         if (prop.optional) {
@@ -826,9 +826,9 @@ export function HasMetaHooks(typeObject: object): boolean {
  * the program that wrote it, which showed up immediately as one test's meta type
  * governing the next test's parameterization.
  */
-const metaKeyClaimsByAgent = new WeakMap<object, Map<string, object>>();
+const metaKeyClaimsByAgent = new WeakMap<object, Map<string | SymbolValue, object>>();
 
-function claimsForAgent(): Map<string, object> {
+function claimsForAgent(): Map<string | SymbolValue, object> {
   const agent = surroundingAgent as unknown as object;
   let claims = metaKeyClaimsByAgent.get(agent);
   if (!claims) {
@@ -839,7 +839,7 @@ function claimsForAgent(): Map<string, object> {
 }
 
 /** Record a meta type's claim over a key. Returns the prior claimant, if any. */
-export function ClaimMetaKey(key: string, typeObject: object): object | undefined {
+export function ClaimMetaKey(key: string | SymbolValue, typeObject: object): object | undefined {
   const claims = claimsForAgent();
   const existing = claims.get(key);
   if (existing !== undefined && existing !== typeObject) {
@@ -850,7 +850,7 @@ export function ClaimMetaKey(key: string, typeObject: object): object | undefine
 }
 
 /** The meta type claiming a key, or *undefined* where none does. */
-export function MetaTypeClaiming(key: string): object | undefined {
+export function MetaTypeClaiming(key: string | SymbolValue): object | undefined {
   return claimsForAgent().get(key);
 }
 

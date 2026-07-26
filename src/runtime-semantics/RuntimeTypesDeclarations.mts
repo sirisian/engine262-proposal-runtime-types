@@ -8,7 +8,7 @@ import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { builtinTypeRecord } from '../type-system/records.mts';
+import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
@@ -204,7 +204,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     for (const property of shape.Properties) {
       const conflict = ClaimMetaKey(property.key, typeObject as object);
       if (conflict !== undefined) {
-        return Throw.TypeError('$1 is already claimed by another meta type', Value(property.key));
+        return Throw.TypeError('$1 is already claimed by another meta type', propertyKeyValue(property.key));
       }
     }
   }
