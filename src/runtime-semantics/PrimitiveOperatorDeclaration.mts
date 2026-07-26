@@ -1,8 +1,8 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { OrdinaryFunctionCreate, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
+import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { surroundingAgent, EnsureCompletion, type PlainEvaluator } from '#self';
+import { surroundingAgent, EnsureCompletion, Q, type PlainEvaluator } from '#self';
 
 /**
  * proposal-runtime-types #sec-primitive-operator-blocks: `primitive T { ... }`
@@ -27,6 +27,25 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
   for (const e of node.OperatorDefinitionList ?? []) {
+    // #sec-primitive-operator-blocks: an IMPLICIT CAST is "an operator whose
+    // name is a parameterization of the primitive" - so it carries a [[Type]]
+    // and no [[OperatorName]], which is the discriminator. It takes no
+    // parameters: the value it converts is `this`.
+    if (e.type === 'OperatorDefinition' && e.OperatorName === null && e.Type && e.FunctionBody) {
+      const target = Q(yield* TypeNodeToTypeRecord(e.Type));
+      const castFn = OrdinaryFunctionCreate(
+        surroundingAgent.intrinsic('%Function.prototype%'),
+        'operator',
+        e.FormalParameters ?? [],
+        e.FunctionBody,
+        'non-lexical-this',
+        env,
+        privEnv,
+      );
+      (castFn as { IsImplicitCast?: boolean }).IsImplicitCast = true;
+      RegisterPrimitiveCast(typeName, target, castFn);
+      continue;
+    }
     if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) {
       continue;
     }

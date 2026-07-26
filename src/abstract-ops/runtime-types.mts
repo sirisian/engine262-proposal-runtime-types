@@ -322,6 +322,22 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       return new TypedNumberValue(value.value, t);
     }
   }
+  // #sec-primitive-operator-blocks: a BARE value reaching a parameterization
+  // crosses through an implicit cast where the primitive declares one. This is
+  // ConvertParameterization's second arm from the outside - the value carries
+  // nothing of the meta types the target constrains, and the cast supplies what
+  // it lacks - and "its absence is why such a boundary is otherwise a type
+  // error". Tried before the membership test, since a bare value that already
+  // satisfies the target needs no cast and one that does not would otherwise be
+  // refused here.
+  if (surroundingAgent.feature('runtime-types') && t.Kind === 'parameterized') {
+    const cast = Q(yield* ApplyImplicitCast(value, t));
+    if (cast !== undefined) {
+      // The cast's result crosses the boundary as any other value does, so a
+      // `validate` hook still runs over it: a cast is a way IN, not a way past.
+      return Q(yield* RequireTypeAfterCast(cast, t));
+    }
+  }
   const already = Q(yield* IsOfType(value, t));
   if (already) {
     // An array that is ALREADY of the type still has to carry its element type,
@@ -642,6 +658,10 @@ export function EnterOperatorBody(): void {
 
 export function LeaveOperatorBody(): void {
   operatorBodyDepth -= 1;
+}
+
+export function IsInsideOperatorBody(): boolean {
+  return operatorBodyDepth > 0;
 }
 
 export function LookupPrimitiveOperator(value: Value, opText: string): PrimitiveOperatorEntry | null {
@@ -972,6 +992,126 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
 }
 
 /**
+ * proposal-runtime-types #sec-primitive-operator-blocks: the IMPLICIT CAST
+ * operator, "written as an operator whose name is a parameterization of the
+ * primitive, which supplies the conversion ... from the bare primitive into a
+ * parameterization".
+ *
+ * Keyed by the primitive the block names. A block may declare several, one per
+ * parameterization it can produce, and the boundary picks the ones it needs:
+ * "At a boundary, one is invoked FOR EACH META TYPE the required metadata
+ * constrains and the supplied value's does not, and its absence is why such a
+ * boundary is otherwise a type error."
+ *
+ * That sentence is the whole feature. `const v: Velocity = 10` is a type error
+ * today not because 10 is unfit but because nothing supplies the crossing from
+ * a bare `number` into the dimensions meta type; a cast declared on `number` is
+ * what supplies it.
+ */
+interface PrimitiveCast {
+  readonly target: TypeRecord;
+  readonly fn: Value;
+}
+
+const primitiveCasts = new WeakMap<object, Map<string, PrimitiveCast[]>>();
+
+function castsForAgent(): Map<string, PrimitiveCast[]> {
+  const agent = surroundingAgent as unknown as object;
+  let table = primitiveCasts.get(agent);
+  if (!table) {
+    table = new Map();
+    primitiveCasts.set(agent, table);
+  }
+  return table;
+}
+
+export function RegisterPrimitiveCast(typeName: string, target: TypeRecord, fn: Value): void {
+  const table = castsForAgent();
+  const list = table.get(typeName) ?? [];
+  list.push({ target, fn });
+  table.set(typeName, list);
+}
+
+/** The casts a primitive declares, in declaration order. */
+export function PrimitiveCastsFor(typeName: string): readonly PrimitiveCast[] {
+  return castsForAgent().get(typeName) ?? [];
+}
+
+/**
+ * The crossing from a BARE primitive value into a parameterization, which is
+ * ConvertParameterization's second arm seen from the outside: the value carries
+ * nothing of the meta types the target constrains, and a cast supplies what it
+ * lacks. Returns *undefined* where no cast applies, so the caller reports the
+ * ordinary type error and nothing about an undeclared crossing changes.
+ */
+export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  // The raw-body rule reaches the CAST too, and not only the binary operators:
+  // a cast body returning `this` has its return checked against the cast's own
+  // target, which would invoke the cast it is defining. Suppressing it here is
+  // what makes the body see a raw value, exactly as the clause says.
+  if (IsInsideOperatorBody()) {
+    return undefined;
+  }
+  if (t.Kind !== 'parameterized' || !isTypedNumber(value) && !(value instanceof NumberValue)) {
+    return undefined;
+  }
+  const base = t.Base;
+  if (base.Kind !== 'primitive') {
+    return undefined;
+  }
+  const name = base.Arguments && base.Arguments.length > 0
+    ? `${base.Name}${base.Arguments[0]}`
+    : base.Name;
+  // A bare Number is spelled `number`; a typed value names its own base.
+  const declaredOn = value instanceof NumberValue ? ['number', name] : [name];
+  for (const key of declaredOn) {
+    for (const cast of PrimitiveCastsFor(key)) {
+      // The cast is chosen by whether it produces the metadata the target
+      // requires. Where a target constrains several meta types and several
+      // casts apply, each runs in declaration order and the last result stands,
+      // which is the clause's "one is invoked for each meta type" read
+      // literally: a cast supplies its own meta type's portion.
+      if (SameType(cast.target, t)) {
+        // "An operator body evaluates on RAW VALUES: no operator declared by
+        // any block is re-entered within one." A cast body returning `this`
+        // returns the bare value, and checking that return against the cast's
+        // own target would re-enter the crossing it is defining - which is the
+        // failure the rule exists to prevent, and which showed up immediately
+        // as the body's return boundary refusing the value.
+        //
+        // So the body computes the raw value and the DECLARED TARGET says what
+        // it becomes: the result is stamped with the target's type rather than
+        // checked against it. That is the clause's division of labour - a cast
+        // "supplies the conversion", it does not perform a check.
+        EnterOperatorBody();
+        let raw;
+        try {
+          raw = Q(yield* Call(cast.fn as never, value, []));
+        } finally {
+          LeaveOperatorBody();
+        }
+        // A cast body is ordinary code, so in sloppy mode its `this` is the
+        // BOXED value and `return this;` - the usual whole body - hands back a
+        // Number wrapper rather than a Number. Unwrapping it here is what lets
+        // the plainest cast anyone will write work; a body that computes
+        // returns a primitive and takes the branch above.
+        const unwrapped = raw instanceof ObjectValue && 'NumberData' in raw
+          ? (raw as unknown as { NumberData: Value }).NumberData
+          : raw;
+        if (isTypedNumber(unwrapped)) {
+          return new TypedNumberValue(unwrapped.value, t);
+        }
+        if (unwrapped instanceof NumberValue) {
+          return new TypedNumberValue(R(unwrapped) as number, t);
+        }
+        return unwrapped;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
  * #sec-primitive-metadata: ConvertParameterization. The crossing between two
  * parameterizations of one base.
  *
@@ -987,6 +1127,15 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
  * already an effectful operation, so running a hook inside it costs nothing
  * structurally; it is the synchronous subtype RELATION that cannot call one.
  */
+/** The membership judgment over a cast's result, which a cast does not bypass. */
+export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluator {
+  const ok = Q(yield* IsOfType(value, t));
+  if (ok) {
+    return value;
+  }
+  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+}
+
 export function* ConvertParameterization(value: Value, from: TypeRecord, to: TypeRecord): ValueEvaluator {
   if (from.Kind !== 'parameterized' || to.Kind !== 'parameterized') {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
@@ -1218,6 +1367,15 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
 
 /** Applies the return annotation to a return value. */
 export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
+  // An IMPLICIT CAST's declared type names what its result BECOMES, not a
+  // boundary its body must already satisfy: the body computes a raw value -
+  // `return this;` is the whole of the usual one - and the crossing is what the
+  // cast supplies. Enforcing the annotation here would make the body's return
+  // re-enter the very conversion it defines, which is the raw-body rule's
+  // subject: "an operator body evaluates on raw values".
+  if ((fn as { IsImplicitCast?: boolean }).IsImplicitCast === true) {
+    return value;
+  }
   const annotation = returnAnnotationOf(fn);
   if (!annotation) {
     return value;

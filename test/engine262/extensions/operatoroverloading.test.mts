@@ -197,3 +197,52 @@ test('a `primitive` block declares operators on a primitive, and closes scalar-o
   // The diagnostic still fires where nothing declares the left operand's side.
   expectThrownKind('class W { operator *(rhs: number): W { return this; } } const w = new W(); 2 * w;', 'TypeError');
 });
+
+test('a primitive block may declare an implicit cast into a parameterization', () => {
+  // #sec-primitive-operator-blocks: "Such a declaration may also define an
+  // IMPLICIT CAST operator, written as an operator whose name is a
+  // parameterization of the primitive, which supplies the conversion ... from
+  // the bare primitive into a parameterization. At a boundary, one is invoked
+  // for each meta type the required metadata constrains and the supplied
+  // value's does not, AND ITS ABSENCE IS WHY SUCH A BOUNDARY IS OTHERWISE A
+  // TYPE ERROR: `const v: Velocity = 10;` compiles exactly where `number`
+  // declares a cast into the dimensions meta type."
+  //
+  // That sentence is asserted in both directions, because half of it is the
+  // feature and the other half is what must not change.
+  const dim = 'type Dim = { m: number, s: number }; '
+    + 'meta Dim { default = { m: 0, s: 0 }; subtype(a, b) { return a.m === b.m && a.s === b.s; } validate(v, c) { return true; } } '
+    + 'type Velocity = float64.<{ m: 1, s: -1 }>; ';
+  const cast = 'primitive float64 { operator float64.<{ m: 1, s: -1 }>(): float64.<{ m: 1, s: -1 }> { return this; } } ';
+  expect(evaluated(`${dim}${cast} let v: Velocity = 10; String(Number(v));`)).toBe('10');
+  // WITHOUT the cast the same boundary is a type error, which is what makes a
+  // brand a brand.
+  expectThrown(`${dim} let v: Velocity = 10;`);
+  // The value crosses AS the parameterization, not as a bare number beside it.
+  expect(evaluated(`${dim}${cast} let v: Velocity = 10; String(v is Velocity);`)).toBe('true');
+
+  // A cast is a way IN, not a way PAST: its result crosses the boundary as any
+  // other value does, so a `validate` hook still judges it.
+  const bounded = 'type B = { m: number }; '
+    + 'meta B { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return Number(v) >= 0; } } '
+    + 'primitive float64 { operator float64.<{ m: 1 }>(): float64.<{ m: 1 }> { return this; } } ';
+  expect(evaluated(`${bounded} let a: float64.<{ m: 1 }> = 5; String(Number(a));`)).toBe('5');
+  // Refused either statically or at the boundary - what matters is that the
+  // cast did not admit it, so the kind is not pinned here.
+  expectThrown(`${bounded} let b: float64.<{ m: 1 }> = -5;`);
+
+  // "An operator body evaluates on RAW VALUES: no operator declared by any
+  // block is re-entered within one." A cast body returning `this` returns the
+  // bare value, and checking that return against the cast's own target would
+  // re-enter the crossing it defines - which is what happened before the rule
+  // was applied here, and it failed inside the body rather than at the
+  // boundary. The declared type names what the result BECOMES; the body
+  // computes, the target converts.
+  expect(evaluated(`${dim}${cast} let v: Velocity = 10; String(Reflect.typeOf(v) === Velocity);`)).toBe('true');
+  // A body that COMPUTES rather than returning `this` is unaffected by the
+  // unwrapping the plain form needs.
+  const computing = 'type D2 = { m: number }; '
+    + 'meta D2 { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return true; } } '
+    + 'primitive float64 { operator float64.<{ m: 2 }>(): float64.<{ m: 2 }> { return Number(this) * 2; } } ';
+  expect(evaluated(`${computing} let d: float64.<{ m: 2 }> = 4; String(Number(d));`)).toBe('8');
+});
