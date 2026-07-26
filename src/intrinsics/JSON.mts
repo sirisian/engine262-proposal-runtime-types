@@ -864,6 +864,14 @@ function* JSON_stringify([value = Value.undefined, replacer = Value.undefined, _
     }
   }
   let gap: string;
+  // The same shape as the Array constructor's length: the indentation argument
+  // is a numeric position, and a typed one was silently ignored - `stringify(v,
+  // null, 3)` indented and `stringify(v, null, (3 := uint32))` did not. Every
+  // other numeric-reading site in this file already routes through
+  // unwrapToNumber; this one was missed.
+  if (isTypedNumber(space)) {
+    space = unwrapToNumber(space);
+  }
   if (space instanceof NumberValue) {
     space = Math.min(10, X(ToIntegerOrInfinity(space)));
     if (space < 1) {

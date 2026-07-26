@@ -343,8 +343,25 @@ export function* ToBigInt(argument: Value): ValueEvaluator<BigIntValue> {
   } else if (prim instanceof BigIntValue) {
     // Return prim.
     return prim;
-  } else if (prim instanceof NumberValue) {
+  } else if (prim instanceof NumberValue || isTypedNumber(prim)) {
     // Throw a TypeError exception.
+    //
+    // proposal-runtime-types: a value of a numeric type of this proposal took
+    // NO branch here and fell through to the non-exhaustive throw at the end,
+    // which is a HOST CRASH rather than a language-level error - `BigInt(3 :=
+    // uint32)` killed the host. The rule it should take is the one already
+    // written on the line above: a Number cannot implicitly become a BigInt,
+    // and neither can a uint32, for the stronger reason that this proposal has
+    // no conversion between them at all (`bigint(t)` refuses today, pending the
+    // exact wide-integer prerequisite). So the answer is the Number's answer,
+    // read onto the new type rather than invented for it.
+    //
+    // The asymmetry this leaves is deliberate and worth stating: `BigInt(3)`
+    // answers 3n, because the BigInt CONSTRUCTOR has its own Number step, while
+    // `BigInt(3 := uint32)` throws. If that is ever to converge, the lever is
+    // the cast `bigint(t)` - the conversion the type system would have to admit
+    // first - and not this operation, which must not be more permissive than
+    // the type system it serves.
     return Throw.TypeError('Cannot convert $1 to a BigInt', prim);
   } else if (prim instanceof JSStringValue) {
     // 1. Let n be StringToBigInt(prim).

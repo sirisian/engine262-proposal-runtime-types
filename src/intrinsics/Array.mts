@@ -11,6 +11,8 @@ import {
   ObjectValue,
   UndefinedValue,
   Value,
+  isTypedNumber,
+  unwrapToNumber,
   wellKnownSymbols,
   type Arguments,
   type FunctionCallContext,
@@ -61,12 +63,28 @@ function* ArrayConstructor(values: Arguments, { NewTarget }: FunctionCallContext
     const len = values[0]!;
     const array = X(ArrayCreate(0, proto));
     let intLen;
-    if (!(len instanceof NumberValue)) {
+    // proposal-runtime-types: this branch asks whether the one argument is a
+    // LENGTH or an element, and "is it a Number" was how it asked. A value of a
+    // numeric type of this proposal is not a Number, so `Array(3 := uint32)`
+    // took the element path and produced a one-element array holding the 3 -
+    // the shape F54 named, a builtin that predates the numeric types testing
+    // for Number where it means numeric. The design writes a length AT an
+    // integer type (`[n].<uint8, uint64>`), so a numeric value is exactly what
+    // a length may be.
+    //
+    // The comparison below is why the value is unwrapped rather than tested in
+    // place: SameValueZero of a plain uint32 3 against a TYPED 3 is *false* by
+    // R1, so leaving `len` typed would turn every valid typed length into a
+    // RangeError. The array's stored length stays a plain Number, which the
+    // array exotic object asserts and which F54 left in place - the typing of
+    // a length lives at the [[Get]], not in the slot.
+    const lenNumber = isTypedNumber(len) ? unwrapToNumber(len) : len;
+    if (!(lenNumber instanceof NumberValue)) {
       X(CreateDataPropertyOrThrow(array, Value('0'), len));
       intLen = F(1);
     } else {
-      intLen = X(ToUint32(len));
-      if (!SameValueZero(intLen, len)) {
+      intLen = X(ToUint32(lenNumber));
+      if (!SameValueZero(intLen, lenNumber)) {
         return Throw.RangeError('$1 is not a valid array length', len);
       }
     }

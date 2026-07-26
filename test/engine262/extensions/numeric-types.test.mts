@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool, expectThrown } from '../readme/harness.mts';
+import { evaluated, ok, bool, expectThrown, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * Extension coverage — complex.md, decimal.md, rational.md (extended numeric types).
@@ -171,4 +171,58 @@ test('numeric types: a typed float keeps a negative zero', () => {
   // an integer type has no signed zero, so a negative zero reaching one becomes
   // positive zero rather than carrying a sign the type cannot represent
   expect(evaluated('let z = -0; String(1 / Number((z := int32)));')).toBe('Infinity');
+});
+
+test('numeric types: a library position that means NUMERIC accepts a numeric value', () => {
+  // The sweep F54 asked for. A builtin written before the numeric types existed
+  // asks "is this a Number" where it means "is this numeric", and a value of
+  // this proposal's numeric types is not a Number - so it took the wrong branch
+  // silently. Three sites answered wrongly and everything else already routed
+  // through unwrapToNumber, which is the convention these had missed.
+
+  // The Array constructor's one argument is a LENGTH or an element, and it
+  // decided by asking for a Number: `Array(3 := uint32)` built a ONE-element
+  // array holding the 3. The design writes a length at an integer type
+  // (`[n].<uint8, uint64>`), so a numeric value is exactly what a length is.
+  expect(evaluated('String(Array((3 := uint32)).length);')).toBe('3');
+  expect(evaluated('String(new Array((3 := uint32)).length);')).toBe('3');
+  expect(evaluated('String(Array((3 := uint8)).length);')).toBe('3');
+  // The element path still holds for a NON-numeric argument, and the multi
+  // argument form is unchanged - both are what the branch is for.
+  expect(evaluated('const a = Array("x"); String(a.length) + "/" + a[0];')).toBe('1/x');
+  expect(evaluated('String(new Array((1 := uint8), (2 := uint8)).length);')).toBe('2');
+  // A typed length out of the uint32 range is still a RangeError, which is the
+  // check the unwrap had to preserve: SameValueZero of a plain uint32 against a
+  // TYPED value is false by R1, so an unwrap that stopped short would have
+  // turned every valid typed length into an error.
+  expectThrownKind('Array((4.5 := float64));', 'RangeError');
+  // The array this produces is an ORDINARY array, not a typed one: F54's
+  // `length` typing applies at the [[Get]] of a TYPED array, and a plain array
+  // built from a typed length is still plain. Pinned in both directions so
+  // neither is "fixed" into the other.
+  expect(evaluated('String(Array((3 := uint32)).length is uint32);')).toBe('false');
+  expect(evaluated('let t: [].<uint8> = [1, 2, 3]; String(t.length is uint32);')).toBe('true');
+
+  // JSON.stringify's indentation is the same shape: a numeric position that
+  // silently ignored a typed value, so the output came back unindented.
+  expect(evaluated('JSON.stringify({ a: 1 }, null, (3 := uint32));')).toBe(JSON.stringify({ a: 1 }, null, 3));
+  expect(evaluated('JSON.stringify({ a: 1 }, null, (3 := uint8));')).toBe(JSON.stringify({ a: 1 }, null, 3));
+  // The serialization half was already right and is pinned so it stays that way.
+  expect(evaluated('JSON.stringify({ a: (3 := uint32), b: [(1.5 := float32)] });')).toBe('{"a":3,"b":[1.5]}');
+});
+
+test('numeric types: ToBigInt refuses a numeric value rather than crashing', () => {
+  // A typed value took NO branch of ToBigInt and fell through to the
+  // non-exhaustive throw, which is a host crash rather than a language error:
+  // `BigInt(3 := uint32)` killed the host. The rule it takes now is the one
+  // already written for a Number on the line above it, since this proposal has
+  // no conversion from a sized integer to a bigint at all.
+  expectThrownKind('BigInt((3 := uint32));', 'TypeError');
+  expectThrownKind('BigInt((1.5 := float64));', 'TypeError');
+  expectThrownKind('BigInt.asIntN(64, (3 := uint32));', 'TypeError');
+  // The asymmetry is deliberate: the BigInt CONSTRUCTOR has its own Number
+  // step, so a plain 3 converts where a typed 3 does not. If those are ever to
+  // converge the lever is the cast, which refuses today for the same reason.
+  expect(evaluated('String(BigInt(3));')).toBe('3');
+  expectThrownKind('bigint((3 := uint32));', 'TypeError');
 });
