@@ -264,3 +264,47 @@ test('primitive metadata: a numeric type argument is unaffected', () => {
   expect(evaluated('type U = uint.<8>; String(U.bitLength);')).toBe('8');
   expect(evaluated('type V = vector.<float32, 4>; String(V.byteLength);')).toBe('16');
 });
+
+test('memory layout: sub-byte fields pack into shared bytes', () => {
+  // #sec-natural-alignment states the whole walk as a BIT cursor, not a byte
+  // one: "Where the field's type has a `bitLength` under 8, it is a bit-field:
+  // it is placed at the cursor, or at the bit its `offsetBit` names, and the
+  // cursor advances by its `bitLength`." Writing it in bytes and special-casing
+  // bit-fields is how the rounding rules drift apart; in bits the two cases
+  // share one cursor.
+  //
+  // The design's RGB565, exactly.
+  const rgb = '@packed class RGB565 { r: uint.<5>; g: uint.<6>; b: uint.<5>; } ';
+  expect(evaluated(`${rgb} String((type RGB565).byteLength) + "/" + String((type RGB565).bitLength);`)).toBe('2/16');
+  expect(evaluated(`${rgb} const R = (n) => Reflect.getReflection.<Reflect.ClassField, RGB565>(n); String(R("r").offsetBit) + "/" + String(R("g").offsetBit) + "/" + String(R("b").offsetBit);`)).toBe('0/5/11');
+  expect(evaluated(`${rgb} String(Reflect.getReflection.<Reflect.ClassField, RGB565>("g").isBitField);`)).toBe('true');
+
+  // "Automatic packing reaches only a field under 8 bits, so a `uint.<12>`
+  // occupies 2 bytes unless an `offsetBit` places it." The BYTE BOUNDARY is the
+  // line, not the type's name.
+  expect(evaluated('class W { a: uint.<12>; } String((type W).byteLength) + "/" + String((type W).bitLength);')).toBe('2/12');
+  // `offsetBit` places one explicitly, which is what fixes bit order exactly.
+  expect(evaluated('@packed class E { a: uint.<3>; @offsetBit(8) b: uint.<4>; } const R = (n) => Reflect.getReflection.<Reflect.ClassField, E>(n); String(R("a").offsetBit) + "/" + String(R("b").offsetBit) + "/" + String((type E).bitLength);')).toBe('0/8/12');
+
+  // bitLength is now the UNROUNDED extent: a class of one `uint.<5>` is 5 bits
+  // in 1 byte, where the walk previously reported 8 because it derived
+  // bitLength from byteLength.
+  expect(evaluated('class B { r: uint.<5>; } String((type B).bitLength) + "/" + String((type B).byteLength);')).toBe('5/1');
+  // Byte-sized classes are unchanged by the rewrite.
+  expect(evaluated('class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
+  expect(evaluated('class V { x: float32; y: float32; z: float32; } String((type V).byteLength) + "/" + String((type V).alignment);')).toBe('12/4');
+});
+
+test('memory layout: a bit-field has no byte address to refer to', () => {
+  // "Reading or writing a bit-field is a shift and a mask, and taking a
+  // reference to one is a type error, since it has no byte address to refer
+  // to." A reference borrows a storage LOCATION, and a field packed into part
+  // of a byte is not one.
+  const c = '@packed class C { r: uint.<5>; n: uint8; } const c = new C(); ';
+  expectThrown(`${c} function f(p: ref uint.<5>) { return 1; } f(ref c.r);`);
+  // A byte-addressable field of the same class is still borrowable, which is
+  // what keeps this a rule about bit-fields rather than about typed classes.
+  expect(evaluated(`${c} function g(p: ref uint8) { return 2; } String(g(ref c.n));`)).toBe('2');
+  // And an ordinary object property is untouched.
+  expect(evaluated('const o = { z: 1 }; function h(p: ref number) { return 3; } String(h(ref o.z));')).toBe('3');
+});

@@ -3,10 +3,11 @@ import {
 } from '../evaluator.mts';
 import { NormalCompletion, Q } from '../completion.mts';
 import {
-  Value, ReferenceRecord, ReferenceValue, ObjectValue, PrivateName, type JSStringValue,
+  Value, ReferenceRecord, ReferenceValue, ObjectValue, PrivateName, JSStringValue,
 } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { RebindRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
+import { Get, surroundingAgent } from '#self';
 import {
   IsPropertyKey,
   IsPropertyReference,
@@ -43,6 +44,22 @@ export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpressi
     }
     if (!IsPropertyKey(ref.ReferencedName)) {
       ref.ReferencedName = Q(yield* ToPropertyKey(ref.ReferencedName as Value));
+    }
+    // #sec-layout-control: "taking a reference to [a bit-field] is a type
+    // error, since it has no byte address to refer to". A reference is a
+    // borrowed STORAGE LOCATION, and a field packed into part of a byte is not
+    // one - reading and writing it is a shift and a mask over the byte that
+    // contains it, so there is nothing for a ref to alias.
+    if (surroundingAgent.feature('runtime-types') && ref.ReferencedName instanceof JSStringValue) {
+      // The ECMAScript `constructor`, reached through the prototype chain -
+      // NOT the host object's own `.constructor`, which is the engine class
+      // that implements ObjectValue and carries no layout.
+      const owner = Q(yield* Get(ref.Base, Value('constructor')));
+      const layout = (owner as { InstanceLayout?: { fields: readonly { key: string, isBitField: boolean }[] } })?.InstanceLayout;
+      const placement = layout?.fields.find((f) => f.key === (ref.ReferencedName as JSStringValue).stringValue());
+      if (placement?.isBitField) {
+        return Throw.TypeError('cannot take a ref of $1, which is a bit-field and has no byte address', ref.ReferencedName);
+      }
     }
   }
   return ref;

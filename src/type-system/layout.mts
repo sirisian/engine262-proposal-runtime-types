@@ -122,7 +122,11 @@ export function LayoutOf(t: TypeRecord): Layout | null {
 /** One field's placement, which is what a reflection reports as its `offset`. */
 export interface FieldPlacement {
   readonly key: string;
+  /** The containing byte. A bit-field has no byte address of its own; this is where its byte begins. */
   readonly offset: number;
+  /** The bit position, which is what fixes bit order exactly for a wire format. */
+  readonly offsetBit: number;
+  readonly isBitField: boolean;
   readonly layout: Layout;
 }
 
@@ -181,53 +185,90 @@ export function ComputeClassLayout(
   fields: readonly { key: string, type: TypeRecord, controls?: FieldControls }[],
   controls: ClassControls = {},
 ): ClassLayout | null {
+  // #sec-natural-alignment states this as a BIT cursor, not a byte one, because
+  // a sub-byte field advances by bits: "Let a bit cursor begin at 0, at the end
+  // of the layout of the class it extends where it extends one and at 0
+  // otherwise." Writing it in bytes and special-casing bit-fields is how the
+  // rounding rules drift apart; in bits the two cases share one cursor.
   const placed: FieldPlacement[] = baseLayout ? [...baseLayout.fields] : [];
-  let cursor = baseLayout ? baseLayout.byteLength : 0;
-  // `packed` gives the class alignment 1 and places each field immediately
-  // after the one before it; `alignAll` decides the INSTANCE's alignment. The
-  // clause is explicit that they compose - one decides the fields' placement
-  // and the other the whole - so they are tracked separately.
+  let cursor = baseLayout ? baseLayout.bitLength : 0;
+  // "The cursor's furthest extent" - tracked separately, because an explicit
+  // `offset` may place a field behind the cursor (the C union) and must not
+  // shrink the class.
+  let furthest = cursor;
   let alignment = controls.packed ? 1 : (baseLayout ? baseLayout.alignment : 1);
   for (const field of fields) {
     const layout = LayoutOf(field.type);
     if (!layout) {
       return null;
     }
-    // "An `align` REPLACES its field's alignment rather than strengthening it":
-    // a `float32x4` at `@align(4)` follows a `float32` at byte 2 at byte 8, not
-    // at byte 16. Taking the max is the obvious wrong implementation.
-    const fieldAlignment = field.controls?.align !== undefined
-      ? field.controls.align
-      : (controls.packed ? 1 : layout.alignment);
-    let offset;
-    if (field.controls?.offset !== undefined) {
-      // Two fields may share one offset, which is the C union, and a negative
-      // one reaches into a base's memory. Deliberate reinterpretation, so
-      // neither is diagnosed.
-      offset = field.controls.offset;
+    // "Where the field's type has a `bitLength` under 8, it is a bit-field."
+    // The byte boundary is the line, not the type's name: a `uint.<12>` is not
+    // a bit-field and occupies 2 bytes unless an `offsetBit` places it, which
+    // is what a 12-bit wire format has anyway.
+    const isBitField = layout.bitLength < 8;
+    let offsetBits;
+    if (isBitField) {
+      offsetBits = field.controls?.offsetBit !== undefined ? field.controls.offsetBit : cursor;
+      cursor = offsetBits + layout.bitLength;
     } else {
-      offset = fieldAlignment > 0 && cursor % fieldAlignment !== 0
-        ? cursor + (fieldAlignment - (cursor % fieldAlignment))
-        : cursor;
+      // "Otherwise the cursor is first rounded up to a byte."
+      if (cursor % 8 !== 0) {
+        cursor += 8 - (cursor % 8);
+      }
+      const fieldAlignment = field.controls?.align !== undefined
+        ? field.controls.align
+        : (controls.packed ? 1 : layout.alignment);
+      let byteOffset;
+      if (field.controls?.offset !== undefined) {
+        byteOffset = field.controls.offset;
+      } else if (field.controls?.offsetBit !== undefined) {
+        // An `offsetBit` on a field 8 bits or wider places it too: the clause
+        // says a `uint.<12>` occupies 2 bytes "unless an `offsetBit` places
+        // it", so the control reaches past the sub-byte case.
+        byteOffset = undefined;
+        offsetBits = field.controls.offsetBit;
+      } else if (controls.packed) {
+        byteOffset = cursor / 8;
+      } else {
+        const at = cursor / 8;
+        byteOffset = fieldAlignment > 0 && at % fieldAlignment !== 0
+          ? at + (fieldAlignment - (at % fieldAlignment))
+          : at;
+      }
+      if (byteOffset !== undefined) {
+        offsetBits = byteOffset * 8;
+      }
+      cursor = offsetBits! + layout.bitLength;
+      if (!controls.packed && fieldAlignment > alignment) {
+        alignment = fieldAlignment;
+      }
     }
-    placed.push({ key: field.key, offset, layout });
-    const end = offset + layout.byteLength;
-    if (end > cursor) {
-      cursor = end;
-    }
-    if (!controls.packed && fieldAlignment > alignment) {
-      alignment = fieldAlignment;
+    placed.push({
+      key: field.key,
+      offset: Math.floor(offsetBits! / 8),
+      offsetBit: offsetBits!,
+      isBitField,
+      layout,
+    });
+    if (cursor > furthest) {
+      furthest = cursor;
     }
   }
   if (controls.alignAll !== undefined) {
     alignment = controls.alignAll;
   }
-  // Rounded up to the class's own alignment, so an array of it stays aligned.
-  let byteLength = alignment > 0 && cursor % alignment !== 0
-    ? cursor + (alignment - (cursor % alignment))
-    : cursor;
+  // "Its `bitLength` is the cursor's furthest extent, and its `byteLength` is
+  // the size its `size` names, or that extent rounded up to a byte and then to
+  // the class's alignment." So bitLength is the UNROUNDED extent: a class of
+  // one `uint.<5>` reports 5 bits in 1 byte, where before it reported 8.
+  const bitLength = furthest;
+  let byteLength = Math.ceil(bitLength / 8);
+  if (alignment > 0 && byteLength % alignment !== 0) {
+    byteLength += alignment - (byteLength % alignment);
+  }
   if (controls.size !== undefined) {
     byteLength = controls.size;
   }
-  return { bitLength: byteLength * 8, byteLength, alignment, fields: placed };
+  return { bitLength, byteLength, alignment, fields: placed };
 }

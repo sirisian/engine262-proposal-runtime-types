@@ -634,6 +634,7 @@ export interface Throw {
   | 'calendar must be a string, but $1'
   | 'calendarName option is invalid ($1), only "auto", "always", "never" and "critical" are accepted'
   | 'callbackfn ($1) is not a function'
+  | 'cannot take a ref of $1, which is a bit-field and has no byte address'
   | 'comparator ($1) is not a function'
   | 'direction option is not valid ($1), only "next" and "previous" are accepted'
   | 'disambiguation option is invalid ($1), only "compatible", "earlier", "later" and "reject" are accepted'

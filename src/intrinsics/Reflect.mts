@@ -664,6 +664,13 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   X(CreateDataProperty(obj, Value('byteLength'), Value(placement.layout.byteLength)));
   X(CreateDataProperty(obj, Value('bitLength'), Value(placement.layout.bitLength)));
   X(CreateDataProperty(obj, Value('alignment'), Value(placement.layout.alignment)));
+  // #sec-layout-control: `offsetBit` "places it that many bits from the start
+  // of the allocation, which is what fixes bit order exactly". A bit-field has
+  // no byte address of its own - which is why a reference to one is refused -
+  // so the bit position is the placement a wire format actually needs, and
+  // `offset` beside it names the byte that contains it.
+  X(CreateDataProperty(obj, Value('offsetBit'), Value(placement.offsetBit)));
+  X(CreateDataProperty(obj, Value('isBitField'), placement.isBitField ? Value.true : Value.false));
   return obj;
 }
 
