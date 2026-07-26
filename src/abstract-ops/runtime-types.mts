@@ -483,6 +483,98 @@ export function RegisterClassOperator(proto: Value, opText: string, fn: Value): 
   table.set(opText, fn);
 }
 
+/**
+ * proposal-runtime-types #sec-primitive-operator-blocks: the operators a
+ * `primitive` block declares, keyed by the primitive the block names and then
+ * by the operator. A class operator table is keyed by a PROTOTYPE, which a
+ * primitive has no useful equivalent of, so this is its own table - the two
+ * declaration forms "differ only in what the receiver is", and the receiver is
+ * what the key has to be.
+ *
+ * The declaration was PARSED AND DISCARDED before this: `primitive float64 {
+ * ... }` evaluated to *undefined* and registered nothing, so a program could
+ * declare an operator, get no error, and get no behaviour either - the worst of
+ * the three outcomes.
+ */
+interface PrimitiveOperatorEntry { readonly fn: Value, readonly parameterType: TypeRecord | null }
+
+const primitiveOperatorTables = new WeakMap<object, Map<string, Map<string, PrimitiveOperatorEntry>>>();
+
+function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEntry>> {
+  const agent = surroundingAgent as unknown as object;
+  let table = primitiveOperatorTables.get(agent);
+  if (!table) {
+    table = new Map();
+    primitiveOperatorTables.set(agent, table);
+  }
+  return table;
+}
+
+export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null): void {
+  const tables = primitiveTablesForAgent();
+  let ops = tables.get(typeName);
+  if (!ops) {
+    ops = new Map();
+    tables.set(typeName, ops);
+  }
+  ops.set(opText, { fn, parameterType });
+}
+
+/**
+ * The operator a `primitive` block declares for this value, or *null*.
+ *
+ * The receiver's primitive is read from the value: a typed numeric value names
+ * its own base, and a plain Number is `number`, which is the declaration the
+ * design uses to close the scalar-on-the-left case (F4) - `2 * v` dispatches
+ * because the LEFT operand is a number and `number` declares the operator.
+ */
+/**
+ * #sec-primitive-operator-blocks: "An operator body evaluates on raw values: no
+ * operator declared by any block is re-entered within one, so `return this +
+ * rhs;` inside `operator+` is the primitive addition rather than itself."
+ *
+ * Without this the first `primitive number { operator *(rhs: V) }` written
+ * turned every multiplication inside any operator body into a dispatch, so a
+ * class operator whose body multiplied two plain numbers called the block and
+ * failed on its parameter type. The clause states the rule in the sentence
+ * above; the counter is how it is kept.
+ */
+let operatorBodyDepth = 0;
+
+export function EnterOperatorBody(): void {
+  operatorBodyDepth += 1;
+}
+
+export function LeaveOperatorBody(): void {
+  operatorBodyDepth -= 1;
+}
+
+export function LookupPrimitiveOperator(value: Value, opText: string): PrimitiveOperatorEntry | null {
+  if (operatorBodyDepth > 0) {
+    return null;
+  }
+  const tables = primitiveTablesForAgent();
+  if (tables.size === 0) {
+    return null;
+  }
+  let name: string | null = null;
+  if (isTypedNumber(value)) {
+    const record = (value as TypedNumberValue).TypeRecord as TypeRecord;
+    const base = record.Kind === 'parameterized' ? record.Base : record;
+    if (base.Kind === 'primitive') {
+      name = base.Arguments && base.Arguments.length > 0
+        ? `${base.Name}${base.Arguments[0]}`
+        : base.Name;
+    }
+  } else if (value instanceof NumberValue) {
+    name = 'number';
+  }
+  if (name === null) {
+    return null;
+  }
+  return tables.get(name)?.get(opText) ?? null;
+}
+
 export function LookupClassOperator(value: Value, opText: string): Value | null {
   let proto: unknown = (value as { Prototype?: unknown }).Prototype;
   while (proto && proto instanceof Object && !(proto as { type?: string, constructor: unknown } instanceof Array)) {

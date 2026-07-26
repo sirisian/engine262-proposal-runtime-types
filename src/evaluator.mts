@@ -84,6 +84,7 @@ import {
   Evaluate_AnyFunctionBody,
   Evaluate_ExpressionBody,
 } from './runtime-semantics/all.mts';
+import { Evaluate_PrimitiveOperatorDeclaration } from './runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ObjectValue, surroundingAgent } from '#self';
 import {
@@ -190,8 +191,7 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     case 'MetaDeclaration':
       return yield* Evaluate_MetaDeclaration(node);
     case 'PrimitiveOperatorDeclaration':
-      // Primitive operator tables join the numeric value types.
-      return undefined;
+      return yield* Evaluate_PrimitiveOperatorDeclaration(node);
     case 'LexicalDeclaration':
       return yield* Evaluate_LexicalDeclaration(node);
     case 'FunctionDeclaration':

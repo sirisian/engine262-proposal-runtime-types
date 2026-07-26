@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../readme/harness.mts';
+import { evaluated, expectThrown, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * Extension coverage - operatoroverloading.md.
@@ -170,4 +170,30 @@ test('operators: reporting the right operand case leaves every neighbouring case
   // defined meanings there and may well be what the program wants
   expect(evaluated(V_MUL + 'let v = new V(3); ("a" + v).slice(0, 1);')).toBe('a');
   expect(evaluated(C_CMP + 'let c = new C(1); String("a" < c);')).toBe('false');
+});
+
+test('a `primitive` block declares operators on a primitive, and closes scalar-on-the-left', () => {
+  // #sec-primitive-operator-blocks. The declaration PARSED and evaluated to
+  // nothing before this, so a program could declare an operator, get no error,
+  // and get no behaviour - which reads as support and is the worst of the
+  // three outcomes.
+  const decl = 'class V { constructor(x) { this.x = x; } operator *(rhs: number): V { return new V(this.x * rhs); } } '
+    + 'primitive number { operator *(rhs: V): V { return new V(this * rhs.x); } } const v = new V(3); ';
+  // The design closes scalar-on-the-left with a block on the number type, and
+  // the diagnostic below was what stood in for it (F4): landing the block
+  // REPLACES that diagnostic with dispatch rather than deleting it.
+  expect(evaluated(`${decl} String((2 * v).x);`)).toBe('6');
+  expect(evaluated(`${decl} String((v * 2).x);`)).toBe('6');
+  // "where no definition with a body matches, the primitive operation runs" -
+  // and MATCHING is on the right operand against the parameter type. Without
+  // that test a block on `number` would capture every multiplication in the
+  // program and fail on its own parameter.
+  expect(evaluated(`${decl} String(3 * 2);`)).toBe('6');
+  expect(evaluated(`${decl} String(3 + 2);`)).toBe('5');
+  // "An operator body evaluates on raw values: no operator declared by any
+  // block is re-entered within one." The class operator's body multiplies two
+  // plain numbers, which without the rule dispatches back into the block.
+  expect(evaluated(`${decl} String((v * 2).x + (2 * v).x);`)).toBe('12');
+  // The diagnostic still fires where nothing declares the left operand's side.
+  expectThrownKind('class W { operator *(rhs: number): W { return this; } } const w = new W(); 2 * w;', 'TypeError');
 });

@@ -9,8 +9,10 @@ import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
 } from '../intrinsics/Rational.mts';
 import { Q } from '../completion.mts';
+import { IsOfType } from '../type-system/runtime.mts';
 import {
-  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, RightOperandDeclaresOperator } from '#self';
+  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
+
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
@@ -23,7 +25,42 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       // proposal-runtime-types (spec sec-class-operators): a class operator's
       // receiver is the left operand and the declaration's single parameter is
       // the right operand. Dispatch with this = lval and arguments = [rval].
-      return Q(yield* Call(opFn as never, lval, [rval]));
+      EnterOperatorBody();
+      try {
+        return Q(yield* Call(opFn as never, lval, [rval]));
+      } finally {
+        LeaveOperatorBody();
+      }
+    }
+  }
+  // proposal-runtime-types #sec-primitive-operator-blocks: an operator declared
+  // by a `primitive` block, whose receiver is the primitive rather than an
+  // Object. This is what makes `2 * v` work where `v` declares the operator and
+  // the left operand is a bare number: the design closes the scalar-on-the-left
+  // case with a block on the number type, and the diagnostic below is what
+  // stood in for it (F4). Landing the block REPLACES that diagnostic with
+  // dispatch rather than deleting it - a program that declares no block still
+  // gets told why its expression did not work.
+  if (surroundingAgent.feature('runtime-types') && !(lval instanceof ObjectValue)) {
+    const entry = LookupPrimitiveOperator(lval, opText);
+    // "at most one definition with a body may match ... where no definition
+    // with a body matches, the primitive operation runs". MATCHING is on the
+    // right operand against the definition's parameter type, and skipping that
+    // test is not a shortcut: a `primitive number { operator *(rhs: V) }` would
+    // otherwise capture EVERY multiplication of two numbers in the program and
+    // fail on its own parameter.
+    if (entry) {
+      const admits = entry.parameterType === null
+        ? true
+        : Q(yield* IsOfType(rval, entry.parameterType));
+      if (admits) {
+        EnterOperatorBody();
+        try {
+          return Q(yield* Call(entry.fn as never, lval, [rval]));
+        } finally {
+          LeaveOperatorBody();
+        }
+      }
     }
   }
   // proposal-runtime-types (operatoroverloading.md): the mirror image, where the
