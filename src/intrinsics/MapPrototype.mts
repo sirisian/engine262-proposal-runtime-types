@@ -1,16 +1,12 @@
 import {
   NumberValue,
   Value,
-  wellKnownSymbols, TypedNumberValue } from '../value.mts';
-import { Q, X, NormalCompletion } from '../completion.mts';
+  wellKnownSymbols } from '../value.mts';
+import { Q, X } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { displayType } from '../type-system/records.mts';
-import { fitsNumericType } from '../type-system/runtime.mts';
-import { SameType } from '../type-system/relations.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { CreateMapIterator } from './MapIteratorPrototype.mts';
 import type { MapObject } from './Map.mts';
-import { isTypedNumber, R } from '#self';
 import {
   surroundingAgent,
   Call,
@@ -19,10 +15,11 @@ import {
   IsCallable,
   RequireInternalSlot,
   SameValue, SameValueZero, Throw,
+  RequireType,
 } from '#self';
 import type {
   Arguments, Descriptor, ValueEvaluator, FunctionCallContext, Realm,
-  ValueCompletion,
+  ValueCompletion, PlainEvaluator,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-map.prototype.clear */
@@ -53,44 +50,30 @@ function MapProto_clear(_args: Arguments, { thisValue }: FunctionCallContext): V
  * `Map.<K, V>` alongside the array. The map carries its type arguments from the
  * boundary that produced it, index 0 being the key and 1 the value (F73).
  *
- * Synchronous, and so scoped to the NUMERIC types, for the reason the Set side
- * gives: those are the ones where a value's type is part of its identity.
+ * RequireType, the one check-site operation, for the reason the Set side gives:
+ * the synchronous helper this replaces reached the numeric types alone, so a
+ * `Map.<string, uint8>` checked neither position and `m.get(5)` answered
+ * *undefined* rather than reporting the key it could never hold.
  */
-function mapValueAtType(O: Value, value: Value, index: number): ValueCompletion {
+function* mapValueAtType(O: Value, value: Value, index: number): PlainEvaluator<Value> {
   if (!surroundingAgent.feature('runtime-types')) {
-    return NormalCompletion(value);
+    return value;
   }
   const args = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
   const t = args?.[index];
-  if (t === undefined || typeof t === 'number' || t.Kind !== 'primitive'
-      || !['uint', 'int', 'float16', 'float32', 'float64', 'number'].includes(t.Name)) {
-    return NormalCompletion(value);
+  if (t === undefined || typeof t === 'number') {
+    return value;
   }
-  if (isTypedNumber(value)) {
-    if (SameType((value as TypedNumberValue).TypeRecord as TypeRecord, t)) {
-      return NormalCompletion(value);
-    }
-    const carried = (value as TypedNumberValue).value;
-    return fitsNumericType(carried, t.Name, t.Arguments)
-      ? NormalCompletion(new TypedNumberValue(carried, t))
-      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-  }
-  if (value instanceof NumberValue) {
-    const n = R(value) as number;
-    return fitsNumericType(n, t.Name, t.Arguments)
-      ? NormalCompletion(new TypedNumberValue(n, t))
-      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-  }
-  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  return Q(yield* RequireType(value, t));
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.delete */
-function MapProto_delete([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* MapProto_delete([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
   // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
   Q(RequireInternalSlot(M, 'MapData'));
-  key = Q(mapValueAtType(M, key, 0));
+  key = Q(yield* mapValueAtType(M, key, 0));
   // 3. Let entires be M.[[MapData]].
   const entries = M.MapData;
   // 4. For each Record { [[Key]], [[Value]] } p that is an element of entries, do
@@ -142,12 +125,12 @@ function* MapProto_forEach([callbackfn = Value.undefined, thisArg = Value.undefi
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.get */
-function MapProto_get([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* MapProto_get([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
   // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
   Q(RequireInternalSlot(M, 'MapData'));
-  key = Q(mapValueAtType(M, key, 0));
+  key = Q(yield* mapValueAtType(M, key, 0));
   // 3. Let entries be the List that is M.[[MapData]].
   const entries = M.MapData;
   // 4. For each Record { [[Key]], [[Value]] } p that is an element of entries, do
@@ -163,11 +146,19 @@ function MapProto_get([key = Value.undefined]: Arguments, { thisValue }: Functio
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.getorinsert */
-function MapProto_getOrInsert([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* MapProto_getOrInsert([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
   // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
   Q(RequireInternalSlot(M, 'MapData'));
+  // A store is a store whatever it is spelled: `getOrInsert` reaches both
+  // positions of the map and was checking NEITHER, so `m.getOrInsert(300, 400)`
+  // on a `Map.<uint8, uint8>` stored two plain Numbers where `m.set` of the
+  // same pair throws. Found while lifting the numeric-only limit, and the same
+  // omission as the one being lifted: a boundary the table names, reached by a
+  // method nobody had listed.
+  key = Q(yield* mapValueAtType(M, key, 0));
+  value = Q(yield* mapValueAtType(M, value, 1));
   // 3. Set key to CanonicalizeKeyedCollectionKey(key).
   key = CanonicalizeKeyedCollectionKey(key);
   // 4. For each Record { [[Key]], [[Value]] } p of M.[[MapData]], do
@@ -196,6 +187,7 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
   if (!IsCallable(callbackfn)) {
     return Throw.TypeError('$1 is not a function', callbackfn);
   }
+  key = Q(yield* mapValueAtType(M, key, 0));
   // 4. Set key to CanonicalizeKeyedCollectionKey(key).
   key = CanonicalizeKeyedCollectionKey(key);
   // 5. For each Record { [[Key]], [[Value]] } p of M.[[MapData]], do
@@ -207,7 +199,12 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
     }
   }
   // 6. Let value be ? Call(callbackfn, undefined, « key »).
-  const value = Q(yield* Call(callbackfn, Value.undefined, [key]));
+  // The callback's RESULT is what gets stored, so it is the value position and
+  // takes the value type. This is the one place in a collection where the
+  // conversion demonstrably had to be effectful even before the type space
+  // widened: user code produces the value, and it is checked after running.
+  let value = Q(yield* Call(callbackfn, Value.undefined, [key]));
+  value = Q(yield* mapValueAtType(M, value, 1));
   // 7. NOTE: The Map may have been modified during execution of callbackfn.
   // 8. For each Record { [[Key]], [[Value]] } p of M.[[MapData]], do
   for (const p of entries) {
@@ -228,12 +225,12 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.has */
-function MapProto_has([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* MapProto_has([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
   // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
   Q(RequireInternalSlot(M, 'MapData'));
-  key = Q(mapValueAtType(M, key, 0));
+  key = Q(yield* mapValueAtType(M, key, 0));
   // 3. Let entries be the List that is M.[[MapData]].
   const entries = M.MapData;
   // 4. For each Record { [[Key]], [[Value]] } p that is an element of entries, do
@@ -256,13 +253,13 @@ function MapProto_keys(_args: Arguments, { thisValue }: FunctionCallContext): Va
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.set */
-function MapProto_set([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* MapProto_set([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
   // 2. Perform ? RequireInternalSlot(M, [[MapData]]).
   Q(RequireInternalSlot(M, 'MapData'));
-  key = Q(mapValueAtType(M, key, 0));
-  value = Q(mapValueAtType(M, value, 1));
+  key = Q(yield* mapValueAtType(M, key, 0));
+  value = Q(yield* mapValueAtType(M, value, 1));
   // 3. Let entries be the List that is M.[[MapData]].
   const entries = M.MapData;
   // 4. For each Record { [[Key]], [[Value]] } p that is an element of entries, do

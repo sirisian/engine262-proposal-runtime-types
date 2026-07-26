@@ -1,7 +1,6 @@
 import {
   Descriptor,
   NumberValue,
-  TypedNumberValue,
   Value,
   wellKnownSymbols,
   ObjectValue,
@@ -14,13 +13,9 @@ import {
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { displayType } from '../type-system/records.mts';
-import { fitsNumericType } from '../type-system/runtime.mts';
-import { SameType } from '../type-system/relations.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { CreateSetIterator } from './SetIteratorPrototype.mts';
 import type { SetObject } from './Set.mts';
-import { isTypedNumber } from '#self';
 import {
   surroundingAgent,
   Call,
@@ -39,6 +34,7 @@ import {
   IteratorStepValue,
   IteratorClose,
   Throw,
+  RequireType,
 } from '#self';
 import type {
   FunctionObject,
@@ -50,48 +46,42 @@ import type {
  * proposal-runtime-types: a typed collection's element positions take the
  * declared type, which #sec-array-defaults-and-stores states for the array and
  * for `Set.<T>` and `Map.<K, V>` alike. The collection carries its type
- * arguments from the boundary that produced it (F72).
+ * arguments from the boundary that produced it (F72, F73).
  *
- * Synchronous, and therefore scoped to the NUMERIC element types: those are
- * the ones where a value's type is part of its identity, so a `Set.<uint8>`
- * holding a plain Number is the defect worth fixing. A non-numeric element
- * type needs the full conversion and is left to the pass that gives these
- * methods real signatures.
+ * This is RequireType, the one check-site operation, and nothing else. The
+ * helper it replaces was synchronous and so reached the NUMERIC element types
+ * alone: a `Set.<string>` checked nothing at all, and `s.add(5)` stored the
+ * Number silently. That is the shape F51 named - the engine holding a second,
+ * narrower operation where the specification has one - and the fix is the same
+ * one: delete the narrow operation and call the real one. Being a generator is
+ * what buys the rest of the type space, since a conversion may run user code
+ * (a `validate` hook, a builder) and a synchronous helper cannot.
+ *
+ * The behaviour is therefore the ARRAY's behaviour at its element positions,
+ * not a new rule: a value already of the type passes, a lossless conversion
+ * runs, and a value the type cannot hold is an error. It is one error for a
+ * search as much as for a store, because a needle the element type cannot hold
+ * makes a test that can never succeed (F69).
  */
-function collectionValueAtType(O: Value, value: Value, index: number): ValueCompletion {
+function* collectionValueAtType(O: Value, value: Value, index: number): PlainEvaluator<Value> {
   if (!surroundingAgent.feature('runtime-types')) {
-    return NormalCompletion(value);
+    return value;
   }
   const args = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
   const t = args?.[index];
-  if (t === undefined || typeof t === 'number' || t.Kind !== 'primitive' || !['uint', 'int', 'float16', 'float32', 'float64', 'number'].includes(t.Name)) {
-    return NormalCompletion(value);
+  if (t === undefined || typeof t === 'number') {
+    return value;
   }
-  if (isTypedNumber(value)) {
-    if (SameType((value as TypedNumberValue).TypeRecord as TypeRecord, t)) {
-      return NormalCompletion(value);
-    }
-    const carried = (value as TypedNumberValue).value;
-    return fitsNumericType(carried, t.Name, t.Arguments)
-      ? NormalCompletion(new TypedNumberValue(carried, t))
-      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-  }
-  if (value instanceof NumberValue) {
-    const n = R(value) as number;
-    return fitsNumericType(n, t.Name, t.Arguments)
-      ? NormalCompletion(new TypedNumberValue(n, t))
-      : Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-  }
-  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  return Q(yield* RequireType(value, t));
 }
 
 /** https://tc39.es/ecma262/#sec-set.prototype.add */
-function SetProto_add([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* SetProto_add([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be the this value.
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
-  value = Q(collectionValueAtType(S, value, 0));
+  value = Q(yield* collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. For each e that is an element of entries, do
@@ -134,12 +124,12 @@ function SetProto_clear(_args: Arguments, { thisValue }: FunctionCallContext): V
 }
 
 /** https://tc39.es/ecma262/#sec-set.prototype.delete */
-function SetProto_delete([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* SetProto_delete([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be the this value.
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
-  value = Q(collectionValueAtType(S, value, 0));
+  value = Q(yield* collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. For each e that is an element of entries, do
@@ -267,12 +257,12 @@ function* SetProto_forEach([callbackfn = Value.undefined, thisArg = Value.undefi
 }
 
 /** https://tc39.es/ecma262/#sec-set.prototype.has */
-function SetProto_has([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* SetProto_has([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be the this value.
   const S = thisValue as SetObject;
   // 2. Perform ? RequireInternalSlot(S, [[SetData]]).
   Q(RequireInternalSlot(S, 'SetData'));
-  value = Q(collectionValueAtType(S, value, 0));
+  value = Q(yield* collectionValueAtType(S, value, 0));
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
   // 4. Let entries be the List that is S.[[SetData]].

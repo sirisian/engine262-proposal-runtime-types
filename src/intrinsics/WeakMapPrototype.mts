@@ -3,9 +3,11 @@ import {
   type Arguments,
   type FunctionCallContext,
 } from '../value.mts';
-import { Q, type ValueCompletion, type ValueEvaluator } from '../completion.mts';
+import { Q, type ValueEvaluator } from '../completion.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import type { WeakMapObject } from './WeakMap.mts';
+import type { PlainEvaluator } from '#self';
 import {
   surroundingAgent,
   Call,
@@ -15,14 +17,41 @@ import {
   CanBeHeldWeakly,
   Realm,
   Throw,
+  RequireType,
 } from '#self';
 
+/**
+ * proposal-runtime-types: the weak collections carry type arguments from the
+ * same boundary the strong ones do - CheckedConvertValue stamps all four - and
+ * this is the consumer that stamp did not have. A `WeakMap.<object, uint8>`
+ * stamped its arguments and then checked neither position, which is worse than
+ * not stamping: the checker reports the value position as a type error while
+ * the run time accepts anything through the `any` path, so the two disagree
+ * about the same store.
+ *
+ * The KEY position of a weak collection is constrained to `object | symbol` by
+ * the design, since a weak reference needs identity; CanBeHeldWeakly still
+ * decides that, and this decides the declared type on top of it.
+ */
+function* weakValueAtType(O: Value, value: Value, index: number): PlainEvaluator<Value> {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return value;
+  }
+  const args = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+  const t = args?.[index];
+  if (t === undefined || typeof t === 'number') {
+    return value;
+  }
+  return Q(yield* RequireType(value, t));
+}
+
 /** https://tc39.es/ecma262/#sec-weakmap.prototype.delete */
-function WeakMapProto_delete([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakMapProto_delete([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
   // 3. If CanBeHeldWeakly(key) is false, return false.
   if (!CanBeHeldWeakly(key)) {
     return Value.false;
@@ -47,11 +76,12 @@ function WeakMapProto_delete([key = Value.undefined]: Arguments, { thisValue }: 
 }
 
 /** https://tc39.es/ecma262/#sec-weakmap.prototype.get */
-function WeakMapProto_get([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakMapProto_get([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let m be the this value.
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
   // 3. If CanBeHeldWeakly(key) is false, return false.
   if (!CanBeHeldWeakly(key)) {
     return Value.undefined;
@@ -69,11 +99,13 @@ function WeakMapProto_get([key = Value.undefined]: Arguments, { thisValue }: Fun
 }
 
 /** https://tc39.es/ecma262/#sec-weakmap.prototype.getorinsert */
-function WeakMapProto_getOrInsert([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakMapProto_getOrInsert([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let m be the this value.
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
+  value = Q(yield* weakValueAtType(M, value, 1));
   // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
   if (!CanBeHeldWeakly(key)) {
     return Throw.TypeError('$1 cannot be used as a WeakMap key', key);
@@ -100,6 +132,7 @@ function* WeakMapProto_getOrInsertComputed([key = Value.undefined, callbackfn = 
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
   // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
   if (!CanBeHeldWeakly(key)) {
     return Throw.TypeError('$1 cannot be weakly referenced', key);
@@ -117,7 +150,8 @@ function* WeakMapProto_getOrInsertComputed([key = Value.undefined, callbackfn = 
     }
   }
   // 6. Let value be ? Call(callbackfn, undefined, « key »).
-  const value = Q(yield* Call(callbackfn, Value.undefined, [key]));
+  let value = Q(yield* Call(callbackfn, Value.undefined, [key]));
+  value = Q(yield* weakValueAtType(M, value, 1));
   // 7. NOTE: The Map may have been modified during execution of callbackfn.
   // 8. For each Record { [[Key]], [[Value]] } p of M.[[WeakMapData]], do
   for (const p of entries) {
@@ -138,11 +172,12 @@ function* WeakMapProto_getOrInsertComputed([key = Value.undefined, callbackfn = 
 }
 
 /** https://tc39.es/ecma262/#sec-weakmap.prototype.has */
-function WeakMapProto_has([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakMapProto_has([key = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
   // 3. If CanBeHeldWeakly(key) is false, return false.
   if (!CanBeHeldWeakly(key)) {
     return Value.false;
@@ -160,11 +195,13 @@ function WeakMapProto_has([key = Value.undefined]: Arguments, { thisValue }: Fun
 }
 
 /** https://tc39.es/ecma262/#sec-weakmap.prototype.set */
-function WeakMapProto_set([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakMapProto_set([key = Value.undefined, value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let M be the this value.
   const M = thisValue as WeakMapObject;
   // 2. Perform ? RequireInternalSlot(M, [[WeakMapData]]).
   Q(RequireInternalSlot(M, 'WeakMapData'));
+  key = Q(yield* weakValueAtType(M, key, 0));
+  value = Q(yield* weakValueAtType(M, value, 1));
   // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
   if (!CanBeHeldWeakly(key)) {
     return Throw.TypeError('$1 cannot be weakly referenced', key);

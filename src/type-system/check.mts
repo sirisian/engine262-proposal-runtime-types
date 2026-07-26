@@ -769,6 +769,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return sig;
             }
           }
+          // The same for a typed COLLECTION, which reaches the checker as the
+          // nominal its annotation resolved to, carrying its type arguments.
+          if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
+              && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map'
+                || receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
+            const sig = collectionMethodSignature(
+              receiver.LibraryName,
+              (m.IdentifierName as { name: string }).name,
+              receiver.Arguments,
+              receiver,
+            );
+            if (sig) {
+              return sig;
+            }
+          }
           const objType = structureOf(receiver);
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
@@ -1225,6 +1240,64 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'symbol': return makePrimitive('symbol');
       case 'undefined': return makePrimitive('undefined');
       case 'object': return makePrimitive('object');
+      default: return null;
+    }
+  };
+
+  /**
+   * A method of a typed COLLECTION takes its key and value positions at the
+   * declared types, which sec-array-defaults-and-stores states beside the
+   * array's element positions and which the run time enforces. The checker
+   * knowing them is what turns `s.add(300)` on a `Set.<uint8>` from a run-time
+   * RangeError into the Early Error a statically determinable mistake
+   * deserves - the same step the array methods took in F70, and the reason a
+   * collection's methods were the array methods' one remaining asymmetry.
+   *
+   * The signatures are the DESIGN's own, written out in the weak-reference
+   * section of the README rather than invented here: `add(value: T): Set.<T>`,
+   * `has(value: T): boolean`, `delete(value: T): boolean`, and for the keyed
+   * form `get(key: K): V | undefined`, `set(key: K, value: V): Map.<K, V>`.
+   * The `undefined` in `get`'s return is the design's and is load-bearing: a
+   * lookup that finds nothing answers *undefined*, so `let x: uint8 = m.get(k)`
+   * is a mistake the types can see.
+   */
+  const collectionMethodSignature = (library: string, name: string, args: readonly (TypeRecord | number)[], receiver: TypeRecord): Known => {
+    const boolType = makePrimitive('boolean');
+    const anyType = { Kind: 'any' as const };
+    const shapes = (n: number, optionalFrom: number) => Array.from({ length: n }, (_unused, i) => ({
+      Optional: i >= optionalFrom, Rest: false, HasDefault: false,
+    }));
+    const arg = (i: number): TypeRecord => {
+      const a = args[i];
+      return a === undefined || typeof a === 'number' ? anyType as TypeRecord : a;
+    };
+    const sig = (Parameters: TypeRecord[], Return: TypeRecord, optionalFrom = Parameters.length) => ({
+      Kind: 'function',
+      Signatures: [{ Parameters, Return, Shapes: shapes(Parameters.length, optionalFrom), Untyped: false }],
+    } as unknown as Known);
+    if (library === 'Set' || library === 'WeakSet') {
+      const element = arg(0);
+      switch (name) {
+        case 'add': return sig([element], receiver);
+        case 'has':
+        case 'delete': return sig([element], boolType);
+        default: return null;
+      }
+    }
+    const key = arg(0);
+    const value = arg(1);
+    switch (name) {
+      // The design writes the lookup as `V | undefined`, and a union is how the
+      // checker says it: a `Map.<K, V>` that does not hold the key answers
+      // *undefined*, so a binding of type V is not what a lookup produces.
+      case 'get': return sig([key], { Kind: 'union', Members: [value, makePrimitive('undefined')] } as TypeRecord);
+      case 'set': return sig([key, value], receiver);
+      case 'has':
+      case 'delete': return sig([key], boolType);
+      // `getOrInsert` postdates the design's listing, so its return is read off
+      // its own semantics rather than quoted: it answers the value it found or
+      // the one it inserted, and never *undefined*.
+      case 'getOrInsert': return sig([key, value], value);
       default: return null;
     }
   };

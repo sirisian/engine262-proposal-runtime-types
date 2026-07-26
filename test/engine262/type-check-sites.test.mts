@@ -482,17 +482,99 @@ test('a typed Set takes its element positions at the element type', () => {
   // conversion.
   const s = 'let s: Set.<uint8> = new Set(); ';
   expect(evaluated(`${s} s.add(65); String([...s][0] is uint8);`)).toBe('true');
-  expect(thrownKind(`${s} s.add(300);`)).toBe('RangeError');
-  expect(thrownKind(`${s} s.add("x");`)).toBe('TypeError');
+  // MIGRATED TO STATIC FORM: a LITERAL the element type cannot hold is now an
+  // Early Error, since the checker knows these signatures. The run-time kinds
+  // these lines used to assert are asserted below through the `any` path,
+  // which is where the runtime backstop still lives - the same migration the
+  // array methods' assertions made when they gained signatures (F70/F37).
+  expectStatic(`${s} s.add(300);`);
+  expectStatic(`${s} s.add("x");`);
+  expect(thrownKind(`${s} function anyv() { return 300; } s.add(anyv());`)).toBe('RangeError');
+  expect(thrownKind(`${s} function anyv() { return "x"; } s.add(anyv());`)).toBe('TypeError');
   // A literal needle finds what the set holds, and so does a typed one, and one
   // of another family converts through the same boundary.
   expect(evaluated(`${s} s.add(65); String(s.has(65));`)).toBe('true');
   expect(evaluated(`${s} s.add(65); String(s.has((65 := uint8)));`)).toBe('true');
-  expect(evaluated(`${s} s.add(65); String(s.has((65 := uint16)));`)).toBe('true');
+  // A needle of ANOTHER numeric family is a static type error, uniformly: the
+  // checker rejects a `uint16` where a `uint8` is required at a binding, at a
+  // parameter, and at an array method, and a collection method is now the same
+  // position. Reaching the boundary through a path the checker cannot see, the
+  // run time still converts it, which is the backstop that assertion was
+  // really about.
+  expectStatic(`${s} s.has((65 := uint16));`);
+  expect(evaluated(`${s} s.add(65); function anyv() { return (65 := uint16); } String(s.has(anyv()));`)).toBe('true');
   expect(evaluated(`${s} s.add(65); String(s.delete(65)) + "/" + String(s.size);`)).toBe('true/0');
   expect(evaluated(`${s} s.add(65); s.add(65); String(s.size);`)).toBe('1');
   // An untyped Set constrains nothing, exactly as an untyped array does not.
   expect(evaluated('const u = new Set(); u.add(300); u.add("x"); String(u.size);')).toBe('2');
+});
+
+test('a typed collection checks every position it declares, at any type', () => {
+  // The conversion at these methods used to be SYNCHRONOUS, and so reached the
+  // NUMERIC element types and no others: a `Set.<string>` checked nothing at
+  // all. That is F51's shape again - a second, narrower operation beside the
+  // one the specification has - and the fix is the same, to call RequireType.
+  // Being a generator is what buys the rest of the type space.
+  const ss = 'let s: Set.<string> = new Set(); ';
+  expect(thrownKind(`${ss} function anyv() { return {}; } s.add(anyv());`)).toBe('TypeError');
+  expect(thrownKind(`${ss} function anyv() { return {}; } s.has(anyv());`)).toBe('TypeError');
+  expect(thrownKind(`${ss} function anyv() { return {}; } s.delete(anyv());`)).toBe('TypeError');
+  // The conversion is the array's conversion, so it behaves identically: a
+  // lossless source converts rather than failing, exactly as `a.push(5)` on a
+  // `[].<string>` has always produced the string "5".
+  expect(evaluated(`${ss} function anyv() { return 5; } s.add(anyv()); String(typeof [...s][0]);`)).toBe('string');
+
+  const mm = 'let m: Map.<string, uint8> = new Map(); ';
+  expect(thrownKind(`${mm} function anyv() { return {}; } m.get(anyv());`)).toBe('TypeError');
+  expect(thrownKind(`${mm} function anyv() { return 300; } m.set("a", anyv());`)).toBe('RangeError');
+  expect(thrownKind(`${mm} function anyv() { return {}; } m.has(anyv());`)).toBe('TypeError');
+  expect(evaluated(`${mm} m.set("a", 65); String(m.get("a") is uint8);`)).toBe('true');
+
+  // `getOrInsert` is a store however it is spelled, and it was checking NEITHER
+  // position - not even the numeric ones the old helper did reach. Found while
+  // lifting that limit.
+  const mu = 'let m: Map.<uint8, uint8> = new Map(); ';
+  expect(thrownKind(`${mu} function anyv() { return 300; } m.getOrInsert(anyv(), 1);`)).toBe('RangeError');
+  expect(thrownKind(`${mu} function anyv() { return 300; } m.getOrInsert(1, anyv());`)).toBe('RangeError');
+  expect(thrownKind(`${mu} function anyv() { return 300; } m.getOrInsertComputed(1, () => anyv());`)).toBe('RangeError');
+  expect(evaluated(`${mu} String(m.getOrInsert(1, 65) is uint8);`)).toBe('true');
+
+  // The weak collections carry the same stamp and had no consumer for it, so a
+  // typed position the checker reported was accepted by the run time.
+  const wm = 'let w: WeakMap.<object, uint8> = new WeakMap(); const o = {}; ';
+  expect(thrownKind(`${wm} function anyv() { return 300; } w.set(o, anyv());`)).toBe('RangeError');
+  expect(evaluated(`${wm} w.set(o, 65); String(w.get(o) is uint8);`)).toBe('true');
+
+  // An untyped collection constrains nothing, exactly as an untyped array does
+  // not - the control that keeps this from being a change to every program.
+  expect(evaluated('const u = new Set(); u.add(300); u.add({}); String(u.size);')).toBe('2');
+  expect(evaluated('const u = new Map(); u.set({}, 300); String(u.size);')).toBe('1');
+});
+
+test('the checker knows a typed collection\'s method signatures', () => {
+  // The static half, and the array methods' one remaining asymmetry: a literal
+  // the declared type cannot hold is an Early Error rather than a run-time
+  // one. Proved by REJECTION inside a never-called function, since every
+  // positive passes against a checker that knows nothing (F79).
+  expectStatic('function f(s: Set.<uint8>) { s.add(300); }');
+  expectStatic('function f(s: Set.<uint8>) { s.has(300); }');
+  expectStatic('function f(s: Set.<uint8>) { s.delete(300); }');
+  expectStatic('function f(s: Set.<string>) { s.add(5); }');
+  expectStatic('function f(m: Map.<string, uint8>) { m.set("a", 300); }');
+  expectStatic('function f(m: Map.<string, uint8>) { m.get(5); }');
+  expectStatic('function f(m: Map.<string, uint8>) { m.has(5); }');
+  expectStatic('function f(w: WeakMap.<object, uint8>) { w.set({}, 300); }');
+  // The signatures are the DESIGN's, and its lookup returns `V | undefined`:
+  // a lookup that finds nothing answers undefined, so a binding of the value
+  // type is a mistake the types can see.
+  expectStatic('function f(m: Map.<string, uint8>) { let x: uint8 = m.get("a"); }');
+  // The positive forms typecheck, including the returns the design declares:
+  // `has` answers a boolean and `add` answers the set itself, for chaining.
+  expect(evaluated('function f(s: Set.<uint8>) { let b: boolean = s.has(5); let t: Set.<uint8> = s.add(5); } "ok";')).toBe('ok');
+  expect(evaluated('function f(m: Map.<string, uint8>) { let x: uint8 | undefined = m.get("a"); } "ok";')).toBe('ok');
+  // An UNTYPED collection has no declared type to check against, so nothing
+  // here reaches an ordinary program.
+  expect(evaluated('function f(s: Set) { s.add(300); s.add("x"); } "ok";')).toBe('ok');
 });
 
 test('a test narrows the binding it guards', () => {
@@ -711,13 +793,17 @@ test('a typed Map takes its key and value positions at their declared types', ()
   // The value position (F73), mirroring the Set element position.
   const m = 'let m: Map.<string, uint8> = new Map(); ';
   expect(evaluated(`${m} m.set("a", 65); String(m.get("a") is uint8);`)).toBe('true');
-  expect(thrownKind(`${m} m.set("a", 300);`)).toBe('RangeError');
+  // MIGRATED TO STATIC FORM, as the Set assertions above were, and for the
+  // same reason.
+  expectStatic(`${m} m.set("a", 300);`);
+  expect(thrownKind(`${m} function anyv() { return 300; } m.set("a", anyv());`)).toBe('RangeError');
   expect(thrownKind(`${m} m.set("a", {});`)).toBe('TypeError');
   // And the KEY position, which is the same rule at index 0.
   const k = 'let k: Map.<uint8, string> = new Map(); ';
   expect(evaluated(`${k} k.set(65, "v"); String(k.get(65));`)).toBe('v');
   expect(evaluated(`${k} k.set(65, "v"); String(k.has(65)) + "/" + String(k.delete(65));`)).toBe('true/true');
-  expect(thrownKind(`${k} k.set(300, "v");`)).toBe('RangeError');
+  expectStatic(`${k} k.set(300, "v");`);
+  expect(thrownKind(`${k} function anyv() { return 300; } k.set(anyv(), "v");`)).toBe('RangeError');
   // An untyped Map constrains nothing.
   expect(evaluated('const u = new Map(); u.set("a", 300); String(u.get("a"));')).toBe('300');
 });

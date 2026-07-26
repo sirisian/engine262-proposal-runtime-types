@@ -3,9 +3,11 @@ import {
   type Arguments,
   type FunctionCallContext,
 } from '../value.mts';
-import { Q, type ValueCompletion } from '../completion.mts';
+import { Q, type ValueEvaluator } from '../completion.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import type { WeakSetObject } from './WeakSet.mts';
+import type { PlainEvaluator } from '#self';
 import {
   surroundingAgent,
   SameValue,
@@ -13,14 +15,33 @@ import {
   CanBeHeldWeakly,
   Realm,
   Throw,
+  RequireType,
 } from '#self';
 
+/**
+ * proposal-runtime-types: the element position of a `WeakSet.<T>`, which
+ * CheckedConvertValue already stamps and nothing consumed. See the WeakMap
+ * side for why an unconsumed stamp is worse than no stamp.
+ */
+function* weakValueAtType(O: Value, value: Value): PlainEvaluator<Value> {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return value;
+  }
+  const args = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+  const t = args?.[0];
+  if (t === undefined || typeof t === 'number') {
+    return value;
+  }
+  return Q(yield* RequireType(value, t));
+}
+
 /** https://tc39.es/ecma262/#sec-weakset.prototype.add */
-function WeakSetProto_add([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakSetProto_add([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be this value.
   const S = thisValue as WeakSetObject;
   // 2. Perform ? RequireInternalSlot(S, [[WeakSetData]]).
   Q(RequireInternalSlot(S, 'WeakSetData'));
+  value = Q(yield* weakValueAtType(S, value));
   // 3. If CanBeHeldWeakly(value) is false, throw a TypeError exception.
   if (!CanBeHeldWeakly(value)) {
     return Throw.TypeError('$1 cannot be weakly referenced', value);
@@ -41,11 +62,12 @@ function WeakSetProto_add([value = Value.undefined]: Arguments, { thisValue }: F
 }
 
 /** https://tc39.es/ecma262/#sec-weakset.prototype.delete */
-function WeakSetProto_delete([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakSetProto_delete([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be the this value.`
   const S = thisValue as WeakSetObject;
   // 2. Perform ? RequireInternalSlot(S, [[WeakSetData]]).
   Q(RequireInternalSlot(S, 'WeakSetData'));
+  value = Q(yield* weakValueAtType(S, value));
   // 3. If CanBeHeldWeakly(value) is false, return false.
   if (!CanBeHeldWeakly(value)) {
     return Value.false;
@@ -68,11 +90,12 @@ function WeakSetProto_delete([value = Value.undefined]: Arguments, { thisValue }
 }
 
 /** https://tc39.es/ecma262/#sec-weakset.prototype.has */
-function WeakSetProto_has([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+function* WeakSetProto_has([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let S be the this value.
   const S = thisValue as WeakSetObject;
   // 2. Perform ? RequireInternalSlot(S, [[WeakSetData]]).
   Q(RequireInternalSlot(S, 'WeakSetData'));
+  value = Q(yield* weakValueAtType(S, value));
   // 3. If CanBeHeldWeakly(value) is false, return false.
   if (!CanBeHeldWeakly(value)) {
     return Value.false;
