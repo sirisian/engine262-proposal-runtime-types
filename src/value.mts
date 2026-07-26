@@ -1,5 +1,6 @@
 import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
+import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -923,6 +924,22 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
     }
+    // proposal-runtime-types, the placement forms: a placed instance's fields
+    // ARE the buffer's bytes, so a read is a decode at the field's laid-out
+    // position rather than a property lookup. Without this the constructor's
+    // values would be written into the buffer once and read back from stale
+    // properties, and the two would diverge the moment anything else wrote to
+    // the buffer - which is precisely what a placement is for.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const backing = PlacementBackingOf(this as unknown as object);
+      if (backing !== undefined) {
+        const declared = (this as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> })
+          .TypedProperties?.get(P.stringValue());
+        if (declared) {
+          return Q(yield* ReadPlacedField(backing, P.stringValue(), declared.TypeRecord));
+        }
+      }
+    }
     // proposal-runtime-types #sec-layout-properties, the table's dynamic-array
     // row: "No as a type. An instance has a `byteLength`, its length times its
     // element's." So this is a property of the INSTANCE, where the length is
@@ -975,6 +992,18 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
+      }
+      const placedBacking = PlacementBackingOf(Receiver as unknown as object);
+      if (placedBacking !== undefined && P instanceof JSStringValue) {
+        const declared = (Receiver as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> })
+          .TypedProperties?.get(P.stringValue());
+        if (declared) {
+          // The store check runs first, exactly as it does for a property-backed
+          // field, and the converted value is what reaches the bytes.
+          const converted = Q(yield* RequireType(V, declared.TypeRecord));
+          Q(yield* WritePlacedField(placedBacking, P.stringValue(), declared.TypeRecord, converted));
+          return Value.true;
+        }
       }
       const typedProperties = (Receiver as { TypedProperties?: Map<unknown, { TypeRecord: unknown }> }).TypedProperties;
       if (typedProperties !== undefined) {

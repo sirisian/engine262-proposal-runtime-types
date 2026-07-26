@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown, evaluatedSeeded } from '../readme/harness.mts';
+import { evaluated, ok, expectThrown, expectThrownKind, evaluatedSeeded } from '../readme/harness.mts';
 
 /**
  * Extension coverage — memorylayout.md, soa.md, threading.md, decorators.md, and
@@ -307,4 +307,61 @@ test('memory layout: a bit-field has no byte address to refer to', () => {
   expect(evaluated(`${c} function g(p: ref uint8) { return 2; } String(g(ref c.n));`)).toBe('2');
   // And an ordinary object property is untouched.
   expect(evaluated('const o = { z: 1 }; function h(p: ref number) { return 3; } String(h(ref o.z));')).toBe('3');
+});
+
+test('memory layout: a placement allocation lands an instance on existing bytes', () => {
+  // The placement forms of
+  // #sec-type-arguments-and-placement-new-in-expression-position. The parser
+  // had built these arguments since the form was added and NOTHING consumed
+  // them, so a placement construction allocated fresh storage and discarded the
+  // buffer it was handed - which reads as support.
+  //
+  // This is also the first thing in the engine that puts real BYTES under an
+  // instance: every typed class before it stored its fields as ordinary
+  // properties, which is why four stages could compute a layout that nothing
+  // read.
+  const V = 'class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } ';
+  const setup = `${V} const buf = new ArrayBuffer(32); const v = new(buf, 0) V(1.5, 2.5); const view = new Float32Array(buf); `;
+  expect(evaluated(`${setup} String(view[0]) + "/" + String(view[1]);`)).toBe('1.5/2.5');
+  // ALIASING, in both directions, which is the whole point: the instance's
+  // fields ARE the buffer's bytes.
+  expect(evaluated(`${setup} view[0] = 9.5; String(Number(v.x));`)).toBe('9.5');
+  expect(evaluated(`${setup} v.y = 7.5; String(view[1]);`)).toBe('7.5');
+  // The store check runs before the bytes are written, exactly as for a
+  // property-backed field.
+  expectThrown(`${setup} v.x = "s";`);
+  // "The second, when present, is the byte offset and otherwise 0."
+  expect(evaluated(`${setup} const v2 = new(buf, 16) V(3, 4); String(view[4]) + "/" + String(view[5]);`)).toBe('3/4');
+  // "It is a *RangeError* exception when the extent so computed exceeds the
+  // buffer's length."
+  // The extent is validated BEFORE the constructor runs: it depends only on
+  // the arguments and the layout, and checking afterwards would let a
+  // constructor with side effects run for a placement that can never happen.
+  expectThrownKind('class P { x: float32; y: float32; } new(new ArrayBuffer(4), 0) P();', 'RangeError');
+  expect(evaluated('let ran = false; class P { x: float32; y: float32; constructor() { ran = true; } } try { new(new ArrayBuffer(4), 0) P(); } catch (e) {} String(ran);')).toBe('false');
+  // "Bytes the layout does not assign keep the buffer's contents, since reusing
+  // storage is what the form is for and the zero-fill rule of fresh allocation
+  // does not apply."
+  expect(evaluated('class P { x: float32; y: float32; } const b = new ArrayBuffer(32); const u = new Uint8Array(b); u[12] = 0xAB; new(b, 0) P(); String(u[12]);')).toBe('171');
+});
+
+test('memory layout: a placed bit-field is a shift and a mask', () => {
+  // "Reading or writing a bit-field is a shift and a mask." Stage F could not
+  // implement that sentence because an instance had no bytes to shift within;
+  // a placement gives it some, so the sentence becomes real here.
+  const rgb = '@packed class RGB { r: uint.<5>; g: uint.<6>; b: uint.<5>; } const cb = new ArrayBuffer(4); const c = new(cb, 0) RGB(); ';
+  expect(evaluated(`${rgb} c.r = 31; c.g = 0; c.b = 1; String(Number(c.r)) + "/" + String(Number(c.g)) + "/" + String(Number(c.b));`)).toBe('31/0/1');
+  // And the bytes are packed as the layout says: `r` fills bits 0..4 of byte 0,
+  // and `b` at bit 11 is bit 3 of byte 1.
+  expect(evaluated(`${rgb} c.r = 31; c.b = 1; const u = new Uint8Array(cb); String(u[0]) + "/" + String(u[1]);`)).toBe('31/8');
+});
+
+test('memory layout: a placement over a resizable buffer records its extent', () => {
+  // "Over a resizable buffer the extent is recorded: shrinking the buffer below
+  // a live allocation's extent detaches those instances, touching a detached
+  // instance throws a *TypeError* exception, and growing never invalidates."
+  const rz = 'class V { x: float32; y: float32; } const rb = new ArrayBuffer(32, { maxByteLength: 64 }); const v = new(rb, 16) V(); v.x = 1.5; ';
+  expect(evaluated(`${rz} String(Number(v.x));`)).toBe('1.5');
+  expect(evaluated(`${rz} rb.resize(64); String(Number(v.x));`)).toBe('1.5');
+  expectThrownKind(`${rz} rb.resize(8); v.x;`, 'TypeError');
 });

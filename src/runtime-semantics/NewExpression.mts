@@ -1,10 +1,11 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
+import { BindPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { ObjectValue } from '../value.mts';
+import { ObjectValue, type Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { surroundingAgent } from '#self';
 import {
@@ -16,7 +17,7 @@ import {
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-evaluatenew */
-function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: undefined | ParseNode.Arguments) {
+function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: undefined | ParseNode.Arguments, placementArgs?: readonly ParseNode.AssignmentExpressionOrHigher[] | null) {
   // 1. Assert: constructExpr is either a NewExpression or a MemberExpression.
   // 2. Assert: arguments is either empty or an Arguments.
   Assert(args === undefined || isArray(args));
@@ -36,8 +37,34 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   if (!IsConstructor(constructor)) {
     return Throw.TypeError('$1 is not a constructor', constructor);
   }
+  // The placement is VALIDATED before the constructor runs: the extent depends
+  // only on the arguments and the type's layout, and checking it afterwards
+  // would let a constructor with side effects run for a placement that can
+  // never happen.
+  let placementBacking;
+  if (surroundingAgent.feature('runtime-types') && placementArgs !== undefined && placementArgs !== null) {
+    const placementValues: Value[] = [];
+    for (const argNode of placementArgs) {
+      placementValues.push(Q(yield* GetValue(Q(yield* Evaluate(argNode)))));
+    }
+    placementBacking = Q(yield* ValidatePlacement(constructor as ObjectValue, placementValues));
+  }
   // 8. Return ? Construct(constructor, argList).
   const constructed = Q(yield* Construct(constructor, argList));
+  // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,
+  // byteLength) Type(args)`. The parser has built these arguments since the
+  // form was added and NOTHING consumed them, so a placement construction
+  // allocated fresh storage and silently discarded the buffer it was handed -
+  // which reads as support.
+  //
+  // The instance is constructed first and then BOUND to the buffer, so the
+  // constructor body runs exactly as it does for a fresh allocation and its
+  // field writes land in the buffer through the same store path. The
+  // alternative - binding before construction - would need the constructor to
+  // know it is being placed.
+  if (placementBacking !== undefined && constructed instanceof ObjectValue) {
+    Q(yield* BindPlacement(constructed, placementBacking));
+  }
   // proposal-runtime-types: `new Set.<uint8>()` carries its type arguments on
   // the construction, and nothing was carrying them to the object - the
   // specialization form handles a generic ALIAS and returns the plain
@@ -67,12 +94,14 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
 //   NewExpression :
 //     `new` NewExpression
 //     `new` MemberExpression Arguments
-export function* Evaluate_NewExpression({ MemberExpression, Arguments }: ParseNode.NewExpression): ValueEvaluator {
+export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEvaluator {
+  const { MemberExpression, Arguments } = node;
+  const placementArgs = (node as { PlacementArguments?: readonly ParseNode.AssignmentExpressionOrHigher[] | null }).PlacementArguments;
   if (!Arguments) {
     // 1. Return ? EvaluateNew(NewExpression, empty).
-    return Q(yield* EvaluateNew(MemberExpression, undefined));
+    return Q(yield* EvaluateNew(MemberExpression, undefined, placementArgs));
   } else {
     // 1. Return ? EvaluateNew(MemberExpression, Arguments).
-    return Q(yield* EvaluateNew(MemberExpression, Arguments));
+    return Q(yield* EvaluateNew(MemberExpression, Arguments, placementArgs));
   }
 }
