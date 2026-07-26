@@ -6,6 +6,7 @@ import {
 } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
+import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
@@ -389,11 +390,87 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
       }
       return undefined;
     }
+    case 'array': {
+      // #sec-defaultvalueof: a DYNAMIC extent defaults to a new empty array of
+      // the type, and a FIXED one to an array of that many copies of the
+      // element's default, or ~none~ where the element has none. "Every default
+      // above is a zero: ... an array or an aggregate whose storage is
+      // zero-filled", and the clause is explicit that zero-filling is part of
+      // the semantics rather than an optimization - the reason given is
+      // security, since an allocation exposing a previous one's bytes leaks
+      // whatever was there.
+      const out = X(ArrayCreate(0));
+      (out as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      if (t.Extent === 'dynamic') {
+        return out;
+      }
+      if (typeof t.Extent !== 'number') {
+        return undefined;
+      }
+      const element = DefaultValueOf(t.Element);
+      if (element === undefined) {
+        return undefined;
+      }
+      for (let i = 0; i < t.Extent; i += 1) {
+        // Each element is its own instance, not the same one shared: a class
+        // default is an object, and `d[0].a = 1` must not be visible at `d[1]`.
+        const each = DefaultValueOf(t.Element);
+        if (each === undefined) {
+          return undefined;
+        }
+        X(CreateDataPropertyOrThrow(out, Value(String(i)), each));
+      }
+      return out;
+    }
+    case 'nominal': {
+      // #sec-defaultvalueof: "If _t_ denotes a value type class, return the
+      // instance of _t_ each of whose fields holds the default of the field's
+      // type, or ~none~ if any field's type has no default."
+      //
+      // The instance comes into existence WITHOUT its constructor running,
+      // which #sec-typed-classes endorses rather than tolerates: "a value type
+      // class is a shape with a zero, not an object with an invariant its
+      // constructor establishes", and a class that needs its constructor states
+      // that by holding a field whose type has no default, which makes this
+      // return ~none~ and the declaration a type error.
+      //
+      // Field-wise regardless of LAYOUT: a class holding a `string` field has
+      // no layout and still has a default, so this reads the field list rather
+      // than the layout walk's result.
+      const constructor = t.Constructor as {
+        Fields?: readonly { Name?: unknown, TypeObject?: { TypeRecord?: TypeRecord } }[],
+        prototypeForDefault?: unknown,
+      } | undefined;
+      if (!constructor || !Array.isArray(constructor.Fields)) {
+        return undefined;
+      }
+      const proto = (constructor as unknown as { properties?: Map<unknown, { Value?: Value }> })
+        .properties?.get(Value('prototype'))?.Value;
+      const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+      const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+      for (const field of constructor.Fields) {
+        const record = field.TypeObject?.TypeRecord;
+        const name = field.Name as { stringValue?: () => string } | undefined;
+        if (!record || typeof name?.stringValue !== 'function') {
+          // An untyped field has no declared default to fill.
+          return undefined;
+        }
+        const value = DefaultValueOf(record);
+        if (value === undefined) {
+          return undefined;
+        }
+        X(CreateDataPropertyOrThrow(instance, Value(name.stringValue()), value));
+        typed.set(name.stringValue(), { TypeRecord: record });
+      }
+      // The instance carries its field types, so a store into a defaulted
+      // instance is checked exactly as one into a constructed instance is.
+      (instance as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+      X(instance.PreventExtensions());
+      return instance;
+    }
     default:
-      // object, function, tuple, array, nominal, intersection, parameterized,
-      // reference: no scalar default is materialized here. Arrays and value-type
-      // aggregates get their zero-filled defaults through the memory-layout
-      // extension; the core reports none so a binding of such a type without an
+      // object, function, tuple, intersection, parameterized, reference: no
+      // default is materialized here, so a binding of such a type without an
       // initializer is a type error rather than silently undefined.
       return undefined;
   }

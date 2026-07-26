@@ -1,4 +1,6 @@
 import { type GCMarker } from './host-defined/engine.mts';
+import { LayoutOf } from './type-system/layout.mts';
+import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
 } from './completion.mts';
@@ -920,6 +922,24 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && P instanceof JSStringValue && P.stringValue() === 'length'
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
+    }
+    // proposal-runtime-types #sec-layout-properties, the table's dynamic-array
+    // row: "No as a type. An instance has a `byteLength`, its length times its
+    // element's." So this is a property of the INSTANCE, where the length is
+    // known, rather than of the type, which has no extent - which is why it is
+    // read here and not from a Type Object's own properties.
+    if (surroundingAgent.feature('runtime-types')
+        && P instanceof JSStringValue && P.stringValue() === 'byteLength'
+        && result === Value.undefined) {
+      const element = (this as { TypedElement?: TypeRecord }).TypedElement;
+      if (element !== undefined) {
+        const elementLayout = LayoutOf(element);
+        if (elementLayout) {
+          const lengthValue = Q(yield* OrdinaryGet(this as unknown as OrdinaryObject, Value('length'), Receiver));
+          const length = lengthValue instanceof NumberValue ? R(lengthValue) as number : 0;
+          return Value(length * elementLayout.byteLength);
+        }
+      }
     }
     return result;
   }

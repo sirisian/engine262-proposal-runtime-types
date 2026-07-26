@@ -370,3 +370,41 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   // The one-argument form is untouched.
   expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type');
 });
+
+test('memory layout: a fixed array and a value type class hold zero-filled defaults', () => {
+  // #sec-defaultvalueof: a FIXED extent defaults to "a new array of the type _t_
+  // whose _t_.[[Extent]] elements are each _d_", and a value type class to "the
+  // instance of _t_ each of whose fields holds the default of the field's type".
+  // The clause is explicit that zero-filling is part of the semantics rather
+  // than an optimization, and gives security as the reason: an allocation
+  // exposing a previous one's bytes leaks whatever was there.
+  expect(evaluated('let p: [3].<uint8>; String(p.length) + "/" + String(Number(p[0]));')).toBe('3/0');
+  expect(evaluated('class A { a: uint8; b: uint16; } let c: A; String(Number(c.a)) + "/" + String(Number(c.b));')).toBe('0/0');
+  expect(evaluated('class A { a: uint8; } let d: [3].<A>; String(d.length) + "/" + String(Number(d[0].a));')).toBe('3/0');
+  // A DYNAMIC extent defaults to a new EMPTY array, not to *undefined*.
+  expect(evaluated('let dyn: [].<uint8>; String(dyn.length);')).toBe('0');
+
+  // Each element is its OWN instance. A shared one would make `d[0].a = 5`
+  // visible at `d[1]`, which is the defect this is written to catch.
+  expect(evaluated('class A { a: uint8; } let d: [3].<A>; d[0].a = 5; String(Number(d[0].a)) + "/" + String(Number(d[1].a));')).toBe('5/0');
+
+  // The instance comes into existence WITHOUT its constructor running, which
+  // #sec-typed-classes endorses: "a value type class is a shape with a zero,
+  // not an object with an invariant its constructor establishes". It still
+  // carries its field types, so a store into a defaulted instance is checked
+  // exactly as one into a constructed instance is, and it is sealed.
+  expect(evaluated('class A { a: uint8; } let d: [3].<A>; function anyv() { return 300; } try { d[0].a = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('class A { a: uint8; } let d: [2].<A>; String(Object.isExtensible(d[0]));')).toBe('false');
+
+  // Field-wise regardless of LAYOUT: a class holding a `string` has no layout
+  // and still has a default.
+  expect(evaluated('class W { s: string; } let w: W; JSON.stringify(w.s);')).toBe('""');
+
+  // #sec-layout-properties, the dynamic-array row: "An instance has a
+  // byteLength, its length times its element's" - a property of the INSTANCE,
+  // where the length is known, rather than of the type, which has no extent.
+  expect(evaluated('class A { a: uint8; b: uint16; } let d: [3].<A>; String(d.byteLength);')).toBe('12');
+  expect(evaluated('let p: [10].<uint8>; String(p.byteLength);')).toBe('10');
+  // An untyped array is untouched.
+  expect(evaluated('const plain = [1, 2]; String(plain.byteLength);')).toBe('undefined');
+});
