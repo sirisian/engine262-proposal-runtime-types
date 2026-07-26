@@ -703,6 +703,42 @@ test('a check the static types already establish is not inserted', () => {
   expect(thrownKind('function anyv() { return 300; } let x: uint8 = anyv();')).toBe('RangeError');
 });
 
+test('an object type boundary CONVERTS its members, and keeps everything else', () => {
+  // #table-check-sites: "a boundary is where a value acquires a type it did not
+  // have". An object type's boundary TESTED membership where it had to CONVERT,
+  // so a plain object never satisfied a type with a value-type member:
+  // `let o: { x: uint8 } = { x: 5 }` threw, because the 5 is a Number and
+  // nothing made it a uint8, while `{ x: number }` passed. Object types with
+  // numeric members were close to unusable. F71's shape at a second boundary -
+  // a conversion that stops at the surface.
+  expect(evaluated('let o: { x: uint8 } = { x: 5 }; String(o.x is uint8);')).toBe('true');
+  expect(evaluated('function f(p: { x: uint8 }) { return p.x is uint8; } String(f({ x: 5 }));')).toBe('true');
+  expect(evaluated('interface I { x: uint8 } let i: I = { x: 5 }; String(i.x is uint8);')).toBe('true');
+
+  // CONVERTED IN PLACE, where the array arm builds a new array, and width
+  // subtyping is the reason: an object may carry properties the type does not
+  // declare and legitimately keeps them, so building a new object from the
+  // declared members alone would discard them. Identity is preserved with them.
+  const wide = 'const src = { x: 5, extra: "kept" }; let w: { x: uint8 } = src; ';
+  expect(evaluated(`${wide} w.extra;`)).toBe('kept');
+  expect(evaluated(`${wide} String(w === src);`)).toBe('true');
+  expect(evaluated(`${wide} String(w.x is uint8);`)).toBe('true');
+
+  // The object now carries its member types, so a LATER store is checked - the
+  // same reason the array arm stamps its element type (F49/F51). Without it the
+  // members would be converted once and every later store would go unchecked.
+  const o = 'let o: { x: uint8 } = { x: 5 }; function anyv() { return 300; } ';
+  expect(thrownKind(`${o} o.x = anyv();`)).toBe('RangeError');
+  expect(evaluated(`${o} o.x = 7; String(o.x is uint8);`)).toBe('true');
+
+  // What the members do NOT decide: a type may have more to say than its
+  // members, and converting must precede the membership check rather than
+  // replace it. A `where` predicate, an index signature, and a missing required
+  // member are all still judged.
+  expect(thrownKind('function anyv() { return {}; } let o: { x: uint8 } = anyv();', 'TypeError')).toBe('TypeError');
+  expect(evaluated('let opt: { x?: uint8 } = {}; "ok";')).toBe('ok');
+});
+
 test('an array or object literal is checked against its contextual type', () => {
   // F37's standing pin. The only check on a literal's CONTENTS was the runtime
   // boundary: `let a: [].<uint8> = [1, 300]` inside a never-called function

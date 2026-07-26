@@ -11,7 +11,7 @@ import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import {
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
 
 /**
@@ -425,6 +425,70 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       default:
         break;
     }
+  }
+  // An INTERFACE reaches here as a ~nominal~ whose [[Structure]] is the object
+  // record, since its identity is its declaration and its shape is structural.
+  // Both spell the same boundary, so both take the same conversion; without
+  // this an interface-annotated binding failed where the equivalent object type
+  // succeeded, which is a distinction neither the design nor the specification
+  // draws.
+  const objectShape = t.Kind === 'object'
+    ? t
+    : (t.Kind === 'nominal' && t.Structure !== undefined && t.Structure.Kind === 'object' ? t.Structure : null);
+  if (objectShape !== null && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {
+    // proposal-runtime-types #table-check-sites: "a boundary is where a value
+    // acquires a type it did not have". An object type's boundary TESTED
+    // membership where it had to CONVERT, so a plain object never satisfied a
+    // type with a value-type member - `let o: { x: uint8 } = { x: 5 }` threw,
+    // because the literal's `5` is a Number and nothing made it a uint8, while
+    // `{ x: number }` passed. That made object types with numeric members close
+    // to unusable. It is F71's shape at a second boundary: a conversion that
+    // stops at the surface.
+    //
+    // CONVERTED IN PLACE, which is where this parts company with the array
+    // arm above, and the reason is width subtyping. The array arm builds a new
+    // array from indices 0..len-1, which is total: an array has nothing else.
+    // An object may carry properties the type does not declare and legitimately
+    // keeps them (`let o: { x: uint8 } = objWithMore`), so building a new object
+    // from the declared members alone would DISCARD them. Converting in place
+    // keeps the identity, the prototype, and the undeclared properties, and the
+    // declared members become values of their declared types - which is what
+    // the sentence above asks a boundary to do.
+    for (const prop of objectShape.Properties) {
+      const key = Value(prop.key);
+      const has = Q(yield* HasProperty(value, key));
+      if (has === Value.false) {
+        if (prop.optional) {
+          continue;
+        }
+        return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+      }
+      const current = Q(yield* Get(value, key));
+      const converted = Q(yield* CheckedConvertValue(current, prop.type));
+      if (converted !== current) {
+        Q(yield* SetProperty(value, key, converted, Value.true));
+      }
+    }
+    // #table-check-sites, row "a value stored to a property or field of
+    // declared type t": the store check reads the type off the object, so the
+    // object must carry it. Without this the members were converted once at the
+    // boundary and every later store went unchecked - the same defect the array
+    // element type had before F49/F51.
+    const typed = (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties
+      ?? new Map<unknown, { TypeRecord: TypeRecord }>();
+    for (const prop of objectShape.Properties) {
+      if (!typed.has(prop.key)) {
+        typed.set(prop.key, { TypeRecord: prop.type });
+      }
+    }
+    (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+    // FALL THROUGH to the membership check rather than returning here. The
+    // members are now of their declared types, which is what this arm exists to
+    // do, but a type may have more to say than its members: a dependent record
+    // has a `where` predicate, a nominal has index signatures, and an interface
+    // has both. Returning the value directly skipped every one of them - six
+    // tests across five files caught it, which is what those tests are for.
+    return Q(yield* requireMembership(value, t));
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types (spec sec-contextual-types, README "Typed Array

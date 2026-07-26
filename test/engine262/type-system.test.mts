@@ -64,7 +64,24 @@ test('unresolvable and unsupported types throw', () => {
 test('object types are structural', () => {
   expect(evaluated(`type P = { x: number, y?: string };
     ({ x: 1 } is P) && ({ x: 1, y: "s" } is P) && !({ y: "s" } is P) && !({ x: "s" } is P) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('type P = { x: number }; function f() { return { x: "s" }; } try { let p: P = f(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // MIGRATED (F87). This asserted that an object MEMBER was tested rather than
+  // converted, which was the old behaviour and the outlier: the binding
+  // boundary and the array element boundary both convert, and `let x: number =
+  // "s"` and `let a: [].<number> = ["s"]` have always produced NaN. An object
+  // member now behaves as they do. The assertion is kept in its new form
+  // because what it guards is that the three agree.
+  //
+  // THAT AGREEMENT IS ON A WEAK RULE, and it is recorded as an open question:
+  // CheckedConvertValue calls ToNumber unconditionally for a `number` target,
+  // where the `string` target is gated by isStringConversionSource precisely to
+  // stop silent failures. "s" reaching a number position as NaN is that silent
+  // failure at the other target. Fixing it belongs at the conversion, where it
+  // would fix all three boundaries at once, not here.
+  expect(evaluated('type P = { x: number }; function f() { return { x: "s" }; } let p: P = f(); String(p.x);')).toBe('NaN');
+  expect(evaluated('function s() { return "s"; } let x: number = s(); String(x);')).toBe('NaN');
+  // A member the target's type genuinely cannot hold is still refused, which is
+  // the half that must not weaken.
+  expect(evaluated('type Q = { x: uint8 }; function f() { return { x: 300 }; } try { let q: Q = f(); "no"; } catch (e) { "caught"; }')).toBe('caught');
   expect(evaluated('type A = { x: number }; type B = { x: number }; A === B ? "same" : "different";')).toBe('same');
 });
 

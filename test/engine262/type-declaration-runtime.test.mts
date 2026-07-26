@@ -36,7 +36,12 @@ test('interfaces check structurally', () => {
   // try cannot swallow it, and the runtime backstop is asserted beside it
   // through the `any` path where the checker still cannot decide (F37).
   expect(run('interface I { x: string } let p: I = { x: 300 };')).toMatchObject({ Type: 'throw' });
-  expect(evaluated('interface I { x: string } function anyv() { return { x: 300 }; } try { let p: I = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // An interface member converts as an object type's does (F87): 300 has a
+  // canonical text and reaches `string` losslessly, so it converts rather than
+  // failing - the same rule `let s: string = 300` has always followed.
+  expect(evaluated('interface I { x: string } function anyv() { return { x: 300 }; } let p: I = anyv(); p.x + "/" + typeof p.x;')).toBe('300/string');
+  // A member the type cannot hold is still refused.
+  expect(evaluated('interface J { x: uint8 } function anyv() { return { x: 300 }; } try { let p: J = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
 
 test('class operators dispatch on binary expressions', () => {
