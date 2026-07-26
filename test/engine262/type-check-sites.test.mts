@@ -735,7 +735,7 @@ test('an object type boundary CONVERTS its members, and keeps everything else', 
   // members, and converting must precede the membership check rather than
   // replace it. A `where` predicate, an index signature, and a missing required
   // member are all still judged.
-  expect(thrownKind('function anyv() { return {}; } let o: { x: uint8 } = anyv();', 'TypeError')).toBe('TypeError');
+  expect(thrownKind('function anyv() { return {}; } let o: { x: uint8 } = anyv();')).toBe('TypeError');
   expect(evaluated('let opt: { x?: uint8 } = {}; "ok";')).toBe('ok');
 });
 

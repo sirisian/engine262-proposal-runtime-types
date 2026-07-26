@@ -109,6 +109,28 @@ function isStringConversionSource(value: Value): boolean {
     || value instanceof BooleanValue;
 }
 
+/**
+ * proposal-runtime-types #table-implicit-conversions, the `any`-in-a-typed-
+ * position row: "the value is checked at the boundary and, if it is a NUMERIC
+ * VALUE the target represents exactly, converted; a value the target cannot
+ * represent raises a *RangeError*, and one of the WRONG TYPE a *TypeError*."
+ *
+ * The engine called ToNumber unconditionally, so every value of the wrong type
+ * reached a `number` position as whatever ToNumber makes of it: `"s"` as NaN,
+ * *undefined* as NaN, an object as NaN, *null* as 0, `[]` as 0. Those are the
+ * classic silent failures, and they are exactly what the `string` target is
+ * gated against by isStringConversionSource - the same reasoning, at the target
+ * that had no gate. A program that wants ToNumber's answer writes `Number(v)`
+ * and says so.
+ *
+ * A typed numeric value passes: it IS a numeric value and `number` represents
+ * it exactly, which is the clause's own condition. That is a conversion within
+ * the numeric types rather than an admission of a foreign one.
+ */
+function isNumberConversionSource(value: Value): boolean {
+  return value instanceof NumberValue || value instanceof TypedNumberValue;
+}
+
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // #sec-parameterized-types: the crossing between two parameterizations of one
   // base is ConvertParameterization, which each meta type gates independently —
@@ -193,6 +215,11 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         }
         return Q(yield* ToString(value));
       case 'number':
+        // NOT gated here, deliberately. A cast is not a boundary: `v := number`
+        // is an explicit conversion the program wrote and asked for, and it
+        // wraps and truncates where the annotated binding throws. The gate
+        // below is the BOUNDARY's, which is what #table-implicit-conversions'
+        // `any`-in-a-typed-position row governs.
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);
@@ -345,6 +372,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         }
         return Q(yield* ToString(value));
       case 'number':
+        if (!isNumberConversionSource(value)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);

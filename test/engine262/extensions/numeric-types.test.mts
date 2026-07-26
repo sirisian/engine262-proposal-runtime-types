@@ -268,3 +268,38 @@ test('numeric types: a literal at `bigint` is read from its source text', () => 
   // wrote.
   expectThrownKind('function anyv() { return 9007199254740993; } let x: bigint = anyv();', 'RangeError');
 });
+
+test('numeric types: the `number` target admits numeric values only', () => {
+  // #table-implicit-conversions, the `any`-in-a-typed-position row: "if it is a
+  // NUMERIC VALUE the target represents exactly, converted; a value the target
+  // cannot represent raises a *RangeError*, and one of the WRONG TYPE a
+  // *TypeError*." The engine called ToNumber unconditionally, so every value of
+  // the wrong type reached a `number` position as whatever ToNumber made of it.
+  // Those are the classic silent failures, and they are exactly what the
+  // `string` target has been gated against since the conversion rule was
+  // written - the same reasoning, at the target that had no gate.
+  expectThrownKind('function a() { return "s"; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return "5"; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return true; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return null; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return undefined; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return {}; } let x: number = a();', 'TypeError');
+  expectThrownKind('function a() { return []; } let x: number = a();', 'TypeError');
+
+  // A NUMERIC value passes, which is the clause's own condition: a typed value
+  // IS numeric and `number` represents it exactly.
+  expect(evaluated('function a() { return 5; } let x: number = a(); String(x);')).toBe('5');
+  expect(evaluated('function a() { return (5 := uint8); } let x: number = a(); String(x);')).toBe('5');
+
+  // A CAST is not a boundary and is untouched: it is the explicit conversion a
+  // program writes when it wants ToNumber's answer, and it still wraps and
+  // truncates where the annotated binding throws.
+  expect(evaluated('String("5" := number);')).toBe('5');
+  expect(evaluated('String(("s" := number) !== ("s" := number));')).toBe('true');
+  expect(evaluated('String(true := number);')).toBe('1');
+  // And every other boundary takes the same rule, since they share the
+  // operation: an array element and an object member refuse what a binding
+  // refuses.
+  expectThrownKind('function a() { return ["s"]; } let arr: [].<number> = a();', 'TypeError');
+  expectThrownKind('function a() { return { x: "s" }; } let o: { x: number } = a();', 'TypeError');
+});
