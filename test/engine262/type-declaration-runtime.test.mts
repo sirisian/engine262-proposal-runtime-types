@@ -30,7 +30,13 @@ test('interfaces check structurally', () => {
     ({ x: 1, y: 2 } is Point) && !({ x: 1 } is Point) && !({ x: "a", y: 2 } is Point) ? "ok" : "no";`)).toBe('ok');
   expect(evaluated(`interface Named { name: string; greet(a) }
     ({ name: "n", greet() {} } is Named) && !({ name: "n", greet: 3 } is Named) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('interface I { x: string } try { let p: I = { x: 300 }; "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // MIGRATED TO STATIC FORM. This asserted a RUNTIME throw, caught by the
+  // try - which is what a mistyped object literal produced while the checker
+  // could not see into a literal's contents. It is an Early Error now, so the
+  // try cannot swallow it, and the runtime backstop is asserted beside it
+  // through the `any` path where the checker still cannot decide (F37).
+  expect(run('interface I { x: string } let p: I = { x: 300 };')).toMatchObject({ Type: 'throw' });
+  expect(evaluated('interface I { x: string } function anyv() { return { x: 300 }; } try { let p: I = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
 
 test('class operators dispatch on binary expressions', () => {

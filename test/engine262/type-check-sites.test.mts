@@ -703,6 +703,39 @@ test('a check the static types already establish is not inserted', () => {
   expect(thrownKind('function anyv() { return 300; } let x: uint8 = anyv();')).toBe('RangeError');
 });
 
+test('an array or object literal is checked against its contextual type', () => {
+  // F37's standing pin. The only check on a literal's CONTENTS was the runtime
+  // boundary: `let a: [].<uint8> = [1, 300]` inside a never-called function
+  // raised nothing, while `let x: uint8 = 300` had been an Early Error since
+  // Phase 3. The same mistake written at a different depth.
+  expectStatic('function nc() { let a: [].<uint8> = [1, 300]; }');
+  expectStatic('function nc() { let a: [].<uint8> = [1, "x"]; }');
+  expectStatic('function nc() { let o: { x: uint8 } = { x: 300 }; }');
+  // A FIXED extent requires the literal to have length N, which the run time
+  // enforced and the checker could not see.
+  expectStatic('function nc() { let a: [2].<uint8> = [1, 2, 3]; }');
+  expectStatic('function nc() { let a: [2].<uint8> = [1]; }');
+  // The parts behave like the whole because the recursion goes through the
+  // contextual path: a nested literal takes its own contextual type apart, and
+  // a numeric literal at a `bigint` element reads its SOURCE TEXT exactly as it
+  // does at a binding (F85) - which closes a limit recorded there.
+  expectStatic('function nc() { let a: [].<[].<uint8>> = [[1, 300]]; }');
+  expect(evaluated('function nc() { let a: [].<uint8> = [1, 2]; } "ok";')).toBe('ok');
+  expect(evaluated('function nc() { let o: { x: uint8 } = { x: 5 }; } "ok";')).toBe('ok');
+  expect(evaluated('function nc() { let a: [2].<uint8> = [1, 2]; } "ok";')).toBe('ok');
+  expect(evaluated('let a: [].<bigint> = [9007199254740993]; String(a[0]);')).toBe('9007199254740993');
+
+  // A SPREAD contributes an unknown number of elements of an unknown type, so
+  // it stops both judgments rather than being guessed at: reporting an arity
+  // the program does not have would be worse than reporting none.
+  expect(evaluated('const src = [1, 2]; let a: [].<uint8> = [...src]; String(a.length);')).toBe('2');
+  expect(evaluated('function nc(src) { let a: [2].<uint8> = [...src]; } "ok";')).toBe('ok');
+  // The run time is untouched, and an empty literal still carries its element
+  // type (F71).
+  expect(evaluated('let a: [].<uint8> = [1, 2]; String(a[0] is uint8);')).toBe('true');
+  expect(evaluated('let e: [].<uint8> = []; e.push(65); String(e[0] is uint8);')).toBe('true');
+});
+
 test('a BLOCK-bodied callback\'s return type is inferred', () => {
   // F80 could read a CONCISE arrow body, whose body IS the returned
   // expression, and left a block body at ~any~ - so `a.map(x => x)` flowed and

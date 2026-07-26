@@ -435,6 +435,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return returned;
   };
 
+  /**
+   * Each element of an array literal against the element type, and the arity
+   * against a FIXED extent. A spread contributes an unknown number of elements
+   * of an unknown type, so it stops both judgments rather than being guessed
+   * at - the alternative is reporting an arity the program does not have.
+   */
+  const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
+    const elements = node.ElementList ?? [];
+    let spread = false;
+    let count = 0;
+    for (const el of elements) {
+      if (!el || typeof el !== 'object') {
+        continue;
+      }
+      if ((el as ParseNode).type === 'SpreadElement') {
+        spread = true;
+        walk(el as ParseNode);
+        continue;
+      }
+      if ((el as ParseNode).type === 'Elision') {
+        count += 1;
+        continue;
+      }
+      count += 1;
+      requireAssignable(staticTypeIn(el as ParseNode, target.Element), target.Element);
+      walk(el as ParseNode);
+    }
+    // "A fixed extent `[N].<T>` requires the literal to have length N", which
+    // the run time already enforces and the checker could not see.
+    if (!spread && typeof target.Extent === 'number' && count !== target.Extent) {
+      report({ Kind: 'array', Element: target.Element, Extent: count }, target);
+    }
+  };
+
+  /**
+   * Each member of an object literal against the property the target declares.
+   * A member the target does not declare is left alone here: the freshness rule
+   * of #sec-literal-freshness makes it an error, and that judgment is a
+   * different one from this - it belongs with the rule that states it, not
+   * bolted onto the member check.
+   */
+  const checkObjectLiteralAgainst = (node: ParseNode.ObjectLiteral, target: TypeRecord & { Kind: 'object' }) => {
+    for (const member of node.PropertyDefinitionList ?? []) {
+      if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
+        walk(member as ParseNode);
+        continue;
+      }
+      const def = member as unknown as {
+        PropertyName?: { name?: string, value?: string } | null,
+        AssignmentExpression?: ParseNode,
+      };
+      const key = def.PropertyName?.name ?? def.PropertyName?.value;
+      const declared = typeof key === 'string'
+        ? target.Properties.find((prop) => prop.key === key)
+        : undefined;
+      if (declared && def.AssignmentExpression) {
+        requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type);
+      }
+      if (def.AssignmentExpression) {
+        walk(def.AssignmentExpression);
+      }
+    }
+  };
+
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (!node) {
       return null;
@@ -443,6 +507,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = checkNumericCall(node, contextual);
       if (resolved) {
         return resolved;
+      }
+    }
+    // An ARRAY or OBJECT literal takes its contextual type apart and checks
+    // its parts against it. This is F37's standing pin, and until now the only
+    // check on a literal's contents was the RUNTIME boundary: `let a:
+    // [].<uint8> = [1, 300]` inside a never-called function raised nothing at
+    // all, while `let x: uint8 = 300` had been an Early Error since Phase 3.
+    // The two are the same mistake written at different depths.
+    //
+    // Recursing through staticTypeIn rather than staticType is what makes the
+    // parts behave like the whole: an element adopts the element type by the
+    // literal rule, a nested literal takes its own contextual type apart in
+    // turn, and a numeric literal at a `bigint` element reads its source text
+    // exactly as it does at a binding (F85).
+    if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'array') {
+      checkArrayLiteralAgainst(node as ParseNode.ArrayLiteral, contextual);
+      return contextual;
+    }
+    if (node.type === 'ObjectLiteral' && contextual) {
+      const shape = structureOf(contextual);
+      if (shape && shape.Kind === 'object') {
+        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape);
+        return contextual;
       }
     }
     // A numeric LITERAL at a `bigint` contextual position is read from its
