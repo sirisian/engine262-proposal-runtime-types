@@ -55,7 +55,7 @@ import { bootstrapParseInt } from '../intrinsics/parseInt.mts';
 import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
-import { bootstrapReflect, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
+import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -213,6 +213,9 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapEnumPrototype(realmRec);
   // proposal-runtime-types: needs %Type.prototype%, so it follows it.
   bootstrapReflectNever(realmRec);
+  // proposal-runtime-types: the ClassField reflection context, a type, so it
+  // follows %Type.prototype% for the same reason %Reflect.never% does.
+  bootstrapReflectClassField(realmRec);
   // proposal-runtime-types: a meta type this specification declares rather than
   // a program. Needs %Type.prototype% too, so it follows it.
   bootstrapStringPattern(realmRec);

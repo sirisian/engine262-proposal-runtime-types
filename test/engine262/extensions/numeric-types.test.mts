@@ -339,3 +339,34 @@ test('memory layout: a value type class lays out by natural alignment', () => {
   expectThrownKind('class S2 { s: string; } (type S2).byteLength;', 'TypeError');
   expectThrownKind('dynamic class D { d: uint8; } (type D).byteLength;', 'TypeError');
 });
+
+test('memory layout: a field reports its offset through the ClassField reflection', () => {
+  // #sec-layout-properties: "A field's offset is read through the reflection of
+  // its declaration rather than from the type, because it belongs to the field:
+  // Reflect.getReflection.<Reflect.ClassField, T>(name) reports an offset and a
+  // byteLength ... This is the offsetof a serializer, a placement
+  // construction, or a vertex attribute descriptor needs."
+  const V = 'class Vertex { x: float32; y: float32; z: float32; } ';
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("y").offset);`)).toBe('4');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("y").byteLength);`)).toBe('4');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("z").offset);`)).toBe('8');
+  // The offset is the LAID-OUT one, so the padding the alignment rule inserts
+  // is visible here: `b` is at 2 and not at 1.
+  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('2');
+  // Inheritance appends, so a base's field keeps its offset when read through
+  // the subclass and the subclass's field follows it.
+  const S = 'class B { a: uint8; } class S extends B { b: uint8; } ';
+  expect(evaluated(`${S} String(Reflect.getReflection.<Reflect.ClassField, S>("a").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassField, S>("b").offset);`)).toBe('0/1');
+
+  // A context is used in TYPE position, so it has to BE a type for the call to
+  // resolve; `Reflect.ClassField` is a Type Object for the same reason
+  // `Reflect.never` is one.
+  expect(evaluated('String(typeof Reflect.ClassField);')).toBe('object');
+
+  // Rejections. A class with no layout has no offsets to report, and a name
+  // that is not a field of the class is not answered with a number.
+  expectThrownKind('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a");', 'TypeError');
+  expectThrownKind('class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
+  // The one-argument form is untouched.
+  expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type');
+});

@@ -3,6 +3,8 @@ import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { ClassFieldReflection } from '../intrinsics/Reflect.mts';
+import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
@@ -46,6 +48,28 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const argList = Q(yield* ArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
+  // proposal-runtime-types #sec-layout-properties: `Reflect.getReflection.<`
+  // `Reflect.ClassField`, T`>(`name`)` reports a field's `offset` and
+  // `byteLength`. The context and the type ride on the callee as type
+  // arguments, exactly as `JSON.parse.<T>`'s does, so the interception is the
+  // same shape - which is why this sits beside it rather than inside
+  // getReflection, where the type arguments are not in scope.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 2) {
+    const reflectObj = surroundingAgent.intrinsic('%Reflect%');
+    const getReflection = Q(yield* Get(reflectObj, Value('getReflection')));
+    if (SameValue(func, getReflection)) {
+      const contextRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
+        const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
+        const name = Q(yield* ToString(nameValue));
+        return Q(ClassFieldReflection(classRecord, name.stringValue(), surroundingAgent.currentRealmRecord));
+      }
     }
   }
   // proposal-runtime-types (random.md): the no-argument typed form

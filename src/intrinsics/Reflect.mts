@@ -1,5 +1,8 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
+import type { ClassLayout } from '../type-system/layout.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { neverType, propertyKeyValue } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
@@ -601,6 +604,69 @@ export function bootstrapReflect(realmRec: Realm) {
  * Defined in its own pass rather than in the Reflect table, because a Type Object
  * needs %Type.prototype% and Reflect is bootstrapped before it.
  */
+/**
+ * proposal-runtime-types: a REFLECTION CONTEXT. `Reflect.getReflection.<`
+ * `Reflect.ClassField`, T`>(`_name_`)` names the context in TYPE position, so a
+ * context has to be a type for the call to resolve at all. It is a nominal with
+ * a sentinel declaration and a LibraryName, which is the same shape the library
+ * generics use and which makes it interned and comparable.
+ *
+ * Only ClassField is declared here. The full context table belongs to the
+ * decorators and metadata extension, which is what reads most of them; this one
+ * is declared because #sec-layout-properties routes a field's OFFSET through it
+ * - "a field's offset is read through the reflection of its declaration rather
+ * than from the type, because it belongs to the field".
+ */
+const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
+
+export function classFieldContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classFieldContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassField',
+  };
+}
+
+export function bootstrapReflectClassField(realmRec: Realm) {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const reflect = realmRec.Intrinsics['%Reflect%'];
+  X(reflect.DefineOwnProperty(Value('ClassField'), Descriptor({
+    Value: GetTypeObject(classFieldContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+}
+
+/**
+ * #sec-layout-properties: the reflection of a class FIELD reports an `offset`
+ * and a `byteLength`, "the `offsetof` a serializer, a placement construction, or
+ * a vertex attribute descriptor needs". The placement is already computed - the
+ * class layout walk records every field's offset at declaration - so this reads
+ * what is there rather than walking again.
+ */
+export function ClassFieldReflection(classRecord: TypeRecord, name: string, realmRec: Realm): ValueCompletion {
+  const constructor = (classRecord as { Constructor?: { InstanceLayout?: ClassLayout | null } }).Constructor;
+  const layout = constructor?.InstanceLayout ?? null;
+  if (!layout) {
+    return Throw.TypeError('this type has no layout, so it has no $1', Value('offset'));
+  }
+  const placement = layout.fields.find((f) => f.key === name);
+  if (!placement) {
+    return Throw.TypeError('$1 is not a field of this type', Value(name));
+  }
+  const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(obj, Value('kind'), Value('field')));
+  X(CreateDataProperty(obj, Value('offset'), Value(placement.offset)));
+  X(CreateDataProperty(obj, Value('byteLength'), Value(placement.layout.byteLength)));
+  X(CreateDataProperty(obj, Value('bitLength'), Value(placement.layout.bitLength)));
+  X(CreateDataProperty(obj, Value('alignment'), Value(placement.layout.alignment)));
+  return obj;
+}
+
 export function bootstrapReflectNever(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {
     return;

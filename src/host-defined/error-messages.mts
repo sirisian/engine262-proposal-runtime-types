@@ -481,6 +481,7 @@ export interface Throw {
   | '$1 is not a TemporalTimeLike object'
   | '$1 is not a class and cannot be extended by a partial class'
   | '$1 is not a constructor'
+  | '$1 is not a field of this type'
   | '$1 is not a finite number'
   | '$1 is not a function'
   | '$1 is not a generic type'
