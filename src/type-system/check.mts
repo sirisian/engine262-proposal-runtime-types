@@ -94,6 +94,12 @@ interface EnumInfo {
 
 interface Frame {
   readonly bindings: Map<string, TypeRecord>;
+  // The names this frame NARROWS rather than declares. sec-narrowing: "a
+  // narrowed binding is invalidated by an assignment that leaves the narrowed
+  // type", so an assignment has to find the DECLARED type to check against and
+  // then drop the narrowing - which needs the two kinds of entry told apart
+  // (F78).
+  readonly narrowed?: Set<string>;
   readonly aliases: Map<string, TypeRecord>;
   // Enum declarations in scope, by enum name, and the bindings known to hold an
   // enumerator of one, by variable name to enum name.
@@ -1123,7 +1129,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (whenTrueNode) {
       pushBlock(() => {
         if (whenTrue !== empty && fact.sense !== 'false') {
-          declare(fact.name, whenTrue as Known);
+          declareNarrowed(fact.name, whenTrue as Known);
         }
         walk(whenTrueNode);
       });
@@ -1131,7 +1137,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (whenFalseNode) {
       pushBlock(() => {
         if (whenFalse !== empty && fact.sense !== 'true') {
-          declare(fact.name, whenFalse as Known);
+          declareNarrowed(fact.name, whenFalse as Known);
         }
         walk(whenFalseNode);
       });
@@ -1249,6 +1255,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (name) {
           interfaceNodes.set(name, n);
         }
+      }
+    }
+  };
+
+  /** Record a NARROWING of a name, which an assignment may later invalidate. */
+  const declareNarrowed = (name: string, t: Known) => {
+    if (!t) {
+      return;
+    }
+    const frame = frames[frames.length - 1] as Frame & { narrowed?: Set<string> };
+    frame.bindings.set(name, t as TypeRecord);
+    ((frame as { narrowed?: Set<string> }).narrowed ??= new Set()).add(name);
+  };
+
+  /**
+   * The type a name was DECLARED with, ignoring any narrowing in force. An
+   * assignment is checked against this, because the declared type is what the
+   * binding may hold; the narrowing is a fact about the current value and the
+   * assignment is what ends it (F78).
+   */
+  const lookupDeclared = (name: string): Known => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const f = frames[i] as Frame & { narrowed?: Set<string> };
+      if (f.narrowed?.has(name)) {
+        continue;
+      }
+      const t = f.bindings.get(name);
+      if (t !== undefined) {
+        return t;
+      }
+    }
+    return null;
+  };
+
+  /** Drop any narrowing of a name, which an assignment to it invalidates. */
+  const invalidateNarrowing = (name: string) => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const f = frames[i] as Frame & { narrowed?: Set<string> };
+      if (f.narrowed?.has(name)) {
+        f.bindings.delete(name);
+        f.narrowed.delete(name);
       }
     }
   };
@@ -1784,8 +1831,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'AssignmentExpression': {
         const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
         if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
-          const target = lookup((a.LeftHandSideExpression as { name: string }).name);
+          // Checked against the DECLARED type, not the narrowed one: a binding
+          // of `uint8 | string` may be assigned a string inside a branch that
+          // narrowed it to `uint8`, and doing so ENDS the narrowing rather than
+          // being an error (F78).
+          const name = (a.LeftHandSideExpression as { name: string }).name;
+          const target = lookupDeclared(name);
           requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          invalidateNarrowing(name);
         } else if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'MemberExpression') {
           // #table-check-sites rows 4 and 5, statically: a store whose target
           // has a known typed property or element type is the same shape as a

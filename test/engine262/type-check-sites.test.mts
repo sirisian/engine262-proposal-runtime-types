@@ -532,6 +532,25 @@ test('every narrowing form the checker reads, and where it applies', () => {
   expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 ? ((y: uint8) => y)(x) : 0; } "ok";')).toBe('ok');
 });
 
+test('an assignment invalidates a narrowing rather than being refused by it', () => {
+  // sec-narrowing: "a narrowed binding is invalidated by an assignment that
+  // leaves the narrowed type". The engine had the other behaviour - it checked
+  // the assignment against the NARROWED type, so assigning a string to a
+  // `uint8 | string` inside a branch that narrowed it to `uint8` was an error
+  // (F78). That is the rule the clause states being enforced backwards: the
+  // narrowing is a fact about the current value, and the assignment is what
+  // ends it.
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8) { x = "s"; } } "ok";')).toBe('ok');
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8) { x = "s"; let y: uint8 = x; } }');
+  // The narrowing holds up to the assignment, and the DECLARED type still
+  // bounds what may be assigned.
+  expect(evaluated('function nc(x: uint8 | string) { if (x is uint8) { let y: uint8 = x; x = "s"; } } "ok";')).toBe('ok');
+  expectStatic('function nc(x: uint8 | string) { if (x is uint8) { x = true; } }');
+  // An ordinary binding is unaffected in both directions.
+  expect(evaluated('function nc() { let x: uint8 = 5; x = 7; } "ok";')).toBe('ok');
+  expectStatic('function nc() { let x: uint8 = 5; x = "s"; }');
+});
+
 test('the short-circuit operators narrow, in the branch each one implies', () => {
   // `a && b` implies its left only where the whole is TRUE, and `a || b`
   // implies the left is false only where the whole is FALSE. Each narrows the
