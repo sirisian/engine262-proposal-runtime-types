@@ -55,13 +55,25 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     const byteLength = elementLayout.byteLength * extent;
     return { bitLength: byteLength * 8, byteLength, alignment: elementLayout.alignment };
   }
+  if (t.Kind === 'nominal') {
+    // #sec-memory-layout's type table, row "an enum": "Yes, its underlying
+    // type's." The pin this replaces said the Type Record carried no resolved
+    // underlying type; F62 added [[Underlying]] for the enum subtype relation,
+    // so the enum row costs one line now.
+    if (t.EnumMembers !== undefined) {
+      return t.Underlying ? LayoutOf(t.Underlying) : null;
+    }
+    // Row "a value type class": the natural-alignment walk over its fields,
+    // computed at DECLARATION and carried on the constructor. Computing it here
+    // would mean resolving each field's type at every read, which is a
+    // generator's work, and #sec-layout-properties calls these compile-time
+    // constants - so the walk runs once, where the field types are already
+    // resolved, and this reads the answer.
+    const constructor = t.Constructor as { InstanceLayout?: Layout | null } | undefined;
+    return constructor?.InstanceLayout ?? null;
+  }
   if (t.Kind !== 'primitive') {
-    // An enum's layout is its underlying type's, and a value type class's is the
-    // natural-alignment walk over its fields. Neither is computed here: the Type
-    // Record carries no resolved underlying type for an enum, and the field walk
-    // belongs with the rest of the memory layout work. Both report no layout for
-    // now rather than a wrong number. A union, a reference type, and `any` have
-    // none by design.
+    // A union, a reference type, and `any` have no layout by design.
     return null;
   }
   const name = t.Name;
@@ -105,4 +117,64 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // `bigint`, `string`, and `symbol` size with the value, not the type.
     default: return null;
   }
+}
+
+/** One field's placement, which is what a reflection reports as its `offset`. */
+export interface FieldPlacement {
+  readonly key: string;
+  readonly offset: number;
+  readonly layout: Layout;
+}
+
+export interface ClassLayout extends Layout {
+  readonly fields: readonly FieldPlacement[];
+}
+
+/**
+ * #sec-natural-alignment: "Each field is placed at the next offset that is a
+ * multiple of its own alignment, a class's alignment is the largest alignment
+ * among its fields, and its byteLength is rounded up to that alignment so that
+ * every element of an array of the class is aligned too."
+ *
+ * Declaration order, never reordered - the clause is explicit that field order
+ * is a performance decision the PROGRAM makes, because views, serialization,
+ * and interop depend on the declared order. `{ a: uint8, b: float64, c: uint8 }`
+ * is 24 bytes and the reordering a compiler would be tempted to do is 16; this
+ * returns 24.
+ *
+ * Inheritance appends: the base's fields keep their offsets and the subclass's
+ * follow under the same rule, so `class B extends A` lays out as the flattening
+ * of both. That is what lets a B be passed where an A is expected.
+ *
+ * Returns *null* where the class has no layout - a field whose type has none
+ * (a `string`, a reference, a union), which the table's rows "a class with an
+ * untyped field" and "a union of value types" cover between them. One field
+ * without a layout is enough: a class is laid out or it is not.
+ */
+export function ComputeClassLayout(
+  baseLayout: ClassLayout | null,
+  fields: readonly { key: string, type: TypeRecord }[],
+): ClassLayout | null {
+  const placed: FieldPlacement[] = baseLayout ? [...baseLayout.fields] : [];
+  let cursor = baseLayout ? baseLayout.byteLength : 0;
+  let alignment = baseLayout ? baseLayout.alignment : 1;
+  for (const field of fields) {
+    const layout = LayoutOf(field.type);
+    if (!layout) {
+      return null;
+    }
+    const offset = layout.alignment > 0 && cursor % layout.alignment !== 0
+      ? cursor + (layout.alignment - (cursor % layout.alignment))
+      : cursor;
+    placed.push({ key: field.key, offset, layout });
+    cursor = offset + layout.byteLength;
+    if (layout.alignment > alignment) {
+      alignment = layout.alignment;
+    }
+  }
+  // Rounded up to the class's own alignment, so an array of it stays aligned.
+  const byteLength = alignment > 0 && cursor % alignment !== 0
+    ? cursor + (alignment - (cursor % alignment))
+    : cursor;
+  return { bitLength: byteLength * 8, byteLength, alignment, fields: placed };
 }

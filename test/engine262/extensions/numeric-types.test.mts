@@ -303,3 +303,39 @@ test('numeric types: the `number` target admits numeric values only', () => {
   expectThrownKind('function a() { return ["s"]; } let arr: [].<number> = a();', 'TypeError');
   expectThrownKind('function a() { return { x: "s" }; } let o: { x: number } = a();', 'TypeError');
 });
+
+test('memory layout: a value type class lays out by natural alignment', () => {
+  // #sec-natural-alignment: "Each field is placed at the next offset that is a
+  // multiple of its own alignment, a class's alignment is the largest alignment
+  // among its fields, and its byteLength is rounded up to that alignment so
+  // that every element of an array of the class is aligned too." The design's
+  // own worked examples are the test vector.
+  const V = 'class Vertex { x: float32; y: float32; z: float32; } ';
+  expect(evaluated(`${V} String((type Vertex).byteLength) + "/" + String((type Vertex).alignment);`)).toBe('12/4');
+  expect(evaluated(`${V} String((type Vertex).bitLength);`)).toBe('96');
+  // Padded from 3 to 4 so `b` stays aligned in an array of A.
+  expect(evaluated('class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('4/2');
+  // DECLARATION ORDER, never reordered: the clause is explicit that field order
+  // is a performance decision the program makes, because views, serialization,
+  // and interop depend on it. These two hold the same fields.
+  expect(evaluated('class P { a: uint8; b: float64; c: uint8; } String((type P).byteLength);')).toBe('24');
+  expect(evaluated('class T { b: float64; a: uint8; c: uint8; } String((type T).byteLength);')).toBe('16');
+  // Inheritance APPENDS: a base's fields keep their offsets and a subclass's
+  // follow, so a subclass lays out as the flattening of both.
+  expect(evaluated('class B { a: uint8; } class S extends B { b: uint8; } class F { a: uint8; b: uint8; } String((type S).byteLength === (type F).byteLength);')).toBe('true');
+  // A field that is itself a laid-out type - a class, a fixed array - carries
+  // its own alignment up into the enclosing class.
+  expect(evaluated('class V2 { x: float32; y: float32; } class N { v: V2; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('8/4');
+  expect(evaluated('class Ar { a: [4].<uint8>; b: uint32; } String((type Ar).byteLength) + "/" + String((type Ar).alignment);')).toBe('8/4');
+  // An enum's layout is its underlying type's. The pin that said the Type
+  // Record carried no underlying type is stale: F62 added it for the enum
+  // subtype relation, so this row costs one line.
+  expect(evaluated('enum E: uint8 { A, B } String((type E).byteLength) + "/" + String((type E).bitLength);')).toBe('1/8');
+  expect(evaluated('enum W: uint32 { A } String((type W).byteLength);')).toBe('4');
+
+  // THE ROWS WITH NO LAYOUT, proved by rejection, since reading a size off one
+  // must be a TypeError rather than "a number that hides the mistake".
+  expectThrownKind('class U { a: uint8; b; } (type U).byteLength;', 'TypeError');
+  expectThrownKind('class S2 { s: string; } (type S2).byteLength;', 'TypeError');
+  expectThrownKind('dynamic class D { d: uint8; } (type D).byteLength;', 'TypeError');
+});

@@ -1,4 +1,6 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { ComputeClassLayout, type ClassLayout } from '../type-system/layout.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
 import {
   Value, NullValue, ObjectValue, PrivateName,
@@ -628,6 +630,44 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // #sec-typed-storage's prototype freeze, on this branch too. The evaluation
     // has two exits and only one of them was taken by an ordinary declaration,
     // which is why the first placement of this appeared to do nothing.
+    // #sec-memory-layout: the value type class row of the layout table. Computed
+    // HERE, at declaration, because every field's type is already resolved into
+    // its ClassFieldDefinition Record's [[TypeObject]] - resolving them again at
+    // each read of `byteLength` would be a generator's work, and
+    // #sec-layout-properties calls these compile-time constants.
+    //
+    // FINITENESS needs no cycle guard at this point, which is worth stating
+    // because the plan expected one: a class whose field type names the class
+    // itself is already refused by the ordinary temporal dead zone, before any
+    // layout is computed - `class A { a: A; }` is a ReferenceError. The
+    // condition of #sec-layout-finiteness therefore holds by construction here.
+    // What does NOT hold is the other half of that clause: `class N { next: N |
+    // null; }` is refused by the same TDZ, and the clause says a `T | null`
+    // field closes a cycle because it is a reference, "which is why a linked
+    // list is expressible". That over-refusal is recorded rather than fixed
+    // here; it is a binding-resolution question, not a layout one.
+    if ((F as { SealInstances?: boolean }).SealInstances === true) {
+      const baseCtor = constructorParent as { InstanceLayout?: ClassLayout | null } | undefined;
+      const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
+        ? baseCtor.InstanceLayout ?? null
+        : null;
+      const laidOut: { key: string, type: TypeRecord }[] = [];
+      let complete = true;
+      for (const field of instanceFields) {
+        const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
+        const name = (field as { Name?: unknown }).Name;
+        if (!typeObject?.TypeRecord || typeof (name as { stringValue?: unknown })?.stringValue !== 'function') {
+          // An untyped field, or a private name: the table's "a class with an
+          // untyped field" row gives the whole class no layout.
+          complete = false;
+          break;
+        }
+        laidOut.push({ key: (name as { stringValue(): string }).stringValue(), type: typeObject.TypeRecord });
+      }
+      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = complete
+        ? ComputeClassLayout(baseLayout, laidOut)
+        : null;
+    }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
       Q(yield* SetIntegrityLevel(proto, 'frozen'));
     }
