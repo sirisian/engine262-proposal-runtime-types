@@ -693,7 +693,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `a.includes(70000)` from a run-time RangeError into the Early Error
           // a statically determinable mistake deserves (F70).
           if (receiver && receiver.Kind === 'array') {
-            const sig = arrayMethodSignature((m.IdentifierName as { name: string }).name, receiver.Element);
+            // "The Static Type of a member access reading the `length` property
+            // of an array is `uint32`" - the specification says so and the run
+            // time has done it since F54; this is the static half, which had
+            // been open since the first verification pass (F79).
+            if ((m.IdentifierName as { name: string }).name === 'length') {
+              return builtinTypeRecord('uint', [32]);
+            }
+            const sig = arrayMethodSignature((m.IdentifierName as { name: string }).name, receiver.Element, receiver);
             if (sig) {
               return sig;
             }
@@ -1158,7 +1165,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const arrayMethodSignature = (name: string, element: TypeRecord): Known => {
+  const arrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
     const anyType = { Kind: 'any' as const };
     const numberType = makePrimitive('number');
     const boolType = makePrimitive('boolean');
@@ -1175,6 +1182,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: 'function', Signatures: [{ Parameters: [element, numberType, numberType], Return: anyType, Shapes: shapes(3, 1), Untyped: false }] } as unknown as Known;
       case 'at':
         return { Kind: 'function', Signatures: [{ Parameters: [numberType], Return: element, Shapes: shapes(1, 1), Untyped: false }] } as unknown as Known;
+      // A result drawn from the receiver's own elements is an array of the same
+      // element type: `filter` selects, `slice` copies a range, `reverse` and
+      // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
+      // the callback's return, which needs the callback typed first, and
+      // claiming the receiver's type would be wrong rather than merely
+      // imprecise (F79).
+      case 'filter':
+      case 'slice':
+      case 'reverse':
+      case 'sort':
+      case 'toReversed':
+      case 'toSorted':
+      case 'concat':
+        return { Kind: 'function', Signatures: [{ Parameters: [anyType, anyType], Return: receiver, Shapes: shapes(2, 0), Untyped: false }] } as unknown as Known;
       default:
         return null;
     }

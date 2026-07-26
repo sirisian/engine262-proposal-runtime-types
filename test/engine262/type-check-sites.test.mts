@@ -532,6 +532,34 @@ test('every narrowing form the checker reads, and where it applies', () => {
   expect(evaluated('function nc(x: uint8 | string) { const r = x is uint8 ? ((y: uint8) => y)(x) : 0; } "ok";')).toBe('ok');
 });
 
+test('a typed array length and element-preserving results flow statically', () => {
+  // Phase 5 of the checker plan. Asserted by REJECTION, because a permissive
+  // checker passes every positive test: only a rejection proves it knows the
+  // type. Measuring this way is what showed the pieces were undone, since each
+  // one looked fine from its positive case alone (F79).
+  //
+  // "The Static Type of a member access reading the `length` property of an
+  // array is `uint32`" - the run time has done this since F54, this is the
+  // static half.
+  expectStatic('function nc(a: [].<uint8>) { let n: string = a.length; }');
+  expectStatic('function nc(a: [].<uint8>) { let n: uint8 = a.length; }');
+  expect(evaluated('function nc(a: [].<uint8>) { let n: uint32 = a.length; } "ok";')).toBe('ok');
+  // A result drawn from the receiver's own elements is an array of the SAME
+  // element type.
+  expectStatic('function nc(a: [].<uint8>) { let b: string = a.filter(x => true); }');
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.filter(x => true); }');
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.slice(0); }');
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.sort(); }');
+  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<uint8> = a.filter(x => true); } "ok";')).toBe('ok');
+  // `map` is deliberately NOT claimed: its element type is the callback's
+  // return, so asserting the receiver's would be wrong rather than imprecise.
+  expect(evaluated('function nc(a: [].<uint8>) { let b: string = a.map(x => "s"); } "ok";')).toBe('ok');
+  // An untyped array declares no element type and constrains nothing.
+  expect(evaluated('function nc(a) { let n: string = a.length; } "ok";')).toBe('ok');
+  // The run time is untouched.
+  expect(evaluated('let a: [].<uint8> = [3,1]; String(a.filter(x => true)[0] is uint8) + "/" + String(a.length);')).toBe('true/2');
+});
+
 test('an assignment invalidates a narrowing rather than being refused by it', () => {
   // sec-narrowing: "a narrowed binding is invalidated by an assignment that
   // leaves the narrowed type". The engine had the other behaviour - it checked
