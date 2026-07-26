@@ -171,13 +171,24 @@ test('memory layout: a laid out type reports its size, bit width, and alignment'
 });
 
 test('memory layout: an unnamed width takes the natural alignment rule', () => {
-  // the smallest power of two at least the byte length, capped at eight
+  // The smallest power of two at least the byte length, and NOT capped. The
+  // examples the rule was written around are unchanged.
   expect(evaluated('type U = uint.<4>; String(U.alignment);')).toBe('1');
   expect(evaluated('type U = uint.<24>; String(U.byteLength);')).toBe('3');
   expect(evaluated('type U = uint.<24>; String(U.alignment);')).toBe('4');
-  // the cap: a sixteen byte integer still aligns to eight
+  // CAP REMOVED (F96). It made two 16-byte types disagree for no reason a
+  // program could see: a `uint.<128>` aligned at 8 while a `float32x4` of the
+  // same width aligned at 16, because the vector rule bypassed the cap. Rust,
+  // which this layout follows, aligns each scalar to its own size - `u128` is
+  // 16-byte aligned, matching C - and caps nothing; raising an alignment is
+  // `#[repr(align(N))]`'s job, which is `@align` here.
   expect(evaluated('String(int128.byteLength);')).toBe('16');
-  expect(evaluated('String(int128.alignment);')).toBe('8');
+  expect(evaluated('String(int128.alignment);')).toBe('16');
+  // The vector case now FALLS OUT of the general rule rather than needing one
+  // of its own, since a width that is already a power of two rounds to itself.
+  expect(evaluated('type V = float32x4; String(V.alignment) + "/" + String(V.byteLength);')).toBe('16/16');
+  // And a bit vector still packs: eight one-bit lanes in one byte.
+  expect(evaluated('type B = boolean8; String(B.alignment) + "/" + String(B.byteLength);')).toBe('1/1');
 });
 
 test('memory layout: a fixed length array lays out as its element repeated', () => {
@@ -364,4 +375,24 @@ test('memory layout: a placement over a resizable buffer records its extent', ()
   expect(evaluated(`${rz} String(Number(v.x));`)).toBe('1.5');
   expect(evaluated(`${rz} rb.resize(64); String(Number(v.x));`)).toBe('1.5');
   expectThrownKind(`${rz} rb.resize(8); v.x;`, 'TypeError');
+});
+
+test('memory layout: overlapping fields reinterpret, and the store check is per field', () => {
+  // #sec-layout-control: "Two fields given one `offset` occupy one memory,
+  // which is the C union." This is the ONE place a typed read can produce a
+  // value the type system did not construct, and the specification permits it
+  // knowingly: the store check applies PER FIELD against the type that field
+  // declares, and neither field knows the other shares its bytes.
+  const u = '@packed class U { value: float32; @offset(0) bits: uint32; } const b = new ArrayBuffer(8); const u = new(b, 0) U(); ';
+  // Both fields are placed at byte 0.
+  expect(evaluated(`${u} String(Reflect.getReflection.<Reflect.ClassField, U>("value").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassField, U>("bits").offset);`)).toBe('0/0');
+  // A float written through one field is read as its BIT PATTERN through the
+  // other, which is what a program overlapping two types asked for and is why
+  // the C union is expressible at all. 1.0 as a float32 is 0x3F800000.
+  expect(evaluated(`${u} u.value = 1; String(Number(u.bits));`)).toBe('1065353216');
+  expect(evaluated(`${u} u.bits = 1065353216; String(Number(u.value));`)).toBe('1');
+  // Each field still checks its OWN type: the reinterpretation is between the
+  // bytes, never a way past a store boundary.
+  expectThrown(`${u} u.bits = "s";`);
+  expectThrown(`${u} function anyv() { return 4294967296; } u.bits = anyv();`);
 });

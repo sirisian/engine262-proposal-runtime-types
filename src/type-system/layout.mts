@@ -19,9 +19,21 @@ export interface Layout {
  * A width no named type has aligns to the smallest power of two at least its byte
  * length, capped at eight: `uint.<4>` sits at alignment one and `uint.<24>` at four.
  */
+/**
+ * proposal-runtime-types #sec-layout-properties: a type's alignment is its byte
+ * length rounded up to a power of two, and is NOT capped.
+ *
+ * The cap at 8 that this replaces made two 16-byte types disagree for no reason
+ * a program could see: a `uint.<128>` aligned at 8 while a `float32x4` of the
+ * same width aligned at 16, because the vector rule bypassed the cap. Rust,
+ * which this layout follows, aligns each scalar to its own size - `u128` is
+ * 16-byte aligned, matching C - and caps nothing; raising an alignment is
+ * `#[repr(align(N))]`'s job, which is `@align` here. Removing the cap makes the
+ * vector case fall out of the general rule instead of needing one of its own.
+ */
 function naturalAlignment(byteLength: number): number {
   let a = 1;
-  while (a < byteLength && a < 8) {
+  while (a < byteLength) {
     a *= 2;
   }
   return a;
@@ -97,10 +109,11 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // what makes it a usable bitfield rather than a name for a byte.
     const bitLength = laneLayout.bitLength * lanes;
     const byteLength = Math.ceil(bitLength / 8);
-    // A SIMD vector aligns to its WHOLE width rather than the capped natural rule,
-    // which memorylayout.md states for a width no named type has: float32x4 is 16
-    // bytes at alignment 16, because the register it occupies is addressed that way.
-    return { bitLength, byteLength, alignment: byteLength };
+    // A SIMD vector aligns to its whole width - float32x4 is 16 bytes at
+    // alignment 16, because the register it occupies is addressed that way -
+    // and that is now what the general rule says, since a width that is already
+    // a power of two rounds up to itself. It no longer needs a rule of its own.
+    return { bitLength, byteLength, alignment: naturalAlignment(byteLength) };
   }
   switch (name) {
     case 'float16': return fromBits(16);
