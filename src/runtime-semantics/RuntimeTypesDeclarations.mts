@@ -89,6 +89,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     const obj = GetTypeObject(record);
     for (let i = 0; i < memberNames.length; i += 1) {
       X(CreateDataPropertyOrThrow(obj, Value(memberNames[i]), memberValues[i]));
+      // The design's index operator: `Count[0]` is `Count.Zero` beside
+      // `Count['Zero']`. By POSITION rather than by underlying value - the
+      // design's own example cannot tell the two apart, since its enumerators
+      // are numbered from 0, but an index operator beside a name lookup is
+      // indexing the ENUMERATION, and position is what `keys()`, `values()`,
+      // and `entries()` are ordered by. A lookup by VALUE already exists and
+      // is spelled `Count(n)`, the reverse conversion.
+      X(CreateDataPropertyOrThrow(obj, Value(String(i)), memberValues[i]));
     }
     value = obj;
   } else if (node.type === 'InterfaceDeclaration') {

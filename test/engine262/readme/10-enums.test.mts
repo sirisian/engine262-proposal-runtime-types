@@ -83,12 +83,23 @@ test('enum: Count(n) throws for a value that is not an enumerator', () => {
   expectThrown('enum Count { Zero, One, Two }; Count(9);');
 });
 
-test('enum: toString-to-key and %Enum.prototype% methods are design-level (documents the gap)', () => {
-  // Target (README, not in normative spec.emu): Count.One.toString() === "One" and
-  // Count.keys()/values()/entries(). Today toString shows the underlying value and
-  // the prototype iterator methods are absent.
+test('enum: %Enum.prototype% carries the enumeration surface', () => {
+  // GAP CLOSED (F84). This documented the absence of the surface; it is present
+  // now, so the test asserts it rather than its absence.
+  //
+  // One correction to what this test recorded as the target. It expected
+  // `Count.One.toString()` to answer "One", and that is not what the design
+  // says: the signature is `%Enum.prototype%.toString(value)`, a lookup ON THE
+  // ENUMERATION taking the value as an argument. An enumerator IS its
+  // underlying value - that is the whole of the one-way subtype rule - so it
+  // has no method of its own to override, and `Count.One.toString()` answering
+  // "1" is correct rather than a gap. The design says as much in the sentence
+  // after the listing: interpolation sees the underlying value, and getting the
+  // key is what `toString` is for.
   expect(evaluated('enum Count { Zero, One, Two }; Count.One.toString();')).toBe('1');
-  expect(evaluated('enum Count { Zero, One, Two }; String(typeof Count.keys);')).toBe('undefined');
+  expect(evaluated('enum Count { Zero, One, Two }; Count.toString(Count.One);')).toBe('One');
+  expect(evaluated('enum Count { Zero, One, Two }; String(typeof Count.keys);')).toBe('function');
+  expect(evaluated('enum Count { Zero, One, Two }; [...Count.keys()].join("|");')).toBe('Zero|One|Two');
 });
 
 test('enum: an enumerator holds a plain underlying value; Reflect.typeOf reports the primitive (documents the gap)', () => {

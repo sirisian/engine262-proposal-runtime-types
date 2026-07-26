@@ -59,6 +59,7 @@ import { bootstrapReflect, bootstrapReflectNever } from '../intrinsics/Reflect.m
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
 import { bootstrapRegExp } from '../intrinsics/RegExp.mts';
 import { bootstrapRegExpPrototype } from '../intrinsics/RegExpPrototype.mts';
@@ -207,6 +208,9 @@ export function CreateIntrinsics(realmRec: Realm) {
 
   bootstrapReflect(realmRec);
   bootstrapTypePrototype(realmRec);
+  // proposal-runtime-types: an enum's Type Object gets %Enum.prototype%, which
+  // inherits from %Type.prototype%, so it follows it.
+  bootstrapEnumPrototype(realmRec);
   // proposal-runtime-types: needs %Type.prototype%, so it follows it.
   bootstrapReflectNever(realmRec);
   // proposal-runtime-types: a meta type this specification declares rather than

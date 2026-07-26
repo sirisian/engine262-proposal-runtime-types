@@ -672,6 +672,7 @@ export interface Throw {
 '"add" property ($1) of object $2 is not a function'
   | '"set" property ($1) of object $2 is not a function'
   | '$1 and $2 are different numeric types and do not mix; convert one of them'
+  | '$1 called on incompatible receiver $2'
   | '$1 called on invalid receiver: $2'
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'

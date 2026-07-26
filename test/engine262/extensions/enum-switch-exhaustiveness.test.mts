@@ -69,3 +69,59 @@ test('a switch whose discriminant is not enum-typed is unaffected', () => {
   // a partial numeric switch does not require exhaustiveness
   expect(evaluated('let x = 3; let r = "none"; switch (x) { case 1: r = "a"; break; } r;')).toBe('none');
 });
+
+/**
+ * The enumeration surface: %Enum.prototype%.
+ *
+ * README "Enums": "enumeration objects share a common prototype, written here
+ * as %Enum.prototype%". Five members are normative here - `toString(value)`,
+ * `keys()`, `values()`, `entries()`, and `@@iterator` - plus the design's index
+ * operator. `forEach`, `filter`, and `map` are DECLINED as compositions:
+ * `entries()` composes with the Array methods to give all three.
+ */
+test('an enumeration answers its keys, values, and entries', () => {
+  const e = 'enum Count: uint8 { Zero, One, Two } ';
+  expect(evaluated(`${e} [...Count.keys()].join("|");`)).toBe('Zero|One|Two');
+  expect(evaluated(`${e} [...Count.values()].join("|");`)).toBe('0|1|2');
+  expect(evaluated(`${e} JSON.stringify([...Count.entries()]);`)).toBe('[["Zero",0],["One",1],["Two",2]]');
+  // @@iterator is ENTRIES, not values: iterating an enumeration yields what the
+  // enumeration is, a set of named values, and a bare value loses the name that
+  // distinguishes an enum from its underlying type. Map makes the same choice.
+  expect(evaluated(`${e} JSON.stringify([...Count]);`)).toBe('[["Zero",0],["One",1],["Two",2]]');
+  // The values carry the enum type, so what comes out is what went in.
+  expect(evaluated(`${e} String([...Count.values()][0] is Count);`)).toBe('true');
+  // The surface is the ENUM's; an ordinary Type Object does not have it.
+  expect(evaluated('String(typeof uint8.keys);')).toBe('undefined');
+});
+
+test('toString maps an enumerator to its key', () => {
+  // It answered "[object Type]" - the inherited Object.prototype.toString -
+  // which is a silently wrong answer where the design specifies a right one,
+  // and by this project's standard that is worse than a missing feature (F48).
+  const e = 'enum Count: uint8 { Zero, One, Two } ';
+  expect(evaluated(`${e} Count.toString(Count.Zero);`)).toBe('Zero');
+  expect(evaluated(`${e} Count.toString(Count.Two);`)).toBe('Two');
+  // A value that is not an enumerator has no key, and *undefined* is the answer
+  // that does not invent one.
+  expect(evaluated(`${e} String(Count.toString(99));`)).toBe('undefined');
+  // A string-underlying enum reads the same way, which is what `toString` is
+  // FOR: interpolation sees the underlying value, so the key needs a lookup.
+  const l = 'enum Level: string { Low = "low", High = "high" } ';
+  expect(evaluated(`${l} Level.toString(Level.Low);`)).toBe('Low');
+  expect(evaluated(`${l} String(Level.Low);`)).toBe('low');
+});
+
+test('an enumeration indexes by position beside indexing by name', () => {
+  // The design writes `Count[0]; // Count.Zero` beside `Count['Zero']`. By
+  // POSITION rather than by underlying value: the design's own example cannot
+  // tell the two apart, since its enumerators are numbered from 0, but an index
+  // operator beside a name lookup indexes the ENUMERATION, and position is what
+  // `keys()`, `values()`, and `entries()` are ordered by. A lookup by VALUE
+  // already exists and is spelled `Count(n)`, the reverse conversion.
+  expect(evaluated('enum Count: uint8 { Zero, One, Two } String(Count[0]) + "/" + String(Count[2]);')).toBe('0/2');
+  const s = 'enum Sparse: uint8 { A = 10, B = 20 } ';
+  expect(evaluated(`${s} String(Sparse[0]) + "/" + String(Sparse[1]);`)).toBe('10/20');
+  expect(evaluated(`${s} String(Sparse[10]);`)).toBe('undefined');
+  // Both older routes are undisturbed.
+  expect(evaluated(`${s} String(Sparse["A"]) + "/" + String(Sparse(20) === Sparse.B);`)).toBe('10/true');
+});

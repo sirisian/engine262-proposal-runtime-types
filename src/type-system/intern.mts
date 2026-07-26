@@ -104,7 +104,15 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       return existing;
     }
   }
-  const proto = (realm ?? surroundingAgent.currentRealmRecord).Intrinsics['%Type.prototype%'];
+  // proposal-runtime-types (README "Enums"): "enumeration objects share a
+  // common prototype, written here as %Enum.prototype%". It inherits from
+  // %Type.prototype%, so an enum keeps everything a Type Object has and gains
+  // the enumeration surface on top.
+  const intrinsics = (realm ?? surroundingAgent.currentRealmRecord).Intrinsics as {
+    readonly '%Type.prototype%': ObjectValue, readonly '%Enum.prototype%'?: ObjectValue,
+  };
+  const isEnum = canonical.Kind === 'nominal' && canonical.EnumMembers !== undefined;
+  const proto = (isEnum && intrinsics['%Enum.prototype%']) || intrinsics['%Type.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['TypeRecord']) as unknown as TypeObject;
   obj.TypeRecord = canonical;
   // proposal-runtime-types (spec sec-conversions, sec-enums): a Type Object is
