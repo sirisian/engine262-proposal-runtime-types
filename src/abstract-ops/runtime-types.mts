@@ -1,4 +1,5 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
+import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { NumberValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -864,6 +865,15 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
   if (!fn) {
     return undefined;
   }
+  // #sec-evaluation-budget: this is where the type machinery runs USER CODE,
+  // so it is where the meter belongs. Once the enclosing top-level type
+  // evaluation is exhausted the hook is not called at all - the evaluation is
+  // abandoned, and calling on would be running code the budget already
+  // refused.
+  if (IsBudgetExhausted()) {
+    return undefined;
+  }
+  ConsumeEvaluationSteps(1);
   return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
 }
 

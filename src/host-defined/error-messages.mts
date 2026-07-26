@@ -661,6 +661,7 @@ export interface Throw {
   | 'the $1 test can never succeed, so the branch it guards is dead code'
   | 'the argument bound by ref to $1 does not satisfy its type annotation'
   | 'the call to $1 is ambiguous between overloads'
+  | 'the type evaluation budget was exhausted ($1) while checking this source text'
   | 'the value bound by ref to $1 does not satisfy its type annotation'
   | 'this type has no layout, so it has no $1'
   | 'this value $1 is not an object'

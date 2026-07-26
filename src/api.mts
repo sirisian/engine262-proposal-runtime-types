@@ -161,6 +161,14 @@ export interface ManagedRealmHostDefined {
   resolverCache?: ModuleCache;
 
   randomSeed?(): string;
+  /**
+   * proposal-runtime-types #sec-evaluation-budget: the two host-defined limits,
+   * "a count of evaluation steps and a count of constructed Type Records, each
+   * per top-level type-position evaluation". The clause fixes floors a host
+   * meets or exceeds, and a host that raises one can only turn a failure into a
+   * result, never a result into a different one.
+   */
+  typeEvaluationBudget?: { steps?: number, records?: number };
   attachingInspector?: unknown;
   attachingInspectorReportError?(realm: Realm, error: Value): void;
   /**

@@ -9,6 +9,7 @@ import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import { TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, type DeferredMetadataCheck } from './check.mts';
+import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { Throw } from '#self';
 
 /**
@@ -53,11 +54,25 @@ import { Throw } from '#self';
  * expressions this engine does not yet hold to the compile-time-evaluable
  * discipline, so pre-running them could observe bindings early); declarations
  * nested in blocks or wrapped in `export` are left to body order; the
- * evaluation budget of #sec-evaluation-budget is not yet wired to the hook
- * calls; and judgment results are not yet memoized across passes, which
+ * and judgment results are not yet memoized across passes, which
  * purity and interning license but nothing here needs at this scale.
  */
 export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
+  // #sec-evaluation-budget: this pass runs a source text's own type
+  // declarations and then applies the metadata subtype judgment, both of which
+  // call USER CODE - a builder, a `where`, a meta hook. It is therefore a
+  // top-level type-position evaluation and is metered as one. Without this the
+  // pass is an unbounded denial-of-service surface on any tool that runs it,
+  // which is every tool that type-checks a file.
+  BeginTypeEvaluation();
+  try {
+    return yield* runPreEvaluationTypeCheckMetered(root);
+  } finally {
+    EndTypeEvaluation();
+  }
+}
+
+function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = root.type === 'Script'
     ? root.ScriptBody?.StatementList
     : root.ModuleBody?.ModuleItemList;
@@ -102,6 +117,21 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
     if (!admits) {
       return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
+  }
+  // #sec-evaluation-budget: "the evaluation is abandoned, and
+  // EvaluateToTypeObject of the containing type-position expression is
+  // ~empty~, with a diagnostic naming the outermost call". Reported once, HERE,
+  // at the end of the whole pass rather than at the metered point that noticed
+  // - the point that notices is wherever the last step happened to be spent,
+  // which is not the containing evaluation the clause asks to name. It is also
+  // why the check must come after the work and not before it: an earlier
+  // version of this sat above the judgments that spend the budget and could
+  // never observe an exhaustion they caused.
+  if (IsBudgetExhausted()) {
+    return Throw.RangeError(
+      'the type evaluation budget was exhausted ($1) while checking this source text',
+      Value(BudgetExhaustionKind() ?? 'steps'),
+    );
   }
   return undefined;
 }

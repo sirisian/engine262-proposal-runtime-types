@@ -3,6 +3,7 @@ import type { ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey } from './records.mts';
+import { CountConstructedTypeRecord } from './budget.mts';
 import { SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
 
@@ -113,6 +114,11 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   };
   const isEnum = canonical.Kind === 'nominal' && canonical.EnumMembers !== undefined;
   const proto = (isEnum && intrinsics['%Enum.prototype%']) || intrinsics['%Type.prototype%'];
+  // #sec-evaluation-budget counts CONSTRUCTED Type Records, so the count sits
+  // after the intern-table lookup above: a type that was already interned is
+  // not constructed again, and charging for it would make the budget depend on
+  // how often a program mentions a type rather than on how many it builds.
+  CountConstructedTypeRecord();
   const obj = OrdinaryObjectCreate(proto, ['TypeRecord']) as unknown as TypeObject;
   obj.TypeRecord = canonical;
   // proposal-runtime-types (spec sec-conversions, sec-enums): a Type Object is
