@@ -58,3 +58,44 @@ test('class operators dispatch on binary expressions', () => {
   // Objects without operators keep today's behaviour.
   expect(evaluated('const r = {} + 1; typeof r === "string" ? "ok" : "no";')).toBe('ok');
 });
+
+test('a typed class is sealed and its prototype frozen', () => {
+  // #sec-typed-storage: "A class in which AT LEAST ONE public or private field
+  // is typed is automatically sealed, as if PreventExtensions had been
+  // performed on each of its instances, and ITS PROTOTYPE IS FROZEN." The
+  // instance half was already right; the prototype half was described in a
+  // comment beside it and never performed, so a typed class's prototype was an
+  // ordinary mutable object.
+  expect(evaluated('class A { a: uint8; } String(Object.isFrozen(A.prototype));')).toBe('true');
+  expect(evaluated('class A { a: uint8; } String(Object.isExtensible(new A()));')).toBe('false');
+  // ONE typed field is the condition, not every field: sealing is what makes a
+  // field's type a fact about the layout at all, which one field already asks
+  // for.
+  expect(evaluated('class M { a: uint8; b; } String(Object.isFrozen(M.prototype));')).toBe('true');
+  // The opt-outs.
+  expect(evaluated('dynamic class D { d: uint8; } String(Object.isFrozen(D.prototype));')).toBe('false');
+  expect(evaluated('class U { u; } String(Object.isFrozen(U.prototype));')).toBe('false');
+  // What sealing does NOT do: a field may still be written, since "a field's
+  // type is what constrains it", and the store check still applies.
+  expect(evaluated('class A { a: uint8; } const x = new A(); x.a = 7; String(x.a);')).toBe('7');
+  expect(evaluated('class A { a: uint8; } const x = new A(); try { x.a = 300; "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // Methods and inheritance are undisturbed, and a subclass freezes too.
+  expect(evaluated('class A { a: uint8; m() { return 1; } } String(new A().m());')).toBe('1');
+  expect(evaluated('class B { a: uint8; } class S extends B { b: uint8; } String(Object.isFrozen(S.prototype)) + "/" + String(Object.isFrozen(B.prototype));')).toBe('true/true');
+  // A program cannot add to the prototype afterwards, which is the point.
+  expect(evaluated('class A { a: uint8; } try { Object.defineProperty(A.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
+});
+
+test('a partial class still extends a typed class', () => {
+  // #sec-partial-classes: a partial declaration "adds behaviour and no cases...
+  // and does not change a class's layout", so it is permitted over a typed
+  // class - and the two specified features are in tension only at the
+  // implementation, where a frozen prototype refuses the DefineOwnProperty a
+  // merge is made of. The freeze is against a PROGRAM mutating the prototype
+  // after the fact; a partial declaration is part of how the class is declared,
+  // spread across modules. The merge therefore lifts the freeze and restores
+  // it, evaluating no user code in between.
+  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } String(new C().m());')).toBe('1');
+  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } String(Object.isFrozen(C.prototype));')).toBe('true');
+  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } try { Object.defineProperty(C.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
+});

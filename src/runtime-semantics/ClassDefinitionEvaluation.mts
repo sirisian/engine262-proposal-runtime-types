@@ -1,3 +1,5 @@
+import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { Descriptor } from '../value.mts';
 import {
   Value, NullValue, ObjectValue, PrivateName,
   BooleanValue,
@@ -445,6 +447,25 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         return result;
       }
     }
+    // proposal-runtime-types #sec-typed-storage: "...is automatically sealed, as
+    // if PreventExtensions had been performed on each of its instances, AND ITS
+    // PROTOTYPE IS FROZEN." The instance half was recorded above as
+    // [[SealInstances]] and applied at field initialization; the prototype half
+    // was described in the comment there and never performed, so a typed class's
+    // prototype was an ordinary mutable object and a program could add to or
+    // replace a method on it after the declaration.
+    //
+    // Frozen HERE, at the end of the evaluation, because the prototype is only
+    // complete once the static elements above have run: freezing at the point
+    // the decision is recorded would refuse the class's own methods.
+    //
+    // Sealing follows from ONE typed field, not from every field being typed:
+    // #sec-typed-classes says "at least one of its public or private fields",
+    // and the reason is that sealing is what makes a field's type a fact about
+    // the layout at all, which one typed field already asks for.
+    if ((F as { SealInstances?: boolean }).SealInstances === true) {
+      Q(yield* SetIntegrityLevel(proto, 'frozen'));
+    }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
     // 33. Return F.
@@ -604,6 +625,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         return result;
       }
     }
+    // #sec-typed-storage's prototype freeze, on this branch too. The evaluation
+    // has two exits and only one of them was taken by an ordinary declaration,
+    // which is why the first placement of this appeared to do nothing.
+    if ((F as { SealInstances?: boolean }).SealInstances === true) {
+      Q(yield* SetIntegrityLevel(proto, 'frozen'));
+    }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
     // 33. Return F.
@@ -629,6 +656,32 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
     return undefined;
   }
   const proto = Q(yield* Get(F, Value('prototype')));
+  // #sec-partial-classes: a `partial` declaration "adds behaviour and no cases:
+  // it introduces no subclass and no instance state, so it does not enlarge the
+  // closed set of a sealed hierarchy and DOES NOT CHANGE A CLASS'S LAYOUT". It
+  // is therefore permitted over a typed class, whose prototype
+  // #sec-typed-storage freezes - and the two are only in tension at the
+  // implementation, where a frozen prototype refuses the DefineOwnProperty a
+  // merge is made of.
+  //
+  // The freeze is against a PROGRAM mutating the prototype after the fact. A
+  // partial declaration is not that: it is part of how the class is declared,
+  // spread across modules, and refusing it would make the two specified
+  // features contradict each other. So the merge lifts the freeze for its own
+  // duration and restores it, which leaves nothing observable between the two:
+  // a program cannot run in the gap, since the merge evaluates without calling
+  // user code.
+  const wasFrozen = proto instanceof ObjectValue && (F as { SealInstances?: boolean }).SealInstances === true
+    && Q(yield* TestIntegrityLevel(proto, 'frozen'));
+  if (wasFrozen) {
+    (proto as unknown as { Extensible: unknown }).Extensible = Value.true;
+    for (const key of Q(yield* (proto as ObjectValue).OwnPropertyKeys())) {
+      const desc = Q(yield* (proto as ObjectValue).GetOwnProperty(key));
+      if (desc instanceof Descriptor && desc.Configurable === Value.false) {
+        Q(yield* (proto as ObjectValue).DefineOwnProperty(key, Descriptor({ Configurable: Value.true })));
+      }
+    }
+  }
   if (!(proto instanceof ObjectValue)) {
     return Throw.TypeError('$1 cannot be extended by a partial class', F);
   }
@@ -650,6 +703,11 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
     }
     const target = IsStatic(e) ? (F as ObjectValue) : proto;
     Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
+  }
+  // Restored before the exit. The merge evaluates no user code between the lift
+  // and here, so nothing can observe the prototype unfrozen.
+  if (wasFrozen) {
+    Q(yield* SetIntegrityLevel(proto as ObjectValue, 'frozen'));
   }
   return undefined;
 }
