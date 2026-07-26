@@ -703,6 +703,48 @@ test('a check the static types already establish is not inserted', () => {
   expect(thrownKind('function anyv() { return 300; } let x: uint8 = anyv();')).toBe('RangeError');
 });
 
+test('a BLOCK-bodied callback\'s return type is inferred', () => {
+  // F80 could read a CONCISE arrow body, whose body IS the returned
+  // expression, and left a block body at ~any~ - so `a.map(x => x)` flowed and
+  // `a.map(x => { return x; })` did not, which is the same function written
+  // two ways. The inference is the JOIN of the body's return expressions.
+  const a = 'function nc(a: [].<uint8>) ';
+  expectStatic(`${a} { let b: [].<string> = a.map(x => { return x; }); }`);
+  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { return "s"; }); }`);
+  expect(evaluated(`${a} { let b: [].<uint8> = a.map(x => { return x; }); } "ok";`)).toBe('ok');
+  expect(evaluated(`${a} { let b: [].<string> = a.map(x => { return "s"; }); } "ok";`)).toBe('ok');
+  // A FunctionExpression callback, not only an arrow.
+  expectStatic(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
+  // The parameters the position supplies are visible in the body, so the
+  // `uint32` index flows into the inference too.
+  expect(evaluated(`${a} { let b: [].<uint32> = a.map((x, i) => { return i; }); } "ok";`)).toBe('ok');
+
+  // SEVERAL returns join into a union.
+  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } return "s"; }); }`);
+  expect(evaluated(`${a} { let b: [].<uint8 | string> = a.map(x => { if (x) { return x; } return "s"; }); } "ok";`)).toBe('ok');
+  // A body that can COMPLETE without returning answers *undefined*, and the
+  // inference says so rather than pretending the value is always there.
+  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } }); }`);
+  expect(evaluated(`${a} { let b: [].<uint8 | undefined> = a.map(x => { if (x) { return x; } }); } "ok";`)).toBe('ok');
+  // An UNKNOWN arm makes the whole inference unknown: a union with an unknown
+  // member is unknown, and answering the other arms would state more than the
+  // body supports.
+  expect(evaluated('function nc(a: [].<uint8>, u) { let b: [].<uint8> = a.map(x => { return u; }); } "ok";')).toBe('ok');
+  // A nested function's returns belong to IT, so they neither contribute nor
+  // spoil the enclosing inference.
+  expect(evaluated(`${a} { let b: [].<uint8> = a.map(x => { const g = () => "s"; return x; }); } "ok";`)).toBe('ok');
+  expectStatic(`${a} { let b: [].<string> = a.map(x => { const g = () => "s"; return x; }); }`);
+
+  // `flatMap` flattens one level, so a callback returning an array contributes
+  // its ELEMENTS - the only difference from `map`.
+  expectStatic(`${a} { let b: [].<uint8> = a.flatMap(x => { return "s"; }); }`);
+  expect(evaluated(`${a} { let b: [].<string> = a.flatMap(x => { return "s"; }); } "ok";`)).toBe('ok');
+  expect(evaluated(`${a} { let b: [].<uint8> = a.flatMap(x => { return [x]; }); } "ok";`)).toBe('ok');
+
+  // The run time is untouched by any of it.
+  expect(evaluated('let a: [].<uint8> = [1, 2]; String(a.map(x => { return x; })[0] is uint8);')).toBe('true');
+});
+
 test('the RETURN boundary elides too, and the condition is a property of the function', () => {
   // Phase 6 at the second of its four boundaries. The binding boundary could
   // be decided at the ANNOTATION, because a binding has one initializer; a
@@ -759,7 +801,14 @@ test('a callback takes its parameter types from the call site', () => {
   // A BLOCK-bodied callback leaves `map` imprecise rather than wrong: its
   // return needs inference the checker does not have, so the result stays
   // ~any~ and nothing is claimed about it.
-  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => { return 1; }); } "ok";')).toBe('ok');
+  // PIN FLIPPED (F83). This line asserted the LIMIT F80 recorded - a
+  // block-bodied callback left `map` at ~any~, so a wrong annotation was
+  // accepted - and the limit is gone: the return type is now inferred from the
+  // body's returns, so the same mistake is caught. The pin is kept in its new
+  // form rather than deleted, since what it guards is that the two spellings
+  // of one function agree.
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => { return 1; }); }');
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => 1); }');
   // An untyped receiver constrains nothing, and the run time is untouched.
   expect(evaluated('function nc(a) { a.forEach((x) => { let y: string = x; }); } "ok";')).toBe('ok');
   expect(evaluated('let a: [].<uint8> = [1,2]; let n = 0; a.forEach((x) => { n += 1; }); String(n);')).toBe('2');

@@ -710,35 +710,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const calledName = mem && mem.type === 'MemberExpression'
           ? (mem as unknown as { IdentifierName?: { name: string } | null }).IdentifierName?.name
           : undefined;
-        if (calledName === 'map') {
+        if (calledName === 'map' || calledName === 'flatMap') {
           const recv = mem && (mem as unknown as { MemberExpression?: ParseNode }).MemberExpression
             ? staticType((mem as unknown as { MemberExpression: ParseNode }).MemberExpression)
             : null;
           const cbArg = (node as { Arguments?: readonly ParseNode[] }).Arguments?.[0];
-          if (recv && recv.Kind === 'array' && cbArg && cbArg.type === 'ArrowFunction') {
-            const arrow = cbArg as unknown as { ConciseBody?: ParseNode, ArrowParameters?: readonly ParseNode[] };
-            // A concise body is TWO wrapper nodes deep - `ConciseBody` holds
-            // an `ExpressionBody` which holds the expression - and asking
-            // staticType for either wrapper answers nothing, which is why the
-            // first attempt inferred no type at all.
-            let body = arrow.ConciseBody;
-            if (body && body.type === 'ConciseBody') {
-              body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
-            }
-            if (body && body.type === 'ExpressionBody') {
-              body = (body as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression;
-            }
-            if (body && body.type !== 'FunctionBody') {
-              const returned = pushBlock(() => {
-                const first = arrow.ArrowParameters?.[0];
-                if (first && first.type === 'SingleNameBinding' && (first as ParseNode.SingleNameBinding).BindingIdentifier) {
-                  declare((first as ParseNode.SingleNameBinding).BindingIdentifier!.name, recv.Element);
-                }
-                return staticType(body);
-              });
-              if (returned) {
-                return { Kind: 'array', Element: returned, Extent: 'dynamic' } as unknown as Known;
-              }
+          if (recv && recv.Kind === 'array' && cbArg) {
+            const returned = inferredReturnType(cbArg, [recv.Element, builtinTypeRecord('uint', [32]), recv]);
+            if (returned) {
+              // `flatMap` flattens ONE level, so a callback returning an array
+              // contributes that array's elements and one returning a value
+              // contributes the value. Reading the element off the callback's
+              // return is the whole difference from `map`.
+              const element = calledName === 'flatMap' && returned.Kind === 'array' ? returned.Element : returned;
+              return { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as Known;
             }
           }
         }
@@ -1298,6 +1283,171 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * lookup that finds nothing answers *undefined*, so `let x: uint8 = m.get(k)`
    * is a mistake the types can see.
    */
+  /**
+   * Whether a function body's straight-line exit is a `return` with a value.
+   *
+   * This is the second half of the return-boundary condition and the half that
+   * is easy to forget: a function whose every explicit return is proven can
+   * STILL fall off the end, and falling off the end hands back *undefined*,
+   * which no numeric or object annotation admits. Requiring the body to end in
+   * a `return` makes that path impossible without a control-flow graph.
+   *
+   * It is deliberately syntactic and therefore conservative. A body ending in
+   * `if (c) return a; else return b;` is not elided even though both arms
+   * return, and a CONCISE arrow body is not elided at all - it has no
+   * ReturnStatement node to prove. Both are misses rather than errors: the
+   * boundary runs and the program is correct, which is the right direction to
+   * be wrong in when the alternative is skipping a check that was needed.
+   */
+  const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | undefined): boolean => {
+    if (!body) {
+      return false;
+    }
+    const list = Array.isArray(body)
+      ? body as readonly ParseNode[]
+      : (body as { FunctionStatementList?: readonly ParseNode[], StatementList?: readonly ParseNode[] }).FunctionStatementList
+        ?? (body as { StatementList?: readonly ParseNode[] }).StatementList;
+    if (!list || list.length === 0) {
+      return false;
+    }
+    const last = list[list.length - 1]!;
+    return last.type === 'ReturnStatement' && !!(last as { Expression?: ParseNode | null }).Expression;
+  };
+
+  /**
+   * The RETURN TYPE of a function literal written at a call, inferred from its
+   * body with the parameters bound to the types the position supplies.
+   *
+   * F80 could read a CONCISE arrow body, whose body IS the returned
+   * expression, and left a BLOCK body at ~any~ - so `a.map(x => x)` flowed and
+   * `a.map(x => { return x; })` did not, which is the same function written
+   * two ways. This is the machinery that closes it, and it is the join of the
+   * body's `return` expressions:
+   *
+   *  - Every `return` inside the literal contributes the Static Type of its
+   *    expression. A `return` with NO expression contributes *undefined*.
+   *  - A body that can complete without returning also contributes
+   *    *undefined*, since falling off the end answers it. `endsWithReturn` is
+   *    the same conservative test the return-boundary elision uses (F82): a
+   *    body ending in `if (c) return a; else return b;` is treated as able to
+   *    complete, which loses precision and cannot lose soundness.
+   *  - If any contribution is UNKNOWN the whole inference is unknown, because
+   *    a union containing an unknown arm is unknown. Answering the other arms
+   *    would state more than the body supports.
+   *  - Returns inside a NESTED function belong to that function and are not
+   *    collected; the walk stops at every function form.
+   */
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[]): Known => {
+    const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
+      ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
+    if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression') {
+      // A generator or async literal's result is an iterator or a promise, not
+      // the returned value; those judgments are not this operation's business.
+      return null;
+    }
+    const declareParameters = () => {
+      let i = 0;
+      for (const prm of params ?? []) {
+        if (prm.type === 'SingleNameBinding' && (prm as ParseNode.SingleNameBinding).BindingIdentifier) {
+          const annotated = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          // An ANNOTATION wins over the position, since the program said what
+          // it wanted; the position fills a parameter that said nothing.
+          const t = annotated ? resolveType(annotated.Type) : (parameterTypes[i] ?? null);
+          declare((prm as ParseNode.SingleNameBinding).BindingIdentifier!.name, t);
+        }
+        i += 1;
+      }
+    };
+
+    // A concise arrow body: the expression IS the return. Two wrapper nodes
+    // deep - `ConciseBody` holds an `ExpressionBody` which holds it (F80).
+    let body = (fn as { ConciseBody?: ParseNode, FunctionBody?: ParseNode }).ConciseBody
+      ?? (fn as { FunctionBody?: ParseNode }).FunctionBody;
+    if (body && body.type === 'ConciseBody') {
+      body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
+    }
+    if (body && body.type === 'ExpressionBody') {
+      body = (body as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression;
+    }
+    if (!body) {
+      return null;
+    }
+    if (body.type !== 'FunctionBody') {
+      return pushBlock(() => {
+        declareParameters();
+        return staticType(body!);
+      });
+    }
+
+    const list = (body as unknown as { FunctionStatementList?: readonly ParseNode[] }).FunctionStatementList;
+    if (!list) {
+      return null;
+    }
+    return pushBlock(() => {
+      declareParameters();
+      const contributions: TypeRecord[] = [];
+      let unknown = false;
+      const collect = (n: ParseNode | null | undefined): void => {
+        if (!n || typeof n !== 'object' || unknown) {
+          return;
+        }
+        if (n.type === 'ArrowFunction' || n.type === 'FunctionExpression' || n.type === 'FunctionDeclaration'
+          || n.type === 'GeneratorExpression' || n.type === 'GeneratorDeclaration'
+          || n.type === 'AsyncFunctionExpression' || n.type === 'AsyncFunctionDeclaration'
+          || n.type === 'AsyncArrowFunction' || n.type === 'MethodDefinition'
+          || n.type === 'ClassDeclaration' || n.type === 'ClassExpression') {
+          return;
+        }
+        if (n.type === 'ReturnStatement') {
+          const expr = (n as { Expression?: ParseNode | null }).Expression;
+          if (!expr) {
+            contributions.push(makePrimitive('undefined'));
+            return;
+          }
+          const t = staticType(expr);
+          if (!t) {
+            unknown = true;
+            return;
+          }
+          contributions.push(widen(t));
+          return;
+        }
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child)) {
+            for (const c of child) {
+              collect(c as ParseNode);
+            }
+          } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+            collect(child as ParseNode);
+          }
+        }
+      };
+      for (const st of list) {
+        collect(st);
+      }
+      if (unknown) {
+        return null;
+      }
+      if (!endsWithReturn(body)) {
+        contributions.push(makePrimitive('undefined'));
+      }
+      if (contributions.length === 0) {
+        return null;
+      }
+      const Members: TypeRecord[] = [];
+      for (const c of contributions) {
+        if (!Members.some((m) => SameType(m, c))) {
+          Members.push(c);
+        }
+      }
+      return Members.length === 1 ? Members[0]! : { Kind: 'union', Members };
+    });
+  };
+
   const collectionMethodSignature = (library: string, name: string, args: readonly (TypeRecord | number)[], receiver: TypeRecord): Known => {
     const boolType = makePrimitive('boolean');
     const anyType = { Kind: 'any' as const };
@@ -1658,37 +1808,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * CONVERTED, so `return 5` from a `(): uint8` needs its boundary; a binding
    * of type `uint8` does not.
    */
-  /**
-   * Whether a function body's straight-line exit is a `return` with a value.
-   *
-   * This is the second half of the return-boundary condition and the half that
-   * is easy to forget: a function whose every explicit return is proven can
-   * STILL fall off the end, and falling off the end hands back *undefined*,
-   * which no numeric or object annotation admits. Requiring the body to end in
-   * a `return` makes that path impossible without a control-flow graph.
-   *
-   * It is deliberately syntactic and therefore conservative. A body ending in
-   * `if (c) return a; else return b;` is not elided even though both arms
-   * return, and a CONCISE arrow body is not elided at all - it has no
-   * ReturnStatement node to prove. Both are misses rather than errors: the
-   * boundary runs and the program is correct, which is the right direction to
-   * be wrong in when the alternative is skipping a check that was needed.
-   */
-  const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | undefined): boolean => {
-    if (!body) {
-      return false;
-    }
-    const list = Array.isArray(body)
-      ? body as readonly ParseNode[]
-      : (body as { FunctionStatementList?: readonly ParseNode[], StatementList?: readonly ParseNode[] }).FunctionStatementList
-        ?? (body as { StatementList?: readonly ParseNode[] }).StatementList;
-    if (!list || list.length === 0) {
-      return false;
-    }
-    const last = list[list.length - 1]!;
-    return last.type === 'ReturnStatement' && !!(last as { Expression?: ParseNode | null }).Expression;
-  };
-
   const returnsProven: boolean[] = [];
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[]) => {
