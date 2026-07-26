@@ -1077,7 +1077,7 @@ export abstract class ExpressionParser extends FunctionParser {
       case Token.FUNCTION:
         return this.parseFunctionExpression(FunctionKind.NORMAL);
       case Token.AT:
-        return surroundingAgent.feature('decorators') ? this.parseClassExpression() : this.unexpected();
+        return (surroundingAgent.feature('decorators') || surroundingAgent.feature('runtime-types')) ? this.parseClassExpression() : this.unexpected();
       case Token.CLASS:
         return this.parseClassExpression();
       case Token.TEMPLATE:
@@ -2168,7 +2168,8 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parseDecorators(): ParseNode.Decorator[] | null {
-    if (!surroundingAgent.feature('decorators')) {
+    // Either decorator proposal supplies the grammar; see the Lexer.
+    if (!surroundingAgent.feature('decorators') && !surroundingAgent.feature('runtime-types')) {
       return null;
     }
     const Decorators: ParseNode.Decorator[] = [];

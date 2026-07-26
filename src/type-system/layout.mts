@@ -151,30 +151,83 @@ export interface ClassLayout extends Layout {
  * untyped field" and "a union of value types" cover between them. One field
  * without a layout is enough: a class is laid out or it is not.
  */
+/**
+ * #sec-layout-control: the seven reserved names, three on a class and four on a
+ * field. They are NOT decorators in the semantic sense of this proposal's
+ * decorators extension - they take no context parameter and name no function -
+ * they are reserved names that set property-descriptor keys and happen to share
+ * the `@` spelling. That is why they are recognized syntactically and never
+ * evaluated.
+ *
+ * `offsetBit` and `endian` are carried and have no effect on the byte walk:
+ * the first places a BIT-field, and the second fixes a field's byte order,
+ * which is a property of reading and writing rather than of placement.
+ */
+export interface ClassControls {
+  readonly packed?: boolean;
+  readonly alignAll?: number;
+  readonly size?: number;
+}
+
+export interface FieldControls {
+  readonly align?: number;
+  readonly offset?: number;
+  readonly offsetBit?: number;
+  readonly endian?: string;
+}
+
 export function ComputeClassLayout(
   baseLayout: ClassLayout | null,
-  fields: readonly { key: string, type: TypeRecord }[],
+  fields: readonly { key: string, type: TypeRecord, controls?: FieldControls }[],
+  controls: ClassControls = {},
 ): ClassLayout | null {
   const placed: FieldPlacement[] = baseLayout ? [...baseLayout.fields] : [];
   let cursor = baseLayout ? baseLayout.byteLength : 0;
-  let alignment = baseLayout ? baseLayout.alignment : 1;
+  // `packed` gives the class alignment 1 and places each field immediately
+  // after the one before it; `alignAll` decides the INSTANCE's alignment. The
+  // clause is explicit that they compose - one decides the fields' placement
+  // and the other the whole - so they are tracked separately.
+  let alignment = controls.packed ? 1 : (baseLayout ? baseLayout.alignment : 1);
   for (const field of fields) {
     const layout = LayoutOf(field.type);
     if (!layout) {
       return null;
     }
-    const offset = layout.alignment > 0 && cursor % layout.alignment !== 0
-      ? cursor + (layout.alignment - (cursor % layout.alignment))
-      : cursor;
+    // "An `align` REPLACES its field's alignment rather than strengthening it":
+    // a `float32x4` at `@align(4)` follows a `float32` at byte 2 at byte 8, not
+    // at byte 16. Taking the max is the obvious wrong implementation.
+    const fieldAlignment = field.controls?.align !== undefined
+      ? field.controls.align
+      : (controls.packed ? 1 : layout.alignment);
+    let offset;
+    if (field.controls?.offset !== undefined) {
+      // Two fields may share one offset, which is the C union, and a negative
+      // one reaches into a base's memory. Deliberate reinterpretation, so
+      // neither is diagnosed.
+      offset = field.controls.offset;
+    } else {
+      offset = fieldAlignment > 0 && cursor % fieldAlignment !== 0
+        ? cursor + (fieldAlignment - (cursor % fieldAlignment))
+        : cursor;
+    }
     placed.push({ key: field.key, offset, layout });
-    cursor = offset + layout.byteLength;
-    if (layout.alignment > alignment) {
-      alignment = layout.alignment;
+    const end = offset + layout.byteLength;
+    if (end > cursor) {
+      cursor = end;
+    }
+    if (!controls.packed && fieldAlignment > alignment) {
+      alignment = fieldAlignment;
     }
   }
+  if (controls.alignAll !== undefined) {
+    alignment = controls.alignAll;
+  }
   // Rounded up to the class's own alignment, so an array of it stays aligned.
-  const byteLength = alignment > 0 && cursor % alignment !== 0
+  let byteLength = alignment > 0 && cursor % alignment !== 0
     ? cursor + (alignment - (cursor % alignment))
     : cursor;
+  if (controls.size !== undefined) {
+    byteLength = controls.size;
+  }
   return { bitLength: byteLength * 8, byteLength, alignment, fields: placed };
 }

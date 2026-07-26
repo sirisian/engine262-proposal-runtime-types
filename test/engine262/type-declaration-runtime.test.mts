@@ -99,3 +99,17 @@ test('a partial class still extends a typed class', () => {
   expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } String(Object.isFrozen(C.prototype));')).toBe('true');
   expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } try { Object.defineProperty(C.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
+
+test('the two decorator proposals are mutually exclusive', () => {
+  // `runtime-types` and `decorators` are COMPETING decorator proposals. They
+  // share the `@` grammar and nothing else: TC39's calls a decorator with the
+  // `(value, context)` convention and expects a replacement function, while
+  // this proposal identifies a decorator by the TYPE of its context parameter,
+  // resolves overloads, and replaces by return value. One `@f` on one field
+  // cannot mean both, so enabling both is refused at the Agent rather than
+  // silently resolved in favour of whichever evaluation path a class happens to
+  // take - which is what it was doing, since the two paths disagreed.
+  expect(() => new Agent({ features: ['runtime-types', 'decorators'] })).toThrow();
+  expect(() => new Agent({ features: ['runtime-types'] })).not.toThrow();
+  expect(() => new Agent({ features: ['decorators'] })).not.toThrow();
+});

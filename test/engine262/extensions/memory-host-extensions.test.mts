@@ -14,9 +14,34 @@ import { evaluated, ok, expectThrown, evaluatedSeeded } from '../readme/harness.
  */
 
 // ── memorylayout: decorators and byte layout ──────────────────────────────────
-test('memory layout: field layout decorators do not parse under the feature (documents the gap)', () => {
-  // Target (memorylayout.md): @packed / @align / @offset / @endian on fields.
-  expectThrown('@packed class A { x: uint8; } typeof A;');
+test('memory layout: the reserved layout controls place a class and its fields', () => {
+  // GAP CLOSED. This documented that `@packed` did not parse under the feature,
+  // because the `@` token was gated on the TC39 `decorators` feature alone.
+  // That feature is a COMPETING decorator proposal - it calls a decorator with
+  // the `(value, context)` convention where this proposal identifies one by the
+  // type of its context parameter and resolves overloads - so the two are now
+  // mutually exclusive and `runtime-types` supplies the grammar itself.
+  //
+  // The seven controls are not decorators in that semantic sense at all: they
+  // name no function and take no context, they set property-descriptor keys.
+  // So they are recognized syntactically and never evaluated.
+  expect(evaluated('@packed class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('3/1');
+  expect(evaluated('@packed class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('1');
+  // The design's four-control example, which exercises `alignAll`, `size`,
+  // `offset`, and `align` in one declaration. `align` REPLACES a field's
+  // alignment rather than strengthening it, so `y` lands at byte 8 and not at
+  // 16 - taking the max is the obvious wrong implementation.
+  const four = '@alignAll(16) @size(32) class A { @offset(2) x: float32; @align(4) y: float32x4; } ';
+  expect(evaluated(`${four} String((type A).byteLength) + "/" + String((type A).alignment);`)).toBe('32/16');
+  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassField, A>("x").offset);`)).toBe('2');
+  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassField, A>("y").offset);`)).toBe('8');
+  // A class with no controls is unaffected.
+  expect(evaluated('class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
+  // ANY OTHER DECORATOR IS REFUSED. This proposal's decorators extension -
+  // context types, overload resolution, replacement by return value - is a
+  // separate feature and is not implemented, and a declaration that is accepted
+  // and does nothing reads as support.
+  expectThrown('function f(x) { return x; } @f class Z { a: uint8; }');
 });
 
 test('memory layout: a type reports its own byteLength', () => {

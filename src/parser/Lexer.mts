@@ -585,7 +585,13 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
         case Token.TEMPLATE:
           return single;
         case Token.AT:
-          if (surroundingAgent.feature('decorators')) {
+          // proposal-runtime-types: the `@` token belongs to BOTH decorator
+          // proposals, which are mutually exclusive (see the Agent). This
+          // proposal's decorators are its own feature - identified by the type
+          // of a context parameter, resolved by overloading, replacing by
+          // return value - and share only the grammar, so the token is enabled
+          // by either feature and the SEMANTICS are decided by which one is on.
+          if (surroundingAgent.feature('decorators') || surroundingAgent.feature('runtime-types')) {
             return single;
           } else {
             return this.unexpected(single);

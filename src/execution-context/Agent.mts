@@ -77,6 +77,19 @@ export class Agent {
   hostDefinedOptions: AgentHostDefined;
 
   constructor(options: AgentHostDefined = {}) {
+    // proposal-runtime-types: `runtime-types` and `decorators` are TWO
+    // COMPETING DECORATOR PROPOSALS and are mutually exclusive. They share the
+    // `@` grammar and nothing else: TC39's calls a decorator with the
+    // `(value, context)` convention and expects a replacement function, while
+    // this proposal identifies a decorator by the TYPE of its context
+    // parameter, resolves overloads, and replaces by return value. One `@f` on
+    // one field cannot mean both, so enabling both is refused here rather than
+    // silently resolved in favour of whichever path a class evaluation happens
+    // to take.
+    const enabled = options.features ?? [];
+    if (enabled.includes('runtime-types') && enabled.includes('decorators')) {
+      throw new RangeError('the "runtime-types" and "decorators" features are mutually exclusive: they are competing decorator proposals that share the `@` grammar and disagree on what a decorator means');
+    }
     const Signifier = agentSignifier;
     agentSignifier += 1;
     this.AgentRecord = {

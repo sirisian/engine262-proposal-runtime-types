@@ -1,5 +1,6 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
-import { ComputeClassLayout, type ClassLayout } from '../type-system/layout.mts';
+import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
+import type { ThrowCompletion } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
 import {
@@ -97,7 +98,12 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         fieldDefinition.Decorators = decorators;
         return fieldDefinition;
       } else {
-        return yield* ClassFieldDefinitionEvaluation(node, object);
+        if (surroundingAgent.feature('runtime-types')) {
+          Q(reservedOnlyDecorators(node.Decorators));
+        }
+        const plain = Q(yield* ClassFieldDefinitionEvaluation(node, object));
+        (plain as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
+        return plain;
       }
     }
     case 'ClassStaticBlock':
@@ -134,6 +140,100 @@ export interface DefaultConstructorBuiltinFunction extends BuiltinFunctionObject
  * and a `set operator[]` is the write half of the index accessor, kept apart from
  * the read half so a write dispatches to its own declaration.
  */
+
+/**
+ * proposal-runtime-types #sec-layout-control: the seven RESERVED names. They
+ * are recognized by name and never evaluated, because they are not decorators
+ * in the sense of this proposal's decorators extension: a decorator there is
+ * identified by the TYPE of its context parameter and resolved by overloading,
+ * while these name no function at all and set property-descriptor keys. They
+ * share the `@` and nothing else.
+ *
+ * A decorator whose name is not one of the seven is left for the decorators
+ * extension, which this engine does not implement - see reservedOnlyDecorators.
+ */
+function reservedLayoutControl(decorator: ParseNode.Decorator): { name: string, argument: unknown } | null {
+  const bare = decorator.subtype === 'MemberExpression'
+    ? (decorator as { MemberExpression?: { name?: string } }).MemberExpression
+    : undefined;
+  if (bare && typeof bare.name === 'string') {
+    return { name: bare.name, argument: undefined };
+  }
+  if (decorator.subtype === 'CallExpression') {
+    const call = (decorator as { CallExpression?: { CallExpression?: { name?: string }, Arguments?: readonly { value?: unknown, type?: string }[] } }).CallExpression;
+    const target = call?.CallExpression;
+    if (target && typeof target.name === 'string') {
+      const first = call?.Arguments && call.Arguments.length > 0 ? call.Arguments[0] : undefined;
+      // Only a literal argument is read: a control is part of the layout, which
+      // #sec-layout-properties calls a compile-time constant.
+      const value = first && (first.type === 'NumericLiteral' || first.type === 'StringLiteral')
+        ? (first as { value?: unknown }).value
+        : undefined;
+      return { name: target.name, argument: value };
+    }
+  }
+  return null;
+}
+
+const CLASS_CONTROLS: readonly string[] = ['packed', 'alignAll', 'size'];
+const FIELD_CONTROLS: readonly string[] = ['align', 'offset', 'offsetBit', 'endian'];
+
+export function readClassControls(decorators: readonly ParseNode.Decorator[] | null | undefined): ClassControls {
+  const out: { packed?: boolean, alignAll?: number, size?: number } = {};
+  for (const d of decorators ?? []) {
+    const control = reservedLayoutControl(d);
+    if (!control || !CLASS_CONTROLS.includes(control.name)) {
+      continue;
+    }
+    if (control.name === 'packed') {
+      out.packed = true;
+    } else if (typeof control.argument === 'number') {
+      if (control.name === 'alignAll') {
+        out.alignAll = control.argument;
+      } else {
+        out.size = control.argument;
+      }
+    }
+  }
+  return out;
+}
+
+export function readFieldControls(decorators: readonly ParseNode.Decorator[] | null | undefined): FieldControls {
+  const out: { align?: number, offset?: number, offsetBit?: number, endian?: string } = {};
+  for (const d of decorators ?? []) {
+    const control = reservedLayoutControl(d);
+    if (!control || !FIELD_CONTROLS.includes(control.name)) {
+      continue;
+    }
+    if (control.name === 'endian') {
+      if (typeof control.argument === 'string') {
+        out.endian = control.argument;
+      }
+    } else if (typeof control.argument === 'number') {
+      out[control.name as 'align' | 'offset' | 'offsetBit'] = control.argument;
+    }
+  }
+  return out;
+}
+
+/**
+ * Under `runtime-types` the ONLY decorators this engine implements are the
+ * reserved layout controls. This proposal's decorators extension - context
+ * types, overload resolution, replacement by return value - is a separate
+ * feature and is not built, so any other decorator is refused rather than
+ * evaluated as a TC39 decorator would be. Refusing is the honest state: a
+ * declaration that is accepted and does nothing reads as support.
+ */
+export function reservedOnlyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined): ThrowCompletion | undefined {
+  for (const d of decorators ?? []) {
+    const control = reservedLayoutControl(d);
+    if (!control || (!CLASS_CONTROLS.includes(control.name) && !FIELD_CONTROLS.includes(control.name))) {
+      return Throw.TypeError('$1 is not supported yet', Value('a decorator other than a reserved layout control'));
+    }
+  }
+  return undefined;
+}
+
 function operatorTableKey(e: ParseNode.OperatorDefinition): string {
   const name = e.OperatorName ?? '';
   if (name === '[]' && e.AccessorKind === 'set') {
@@ -651,7 +751,8 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
         ? baseCtor.InstanceLayout ?? null
         : null;
-      const laidOut: { key: string, type: TypeRecord }[] = [];
+      const classControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
+      const laidOut: { key: string, type: TypeRecord, controls?: FieldControls }[] = [];
       let complete = true;
       for (const field of instanceFields) {
         const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
@@ -662,10 +763,14 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           complete = false;
           break;
         }
-        laidOut.push({ key: (name as { stringValue(): string }).stringValue(), type: typeObject.TypeRecord });
+        laidOut.push({
+          key: (name as { stringValue(): string }).stringValue(),
+          type: typeObject.TypeRecord,
+          controls: (field as { LayoutControls?: FieldControls }).LayoutControls,
+        });
       }
       (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = complete
-        ? ComputeClassLayout(baseLayout, laidOut)
+        ? ComputeClassLayout(baseLayout, laidOut, classControls)
         : null;
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
