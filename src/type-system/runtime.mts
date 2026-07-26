@@ -1263,11 +1263,16 @@ export function fitsNumericType(v: number, name: string, args: readonly (TypeRec
     // denoted by the literal", which is EXACT, and this engine cannot honour
     // that: the lexer turns a NumericLiteral into a double at scan time, so by
     // the time a contextual type is known the digits beyond 2**53 are already
-    // gone. `let x: bigint = 9007199254740993` would silently become
-    // ...992 (F67). Refusing beyond the safe range is the honest boundary: it
-    // never corrupts, and the suffix stays available for the large values,
-    // which is where it was always earning its keep. Retaining the literal's
-    // source text on the parse node would lift the restriction.
+    // gone (F67).
+    //
+    // THE LITERAL PATH NO LONGER REACHES HERE (F85): a numeric literal at a
+    // `bigint` contextual position is read from its SOURCE TEXT by the
+    // checker, which is where the exact value still exists, so the whole range
+    // now works and the suffix is redundant wherever a type is written. What
+    // still reaches here is a Number that is NOT a literal - one arriving
+    // through `any`, or computed - and for those the bound is not a limitation
+    // but the truth: the information is genuinely gone by the time the value
+    // exists, so admitting it would report a value the source never wrote.
     return Number.isSafeInteger(v);
   }
   return name === 'float16' || name === 'float32' || name === 'float64';

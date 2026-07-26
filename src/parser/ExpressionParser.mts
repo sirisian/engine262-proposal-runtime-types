@@ -1098,7 +1098,12 @@ export abstract class ExpressionParser extends FunctionParser {
     if (!this.test(Token.NUMBER) && !this.test(Token.BIGINT)) {
       this.unexpected();
     }
-    node.value = this.next().valueAsNumeric();
+    const token = this.next();
+    node.value = token.valueAsNumeric();
+    // The token's own extent, so numeric separators and a radix prefix are
+    // carried as written; BigInt() reads both, and a `n` suffix is dropped
+    // because the text is used only where the target is already known.
+    node.SourceText = this.source.slice(token.startIndex, token.endIndex);
     return this.finishNode(node, 'NumericLiteral');
   }
 

@@ -128,6 +128,59 @@ function widen(t: TypeRecord): TypeRecord {
  */
 const elidableAnnotations = new WeakSet<object>();
 
+/**
+ * Whether a contextual type asks for a `bigint`, through a union as well as
+ * directly: `let x: bigint | undefined = 9007199254740993` wants the same
+ * reading as the bare annotation.
+ */
+function bigintTarget(t: TypeRecord): boolean {
+  if (t.Kind === 'primitive') {
+    return t.Name === 'bigint';
+  }
+  if (t.Kind === 'union') {
+    return t.Members.some(bigintTarget);
+  }
+  return false;
+}
+
+/**
+ * The exact mathematical value a numeric literal denotes, where it denotes an
+ * integer, read from the source text. Returns *null* where the literal is not
+ * an integer, where it is already a BigInt literal (which needs no help), or
+ * where no source text was retained - an older parse node, or one this engine
+ * synthesized.
+ */
+function exactBigIntOf(node: ParseNode.NumericLiteral): bigint | null {
+  if (typeof node.value === 'bigint') {
+    return null;
+  }
+  const text = node.SourceText;
+  if (typeof text !== 'string' || text.length === 0) {
+    return null;
+  }
+  // A separator is not part of the value; a fraction or an exponent means the
+  // literal does not denote an integer, and BigInt() would throw rather than
+  // answer. Legacy octal is excluded deliberately: `0755` denotes 493 in
+  // sloppy mode and 755 to BigInt, and a literal whose reading depends on the
+  // mode is not one to be clever with.
+  const cleaned = text.replace(/_/g, '');
+  if (!/^(0[xXoObB][0-9a-fA-F]+|[1-9][0-9]*|0)$/.test(cleaned)) {
+    return null;
+  }
+  try {
+    return BigInt(cleaned);
+  } catch {
+    return null;
+  }
+}
+
+/** Numeric literals the checker read at `bigint`, consulted by NumericValue. */
+const bigintLiterals = new WeakSet<object>();
+
+export function IsBigIntContextLiteral(node: object): boolean {
+  return bigintLiterals.has(node);
+}
+
 export function IsCheckElided(annotation: object): boolean {
   return elidableAnnotations.has(annotation);
 }
@@ -390,6 +443,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = checkNumericCall(node, contextual);
       if (resolved) {
         return resolved;
+      }
+    }
+    // A numeric LITERAL at a `bigint` contextual position is read from its
+    // SOURCE TEXT rather than from the double the lexer produced. The rule was
+    // bounded at 2**53 and refused beyond it, which never corrupted but meant
+    // the `n` suffix was still required exactly where it is most tedious - the
+    // large constants (F67). #sec-literalvalueintype converts from "the
+    // mathematical value denoted by the literal", and the text is where that
+    // value still exists.
+    //
+    // Marked as well as typed: the checker's answer and the run time's value
+    // have to agree, so the same test that admits the literal records that its
+    // evaluation must produce the BigInt. That is the elidable-annotation
+    // channel again - the checker knows something at a node, and the run time
+    // consults the mark.
+    if (node.type === 'NumericLiteral' && contextual && bigintTarget(contextual)) {
+      const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
+      if (exact !== null) {
+        bigintLiterals.add(node);
+        return { Kind: 'literal', Value: Value(exact), Base: makePrimitive('bigint') };
       }
     }
     return staticType(node);

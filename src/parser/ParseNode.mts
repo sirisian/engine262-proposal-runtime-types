@@ -67,6 +67,15 @@ export namespace ParseNode {
   export interface NumericLiteral extends BaseParseNode {
     readonly type: 'NumericLiteral';
     readonly value: number | bigint;
+    /**
+     * proposal-runtime-types: the literal's SOURCE TEXT, retained because
+     * [[value]] has already lost information by the time anything can consult a
+     * contextual type. `9007199254740993` is the double ...992 the moment the
+     * lexer produces it, and #sec-literalvalueintype converts from "the
+     * mathematical value denoted by the literal", which is exact. The text is
+     * the only place that value still exists (F67).
+     */
+    readonly SourceText?: string;
   }
 
   // StringLiteral ::

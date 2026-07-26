@@ -81,12 +81,16 @@ test('numeric types: a plain integer literal takes the bigint type from its cont
   expect(evaluated('String(65 + 1) + "/" + String(typeof 65) + "/" + String(65n + 1n);')).toBe('66/number/66');
   // AND THE BOUNDARY OF THE RULE (F67): only up to 2**53. The specification
   // converts a literal from "the mathematical value denoted by the literal",
-  // which is exact, and this engine cannot honour that, because the lexer turns
-  // a NumericLiteral into a double at scan time - so by the time a contextual
-  // type is known, the digits beyond 2**53 are gone. Refusing is the honest
-  // boundary: `let x: bigint = 9007199254740993` would otherwise become ...992,
-  // a silent wrong value, which is worse than requiring the suffix.
-  expect(evaluated('let r = "no"; try { eval("function nc() { let x: bigint = 9007199254740993; }"); } catch (e) { r = "refused"; } r;')).toBe('refused');
+  // which is exact. PIN FLIPPED (F85): this asserted the REFUSAL, which was the
+  // honest boundary while the exact value was unreachable - the lexer turns a
+  // NumericLiteral into a double at scan time, so the digits beyond 2**53 were
+  // gone before any contextual type could be consulted, and refusing at least
+  // never corrupted. The parse node now retains the literal's SOURCE TEXT, so
+  // the value is reachable and the whole range works. The assertion is kept in
+  // its new form because what it guards is unchanged: this boundary must never
+  // report digits the source did not write.
+  expect(evaluated('let r = "no"; try { eval("function nc() { let x: bigint = 9007199254740993; }"); } catch (e) { r = "refused"; } r;')).toBe('no');
+  expect(evaluated('let x: bigint = 9007199254740993; String(x);')).toBe('9007199254740993');
   expect(evaluated('let x: bigint = 9007199254740993n; String(x);')).toBe('9007199254740993');
   expect(evaluated('let x: bigint = 9007199254740991; String(x);')).toBe('9007199254740991');
 });
@@ -225,4 +229,42 @@ test('numeric types: ToBigInt refuses a numeric value rather than crashing', () 
   // converge the lever is the cast, which refuses today for the same reason.
   expect(evaluated('String(BigInt(3));')).toBe('3');
   expectThrownKind('bigint((3 := uint32));', 'TypeError');
+});
+
+test('numeric types: a literal at `bigint` is read from its source text', () => {
+  // #sec-literalvalueintype converts from "the mathematical value denoted by
+  // the literal", which is EXACT. The lexer turns a NumericLiteral into a
+  // double at scan time, so by the time a contextual type is known the digits
+  // beyond 2**53 are gone - the rule was therefore bounded at 2**53 and
+  // REFUSED above it, which never corrupted but left the `n` suffix required
+  // exactly where it is most tedious (F67). The parse node now retains the
+  // literal's SOURCE TEXT, which is where that value still exists.
+  expect(evaluated('let x: bigint = 9007199254740993; String(x);')).toBe('9007199254740993');
+  expect(evaluated('let x: bigint = 123456789012345678901234567890; String(x);')).toBe('123456789012345678901234567890');
+  // Every spelling of an integer literal, since the text is read as written.
+  expect(evaluated('let x: bigint = 0x1FFFFFFFFFFFFF1; String(x);')).toBe('144115188075855857');
+  expect(evaluated('let x: bigint = 1_000_000_000_000_000_003; String(x);')).toBe('1000000000000000003');
+  expect(evaluated('let x: bigint = 0b1011; String(x);')).toBe('11');
+  expect(evaluated('let x: bigint = 0o17; String(x);')).toBe('15');
+  // At the other contextual positions, not only a binding.
+  expect(evaluated('function f(b: bigint) { return b; } String(f(9007199254740993));')).toBe('9007199254740993');
+  expect(evaluated('function g(): bigint { return 9007199254740993; } String(g());')).toBe('9007199254740993');
+  expect(evaluated('let x: bigint | string = 9007199254740993; String(x);')).toBe('9007199254740993');
+  // A BigInt literal is untouched, and so is the small case.
+  expect(evaluated('let x: bigint = 2n; String(x);')).toBe('2');
+  expect(evaluated('let x: bigint = 5; String(x);')).toBe('5');
+
+  // WHAT MUST NOT CHANGE. A literal outside a `bigint` context is the double
+  // it always was - this reads the source text only where the target is known
+  // to want the exact value.
+  expect(evaluated('let n = 9007199254740993; String(n);')).toBe('9007199254740992');
+  expect(evaluated('String(9007199254740993);')).toBe('9007199254740992');
+  // A non-integer literal denotes no BigInt and is still refused.
+  expectThrown('let x: bigint = 1.5;');
+  expectThrown('let x: bigint = 1e400;');
+  // A Number that is NOT a literal keeps the 2**53 bound, and there the bound
+  // is the truth rather than a limitation: the information is gone by the time
+  // the value exists, so admitting it would report digits the source never
+  // wrote.
+  expectThrownKind('function anyv() { return 9007199254740993; } let x: bigint = anyv();', 'RangeError');
 });
