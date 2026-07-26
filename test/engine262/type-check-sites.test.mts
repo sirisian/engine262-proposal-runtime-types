@@ -551,6 +551,43 @@ test('a typed collection checks every position it declares, at any type', () => 
   expect(evaluated('const u = new Map(); u.set({}, 300); String(u.size);')).toBe('1');
 });
 
+test('a set operation\'s result carries the element type its values can come from', () => {
+  // standardlibrary.md writes these out: `intersection` and `difference` draw
+  // only from `this`, so the result keeps T; `union` and `symmetricDifference`
+  // draw from both, so the result holds `T | U`. Both halves land together
+  // deliberately - a checker that says `Set.<uint8>` over a run time holding an
+  // unstamped Set is the disagreement cycle 76 was about.
+  const two = 'let a: Set.<uint8> = new Set(); a.add(1); let b: Set.<uint16> = new Set(); b.add(1000); ';
+  // RUN TIME: the result was UNSTAMPED, so the typed surface switched off for
+  // everything downstream - `s.union(o).add(300)` was accepted on two
+  // `Set.<uint8>` operands. F71's shape, at a different producer.
+  expect(thrownKind(`${two} const u = a.union(b); u.add("x");`)).toBe('TypeError');
+  // 1000 converts at the uint16 arm of the union and the set ALREADY holds
+  // that value, so it dedupes: the conversion happening is what makes the two
+  // the same value rather than two.
+  expect(evaluated(`${two} const u = a.union(b); u.add(1000); String(u.size);`)).toBe('2');
+  expect(thrownKind(`${two} const i = a.intersection(b); function anyv() { return 300; } i.add(anyv());`)).toBe('RangeError');
+  // The receiver's type survives against an UNTYPED other, because those
+  // elements can only have come from the receiver.
+  expect(thrownKind(`${two} const d = a.difference(new Set([1])); function anyv() { return 300; } d.add(anyv());`)).toBe('RangeError');
+  // A union WITH an untyped set is deliberately unconstrained: `T | U` is
+  // unknown when U is, and answering `Set.<T>` would be a claim the values do
+  // not support.
+  expect(evaluated(`${two} const m = a.union(new Set([1])); m.add("x"); String(m.size);`)).toBe('3');
+
+  // STATICALLY, proved by rejection.
+  expectStatic('function f(s: Set.<uint8>) { let b: string = s.union(s); }');
+  expectStatic('function f(s: Set.<uint8>) { let b: string = s.intersection(s); }');
+  expectStatic('function f(s: Set.<uint8>) { let b: string = s.isSubsetOf(s); }');
+  // The union of two DIFFERENT element types is neither one of them.
+  expectStatic('function f(s: Set.<uint8>, o: Set.<uint16>) { let b: Set.<uint8> = s.union(o); }');
+  expect(evaluated('function f(s: Set.<uint8>, o: Set.<uint16>) { let b: Set.<uint8 | uint16> = s.union(o); } "ok";')).toBe('ok');
+  expect(evaluated('function f(s: Set.<uint8>) { let b: Set.<uint8> = s.intersection(s); } "ok";')).toBe('ok');
+  expect(evaluated('function f(s: Set.<uint8>) { let b: boolean = s.isDisjointFrom(s); } "ok";')).toBe('ok');
+  // An untyped operand leaves the result unknown rather than wrong.
+  expect(evaluated('function f(s: Set.<uint8>, o) { let b: string = s.union(o); } "ok";')).toBe('ok');
+});
+
 test('the checker knows a typed collection\'s method signatures', () => {
   // The static half, and the array methods' one remaining asymmetry: a literal
   // the declared type cannot hold is an Early Error rather than a run-time

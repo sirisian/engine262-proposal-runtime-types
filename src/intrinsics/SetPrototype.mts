@@ -13,6 +13,7 @@ import {
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { SameType } from '../type-system/relations.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { CreateSetIterator } from './SetIteratorPrototype.mts';
 import type { SetObject } from './Set.mts';
@@ -73,6 +74,44 @@ function* collectionValueAtType(O: Value, value: Value, index: number): PlainEva
     return value;
   }
   return Q(yield* RequireType(value, t));
+}
+
+/**
+ * proposal-runtime-types (standardlibrary.md, "Set Operations"): the element
+ * type of an operation's RESULT follows where its elements can come from.
+ * `intersection` and `difference` draw only from the receiver, so the result
+ * keeps the receiver's element type; `union` and `symmetricDifference` draw
+ * from both, so the result holds `T | U`.
+ *
+ * Without this the result came back UNSTAMPED, which switched the typed
+ * surface off for everything downstream: `s.union(o).add(300)` was accepted on
+ * two `Set.<uint8>` operands. That is F71's shape - a typed container produced
+ * by a route that forgot to carry the type - and it is why the static half of
+ * this cycle could not land alone: a checker that says `Set.<uint8>` over a run
+ * time that holds an untyped Set is the disagreement cycle 76 was about.
+ *
+ * Where the OTHER side's element type is unknown, a union of the two is
+ * unknown, so the result is deliberately left unstamped. Answering the
+ * receiver's type there would be a claim the values do not support.
+ */
+function stampOperationResult(result: Value, O: Value, other: Value, drawsFromBoth: boolean): void {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const mine = (O as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection?.[0];
+  if (mine === undefined || typeof mine === 'number') {
+    return;
+  }
+  if (!drawsFromBoth) {
+    (result as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = [mine];
+    return;
+  }
+  const theirs = (other as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection?.[0];
+  if (theirs === undefined || typeof theirs === 'number') {
+    return;
+  }
+  const element: TypeRecord = SameType(mine, theirs) ? mine : { Kind: 'union', Members: [mine, theirs] };
+  (result as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = [element];
 }
 
 /** https://tc39.es/ecma262/#sec-set.prototype.add */
@@ -220,6 +259,7 @@ function* SetProto_difference([other = Value.undefined]: Arguments, { thisValue 
     9. Return result.
   */
   const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Set.prototype%'), ['SetData']) as Mutable<SetObject>;
+  stampOperationResult(result, O, other, false);
   result.SetData = resultSetData;
   return result;
 }
@@ -366,6 +406,7 @@ function* SetProto_intersection([other = Value.undefined]: Arguments, { thisValu
     9. Return result.
   */
   const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Set.prototype%'), ['SetData']) as Mutable<SetObject>;
+  stampOperationResult(result, O, other, false);
   result.SetData = resultSetData;
   return result;
 }
@@ -556,6 +597,7 @@ function* SetProto_symmetricDifference([other = Value.undefined]: Arguments, { t
   */
 
   const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Set.prototype%'), ['SetData']) as Mutable<SetObject>;
+  stampOperationResult(result, O, other, true);
   result.SetData = resultSetData;
   return result;
 }
@@ -588,6 +630,7 @@ function* SetProto_union([other = Value.undefined]: Arguments, { thisValue }: Fu
     }
   }
   const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Set.prototype%'), ['SetData']) as Mutable<SetObject>;
+  stampOperationResult(result, O, other, true);
   result.SetData = resultSetData;
   return result;
 }

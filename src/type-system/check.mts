@@ -4,7 +4,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
-import { IsAssignable } from './relations.mts';
+import { SameType, IsAssignable } from './relations.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
@@ -742,6 +742,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        // The SET OPERATIONS whose result draws from BOTH sides: the design
+        // writes `union<U>(other: Set.<U>): Set.<T | U>` and the same for
+        // `symmetricDifference`. The result therefore depends on an ARGUMENT's
+        // type, which a signature written at the member access cannot express -
+        // the same reason `map` is handled here rather than there.
+        //
+        // Where the other side's element type is UNKNOWN, `T | U` is unknown
+        // and the result is ~any~. That is not a miss to fix later: a union
+        // with an untyped set really can hold anything, and answering
+        // `Set.<T>` would be wrong rather than imprecise.
+        if (calledName === 'union' || calledName === 'symmetricDifference') {
+          const recv = mem && (mem as unknown as { MemberExpression?: ParseNode }).MemberExpression
+            ? staticType((mem as unknown as { MemberExpression: ParseNode }).MemberExpression)
+            : null;
+          if (recv && recv.Kind === 'nominal' && recv.LibraryName === 'Set' && recv.Arguments.length > 0) {
+            const otherNode = (node as { Arguments?: readonly ParseNode[] }).Arguments?.[0];
+            const other = otherNode ? staticType(otherNode) : null;
+            const mine = recv.Arguments[0];
+            if (other && other.Kind === 'nominal' && other.LibraryName === 'Set'
+                && other.Arguments.length > 0 && typeof mine !== 'number') {
+              const theirs = other.Arguments[0];
+              if (typeof theirs !== 'number') {
+                const Members = SameType(mine as TypeRecord, theirs as TypeRecord)
+                  ? [mine as TypeRecord]
+                  : [mine as TypeRecord, theirs as TypeRecord];
+                // Canonicalized, because assignability compares a nominal's
+                // ARGUMENTS by SameType: an uncanonicalized union built here
+                // and the one an annotation resolves to are the same type and
+                // would not have compared equal, so the correct annotation for
+                // the result would have been rejected.
+                const element: TypeRecord = Members.length === 1 ? Members[0]! : { Kind: 'union', Members };
+                return { Kind: 'nominal', Declaration: recv.Declaration, Arguments: [element], LibraryName: 'Set' } as unknown as Known;
+              }
+            }
+            return null;
+          }
+        }
         if (callee && callee.Kind === 'function' && callee.Signatures.length === 1) {
           return callee.Signatures[0].Return;
         }
@@ -1281,6 +1318,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         case 'add': return sig([element], receiver);
         case 'has':
         case 'delete': return sig([element], boolType);
+        // The design's set operations. `intersection` and `difference` draw
+        // ONLY from `this`, so the result keeps the receiver's element type
+        // whatever the other side holds - which is why they can be written
+        // here while `union` and `symmetricDifference` cannot.
+        //
+        // The `other` parameter is left ~any~ rather than typed `Set.<U>`.
+        // The design writes a generic parameter, and this checker has no way
+        // to say "a Set of any element type" without deciding assignability
+        // between two parameterizations of one nominal, which is a rule the
+        // specification has not stated. An under-approximation admits what the
+        // design admits and declines to invent the rest; the run time refuses
+        // a non-Set as it always did.
+        case 'intersection':
+        case 'difference': return sig([anyType as TypeRecord], receiver);
+        case 'isSubsetOf':
+        case 'isSupersetOf':
+        case 'isDisjointFrom': return sig([anyType as TypeRecord], boolType);
         default: return null;
       }
     }
