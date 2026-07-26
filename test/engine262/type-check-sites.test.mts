@@ -551,13 +551,40 @@ test('a typed array length and element-preserving results flow statically', () =
   expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.slice(0); }');
   expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.sort(); }');
   expect(evaluated('function nc(a: [].<uint8>) { let b: [].<uint8> = a.filter(x => true); } "ok";')).toBe('ok');
-  // `map` is deliberately NOT claimed: its element type is the callback's
-  // return, so asserting the receiver's would be wrong rather than imprecise.
-  expect(evaluated('function nc(a: [].<uint8>) { let b: string = a.map(x => "s"); } "ok";')).toBe('ok');
+  // `map` DOES flow since F80, once the callback could be typed: its element
+  // type is the callback's return, so a `[].<uint8>` mapped to strings is a
+  // string array and not a number one.
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<uint8> = a.map(x => "s"); }');
+  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => x); }');
+  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => "s"); } "ok";')).toBe('ok');
   // An untyped array declares no element type and constrains nothing.
   expect(evaluated('function nc(a) { let n: string = a.length; } "ok";')).toBe('ok');
   // The run time is untouched.
   expect(evaluated('let a: [].<uint8> = [3,1]; String(a.filter(x => true)[0] is uint8) + "/" + String(a.length);')).toBe('true/2');
+});
+
+test('a callback takes its parameter types from the call site', () => {
+  // The last piece of Phase 5, and machinery rather than a signature: a
+  // function LITERAL takes its parameter types from the position it is written
+  // in, so a callback learns the element type (F80). Asserted by rejection,
+  // since a positive test passes against a checker that knows nothing.
+  expectStatic('function nc(a: [].<uint8>) { a.forEach((x) => { let y: string = x; }); }');
+  expectStatic('function nc(a: [].<uint8>) { a.map((x) => { let y: string = x; return 1; }); }');
+  expectStatic('function nc(a: [].<uint8>) { a.filter((x) => { let y: string = x; return true; }); }');
+  expect(evaluated('function nc(a: [].<uint8>) { a.forEach((x) => { let y: uint8 = x; }); } "ok";')).toBe('ok');
+  // The INDEX is a `uint32` and the third parameter is the array itself, which
+  // is what the signature says and what a reader would expect.
+  expectStatic('function nc(a: [].<uint8>) { a.forEach((x, i) => { let y: string = i; }); }');
+  expectStatic('function nc(a: [].<uint8>) { a.forEach((x, i, arr) => { let y: string = arr; }); }');
+  // An ANNOTATION wins over the context, since the program said what it wanted.
+  expect(evaluated('function nc(a: [].<uint8>) { a.forEach((x: uint8) => { let y: uint8 = x; }); } "ok";')).toBe('ok');
+  // A BLOCK-bodied callback leaves `map` imprecise rather than wrong: its
+  // return needs inference the checker does not have, so the result stays
+  // ~any~ and nothing is claimed about it.
+  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => { return 1; }); } "ok";')).toBe('ok');
+  // An untyped receiver constrains nothing, and the run time is untouched.
+  expect(evaluated('function nc(a) { a.forEach((x) => { let y: string = x; }); } "ok";')).toBe('ok');
+  expect(evaluated('let a: [].<uint8> = [1,2]; let n = 0; a.forEach((x) => { n += 1; }); String(n);')).toBe('2');
 });
 
 test('an assignment invalidates a narrowing rather than being refused by it', () => {

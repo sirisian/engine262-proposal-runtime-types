@@ -678,6 +678,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
         const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);
+        // `a.map(cb)` returns an array of the CALLBACK'S return type, which is
+        // why F79 left it ~any~ rather than guessing. The inference happens
+        // HERE rather than through a channel: a declaration asks for its
+        // initializer's type before the walk reaches the call, so a value
+        // recorded during the walk would arrive too late (F80). It is readable
+        // for a concise-bodied arrow, whose body IS the returned expression;
+        // a block body needs return-type inference the checker does not have,
+        // and stays ~any~ - imprecise rather than wrong.
+        const mem = (node as { CallExpression?: ParseNode }).CallExpression;
+        const calledName = mem && mem.type === 'MemberExpression'
+          ? (mem as unknown as { IdentifierName?: { name: string } | null }).IdentifierName?.name
+          : undefined;
+        if (calledName === 'map') {
+          const recv = mem && (mem as unknown as { MemberExpression?: ParseNode }).MemberExpression
+            ? staticType((mem as unknown as { MemberExpression: ParseNode }).MemberExpression)
+            : null;
+          const cbArg = (node as { Arguments?: readonly ParseNode[] }).Arguments?.[0];
+          if (recv && recv.Kind === 'array' && cbArg && cbArg.type === 'ArrowFunction') {
+            const arrow = cbArg as unknown as { ConciseBody?: ParseNode, ArrowParameters?: readonly ParseNode[] };
+            // A concise body is TWO wrapper nodes deep - `ConciseBody` holds
+            // an `ExpressionBody` which holds the expression - and asking
+            // staticType for either wrapper answers nothing, which is why the
+            // first attempt inferred no type at all.
+            let body = arrow.ConciseBody;
+            if (body && body.type === 'ConciseBody') {
+              body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
+            }
+            if (body && body.type === 'ExpressionBody') {
+              body = (body as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression;
+            }
+            if (body && body.type !== 'FunctionBody') {
+              const returned = pushBlock(() => {
+                const first = arrow.ArrowParameters?.[0];
+                if (first && first.type === 'SingleNameBinding' && (first as ParseNode.SingleNameBinding).BindingIdentifier) {
+                  declare((first as ParseNode.SingleNameBinding).BindingIdentifier!.name, recv.Element);
+                }
+                return staticType(body);
+              });
+              if (returned) {
+                return { Kind: 'array', Element: returned, Extent: 'dynamic' } as unknown as Known;
+              }
+            }
+          }
+        }
         if (callee && callee.Kind === 'function' && callee.Signatures.length === 1) {
           return callee.Signatures[0].Return;
         }
@@ -1188,7 +1232,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the callback's return, which needs the callback typed first, and
       // claiming the receiver's type would be wrong rather than merely
       // imprecise (F79).
-      case 'filter':
+      // The methods that take a CALLBACK: its first parameter is the element,
+      // its second the index at `uint32`, its third the array itself. Writing
+      // that as a function type is what lets the call site push those types
+      // into the literal's parameters (F80).
+      case 'forEach':
+      case 'map':
+      case 'find':
+      case 'findIndex':
+      case 'findLast':
+      case 'findLastIndex':
+      case 'some':
+      case 'every': {
+        const callback = {
+          Kind: 'function',
+          Signatures: [{
+            Parameters: [element, builtinTypeRecord('uint', [32]) ?? numberType, receiver],
+            Return: anyType,
+            Shapes: shapes(3, 1),
+            Untyped: false,
+          }],
+        } as unknown as TypeRecord;
+        const result = name === 'map' ? anyType : (name === 'find' || name === 'findLast' ? element : anyType);
+        return { Kind: 'function', Signatures: [{ Parameters: [callback, anyType], Return: result, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+      }
+      case 'filter': {
+        // Selects from the receiver's own elements, so the result keeps the
+        // element type AND the callback sees it.
+        const callback = {
+          Kind: 'function',
+          Signatures: [{
+            Parameters: [element, builtinTypeRecord('uint', [32]) ?? numberType, receiver],
+            Return: anyType,
+            Shapes: shapes(3, 1),
+            Untyped: false,
+          }],
+        } as unknown as TypeRecord;
+        return { Kind: 'function', Signatures: [{ Parameters: [callback, anyType], Return: receiver, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+      }
       case 'slice':
       case 'reverse':
       case 'sort':
@@ -1397,13 +1478,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean) => {
+  /**
+   * The parameter types a function LITERAL takes from the position it is
+   * written in: `a.forEach(x => ...)` on a `[].<uint8>` gives `x` the element
+   * type. Recorded at the call site, keyed by the literal's node, and consulted
+   * when the walk reaches it - the same channel shape the numeric overload
+   * resolution uses, because a contextual type has to travel from where it is
+   * known to where it is needed (F80).
+   */
+  const contextualParameterTypes = new Map<ParseNode, readonly Known[]>();
+  /** A callback's inferred return type, keyed by the CALL that passed it. */
+  const callbackReturnTypes = new Map<ParseNode, TypeRecord>();
+
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[]) => {
     frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
+    let index = 0;
     for (const p of params ?? []) {
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
+        const fromContext = contextual?.[index];
+        const annotated = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
         walkBindingElement(p);
+        // An ANNOTATION wins over the context, since the program said what it
+        // wanted; the context fills a parameter that said nothing.
+        if (fromContext && !annotated && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
+          declare((p as ParseNode.SingleNameBinding).BindingIdentifier!.name, fromContext);
+        }
       }
+      index += 1;
     }
     if (body) {
       walk(body);
@@ -1776,9 +1878,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (sig) {
             const chosen = sig;
             c.Arguments.forEach((arg, i) => {
-              if (i < chosen.Parameters.length && arg.type !== 'AssignmentRestElement') {
-                requireAssignable(staticTypeIn(arg, chosen.Parameters[i]), chosen.Parameters[i]);
+              if (i >= chosen.Parameters.length || arg.type === 'AssignmentRestElement') {
+                return;
               }
+              const param = chosen.Parameters[i];
+              // A FUNCTION LITERAL in a position whose type is a function type
+              // takes that type's parameters as its own, which is how a
+              // callback learns the element type (F80). Recorded here and read
+              // when the walk reaches the literal.
+              if (param && param.Kind === 'function' && param.Signatures.length === 1
+                  && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
+                contextualParameterTypes.set(arg, param.Signatures[0].Parameters as readonly Known[]);
+                // `map`'s result element type is the CALLBACK'S RETURN, which
+                // is why it could not be claimed before the callback was typed
+                // (F79 left it ~any~ deliberately). It is readable for a
+                // concise-bodied arrow, whose body IS the returned expression,
+                // with the callback's parameters in scope. A block-bodied
+                // callback needs return-type inference the checker does not
+                // have, and stays ~any~ - imprecise rather than wrong (F80).
+                if (arg.type === 'ArrowFunction') {
+                  const arrow = arg as unknown as { ConciseBody?: ParseNode, ArrowParameters?: readonly ParseNode[] };
+                  const body = arrow.ConciseBody;
+                  if (body && body.type !== 'FunctionBody') {
+                    pushBlock(() => {
+                      (param.Signatures[0].Parameters as readonly Known[]).forEach((pt, pi) => {
+                        const p = arrow.ArrowParameters?.[pi];
+                        if (pt && p && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
+                          declare((p as ParseNode.SingleNameBinding).BindingIdentifier!.name, pt);
+                        }
+                      });
+                      const returned = staticType(body);
+                      if (returned) {
+                        callbackReturnTypes.set(c as unknown as ParseNode, returned);
+                      }
+                    });
+                  }
+                }
+                return;
+              }
+              requireAssignable(staticTypeIn(arg, param), param);
             });
           }
         }
@@ -1909,7 +2047,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
         return;
       case 'ArrowFunction':
-        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true);
+        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
         return;
       case 'MethodDefinition':
         enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
