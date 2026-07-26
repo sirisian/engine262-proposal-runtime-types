@@ -339,6 +339,15 @@ export function* InitializeInstanceElements(O: ObjectValue, constructor: ECMAScr
 export function* InitializeFieldOrAccessor(receiver: ObjectValue, elementRecord: ClassElementDefinitionRecord): PlainEvaluator<void> {
   Assert(elementRecord.Kind === 'field' || elementRecord.Kind === 'accessor');
   const fieldName = elementRecord.Kind === 'accessor' ? elementRecord.BackingStorageKey : elementRecord.Key;
+  // proposal-runtime-types: the DECORATOR path's field initialization, which is
+  // the twin of DefineField above and carried NONE of its typed behaviour. With
+  // the `decorators` feature on, `class A { a: uint8; }` produced a field with
+  // no declared type at all: no default, no conversion of the initializer, and
+  // no [[TypedProperties]] entry - so `x.a = 300` stored 300 and
+  // #table-check-sites' store boundary was silently absent. One declaration,
+  // two evaluation paths, and only one of them knew the field had a type.
+  const fieldAnnotation = (elementRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  const fieldTypeObject = (elementRecord as { TypeObject?: object }).TypeObject;
   let initValue: Value;
   // TODO(decorator): spec bug. ApplyDecoratorsToElementDefinition unshift decorator initializers into this array, but read it in order, so the spec order is wrong (be like [decorator2, decorator1, syntaxInit], but the correct order should be [syntaxInit, decorator2, decorator1])
   if (!surroundingAgent.feature('decorators.no-bugfix.1') && elementRecord.Initializers[-1]) {
@@ -350,11 +359,41 @@ export function* InitializeFieldOrAccessor(receiver: ObjectValue, elementRecord:
   for (const initializer of elementRecord.Initializers) {
     initValue = Q(yield* Call(initializer, receiver, [initValue]));
   }
+  // A typed field with no initializer takes its type's DEFAULT rather than
+  // *undefined*, the same rule the other path follows and the same rule a typed
+  // binding follows. A registered meta-type default wins; otherwise the
+  // structural one.
+  if (surroundingAgent.feature('runtime-types')
+      && fieldAnnotation && fieldTypeObject
+      && initValue === Value.undefined
+      && elementRecord.Initializers.length === 0) {
+    const record = (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord;
+    let dflt = LookupTypeDefault(fieldTypeObject);
+    if (dflt === undefined) {
+      dflt = DefaultValueOf(record);
+    }
+    if (dflt !== undefined) {
+      initValue = Q(yield* EnforceAnnotation(fieldAnnotation, dflt));
+    }
+  }
   if (fieldName instanceof PrivateName) {
     Q(yield* PrivateFieldAdd(receiver, fieldName, initValue));
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      (fieldName as { TypeObject?: object }).TypeObject = fieldTypeObject;
+    }
   } else {
     Assert(IsPropertyKey(fieldName));
-    Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, initValue));
+    // The initializer is itself a store to a field of declared type, so it is
+    // converted rather than kept as written (F57).
+    let stored = initValue;
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
+    }
+    Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, stored));
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      const map = ((receiver as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
+      map.set(fieldName instanceof JSStringValue ? fieldName.stringValue() : fieldName, fieldTypeObject);
+    }
   }
   for (const initializer of elementRecord.ExtraInitializers) {
     Q(yield* Call(initializer, receiver));

@@ -6,7 +6,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import {
-  InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
+  InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation, withoutLayoutControls,
 } from './all.mts';
 import {
   surroundingAgent, ResolveBinding, GetValue, IsConstructor, Throw,
@@ -63,7 +63,8 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
 //   ClassDeclaration : `class` BindingIdentifier ClassTAil
 export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDeclaration): PlainEvaluator {
-  const decorators = ClassDeclaration.Decorators ? Q(yield* DecoratorListEvaluation(ClassDeclaration.Decorators)) : [];
+  // The reserved layout controls are read from the syntax, not evaluated.
+  const decorators = Q(yield* DecoratorListEvaluation(withoutLayoutControls(ClassDeclaration.Decorators)));
   // 1. Perform ? BindingClassDeclarationEvaluation of this ClassDeclaration.
   Q(yield* BindingClassDeclarationEvaluation(ClassDeclaration, decorators));
   // 2. Return NormalCompletion(empty).
