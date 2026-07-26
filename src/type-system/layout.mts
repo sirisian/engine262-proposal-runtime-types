@@ -84,8 +84,26 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     const constructor = t.Constructor as { InstanceLayout?: Layout | null } | undefined;
     return constructor?.InstanceLayout ?? null;
   }
+  if (t.Kind === 'union') {
+    // #sec-memory-layout's table, row "a reference type, INCLUDING A NULLABLE
+    // UNION OF A VALUE TYPE CLASS": "No. A reference's width is the
+    // implementation's business." So the union has no layout OF ITS OWN, and a
+    // FIELD of that type still occupies a reference's width - which is what
+    // #sec-layout-finiteness means by "a field written `T | null` closes a
+    // cycle because it is a reference ... whose width is the implementation's;
+    // the recursion stops there rather than descending, which is why a linked
+    // list is expressible".
+    //
+    // Eight bytes at alignment eight is this implementation's choice, matching
+    // a 64-bit pointer. The clause leaves it open deliberately, so nothing here
+    // is normative beyond "it has one and the recursion stops".
+    const nullable = t.Members.length === 2
+      && t.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void')
+      && t.Members.some((m) => m.Kind === 'nominal');
+    return nullable ? { bitLength: 64, byteLength: 8, alignment: 8 } : null;
+  }
   if (t.Kind !== 'primitive') {
-    // A union, a reference type, and `any` have no layout by design.
+    // `any` and the remaining forms have no layout by design.
     return null;
   }
   const name = t.Name;
@@ -197,7 +215,8 @@ export function ComputeClassLayout(
   baseLayout: ClassLayout | null,
   fields: readonly { key: string, type: TypeRecord, controls?: FieldControls }[],
   controls: ClassControls = {},
-): ClassLayout | null {
+  declaringClass?: unknown,
+): ClassLayout | null | { cycle: string } {
   // #sec-natural-alignment states this as a BIT cursor, not a byte one, because
   // a sub-byte field advances by bits: "Let a bit cursor begin at 0, at the end
   // of the layout of the class it extends where it extends one and at 0
@@ -211,6 +230,36 @@ export function ComputeClassLayout(
   let furthest = cursor;
   let alignment = controls.packed ? 1 : (baseLayout ? baseLayout.alignment : 1);
   for (const field of fields) {
+    // #sec-layout-finiteness: "a value type class may not contain itself,
+    // directly or through a cycle of value type fields", and "the two are one
+    // condition" with the layout being defined at all.
+    //
+    // This check had never had to work. A cyclic class was refused by the
+    // ordinary temporal dead zone before any layout was computed, so the
+    // condition held by accident; resolving a type-position name against its
+    // DECLARATION (which #sec-compile-time-evaluability requires) removes that
+    // accident and leaves the clause to be enforced properly.
+    //
+    // A field whose type is a class STILL UNDER DECLARATION is the cycle: its
+    // nominal record carries no [[Constructor]] yet, because the class it names
+    // has not finished being defined. A reference to the same class does not
+    // reach here - `T | null` is a union, and the union arm above gives it a
+    // reference's width without descending - which is exactly the distinction
+    // the clause draws between a linked list and a class containing itself.
+    if (field.type.Kind === 'nominal'
+        && field.type.EnumMembers === undefined
+        && field.type.Constructor === undefined) {
+      // ONLY the class itself is a cycle here. A by-value field naming a class
+      // declared LATER also has no [[Constructor]] yet, and that is a forward
+      // reference rather than a cycle: its layout is simply not computable at
+      // this declaration, so the class reports none rather than an error. Being
+      // wrong in that direction costs precision; being wrong in the other would
+      // refuse a program the clause admits.
+      if (declaringClass !== undefined && field.type.Declaration === declaringClass) {
+        return { cycle: field.key };
+      }
+      return null;
+    }
     const layout = LayoutOf(field.type);
     if (!layout) {
       return null;

@@ -29,9 +29,10 @@ import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { EnforceAnnotation, LookupTypeDefault, RequireType } from './runtime-types.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
+import { LookupTypeDefault, RequireType } from './runtime-types.mts';
+import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
 import {
   Assert,
   Call,
@@ -240,7 +241,6 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     // same rule a typed binding follows (#sec-default-values). A registered
     // meta-type default wins; otherwise the structural default. A type with no
     // default leaves the field undefined.
-    const annotation = fieldAnnotation;
     // Resolved at class definition time, not here: this runs inside the
     // constructor, which for a default constructor is a builtin with no
     // lexical environment to resolve a named type against (F51).
@@ -252,7 +252,14 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     if (dflt === undefined) {
       initValue = Value.undefined;
     } else {
-      initValue = Q(yield* EnforceAnnotation(annotation, dflt));
+      // Against the RESOLVED record, not the annotation node. EnforceAnnotation
+      // re-resolves the node, which calls ResolveBinding - and this runs inside
+      // the constructor, which for a default constructor is a builtin with no
+      // lexical environment to resolve against. F51 recorded exactly that for
+      // the field's own type and fixed it by resolving at class definition;
+      // this call kept re-resolving and was latent only because no field type
+      // had named a binding before. A `next: N | null` names one.
+      initValue = Q(yield* RequireType(dflt, record));
     }
   } else { // 4. Else, let initValue be undefined.
     initValue = Value.undefined;
@@ -280,6 +287,21 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     let stored = initValue;
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
+    }
+    // proposal-runtime-types: on a PLACED instance a field's storage is the
+    // buffer, so its definition writes bytes rather than creating a property.
+    // This is a define rather than a set, so it does not pass through [[Set]]
+    // and needs the branch of its own; without it the field would be defined as
+    // a property AND written to the buffer, which is the stale copy the
+    // construct-then-move implementation left behind.
+    const placedBacking = surroundingAgent.feature('runtime-types') && fieldTypeObject
+      ? PlacementBackingOf(receiver as unknown as object)
+      : undefined;
+    if (placedBacking !== undefined && fieldName instanceof JSStringValue) {
+      Q(yield* WritePlacedField(placedBacking, fieldName.stringValue(), (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord, stored));
+      const map = ((receiver as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
+      map.set(fieldName.stringValue(), fieldTypeObject);
+      return;
     }
     // b. Perform ? CreateDataPropertyOrThrow(receiver, fieldName, initValue).
     Q(yield* CreateDataPropertyOrThrow(receiver, fieldName, stored));
@@ -420,6 +442,13 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   if (kind === 'base') {
     // a. Let thisArgument be ? OrdinaryCreateFromConstructor(newTarget, "%Object.prototype%").
     thisArgument = Q(yield* OrdinaryCreateFromConstructor(newTarget, '%Object.prototype%'));
+    // proposal-runtime-types: a placement allocation binds HERE, between the
+    // instance being created and its fields being initialized, so that every
+    // field write of the initialization and of the constructor body lands in
+    // the buffer. See the pending placement in placement.mts.
+    if (surroundingAgent.feature('runtime-types')) {
+      TakePendingPlacement(thisArgument);
+    }
   }
   // 6. Let calleeContext be PrepareForOrdinaryCall(F, newTarget).
   const calleeContext = PrepareForOrdinaryCall(F, newTarget);

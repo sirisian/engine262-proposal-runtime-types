@@ -8,7 +8,7 @@ import type { ClassLayout, FieldPlacement } from '../type-system/layout.mts';
 import type { TypedArrayTypes } from '../intrinsics/TypedArray.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
-  GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, Get, ToIndex,
+  GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, ToIndex,
 } from '#self';
 
 /**
@@ -32,6 +32,42 @@ export interface PlacementBacking {
 }
 
 const placements = new WeakMap<object, PlacementBacking>();
+
+/**
+ * The placement a construction now under way is to be bound to.
+ *
+ * C++'s placement `new`, which this form is named after, constructs the object
+ * DIRECTLY IN the supplied storage: there is no intermediate object and no
+ * copy, and `this` points into the buffer for the whole of the constructor.
+ * The clause says the same - "Construction stores each field of each instance
+ * at its laid-out position" - and the first implementation instead constructed
+ * into fresh storage and moved the fields afterwards, which left every field's
+ * constructor-written property behind as a stale copy that could not be deleted
+ * (#sec-typed-storage makes deleting a typed field a *TypeError*).
+ *
+ * Marking the instance between its creation and the initialization of its
+ * fields removes the intermediate state rather than cleaning up after it: no
+ * property is ever created, so there is nothing to delete and the typed-storage
+ * rule never comes into it. A constructor that reads back a field it has just
+ * written now reads the buffer too, which is what a placed instance should do
+ * for the whole of its life rather than from the end of construction onwards.
+ *
+ * One-shot, and consumed by the first instance created after it is set, which
+ * is the same shape NewTarget is threaded through construction with.
+ */
+let pendingPlacement: PlacementBacking | undefined;
+
+export function SetPendingPlacement(backing: PlacementBacking | undefined): void {
+  pendingPlacement = backing;
+}
+
+/** Consume the pending placement, if the object being created is to take it. */
+export function TakePendingPlacement(instance: object): void {
+  if (pendingPlacement !== undefined) {
+    placements.set(instance, pendingPlacement);
+    pendingPlacement = undefined;
+  }
+}
 
 export function SetPlacementBacking(instance: object, backing: PlacementBacking): void {
   placements.set(instance, backing);
@@ -180,57 +216,6 @@ function R(v: Value): number {
 
 export { X, surroundingAgent };
 
-/**
- * Bind a freshly constructed instance to a buffer at the placement arguments'
- * offset, and MOVE its fields into it.
- *
- * "The first argument is the buffer, the second, when present, is the byte
- * offset and otherwise 0, and the third, when present, is the byte length
- * reserved for each element and otherwise the constructed type's `byteLength`."
- * A third argument larger leaves padding and a smaller one makes elements
- * overlap, so the reserved extent is recorded rather than derived.
- *
- * "Bytes the layout does not assign keep the buffer's contents, since reusing
- * storage is what the form is for and the zero-fill rule of fresh allocation
- * does not apply." So this writes only the fields, and nothing else in the
- * buffer is touched - which is why it moves the constructed values in one at a
- * time rather than zeroing the extent first.
- */
-export function* BindPlacement(instance: ObjectValue, backing: PlacementBacking): PlainEvaluator<void> {
-  const layout = backing.Layout;
-  // The constructor has already run and left its values on the instance as
-  // ordinary properties; each is written into the buffer at its laid-out
-  // position and the property removed, so a later read comes from the bytes.
-  const typed = (instance as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties;
-  for (const field of layout.fields) {
-    const declared = typed?.get(field.key)?.TypeRecord;
-    if (!declared) {
-      continue;
-    }
-    const current = Q(yield* Get(instance, Value(field.key)));
-    Q(yield* WritePlacedField(backing, field.key, declared, current));
-    // The constructor's property is NOT deleted: #sec-typed-storage makes
-    // deleting a typed field a TypeError, and that rule does not stop applying
-    // because the field moved into a buffer. It is left in place and shadowed -
-    // every read and write of a placed field goes through the backing before
-    // the property is consulted - so it is a stale copy that nothing can
-    // observe through the field's own name. Removing it needs the typed-storage
-    // rule to distinguish a program's delete from this one, which is a question
-    // for the clause rather than a thing to do quietly here.
-  }
-  SetPlacementBacking(instance, backing);
-  return undefined;
-}
-
-/**
- * Validate a placement BEFORE the constructor runs.
- *
- * "It is a *RangeError* exception when the extent so computed exceeds the
- * buffer's length." Checking that after construction would let a constructor
- * with side effects run for a placement that can never happen, which is
- * observable and wrong; the extent depends only on the arguments and the
- * type's layout, so nothing needs the instance to decide it.
- */
 export function* ValidatePlacement(constructor: ObjectValue, args: readonly Value[]): PlainEvaluator<PlacementBacking> {
   const layout = (constructor as { InstanceLayout?: ClassLayout | null }).InstanceLayout;
   if (!layout) {

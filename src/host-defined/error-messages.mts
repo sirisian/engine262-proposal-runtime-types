@@ -684,6 +684,7 @@ export interface Throw {
   | '$1 and $2 are different numeric types and do not mix; convert one of them'
   | '$1 called on incompatible receiver $2'
   | '$1 called on invalid receiver: $2'
+  | '$1 contains itself through field $2, so it has no finite layout'
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'
   | '$1 has no signature taking a value of type $2'

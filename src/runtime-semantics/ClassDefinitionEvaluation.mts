@@ -1,4 +1,5 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { TakePendingPlacement } from '../abstract-ops/placement.mts';
 import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -360,6 +361,15 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // 1. NOTE: This branch behaves similarly to `constructor() {}`.
         // 2. Let result be ? OrdinaryCreateFromConstructor(NewTarget, "%Object.prototype%").
         result = Q(yield* OrdinaryCreateFromConstructor(NewTarget, '%Object.prototype%'));
+        // proposal-runtime-types: a placement binds between the instance being
+        // created and its fields being initialized, and a class with NO
+        // constructor is created here rather than in the ordinary [[Construct]]
+        // - two creation paths, and a placement must be taken on both. Missing
+        // this one left a default-constructor class placed in name only: its
+        // fields became properties and its buffer was never written.
+        if (surroundingAgent.feature('runtime-types')) {
+          TakePendingPlacement(result);
+        }
       }
       Q(yield* InitializeInstanceElements(result, F));
       // proposal-runtime-types (spec sec-typed-classes): a class with a typed
@@ -769,9 +779,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           controls: (field as { LayoutControls?: FieldControls }).LayoutControls,
         });
       }
-      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = complete
-        ? ComputeClassLayout(baseLayout, laidOut, classControls)
-        : null;
+      const computed = complete ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;
+      if (computed !== null && 'cycle' in computed) {
+        // #sec-layout-finiteness, reported at the declaration that closes the
+        // cycle rather than where a size is later asked for.
+        return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', className as Value, Value(computed.cycle));
+      }
+      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = computed;
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
       Q(yield* SetIntegrityLevel(proto, 'frozen'));

@@ -371,9 +371,15 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
       if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
         return new TypedNumberValue(0, t);
       }
-      if (name === 'string') { return Value(''); }
-      if (name === 'boolean') { return Value.false; }
-      if (name === 'bigint') { return Value(0n); }
+      if (name === 'string') {
+ return Value(''); 
+}
+      if (name === 'boolean') {
+ return Value.false; 
+}
+      if (name === 'bigint') {
+ return Value(0n); 
+}
       // symbol has no meaningful zero
       return undefined;
     }
@@ -383,10 +389,14 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
     case 'union': {
       // A union defaults to null or undefined only when it admits one.
       for (const m of t.Members) {
-        if (m.Kind === 'literal' && (m.Value as Value) === Value.null) { return Value.null; }
+        if (m.Kind === 'literal' && (m.Value as Value) === Value.null) {
+ return Value.null; 
+}
       }
       for (const m of t.Members) {
-        if (m.Kind === 'void') { return Value.undefined; }
+        if (m.Kind === 'void') {
+ return Value.undefined; 
+}
       }
       return undefined;
     }
@@ -813,7 +823,7 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
       let r = (value as TypedNumberValue).TypeRecord as TypeRecord;
       // #sec-primitive-metadata, the branding rule: a parameterized type is a
       // subtype of its base, so a value carrying `float64.<{ min: 0 }>` IS a
-      // float64 — which is what lets a constructed value satisfy its own
+      // float64 ï¿½ which is what lets a constructed value satisfy its own
       // type's base check, and what F33's construction boundary produces.
       if (r.Kind === 'parameterized') {
         r = r.Base;
@@ -946,6 +956,58 @@ export function MetadataObjectFromType(t: TypeRecord): Value {
   return Object.freeze(fields) as unknown as Value;
 }
 
+
+/**
+ * proposal-runtime-types #sec-compile-time-evaluability: "Evaluation is confined
+ * to checking and READS DECLARATIONS RATHER THAN RUN-TIME BINDINGS."
+ *
+ * A type annotation naming a class reads that class's DECLARATION. The engine
+ * resolved it through ResolveBinding and GetValue, which is the run-time
+ * binding, so a name in its temporal dead zone was refused - and a class's own
+ * binding is in its dead zone for the whole of its declaration. That made
+ * `class N { next: N | null; }` a ReferenceError, along with a forward
+ * reference to a class declared later and a self-referential alias, while a
+ * METHOD signature naming the same class worked, because a signature is not
+ * resolved at declaration and a field's type is.
+ *
+ * This finds the declaration by walking the parse tree the annotation sits in.
+ * The nominal record it builds is keyed on the DECLARATION node, which is what
+ * SameType compares, so the record built here and the one built after the class
+ * is initialized are the same type.
+ */
+function declarationNamed(from: ParseNode, name: string): ParseNode | null {
+  const seen = new Set<ParseNode>();
+  let node: ParseNode | undefined = from;
+  while (node && !seen.has(node)) {
+    seen.add(node);
+    const lists = [
+      (node as { StatementList?: readonly ParseNode[] }).StatementList,
+      (node as { ScriptBody?: { StatementList?: readonly ParseNode[] } }).ScriptBody?.StatementList,
+      (node as { ModuleBody?: { ModuleItemList?: readonly ParseNode[] } }).ModuleBody?.ModuleItemList,
+      (node as { FunctionStatementList?: readonly ParseNode[] }).FunctionStatementList,
+    ];
+    for (const list of lists) {
+      for (const item of list ?? []) {
+        const declared = item as {
+          type?: string,
+          BindingIdentifier?: { name?: string },
+          Declaration?: { type?: string, BindingIdentifier?: { name?: string } },
+        };
+        const inner = declared.type === 'ExportDeclaration' ? declared.Declaration : declared;
+        if (!inner) {
+          continue;
+        }
+        if ((inner.type === 'ClassDeclaration' || inner.type === 'TypeAliasDeclaration')
+            && inner.BindingIdentifier?.name === name) {
+          return inner as unknown as ParseNode;
+        }
+      }
+    }
+    node = (node as { parent?: ParseNode }).parent;
+  }
+  return null;
+}
+
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   switch (node.type) {
     case 'TypeReference': {
@@ -1042,7 +1104,27 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         return voidType;
       }
       const ref = Q(yield* ResolveBinding(Value(name)));
-      const value = Q(yield* GetValue(ref));
+      // The binding is consulted first, since an initialized one carries the
+      // interned Type Object and everything downstream of it. Where it is in
+      // its DEAD ZONE - which a class's own name is for the whole of its
+      // declaration, and a class declared later is until it runs - the
+      // DECLARATION answers instead: #sec-compile-time-evaluability says type
+      // evaluation "reads declarations rather than run-time bindings", and the
+      // dead zone is a property of the binding.
+      const resolved = EnsureCompletion(yield* GetValue(ref));
+      let declared;
+      if (resolved.Type === 'throw') {
+        const declaration = declarationNamed(node, name);
+        if (declaration && (declaration as { type?: string }).type === 'ClassDeclaration') {
+          // A Type Object over the declaration, so the resolution continues
+          // down the SAME path an initialized binding takes - including the
+          // single attach point for type arguments below. Returning the record
+          // directly from here would drop them, and a `Box.<uint32>` would
+          // intern as a bare `Box`.
+          declared = GetTypeObject({ Kind: 'nominal', Declaration: declaration, Arguments: [] });
+        }
+      }
+      const value = declared !== undefined ? declared as unknown as Value : Q(resolved);
       // proposal-runtime-types: resolve the name to a base Type Record. The name
       // is either bound to a Type Object, or it is a class constructor whose
       // associated class type we look up. A generic type alias is expanded eagerly

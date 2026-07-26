@@ -396,3 +396,89 @@ test('memory layout: overlapping fields reinterpret, and the store check is per 
   expectThrown(`${u} u.bits = "s";`);
   expectThrown(`${u} function anyv() { return 4294967296; } u.bits = anyv();`);
 });
+
+test('memory layout: a type-position name resolves against its declaration', () => {
+  // #sec-compile-time-evaluability: "Evaluation is confined to checking and
+  // READS DECLARATIONS RATHER THAN RUN-TIME BINDINGS." The engine resolved a
+  // type name through ResolveBinding and GetValue - the run-time binding - so a
+  // name in its temporal dead zone was refused, and a class's own binding is in
+  // its dead zone for the whole of its declaration.
+  //
+  // #sec-layout-finiteness names the case this broke: "a field written `T |
+  // null` closes a cycle because it is a reference ... which is why a LINKED
+  // LIST IS EXPRESSIBLE and a class containing itself by value is not."
+  expect(evaluated('class N { value: uint32; next: N | null; } "ok";')).toBe('ok');
+  // The refusal was never only about self-reference: a forward reference and
+  // mutual recursion went with it, while a METHOD signature naming the same
+  // class always worked - which is the diagnostic, since a signature is not
+  // resolved at declaration and a field's type is.
+  expect(evaluated('class A { b: B | null; } class B { x: uint8; } "ok";')).toBe('ok');
+  expect(evaluated('class P { q: Q | null; } class Q { p: P | null; } "ok";')).toBe('ok');
+  expect(evaluated('class M { m(): M | null { return null; } } "ok";')).toBe('ok');
+  // The list is usable, not merely declarable.
+  const list = 'class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
+  expect(evaluated(`${list} String(Number(a.next.value));`)).toBe('7');
+  expect(evaluated(`${list} String(b.next);`)).toBe('null');
+
+  // A reference field has a WIDTH, so a class holding one has a layout: the
+  // table's row "a reference type, including a nullable union of a value type
+  // class" says the width is the implementation's business, and this
+  // implementation spends 8 bytes at alignment 8.
+  expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('8/8');
+  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassField, R>("r").offset);')).toBe('16/8');
+  // KNOWN LIMIT, recorded rather than asserted away: a SELF-referential class
+  // declares, constructs, and links, but its own layout is not computed at its
+  // declaration. The self-reference resolves to a type built from the
+  // declaration, which the class's own Type Object does not yet agree with -
+  // `Reflect.typeOf` over it does not report the class - so the layout walk
+  // cannot complete. Nothing above depends on it, and the reference width is
+  // exercised by the completed-class rows instead.
+  expectThrown('class N { value: uint32; next: N | null; } (type N).byteLength;');
+});
+
+test('memory layout: a class may not contain itself by value', () => {
+  // #sec-layout-finiteness: "a value type class may not contain itself,
+  // directly or through a cycle of value type fields".
+  //
+  // This check had NEVER HAD TO WORK. A cyclic class was refused by the
+  // ordinary temporal dead zone before any layout was computed, so the
+  // condition held by accident; resolving a type-position name against its
+  // declaration removes the accident and leaves the clause to be enforced.
+  expectThrownKind('class C { self: C; }', 'TypeError');
+  // The distinction the clause draws: a REFERENCE to the same class closes the
+  // cycle and is fine, because the recursion stops at a type with no layout of
+  // its own rather than descending.
+  expect(evaluated('class D { self: D | null; } "ok";')).toBe('ok');
+  // A FORWARD reference by value is not a cycle. Its layout is simply not
+  // computable at that declaration, so the class reports none rather than
+  // being refused - being wrong in that direction costs precision, being wrong
+  // in the other would refuse a program the clause admits.
+  expect(evaluated('class P2 { q: Q2; } class Q2 { x: uint8; } "ok";')).toBe('ok');
+});
+
+test('memory layout: a placement binds before construction, so no property is created', () => {
+  // "Construction stores each field of each instance at its laid-out position."
+  // The first implementation constructed into fresh storage and moved the
+  // fields afterwards, which left each constructor-written property behind as a
+  // stale copy that could not be deleted - #sec-typed-storage makes deleting a
+  // typed field a TypeError. Binding between the instance being created and its
+  // fields being initialized removes the intermediate state rather than
+  // cleaning up after it, which is what C++ placement `new` does: the object is
+  // constructed directly in the supplied storage.
+  const V = 'class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } const b = new ArrayBuffer(32); const v = new(b, 0) V(1.5, 2.5); ';
+  expect(evaluated(`${V} String(Object.getOwnPropertyNames(v).length);`)).toBe('0');
+  expect(evaluated(`${V} String(Number(v.x)) + "/" + String(new Float32Array(b)[1]);`)).toBe('1.5/2.5');
+  // A class with NO constructor is created on a different path - inside the
+  // default constructor builtin rather than in [[Construct]] - and a placement
+  // has to be taken on both. Missing the second left such a class placed in
+  // name only: its fields became properties and its buffer stayed zero.
+  const D = 'class D { x: float32; } const b2 = new ArrayBuffer(8); const d = new(b2, 0) D(); d.x = 1.5; ';
+  expect(evaluated(`${D} String(Object.getOwnPropertyNames(d).length);`)).toBe('0');
+  expect(evaluated(`${D} String(new Float32Array(b2)[0]);`)).toBe('1.5');
+  // A constructor now reads back through the BUFFER, which is what a placed
+  // instance should do for the whole of its life rather than from the end of
+  // construction onwards.
+  expect(evaluated('let seen = 0; class W { p: uint8; constructor() { this.p = 3; seen = Number(this.p); } } const b3 = new ArrayBuffer(8); new(b3, 0) W(); String(seen);')).toBe('3');
+  // An unplaced instance is untouched.
+  expect(evaluated('class U { x: float32; } String(Object.getOwnPropertyNames(new U()).join(","));')).toBe('x');
+});

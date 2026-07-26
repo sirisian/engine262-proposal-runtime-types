@@ -1,5 +1,5 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
-import { BindPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
+import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
@@ -48,9 +48,20 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       placementValues.push(Q(yield* GetValue(Q(yield* Evaluate(argNode)))));
     }
     placementBacking = Q(yield* ValidatePlacement(constructor as ObjectValue, placementValues));
+    // The instance takes the placement as it is CREATED, before its fields are
+    // initialized, so the constructor writes into the buffer rather than into
+    // properties that would then have to be moved and could not be deleted.
+    SetPendingPlacement(placementBacking);
   }
   // 8. Return ? Construct(constructor, argList).
-  const constructed = Q(yield* Construct(constructor, argList));
+  let constructed;
+  try {
+    constructed = Q(yield* Construct(constructor, argList));
+  } finally {
+    // Cleared whatever happened, so a failed construction cannot leave a
+    // placement waiting for the next unrelated one.
+    SetPendingPlacement(undefined);
+  }
   // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,
   // byteLength) Type(args)`. The parser has built these arguments since the
   // form was added and NOTHING consumed them, so a placement construction
@@ -62,9 +73,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // field writes land in the buffer through the same store path. The
   // alternative - binding before construction - would need the constructor to
   // know it is being placed.
-  if (placementBacking !== undefined && constructed instanceof ObjectValue) {
-    Q(yield* BindPlacement(constructed, placementBacking));
-  }
+
   // proposal-runtime-types: `new Set.<uint8>()` carries its type arguments on
   // the construction, and nothing was carrying them to the object - the
   // specialization form handles a generic ALIAS and returns the plain
