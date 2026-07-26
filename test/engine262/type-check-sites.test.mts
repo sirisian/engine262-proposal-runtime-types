@@ -563,6 +563,27 @@ test('a typed array length and element-preserving results flow statically', () =
   expect(evaluated('let a: [].<uint8> = [3,1]; String(a.filter(x => true)[0] is uint8) + "/" + String(a.length);')).toBe('true/2');
 });
 
+test('a check the static types already establish is not inserted', () => {
+  // #sec-check-elision: "A check is required only where the static types do not
+  // already establish the result." Phase 6 (F81). The plan asked for a DIRECT
+  // assertion that the check is gone, since behavioural equivalence cannot
+  // distinguish an elision from a no-op - so the observation is a getter, since
+  // an object type's membership check READS the properties.
+  const src = 'let reads = 0; const o = { get a() { reads += 1; return (5 := uint8); } }; ';
+  expect(evaluated(`${src} function f(s: { a: uint8 }) { reads = 0; let t: { a: uint8 } = s; return reads; } String(f(o));`)).toBe('0');
+  expect(evaluated(`${src} function g(s) { reads = 0; let t: { a: uint8 } = s; return reads; } String(g(o));`)).toBe('1');
+  // The value is unchanged either way, which is the property that makes the
+  // elision legitimate rather than a behaviour change.
+  expect(evaluated('const s = (5 := uint8); let x: uint8 = s; String(x) + "/" + String(x is uint8);')).toBe('5/true');
+  expect(evaluated('function f(s: uint8) { let t: uint8 | string = s; return t is uint8; } String(f((5 := uint8)));')).toBe('true');
+  // WHAT IS NOT ELIDED, and the first is the correctness argument: a LITERAL is
+  // assignable to `uint8` and still must be CONVERTED, so assignability alone
+  // does not license skipping the boundary. An ~any~ source is not elided
+  // either, which is the case the checks exist for.
+  expect(evaluated('let x: uint8 = 5; String(x is uint8);')).toBe('true');
+  expect(thrownKind('function anyv() { return 300; } let x: uint8 = anyv();')).toBe('RangeError');
+});
+
 test('a callback takes its parameter types from the call site', () => {
   // The last piece of Phase 5, and machinery rather than a signature: a
   // function LITERAL takes its parameter types from the position it is written

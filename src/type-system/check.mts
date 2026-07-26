@@ -112,6 +112,26 @@ function widen(t: TypeRecord): TypeRecord {
   return t.Kind === 'literal' ? t.Base : t;
 }
 
+/**
+ * #sec-check-elision: "A check is required only where the static types do not
+ * already establish the result." The checker proves that at a boundary and
+ * records the annotation whose check may be skipped; the run time consults the
+ * same set (F81).
+ *
+ * The condition is narrower than the clause's first bullet reads, and the
+ * narrowing is the whole correctness argument. A LITERAL is assignable to
+ * `uint8` and still needs converting - `let x: uint8 = 5` must produce a uint8
+ * value, not the Number 5 - so assignability alone does not license skipping
+ * the boundary. What licenses it is that the value is ALREADY of the target
+ * type: a non-literal static type that is assignable needs no representation
+ * change, so the boundary would return it unchanged.
+ */
+const elidableAnnotations = new WeakSet<object>();
+
+export function IsCheckElided(annotation: object): boolean {
+  return elidableAnnotations.has(annotation);
+}
+
 export function CheckScript(script: ParseNode.Script): ObjectValue[] {
   return CheckStatementList(script.ScriptBody?.StatementList ?? null, script);
 }
@@ -1453,6 +1473,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
       const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
+      if (b.TypeAnnotation && declared && b.Initializer) {
+        const source = staticType(b.Initializer);
+        // Not `any`, not a literal, and assignable: the value is already of the
+        // target type, so the boundary has nothing to do (F81).
+        if (source && source.Kind !== 'any' && source.Kind !== 'literal' && IsAssignable(source, declared)) {
+          elidableAnnotations.add(b.TypeAnnotation);
+        }
+      }
       // proposal-runtime-types (spec sec-enums): a parameter annotated with an enum
       // type holds an enumerator, so a switch over it can be checked.
       const boundEnum = enumOfAnnotation(b.TypeAnnotation) ?? enumOfInitializer(b.Initializer);
@@ -1812,6 +1840,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return;
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+          if (n.TypeAnnotation && declared && n.Initializer) {
+            const src = staticType(n.Initializer);
+            if (src && src.Kind !== 'any' && src.Kind !== 'literal' && IsAssignable(src, declared)) {
+              elidableAnnotations.add(n.TypeAnnotation);
+            }
+          }
           if (n.Initializer) {
             requireAssignable(staticTypeIn(n.Initializer, declared), declared);
             walk(n.Initializer);

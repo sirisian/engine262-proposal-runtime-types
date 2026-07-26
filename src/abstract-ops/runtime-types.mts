@@ -2,6 +2,7 @@ import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { NumberValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { IsCheckElided } from '../type-system/check.mts';
 import { displayType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -255,6 +256,13 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
 /** Enforces a binding's TypeAnnotation, if any, at initialization. */
 export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null | undefined, value: Value): ValueEvaluator {
   if (!annotation) {
+    return value;
+  }
+  // #sec-check-elision: the checker proved this boundary cannot fail and cannot
+  // convert, so the check is not inserted (F81). The value is returned as it
+  // stands, which is what the boundary would have done anyway - the difference
+  // is that no user code runs, which is how the elision is observable at all.
+  if (IsCheckElided(annotation)) {
     return value;
   }
   // #sec-contextual-types: the binding boundary applies the CHECKED conversion
