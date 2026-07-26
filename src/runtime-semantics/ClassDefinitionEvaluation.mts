@@ -1,5 +1,5 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
-import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
+import { ComputeClassLayout, type ClassLayout } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
 import {
@@ -82,7 +82,7 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
     case 'AsyncMethod':
     case 'AsyncGeneratorMethod': {
       if (surroundingAgent.feature('decorators')) {
-        const decorators = Q(yield* DecoratorListEvaluation(withoutLayoutControls(node.Decorators)));
+        const decorators = node.Decorators ? Q(yield* DecoratorListEvaluation(node.Decorators)) : [];
         const methodDefinition = Q(yield* MethodDefinitionEvaluation(node, object));
         methodDefinition.Decorators = decorators;
         return methodDefinition;
@@ -92,13 +92,9 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
     }
     case 'FieldDefinition': {
       if (surroundingAgent.feature('decorators')) {
-        const decorators = Q(yield* DecoratorListEvaluation(withoutLayoutControls(node.Decorators)));
+        const decorators = node.Decorators ? Q(yield* DecoratorListEvaluation(node.Decorators)) : [];
         const fieldDefinition = Q(yield* ClassFieldDefinitionEvaluation_decorator(node, object));
         fieldDefinition.Decorators = decorators;
-        // The reserved field controls, read from the syntax that was excluded
-        // from evaluation just above. They ride on the element record because
-        // that is what the layout walk reads.
-        (fieldDefinition as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
         return fieldDefinition;
       } else {
         return yield* ClassFieldDefinitionEvaluation(node, object);
@@ -138,103 +134,6 @@ export interface DefaultConstructorBuiltinFunction extends BuiltinFunctionObject
  * and a `set operator[]` is the write half of the index accessor, kept apart from
  * the read half so a write dispatches to its own declaration.
  */
-
-/**
- * proposal-runtime-types #sec-layout-control: "Seven reserved names control the
- * layout above. Each is a property-descriptor key and each has a decorator of
- * the same name that sets it."
- *
- * RESERVED, so they are recognized by NAME rather than resolved as bindings:
- * `@packed` is not a function a program defines or imports, and making the
- * seven global bindings would put `offset`, `size`, and `align` in every
- * program's scope. A decorator whose name is not one of the seven is left
- * alone and evaluates as an ordinary decorator does.
- */
-function reservedLayoutControl(decorator: ParseNode.Decorator): { name: string, argument: unknown } | null {
-  const callee = decorator.subtype === 'CallExpression'
-    ? (decorator as { CallExpression?: { CallExpression?: unknown, Arguments?: readonly unknown[] } }).CallExpression
-    : undefined;
-  const bare = decorator.subtype === 'MemberExpression'
-    ? (decorator as { MemberExpression?: { name?: string } }).MemberExpression
-    : undefined;
-  if (bare && typeof bare.name === 'string') {
-    return { name: bare.name, argument: undefined };
-  }
-  if (callee) {
-    const target = (callee as { CallExpression?: { name?: string } }).CallExpression;
-    const args = (callee as { Arguments?: readonly { value?: unknown, type?: string }[] }).Arguments;
-    if (target && typeof target.name === 'string') {
-      const first = args && args.length > 0 ? args[0] : undefined;
-      // Only a literal argument is read. A control is part of the layout, which
-      // #sec-layout-properties calls a compile-time constant, so an expression
-      // that would have to run is not one of these.
-      const value = first && (first.type === 'NumericLiteral' || first.type === 'StringLiteral')
-        ? (first as { value?: unknown }).value
-        : undefined;
-      return { name: target.name, argument: value };
-    }
-  }
-  return null;
-}
-
-const CLASS_CONTROLS: readonly string[] = ['packed', 'alignAll', 'size'];
-const FIELD_CONTROLS: readonly string[] = ['align', 'offset', 'offsetBit', 'endian'];
-
-
-/**
- * The decorators that are NOT reserved layout controls. A reserved name is
- * recognized syntactically and never evaluated: `@packed` names no binding, so
- * evaluating the list as written raises a ReferenceError before the layout
- * reader ever sees it.
- */
-export function withoutLayoutControls(decorators: readonly ParseNode.Decorator[] | null | undefined): readonly ParseNode.Decorator[] {
-  if (!decorators) {
-    return [];
-  }
-  return decorators.filter((d) => {
-    const control = reservedLayoutControl(d);
-    return !control || (!CLASS_CONTROLS.includes(control.name) && !FIELD_CONTROLS.includes(control.name));
-  });
-}
-
-function readClassControls(decorators: readonly ParseNode.Decorator[] | null | undefined): ClassControls {
-  const out: { packed?: boolean, alignAll?: number, size?: number } = {};
-  for (const d of decorators ?? []) {
-    const control = reservedLayoutControl(d);
-    if (!control || !CLASS_CONTROLS.includes(control.name)) {
-      continue;
-    }
-    if (control.name === 'packed') {
-      out.packed = true;
-    } else if (typeof control.argument === 'number') {
-      if (control.name === 'alignAll') {
-        out.alignAll = control.argument;
-      } else {
-        out.size = control.argument;
-      }
-    }
-  }
-  return out;
-}
-
-function readFieldControls(decorators: readonly ParseNode.Decorator[] | null | undefined): FieldControls {
-  const out: { align?: number, offset?: number, offsetBit?: number, endian?: string } = {};
-  for (const d of decorators ?? []) {
-    const control = reservedLayoutControl(d);
-    if (!control || !FIELD_CONTROLS.includes(control.name)) {
-      continue;
-    }
-    if (control.name === 'endian') {
-      if (typeof control.argument === 'string') {
-        out.endian = control.argument;
-      }
-    } else if (typeof control.argument === 'number') {
-      out[control.name as 'align' | 'offset' | 'offsetBit'] = control.argument;
-    }
-  }
-  return out;
-}
-
 function operatorTableKey(e: ParseNode.OperatorDefinition): string {
   const name = e.OperatorName ?? '';
   if (name === '[]' && e.AccessorKind === 'set') {
@@ -502,55 +401,6 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       }
     }
     F.Elements = instanceElements;
-    // #sec-typed-storage's seal, on the DECORATOR branch. The same computation
-    // as on the other branch, and its absence here is the same divergence: this
-    // branch had NONE of the runtime-types class behaviour - not the seal, not
-    // the frozen prototype, not the layout, and until this cycle not even the
-    // field types. Every one of them was added to the branch a program without
-    // decorators takes.
-    {
-      const decoratedModifiers = (ClassTail as { parent?: { ClassModifiers?: readonly string[] | null } }).parent?.ClassModifiers ?? [];
-      const decoratedTyped = (ClassBody ?? []).some((el) => (el as { type?: string, static?: boolean, TypeAnnotation?: unknown }).type === 'FieldDefinition'
-        && !(el as { static?: boolean }).static
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
-      (F as { SealInstances?: boolean }).SealInstances = decoratedTyped && !decoratedModifiers.includes('dynamic');
-      (F as { IsAbstract?: boolean }).IsAbstract = decoratedModifiers.includes('abstract');
-    }
-    // #sec-memory-layout, on the DECORATOR branch. The two branches collect a
-    // class's instance fields into different lists - [[Fields]] here is empty
-    // and the fields are in [[Elements]] - so the walk has to run on both. A
-    // layout is a property of the declaration and does not depend on which
-    // branch evaluated it, and that is also where the reserved control
-    // decorators are read, since only this branch has them.
-    if ((F as { SealInstances?: boolean }).SealInstances === true) {
-      const baseCtor = constructorParent as { InstanceLayout?: ClassLayout | null } | undefined;
-      const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
-        ? baseCtor.InstanceLayout ?? null
-        : null;
-      const decoratedControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
-      const decoratedFields: { key: string, type: TypeRecord, controls?: FieldControls }[] = [];
-      let decoratedComplete = true;
-      for (const element of instanceElements) {
-        if (element.Kind !== 'field') {
-          continue;
-        }
-        const typeObject = (element as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
-        const key = (element as { Key?: unknown }).Key;
-        if (!typeObject?.TypeRecord || typeof (key as { stringValue?: unknown })?.stringValue !== 'function') {
-          decoratedComplete = false;
-          break;
-        }
-        decoratedFields.push({
-          key: (key as { stringValue(): string }).stringValue(),
-          type: typeObject.TypeRecord,
-          controls: (element as { LayoutControls?: FieldControls }).LayoutControls,
-        });
-      }
-      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = decoratedComplete
-        ? ComputeClassLayout(baseLayout, decoratedFields, decoratedControls)
-        : null;
-    }
     F.Initializers = instanceMethodExtraInitializers;
     // TODO(decorator): spec bug?
     // Q(yield* InitializePrivateMethods(F, staticElements));
@@ -801,30 +651,21 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
         ? baseCtor.InstanceLayout ?? null
         : null;
-      const classControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
-      const laidOut: { key: string, type: TypeRecord, controls?: FieldControls }[] = [];
+      const laidOut: { key: string, type: TypeRecord }[] = [];
       let complete = true;
       for (const field of instanceFields) {
         const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
-        // The two evaluation paths name the field differently - the plain one
-        // records [[Name]] and the decorator one [[Key]] - and the layout is a
-        // property of the DECLARATION, which does not depend on which path read
-        // it. Reading only one is how the walk came up empty with decorators on.
-        const name = (field as { Name?: unknown }).Name ?? (field as { Key?: unknown }).Key;
+        const name = (field as { Name?: unknown }).Name;
         if (!typeObject?.TypeRecord || typeof (name as { stringValue?: unknown })?.stringValue !== 'function') {
           // An untyped field, or a private name: the table's "a class with an
           // untyped field" row gives the whole class no layout.
           complete = false;
           break;
         }
-        laidOut.push({
-          key: (name as { stringValue(): string }).stringValue(),
-          type: typeObject.TypeRecord,
-          controls: readFieldControls((field as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators),
-        });
+        laidOut.push({ key: (name as { stringValue(): string }).stringValue(), type: typeObject.TypeRecord });
       }
       (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = complete
-        ? ComputeClassLayout(baseLayout, laidOut, classControls)
+        ? ComputeClassLayout(baseLayout, laidOut)
         : null;
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
@@ -1147,12 +988,6 @@ export interface ClassElementDefinitionRecord_Field {
   Decorators: DecoratorDefinitionRecord[] | undefined;
   readonly Initializers: FunctionObject[];
   readonly ExtraInitializers: FunctionObject[];
-  // proposal-runtime-types: the field's resolved type, carried here for the
-  // same reason the non-decorator path carries it on its own record - a
-  // declaration's type does not depend on which evaluation path read it.
-  readonly TypeAnnotation?: ParseNode.TypeAnnotation | null;
-  readonly TypeObject?: object;
-  readonly LayoutControls?: FieldControls;
 }
 export interface ClassElementDefinitionRecord_Accessor {
   readonly Kind: 'accessor';

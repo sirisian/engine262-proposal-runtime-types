@@ -151,84 +151,30 @@ export interface ClassLayout extends Layout {
  * untyped field" and "a union of value types" cover between them. One field
  * without a layout is enough: a class is laid out or it is not.
  */
-/**
- * #sec-layout-control: the seven reserved names, three on a class and four on a
- * field. `offsetBit` and `endian` are read and carried here and have no effect
- * on the byte walk - `offsetBit` places a BIT-field, which is the next stage,
- * and `endian` fixes a field's byte order, which is a property of reading and
- * writing rather than of placement. Carrying them now means the stage that
- * consumes them changes no interface.
- */
-export interface ClassControls {
-  readonly packed?: boolean;
-  readonly alignAll?: number;
-  readonly size?: number;
-}
-
-export interface FieldControls {
-  readonly align?: number;
-  readonly offset?: number;
-  readonly offsetBit?: number;
-  readonly endian?: string;
-}
-
 export function ComputeClassLayout(
   baseLayout: ClassLayout | null,
-  fields: readonly { key: string, type: TypeRecord, controls?: FieldControls }[],
-  controls: ClassControls = {},
+  fields: readonly { key: string, type: TypeRecord }[],
 ): ClassLayout | null {
   const placed: FieldPlacement[] = baseLayout ? [...baseLayout.fields] : [];
   let cursor = baseLayout ? baseLayout.byteLength : 0;
-  // `packed` gives the class an alignment of 1 and places each field
-  // immediately after the one before it. `alignAll` decides the INSTANCE's
-  // alignment and composes with it, which is why the two are tracked
-  // separately: packed decides the fields' placement, alignAll the whole.
-  let alignment = controls.packed ? 1 : (baseLayout ? baseLayout.alignment : 1);
+  let alignment = baseLayout ? baseLayout.alignment : 1;
   for (const field of fields) {
     const layout = LayoutOf(field.type);
     if (!layout) {
       return null;
     }
-    // #sec-layout-control: "An `align` REPLACES its field's alignment rather
-    // than strengthening it, which is the design's own reading: a `float32x4`
-    // at `@align(4)` follows a `float32` at byte 2 at byte 8, not at byte 16."
-    // Taking the max instead is the obvious wrong implementation.
-    const fieldAlignment = field.controls?.align !== undefined
-      ? field.controls.align
-      : (controls.packed ? 1 : layout.alignment);
-    let offset;
-    if (field.controls?.offset !== undefined) {
-      // An explicit offset places the field outright. Two fields may be given
-      // one offset, which is the C union, and a negative one reaches back into
-      // a base's memory - both deliberate reinterpretation, so neither is
-      // diagnosed here.
-      offset = field.controls.offset;
-    } else {
-      offset = fieldAlignment > 0 && cursor % fieldAlignment !== 0
-        ? cursor + (fieldAlignment - (cursor % fieldAlignment))
-        : cursor;
-    }
+    const offset = layout.alignment > 0 && cursor % layout.alignment !== 0
+      ? cursor + (layout.alignment - (cursor % layout.alignment))
+      : cursor;
     placed.push({ key: field.key, offset, layout });
-    // An explicitly placed field still advances the cursor past itself, so a
-    // following field without an offset lands after it.
-    const end = offset + layout.byteLength;
-    if (end > cursor) {
-      cursor = end;
+    cursor = offset + layout.byteLength;
+    if (layout.alignment > alignment) {
+      alignment = layout.alignment;
     }
-    if (!controls.packed && fieldAlignment > alignment) {
-      alignment = fieldAlignment;
-    }
-  }
-  if (controls.alignAll !== undefined) {
-    alignment = controls.alignAll;
   }
   // Rounded up to the class's own alignment, so an array of it stays aligned.
-  let byteLength = alignment > 0 && cursor % alignment !== 0
+  const byteLength = alignment > 0 && cursor % alignment !== 0
     ? cursor + (alignment - (cursor % alignment))
     : cursor;
-  if (controls.size !== undefined) {
-    // "The allocated size, zero-padded to it."
-    byteLength = controls.size;
-  }
   return { bitLength: byteLength * 8, byteLength, alignment, fields: placed };
 }

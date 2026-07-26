@@ -113,27 +113,12 @@ export function* ClassFieldDefinitionEvaluation_decorator(FieldDefinition: Parse
         initializers[-1] = initializer;
       }
     }
-    // proposal-runtime-types: the DECORATOR path dropped the field's type
-    // entirely. With the `decorators` feature on, `class A { a: uint8; }`
-    // produced a field carrying no type at all, so `x.a = 300` stored 300 -
-    // #table-check-sites' store boundary silently absent, and the layout walk
-    // with nothing to walk. The plain path resolved the annotation twenty lines
-    // above and this one never did; the two are the same declaration and must
-    // carry the same type.
-    let decoratedTypeObject;
-    const decoratedAnnotation = (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-    if (decoratedAnnotation && surroundingAgent.feature('runtime-types')) {
-      const record = Q(yield* TypeNodeToTypeRecord(decoratedAnnotation.Type));
-      decoratedTypeObject = GetTypeObject(record);
-    }
     return ClassElementDefinitionRecord({
       Kind: 'field',
       Key: name,
       Initializers: initializers,
       ExtraInitializers: extraInitializers,
       Decorators: undefined,
-      TypeAnnotation: decoratedAnnotation,
-      TypeObject: decoratedTypeObject,
     });
   } else {
     const name = Q(yield* Evaluate_PropertyName(ClassElementName));
