@@ -666,6 +666,44 @@ test('a check the static types already establish is not inserted', () => {
   expect(thrownKind('function anyv() { return 300; } let x: uint8 = anyv();')).toBe('RangeError');
 });
 
+test('the RETURN boundary elides too, and the condition is a property of the function', () => {
+  // Phase 6 at the second of its four boundaries. The binding boundary could
+  // be decided at the ANNOTATION, because a binding has one initializer; a
+  // return annotation is shared by every `return` in the function, so the
+  // decision is a property of the FUNCTION: every return must be proven, and
+  // the body must end in one, since falling off the end hands back *undefined*
+  // and no numeric or object annotation admits it.
+  const src = 'let reads = 0; const o = { get a() { reads += 1; return (5 := uint8); } }; ';
+  expect(evaluated(`${src} function f(s: { a: uint8 }): { a: uint8 } { reads = 0; return s; } f(o); String(reads);`)).toBe('0');
+  expect(evaluated(`${src} function g(s): { a: uint8 } { reads = 0; return s; } g(o); String(reads);`)).toBe('1');
+  // ONE unproven return spoils the function, which is what makes this a
+  // whole-function property rather than a per-statement one.
+  expect(evaluated(`${src} function h(s: { a: uint8 }, c): { a: uint8 } { reads = 0; if (c) { return c; } return s; } h(o, 0); String(reads);`)).toBe('1');
+  // The value is unchanged either way, and the cases the boundary exists for
+  // are untouched: a LITERAL is assignable and still must be CONVERTED, and an
+  // ~any~ return is still checked.
+  expect(evaluated('function f(): uint8 { return 5; } String(f() is uint8);')).toBe('true');
+  expect(thrownKind('function anyv() { return 300; } function f(): uint8 { return anyv(); } f();')).toBe('RangeError');
+  expect(evaluated('function f(s: uint8): uint8 { return s; } String(f((5 := uint8)) is uint8);')).toBe('true');
+  // A `return;` with no expression hands back *undefined*, so the function is
+  // not elided even though it has no unproven expression in it.
+  expect(thrownKind('function anyv() { return 300; } function f(c): uint8 { if (c) { return; } return anyv(); } f(1);')).toBe('TypeError');
+});
+
+test('the PARAMETER boundary is a different decision, and this is why', () => {
+  // Recorded as a test rather than as a comment because it is the reason this
+  // phase stops at two boundaries. A parameter annotation is shared by every
+  // CALL SITE, and the checker cannot see them all: a function reached through
+  // `apply`, through a builtin taking it as a callback, or through `eval` is
+  // called from outside the source the checker walked. Deciding elision in the
+  // callee on the evidence of the calls it can see would let those through.
+  const f = 'function f(p: uint8) { return p is uint8; } ';
+  expect(evaluated(`${f} String(f((5 := uint8)));`)).toBe('true');
+  expect(thrownKind(`${f} f.apply(null, [300]);`)).toBe('RangeError');
+  expect(thrownKind(`${f} [300].map(f);`)).toBe('RangeError');
+  expect(thrownKind(`${f} eval("f(300)");`)).toBe('RangeError');
+});
+
 test('a callback takes its parameter types from the call site', () => {
   // The last piece of Phase 5, and machinery rather than a signature: a
   // function LITERAL takes its parameter types from the position it is written

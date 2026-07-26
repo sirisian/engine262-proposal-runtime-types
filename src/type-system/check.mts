@@ -1591,9 +1591,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** A callback's inferred return type, keyed by the CALL that passed it. */
   const callbackReturnTypes = new Map<ParseNode, TypeRecord>();
 
+  /**
+   * #sec-check-elision at the RETURN boundary. The binding boundary could be
+   * decided at the annotation, because a binding has one initializer; a return
+   * annotation is shared by every `return` in the function, so the decision is
+   * a property of the FUNCTION and not of any one statement. This stack
+   * records, per function being walked, whether every return seen so far hands
+   * back a value already of the declared type.
+   *
+   * The condition is F81's, unchanged: not ~any~, not a literal, and
+   * assignable. A literal is assignable to `uint8` and still must be
+   * CONVERTED, so `return 5` from a `(): uint8` needs its boundary; a binding
+   * of type `uint8` does not.
+   */
+  /**
+   * Whether a function body's straight-line exit is a `return` with a value.
+   *
+   * This is the second half of the return-boundary condition and the half that
+   * is easy to forget: a function whose every explicit return is proven can
+   * STILL fall off the end, and falling off the end hands back *undefined*,
+   * which no numeric or object annotation admits. Requiring the body to end in
+   * a `return` makes that path impossible without a control-flow graph.
+   *
+   * It is deliberately syntactic and therefore conservative. A body ending in
+   * `if (c) return a; else return b;` is not elided even though both arms
+   * return, and a CONCISE arrow body is not elided at all - it has no
+   * ReturnStatement node to prove. Both are misses rather than errors: the
+   * boundary runs and the program is correct, which is the right direction to
+   * be wrong in when the alternative is skipping a check that was needed.
+   */
+  const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | undefined): boolean => {
+    if (!body) {
+      return false;
+    }
+    const list = Array.isArray(body)
+      ? body as readonly ParseNode[]
+      : (body as { FunctionStatementList?: readonly ParseNode[], StatementList?: readonly ParseNode[] }).FunctionStatementList
+        ?? (body as { StatementList?: readonly ParseNode[] }).StatementList;
+    if (!list || list.length === 0) {
+      return false;
+    }
+    const last = list[list.length - 1]!;
+    return last.type === 'ReturnStatement' && !!(last as { Expression?: ParseNode | null }).Expression;
+  };
+
+  const returnsProven: boolean[] = [];
+
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[]) => {
     frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
+    returnsProven.push(true);
     let index = 0;
     for (const p of params ?? []) {
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
@@ -1610,6 +1657,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (body) {
       walk(body);
+    }
+    const proven = returnsProven.pop();
+    const declaredReturn = returnTypes[returnTypes.length - 1];
+    if (checkReturns && returnAnnotation && declaredReturn && proven
+        && endsWithReturn(body)) {
+      elidableAnnotations.add(returnAnnotation);
     }
     returnTypes.pop();
     frames.pop();
@@ -2134,10 +2187,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ReturnStatement': {
         const expr = (n as { Expression?: ParseNode | null }).Expression;
+        const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {
-          const context = returnTypes[returnTypes.length - 1] ?? null;
           requireAssignable(staticTypeIn(expr, context), context);
+          // The elision condition, per return. A `return` with NO expression
+          // hands back *undefined*, which is the same unproven case as falling
+          // off the end and is handled below.
+          if (returnsProven.length > 0 && context) {
+            const source = staticTypeIn(expr, context);
+            if (!(source && source.Kind !== 'any' && source.Kind !== 'literal' && IsAssignable(source, context))) {
+              returnsProven[returnsProven.length - 1] = false;
+            }
+          }
           walk(expr);
+        } else if (returnsProven.length > 0 && context) {
+          returnsProven[returnsProven.length - 1] = false;
         }
         return;
       }
