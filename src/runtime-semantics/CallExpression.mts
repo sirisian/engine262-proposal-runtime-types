@@ -4,6 +4,7 @@ import { Q } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ClassFieldReflection } from '../intrinsics/Reflect.mts';
+import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -48,6 +49,38 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const argList = Q(yield* ArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
+  // proposal-runtime-types (README, "Views"): `[].<T>(buffer, byteOffset,
+  // byteElementLength)` and `[N].<T>(...)` are VIEWS over bytes that already
+  // exist. The form parses as an ARRAY LITERAL carrying type arguments and then
+  // called, which is why it is intercepted here beside the other typed calls
+  // rather than by making a Type Object callable.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && (memberExpr as unknown as { Expression?: { type?: string, ElementList?: readonly unknown[] } }).Expression?.type === 'ArrayLiteral'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const literal = (memberExpr as unknown as { Expression: { ElementList?: readonly ParseNode[] } }).Expression;
+    const elements = literal.ElementList ?? [];
+    // `[].<T>` is length-tracking and `[N].<T>` is fixed, so the literal's one
+    // element - when it has one - is the extent.
+    let extent: number | 'dynamic' = 'dynamic';
+    if (elements.length === 1) {
+      const only = elements[0] as { type?: string, value?: unknown };
+      if (only.type === 'NumericLiteral' && typeof only.value === 'number') {
+        extent = only.value;
+      } else {
+        extent = -1;
+      }
+    } else if (elements.length > 1) {
+      extent = -1;
+    }
+    if (extent !== -1) {
+      const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      if (argList.length > 0) {
+        return Q(yield* CreateArrayView(element, extent, argList as unknown as readonly Value[]));
+      }
     }
   }
   // proposal-runtime-types #sec-layout-properties: `Reflect.getReflection.<`

@@ -46,9 +46,10 @@ test('memory layout: the reserved layout controls place a class and its fields',
 
 test('memory layout: a type reports its own byteLength', () => {
   expect(evaluated('String(uint32.byteLength);')).toBe('4');
-  // The buffer-backed value runtime these sizes describe, the view constructor
-  // over a buffer and the instance byteLength that goes with it, is still to come.
-  expectThrown('let b = new ArrayBuffer(4); [].<uint8>(b);');
+  // THE VIEW CONSTRUCTOR IS HERE (L's remainder, cycle 109). `[].<T>(buffer,
+  // byteOffset, byteElementLength)` views bytes that already exist: it is a
+  // call on the type rather than a `new`, because nothing is constructed.
+  expect(evaluated('const b = new ArrayBuffer(4); String([].<uint8>(b).length);')).toBe('4');
 });
 
 // ── soa: structure of arrays ──────────────────────────────────────────────────
@@ -705,4 +706,39 @@ test('soa: reference iteration mutates in place', () => {
   // Array reference iteration is untouched - the SoA path is taken only for an
   // SoA, and the loop that already worked still does.
   expect(evaluated('class P { a: uint8; } let d: [2].<P>; for (const ref q of d) { q.a = 3; } String(Number(d[0].a)) + String(Number(d[1].a));')).toBe('33');
+});
+
+test('array views alias bytes that already exist', () => {
+  // README, "Views": `[].<T>(buffer [, byteOffset [, byteElementLength]])`.
+  // "The `buffer` argument accepts any typed array as well as existing
+  // `TypedArray`, `ArrayBuffer`, and `SharedArrayBuffer` instances, so a
+  // `[].<uint8>` and a `Uint8Array` viewing the same buffer ALIAS THE SAME
+  // MEMORY."
+  const setup = 'const buf = new ArrayBuffer(16); const u8 = new Uint8Array(buf); for (let i = 0; i < 16; i = i + 1) { u8[i] = i; } ';
+  expect(evaluated(`${setup} const v = [].<uint8>(buf); String(v.length) + "/" + String(Number(v[2]));`)).toBe('16/2');
+  // Aliasing in BOTH directions is the assertion that matters: a view that
+  // copied would pass a read test on its own.
+  expect(evaluated(`${setup} const v = [].<uint8>(buf); v[3] = 9; String(u8[3]);`)).toBe('9');
+  // A wider element divides the extent.
+  expect(evaluated(`${setup} String([].<uint32>(buf).length);`)).toBe('4');
+
+  // "By default `byteElementLength` is the size of the array's type ... [it] can
+  // be less than or greater than the actual size of the type", which is how the
+  // design reads `uint16`s at a 3-byte stride out of an array of a 3-byte
+  // class. Offset 1 with stride 3 over 0..15 gives five elements, and the first
+  // is bytes 1 and 2 little-endian: 0x0201.
+  expect(evaluated(`${setup} const s = [].<uint16>(buf, 1, 3); String(s.length) + "/" + String(Number(s[0]));`)).toBe('5/513');
+
+  // "A `[].<T>` view is LENGTH-TRACKING: its length derives from the buffer's
+  // current byte length, growing and shrinking as the buffer is resized. A fixed
+  // `[N].<T>` view has a fixed byte extent recorded at construction; if the
+  // buffer shrinks below that extent the view is detached and any access throws
+  // a TypeError. GROWTH NEVER INVALIDATES A VIEW."
+  const rz = 'const rb = new ArrayBuffer(16, { maxByteLength: 64 }); const track = [].<uint8>(rb); const fixed = [8].<uint8>(rb); ';
+  expect(evaluated(`${rz} String(track.length);`)).toBe('16');
+  expect(evaluated(`${rz} rb.resize(32); String(track.length);`)).toBe('32');
+  expect(evaluated(`${rz} rb.resize(4); String(track.length);`)).toBe('4');
+  expectThrownKind(`${rz} rb.resize(4); fixed[0];`, 'TypeError');
+  // A fixed view whose extent does not fit is refused at construction.
+  expectThrownKind('const b = new ArrayBuffer(4); [8].<uint8>(b);', 'RangeError');
 });

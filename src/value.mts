@@ -2,6 +2,7 @@ import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
+import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -925,6 +926,21 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
     }
+    // proposal-runtime-types (README, "Views"): an element read through an array
+    // view is a decode at the view's offset plus index times stride, and
+    // `length` derives from the buffer for a length-tracking view.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const viewBacking = ArrayViewBackingOf(this as unknown as object);
+      if (viewBacking !== undefined) {
+        if (P.stringValue() === 'length') {
+          return Value(ArrayViewLength(viewBacking));
+        }
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          return Q(yield* ReadArrayViewElement(viewBacking, index));
+        }
+      }
+    }
     // proposal-runtime-types soa.md: a field read through a `ref` into an SoA is
     // "an indexed load from a column whose base offset is known at compile
     // time". The reference names a column set and an index, so the read is
@@ -1017,6 +1033,14 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
+      }
+      const viewBacking = ArrayViewBackingOf(Receiver as unknown as object);
+      if (viewBacking !== undefined && P instanceof JSStringValue) {
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          Q(yield* WriteArrayViewElement(viewBacking, index, V));
+          return Value.true;
+        }
       }
       const elementBacking = SoAElementBackingOf(Receiver as unknown as object);
       if (elementBacking !== undefined && P instanceof JSStringValue) {
