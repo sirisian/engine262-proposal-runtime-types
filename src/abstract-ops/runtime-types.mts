@@ -1,5 +1,6 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -642,6 +643,7 @@ function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEnt
  */
 export interface DeferredOperatorTypes {
   readonly parameterNames: readonly string[];
+  readonly parameterConstraints?: readonly unknown[];
   readonly parameterTypeNode: unknown;
   readonly returnTypeNode: unknown;
 }
@@ -1602,4 +1604,55 @@ export function IsForbiddenReadonlyWrite(receiver: Value, key: import('../value.
   }
   const running = surroundingAgent.executionContextStack.at(-1)?.Function;
   return running !== declaringConstructor;
+}
+
+/**
+ * proposal-runtime-types #sec-primitive-operator-blocks: "the portions the
+ * matching return types evaluate to are merged into one flat metadata object,
+ * EACH META TYPE CONTRIBUTING ITS `default` WHERE NO MATCHING DEFINITION
+ * MENTIONS IT."
+ *
+ * That last clause is the whole of why a merge exists rather than a
+ * pass-through. A block constrained by one meta type speaks only for that meta
+ * type; every other governing meta type falls back to its default, "which is
+ * the correct answer for a constraint that the operation does not preserve".
+ * Carrying the receiver's other portions through instead would silently keep a
+ * bound the operation may have invalidated.
+ */
+export function MergeOperatorResultMetadata(
+  contributed: readonly { metaType: object, portion: Value }[],
+  governing: readonly object[],
+): Value {
+  const merged: Record<string, unknown> = Object.create(null);
+  const said = new Set<object>();
+  for (const { metaType, portion } of contributed) {
+    said.add(metaType);
+    if (portion && typeof portion === 'object') {
+      for (const key of Object.keys(portion as unknown as Record<string, unknown>)) {
+        merged[key] = (portion as unknown as Record<string, unknown>)[key];
+      }
+    }
+  }
+  for (const metaType of governing) {
+    if (said.has(metaType)) {
+      continue;
+    }
+    const dflt = LookupMetaDefaultSnapshot(metaType);
+    if (dflt && typeof dflt === 'object') {
+      for (const key of Object.keys(dflt as unknown as Record<string, unknown>)) {
+        merged[key] = (dflt as unknown as Record<string, unknown>)[key];
+      }
+    }
+  }
+  return Object.freeze(merged) as unknown as Value;
+}
+
+/**
+ * The meta type a block parameter's constraint names, or *undefined* where the
+ * constraint is not a meta type. A meta type is identified by its interned Type
+ * Object, which is what the claim registry and the hooks are keyed on.
+ */
+export function MetaTypeForConstraint(constraint: TypeRecord): object | undefined {
+  const typeObject = GetTypeObject(constraint) as unknown as object;
+  return LookupMetaTypeName(typeObject) === undefined ? undefined : typeObject;
 }

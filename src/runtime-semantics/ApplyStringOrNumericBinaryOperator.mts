@@ -7,6 +7,7 @@ import { ObjectValue,
 import { isTypedNumber, TypedNumberValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode } from '../type-system/runtime.mts';
+import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata } from '../abstract-ops/runtime-types.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
@@ -86,11 +87,30 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       let deferredParameterType = null;
       let deferredReturnType = null;
       let framePushed = false;
+      let deferredSpokenFor: object[] = [];
       if (entry.deferred && isTypedNumber(lval)) {
         const carried = (lval as TypedNumberValue).TypeRecord as TypeRecord;
         if (carried.Kind === 'parameterized') {
           const frame = new Map<string, TypeRecord>();
-          for (const name of entry.deferred.parameterNames) {
+          // The meta type each parameter speaks for, resolved from its
+          // constraint, so the parameter binds to THAT meta type's portion.
+          const spokenFor: object[] = [];
+          for (let pi = 0; pi < entry.deferred.parameterNames.length; pi += 1) {
+            const name = entry.deferred.parameterNames[pi]!;
+            const constraintNode = entry.deferred.parameterConstraints?.[pi];
+            let portion = carried.Metadata;
+            if (constraintNode) {
+              const constraint = Q(yield* ResolveTypeNode(constraintNode as never));
+              const metaType = MetaTypeForConstraint(constraint);
+              if (metaType !== undefined) {
+                spokenFor.push(metaType);
+                portion = MetadataPortion(carried.Metadata, metaType);
+              }
+            }
+            frame.set(name, metadataAsObjectRecord(portion));
+          }
+          deferredSpokenFor = spokenFor;
+          for (const name of [] as string[]) {
             // The parameter stands for the receiver's METADATA, and it is
             // bound as an ~object~ record reproducing it. That form is not a
             // convenience: `float64.<D>` builds a parameterization only where
@@ -142,6 +162,17 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         // carries, which for a dimension-preserving operator is the receiver's
         // own parameterization.
         if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
+          // "The portions the matching return types evaluate to are merged into
+          // one flat metadata object, each meta type contributing its `default`
+          // where no matching definition mentions it."
+          const governing = GoverningMetaTypes((lval as TypedNumberValue).TypeRecord && ((lval as TypedNumberValue).TypeRecord as TypeRecord).Kind === 'parameterized'
+            ? ((lval as TypedNumberValue).TypeRecord as TypeRecord & { Kind: 'parameterized' }).Metadata
+            : deferredReturnType.Metadata).types;
+          const mergedMetadata = MergeOperatorResultMetadata(
+            deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(deferredReturnType!.Metadata, metaType) })),
+            governing,
+          );
+          deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
           if (isTypedNumber(raw)) {
             return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
           }

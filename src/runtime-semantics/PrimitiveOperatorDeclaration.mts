@@ -25,10 +25,18 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     return undefined;
   }
   // The block's own type parameters, which stand for the receiver's metadata.
+  // Each parameter is carried with its CONSTRAINT, because the constraint names
+  // the meta type the block speaks for: `<D: Dim>` binds D to Dim's PORTION of
+  // the receiver's metadata, not to the whole of it. Binding the whole is what
+  // made a Dim block's result carry a bounds portion it never mentioned, which
+  // #sec-primitive-operator-blocks refuses - every meta type with no matching
+  // definition contributes its `default` instead.
   const blockParameterNames: string[] = [];
-  for (const tp of (node as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] } | null }).TypeParameters?.TypeParameterList ?? []) {
+  const blockParameterConstraints: (unknown | null)[] = [];
+  for (const tp of (node as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: unknown }[] } | null }).TypeParameters?.TypeParameterList ?? []) {
     if (typeof tp.BindingIdentifier?.name === 'string') {
       blockParameterNames.push(tp.BindingIdentifier.name);
+      blockParameterConstraints.push(tp.TypeParameterConstraint ?? null);
     }
   }
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
@@ -85,6 +93,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     if (blockParameterNames.length > 0) {
       deferred = {
         parameterNames: blockParameterNames,
+        parameterConstraints: blockParameterConstraints,
         parameterTypeNode: first?.TypeAnnotation?.Type,
         returnTypeNode: e.TypeAnnotation?.Type,
       };
