@@ -674,3 +674,35 @@ test('soa: a ref into an SoA is a column set and an index', () => {
   // A fixed extent cannot grow, so a reference into one never moves.
   expect(evaluated('class P { a: uint8; } const f = new SoA.<P, 2>(); const ref fr = f[0]; fr.a = 7; String(Number(f[0].a));')).toBe('7');
 });
+
+test('soa: reference iteration mutates in place', () => {
+  // soa.md: "for (const ref p of particles) { p.position += p.velocity * dt; }
+  // // Reference iteration, as on any typed array."
+  //
+  // Each iteration binds the element VIEW - the column set and the index -
+  // rather than a location, because a location over an SoA index would gather a
+  // COPY and every write through the binding would be lost. Same distinction
+  // the `ref` binding form draws, same reason it exists.
+  expect(evaluated('class P { a: uint8; } const s = new SoA.<P, 3>(); for (const ref p of s) { p.a = 7; } String(Number(s[0].a)) + String(Number(s[1].a)) + String(Number(s[2].a));')).toBe('777');
+
+  // The design's own loop, in two passes so the second reads what the first
+  // wrote - which is what shows the writes reaching the columns rather than a
+  // per-iteration copy.
+  const particles = 'class Particle { position: float32; velocity: float32; } '
+    + 'const particles = new SoA.<Particle, 3>(); '
+    + 'for (const ref p of particles) { p.velocity = 2; } '
+    + 'const dt = 0.5; '
+    + 'for (const ref p of particles) { p.position = Number(p.position) + Number(p.velocity) * dt; } ';
+  expect(evaluated(`${particles} String(Number(particles[0].position)) + "/" + String(Number(particles[2].position));`)).toBe('1/1');
+
+  // The length is pinned, and for a sharper reason than an array's: growth
+  // reallocates every column, so a reference taken in an earlier iteration is
+  // invalidated by a `push` in a later one.
+  const grow = 'class Particle { position: float32; velocity: float32; } '
+    + 'const g = new SoA.<Particle>(); const seed = new Particle(); g.push(seed); g.push(seed); ';
+  expectThrownKind(`${grow} for (const ref p of g) { g.push(seed); }`, 'TypeError');
+
+  // Array reference iteration is untouched - the SoA path is taken only for an
+  // SoA, and the loop that already worked still does.
+  expect(evaluated('class P { a: uint8; } let d: [2].<P>; for (const ref q of d) { q.a = 3; } String(Number(d[0].a)) + String(Number(d[1].a));')).toBe('33');
+});

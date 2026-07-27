@@ -27,6 +27,7 @@ import { OutOfRange } from '../utils/language.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateRefBinding } from '../execution-context/Environment.mts';
+import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import {
   Evaluate_SwitchStatement,
   Evaluate_VariableDeclarationList,
@@ -34,7 +35,7 @@ import {
   DestructuringAssignmentEvaluation,
   refineLeftHandSideExpression,
 } from './all.mts';
-import { surroundingAgent, DeclarativeEnvironmentRecord } from '#self';
+import { surroundingAgent, DeclarativeEnvironmentRecord, EnvironmentRecord } from '#self';
 import {
   Assert,
   Call,
@@ -693,8 +694,16 @@ function* RefForOfEvaluation(ForDeclaration: ParseNode.ForDeclaration, expr: Par
   const value = Q(yield* GetValue(exprRef));
   // The referent of a ref loop is an array; a ref denotes an array slot. Other
   // iterables have no index-addressable storage a borrow could alias.
+  // proposal-runtime-types soa.md: "for (const ref p of particles) { ... }" -
+  // "Reference iteration, as on any typed array". An SoA's elements are index
+  // addressable exactly as an array's are; what differs is that the borrow is a
+  // column set and an index rather than an array slot, so the loop takes its
+  // own path rather than making a ReferenceRecord that would gather a copy.
+  if (value instanceof ObjectValue && SoAStorageOf(value as unknown as object) !== undefined) {
+    return yield* SoARefForOfEvaluation(value, LetOrConst, ForBinding, stmt, labelSet, oldEnv);
+  }
   if (!(value instanceof ObjectValue) || X(IsArray(value)) !== Value.true) {
-    return Throw.TypeError('a ref for-of loop requires an array whose elements can be referenced');
+    return Throw.TypeError('a ref for-of loop requires an array or an SoA whose elements can be referenced');
   }
   const array = value;
   // Pin the length once; a change to it while a reference is live is a TypeError.
@@ -726,6 +735,57 @@ function* RefForOfEvaluation(ForDeclaration: ParseNode.ForDeclaration, expr: Par
     const after = Q(yield* LengthOfArrayLike(array));
     if (after !== pinned) {
       return Throw.TypeError('an array may not be resized while a reference into it is live');
+    }
+    if (LoopContinues(result, labelSet) === Value.false) {
+      return UpdateEmpty(result, iterationResult);
+    }
+    if (result.Value !== undefined) {
+      iterationResult = result.Value;
+    }
+  }
+  return NormalCompletion(iterationResult);
+}
+
+
+/**
+ * proposal-runtime-types soa.md: reference iteration over an SoA.
+ *
+ * Each iteration binds the element VIEW - the column set and the index - rather
+ * than a location, because a location over an SoA index would gather a copy and
+ * every write through the binding would be lost. That is the same distinction
+ * the `ref` binding form draws, and the same reason it exists.
+ *
+ * The length is pinned as it is for an array, and for a sharper reason: growth
+ * reallocates every column, so a reference taken in an earlier iteration is
+ * invalidated by a `push` in a later one.
+ */
+function* SoARefForOfEvaluation(soa: ObjectValue, LetOrConst: ParseNode.LetOrConst, ForBinding: ParseNode.ForBinding, stmt: ParseNode.Statement, labelSet: JSStringSet, oldEnv: EnvironmentRecord): StatementEvaluator {
+  const storage = SoAStorageOf(soa as unknown as object)!;
+  const pinned = storage.Length;
+  const [name] = BoundNames(ForBinding);
+  const mutable = !IsConstantDeclaration(LetOrConst);
+  let iterationResult: Value = Value.undefined;
+  for (let i = 0; i < pinned; i += 1) {
+    if (storage.Length !== pinned) {
+      surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
+      return Throw.TypeError('an SoA may not be resized while a reference into it is live');
+    }
+    const view = Q(yield* SoAElementReference(storage, i));
+    const iterationEnv = new DeclarativeEnvironmentRecord(oldEnv);
+    // A `let ref` may be rebound and a `const ref` may not; either way the view
+    // it holds writes through, since the write goes to the columns rather than
+    // to the binding.
+    if (mutable) {
+      X(iterationEnv.CreateMutableBinding(Value(name.stringValue()), Value.false));
+    } else {
+      X(iterationEnv.CreateImmutableBinding(Value(name.stringValue()), Value.false));
+    }
+    X(iterationEnv.InitializeBinding(Value(name.stringValue()), view));
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = iterationEnv;
+    const result = EnsureCompletion(yield* Evaluate(stmt));
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
+    if (storage.Length !== pinned) {
+      return Throw.TypeError('an SoA may not be resized while a reference into it is live');
     }
     if (LoopContinues(result, labelSet) === Value.false) {
       return UpdateEmpty(result, iterationResult);
