@@ -3,7 +3,7 @@ import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ClassFieldReflection } from '../intrinsics/Reflect.mts';
+import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex } from '../abstract-ops/all.mts';
@@ -134,6 +134,15 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const getReflection = Q(yield* Get(reflectObj, Value('getReflection')));
     if (SameValue(func, getReflection)) {
       const contextRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      // #sec-reflection-contexts: `Reflect.getReflection.<Reflect.Type, T>()`
+      // reflects T's own structure. The reflection itself is the one
+      // `Reflect.getReflection(`_T_`)` already produces over a type object; this
+      // is the CONTEXT form of the same request, which is how the specification
+      // writes it and how every other context is asked for.
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Type') {
+        const subject = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        return Q(TypeStructureReflection(subject, surroundingAgent.currentRealmRecord));
+      }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const argList = Q(yield* ArgumentListEvaluation(args));

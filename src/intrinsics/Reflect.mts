@@ -409,6 +409,15 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
  * denotes a type holds a Type Object, so a walker recurses by reflecting it in
  * turn. This is the inverse of nodeToTypeRecord: makeType(getReflection(T)) is T.
  */
+/**
+ * The structure of a type as #sec-reflection-contexts' `Type` context describes
+ * it, discriminated by `kind`. Exported so the context form of
+ * `Reflect.getReflection` can ask for the same thing the value form does.
+ */
+export function TypeStructureReflection(t: TypeRecord, realm: Realm): ObjectValue {
+  return recordToNode(t, realm);
+}
+
 function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
   const node = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   const set = (key: string, value: Value): void => {
@@ -617,6 +626,34 @@ export function bootstrapReflect(realmRec: Realm) {
  * - "a field's offset is read through the reflection of its declaration rather
  * than from the type, because it belongs to the field".
  */
+/**
+ * proposal-runtime-types #sec-reflection-contexts: `Reflect.Type` reflects a
+ * type's own structure, and the table there says of it: "This is the ONE
+ * CONTEXT THIS SPECIFICATION DEFINES; the rest are the decorators extension's."
+ *
+ * It is also, per decorators.md, "the one reflection target that is not also a
+ * decorator context - a bare type expression carries no decorator" - so it
+ * appears in the reflection signatures and nowhere in the replacement,
+ * `addInitializer`, or decorator-context tables.
+ *
+ * The structure it produces already existed: `Reflect.getReflection(`_T_`)`
+ * over a type object walks unions, intersections, tuples, arrays, objects,
+ * functions, literals, parameterizations, and references. What was missing was
+ * the NAME - the context by which `Reflect.getReflection.<Reflect.Type, T>()`
+ * asks for it, which is the form every other context uses and the form the
+ * specification writes.
+ */
+const typeContextDeclaration = { type: 'ReflectionContext', name: 'Type' } as unknown as ParseNode;
+
+export function typeContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: typeContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Type',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -633,6 +670,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
     return;
   }
   const reflect = realmRec.Intrinsics['%Reflect%'];
+  X(reflect.DefineOwnProperty(Value('Type'), Descriptor({
+    Value: GetTypeObject(typeContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
   X(reflect.DefineOwnProperty(Value('ClassField'), Descriptor({
     Value: GetTypeObject(classFieldContextRecord(), realmRec),
     Writable: Value.false,
