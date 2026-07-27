@@ -4,6 +4,9 @@ import { ObjectValue,
   BigIntValue,
   SameType,
 } from '../value.mts';
+import { isTypedNumber, TypedNumberValue } from '../value.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode } from '../type-system/runtime.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
@@ -14,9 +17,32 @@ import {
   Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
 
+/**
+ * The inverse of the metadata projection: an ~object~ Type Record whose
+ * properties reproduce a metadata value, so that `Base.<D>` with D bound to it
+ * rebuilds the same parameterization. Each property is a ~literal~ record,
+ * which is the form the projection hands back unchanged.
+ */
+function metadataAsObjectRecord(metadata: Value): TypeRecord {
+  const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+  if (metadata && typeof metadata === 'object') {
+    for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
+      const raw = (metadata as unknown as Record<string, unknown>)[key];
+      Properties.push({
+        key,
+        type: { Kind: 'literal', Value: raw as Value, Base: { Kind: 'primitive', Name: 'number', Arguments: [] } } as unknown as TypeRecord,
+        optional: false,
+        readonly: false,
+      });
+    }
+  }
+  return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
+}
+
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
 export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean }) {
+  (globalThis as { __a?: string[] }).__a?.push(`apply ${opText}`);
   // proposal-runtime-types: class operator dispatch. Consulted only when the
   // left operand is an Object, so the untyped fast path is unaffected.
   if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
@@ -50,16 +76,80 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     // otherwise capture EVERY multiplication of two numbers in the program and
     // fail on its own parameter.
     if (entry) {
-      const admits = entry.parameterType === null
+      // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
+      // operators "for each parameterization its parameters admit", so the
+      // block's parameter is bound from the RECEIVER and the operand and result
+      // types are resolved against that binding. `operator +(rhs: float64.<D>):
+      // float64.<D>` is then dimension-preserving addition: it admits an
+      // operand of the receiver's own parameterization and nothing else, and
+      // the result carries the same metadata.
+      let deferredParameterType = null;
+      let deferredReturnType = null;
+      let framePushed = false;
+      if (entry.deferred && isTypedNumber(lval)) {
+        const carried = (lval as TypedNumberValue).TypeRecord as TypeRecord;
+        if (carried.Kind === 'parameterized') {
+          const frame = new Map<string, TypeRecord>();
+          for (const name of entry.deferred.parameterNames) {
+            // The parameter stands for the receiver's METADATA, and it is
+            // bound as an ~object~ record reproducing it. That form is not a
+            // convenience: `float64.<D>` builds a parameterization only where
+            // its type argument is an object record, and anything else falls
+            // through to the bare base - which is why binding a record of any
+            // other kind left `float64.<D>` unparameterized and the result
+            // unstamped, silently, with the arithmetic still giving the right
+            // number.
+            frame.set(name, metadataAsObjectRecord(carried.Metadata));
+          }
+          // The frame stays pushed for the WHOLE invocation, not only while
+          // the types are resolved: the operator's own parameter boundary
+          // resolves `float64.<D>` when the body is entered, and popping first
+          // leaves that resolution without the binding - which is where
+          // "D is not defined" came from, raised inside the body of the very
+          // operator that declared D.
+          pushTypeParameterFrame(frame);
+          framePushed = true;
+          if (entry.deferred.parameterTypeNode) {
+            deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
+          }
+          if (entry.deferred.returnTypeNode) {
+            deferredReturnType = Q(yield* ResolveTypeNode(entry.deferred.returnTypeNode as never));
+          }
+        }
+      }
+      const effectiveParameter = deferredParameterType ?? entry.parameterType;
+      const admits = effectiveParameter === null
         ? true
-        : Q(yield* IsOfType(rval, entry.parameterType));
+        : Q(yield* IsOfType(rval, effectiveParameter));
+      if (!admits && framePushed) {
+        popTypeParameterFrame();
+        framePushed = false;
+      }
       if (admits) {
         EnterOperatorBody();
+        let raw;
         try {
-          return Q(yield* Call(entry.fn as never, lval, [rval]));
+          raw = Q(yield* Call(entry.fn as never, lval, [rval]));
         } finally {
           LeaveOperatorBody();
+          if (framePushed) {
+            popTypeParameterFrame();
+            framePushed = false;
+          }
         }
+        // "The metadata of a result comes from the return type annotations
+        // alone." The body computed a raw value; the return type says what it
+        // carries, which for a dimension-preserving operator is the receiver's
+        // own parameterization.
+        if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
+          if (isTypedNumber(raw)) {
+            return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
+          }
+          if (raw instanceof NumberValue) {
+            return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
+          }
+        }
+        return raw;
       }
     }
   }

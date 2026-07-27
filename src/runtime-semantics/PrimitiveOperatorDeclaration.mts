@@ -24,6 +24,13 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
   if (typeof typeName !== 'string') {
     return undefined;
   }
+  // The block's own type parameters, which stand for the receiver's metadata.
+  const blockParameterNames: string[] = [];
+  for (const tp of (node as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] } | null }).TypeParameters?.TypeParameterList ?? []) {
+    if (typeof tp.BindingIdentifier?.name === 'string') {
+      blockParameterNames.push(tp.BindingIdentifier.name);
+    }
+  }
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
   for (const e of node.OperatorDefinitionList ?? []) {
@@ -42,7 +49,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         env,
         privEnv,
       );
-      (castFn as { IsImplicitCast?: boolean }).IsImplicitCast = true;
+      (castFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
       RegisterPrimitiveCast(typeName, target, castFn);
       continue;
     }
@@ -64,16 +71,32 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     // the annotation names a type in the scope the block was written in, and
     // resolving it at an operator invocation would look it up wherever that
     // expression happens to be. This is F51's lesson at a second site.
+    //
+    // UNLESS the block is PARAMETERIZED. `primitive float64 <D: Dim>` declares
+    // operators "for each parameterization its parameters admit", and `D` names
+    // nothing until an invocation supplies a receiver - so the nodes are kept
+    // and resolved at dispatch with `D` bound. That is not F51's mistake: F51
+    // was resolving a name already fixed at declaration, and this is a
+    // parameter whose value IS the invocation.
     const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
     let parameterType: TypeRecord | null = null;
-    if (first?.TypeAnnotation) {
+    let deferred;
+    (globalThis as { __d?: string[] }).__d?.push(`params=${blockParameterNames.length} first=${first ? Object.keys(first).join("|") : "none"} ret=${e.TypeAnnotation ? "yes" : "no"}`);
+    if (blockParameterNames.length > 0) {
+      deferred = {
+        parameterNames: blockParameterNames,
+        parameterTypeNode: first?.TypeAnnotation?.Type,
+        returnTypeNode: e.TypeAnnotation?.Type,
+      };
+    } else if (first?.TypeAnnotation) {
       const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(first.TypeAnnotation.Type));
       if (resolved.Type === 'normal') {
         parameterType = resolved.Value as unknown as TypeRecord;
       }
     }
+    (opFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
     const key = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
-    RegisterPrimitiveOperator(typeName, key, opFn, parameterType);
+    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred);
   }
   return undefined;
 }

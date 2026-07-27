@@ -607,7 +607,11 @@ export function RegisterClassOperator(proto: Value, opText: string, fn: Value): 
  * declare an operator, get no error, and get no behaviour either - the worst of
  * the three outcomes.
  */
-interface PrimitiveOperatorEntry { readonly fn: Value, readonly parameterType: TypeRecord | null }
+interface PrimitiveOperatorEntry {
+  readonly fn: Value,
+  readonly parameterType: TypeRecord | null,
+  readonly deferred?: DeferredOperatorTypes,
+}
 
 const primitiveOperatorTables = new WeakMap<object, Map<string, Map<string, PrimitiveOperatorEntry>>>();
 
@@ -621,14 +625,35 @@ function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEnt
   return table;
 }
 
-export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null): void {
+/**
+ * proposal-runtime-types #sec-primitive-operator-blocks: a PARAMETERIZED block,
+ * `primitive` _T_ _P_ `{` ... `}`, "declares operators on _T_ FOR EACH
+ * PARAMETERIZATION ITS PARAMETERS ADMIT". Its parameter stands for the
+ * receiver's metadata, so neither the operand type nor the return type can be
+ * resolved at declaration - `float64.<D>` names a D that does not exist until
+ * an invocation supplies one.
+ *
+ * So a parameterized block registers its NODES and the environment they were
+ * written in, and the dispatch resolves them with the parameter bound. That is
+ * the one place this proposal resolves a type at use rather than at
+ * declaration, and it is not the F51 mistake: F51 was about resolving a name
+ * that was already fixed, while this is a parameter whose value IS the
+ * invocation.
+ */
+export interface DeferredOperatorTypes {
+  readonly parameterNames: readonly string[];
+  readonly parameterTypeNode: unknown;
+  readonly returnTypeNode: unknown;
+}
+
+export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes): void {
   const tables = primitiveTablesForAgent();
   let ops = tables.get(typeName);
   if (!ops) {
     ops = new Map();
     tables.set(typeName, ops);
   }
-  ops.set(opText, { fn, parameterType });
+  ops.set(opText, { fn, parameterType, deferred });
 }
 
 /**
@@ -669,6 +694,7 @@ export function LookupPrimitiveOperator(value: Value, opText: string): Primitive
     return null;
   }
   const tables = primitiveTablesForAgent();
+  (globalThis as { __k?: string[] }).__k?.push(`entered size=${tables.size}`);
   if (tables.size === 0) {
     return null;
   }
@@ -687,6 +713,7 @@ export function LookupPrimitiveOperator(value: Value, opText: string): Primitive
   if (name === null) {
     return null;
   }
+  (globalThis as { __k?: string[] }).__k?.push(`lookup name=${name} op=${opText} tables=${[...tables.keys()].join(",")} hit=${!!tables.get(name)?.get(opText)}`);
   return tables.get(name)?.get(opText) ?? null;
 }
 
@@ -1373,7 +1400,18 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   // cast supplies. Enforcing the annotation here would make the body's return
   // re-enter the very conversion it defines, which is the raw-body rule's
   // subject: "an operator body evaluates on raw values".
-  if ((fn as { IsImplicitCast?: boolean }).IsImplicitCast === true) {
+  // #sec-primitive-operator-blocks: "The metadata of a result comes from the
+  // RETURN TYPE ANNOTATIONS ALONE." So an operator declared by a primitive
+  // block - a cast or an ordinary operator - has an annotation that says what
+  // its result CARRIES, not a boundary its body must satisfy. The body
+  // evaluates on raw values, which is the raw-body rule, and the dispatch
+  // stamps the result with the annotation's type afterwards.
+  //
+  // Enforcing it here fails twice over: it re-enters the crossing a cast
+  // defines, and for a PARAMETERIZED block it resolves the block's type
+  // parameter outside the frame that binds it, so `float64.<D>` raises
+  // "D is not defined" from inside the body of the operator that declared it.
+  if ((fn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator === true) {
     return value;
   }
   const annotation = returnAnnotationOf(fn);
