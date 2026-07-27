@@ -2,7 +2,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
   SoAProto_lengthGetter, SoAProto_capacityGetter, SoAProto_byteLengthGetter, SoAProto_reserve,
-  SoAProto_push, SoAProto_pop, SoAProto_fill, SoAProto_toArray,
+  SoAProto_push, SoAProto_pop, SoAProto_fill, SoAProto_toArray, SoAProto_fieldsGetter,
 } from './SoA.mts';
 
 /**
@@ -20,6 +20,7 @@ export function bootstrapSoAPrototype(realmRec: Realm) {
     ['length', [SoAProto_lengthGetter]],
     ['capacity', [SoAProto_capacityGetter]],
     ['byteLength', [SoAProto_byteLengthGetter]],
+    ['fields', [SoAProto_fieldsGetter]],
     ['reserve', SoAProto_reserve, 1],
     ['push', SoAProto_push, 1],
     ['pop', SoAProto_pop, 0],

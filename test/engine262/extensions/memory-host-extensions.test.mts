@@ -819,3 +819,34 @@ test('soa: conversion is explicit and copies, and the two types are distinct', (
   expectThrown('class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
   expectThrownKind('class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
 });
+
+test('soa: fields projects each column as a live view', () => {
+  // soa.md: "`fields` projects each of `T`'s immediate fields as an array view
+  // ALIASING THAT FIELD'S COLUMN. The views are LIVE: writes through them are
+  // visible through the element API and the reverse."
+  const pad = 'class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); ';
+  expect(evaluated(`${pad} Object.getOwnPropertyNames(s.fields).join(",");`)).toBe('a,b');
+  expect(evaluated(`${pad} String(s.fields.a.length);`)).toBe('3');
+
+  // LIVENESS IN BOTH DIRECTIONS is the assertion that matters: a projection
+  // that copied would pass a read test on its own.
+  expect(evaluated(`${pad} s.fields.a[1] = 9; String(Number(s[1].a));`)).toBe('9');
+  expect(evaluated(`${pad} const ref r = s[2]; r.a = 4; String(Number(s.fields.a[2]));`)).toBe('4');
+  // "mesh.fields.color.fill(0xFFFFFFFF); // Writes one column across every
+  // element" - one column touched, the others not.
+  expect(evaluated(`${pad} const c = s.fields.a; c[0] = 1; c[1] = 2; c[2] = 3; String(Number(s[1].a)) + "/" + String(Number(s[1].b));`)).toBe('2/0');
+
+  // "The projections live under `fields` RATHER THAN ON THE CONTAINER so a field
+  // named `length` or `push` collides with nothing."
+  expect(evaluated('class C { length: uint8; push: uint8; } const t = new SoA.<C, 2>(); String(t.length) + "/" + String(t.fields.length.length);')).toBe('2/2');
+
+  // THE SPLIT IS ONE LEVEL. "Nested value type fields project as columns of
+  // that type, so `p.fields.origin` is a `[].<Vec2>` and `p.fields.origin.x`
+  // doesn't exist; flatten the class if that's what's wanted."
+  const proj = 'class Vec2 { x: float32; y: float32; } class Projectile { origin: Vec2; direction: Vec2; speed: float32; } const p = new SoA.<Projectile, 4>(); ';
+  expect(evaluated(`${proj} Object.getOwnPropertyNames(p.fields).join(",");`)).toBe('origin,direction,speed');
+  expect(evaluated(`${proj} String(p.fields.origin.length) + "/" + String(p.fields.origin.x);`)).toBe('4/undefined');
+  // A nested column is read and written as an aggregate at its offset - the
+  // same bytes a placed instance of that class describes, decoded the same way.
+  expect(evaluated(`${proj} const ref r = p[1]; r.origin.x = 7; String(Number(p[1].origin.x)) + "/" + String(Number(p[0].origin.x));`)).toBe('7/0');
+});

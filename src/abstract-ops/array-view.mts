@@ -168,3 +168,23 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   X(view.PreventExtensions());
   return view;
 }
+
+/**
+ * A view built directly over a known extent of a buffer, rather than from user
+ * arguments. This is what an SoA's `fields` projection returns: the column is
+ * already a contiguous run at a known offset and stride, so there is nothing to
+ * parse and nothing to check.
+ */
+export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic'): ObjectValue {
+  const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  views.set(view as unknown as object, {
+    Element: element,
+    Buffer: buffer,
+    ByteOffset: byteOffset,
+    Stride: stride,
+    Extent: extent,
+    ByteExtent: extent === 'dynamic' ? 0 : extent * stride,
+  });
+  X(view.PreventExtensions());
+  return view;
+}

@@ -6,8 +6,9 @@ import {
 import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
-import { BufferElementType } from '../abstract-ops/placement.mts';
-import { ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
+import { BufferElementType, SetPlacementBacking, WritePlacedField } from '../abstract-ops/placement.mts';
+import type { ClassLayout } from '../type-system/layout.mts';
+import { ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
@@ -264,6 +265,75 @@ function columnElementType(t: TypeRecord) {
  * copy and is lost. That is not a limitation of this implementation but the
  * ordinary rule for `[N].<T>` too, and it is why `ref` exists.
  */
+
+/**
+ * Read one column element at a byte offset.
+ *
+ * A PRIMITIVE column decodes directly. A column whose type is itself a value
+ * type class is not a single buffer element - soa.md keeps such a field as ONE
+ * column, "interleaved within itself" - so its element is read as a placed
+ * instance of that class at the offset, which is exactly what a placement
+ * backing already is. Reusing it means a nested column and a placed instance
+ * decode identically, which they must, since both describe the same bytes by
+ * the same layout.
+ */
+function* readColumnElement(storage: SoAStorage, columnIndex: number, index: number): ValueEvaluator {
+  const column = storage.Columns[columnIndex]!;
+  const at = storage.ColumnOffsets[columnIndex]! + index * column.layout.byteLength;
+  const primitive = BufferElementType(column.type);
+  if (primitive !== null) {
+    const raw = GetValueFromBuffer(storage.Buffer, at, primitive, true, 'unordered');
+    return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, column.type) : raw;
+  }
+  if (column.type.Kind === 'nominal') {
+    const ctor = (column.type as { Constructor?: ObjectValue }).Constructor as { InstanceLayout?: ClassLayout | null } | undefined;
+    const layout = ctor?.InstanceLayout;
+    if (layout) {
+      const proto = Q(yield* Get(ctor as unknown as ObjectValue, Value('prototype')));
+      const nested = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+      SetPlacementBacking(nested as unknown as object, {
+        Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout,
+      });
+      const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+      for (const field of layout.fields) {
+        typed.set(field.key, { TypeRecord: field.type });
+      }
+      (nested as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+      X(nested.PreventExtensions());
+      return nested;
+    }
+  }
+  return Throw.TypeError('a column of this type cannot be read');
+}
+
+/** Write one column element at a byte offset; the nested case scatters field-wise. */
+function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: number, value: Value): PlainEvaluator<boolean> {
+  const column = storage.Columns[columnIndex]!;
+  const at = storage.ColumnOffsets[columnIndex]! + index * column.layout.byteLength;
+  const primitive = BufferElementType(column.type);
+  if (primitive !== null) {
+    const converted = Q(yield* RequireType(value, column.type));
+    const numeric = converted instanceof TypedNumberValue
+      ? Value(Number((converted as unknown as { value: number }).value))
+      : converted;
+    Q(yield* SetValueInBuffer(storage.Buffer, at, primitive, numeric as NumberValue, true, 'unordered'));
+    return true;
+  }
+  if (column.type.Kind === 'nominal' && value instanceof ObjectValue) {
+    const ctor = (column.type as { Constructor?: ObjectValue }).Constructor as { InstanceLayout?: ClassLayout | null } | undefined;
+    const layout = ctor?.InstanceLayout;
+    if (layout) {
+      const backing = { Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout };
+      for (const field of layout.fields) {
+        const fieldValue = Q(yield* Get(value, Value(field.key)));
+        Q(yield* WritePlacedField(backing, field.key, field.type, Q(yield* RequireType(fieldValue, field.type))));
+      }
+      return true;
+    }
+  }
+  return Throw.TypeError('a column of this type cannot be written');
+}
+
 export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
   const live = requireViewLive(storage);
   if (live) {
@@ -293,12 +363,7 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;
-    const type = columnElementType(column.type);
-    if (type === null) {
-      return Throw.TypeError('a column of this type cannot be read');
-    }
-    const raw = GetValueFromBuffer(storage.Buffer, storage.ColumnOffsets[i]! + index * column.layout.byteLength, type, true, 'unordered');
-    const value = raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, column.type) : raw;
+    const value = Q(yield* readColumnElement(storage, i, index));
     X(CreateDataProperty(instance, Value(column.key), value));
     typed.set(column.key, { TypeRecord: column.type });
   }
@@ -345,16 +410,8 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
   }
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;
-    const type = columnElementType(column.type);
-    if (type === null) {
-      return Throw.TypeError('a column of this type cannot be written');
-    }
     const field = Q(yield* Get(value, Value(column.key)));
-    const converted = Q(yield* RequireType(field, column.type));
-    const numeric = converted instanceof TypedNumberValue
-      ? Value(Number((converted as unknown as { value: number }).value))
-      : converted;
-    Q(yield* SetValueInBuffer(storage.Buffer, storage.ColumnOffsets[i]! + index * column.layout.byteLength, type, numeric as NumberValue, true, 'unordered'));
+    Q(yield* writeColumnElement(storage, i, index, field));
   }
   return true;
 }
@@ -569,13 +626,9 @@ export function* ReadSoAField(backing: SoAElementBacking, key: string): ValueEva
   if (i < 0) {
     return Value.undefined;
   }
-  const column = storage.Columns[i]!;
-  const type = BufferElementType(column.type);
-  if (type === null) {
-    return Throw.TypeError('a column of this type cannot be read');
-  }
-  const raw = GetValueFromBuffer(storage.Buffer, storage.ColumnOffsets[i]! + backing.Index * column.layout.byteLength, type, true, 'unordered');
-  return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, column.type) : raw;
+  // Through the same helper the gather uses, so a nested class column reads
+  // identically whether it is reached by index or by reference.
+  return Q(yield* readColumnElement(storage, i, backing.Index));
 }
 
 /** A field write through a reference: one indexed store into that field's column. */
@@ -589,17 +642,7 @@ export function* WriteSoAField(backing: SoAElementBacking, key: string, value: V
   if (i < 0) {
     return false;
   }
-  const column = storage.Columns[i]!;
-  const type = BufferElementType(column.type);
-  if (type === null) {
-    return Throw.TypeError('a column of this type cannot be written');
-  }
-  const converted = Q(yield* RequireType(value, column.type));
-  const numeric = converted instanceof TypedNumberValue
-    ? Value(Number((converted as unknown as { value: number }).value))
-    : converted;
-  Q(yield* SetValueInBuffer(storage.Buffer, storage.ColumnOffsets[i]! + backing.Index * column.layout.byteLength, type, numeric as NumberValue, true, 'unordered'));
-  return true;
+  return Q(yield* writeColumnElement(storage, i, backing.Index, value));
 }
 
 /**
@@ -765,3 +808,54 @@ export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator
 }
 
 export { SoA_from };
+
+/**
+ * `fields` — soa.md: "`fields` projects each of `T`'s immediate fields as an
+ * array view ALIASING THAT FIELD'S COLUMN. The views are LIVE: writes through
+ * them are visible through the element API and the reverse."
+ *
+ * "A growable `SoA.<T>` projects growable `[].<F>` views; a fixed `SoA.<T, N>`
+ * projects `[N].<F>`. Nested value type fields project as columns of that type,
+ * so `p.fields.origin` is a `[].<Vec2>` and `p.fields.origin.x` doesn't exist;
+ * flatten the class if that's what's wanted."
+ *
+ * "The projections live under `fields` RATHER THAN ON THE CONTAINER so a field
+ * named `length` or `push` collides with nothing" - which is why this is one
+ * object of views rather than accessors on the SoA itself.
+ *
+ * A projection over a GROWABLE SoA is taken against the allocation as it stands.
+ * Growth reallocates every column, so a projection taken before a `push` that
+ * reallocates describes memory the SoA no longer uses - the same hazard a `ref`
+ * has, and refused the same way rather than silently reading stale bytes.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ */
+function* SoAProto_fieldsGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const storage = requireStorage(thisValue);
+  if (!storage) {
+    return Throw.TypeError('$1 is not an SoA', thisValue);
+  }
+  const live = requireViewLive(storage);
+  if (live) {
+    return live;
+  }
+  const fields = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  for (let i = 0; i < storage.Columns.length; i += 1) {
+    const column = storage.Columns[i]!;
+    const view = MakeArrayView(
+      column.type,
+      storage.Buffer,
+      storage.ColumnOffsets[i]!,
+      column.layout.byteLength,
+      // A fixed SoA projects a fixed view of its extent; a growable one projects
+      // a view of the elements IN USE, which is its length rather than its
+      // capacity - a projection describes the elements, not the allocation.
+      storage.Extent === 0 ? storage.Length : storage.Extent,
+    );
+    X(CreateDataProperty(fields, Value(column.key), view));
+  }
+  X(fields.PreventExtensions());
+  return fields;
+}
+
+export { SoAProto_fieldsGetter };
