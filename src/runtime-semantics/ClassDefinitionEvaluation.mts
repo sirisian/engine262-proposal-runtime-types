@@ -112,7 +112,21 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         methodDefinition.Decorators = decorators;
         return methodDefinition;
       } else {
-        return yield* MethodDefinitionEvaluation(node, object, enumerable!);
+        const method = yield* MethodDefinitionEvaluation(node, object, enumerable!);
+        if (surroundingAgent.feature('runtime-types') && node.Decorators) {
+          // decorators.md distinguishes a method from an accessor from an
+          // operator by CONTEXT TYPE rather than by a `kind` string a decorator
+          // has to test, so the position decides which context is built and
+          // overload resolution does the rest.
+          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassMemberDecoratorContext(
+            memberContextKind(node),
+            MemberKeyOf(node, method),
+            (node as { static?: boolean }).static === true,
+            currentClassName ?? Value.undefined,
+            object as Value,
+          ))));
+        }
+        return method;
       }
     }
     case 'FieldDefinition': {
@@ -1303,4 +1317,53 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   }
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
+}
+
+/**
+ * Which class-family context a member declaration takes. decorators.md gives
+ * getters, setters, accessors, methods, and operators each their own, and the
+ * declaration says which: an `AccessorKind` for the first three, an
+ * `OperatorName` for an operator, and a method otherwise.
+ */
+function memberContextKind(node: ParseNode): string {
+  const n = node as unknown as {
+    OperatorName?: string, Accessor?: boolean,
+    UniqueFormalParameters?: unknown, PropertySetParameterList?: unknown,
+  };
+  if (typeof n.OperatorName === 'string') {
+    return 'ClassOperator';
+  }
+  if (n.Accessor === true) {
+    return 'ClassAccessor';
+  }
+  // A MethodDefinition carries no accessor marker; the PARAMETER LIST is what
+  // distinguishes the three, and it is what MethodDefinitionEvaluation itself
+  // switches on. A setter has a PropertySetParameterList, a method has
+  // UniqueFormalParameters, and a getter has neither.
+  if (n.PropertySetParameterList) {
+    return 'ClassSetter';
+  }
+  if (!n.UniqueFormalParameters) {
+    return 'ClassGetter';
+  }
+  return 'ClassMethod';
+}
+
+/**
+ * The name of a class member, for its decorator context.
+ *
+ * Taken from the RECORD the evaluation produced rather than by evaluating the
+ * name node again: a ClassElementName is not an expression the evaluator
+ * handles on its own, and a computed name must not be evaluated twice - once
+ * for the member and once for its decorator - since the expression may have an
+ * effect.
+ */
+function MemberKeyOf(node: ParseNode, evaluatedMember: unknown): Value {
+  const record = evaluatedMember as { Key?: Value } | undefined;
+  if (record?.Key !== undefined) {
+    return record.Key;
+  }
+  const named = node as unknown as { ClassElementName?: { PropertyName?: { name?: string }, name?: string } };
+  const literal = named.ClassElementName?.PropertyName?.name ?? named.ClassElementName?.name;
+  return typeof literal === 'string' ? Value(literal) : Value.undefined;
 }

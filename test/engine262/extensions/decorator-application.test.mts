@@ -113,3 +113,37 @@ test('members apply before their container, in document order', () => {
     + '@tag("C2") @tag("C1") class A { @tag("f2") @tag("f1") a: uint8; @tag("g") b: uint8; } ';
   expect(evaluated(`${composed} log.join(",");`)).toBe('f1,f2,g,C1,C2');
 });
+
+test('each member position takes its own context', () => {
+  // decorators.md distinguishes a method from a getter from a setter by CONTEXT
+  // TYPE rather than by a `kind` string the decorator has to test — which is
+  // the whole reason the contexts are separate types. So the assertion is that
+  // the POSITION selects the context, not that a decorator can tell them apart.
+  const members = 'const log = []; function tag(c) { log.push(c.kind + ":" + String(c.name)); } '
+    + 'class A { @tag m() {} @tag get g() { return 1; } @tag set s(v) {} @tag static st() {} } ';
+  expect(evaluated(`${members} log.join(",");`)).toBe('ClassMethod:m,ClassGetter:g,ClassSetter:s,ClassMethod:st');
+  // `static` is on the context, so a static method is a ClassMethod that says so.
+  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab static m() {} } String(c.static);')).toBe('true');
+  // A method's context carries the same `classContext` a field's does.
+  expect(evaluated('let c; function grab(x) { c = x; } class Named { @grab m() {} } c.classContext.kind + "/" + String(c.classContext.name);')).toBe('Class/Named');
+  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab m() {} } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,name,static,private,abstract,classContext');
+
+  // MIXED members fire in document order and the class still comes last, which
+  // is the composition the ordering rule promises across kinds rather than
+  // within one.
+  const mixed = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+    + '@tag("C") class A { @tag("f") a: uint8; @tag("m") m() {} @tag("g") get g() { return 1; } } ';
+  expect(evaluated(`${mixed} log.join(",");`)).toBe('f(ClassField),m(ClassMethod),g(ClassGetter),C(Class)');
+});
+
+test('a decorated operator has a context but no grammar', () => {
+  // `Reflect.ClassOperator` exists and `memberContextKind` selects it, but the
+  // GRAMMAR admits no decorator before `operator`: `@f operator +(rhs: T): T`
+  // is a SyntaxError while the same operator without a decorator parses.
+  //
+  // Pinned as a gap rather than left to be discovered. The context is built and
+  // reachable the moment the grammar admits the position, so this is a parser
+  // change and not a semantics one.
+  expect(evaluated('class Op { operator +(rhs: Op): Op { return this; } } "parses";')).toBe('parses');
+  expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
+});
