@@ -41,7 +41,11 @@ test('memory layout: the reserved layout controls place a class and its fields',
   // context types, overload resolution, replacement by return value - is a
   // separate feature and is not implemented, and a declaration that is accepted
   // and does nothing reads as support.
-  expectThrown('function f(x) { return x; } @f class Z { a: uint8; }');
+  // OPENED BY STAGE B (cycle 117): a class decorator now runs, and runs AFTER
+  // the class is built so it sees a finished one. The layout controls are
+  // unaffected - they are recognized syntactically and never evaluated, so a
+  // class can carry both.
+  expect(evaluated('const l = []; function f(c) { l.push(c.kind); } @f @packed class Z { a: uint8; b: uint16; } l.join(",") + "/" + String((type Z).byteLength);')).toBe('Class/3');
 });
 
 test('memory layout: a type reports its own byteLength', () => {
@@ -111,10 +115,11 @@ test('threading: Thread is not defined (documents the gap)', () => {
 });
 
 // ── decorators: the @ syntax under the feature ────────────────────────────────
-test('decorators: @decorator does not parse under the runtime-types feature (documents the gap)', () => {
-  // Target (decorators.md): @d class A {} plus the declaration-reflection facility.
-  // (The type-object half of reflection is implemented; see typeobjects.test.mts.)
-  expectThrown('function d(x) { return x; } @d class A {} typeof A;');
+test('decorators: a user decorator runs under the runtime-types feature', () => {
+  // WAS a gap pin. Stage A (cycle 116) opened the call and stage B (cycle 117)
+  // opened the class and member contexts, so a decoration now finds its
+  // function, is applied in the specified order, and receives a context.
+  expect(evaluated('const l = []; function d(c) { l.push(c.kind + ":" + String(c.name)); } @d class A {} l.join(",") + "/" + typeof A;')).toBe('Class:A/function');
 });
 // Phase 3's unclaimed-key error adjudicates these programs' keys, and none of
 // these tests is ABOUT the metadata protocol, so each waives adjudication

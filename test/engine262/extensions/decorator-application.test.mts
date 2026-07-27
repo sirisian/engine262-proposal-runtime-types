@@ -64,8 +64,52 @@ test('what stage A does not open', () => {
   // A decorator has to BE a function. `@notFn` where the binding holds 5 is a
   // TypeError at the decorated declaration rather than a silent no-op.
   expectThrownKind('const notFn = 5; class C { @notFn y: uint8; }', 'TypeError');
-  // The class-level position is still refused: `Reflect.Class` does not exist
-  // and stage A does not invent it. Asserted so that stage B has to remove this
-  // deliberately rather than discover it already gone.
-  expectThrown('function f(c) {} @f class A {}');
+  // The class-level position WAS refused here, and stage B (cycle 117) removed
+  // that refusal deliberately - which is what the assertion was for. It now
+  // asserts the opposite, and the two lines together are the record that the
+  // opening was intended rather than accidental.
+  expect(evaluated('let k; function f(c) { k = c.kind; } @f class A {} k;')).toBe('Class');
+});
+
+test('the class family: contexts exist and carry their declaration', () => {
+  // Stage B of PLAN-decorators.md. decorators.md's `ClassReflection` is `name`,
+  // `type`, `abstract`, `metadata`; `ClassFieldReflection` adds `static`,
+  // `private`, `protected`, `readonly`, `initial`, and the layout pair.
+  expect(evaluated('[typeof Reflect.Class, typeof Reflect.ClassMethod, typeof Reflect.ClassGetter, typeof Reflect.ClassSetter, typeof Reflect.ClassAccessor, typeof Reflect.ClassOperator].join(",");')).toBe('object,object,object,object,object,object');
+
+  // A class decorator sees the class ITSELF, not a description of one.
+  expect(evaluated('let t; function f(c) { t = c.type; } @f class A {} String(t === A);')).toBe('true');
+  expect(evaluated('let k; function f(c) { k = c.kind + ":" + String(c.name); } @f class A {} k;')).toBe('Class:A');
+
+  // The widened ClassField carries the declaration, not only the layout.
+  const field = 'let c; function f(x) { c = x; } class A { @f static s: uint8; } ';
+  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,classContext');
+  expect(evaluated(`${field} String(c.static) + "/" + String(c.private) + "/" + String(c.type === uint8);`)).toBe('true/false/true');
+  expect(evaluated('let c; function f(x) { c = x; } class B { @f #p: uint8; } String(c.private);')).toBe('true');
+
+  // "classContext: Reflect.Class.<TClass>" — a member's context carries its
+  // class's, which is what lets one decorator reach the declaration it belongs
+  // to without the class having to pass itself.
+  expect(evaluated('let c; function f(x) { c = x; } class Named { @f a: uint8; } c.classContext.kind + ":" + String(c.classContext.name);')).toBe('Class:Named');
+});
+
+test('members apply before their container, in document order', () => {
+  // decorators.md "Order": "Members apply before their container, in document
+  // order, and the container's own decorators apply last. A class decorator
+  // sees a FINISHED CLASS, including whatever its fields' and methods'
+  // decorators did."
+  //
+  // One equality on the whole log again: a membership check would pass with the
+  // class running first, which is the arrangement the rule exists to forbid.
+  const both = 'const log = []; '
+    + 'function cls(c) { log.push("class:" + String(c.name)); } '
+    + 'function fld(c) { log.push("field:" + String(c.name) + "@" + String(c.classContext.name)); } '
+    + '@cls class B { @fld b: uint8; @fld c: uint8; } ';
+  expect(evaluated(`${both} log.join(",");`)).toBe('field:b@B,field:c@B,class:B');
+
+  // And the two rules compose: reverse source order WITHIN a declaration,
+  // document order ACROSS declarations, container last.
+  const composed = 'const log = []; function tag(n) { return (c) => log.push(n); } '
+    + '@tag("C2") @tag("C1") class A { @tag("f2") @tag("f1") a: uint8; @tag("g") b: uint8; } ';
+  expect(evaluated(`${composed} log.join(",");`)).toBe('f1,f2,g,C1,C2');
 });

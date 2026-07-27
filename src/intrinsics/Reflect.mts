@@ -654,6 +654,81 @@ export function typeContextRecord(): TypeRecord {
   };
 }
 
+
+/**
+ * proposal-runtime-types decorators.md, the CLASS family of decorator contexts.
+ *
+ * Each is a nominal type in the `Reflect` namespace naming a kind of
+ * declaration, built the same way `ClassField` is: a sentinel declaration so
+ * every writing of the name interns as one type, and a `LibraryName` the
+ * decoration dispatch matches on.
+ */
+const classContextDeclaration = { type: 'ReflectionContext', name: 'Class' } as unknown as ParseNode;
+
+export function classContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Class',
+  };
+}
+
+const classAccessorContextDeclaration = { type: 'ReflectionContext', name: 'ClassAccessor' } as unknown as ParseNode;
+
+export function classAccessorContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classAccessorContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassAccessor',
+  };
+}
+
+const classGetterContextDeclaration = { type: 'ReflectionContext', name: 'ClassGetter' } as unknown as ParseNode;
+
+export function classGetterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classGetterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassGetter',
+  };
+}
+
+const classSetterContextDeclaration = { type: 'ReflectionContext', name: 'ClassSetter' } as unknown as ParseNode;
+
+export function classSetterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classSetterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassSetter',
+  };
+}
+
+const classMethodContextDeclaration = { type: 'ReflectionContext', name: 'ClassMethod' } as unknown as ParseNode;
+
+export function classMethodContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classMethodContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassMethod',
+  };
+}
+
+const classOperatorContextDeclaration = { type: 'ReflectionContext', name: 'ClassOperator' } as unknown as ParseNode;
+
+export function classOperatorContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classOperatorContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassOperator',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -672,6 +747,42 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   const reflect = realmRec.Intrinsics['%Reflect%'];
   X(reflect.DefineOwnProperty(Value('Type'), Descriptor({
     Value: GetTypeObject(typeContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Class'), Descriptor({
+    Value: GetTypeObject(classContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassAccessor'), Descriptor({
+    Value: GetTypeObject(classAccessorContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassGetter'), Descriptor({
+    Value: GetTypeObject(classGetterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassSetter'), Descriptor({
+    Value: GetTypeObject(classSetterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassMethod'), Descriptor({
+    Value: GetTypeObject(classMethodContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassOperator'), Descriptor({
+    Value: GetTypeObject(classOperatorContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

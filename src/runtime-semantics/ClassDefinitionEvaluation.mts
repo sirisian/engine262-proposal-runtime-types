@@ -1,4 +1,6 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
 import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
 import type { ThrowCompletion } from '../completion.mts';
@@ -61,6 +63,7 @@ import {
   CreateMethodProperty,
   OrdinaryObjectCreate,
   CreateDataProperty,
+  EnsureCompletion,
   OrdinaryCreateFromConstructor,
   PrivateMethodOrAccessorAdd,
   InitializeInstanceElements,
@@ -75,6 +78,25 @@ import {
 
 /** https://tc39.es/ecma262/#sec-static-semantics-classelementevaluation */
 // -decorator
+/**
+ * The class whose elements are being evaluated, so a member's decorator context
+ * can carry its `classContext`. ClassElementEvaluation does not receive the
+ * class - it takes the prototype object - and threading a name through three
+ * overload signatures for one property is worse than a scoped current-class,
+ * which is how the engine already carries a pending placement and a pending
+ * SoA type argument.
+ */
+// Left undefined rather than initialized to `Value.undefined`: this module is
+// evaluated before the value intrinsics are, so touching `Value.undefined` at
+// module scope throws during load.
+let currentClassName: Value | undefined;
+
+export function SetCurrentClassName(name: Value | undefined): Value | undefined {
+  const previous = currentClassName;
+  currentClassName = name;
+  return previous;
+}
+
 function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable: BooleanValue): PlainEvaluator<PrivateElementRecord | ClassFieldDefinitionRecord | void>
 // +decorator
 function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue): PlainEvaluator<ClassElementDefinitionRecord | ClassStaticBlockDefinitionRecord | void>
@@ -107,7 +129,9 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // and a context that described a half-built field would be describing
           // something the program never has.
           const key = (plain as { Name?: Value }).Name;
-          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassFieldDecoratorContext(key ?? Value.undefined))));
+          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassFieldDecoratorContext(
+            key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value,
+          ))));
         }
         (plain as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
         return plain;
@@ -304,6 +328,10 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 2. Let classScope be NewDeclarativeEnvironment(env).
   const classScope = new DeclarativeEnvironmentRecord(env);
+  // The class whose members are about to be evaluated, so their decorator
+  // contexts can name it. Restored rather than cleared, since a class may be
+  // declared inside another class's element.
+  const outerClassName = SetCurrentClassName(classBinding instanceof UndefinedValue ? undefined : classBinding);
   // 3. If classBinding is not undefined, then
   if (!(classBinding instanceof UndefinedValue)) {
     // a. Perform classScopeEnv.CreateImmutableBinding(classBinding, true).
@@ -636,6 +664,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
     // 33. Return F.
+    SetCurrentClassName(outerClassName);
     return F;
   } else {
     // 21. Let instancePrivateMethods be a new empty List.
@@ -848,6 +877,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
     // 33. Return F.
+    SetCurrentClassName(outerClassName);
     return F;
   }
 }
@@ -1211,10 +1241,66 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  * A partial context is stated here rather than implied, so that a stage B that
  * forgets a field fails a test rather than shipping a hole.
  */
-export function* ClassFieldDecoratorContext(key: Value): ValueEvaluator {
+export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  const decl = node as unknown as {
+    static?: boolean, TypeAnnotation?: { Type?: ParseNode } | null,
+    ClassElementName?: { PrivateIdentifier?: unknown }, Readonly?: boolean, Access?: string,
+  };
   X(CreateDataProperty(context, Value('kind'), Value('ClassField')));
   X(CreateDataProperty(context, Value('name'), key));
+  // decorators.md's ClassFieldReflection. `static` and `private` are read from
+  // the declaration; `protected` and `readonly` follow the access modifiers the
+  // class extension defines.
+  X(CreateDataProperty(context, Value('static'), decl.static ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('protected'), decl.Access === 'protected' ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('readonly'), decl.Readonly ? Value.true : Value.false));
+  if (decl.TypeAnnotation?.Type) {
+    const t = EnsureCompletion(yield* TypeNodeToTypeRecord(decl.TypeAnnotation.Type as never));
+    if (t.Type === 'normal') {
+      X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+    }
+  }
+  // "classContext: Reflect.Class.<TClass>" - a field's context carries its
+  // class's, which is what lets one decorator reach the declaration it belongs
+  // to without the class having to pass itself.
+  X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
+  return context;
+}
+
+/**
+ * decorators.md's `ClassReflection`: `name`, `type` (the constructor),
+ * `abstract`, and `metadata`.
+ */
+export function* ClassDecoratorContext(className: Value, classCtor: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value('Class')));
+  X(CreateDataProperty(context, Value('name'), className));
+  X(CreateDataProperty(context, Value('type'), classCtor));
+  X(CreateDataProperty(context, Value('abstract'), Value.false));
+  return context;
+}
+
+/**
+ * The contexts for a class's function-valued members. decorators.md gives each
+ * its own reflection - `ClassMethodReflection` carries `signatures` and
+ * `abstract`, a getter's carries neither - but all four share the shape a
+ * decorator dispatches on, so they are built together and differ by `kind` and
+ * by what only some of them have.
+ */
+export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  X(CreateDataProperty(context, Value('name'), key));
+  X(CreateDataProperty(context, Value('static'), isStatic ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
+  if (kind === 'ClassMethod' || kind === 'ClassOperator') {
+    X(CreateDataProperty(context, Value('abstract'), Value.false));
+  }
+  X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
 }

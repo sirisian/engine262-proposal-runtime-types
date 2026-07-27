@@ -6,7 +6,8 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import {
-  InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation, reservedOnlyDecorators,
+  InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
+  ApplyDecorators, ClassDecoratorContext,
 } from './all.mts';
 import {
   surroundingAgent, ResolveBinding, GetValue, IsConstructor, Throw,
@@ -69,7 +70,23 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
   // this one - the list evaluates as that proposal specifies.
   let decorators: DecoratorDefinitionRecord[] = [];
   if (surroundingAgent.feature('runtime-types')) {
-    Q(reservedOnlyDecorators(ClassDeclaration.Decorators));
+    // decorators.md "Order": "Members apply before their container, in document
+    // order, and the container's own decorators apply last. A class decorator
+    // sees a FINISHED CLASS, including whatever its fields' and methods'
+    // decorators did." So the class's own decorators run after the class is
+    // built, not before - which is why this sits below the evaluation rather
+    // than above it, where the refusal it replaces sat.
+    Q(yield* BindingClassDeclarationEvaluation(ClassDeclaration, decorators));
+    const name = ClassDeclaration.BindingIdentifier
+      ? Value((ClassDeclaration.BindingIdentifier as { name: string }).name)
+      : Value.undefined;
+    let ctor: Value = Value.undefined;
+    if (ClassDeclaration.BindingIdentifier) {
+      const ref = Q(yield* ResolveBinding(name as never));
+      ctor = Q(yield* GetValue(ref));
+    }
+    Q(yield* ApplyDecorators(ClassDeclaration.Decorators, Q(yield* ClassDecoratorContext(name, ctor))));
+    return NormalCompletion(undefined);
   } else if (ClassDeclaration.Decorators) {
     decorators = Q(yield* DecoratorListEvaluation(ClassDeclaration.Decorators));
   }
