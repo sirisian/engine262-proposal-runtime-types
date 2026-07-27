@@ -60,6 +60,7 @@ import {
   SetFunctionName,
   CreateMethodProperty,
   OrdinaryObjectCreate,
+  CreateDataProperty,
   OrdinaryCreateFromConstructor,
   PrivateMethodOrAccessorAdd,
   InitializeInstanceElements,
@@ -99,10 +100,15 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         fieldDefinition.Decorators = decorators;
         return fieldDefinition;
       } else {
-        if (surroundingAgent.feature('runtime-types')) {
-          Q(reservedOnlyDecorators(node.Decorators));
-        }
         const plain = Q(yield* ClassFieldDefinitionEvaluation(node, object));
+        if (surroundingAgent.feature('runtime-types')) {
+          // The decorators run AFTER the field definition is evaluated, because
+          // "a decorator runs when the declaration it decorates is evaluated"
+          // and a context that described a half-built field would be describing
+          // something the program never has.
+          const key = (plain as { Name?: Value }).Name;
+          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassFieldDecoratorContext(key ?? Value.undefined))));
+        }
         (plain as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
         return plain;
       }
@@ -215,6 +221,55 @@ export function readFieldControls(decorators: readonly ParseNode.Decorator[] | n
     }
   }
   return out;
+}
+
+/**
+ * proposal-runtime-types, decorators.md "Order": a decorator's EXPRESSION is
+ * evaluated in document order, and the decorators are APPLIED innermost first
+ * and in reverse source order — so on one declaration the decorator written
+ * closest to it is applied first. The two phases run in opposite directions,
+ * which is TC39's rule and Python's, and following it means a reader who knows
+ * either knows these.
+ *
+ * That is why this evaluates the whole list before applying any of it, rather
+ * than evaluating and calling each in turn: `@a(f()) @b(g()) x` must call `f()`
+ * before `g()` and apply `b` before `a`, and one pass cannot do both.
+ *
+ * A RESERVED LAYOUT CONTROL is skipped in both phases. #sec-memory-layout says
+ * the controls are "recognized syntactically and never evaluated", so `@packed`
+ * is not a function call and has no expression to evaluate — which is also what
+ * lets `@packed @audit a: uint8;` carry one of each.
+ */
+export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined, context: Value): PlainEvaluator<void> {
+  const list = decorators ?? [];
+  const applicable: ParseNode.Decorator[] = [];
+  const evaluated: Value[] = [];
+  // Phase one, document order.
+  for (const d of list) {
+    const control = reservedLayoutControl(d);
+    if (control && (CLASS_CONTROLS.includes(control.name) || FIELD_CONTROLS.includes(control.name))) {
+      continue;
+    }
+    applicable.push(d);
+    const expr = d.subtype === 'CallExpression'
+      ? (d as unknown as { CallExpression: ParseNode.CallExpression }).CallExpression
+      : (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression;
+    const ref = Q(yield* Evaluate(expr as ParseNode));
+    evaluated.push(Q(yield* GetValue(ref as never)));
+  }
+  // Phase two, reverse source order.
+  for (let i = applicable.length - 1; i >= 0; i -= 1) {
+    const fn = evaluated[i]!;
+    if (!IsCallable(fn)) {
+      return Throw.TypeError('$1 is not a function', fn);
+    }
+    // "A decorator is an ordinary function whose LAST PARAMETER is annotated
+    // with a reflection context", and the decoration supplies that argument.
+    // A `@f(x)` form has already evaluated to the function the call returned,
+    // so by here every decorator is called with the context alone.
+    Q(yield* Call(fn, Value.undefined, [context]));
+  }
+  return undefined;
 }
 
 /**
@@ -1143,3 +1198,23 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
   (record: ClassElementDefinitionRecord): ClassElementDefinitionRecord;
   [Symbol.hasInstance](instance: unknown): instance is ClassElementDefinitionRecord;
 };
+
+/**
+ * proposal-runtime-types #sec-applying-a-decorator: the context a `ClassField`
+ * decoration supplies as its last argument.
+ *
+ * decorators.md's `ClassFieldReflection` is larger than this — `type`, `static`,
+ * `private`, `protected`, `readonly`, `initial`, `offset`, `byteLength`, and
+ * `metadata`. Stage A of PLAN-decorators.md builds the CALL, not the contexts,
+ * so this carries the `kind` and the `name` that identify what was decorated
+ * and leaves the rest to stage B, which widens `Reflect.ClassField` properly.
+ * A partial context is stated here rather than implied, so that a stage B that
+ * forgets a field fails a test rather than shipping a hole.
+ */
+export function* ClassFieldDecoratorContext(key: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value('ClassField')));
+  X(CreateDataProperty(context, Value('name'), key));
+  return context;
+}
