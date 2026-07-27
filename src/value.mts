@@ -1,6 +1,7 @@
 import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
+import { SoAStorageOf, SoAGather, SoAScatter } from './intrinsics/SoA.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -924,6 +925,19 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
     }
+    // proposal-runtime-types soa.md: `s[i]` GATHERS an element from the columns.
+    // An SoA is an ordinary object with column storage rather than an exotic,
+    // so the index is intercepted here for the same reason a placed field is:
+    // the storage is not a property table and a read has to be computed.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const soa = SoAStorageOf(this as unknown as object);
+      if (soa !== undefined) {
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          return Q(yield* SoAGather(soa, index));
+        }
+      }
+    }
     // proposal-runtime-types, the placement forms: a placed instance's fields
     // ARE the buffer's bytes, so a read is a decode at the field's laid-out
     // position rather than a property lookup. Without this the constructor's
@@ -992,6 +1006,15 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
+      }
+      const soaStorage = SoAStorageOf(Receiver as unknown as object);
+      if (soaStorage !== undefined && P instanceof JSStringValue) {
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          // "particles[0] = spawned; // Scatters the fields into the columns."
+          Q(yield* SoAScatter(soaStorage, index, V));
+          return Value.true;
+        }
       }
       const placedBacking = PlacementBackingOf(Receiver as unknown as object);
       if (placedBacking !== undefined && P instanceof JSStringValue) {

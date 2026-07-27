@@ -573,3 +573,62 @@ test('soa: allocation, capacity, and reserve', () => {
   expectThrown('SoA();');
   expectThrown('class Ref { s: string; } new SoA.<Ref, 2>();');
 });
+
+test('soa: the element boundary gathers and scatters', () => {
+  // soa.md: "Every operation that reads or writes an element behaves as it does
+  // on `[].<T>`." `particles[0]` gathers a value from the columns and
+  // `particles[0] = spawned` scatters the fields into them.
+  const pad = 'class Pad { a: uint8; b: float64; } ';
+
+  // ZERO-FILL, which stage B could allocate but not observe: a fixed
+  // `SoA.<T, N>` holds N zero-filled elements from construction, the same rule
+  // that makes `let d: [10].<A>` hold ten of them.
+  expect(evaluated(`${pad} const s = new SoA.<Pad, 4>(); String(Number(s[0].a)) + "/" + String(Number(s[0].b));`)).toBe('0/0');
+
+  // The round trip, and that it touches ONE element: a scatter that wrote the
+  // whole column would pass a round-trip test on its own.
+  const one = `${pad} const s = new SoA.<Pad, 4>(); s[1] = { a: 7, b: 2.5 }; `;
+  expect(evaluated(`${one} String(Number(s[1].a)) + "/" + String(Number(s[1].b));`)).toBe('7/2.5');
+  expect(evaluated(`${one} String(Number(s[0].a)) + "/" + String(Number(s[2].a));`)).toBe('0/0');
+
+  // A GATHER IS A COPY, because a value type copies. `s[0].x = 5` therefore
+  // writes to that copy and is lost - which is the ordinary rule for `[N].<T>`
+  // too, and is why `ref` exists. It will be the first thing someone trips
+  // over, so it is pinned rather than left to be discovered.
+  expect(evaluated(`${one} const c = s[1]; c.a = 9; String(Number(s[1].a)) + "/" + String(Number(c.a));`)).toBe('7/9');
+
+  // The store check applies PER COLUMN, against that column's declared type.
+  expectThrownKind(`${pad} const s = new SoA.<Pad, 2>(); s[0] = { a: 300, b: 1 };`, 'RangeError');
+  // An index past the end reads *undefined*, as an array does.
+  expect(evaluated(`${pad} const s = new SoA.<Pad, 2>(); String(s[5]);`)).toBe('undefined');
+
+  // A PRIMITIVE element degenerates to a single column, and its element is the
+  // column's value rather than an object with fields.
+  expect(evaluated('const p = new SoA.<float32, 3>(); p[0] = 1.5; String(Number(p[0]));')).toBe('1.5');
+});
+
+test('soa: push, pop, fill, and toArray', () => {
+  const pad = 'class Pad { a: uint8; b: float64; } ';
+  // `push` "appends to every column" and returns the new length; growth doubles
+  // the capacity, so a run of pushes does not recopy every column each time.
+  const pushed = `${pad} const g = new SoA.<Pad>(); g.push({ a: 1, b: 1.5 }); g.push({ a: 2, b: 2.5 }); `;
+  expect(evaluated(`${pushed} String(g.length);`)).toBe('2');
+  expect(evaluated(`${pushed} String(Number(g[0].a)) + "/" + String(Number(g[1].b));`)).toBe('1/2.5');
+  // The elements survive the reallocation growth causes, which is the part a
+  // length check alone would not show.
+  expect(evaluated(`${pushed} for (let i = 0; i < 20; i = i + 1) { g.push({ a: 5, b: 0.5 }); } String(Number(g[0].a)) + "/" + String(Number(g[1].b)) + "/" + String(g.length);`)).toBe('1/2.5/22');
+
+  expect(evaluated(`${pushed} const p = g.pop(); String(Number(p.a)) + "/" + String(g.length);`)).toBe('2/1');
+  expect(evaluated(`${pad} const g = new SoA.<Pad>(); String(g.pop());`)).toBe('undefined');
+  expect(evaluated(`${pad} const f = new SoA.<Pad, 3>(); f.fill({ a: 9, b: 0.5 }); String(Number(f[0].a)) + String(Number(f[1].a)) + String(Number(f[2].a));`)).toBe('999');
+
+  // `toArray` COPIES: "SoA.<T> and [].<T> are distinct types with distinct
+  // layouts, and neither is assignable to the other."
+  const conv = `${pad} const f = new SoA.<Pad, 2>(); f.fill({ a: 4, b: 1 }); const arr = f.toArray(); `;
+  expect(evaluated(`${conv} String(arr.length) + "/" + String(Number(arr[0].a));`)).toBe('2/4');
+  expect(evaluated(`${conv} arr[0].a = 8; String(Number(f[0].a));`)).toBe('4');
+
+  // A fixed extent has nothing to reallocate.
+  expectThrown(`${pad} new SoA.<Pad, 2>().push({ a: 1, b: 1 });`);
+  expectThrown(`${pad} new SoA.<Pad, 2>().pop();`);
+});
