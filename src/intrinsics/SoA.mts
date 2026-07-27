@@ -7,6 +7,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
 import { BufferElementType } from '../abstract-ops/placement.mts';
+import { ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
@@ -41,6 +42,9 @@ export interface SoAStorage {
   Length: number;
   /** Elements the allocation can hold; equals Length for a fixed extent. */
   Capacity: number;
+  /** For a VIEW, where its bytes begin and how many it reserved. */
+  readonly ViewByteOffset?: number;
+  readonly ViewByteLength?: number;
 }
 
 const storages = new WeakMap<object, SoAStorage>();
@@ -259,6 +263,10 @@ function columnElementType(t: TypeRecord) {
  * ordinary rule for `[N].<T>` too, and it is why `ref` exists.
  */
 export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
+  const live = requireViewLive(storage);
+  if (live) {
+    return live;
+  }
   if (index < 0 || index >= storage.Length || !Number.isInteger(index)) {
     return Value.undefined;
   }
@@ -309,6 +317,10 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
  * store boundary of #table-check-sites applies per column.
  */
 export function* SoAScatter(storage: SoAStorage, index: number, value: Value): PlainEvaluator<boolean> {
+  const live = requireViewLive(storage);
+  if (live) {
+    return live;
+  }
   if (index < 0 || index >= storage.Length || !Number.isInteger(index)) {
     return false;
   }
@@ -502,6 +514,26 @@ function requireUnmoved(backing: SoAElementBacking) {
   if (backing.Storage.Capacity !== backing.PinnedCapacity) {
     return Throw.TypeError('this reference is into an SoA that has since grown');
   }
+  return requireViewLive(backing.Storage);
+}
+
+/**
+ * A VIEWED SoA follows the fixed array view's detachment: "shrinking a resizable
+ * buffer below the view's extent detaches it and any access afterward is a
+ * TypeError, while growth never invalidates it. A view over a
+ * `SharedArrayBuffer` can never detach, since shared buffers never shrink."
+ *
+ * An ALLOCATED SoA owns its buffer and has nothing to detach from, which is why
+ * this tests the view fields rather than every SoA.
+ */
+export function requireViewLive(storage: SoAStorage) {
+  if (storage.ViewByteLength === undefined) {
+    return undefined;
+  }
+  const bytes = (storage.Buffer as unknown as { ArrayBufferData?: { byteLength: number } }).ArrayBufferData?.byteLength ?? 0;
+  if ((storage.ViewByteOffset ?? 0) + storage.ViewByteLength > bytes) {
+    return Throw.TypeError('this SoA view is over a buffer that no longer covers it');
+  }
   return undefined;
 }
 
@@ -566,4 +598,91 @@ export function* WriteSoAField(backing: SoAElementBacking, key: string, value: V
     : converted;
   Q(yield* SetValueInBuffer(storage.Buffer, storage.ColumnOffsets[i]! + backing.Index * column.layout.byteLength, type, numeric as NumberValue, true, 'unordered'));
   return true;
+}
+
+/**
+ * proposal-runtime-types soa.md, "Views": `SoA.<T, Length>(buffer, byteOffset)`
+ * lays an SoA over memory that already exists.
+ *
+ * "The form is the array view's. It is A CALL ON THE TYPE rather than a `new`,
+ * because nothing is constructed, and the buffer argument accepts what
+ * `[].<T>`'s does ... so an `SoA` view and a `[].<uint8>` over the same bytes
+ * alias the same memory."
+ *
+ * ONLY THE FIXED FORM IS VIEWABLE, "and the reason is the layout rather than
+ * caution. A `[].<T>` view can track a resizable buffer because growth appends
+ * past the end. An `SoA`'s capacity is baked into every column's offset, so
+ * growth moves every column after the first, and a length-tracking `SoA` view
+ * would be describing a layout that is no longer there."
+ *
+ * "A viewed `SoA` is the same object an allocated one is. Both are a base and
+ * the column offsets the layout rule computes from it" - so this produces the
+ * same storage record, differing only in where the base came from and in that
+ * the buffer is not its own.
+ */
+export function* CreateSoAView(element: TypeRecord, extent: number, args: readonly Value[]): ValueEvaluator {
+  if (extent === 0) {
+    return Throw.TypeError('only a fixed-extent SoA can view a buffer');
+  }
+  const columns = SoAColumnsOf(element);
+  if (columns === null) {
+    return Throw.TypeError('this element type cannot be stored as columns');
+  }
+  const source = args[0];
+  let buffer: ArrayBufferObject | undefined;
+  let baseOffset = 0;
+  if (source instanceof ObjectValue && 'ArrayBufferData' in source) {
+    buffer = source as unknown as ArrayBufferObject;
+  } else if (source instanceof ObjectValue) {
+    const inner = ArrayViewBackingOf(source as unknown as object);
+    if (inner) {
+      buffer = inner.Buffer;
+      baseOffset = inner.ByteOffset;
+    } else {
+      const viewed = source as unknown as { ViewedArrayBuffer?: ArrayBufferObject, ByteOffset?: number };
+      if (viewed.ViewedArrayBuffer) {
+        buffer = viewed.ViewedArrayBuffer;
+        baseOffset = viewed.ByteOffset ?? 0;
+      }
+    }
+  }
+  if (!buffer) {
+    return Throw.TypeError('an SoA view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array');
+  }
+  // Hoisted out of a ternary: the Q macro may not appear inside a conditional
+  // expression, which the bundler enforces and tsc does not - so a build that
+  // reports no type errors can still have failed.
+  let requested = 0;
+  if (args.length > 1) {
+    requested = Number(Q(yield* ToIndex(args[1]!)));
+  }
+  const byteOffset = baseOffset + requested;
+  const placement = ColumnLayoutFor(columns, extent);
+  // "byteOffset must be a multiple of SoA.<T, Length>.alignment, or it's a
+  // TypeError. Columns are placed relative to the base, so a misaligned base
+  // misaligns every column and there would be nothing left of the aligned-lane-
+  // load guarantee."
+  if (placement.alignment > 0 && byteOffset % placement.alignment !== 0) {
+    return Throw.TypeError('an SoA view needs a byte offset that is a multiple of its alignment');
+  }
+  // "The buffer must hold SoA.<T, Length>.byteLength bytes past byteOffset, or
+  // it's a TypeError. Both are compile-time constants, so the check costs
+  // nothing at run time."
+  const available = ((buffer as unknown as { ArrayBufferData?: { byteLength: number } }).ArrayBufferData?.byteLength ?? 0) - byteOffset;
+  if (available < placement.byteLength) {
+    return Throw.TypeError('the buffer does not hold this SoA view');
+  }
+  const instance = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%SoA.prototype%']);
+  SetSoAStorage(instance, {
+    Element: element,
+    Extent: extent,
+    Columns: columns,
+    ColumnOffsets: placement.offsets.map((o) => o + byteOffset),
+    Buffer: buffer,
+    Length: extent,
+    Capacity: extent,
+    ViewByteOffset: byteOffset,
+    ViewByteLength: placement.byteLength,
+  });
+  return instance;
 }

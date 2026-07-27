@@ -5,6 +5,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ClassFieldReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
+import { CreateSoAView } from '../intrinsics/SoA.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -50,6 +51,25 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
     }
+  }
+  // proposal-runtime-types soa.md, "Views": `SoA.<T, N>(buffer, byteOffset)` is
+  // a call on the type, as the array view is, and for the same reason: nothing
+  // is constructed, the bytes are already there.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression?.type === 'IdentifierReference'
+      && (memberExpr as unknown as { Expression: { name?: string } }).Expression.name === 'SoA') {
+    const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
+    const element = Q(yield* TypeNodeToTypeRecord(typeArgs[0]!));
+    let extent = 0;
+    if (typeArgs.length > 1) {
+      const second = Q(yield* TypeNodeToTypeRecord(typeArgs[1]!));
+      if (second.Kind === 'literal' && typeof (second.Value as unknown as { value?: unknown })?.value === 'number') {
+        extent = Number((second.Value as unknown as { value: number }).value);
+      }
+    }
+    const argList = Q(yield* ArgumentListEvaluation(args));
+    return Q(yield* CreateSoAView(element, extent, argList as unknown as readonly Value[]));
   }
   // proposal-runtime-types (README, "Views"): `[].<T>(buffer, byteOffset,
   // byteElementLength)` and `[N].<T>(...)` are VIEWS over bytes that already

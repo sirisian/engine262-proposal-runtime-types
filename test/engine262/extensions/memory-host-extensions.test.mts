@@ -742,3 +742,47 @@ test('array views alias bytes that already exist', () => {
   // A fixed view whose extent does not fit is refused at construction.
   expectThrownKind('const b = new ArrayBuffer(4); [8].<uint8>(b);', 'RangeError');
 });
+
+test('soa: a fixed SoA views bytes that already exist', () => {
+  // soa.md, "Views": "The form is the array view's. It is A CALL ON THE TYPE
+  // rather than a `new`, because nothing is constructed, and the buffer argument
+  // accepts what `[].<T>`'s does ... so an `SoA` view and a `[].<uint8>` over
+  // the same bytes alias the same memory."
+  const pad = 'class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
+    + 'const align = (type SoA.<Pad, 4>).alignment; const buf = new ArrayBuffer(need + 32); ';
+  expect(evaluated(`${pad} const v = SoA.<Pad, 4>(buf, 0); String(v.length) + "/" + String(v.byteLength);`)).toBe('4/40');
+  // ALIASING is the assertion that matters: a view that copied would pass a
+  // read test on its own.
+  expect(evaluated(`${pad} const v = SoA.<Pad, 4>(buf, 0); const seed = new Pad(); seed.a = 7; v[0] = seed; String(new Uint8Array(buf)[0]);`)).toBe('7');
+
+  // "byteOffset must be a multiple of SoA.<T, Length>.alignment, or it's a
+  // TypeError. Columns are placed relative to the base, so a misaligned base
+  // misaligns every column and there would be nothing left of the
+  // aligned-lane-load guarantee."
+  expectThrownKind(`${pad} SoA.<Pad, 4>(buf, 1);`, 'TypeError');
+  expect(evaluated(`${pad} String(SoA.<Pad, 4>(buf, align).length);`)).toBe('4');
+  // "The buffer must hold SoA.<T, Length>.byteLength bytes past byteOffset, or
+  // it's a TypeError."
+  expectThrownKind('class Pad { a: uint8; b: float64; } SoA.<Pad, 4>(new ArrayBuffer(8), 0);', 'TypeError');
+
+  // "ONLY THE FIXED FORM IS VIEWABLE, and the reason is the layout rather than
+  // caution ... an `SoA`'s capacity is baked into every column's offset, so
+  // growth moves every column after the first, and a length-tracking `SoA` view
+  // would be describing a layout that is no longer there."
+  expectThrownKind(`${pad} SoA.<Pad>(buf, 0);`, 'TypeError');
+
+  // "Detachment follows the fixed array view: shrinking a resizable buffer below
+  // the view's extent detaches it and any access afterward is a TypeError, while
+  // GROWTH NEVER INVALIDATES IT."
+  const rz = 'class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
+    + 'const rb = new ArrayBuffer(need, { maxByteLength: need * 4 }); const v = SoA.<Pad, 4>(rb, 0); '
+    + 'const seed = new Pad(); seed.a = 3; v[0] = seed; ';
+  expect(evaluated(`${rz} String(Number(v[0].a));`)).toBe('3');
+  expect(evaluated(`${rz} rb.resize(need * 2); String(Number(v[0].a));`)).toBe('3');
+  expectThrownKind(`${rz} rb.resize(8); v[0];`, 'TypeError');
+
+  // "A viewed `SoA` is the same object an allocated one is." A `ref` into one
+  // borrows the same way, which is what makes the view worth having: a host
+  // hands over one buffer and the script iterates its storage with no copy.
+  expect(evaluated(`${pad} const v = SoA.<Pad, 4>(buf, 0); const ref r = v[1]; r.a = 6; String(Number(v[1].a));`)).toBe('6');
+});
