@@ -147,3 +147,53 @@ test('a decorated operator has a context but no grammar', () => {
   expect(evaluated('class Op { operator +(rhs: Op): Op { return this; } } "parses";')).toBe('parses');
   expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
 });
+
+test('sub-targets: parameters and returns apply before their declaration', () => {
+  // Stage C of PLAN-decorators.md. decorators.md writes the positions as
+  // `d(@f a: uint32): @f uint32` — a decorator before the parameter, and before
+  // the return TYPE. Neither position parsed before this stage, so this is a
+  // grammar change as much as a semantics one.
+  //
+  // decorators.md "Order": "A declaration's sub-targets apply before the
+  // declaration itself: parameter decorators in parameter order, then the
+  // return's, then the method's own."
+  const method = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + (c.index !== undefined ? ":" + c.index : "") + ")"); } '
+    + 'class A { @tag("m") d(@tag("p0") a: uint32, @tag("p1") b: uint32): @tag("ret") uint32 { return a; } } ';
+  expect(evaluated(`${method} log.join(",");`)).toBe('p0(ClassMethodParameter:0),p1(ClassMethodParameter:1),ret(ClassMethodReturn),m(ClassMethod)');
+
+  // Parameters run LEFT TO RIGHT within a declaration. The reverse-source-order
+  // rule applies within ONE decorated position, not across positions — which is
+  // why the index assertion above matters: `p0` before `p1` and both before the
+  // return is the only arrangement consistent with "in parameter order".
+
+  // An accessor's sub-targets take their own contexts: a getter has a return
+  // and no parameter, a setter a parameter and no return worth naming, which is
+  // why decorators.md gives a ClassSetterParameter and no ClassSetterReturn.
+  const accessors = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+    + 'class A { @tag("g") get g(): @tag("gret") uint8 { return 1; } @tag("s") set s(@tag("sp") v: uint8) {} } ';
+  expect(evaluated(`${accessors} log.join(",");`)).toBe('gret(ClassGetterReturn),g(ClassGetter),sp(ClassSetterParameter),s(ClassSetter)');
+
+  // A sub-target reaches the declaration it is part of, as a member reaches its
+  // class.
+  expect(evaluated('let c; function grab(x) { c = x; } class A { m(@grab p: uint8) {} } c.methodContext.kind + "/" + String(c.methodContext.name);')).toBe('ClassMethod/m');
+});
+
+test('the whole ordering rule composes across every level', () => {
+  // THE TEST §6.2 OF THE PLAN ASKED FOR, for the class family: one program
+  // decorating every position it legally can, one array, ONE EQUALITY on the
+  // joined log.
+  //
+  // A membership check would pass with any of these four levels reordered,
+  // which is the whole failure mode the ordering rule exists to prevent. The
+  // sequence below is the one a reader of decorators.md's "Order" section would
+  // predict, and if it ever stops reading that way the ORDER is wrong rather
+  // than the test.
+  const everything = 'const log = []; function t(n) { return (c) => log.push(n); } '
+    + '@t("C2") @t("C1") '
+    + 'class B { '
+    + '  @t("f2") @t("f1") a: uint8; '
+    + '  @t("m") m(@t("p") x: uint8): @t("r") uint8 { return x; } '
+    + '  @t("g") get g(): @t("gr") uint8 { return 1; } '
+    + '} ';
+  expect(evaluated(`${everything} log.join(",");`)).toBe('f1,f2,p,r,m,gr,g,C1,C2');
+});

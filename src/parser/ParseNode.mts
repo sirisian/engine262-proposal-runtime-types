@@ -2630,6 +2630,8 @@ export namespace ParseNode {
   // TypeAnnotation : `:` Type
   export interface TypeAnnotation extends BaseParseNode {
     readonly type: 'TypeAnnotation';
+    /** proposal-runtime-types (decorators.md): a return position's decorators. */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly Type: Type;
   }
 

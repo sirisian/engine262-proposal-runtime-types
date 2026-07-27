@@ -406,6 +406,14 @@ export abstract class TypeParser extends ExpressionParser {
   parseTypeAnnotation(): ParseNode.TypeAnnotation {
     const node = this.startNode<ParseNode.TypeAnnotation>();
     this.expect(Token.COLON);
+    // proposal-runtime-types decorators.md: `d(a: uint32): @f uint32` — a
+    // RETURN carries decorators, written before the type. They belong to the
+    // annotation rather than to the type: `Reflect.Type` "is the one reflection
+    // target that is not also a decorator context", so this is decorating the
+    // return POSITION and not the type in it.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+      node.Decorators = this.parseDecorators();
+    }
     node.Type = this.parseType();
     return this.finishNode(node, 'TypeAnnotation');
   }

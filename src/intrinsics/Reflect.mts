@@ -729,6 +729,61 @@ export function classOperatorContextRecord(): TypeRecord {
   };
 }
 
+const classMethodParameterContextDeclaration = { type: 'ReflectionContext', name: 'ClassMethodParameter' } as unknown as ParseNode;
+
+export function classMethodParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classMethodParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassMethodParameter',
+  };
+}
+
+const classMethodReturnContextDeclaration = { type: 'ReflectionContext', name: 'ClassMethodReturn' } as unknown as ParseNode;
+
+export function classMethodReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classMethodReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassMethodReturn',
+  };
+}
+
+const classGetterReturnContextDeclaration = { type: 'ReflectionContext', name: 'ClassGetterReturn' } as unknown as ParseNode;
+
+export function classGetterReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classGetterReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassGetterReturn',
+  };
+}
+
+const classSetterParameterContextDeclaration = { type: 'ReflectionContext', name: 'ClassSetterParameter' } as unknown as ParseNode;
+
+export function classSetterParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classSetterParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassSetterParameter',
+  };
+}
+
+const classOperatorParameterContextDeclaration = { type: 'ReflectionContext', name: 'ClassOperatorParameter' } as unknown as ParseNode;
+
+export function classOperatorParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classOperatorParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassOperatorParameter',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -783,6 +838,36 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ClassOperator'), Descriptor({
     Value: GetTypeObject(classOperatorContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassMethodParameter'), Descriptor({
+    Value: GetTypeObject(classMethodParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassMethodReturn'), Descriptor({
+    Value: GetTypeObject(classMethodReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassGetterReturn'), Descriptor({
+    Value: GetTypeObject(classGetterReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassSetterParameter'), Descriptor({
+    Value: GetTypeObject(classSetterParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ClassOperatorParameter'), Descriptor({
+    Value: GetTypeObject(classOperatorParameterContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

@@ -113,6 +113,14 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         return methodDefinition;
       } else {
         const method = yield* MethodDefinitionEvaluation(node, object, enumerable!);
+        if (surroundingAgent.feature('runtime-types')) {
+          // decorators.md "Order": "A declaration's sub-targets apply before the
+          // declaration itself: parameter decorators in parameter order, then
+          // the return's, then the method's own." A method's decorator
+          // therefore sees a method whose parts are already decorated, which is
+          // the same reason a class decorator runs after its members.
+          Q(yield* ApplySubTargetDecorators(node, memberContextKind(node), MemberKeyOf(node, method), object as Value));
+        }
         if (surroundingAgent.feature('runtime-types') && node.Decorators) {
           // decorators.md distinguishes a method from an accessor from an
           // operator by CONTEXT TYPE rather than by a `kind` string a decorator
@@ -1366,4 +1374,70 @@ function MemberKeyOf(node: ParseNode, evaluatedMember: unknown): Value {
   const named = node as unknown as { ClassElementName?: { PropertyName?: { name?: string }, name?: string } };
   const literal = named.ClassElementName?.PropertyName?.name ?? named.ClassElementName?.name;
   return typeof literal === 'string' ? Value(literal) : Value.undefined;
+}
+
+/** The sub-target context a declaration's parameters and return take. */
+function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
+  switch (ownerKind) {
+    case 'ClassGetter':
+      // A getter takes no parameters, so only the return has a context.
+      return { parameter: 'ClassSetterParameter', ret: 'ClassGetterReturn' };
+    case 'ClassSetter':
+      // And a setter has no return worth naming, which is why decorators.md
+      // gives it a ClassSetterParameter and no ClassSetterReturn.
+      return { parameter: 'ClassSetterParameter', ret: 'ClassMethodReturn' };
+    case 'ClassOperator':
+      return { parameter: 'ClassOperatorParameter', ret: 'ClassMethodReturn' };
+    default:
+      return { parameter: 'ClassMethodParameter', ret: 'ClassMethodReturn' };
+  }
+}
+
+/**
+ * Apply a declaration's PARAMETER and RETURN decorators, in that order.
+ *
+ * Source order within each: parameters left to right, then the return. The
+ * reverse-source-order rule applies WITHIN one decorated position - `@a @b p` -
+ * and not across positions, which run in the order they are written.
+ */
+export function* ApplySubTargetDecorators(node: ParseNode, ownerKind: string, ownerName: Value, classCtor: Value): PlainEvaluator<void> {
+  const kinds = subTargetKinds(ownerKind);
+  const n = node as unknown as {
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+    PropertySetParameterList?: readonly ParseNode[] | null,
+    FormalParameters?: readonly ParseNode[] | null,
+    TypeAnnotation?: { Decorators?: readonly ParseNode.Decorator[] | null } | null,
+  };
+  const parameters = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  for (let i = 0; i < parameters.length; i += 1) {
+    const decorators = (parameters[i] as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    if (!decorators || decorators.length === 0) {
+      continue;
+    }
+    Q(yield* ApplyDecorators(decorators, Q(yield* SubTargetContext(kinds.parameter, i, ownerKind, ownerName, classCtor))));
+  }
+  if (n.TypeAnnotation?.Decorators && n.TypeAnnotation.Decorators.length > 0) {
+    Q(yield* ApplyDecorators(n.TypeAnnotation.Decorators, Q(yield* SubTargetContext(kinds.ret, -1, ownerKind, ownerName, classCtor))));
+  }
+  return undefined;
+}
+
+/**
+ * decorators.md's `ClassMethodParameterReflection` and its siblings. A parameter
+ * carries its `index`; a return does not, which is what distinguishes the two
+ * beyond the context type.
+ */
+export function* SubTargetContext(kind: string, index: number, ownerKind: string, ownerName: Value, classCtor: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  if (index >= 0) {
+    X(CreateDataProperty(context, Value('index'), Value(index)));
+  }
+  // "methodContext: Reflect.ClassMethod.<TMethod, TClass>" - a sub-target
+  // reaches the declaration it is part of, as a member reaches its class.
+  X(CreateDataProperty(context, Value('methodContext'), Q(yield* ClassMemberDecoratorContext(
+    ownerKind, ownerName, false, currentClassName ?? Value.undefined, classCtor,
+  ))));
+  return context;
 }

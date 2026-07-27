@@ -36,6 +36,9 @@ interface ConciseBodyInfo {
 }
 
 export abstract class FunctionParser extends IdentifierParser {
+  /** Declared here because a FORMAL PARAMETER may carry decorators (decorators.md) and the list parser lives further down the hierarchy. */
+  protected abstract parseDecorators(): ParseNode.Decorator[] | null;
+
   abstract parseStatementList(token: string | Token, directives?: readonly string[]): ParseNode.StatementList;
 
   abstract parseAssignmentExpression(): ParseNode.AssignmentExpressionOrHigher;
@@ -365,6 +368,23 @@ export abstract class FunctionParser extends IdentifierParser {
   // proposal-runtime-types: `ref` is contextual, consumed only when what
   // follows can begin a BindingElement, so a parameter named `ref` still works.
   parseFormalParameter(): ParseNode.FormalParameter {
+    // proposal-runtime-types decorators.md: `d(@f a: uint32)` — a parameter
+    // carries its own decorators, which take the ClassMethodParameter,
+    // ClassSetterParameter, ClassOperatorParameter, or FunctionParameter
+    // context depending on what declares the parameter list.
+    let parameterDecorators: readonly ParseNode.Decorator[] | null = null;
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+      parameterDecorators = this.parseDecorators();
+    }
+    if (parameterDecorators) {
+      const withDecorators = this.parseFormalParameterInner();
+      (withDecorators as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = parameterDecorators;
+      return withDecorators;
+    }
+    return this.parseFormalParameterInner();
+  }
+
+  parseFormalParameterInner(): ParseNode.FormalParameter {
     if (surroundingAgent.feature('runtime-types') && this.test('ref')) {
       switch (this.peekAhead().type) {
         case Token.IDENTIFIER:
