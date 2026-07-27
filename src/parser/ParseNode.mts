@@ -1119,6 +1119,8 @@ export namespace ParseNode {
   //   LetOrConst BindingList `;`
   export interface LexicalDeclaration extends BaseParseNode {
     readonly type: 'LexicalDeclaration';
+    /** proposal-runtime-types (decorators.md): `@f let x = 1;` */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly LetOrConst: LetOrConst;
     readonly BindingList: BindingList;
   }
@@ -1725,6 +1727,8 @@ export namespace ParseNode {
   //   [+Default] `function` `(` FormalParameters `)` `{` FunctionBody `}`
   export interface FunctionDeclaration extends BaseParseNode {
     readonly type: 'FunctionDeclaration';
+    /** proposal-runtime-types (decorators.md): `@f function g() {}` */
+    readonly Decorators?: readonly Decorator[] | null;
 
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;

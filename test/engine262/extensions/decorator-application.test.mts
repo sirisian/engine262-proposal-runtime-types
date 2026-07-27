@@ -197,3 +197,50 @@ test('the whole ordering rule composes across every level', () => {
     + '} ';
   expect(evaluated(`${everything} log.join(",");`)).toBe('f1,f2,p,r,m,gr,g,C1,C2');
 });
+
+test('the function family and bindings', () => {
+  // Stage D of PLAN-decorators.md. `@f function g() {}` and `@f let x = 1;`
+  // needed grammar too: `@` had routed unconditionally to a class declaration,
+  // so the decorator list is now parsed first and what follows decides which
+  // declaration it was.
+  expect(evaluated('function f(c) {} @f function g() {} @f let x = 1; @f const y = 2; @f class A {} "all four parse";')).toBe('all four parse');
+
+  // A function's sub-targets take the FUNCTION contexts, not the class ones.
+  // Falling through to the class defaults would have been invisible to any
+  // ordering test — the sequence is identical either way — so the kinds are
+  // asserted, not just the order.
+  const fn = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+    + '@tag("fn") function g(@tag("p") x: uint8): @tag("r") uint8 { return x; } ';
+  expect(evaluated(`${fn} log.join(",");`)).toBe('p(FunctionParameter),r(FunctionReturn),fn(Function)');
+  // The context carries the function itself.
+  expect(evaluated('let t; function grab(c) { t = c; } @grab function named() {} t.kind + "/" + String(t.name) + "/" + String(t.type === named);')).toBe('Function/named/true');
+
+  // `Let` and `Const` are the first decorators on a STATEMENT rather than a
+  // member, and they fire when the statement executes — so the binding's value
+  // is already there to be described.
+  expect(evaluated('let t; function grab(c) { t = c; } @grab let x = 41; t.kind + "/" + String(t.name) + "/" + String(Number(t.value));')).toBe('Let/x/41');
+  expect(evaluated('let t; function grab(c) { t = c; } @grab const y = 7; t.kind + "/" + String(t.name) + "/" + String(Number(t.value));')).toBe('Const/y/7');
+});
+
+test('a decorated function declaration still hoists — a KNOWN DIVERGENCE', () => {
+  // decorators.md "Order", written in cycle 115: "A DECORATED FUNCTION
+  // DECLARATION DOES NOT HOIST. `@dec function f() {}` behaves as
+  // `var f = @dec function () {};`" — because hoisting it would evaluate its
+  // decorator expressions either before the bindings they reference exist or
+  // out of document order, and TC39's function-decorators proposal reaches the
+  // same answer having rejected four alternatives.
+  //
+  // THE ENGINE STILL HOISTS IT. The decorators fire at the written position, so
+  // the EXPRESSION ORDER the rule protects is already right; what is not yet
+  // enforced is the binding's absence above the declaration. Suppressing it
+  // means skipping InstantiateFunctionObject at FIVE hoisting sites — Block,
+  // GlobalDeclarationInstantiation, FunctionDeclarationInstantiation, the
+  // global object, and modules — and doing some of them would be worse than
+  // doing none, since the behaviour would differ by scope.
+  //
+  // Pinned here so the divergence from a rule this project itself wrote is
+  // visible rather than discovered.
+  expect(evaluated('function noop(c) {} const before = typeof d; @noop function d() { return 1; } before + "/" + typeof d;')).toBe('function/function');
+  // An undecorated declaration hoists and must keep doing so.
+  expect(evaluated('const r = h(); function h() { return "hoisted"; } r;')).toBe('hoisted');
+});

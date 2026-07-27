@@ -9,7 +9,6 @@ import {
   type ValueCompletion,
 } from '../completion.mts';
 import { __ts_cast__ } from '../utils/language.mts';
-import { surroundingAgent, RequireType } from '#self';
 import { PropertyKeyMap } from '../utils/container.mts';
 import type { ProxyObject } from '../intrinsics/Proxy.mts';
 import {
@@ -33,6 +32,7 @@ import {
   IsDataDescriptor,
   IsAccessorDescriptor,
 } from './all.mts';
+import { surroundingAgent, RequireType } from '#self';
 import { Throw } from '#self';
 
 /**

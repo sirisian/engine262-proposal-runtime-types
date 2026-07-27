@@ -784,6 +784,61 @@ export function classOperatorParameterContextRecord(): TypeRecord {
   };
 }
 
+const functionContextDeclaration = { type: 'ReflectionContext', name: 'Function' } as unknown as ParseNode;
+
+export function functionContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: functionContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Function',
+  };
+}
+
+const functionParameterContextDeclaration = { type: 'ReflectionContext', name: 'FunctionParameter' } as unknown as ParseNode;
+
+export function functionParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: functionParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.FunctionParameter',
+  };
+}
+
+const functionReturnContextDeclaration = { type: 'ReflectionContext', name: 'FunctionReturn' } as unknown as ParseNode;
+
+export function functionReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: functionReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.FunctionReturn',
+  };
+}
+
+const letContextDeclaration = { type: 'ReflectionContext', name: 'Let' } as unknown as ParseNode;
+
+export function letContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: letContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Let',
+  };
+}
+
+const constContextDeclaration = { type: 'ReflectionContext', name: 'Const' } as unknown as ParseNode;
+
+export function constContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: constContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Const',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -868,6 +923,36 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ClassOperatorParameter'), Descriptor({
     Value: GetTypeObject(classOperatorParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Function'), Descriptor({
+    Value: GetTypeObject(functionContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('FunctionParameter'), Descriptor({
+    Value: GetTypeObject(functionParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('FunctionReturn'), Descriptor({
+    Value: GetTypeObject(functionReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Let'), Descriptor({
+    Value: GetTypeObject(letContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Const'), Descriptor({
+    Value: GetTypeObject(constContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

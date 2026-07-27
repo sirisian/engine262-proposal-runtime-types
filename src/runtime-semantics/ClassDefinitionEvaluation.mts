@@ -1388,6 +1388,12 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
       return { parameter: 'ClassSetterParameter', ret: 'ClassMethodReturn' };
     case 'ClassOperator':
       return { parameter: 'ClassOperatorParameter', ret: 'ClassMethodReturn' };
+    case 'Function':
+      // A plain function's parameters and return take the FUNCTION contexts,
+      // not the class ones. Falling through to the default gave a standalone
+      // function ClassMethodParameter, which would have been wrong in a way no
+      // ordering test could catch - the sequence is identical either way.
+      return { parameter: 'FunctionParameter', ret: 'FunctionReturn' };
     default:
       return { parameter: 'ClassMethodParameter', ret: 'ClassMethodReturn' };
   }

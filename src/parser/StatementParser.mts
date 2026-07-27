@@ -76,7 +76,36 @@ export abstract class StatementParser extends TypeParser {
     switch (this.peek().type) {
       case Token.FUNCTION:
         return this.parseHoistableDeclaration();
-      case Token.AT:
+      case Token.AT: {
+        // proposal-runtime-types decorators.md: `@` no longer implies a class.
+        // A decorator list may precede a class, a FUNCTION declaration, or a
+        // `let`/`const` binding, so the list is parsed first and the
+        // declaration that follows decides which it was.
+        if (!surroundingAgent.feature('runtime-types')) {
+          return this.parseClassDeclaration(null);
+        }
+        const decorators = this.parseDecorators();
+        switch (this.peek().type) {
+          case Token.FUNCTION: {
+            const fn = this.parseHoistableDeclaration();
+            (fn as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return fn;
+          }
+          case Token.CONST: {
+            const decl = this.parseLexicalDeclaration();
+            (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return decl;
+          }
+          default: {
+            if (this.test('let')) {
+              const decl = this.parseLexicalDeclaration();
+              (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+              return decl;
+            }
+            return this.parseClassDeclaration(decorators);
+          }
+        }
+      }
       case Token.CLASS:
         return this.parseClassDeclaration(null);
       case Token.CONST:

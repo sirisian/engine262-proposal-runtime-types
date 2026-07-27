@@ -195,7 +195,7 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     case 'LexicalDeclaration':
       return yield* Evaluate_LexicalDeclaration(node);
     case 'FunctionDeclaration':
-      return Evaluate_FunctionDeclaration(node);
+      return yield* Evaluate_FunctionDeclaration(node);
     case 'GeneratorDeclaration':
     case 'AsyncFunctionDeclaration':
     case 'AsyncGeneratorDeclaration':

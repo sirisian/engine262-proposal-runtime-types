@@ -1,4 +1,5 @@
 import { EnforceAnnotation } from '../abstract-ops/all.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
   NormalCompletion, Q, X,
@@ -12,6 +13,7 @@ import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
+import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import { RequireBorrowableReference, SoAElementViewFor } from './RefExpression.mts';
 import {
@@ -21,6 +23,8 @@ import {
   ResolveBinding,
   LookupTypeDefault,
   Throw,
+  OrdinaryObjectCreate,
+  CreateDataProperty,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
@@ -166,11 +170,34 @@ export function* Evaluate_BindingList(BindingList: ParseNode.BindingList) {
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalDeclaration : LetOrConst BindingList `;`
-export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst }: ParseNode.LexicalDeclaration): PlainEvaluator {
+export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst, Decorators }: ParseNode.LexicalDeclaration): PlainEvaluator {
+  // proposal-runtime-types decorators.md: `Let` and `Const` are the first
+  // decorators on a STATEMENT rather than a member, and they fire when the
+  // statement executes - "a decorator runs when its declaration is evaluated".
+  // A binding's decorators therefore run AFTER its initializer, since that is
+  // when the binding exists to be described.
+  const applyBindingDecorators = function* applyBindingDecorators(): PlainEvaluator {
+    if (!surroundingAgent.feature('runtime-types') || !Decorators?.length) {
+      return NormalCompletion(undefined);
+    }
+    for (const binding of BindingList) {
+      const id = (binding as { BindingIdentifier?: { name?: string } }).BindingIdentifier;
+      if (typeof id?.name !== 'string') {
+        continue;
+      }
+      const value = Q(yield* GetValue(Q(yield* ResolveBinding(Value(id.name)))));
+      Q(yield* ApplyDecorators(Decorators, Q(yield* BindingDecoratorContext(
+        LetOrConst === 'const' ? 'Const' : 'Let', Value(id.name), value,
+      ))));
+    }
+    return NormalCompletion(undefined);
+  };
   // proposal-runtime-types (explicit resource management): each binding of a
   // `using` declaration registers its value as a resource of the running
   // environment, to be disposed when that environment is left.
   if (LetOrConst === 'using') {
+    // A `using` declaration takes no decorator context of its own; decorators.md
+    // names only Let and Const.
     const next = yield* Evaluate_BindingList(BindingList);
     Q(next);
     for (const binding of BindingList) {
@@ -186,6 +213,17 @@ export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst }: ParseN
   }
   // 1. Let next be the result of evaluating BindingList.
   Q(yield* Evaluate_BindingList(BindingList));
+  Q(yield* applyBindingDecorators());
   // 3. Return NormalCompletion(empty).
   return undefined;
+}
+
+/** decorators.md's `LetReflection` / `ConstReflection`: `name`, `type`, `value`. */
+export function* BindingDecoratorContext(kind: string, name: Value, value: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  X(CreateDataProperty(context, Value('name'), name));
+  X(CreateDataProperty(context, Value('value'), value));
+  return context;
 }
