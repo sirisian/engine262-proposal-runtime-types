@@ -1400,18 +1400,7 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   // cast supplies. Enforcing the annotation here would make the body's return
   // re-enter the very conversion it defines, which is the raw-body rule's
   // subject: "an operator body evaluates on raw values".
-  // #sec-primitive-operator-blocks: "The metadata of a result comes from the
-  // RETURN TYPE ANNOTATIONS ALONE." So an operator declared by a primitive
-  // block - a cast or an ordinary operator - has an annotation that says what
-  // its result CARRIES, not a boundary its body must satisfy. The body
-  // evaluates on raw values, which is the raw-body rule, and the dispatch
-  // stamps the result with the annotation's type afterwards.
-  //
-  // Enforcing it here fails twice over: it re-enters the crossing a cast
-  // defines, and for a PARAMETERIZED block it resolves the block's type
-  // parameter outside the frame that binds it, so `float64.<D>` raises
-  // "D is not defined" from inside the body of the operator that declared it.
-  if ((fn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator === true) {
+  if ((fn as { IsImplicitCast?: boolean }).IsImplicitCast === true) {
     return value;
   }
   const annotation = returnAnnotationOf(fn);
