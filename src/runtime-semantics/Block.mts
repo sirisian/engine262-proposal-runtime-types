@@ -1,4 +1,6 @@
 import { Value } from '../value.mts';
+import { Q } from '../completion.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
 import {
   LexicallyScopedDeclarations,
   IsConstantDeclaration,
@@ -7,7 +9,9 @@ import {
 import { X, NormalCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DisposeResources } from '../abstract-ops/disposal.mts';
+import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { Evaluate_StatementList, InstantiateFunctionObject } from './all.mts';
+import { CreateDataProperty, OrdinaryObjectCreate } from '#self';
 import { surroundingAgent, Assert, DeclarativeEnvironmentRecord } from '#self';
 
 /** https://tc39.es/ecma262/#sec-blockdeclarationinstantiation */
@@ -50,7 +54,25 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
 //  Block :
 //    `{` `}`
 //    `{` StatementList `}`
-export function* Evaluate_Block({ StatementList }: ParseNode.Block) {
+export function* Evaluate_Block({ StatementList, Decorators }: ParseNode.Block) {
+  // proposal-runtime-types decorators.md "Order": "Block, `let`, and `const`
+  // decorators are on the other timeline: they fire when the STATEMENT EXECUTES
+  // rather than when a declaration is evaluated. A block decorator on a loop
+  // body therefore fires ONCE PER ITERATION, which makes block decorators the
+  // only ones that can run more than once."
+  //
+  // So this fires on ENTRY, every entry, and that asymmetry is the feature: a
+  // decorator observing a block is observing an execution rather than a
+  // declaration.
+  //
+  // The reflection carries `label` only. Every other field the design gives a
+  // block - `block`, `condition`, `initializer`, `update` - is an `Expression`,
+  // and the design says in as many words: "That `Expression` is not defined
+  // here. Macro AST is out of scope. The Expression is a placeholder." They are
+  // absent rather than *undefined* so a reader meets the deferral.
+  if (surroundingAgent.feature('runtime-types') && Decorators?.length) {
+    Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext('Block', Value.undefined))));
+  }
   if (StatementList.length === 0) {
     // 1. Return NormalCompletion(empty).
     return NormalCompletion(undefined);
@@ -73,4 +95,13 @@ export function* Evaluate_Block({ StatementList }: ParseNode.Block) {
   surroundingAgent.runningExecutionContext.LexicalEnvironment = oldEnv;
   // 7. Return blockValue.
   return blockValue;
+}
+
+/** decorators.md's `BlockReflection`: `label`, and an AST the design defers. */
+export function* BlockDecoratorContext(kind: string, label: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  X(CreateDataProperty(context, Value('label'), label));
+  return context;
 }

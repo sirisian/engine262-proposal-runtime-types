@@ -938,6 +938,105 @@ export function objectMethodReturnContextRecord(): TypeRecord {
   };
 }
 
+const blockContextDeclaration = { type: 'ReflectionContext', name: 'Block' } as unknown as ParseNode;
+
+export function blockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: blockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Block',
+  };
+}
+
+const ifBlockContextDeclaration = { type: 'ReflectionContext', name: 'IfBlock' } as unknown as ParseNode;
+
+export function ifBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: ifBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.IfBlock',
+  };
+}
+
+const elseIfBlockContextDeclaration = { type: 'ReflectionContext', name: 'ElseIfBlock' } as unknown as ParseNode;
+
+export function elseIfBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: elseIfBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ElseIfBlock',
+  };
+}
+
+const elseBlockContextDeclaration = { type: 'ReflectionContext', name: 'ElseBlock' } as unknown as ParseNode;
+
+export function elseBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: elseBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ElseBlock',
+  };
+}
+
+const whileBlockContextDeclaration = { type: 'ReflectionContext', name: 'WhileBlock' } as unknown as ParseNode;
+
+export function whileBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: whileBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.WhileBlock',
+  };
+}
+
+const doWhileBlockContextDeclaration = { type: 'ReflectionContext', name: 'DoWhileBlock' } as unknown as ParseNode;
+
+export function doWhileBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: doWhileBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.DoWhileBlock',
+  };
+}
+
+const forBlockContextDeclaration = { type: 'ReflectionContext', name: 'ForBlock' } as unknown as ParseNode;
+
+export function forBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: forBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ForBlock',
+  };
+}
+
+const forInBlockContextDeclaration = { type: 'ReflectionContext', name: 'ForInBlock' } as unknown as ParseNode;
+
+export function forInBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: forInBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ForInBlock',
+  };
+}
+
+const forOfBlockContextDeclaration = { type: 'ReflectionContext', name: 'ForOfBlock' } as unknown as ParseNode;
+
+export function forOfBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: forOfBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ForOfBlock',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -1106,6 +1205,60 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ObjectMethodReturn'), Descriptor({
     Value: GetTypeObject(objectMethodReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Block'), Descriptor({
+    Value: GetTypeObject(blockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('IfBlock'), Descriptor({
+    Value: GetTypeObject(ifBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ElseIfBlock'), Descriptor({
+    Value: GetTypeObject(elseIfBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ElseBlock'), Descriptor({
+    Value: GetTypeObject(elseBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('WhileBlock'), Descriptor({
+    Value: GetTypeObject(whileBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('DoWhileBlock'), Descriptor({
+    Value: GetTypeObject(doWhileBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ForBlock'), Descriptor({
+    Value: GetTypeObject(forBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ForInBlock'), Descriptor({
+    Value: GetTypeObject(forInBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ForOfBlock'), Descriptor({
+    Value: GetTypeObject(forOfBlockContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

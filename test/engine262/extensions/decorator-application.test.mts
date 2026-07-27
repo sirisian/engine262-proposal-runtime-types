@@ -283,3 +283,48 @@ test('the object family mirrors the class family', () => {
   // the statement position needed in stage D.
   expect(evaluated('function f(c) {} const a = @f class {}; const b = @f { x: 1 }; typeof a + "/" + typeof b;')).toBe('function/object');
 });
+
+test('block decorators fire on entry, every entry', () => {
+  // Stage F of PLAN-decorators.md. decorators.md "Order": "Block, `let`, and
+  // `const` decorators are on the other timeline: they fire when the STATEMENT
+  // EXECUTES rather than when a declaration is evaluated. A block decorator on
+  // a loop body therefore fires ONCE PER ITERATION, which makes block
+  // decorators the only ones that can run more than once."
+  //
+  // That asymmetry is the feature and not an accident: a decorator observing a
+  // block is observing an execution rather than a declaration. So the counting
+  // assertion is the point of the stage.
+  expect(evaluated('let n = 0; function f(c) { n += 1; } @f { let a = 1; } String(n);')).toBe('1');
+  expect(evaluated('let n = 0; function f(c) { n += 1; } for (let i = 0; i < 3; ++i) @f { let b = i; } String(n);')).toBe('3');
+  expect(evaluated('let n = 0; function f(c) { n += 1; } let i = 0; while (i < 4) { i += 1; @f { let b = i; } } String(n);')).toBe('4');
+  // A block whose loop never runs never fires — which is what distinguishes
+  // "when the statement executes" from "when the declaration is evaluated".
+  expect(evaluated('let n = 0; function f(c) { n += 1; } for (let i = 0; i < 0; ++i) @f { let b = i; } String(n);')).toBe('0');
+
+  // Every block position parses: bare, if, while, do-while, for, for-in, for-of.
+  expect(evaluated('function f(c) {} @f { let a = 1; } if (true) @f { let b = 1; } while (false) @f { let c = 1; } '
+    + 'do @f { let d = 1; } while (false); for (let i = 0; i < 1; ++i) @f { let e = 1; } '
+    + 'for (const k in {}) @f { let g = 1; } for (const v of []) @f { let h = 1; } "all parse";')).toBe('all parse');
+});
+
+test('a block reflection carries its label and nothing more — DEFERRED, not missing', () => {
+  // decorators.md gives every block reflection a `block: Expression`, plus
+  // `condition`, `initializer`, and `update` for the loop forms — and then
+  // says: "That `Expression` is not defined here. MACRO AST IS OUT OF SCOPE.
+  // The Expression is a placeholder."
+  //
+  // So the AST-valued fields are ABSENT rather than *undefined*, and this test
+  // asserts their absence deliberately. A stage that shipped them as *undefined*
+  // would look like a bug; a reader who meets this test meets the deferral.
+  expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,label');
+  expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } c.kind;')).toBe('Block');
+  // The nine contexts exist, ready for the day the grammar distinguishes the
+  // positions and an AST exists to fill them.
+  expect(evaluated('[typeof Reflect.Block, typeof Reflect.IfBlock, typeof Reflect.ElseIfBlock, typeof Reflect.ElseBlock, '
+    + 'typeof Reflect.WhileBlock, typeof Reflect.DoWhileBlock, typeof Reflect.ForBlock, typeof Reflect.ForInBlock, '
+    + 'typeof Reflect.ForOfBlock].join(",");')).toBe('object,object,object,object,object,object,object,object,object');
+  // KNOWN LIMIT: every position currently reports `Block` rather than its own
+  // kind, because the block node does not record which statement form contains
+  // it. Pinned so the narrowing is a task rather than a surprise.
+  expect(evaluated('let c; function f(x) { c = x; } if (true) @f { let a = 1; } c.kind;')).toBe('Block');
+});

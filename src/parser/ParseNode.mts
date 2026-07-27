@@ -1097,6 +1097,8 @@ export namespace ParseNode {
   //   `{` StatementList `}`
   export interface Block extends BaseParseNode {
     readonly type: 'Block';
+    /** proposal-runtime-types (decorators.md): `@f { ... }` */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly StatementList: StatementList;
   }
 

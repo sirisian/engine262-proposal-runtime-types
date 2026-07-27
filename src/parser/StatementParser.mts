@@ -96,6 +96,14 @@ export abstract class StatementParser extends TypeParser {
             (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
             return decl;
           }
+          case Token.LBRACE: {
+            // A decorated BLOCK. The decorators were consumed above, so the
+            // block is parsed directly and given them here rather than through
+            // parseBlock's own list.
+            const block = this.parseBlockInner();
+            (block as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return block;
+          }
           default: {
             if (this.test('let')) {
               const decl = this.parseLexicalDeclaration();
@@ -634,6 +642,24 @@ export abstract class StatementParser extends TypeParser {
   //   ...
   parseStatement(): ParseNode.Statement {
     switch (this.peek().type) {
+      case Token.AT: {
+        // proposal-runtime-types decorators.md: `if (c) @f { }`,
+        // `while (c) @f { }`, `for (...) @f { }` — a loop or conditional BODY
+        // is parsed here, so a decorated block needs the case in this dispatch
+        // as well as in the statement-list one. Only a block may be decorated
+        // in statement position; anything else falls through to the ordinary
+        // expression path, which is what refuses `@f x = 1;`.
+        if (surroundingAgent.feature('runtime-types')) {
+          const decorators = this.parseDecorators();
+          if (this.test(Token.LBRACE)) {
+            const block = this.parseBlockInner();
+            (block as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return block;
+          }
+          return this.unexpected();
+        }
+        return this.unexpected();
+      }
       case Token.LBRACE:
         return this.parseBlockStatement();
       case Token.VAR:
@@ -699,7 +725,27 @@ export abstract class StatementParser extends TypeParser {
   }
 
   // Block : `{` StatementList `}`
+  /**
+   * proposal-runtime-types decorators.md: a BLOCK carries decorators —
+   * `@f { ... }`, `if (c) @f { }`, `while (c) @f { }`, and the rest. The list
+   * is parsed here so every block position gets it at once rather than each
+   * statement form growing its own.
+   *
+   * A block reflection carries `label` and, per the design, a `block:
+   * Expression` that "is not defined here. Macro AST is out of scope." So only
+   * the label and the firing are real; see the stage note in PLAN-decorators.md.
+   */
   parseBlock(lexical = true): ParseNode.Block {
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+      const decorators = this.parseDecorators();
+      const block = this.parseBlockInner(lexical);
+      (block as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+      return block;
+    }
+    return this.parseBlockInner(lexical);
+  }
+
+  parseBlockInner(lexical = true): ParseNode.Block {
     const node = this.startNode<ParseNode.Block>();
     this.expect(Token.LBRACE);
     node.StatementList = this.scope.with({ lexical }, () => this.parseStatementList(Token.RBRACE));
