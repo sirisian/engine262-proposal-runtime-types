@@ -839,6 +839,105 @@ export function constContextRecord(): TypeRecord {
   };
 }
 
+const objectContextDeclaration = { type: 'ReflectionContext', name: 'Object' } as unknown as ParseNode;
+
+export function objectContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Object',
+  };
+}
+
+const objectFieldContextDeclaration = { type: 'ReflectionContext', name: 'ObjectField' } as unknown as ParseNode;
+
+export function objectFieldContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectFieldContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectField',
+  };
+}
+
+const objectGetterContextDeclaration = { type: 'ReflectionContext', name: 'ObjectGetter' } as unknown as ParseNode;
+
+export function objectGetterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectGetterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectGetter',
+  };
+}
+
+const objectGetterReturnContextDeclaration = { type: 'ReflectionContext', name: 'ObjectGetterReturn' } as unknown as ParseNode;
+
+export function objectGetterReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectGetterReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectGetterReturn',
+  };
+}
+
+const objectSetterContextDeclaration = { type: 'ReflectionContext', name: 'ObjectSetter' } as unknown as ParseNode;
+
+export function objectSetterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectSetterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectSetter',
+  };
+}
+
+const objectSetterParameterContextDeclaration = { type: 'ReflectionContext', name: 'ObjectSetterParameter' } as unknown as ParseNode;
+
+export function objectSetterParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectSetterParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectSetterParameter',
+  };
+}
+
+const objectMethodContextDeclaration = { type: 'ReflectionContext', name: 'ObjectMethod' } as unknown as ParseNode;
+
+export function objectMethodContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectMethodContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectMethod',
+  };
+}
+
+const objectMethodParameterContextDeclaration = { type: 'ReflectionContext', name: 'ObjectMethodParameter' } as unknown as ParseNode;
+
+export function objectMethodParameterContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectMethodParameterContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectMethodParameter',
+  };
+}
+
+const objectMethodReturnContextDeclaration = { type: 'ReflectionContext', name: 'ObjectMethodReturn' } as unknown as ParseNode;
+
+export function objectMethodReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: objectMethodReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ObjectMethodReturn',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -953,6 +1052,60 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('Const'), Descriptor({
     Value: GetTypeObject(constContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Object'), Descriptor({
+    Value: GetTypeObject(objectContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectField'), Descriptor({
+    Value: GetTypeObject(objectFieldContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectGetter'), Descriptor({
+    Value: GetTypeObject(objectGetterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectGetterReturn'), Descriptor({
+    Value: GetTypeObject(objectGetterReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectSetter'), Descriptor({
+    Value: GetTypeObject(objectSetterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectSetterParameter'), Descriptor({
+    Value: GetTypeObject(objectSetterParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectMethod'), Descriptor({
+    Value: GetTypeObject(objectMethodContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectMethodParameter'), Descriptor({
+    Value: GetTypeObject(objectMethodParameterContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('ObjectMethodReturn'), Descriptor({
+    Value: GetTypeObject(objectMethodReturnContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

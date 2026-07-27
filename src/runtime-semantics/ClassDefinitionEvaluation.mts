@@ -1394,6 +1394,16 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
       // function ClassMethodParameter, which would have been wrong in a way no
       // ordering test could catch - the sequence is identical either way.
       return { parameter: 'FunctionParameter', ret: 'FunctionReturn' };
+    // The OBJECT family mirrors the class one member for member, so its
+    // sub-targets mirror too. This table is the one place the families do not
+    // generalize by themselves: every owner kind has to name its own, and an
+    // owner that forgets to silently borrows the class contexts.
+    case 'ObjectMethod':
+      return { parameter: 'ObjectMethodParameter', ret: 'ObjectMethodReturn' };
+    case 'ObjectGetter':
+      return { parameter: 'ObjectSetterParameter', ret: 'ObjectGetterReturn' };
+    case 'ObjectSetter':
+      return { parameter: 'ObjectSetterParameter', ret: 'ObjectMethodReturn' };
     default:
       return { parameter: 'ClassMethodParameter', ret: 'ClassMethodReturn' };
   }

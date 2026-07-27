@@ -1076,8 +1076,27 @@ export abstract class ExpressionParser extends FunctionParser {
         return this.parseObjectLiteral();
       case Token.FUNCTION:
         return this.parseFunctionExpression(FunctionKind.NORMAL);
-      case Token.AT:
-        return (surroundingAgent.feature('decorators') || surroundingAgent.feature('runtime-types')) ? this.parseClassExpression() : this.unexpected();
+      case Token.AT: {
+        if (!surroundingAgent.feature('decorators') && !surroundingAgent.feature('runtime-types')) {
+          return this.unexpected();
+        }
+        // proposal-runtime-types decorators.md: `const b = @f { ... }` decorates
+        // the OBJECT LITERAL, so `@` in expression position no longer implies a
+        // class here either - the same dispatch the statement position needed.
+        if (surroundingAgent.feature('runtime-types')) {
+          const decorators = this.parseDecorators();
+          if (this.test(Token.LBRACE)) {
+            const literal = this.parseObjectLiteral();
+            (literal as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return literal;
+          }
+          // parseClassExpression takes no decorator list; the class path
+          // re-reads them from the token stream, so this only reaches here when
+          // the decorators were not followed by an object literal.
+          return this.parseClassExpression();
+        }
+        return this.parseClassExpression();
+      }
       case Token.CLASS:
         return this.parseClassExpression();
       case Token.TEMPLATE:
@@ -1213,6 +1232,20 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parsePropertyDefinition(): ParseNode.PropertyDefinitionLike {
+    // proposal-runtime-types decorators.md: an object literal's members carry
+    // decorators exactly as a class's do - `@f a: 1`, `@f m() {}`, `@f get c()`.
+    // The list is parsed here and the member that follows decides which context
+    // it takes, the same shape the class members use.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+      const decorators = this.parseDecorators();
+      const definition = this.parsePropertyDefinitionInner();
+      (definition as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+      return definition;
+    }
+    return this.parsePropertyDefinitionInner();
+  }
+
+  parsePropertyDefinitionInner(): ParseNode.PropertyDefinitionLike {
     return this.parseBracketedDefinition('property');
   }
 

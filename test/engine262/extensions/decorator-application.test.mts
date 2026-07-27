@@ -244,3 +244,42 @@ test('a decorated function declaration still hoists — a KNOWN DIVERGENCE', () =>
   // An undecorated declaration hoists and must keep doing so.
   expect(evaluated('const r = h(); function h() { return "hoisted"; } r;')).toBe('hoisted');
 });
+
+test('the object family mirrors the class family', () => {
+  // Stage E of PLAN-decorators.md, whose premise was: "structurally parallel to
+  // B and C, which is the point: if B and C are right this is mechanical, and
+  // if it is not mechanical then B or C generalized wrongly."
+  //
+  // Mostly mechanical, with ONE exception recorded below.
+  const obj = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+    + 'const o = @tag("O") { '
+    + '  @tag("f") a: 1, '
+    + '  @tag("m") m(@tag("p") x: uint32): @tag("r") uint32 { return x; }, '
+    + '  @tag("g") get c(): @tag("gr") uint32 { return 1; }, '
+    + '  @tag("s") set d(@tag("sp") v: uint32) {} '
+    + '}; ';
+  // Every context is its OWN, and members apply before the container.
+  expect(evaluated(`${obj} log.join(",");`)).toBe(
+    'f(ObjectField),p(ObjectMethodParameter),r(ObjectMethodReturn),m(ObjectMethod),'
+    + 'gr(ObjectGetterReturn),g(ObjectGetter),sp(ObjectSetterParameter),s(ObjectSetter),O(Object)',
+  );
+
+  // THE ONE THING THAT DID NOT GENERALIZE, and the plan predicted the shape of
+  // it: the sub-target mapping. An owner kind that does not name its own
+  // parameter and return contexts silently borrows the CLASS ones — which is
+  // invisible to an ordering test, since the sequence is identical either way.
+  // Stage D hit it for `Function` and stage E hit it again for all three object
+  // member kinds. Asserted by kind, not by order, which is the only way to see
+  // it.
+  expect(evaluated('let c; function grab(x) { c = x; } const o = { m(@grab p: uint32) {} }; c.kind;')).toBe('ObjectMethodParameter');
+  expect(evaluated('let c; function grab(x) { c = x; } const o = { get g(): @grab uint32 { return 1; } }; c.kind;')).toBe('ObjectGetterReturn');
+  expect(evaluated('let c; function grab(x) { c = x; } const o = { set s(@grab v: uint32) {} }; c.kind;')).toBe('ObjectSetterParameter');
+
+  // "For objects the metadata is on the INSTANCE", so a member's context points
+  // at the object rather than at a constructor.
+  expect(evaluated('let c; function grab(x) { c = x; } const o = { @grab a: 1 }; String(typeof c.objectContext);')).toBe('object');
+
+  // `@` in expression position no longer implies a class — the same dispatch
+  // the statement position needed in stage D.
+  expect(evaluated('function f(c) {} const a = @f class {}; const b = @f { x: 1 }; typeof a + "/" + typeof b;')).toBe('function/object');
+});

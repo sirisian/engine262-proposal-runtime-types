@@ -253,6 +253,8 @@ export namespace ParseNode {
   //   `{` PropertyDefinitionList `,` `}`
   export interface ObjectLiteral extends BaseParseNode {
     readonly type: 'ObjectLiteral';
+    /** proposal-runtime-types (decorators.md): `@f { a: 1 }` */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly PropertyDefinitionList: PropertyDefinitionList;
   }
 

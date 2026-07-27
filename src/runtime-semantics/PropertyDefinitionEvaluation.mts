@@ -18,6 +18,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
+import { ApplyDecorators, ApplySubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   Assert,
@@ -28,6 +29,7 @@ import {
   CopyDataProperties,
   DefineMethodProperty,
 } from '#self';
+import { CreateDataProperty, OrdinaryObjectCreate } from '#self';
 
 /** https://tc39.es/ecma262/#sec-object-initializer-runtime-semantics-propertydefinitionevaluation */
 //   PropertyDefinitionList :
@@ -43,6 +45,72 @@ export function* PropertyDefinitionEvaluation_PropertyDefinitionList(PropertyDef
 //   IdentifierReference
 //   PropertyName `:` AssignmentExpression
 function* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition: ParseNode.PropertyDefinitionLike, object: ObjectValue, enumerable: BooleanValue<true>) {
+  // proposal-runtime-types decorators.md: an object literal's members take the
+  // OBJECT contexts, which mirror the class ones one for one. The result is
+  // evaluated first and the decorators applied after, as everywhere else - "a
+  // decorator runs when the declaration it decorates is evaluated".
+  const decorators = (PropertyDefinition as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+  if (surroundingAgent.feature('runtime-types')) {
+    const result = Q(yield* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinition, object, enumerable));
+    const kind = objectMemberContextKind(PropertyDefinition);
+    const name = objectMemberName(PropertyDefinition);
+    // The SUB-TARGETS run whether or not the member itself is decorated: a
+    // parameter's decorator belongs to the parameter, and gating it on the
+    // member's own list made `{ m(@f p) {} }` silently do nothing. The class
+    // path already ran them unconditionally; this one did not, which is the
+    // kind of divergence between two parallel families that only a test
+    // written for the undecorated-owner case can find.
+    Q(yield* ApplySubTargetDecorators(PropertyDefinition as never, kind, name, object as Value));
+    if (decorators?.length) {
+      Q(yield* ApplyDecorators(decorators, Q(yield* ObjectMemberDecoratorContext(kind, name, object as Value))));
+    }
+    return result;
+  }
+  return yield* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinition, object, enumerable);
+}
+
+/** Which object-family context a member declaration takes. */
+function objectMemberContextKind(node: ParseNode): string {
+  const n = node as unknown as { UniqueFormalParameters?: unknown, PropertySetParameterList?: unknown, type?: string };
+  if (n.type !== 'MethodDefinition' && n.type !== 'GeneratorMethod' && n.type !== 'AsyncMethod' && n.type !== 'AsyncGeneratorMethod') {
+    return 'ObjectField';
+  }
+  // Same discriminator the class members use: a setter has a
+  // PropertySetParameterList, a method has UniqueFormalParameters, a getter has
+  // neither. Sharing it is what keeps the two families one for one.
+  if (n.PropertySetParameterList) {
+    return 'ObjectSetter';
+  }
+  if (!n.UniqueFormalParameters) {
+    return 'ObjectGetter';
+  }
+  return 'ObjectMethod';
+}
+
+/** The written name of an object literal member. */
+function objectMemberName(node: ParseNode): Value {
+  const n = node as unknown as {
+    PropertyName?: { PropertyName?: { name?: string }, name?: string, value?: unknown },
+    ClassElementName?: { PropertyName?: { name?: string }, name?: string },
+  };
+  const written = n.PropertyName?.PropertyName?.name ?? n.PropertyName?.name
+    ?? n.ClassElementName?.PropertyName?.name ?? n.ClassElementName?.name;
+  return typeof written === 'string' ? Value(written) : Value.undefined;
+}
+
+/** decorators.md's `ObjectFieldReflection` and its siblings. */
+export function* ObjectMemberDecoratorContext(kind: string, name: Value, target: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  X(CreateDataProperty(context, Value('name'), name));
+  // "For objects the metadata is on the INSTANCE", so an object member's
+  // context points at the object rather than at a constructor.
+  X(CreateDataProperty(context, Value('objectContext'), target));
+  return context;
+}
+
+function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinition: ParseNode.PropertyDefinitionLike, object: ObjectValue, enumerable: BooleanValue<true>) {
   switch (PropertyDefinition.type) {
     case 'IdentifierReference':
       return yield* PropertyDefinitionEvaluation_PropertyDefinition_IdentifierReference(PropertyDefinition, object, enumerable);
