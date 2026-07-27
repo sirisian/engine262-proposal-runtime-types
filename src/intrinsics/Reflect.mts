@@ -1037,6 +1037,50 @@ export function forOfBlockContextRecord(): TypeRecord {
   };
 }
 
+const enumContextDeclaration = { type: 'ReflectionContext', name: 'Enum' } as unknown as ParseNode;
+
+export function enumContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: enumContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Enum',
+  };
+}
+
+const enumEnumeratorContextDeclaration = { type: 'ReflectionContext', name: 'EnumEnumerator' } as unknown as ParseNode;
+
+export function enumEnumeratorContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: enumEnumeratorContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.EnumEnumerator',
+  };
+}
+
+const tupleContextDeclaration = { type: 'ReflectionContext', name: 'Tuple' } as unknown as ParseNode;
+
+export function tupleContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: tupleContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Tuple',
+  };
+}
+
+const recordContextDeclaration = { type: 'ReflectionContext', name: 'Record' } as unknown as ParseNode;
+
+export function recordContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: recordContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Record',
+  };
+}
+
 const classFieldContextDeclaration = { type: 'ReflectionContext', name: 'ClassField' } as unknown as ParseNode;
 
 export function classFieldContextRecord(): TypeRecord {
@@ -1259,6 +1303,30 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ForOfBlock'), Descriptor({
     Value: GetTypeObject(forOfBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Enum'), Descriptor({
+    Value: GetTypeObject(enumContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('EnumEnumerator'), Descriptor({
+    Value: GetTypeObject(enumEnumeratorContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Tuple'), Descriptor({
+    Value: GetTypeObject(tupleContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Record'), Descriptor({
+    Value: GetTypeObject(recordContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

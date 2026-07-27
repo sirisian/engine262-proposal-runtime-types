@@ -2668,6 +2668,8 @@ export namespace ParseNode {
   //   `enum` BindingIdentifier TypeAnnotation? `{` EnumMemberList? `,`? `}`
   export interface EnumDeclaration extends BaseParseNode {
     readonly type: 'EnumDeclaration';
+    /** proposal-runtime-types (decorators.md): `@f enum E { ... }` */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly BindingIdentifier: BindingIdentifier;
     readonly TypeAnnotation: TypeAnnotation | null;
     readonly EnumMemberList: readonly EnumMember[];
@@ -2676,6 +2678,8 @@ export namespace ParseNode {
   // EnumMember : IdentifierName Initializer?
   export interface EnumMember extends BaseParseNode {
     readonly type: 'EnumMember';
+    /** proposal-runtime-types (decorators.md): `@f Zero,` */
+    readonly Decorators?: readonly Decorator[] | null;
     readonly IdentifierName: IdentifierName;
     readonly Initializer: Initializer | null;
   }

@@ -96,6 +96,12 @@ export abstract class StatementParser extends TypeParser {
             (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
             return decl;
           }
+          case Token.ENUM: {
+            // proposal-runtime-types decorators.md: `@f enum Count { ... }`.
+            const decl = this.parseEnumDeclaration();
+            (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+            return decl;
+          }
           case Token.LBRACE: {
             // A decorated BLOCK. The decorators were consumed above, so the
             // block is parsed directly and given them here rather than through
@@ -273,6 +279,11 @@ export abstract class StatementParser extends TypeParser {
     const EnumMemberList: ParseNode.EnumMember[] = [];
     while (!this.test(Token.RBRACE)) {
       const member = this.startNode<ParseNode.EnumMember>();
+      // decorators.md: an ENUMERATOR carries its own decorators, which take the
+      // EnumEnumerator context.
+      if (this.test(Token.AT)) {
+        (member as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = this.parseDecorators();
+      }
       member.IdentifierName = this.parseIdentifierName();
       member.Initializer = this.parseInitializerOpt();
       EnumMemberList.push(this.finishNode(member, 'EnumMember'));

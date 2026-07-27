@@ -328,3 +328,33 @@ test('a block reflection carries its label and nothing more — DEFERRED, not miss
   // it. Pinned so the narrowing is a task rather than a surprise.
   expect(evaluated('let c; function f(x) { c = x; } if (true) @f { let a = 1; } c.kind;')).toBe('Block');
 });
+
+test('the enum family: enumerators before their enum', () => {
+  // Stage G of PLAN-decorators.md. decorators.md writes `@f enum Count { @f
+  // Zero, ... }`, and the ordering rule applies to a third container kind
+  // exactly as it does to a class and an object literal: members first, in
+  // document order, container last.
+  const e = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ":" + String(c.name) + ")"); } '
+    + '@tag("E") enum Count { @tag("z") Zero, @tag("o") One, Two } ';
+  expect(evaluated(`${e} log.join(",");`)).toBe('z(EnumEnumerator:Zero),o(EnumEnumerator:One),E(Enum:Count)');
+  // An undecorated enumerator between decorated ones is skipped, not
+  // misattributed — `Two` above contributes nothing.
+  expect(evaluated('let n = 0; function f(c) { n += 1; } enum E2 { @f A, B, C } String(n);')).toBe('1');
+  // The enum's context carries the enum type itself.
+  expect(evaluated('let c; function grab(x) { c = x; } @grab enum E3 { A } String(c.type === E3);')).toBe('true');
+});
+
+test('Tuple and Record contexts exist but have no values yet — BLOCKED, not missing', () => {
+  // decorators.md: `const e = @f Composite([0]); // Reflect.Tuple` and
+  // `const d = @f Composite({ a: 1 }); // Reflect.Record`.
+  //
+  // `Composite` is the TC39 COMPOSITES PROPOSAL, which this engine does not
+  // implement — the README describes it as an external proposal this one builds
+  // on. So the two structural contexts have nothing to decorate: the blocker is
+  // another proposal's absence rather than anything in this stage.
+  //
+  // The contexts are built and ready, which is the useful half; pinned here so
+  // the dependency is visible.
+  expect(evaluated('[typeof Reflect.Enum, typeof Reflect.EnumEnumerator, typeof Reflect.Tuple, typeof Reflect.Record].join(",");')).toBe('object,object,object,object');
+  expectThrown('Composite([0]);');
+});

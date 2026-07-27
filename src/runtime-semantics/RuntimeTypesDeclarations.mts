@@ -10,7 +10,9 @@ import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
+import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -144,6 +146,27 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     RecordTypeOrigin(value as object, OriginOfNode(node, node.type, name.stringValue()));
   }
   Q(yield* InitializeBoundName(name, value, env));
+  // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
+  // decorators.md "Order" puts members before their container, so the
+  // ENUMERATORS run first and the enum's own decorators last - the same rule a
+  // class and its fields follow, applied to a third container kind.
+  if (surroundingAgent.feature('runtime-types') && node.type === 'EnumDeclaration') {
+    for (const member of node.EnumMemberList ?? []) {
+      const decorators = (member as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+      if (!decorators?.length) {
+        continue;
+      }
+      const memberName = (member as { IdentifierName?: { name?: string } }).IdentifierName?.name;
+      Q(yield* ApplyDecorators(decorators, Q(yield* EnumDecoratorContext(
+        'EnumEnumerator', typeof memberName === 'string' ? Value(memberName) : Value.undefined, value,
+      ))));
+    }
+    const own = (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    if (own?.length) {
+      Q(yield* ApplyDecorators(own, Q(yield* EnumDecoratorContext('Enum', name, value))));
+    }
+  }
+
   return undefined;
 }
 
@@ -305,4 +328,14 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     }
   }
   return ref;
+}
+
+/** decorators.md's `EnumReflection` and `EnumEnumeratorReflection`. */
+export function* EnumDecoratorContext(kind: string, name: Value, target: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  X(CreateDataProperty(context, Value('name'), name));
+  X(CreateDataProperty(context, Value('type'), target));
+  return context;
 }
