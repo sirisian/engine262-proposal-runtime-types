@@ -632,3 +632,45 @@ test('soa: push, pop, fill, and toArray', () => {
   expectThrown(`${pad} new SoA.<Pad, 2>().push({ a: 1, b: 1 });`);
   expectThrown(`${pad} new SoA.<Pad, 2>().pop();`);
 });
+
+test('soa: a ref into an SoA is a column set and an index', () => {
+  // soa.md: "A `ref` binding is a reference to the element, which for an `SoA`
+  // is A COLUMN SET AND AN INDEX. Field accesses through it compile to a load or
+  // store on one column."
+  //
+  // This is NOT the proxy object soa.md forecloses. A proxy traps every field
+  // access and checks it at the read; this computes the read from the columns
+  // directly, which is the mechanism a placed instance's fields already use.
+  const pad = 'class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); const seed = new Pad(); seed.a = 1; seed.b = 1.5; s[0] = seed; ';
+  expect(evaluated(`${pad} const ref p = s[0]; String(Number(p.a)) + "/" + String(Number(p.b));`)).toBe('1/1.5');
+  // THE WRITE THROUGH, which is the whole point: a `ref` names storage, so a
+  // field write lands in the column and is visible through the element API.
+  expect(evaluated(`${pad} const ref p = s[0]; p.a = 9; String(Number(s[0].a));`)).toBe('9');
+  expect(evaluated(`${pad} const ref p = s[0]; p.a = 9; String(Number(s[1].a));`)).toBe('0');
+  // And the GATHER remains a copy, which is the distinction the design rests
+  // on: `s[i]` copies, `ref s[i]` names storage. Both are correct.
+  expect(evaluated(`${pad} const c = s[0]; c.a = 4; String(Number(s[0].a));`)).toBe('1');
+
+  // THE ASSERTION THAT MATTERS. "Because a reference names storage rather than
+  // an object, `SoA` and `[].<T>` present the same interface to every function
+  // that takes a `ref Particle`. A system written against one storage works
+  // against the other" - and neither call site says which layout produced the
+  // reference. No other test proves this.
+  const cross = 'class Particle { x: float32; y: float32; } '
+    + 'function move(p: ref Particle) { p.x = Number(p.x) + 1; } '
+    + 'const soa = new SoA.<Particle, 2>(); const seed = new Particle(); seed.x = 10; soa[0] = seed; '
+    + 'let arr: [2].<Particle>; arr[0].x = 20; '
+    + 'move(ref soa[0]); move(ref arr[0]); ';
+  expect(evaluated(`${cross} String(Number(soa[0].x)) + "/" + String(Number(arr[0].x));`)).toBe('11/21');
+
+  // "A reference into an `SoA` PINS THE CONTAINER as well as the element: a
+  // `push` that reallocates moves every column, so growing an `SoA` while a
+  // reference into it is live is a TypeError, exactly as changing an array's
+  // length during `ref` iteration is."
+  const grow = 'class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
+    + 'g.push(seed); g.push(seed); const ref r = g[0]; ';
+  expect(evaluated(`${grow} String(Number(r.a));`)).toBe('1');
+  expectThrownKind(`${grow} for (let i = 0; i < 10; i = i + 1) { g.push(seed); } r.a;`, 'TypeError');
+  // A fixed extent cannot grow, so a reference into one never moves.
+  expect(evaluated('class P { a: uint8; } const f = new SoA.<P, 2>(); const ref fr = f[0]; fr.a = 7; String(Number(f[0].a));')).toBe('7');
+});

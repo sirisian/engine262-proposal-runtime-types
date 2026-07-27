@@ -13,7 +13,7 @@ import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execut
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
-import { RequireBorrowableReference } from './RefExpression.mts';
+import { RequireBorrowableReference, SoAElementViewFor } from './RefExpression.mts';
 import {
   surroundingAgent,
   GetValue,
@@ -44,6 +44,14 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     const bindingId = StringValue(BindingIdentifier!);
     const lhs = X(ResolveBinding(bindingId, undefined, strict));
     const location = Q(yield* RequireBorrowableReference(Initializer as ParseNode.LeftHandSideExpression));
+    // proposal-runtime-types soa.md: a `const ref p = s[i]` borrows the column
+    // set and the index, not the gathered copy. This is the form the design
+    // writes, so it is the one that matters most.
+    const soaView = Q(yield* SoAElementViewFor(location));
+    if (soaView !== undefined) {
+      Q(yield* InitializeReferencedBinding(lhs, soaView));
+      return NormalCompletion(undefined);
+    }
     if (TypeAnnotation) {
       const referent = Q(yield* GetValue(location));
       const ok = Q(yield* IsOfTypeNode(referent, TypeAnnotation.Type));

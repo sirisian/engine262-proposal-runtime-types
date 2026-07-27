@@ -7,6 +7,7 @@ import {
 } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { RebindRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
+import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import { Get, surroundingAgent } from '#self';
 import {
   IsPropertyKey,
@@ -77,7 +78,39 @@ export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpressi
  */
 export function* Evaluate_RefExpression({ Expression }: ParseNode.RefExpression): ValueEvaluator {
   const location = Q(yield* RequireBorrowableReference(Expression));
+  const soaView = Q(yield* SoAElementViewFor(location));
+  if (soaView !== undefined) {
+    return soaView;
+  }
   return new ReferenceValue(location);
+}
+
+/**
+ * proposal-runtime-types soa.md: `ref s[i]` borrows A COLUMN SET AND AN INDEX,
+ * not the gathered value. The gather is a copy - a value type copies - so
+ * borrowing it would give a reference that writes nowhere, which is the whole
+ * thing `ref` exists to avoid.
+ *
+ * Shared by the `ref` EXPRESSION and the `const ref x =` BINDING, which take
+ * different paths to the same borrow: routing only the expression left the
+ * binding - the form soa.md actually writes - silently borrowing a copy.
+ */
+export function* SoAElementViewFor(location: unknown): PlainEvaluator<Value | undefined> {
+  if (!surroundingAgent.feature('runtime-types')
+      || !(location instanceof ReferenceRecord)
+      || !(location.Base instanceof ObjectValue)
+      || !(location.ReferencedName instanceof JSStringValue)) {
+    return undefined;
+  }
+  const storage = SoAStorageOf(location.Base as unknown as object);
+  if (storage === undefined) {
+    return undefined;
+  }
+  const index = Number(location.ReferencedName.stringValue());
+  if (String(index) !== location.ReferencedName.stringValue()) {
+    return undefined;
+  }
+  return Q(yield* SoAElementReference(storage, index));
 }
 
 /**

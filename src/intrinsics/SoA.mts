@@ -460,3 +460,110 @@ function* growTo(storage: SoAStorage, capacity: number): PlainEvaluator<void> {
 export {
   SoAProto_push, SoAProto_pop, SoAProto_fill, SoAProto_toArray,
 };
+
+/**
+ * proposal-runtime-types soa.md: a `ref` into an SoA.
+ *
+ * "A `ref` binding is a reference to the element, which for an `SoA` is A
+ * COLUMN SET AND AN INDEX. Field accesses through it compile to a load or store
+ * on one column."
+ *
+ * This is NOT the proxy object soa.md forecloses. A proxy would trap every
+ * field access and check it at the read; this is an object whose field reads
+ * and writes are computed from the columns directly, which is the same
+ * mechanism a placed instance's fields already use. In an engine the
+ * indirection cannot literally be compiled out, but nothing about it is
+ * dynamic: the column set and the offsets are fixed when the type is.
+ *
+ * It is also why `ref s[i]` and `s[i]` differ. The gather is a COPY, because a
+ * value type copies; the reference names the storage. Both are correct and the
+ * design relies on the difference.
+ */
+export interface SoAElementBacking {
+  readonly Storage: SoAStorage;
+  readonly Index: number;
+  /** The capacity the columns had when this reference was taken. */
+  readonly PinnedCapacity: number;
+}
+
+const elementBackings = new WeakMap<object, SoAElementBacking>();
+
+export function SoAElementBackingOf(instance: object): SoAElementBacking | undefined {
+  return elementBackings.get(instance);
+}
+
+/**
+ * "A reference into an `SoA` pins the container as well as the element: a
+ * `push` that reallocates moves every column, so growing an `SoA` while a
+ * reference into it is live is a TypeError, exactly as changing an array's
+ * length during `ref` iteration is."
+ */
+function requireUnmoved(backing: SoAElementBacking) {
+  if (backing.Storage.Capacity !== backing.PinnedCapacity) {
+    return Throw.TypeError('this reference is into an SoA that has since grown');
+  }
+  return undefined;
+}
+
+/** The object a `ref` into an SoA borrows: the column set and the index. */
+export function* SoAElementReference(storage: SoAStorage, index: number): ValueEvaluator {
+  if (index < 0 || index >= storage.Length || !Number.isInteger(index)) {
+    return Throw.TypeError('$1 is not an element of this SoA', Value(String(index)));
+  }
+  const element = storage.Element;
+  const ctor = element.Kind === 'nominal' ? (element as { Constructor?: ObjectValue }).Constructor : undefined;
+  const proto = ctor ? Q(yield* Get(ctor, Value('prototype'))) : Value.null;
+  const view = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  elementBackings.set(view as unknown as object, { Storage: storage, Index: index, PinnedCapacity: storage.Capacity });
+  const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+  for (const column of storage.Columns) {
+    typed.set(column.key, { TypeRecord: column.type });
+  }
+  (view as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+  X(view.PreventExtensions());
+  return view;
+}
+
+/** A field read through a reference: one indexed load from that field's column. */
+export function* ReadSoAField(backing: SoAElementBacking, key: string): ValueEvaluator {
+  const moved = requireUnmoved(backing);
+  if (moved) {
+    return moved;
+  }
+  const { Storage: storage } = backing;
+  const i = storage.Columns.findIndex((c) => c.key === key);
+  if (i < 0) {
+    return Value.undefined;
+  }
+  const column = storage.Columns[i]!;
+  const type = BufferElementType(column.type);
+  if (type === null) {
+    return Throw.TypeError('a column of this type cannot be read');
+  }
+  const raw = GetValueFromBuffer(storage.Buffer, storage.ColumnOffsets[i]! + backing.Index * column.layout.byteLength, type, true, 'unordered');
+  return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, column.type) : raw;
+}
+
+/** A field write through a reference: one indexed store into that field's column. */
+export function* WriteSoAField(backing: SoAElementBacking, key: string, value: Value): PlainEvaluator<boolean> {
+  const moved = requireUnmoved(backing);
+  if (moved) {
+    return moved;
+  }
+  const { Storage: storage } = backing;
+  const i = storage.Columns.findIndex((c) => c.key === key);
+  if (i < 0) {
+    return false;
+  }
+  const column = storage.Columns[i]!;
+  const type = BufferElementType(column.type);
+  if (type === null) {
+    return Throw.TypeError('a column of this type cannot be written');
+  }
+  const converted = Q(yield* RequireType(value, column.type));
+  const numeric = converted instanceof TypedNumberValue
+    ? Value(Number((converted as unknown as { value: number }).value))
+    : converted;
+  Q(yield* SetValueInBuffer(storage.Buffer, storage.ColumnOffsets[i]! + backing.Index * column.layout.byteLength, type, numeric as NumberValue, true, 'unordered'));
+  return true;
+}

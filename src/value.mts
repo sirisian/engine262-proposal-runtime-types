@@ -1,7 +1,7 @@
 import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
-import { SoAStorageOf, SoAGather, SoAScatter } from './intrinsics/SoA.mts';
+import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -925,6 +925,17 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
     }
+    // proposal-runtime-types soa.md: a field read through a `ref` into an SoA is
+    // "an indexed load from a column whose base offset is known at compile
+    // time". The reference names a column set and an index, so the read is
+    // computed rather than looked up - and it is deliberately NOT what `s[i]`
+    // gives, which is a copy.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const elementBacking = SoAElementBackingOf(this as unknown as object);
+      if (elementBacking !== undefined) {
+        return Q(yield* ReadSoAField(elementBacking, P.stringValue()));
+      }
+    }
     // proposal-runtime-types soa.md: `s[i]` GATHERS an element from the columns.
     // An SoA is an ordinary object with column storage rather than an exotic,
     // so the index is intercepted here for the same reason a placed field is:
@@ -1006,6 +1017,13 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
+      }
+      const elementBacking = SoAElementBackingOf(Receiver as unknown as object);
+      if (elementBacking !== undefined && P instanceof JSStringValue) {
+        // A field write through a reference is one indexed store into that
+        // field's column, and the store check runs first as it does anywhere.
+        Q(yield* WriteSoAField(elementBacking, P.stringValue(), V));
+        return Value.true;
       }
       const soaStorage = SoAStorageOf(Receiver as unknown as object);
       if (soaStorage !== undefined && P instanceof JSStringValue) {
