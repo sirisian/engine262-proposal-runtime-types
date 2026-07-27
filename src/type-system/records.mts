@@ -161,6 +161,15 @@ const libraryDeclarationSentinel = { type: 'LibraryType', location: { startIndex
  */
 const libraryTypeNames = new Set([
   'Promise',
+  // proposal-runtime-types (soa.md): `SoA.<T, Length>` is a BUILT-IN EXOTIC in
+  // the same way `[].<T>` is - "something no user-defined class could express,
+  // specified by the language and provided by the engine". It is a library type
+  // name so that `SoA.<T, N>` resolves in type position, but unlike the names
+  // below it is NOT a global constructor whose prototype chain decides
+  // membership: its values are its own instances and its layout is the
+  // structure-of-arrays rule, so both are answered here rather than by a
+  // lookup.
+  'SoA',
   // proposal-runtime-types (README Global Objects): global constructors usable as
   // type names. Each is a nominal type whose values are its instances, tested by
   // the prototype chain of the global (see IsOfType). This is what lets

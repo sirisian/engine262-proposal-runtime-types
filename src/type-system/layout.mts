@@ -67,6 +67,55 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     const byteLength = elementLayout.byteLength * extent;
     return { bitLength: byteLength * 8, byteLength, alignment: elementLayout.alignment };
   }
+  if (t.Kind === 'nominal' && t.LibraryName === 'SoA') {
+    // proposal-runtime-types soa.md, and the layout table's row: "A fixed-length
+    // `SoA.<T, N>` - Yes, but not `T`'s: EACH FIELD OF `T` IS A COLUMN OF N
+    // ELEMENTS, PADDED AND ALIGNED ON ITS OWN, and the size is the sum of the
+    // columns. An element's fields are not adjacent."
+    //
+    // The split is ONE LEVEL, not recursive to the leaves: a field that is
+    // itself a value type stays one column, interleaved within itself. soa.md
+    // makes that deliberate - "a consumer that wants `origin` as a contiguous
+    // stream of Vec2 gets it", and flattening the class is how a program asks
+    // for the other thing. So each column is a fixed array of the FIELD's type,
+    // and the field's own layout is whatever the class walk already gave it.
+    //
+    // There is no interior padding between an element's fields, because an
+    // element's fields are no longer adjacent. That is why a `T` whose
+    // interleaved layout pads to a larger stride has a SMALLER byteLength here
+    // than its `[].<T>` equivalent.
+    const element = t.Arguments[0];
+    const extent = t.Arguments[1];
+    if (element === undefined || typeof element === 'number') {
+      return null;
+    }
+    // A growable `SoA.<T>` has no layout as a TYPE, exactly as `[].<T>` has
+    // none: its instances have a byteLength and the type does not.
+    if (typeof extent !== 'number' || extent === 0) {
+      return null;
+    }
+    const columns = SoAColumnsOf(element);
+    if (columns === null) {
+      return null;
+    }
+    let byteLength = 0;
+    let alignment = 1;
+    for (const column of columns) {
+      // Each column is padded and aligned on its own, so the next column starts
+      // at the next multiple of its own alignment.
+      if (column.layout.alignment > 0 && byteLength % column.layout.alignment !== 0) {
+        byteLength += column.layout.alignment - (byteLength % column.layout.alignment);
+      }
+      byteLength += column.layout.byteLength * extent;
+      if (column.layout.alignment > alignment) {
+        alignment = column.layout.alignment;
+      }
+    }
+    if (alignment > 0 && byteLength % alignment !== 0) {
+      byteLength += alignment - (byteLength % alignment);
+    }
+    return { bitLength: byteLength * 8, byteLength, alignment };
+  }
   if (t.Kind === 'nominal') {
     // #sec-memory-layout's type table, row "an enum": "Yes, its underlying
     // type's." The pin this replaces said the Type Record carried no resolved
@@ -153,6 +202,8 @@ export function LayoutOf(t: TypeRecord): Layout | null {
 /** One field's placement, which is what a reflection reports as its `offset`. */
 export interface FieldPlacement {
   readonly key: string;
+  /** The field's declared type, which a column of it needs (soa.md's `fields`). */
+  readonly type: TypeRecord;
   /** The containing byte. A bit-field has no byte address of its own; this is where its byte begins. */
   readonly offset: number;
   /** The bit position, which is what fixes bit order exactly for a wire format. */
@@ -308,6 +359,7 @@ export function ComputeClassLayout(
     }
     placed.push({
       key: field.key,
+      type: field.type,
       offset: Math.floor(offsetBits! / 8),
       offsetBit: offsetBits!,
       isBitField,
@@ -333,4 +385,46 @@ export function ComputeClassLayout(
     byteLength = controls.size;
   }
   return { bitLength, byteLength, alignment, fields: placed };
+}
+
+/** One column per IMMEDIATE field of the element type, in declaration order. */
+export interface SoAColumn {
+  readonly key: string;
+  readonly type: TypeRecord;
+  readonly layout: Layout;
+}
+
+/**
+ * The columns an `SoA.<T, N>` stores, or *null* where `T` cannot be split.
+ *
+ * soa.md: "`T` must be a value type class, since a class with a reference field
+ * has nothing to split. A PRIMITIVE `T` IS PERMITTED and degenerates to a
+ * single column, so generic code that may or may not be handed a primitive
+ * needs no special case."
+ */
+export function SoAColumnsOf(element: TypeRecord): SoAColumn[] | null {
+  if (element.Kind === 'primitive' || element.Kind === 'array') {
+    const layout = LayoutOf(element);
+    return layout ? [{ key: '0', type: element, layout }] : null;
+  }
+  if (element.Kind !== 'nominal') {
+    return null;
+  }
+  const constructor = element.Constructor as { InstanceLayout?: ClassLayout | null } | undefined;
+  const instance = constructor?.InstanceLayout;
+  if (!instance) {
+    // A class with no layout - an untyped field, a `dynamic` class, or a field
+    // whose type has none - has nothing to split into columns.
+    return null;
+  }
+  const columns: SoAColumn[] = [];
+  for (const field of instance.fields) {
+    if (field.isBitField) {
+      // A bit-field is not byte-addressable, and a column of them would have to
+      // be a bit-vector rather than an array. Refused rather than guessed at.
+      return null;
+    }
+    columns.push({ key: field.key, type: field.type, layout: field.layout });
+  }
+  return columns;
 }

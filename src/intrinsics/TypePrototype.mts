@@ -2,7 +2,7 @@ import { EnsureCompletion, Q } from '../completion.mts';
 import { Value, JSStringValue, NumberValue, TypedNumberValue, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
-import { LayoutOf } from '../type-system/layout.mts';
+import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols } from '#self';
@@ -188,6 +188,40 @@ function layoutOfThis(thisValue: Value, which: 'bitLength' | 'byteLength' | 'ali
   return Value(layout[which]);
 }
 
+/**
+ * proposal-runtime-types soa.md: "`elementByteLength` is the PER-ELEMENT SUM OF
+ * COLUMN STRIDES", as distinct from `byteLength`, which is the whole laid-out
+ * size. The two differ by more than the extent: an element's fields are not
+ * adjacent in an SoA, so this is the width one element occupies across the
+ * columns and not the stride of anything contiguous.
+ *
+ * Only an SoA has one, since only an SoA has columns.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-type-layout
+ */
+function* TypeProto_elementByteLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const record = thisValue.TypeRecord;
+  if (record.Kind !== 'nominal' || record.LibraryName !== 'SoA') {
+    return Value.undefined;
+  }
+  const element = record.Arguments[0];
+  if (element === undefined || typeof element === 'number') {
+    return Value.undefined;
+  }
+  const columns = SoAColumnsOf(element);
+  if (columns === null) {
+    return Throw.TypeError('this type has no layout, so it has no $1', Value('elementByteLength'));
+  }
+  let total = 0;
+  for (const column of columns) {
+    total += column.layout.byteLength;
+  }
+  return Value(total);
+}
+
 /** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
 function* TypeProto_bitLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return layoutOfThis(thisValue, 'bitLength');
@@ -209,6 +243,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['parse', TypeProto_parse, 1],
     ['tryParse', TypeProto_tryParse, 1],
     ['bitLength', [TypeProto_bitLengthGetter]],
+    ['elementByteLength', [TypeProto_elementByteLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Type');

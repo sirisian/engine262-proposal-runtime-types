@@ -1091,7 +1091,12 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // `Promise` is the same nominal with no arguments, so it reflects as the
       // base of an applied `Promise.<T>` and compares equal to it only when both
       // are unapplied.
-      const library = libraryTypeRecord(name, argRecords);
+      // The arguments go through toNumericArgument for the same reason the
+      // builtins do: a numeric type argument - an SoA's Length, as an array's
+      // extent - arrives as a ~literal~ record wrapping a Number, and every
+      // consumer wants the number. Without this an \ carried a
+      // literal where its layout rule expected 4 and reported no layout at all.
+      const library = libraryTypeRecord(name, argRecords.map(toNumericArgument));
       if (library) {
         return library;
       }

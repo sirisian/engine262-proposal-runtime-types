@@ -102,6 +102,26 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   }
   for (const existing of table) {
     if (SameType(existing.TypeRecord, canonical)) {
+      // proposal-runtime-types: a class's type may be interned BEFORE the class
+      // is initialized. A hoisted `type Alias = A;` resolves `A` through the
+      // declaration (which #sec-compile-time-evaluability requires, since type
+      // evaluation "reads declarations rather than run-time bindings"), and
+      // that record carries no [[Constructor]] because the class has none yet.
+      // Identity is by [[Declaration]], so the class's own completion asks for
+      // the SAME type and gets that earlier record back - stripping the class
+      // of its constructor, and with it of its layout and its membership test.
+      //
+      // Verified as an ordinary-code bug, not a corner: `class A { x: float32 }`
+      // followed by `type Alias = A;` left `A` with no byteLength at all.
+      //
+      // The later, more complete record COMPLETES the earlier one rather than
+      // replacing it, so every reference already handed out stays valid - which
+      // is what interning is for.
+      const known = existing.TypeRecord as { Constructor?: unknown };
+      const supplied = canonical as { Constructor?: unknown };
+      if (known.Constructor === undefined && supplied.Constructor !== undefined) {
+        known.Constructor = supplied.Constructor;
+      }
       return existing;
     }
   }

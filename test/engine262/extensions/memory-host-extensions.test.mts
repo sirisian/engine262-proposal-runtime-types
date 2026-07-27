@@ -52,9 +52,51 @@ test('memory layout: a type reports its own byteLength', () => {
 });
 
 // ── soa: structure of arrays ──────────────────────────────────────────────────
-test('soa: SoA.<T> is not defined (documents the gap)', () => {
-  // Target (soa.md): a structure-of-arrays container storing each field in a column.
-  expectThrown('let a: SoA.<{ x: uint8 }>; typeof SoA;');
+test('soa: SoA is a type name, and its layout is the column rule', () => {
+  // soa.md: `SoA.<T, Length>` is "a built-in exotic in the same way `[].<T>` is:
+  // something no user-defined class could express, specified by the language and
+  // provided by the engine". A type name, and unlike the library names beside it
+  // in the table NOT a global constructor whose prototype chain decides
+  // membership.
+  expect(evaluated('class T { x: float32; } let s: SoA.<T, 4>; "ok";')).toBe('ok');
+
+  // The layout table's row: "each field of `T` is a COLUMN of _N_ elements,
+  // PADDED AND ALIGNED ON ITS OWN, and the size is the sum of the columns. An
+  // element's fields are not adjacent."
+  //
+  // THE ASSERTION THAT DISCRIMINATES is the design's own claim: "a `T` whose
+  // interleaved layout pads to a larger stride has an `SoA.byteLength` SMALLER
+  // than its `[].<T>` equivalent". `Pad` interleaves to 16 (a uint8, then a
+  // float64 at offset 8), so four of them is 64 - while the columns are 4 bytes
+  // of `a`, aligned up to 8, then 32 of `b`: 40. A `T` that does not pad gives
+  // the same number either way, so testing only that would prove nothing.
+  const pad = 'class Pad { a: uint8; b: float64; } ';
+  expect(evaluated(`${pad} String((type Pad).byteLength * 4);`)).toBe('64');
+  expect(evaluated(`${pad} const S = type SoA.<Pad, 4>; String(S.byteLength) + "/" + String(S.alignment);`)).toBe('40/8');
+
+  // The split is ONE LEVEL, not recursive to the leaves: a field that is itself
+  // a value type stays one column, interleaved within itself. soa.md makes that
+  // deliberate - a consumer wanting `origin` as a contiguous stream of Vec2 gets
+  // it, and flattening the class is how a program asks for the other thing.
+  const proj = 'class Vec2 { x: float32; y: float32; } class P { origin: Vec2; direction: Vec2; speed: float32; } ';
+  expect(evaluated(`${proj} String((type SoA.<P, 4>).byteLength);`)).toBe('80');
+  // `elementByteLength` is the PER-ELEMENT SUM OF COLUMN STRIDES, which is not
+  // the interleaved stride: `Pad` sums to 9 where its interleaved stride is 16.
+  expect(evaluated(`${pad} String((type SoA.<Pad, 4>).elementByteLength);`)).toBe('9');
+  expect(evaluated(`${proj} String((type SoA.<P, 4>).elementByteLength);`)).toBe('20');
+  // A type with no columns has none.
+  expect(evaluated('String(float64.elementByteLength);')).toBe('undefined');
+
+  // "A PRIMITIVE `T` IS PERMITTED and degenerates to a single column, so generic
+  // code that may or may not be handed a primitive needs no special case."
+  expect(evaluated('const F = type SoA.<float32, 4>; String(F.byteLength) + "/" + String(F.alignment);')).toBe('16/4');
+
+  // REJECTIONS. "`T` must be a value type class, since a class with a reference
+  // field has nothing to split", and a growable `SoA.<T>` has no layout as a
+  // TYPE exactly as `[].<T>` has none - its instances have a byteLength.
+  expectThrown('class Ref { s: string; } (type SoA.<Ref, 4>).byteLength;');
+  expectThrown('class U { a: uint8; b; } (type SoA.<U, 4>).byteLength;');
+  expectThrown('class Ok { a: uint8; } (type SoA.<Ok>).byteLength;');
 });
 
 // ── threading: shared classes and threads ─────────────────────────────────────
@@ -433,7 +475,15 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // `Reflect.typeOf` over it does not report the class - so the layout walk
   // cannot complete. Nothing above depends on it, and the reference width is
   // exercised by the completed-class rows instead.
-  expectThrown('class N { value: uint32; next: N | null; } (type N).byteLength;');
+  // LIMIT CLOSED (F103). This documented that a SELF-REFERENTIAL class's own
+  // layout was not computed at its declaration, because the record built from
+  // the declaration and the class's finished Type Object did not intern as one.
+  // They do now: identity is by [[Declaration]], so the class's completion
+  // finds the earlier record and COMPLETES it with the constructor rather than
+  // being handed a stale one back. The linked list lays out like any other
+  // class holding a reference.
+  expect(evaluated('class N { value: uint32; next: N | null; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('16/8');
+  expect(evaluated('class N { value: uint32; next: N | null; } String(Reflect.getReflection.<Reflect.ClassField, N>("next").offset);')).toBe('8');
 });
 
 test('memory layout: a class may not contain itself by value', () => {
