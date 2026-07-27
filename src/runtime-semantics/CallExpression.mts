@@ -5,7 +5,8 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ClassFieldReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
-import { CreateSoAView } from '../intrinsics/SoA.mts';
+import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
+import { ToIndex } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -50,6 +51,23 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const argList = Q(yield* ArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
+  // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` — "Empty, capacity
+  // >= n". Its element type is a TYPE argument rather than inferred, because
+  // there is no value to infer it from, so the call is intercepted where the
+  // type arguments are in scope.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const inner = (memberExpr as unknown as { Expression?: { type?: string, MemberExpression?: { name?: string }, IdentifierName?: { name?: string } } }).Expression;
+    if (inner?.type === 'MemberExpression'
+        && inner.MemberExpression?.name === 'SoA'
+        && inner.IdentifierName?.name === 'withCapacity') {
+      const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      const n = argList.length > 0 ? Number(Q(yield* ToIndex(argList[0]!))) : 0;
+      return Q(yield* SoAWithCapacity(element, n));
     }
   }
   // proposal-runtime-types soa.md, "Views": `SoA.<T, N>(buffer, byteOffset)` is

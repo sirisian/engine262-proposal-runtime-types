@@ -786,3 +786,36 @@ test('soa: a fixed SoA views bytes that already exist', () => {
   // hands over one buffer and the script iterates its storage with no copy.
   expect(evaluated(`${pad} const v = SoA.<Pad, 4>(buf, 0); const ref r = v[1]; r.a = 6; String(Number(v[1].a));`)).toBe('6');
 });
+
+test('soa: conversion is explicit and copies, and the two types are distinct', () => {
+  // soa.md, "Conversion": "`SoA.<T>` and `[].<T>` are DISTINCT TYPES WITH
+  // DISTINCT LAYOUTS, and NEITHER IS ASSIGNABLE TO THE OTHER. Conversion is
+  // explicit and copies."
+  const arr = 'class Pad { a: uint8; } let arr: [3].<Pad>; arr[0].a = 1; arr[1].a = 2; arr[2].a = 3; ';
+
+  // `SoA.from` takes the element type from the array's own, so the caller does
+  // not restate it, and produces a growable SoA as the signature says.
+  expect(evaluated(`${arr} const s = SoA.from(arr); String(s.length) + "/" + String(Number(s[0].a)) + "/" + String(Number(s[2].a));`)).toBe('3/1/3');
+  // An untyped array has no element type to take, and is refused rather than
+  // guessed at.
+  expectThrown('SoA.from([1, 2, 3]);');
+
+  // THE CONVERSION COPIES, in both directions. A view would alias; this does
+  // not, and the design is explicit that it must not.
+  expect(evaluated(`${arr} const s = SoA.from(arr); const ref r = s[0]; r.a = 9; String(Number(arr[0].a)) + "/" + String(Number(s[0].a));`)).toBe('1/9');
+  expect(evaluated(`${arr} const s = SoA.from(arr); const back = s.toArray(); back[0].a = 4; String(Number(s[0].a));`)).toBe('1');
+
+  // `withCapacity.<T>(n)` — "Empty, capacity >= n". Its element type is a TYPE
+  // argument because there is no value to infer it from.
+  expect(evaluated('class Pad { a: uint8; } const w = SoA.withCapacity.<Pad>(8); String(w.length) + "/" + String(w.capacity);')).toBe('0/8');
+
+  // NEITHER DIRECTION ASSIGNS. The array-into-SoA direction was already an early
+  // error; the SoA-into-array direction was NOT, because the membership judgment
+  // is structural - a `length` and elements of the right type - and an SoA has
+  // both, so it satisfied an array type by duck typing. That is precisely what
+  // the design refuses: "making the two silently interchangeable ... reads well
+  // until a function needs the concrete layout, and then the abstraction has to
+  // be undone."
+  expectThrown('class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
+  expectThrownKind('class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
+});

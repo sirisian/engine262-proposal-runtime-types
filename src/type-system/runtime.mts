@@ -1,4 +1,5 @@
 import { OutOfRange } from '../utils/language.mts';
+import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
   TypedNumberValue, TypedStringValue, ReferenceValue,
@@ -629,6 +630,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     case 'array':
     case 'tuple': {
       if (!(value instanceof ObjectValue)) {
+        return false;
+      }
+      // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
+      // WITH DISTINCT LAYOUTS, and NEITHER IS ASSIGNABLE TO THE OTHER."
+      //
+      // The judgment below is structural - a `length` and elements of the right
+      // type - and an SoA has both, so it satisfied an array type by duck
+      // typing. That is exactly what the design refuses: "making the two
+      // silently interchangeable, as Julia's StructArrays does, reads well until
+      // a function needs the concrete layout, and then the abstraction has to be
+      // undone. Keeping the layout in the type means every call site knows which
+      // it has."
+      if (t.Kind === 'array' && SoAStorageOf(value as unknown as object) !== undefined) {
         return false;
       }
       const lenValue = Q(yield* Get(value, Value('length')));

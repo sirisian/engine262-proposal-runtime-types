@@ -1,4 +1,5 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
+import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
@@ -538,6 +539,16 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     return Q(yield* requireMembership(value, t));
   }
   if (t.Kind === 'array') {
+    // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
+    // WITH DISTINCT LAYOUTS, and NEITHER IS ASSIGNABLE TO THE OTHER. Conversion
+    // is explicit and copies." The other direction is already an early error;
+    // this one was not, because an SoA is an ordinary object and nothing here
+    // asked whether it was one. Refused explicitly rather than by falling
+    // through to a membership test that would report something less useful.
+    if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue
+        && SoAStorageOf(value as unknown as object) !== undefined) {
+      return Throw.TypeError('an SoA is not assignable to $1; convert with toArray()', Value(displayType(t)));
+    }
     // proposal-runtime-types (spec sec-contextual-types, README "Typed Array
     // Propagation"): a plain array in a `[].<T>` position propagates the element
     // type. Each element is converted to the element type by the same checked

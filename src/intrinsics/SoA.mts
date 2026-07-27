@@ -237,7 +237,9 @@ export function bootstrapSoA(realmRec: Realm) {
     return;
   }
   const proto = realmRec.Intrinsics['%SoA.prototype%'];
-  const soaConstructor = bootstrapConstructor(realmRec, SoAConstructor, 'SoA', 0, proto, []);
+  const soaConstructor = bootstrapConstructor(realmRec, SoAConstructor, 'SoA', 0, proto, [
+    ['from', SoA_from, 1],
+  ]);
   realmRec.Intrinsics['%SoA%'] = soaConstructor;
 }
 
@@ -686,3 +688,80 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
   });
   return instance;
 }
+
+/**
+ * `SoA.from(values)` — soa.md's conversion from an array.
+ *
+ * "SoA.<T> and [].<T> are distinct types with distinct layouts, and neither is
+ * assignable to the other. CONVERSION IS EXPLICIT AND COPIES." The element type
+ * comes from the array's own, so the caller does not restate it — and an
+ * untyped array has none, which is refused rather than guessed at.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ */
+function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(values instanceof ObjectValue)) {
+    return Throw.TypeError('$1 is not an array', values);
+  }
+  const element = (values as { TypedElement?: TypeRecord }).TypedElement;
+  if (element === undefined) {
+    return Throw.TypeError('SoA.from needs an array with a declared element type');
+  }
+  const columns = SoAColumnsOf(element);
+  if (columns === null) {
+    return Throw.TypeError('this element type cannot be stored as columns');
+  }
+  const lengthValue = Q(yield* Get(values, Value('length')));
+  const length = Number(Q(yield* ToIndex(lengthValue)));
+  const placement = ColumnLayoutFor(columns, length);
+  const buffer = Q(yield* AllocateArrayBuffer(surroundingAgent.intrinsic('%ArrayBuffer%'), placement.byteLength));
+  const instance = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%SoA.prototype%']);
+  const storage: SoAStorage = {
+    Element: element,
+    // A growable SoA, as the design's signature says: `static from<T>(values:
+    // [].<T>): SoA.<T>`.
+    Extent: 0,
+    Columns: columns,
+    ColumnOffsets: placement.offsets,
+    Buffer: buffer as ArrayBufferObject,
+    Length: length,
+    Capacity: length,
+  };
+  SetSoAStorage(instance, storage);
+  for (let i = 0; i < length; i += 1) {
+    const value = Q(yield* Get(values, Value(String(i))));
+    Q(yield* SoAScatter(storage, i, value));
+  }
+  return instance;
+}
+
+/**
+ * `SoA.withCapacity.<T>(n)` — "Empty, capacity >= n".
+ *
+ * The element type is a TYPE argument here rather than inferred, because there
+ * is no value to infer it from; the call is intercepted where the type
+ * arguments are in scope.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ */
+export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator {
+  const columns = SoAColumnsOf(element);
+  if (columns === null) {
+    return Throw.TypeError('this element type cannot be stored as columns');
+  }
+  const placement = ColumnLayoutFor(columns, n);
+  const buffer = Q(yield* AllocateArrayBuffer(surroundingAgent.intrinsic('%ArrayBuffer%'), placement.byteLength));
+  const instance = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%SoA.prototype%']);
+  SetSoAStorage(instance, {
+    Element: element,
+    Extent: 0,
+    Columns: columns,
+    ColumnOffsets: placement.offsets,
+    Buffer: buffer as ArrayBufferObject,
+    Length: 0,
+    Capacity: n,
+  });
+  return instance;
+}
+
+export { SoA_from };
