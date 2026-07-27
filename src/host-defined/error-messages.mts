@@ -459,6 +459,7 @@ export interface Throw {
   | 'the type in a property descriptor must be a type'
   | 'the view extent exceeds the buffer'
   | 'this SoA view is over a buffer that no longer covers it'
+  | 'this column projection is into an SoA that has since grown'
   | 'this element type cannot be stored as columns'
   | 'this element type has no constructor'
   | 'this has already been initialized'

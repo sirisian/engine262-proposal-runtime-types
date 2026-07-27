@@ -37,6 +37,14 @@ export interface ArrayViewBacking {
   readonly Extent: number | 'dynamic';
   /** For a fixed view, the byte extent recorded at construction. */
   readonly ByteExtent: number;
+  /**
+   * For a projection of an SoA column: the container and the generation its
+   * allocation had when the projection was taken. A growth that reallocates
+   * bumps the generation, and the projection then describes memory the
+   * container no longer uses - so it is refused rather than read.
+   */
+  readonly SourceGeneration?: { readonly Generation: number };
+  readonly TakenAtGeneration?: number;
 }
 
 const views = new WeakMap<object, ArrayViewBacking>();
@@ -67,6 +75,19 @@ export function ArrayViewLength(backing: ArrayViewBacking): number {
 function requireLive(backing: ArrayViewBacking) {
   if (IsDetachedBuffer(backing.Buffer)) {
     return Throw.TypeError('this view is over a detached buffer');
+  }
+  // A projection of an SoA column is invalidated by a growth that reallocates,
+  // exactly as a `ref` into the same SoA is. Without this the projection kept
+  // reading the OLD allocation and disagreed with the container silently, which
+  // is the one outcome none of the alternatives chose.
+  //
+  // The comparison is loop-invariant: the generation cannot change without a
+  // call, and a loop containing no call cannot change it, so it hoists rather
+  // than costing anything per element. A FIXED SoA can never be invalidated at
+  // all, which is the case the feature's performance argument cares about.
+  if (backing.SourceGeneration !== undefined
+      && backing.SourceGeneration.Generation !== backing.TakenAtGeneration) {
+    return Throw.TypeError('this column projection is into an SoA that has since grown');
   }
   if (backing.Extent !== 'dynamic'
       && backing.ByteOffset + backing.ByteExtent > bufferByteLength(backing.Buffer)) {
@@ -175,7 +196,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
  * already a contiguous run at a known offset and stride, so there is nothing to
  * parse and nothing to check.
  */
-export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic'): ObjectValue {
+export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic', source?: { readonly Generation: number }): ObjectValue {
   const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
   views.set(view as unknown as object, {
     Element: element,
@@ -184,6 +205,8 @@ export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, by
     Stride: stride,
     Extent: extent,
     ByteExtent: extent === 'dynamic' ? 0 : extent * stride,
+    SourceGeneration: source,
+    TakenAtGeneration: source?.Generation,
   });
   X(view.PreventExtensions());
   return view;

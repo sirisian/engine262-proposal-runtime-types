@@ -46,6 +46,13 @@ export interface SoAStorage {
   /** For a VIEW, where its bytes begin and how many it reserved. */
   readonly ViewByteOffset?: number;
   readonly ViewByteLength?: number;
+  /**
+   * Bumped whenever the columns are REALLOCATED. A `fields` projection captures
+   * it and refuses to read once it differs, so a projection cannot silently
+   * describe an allocation the SoA has abandoned. A fixed extent never grows,
+   * so its generation never moves.
+   */
+  Generation: number;
 }
 
 const storages = new WeakMap<object, SoAStorage>();
@@ -133,6 +140,7 @@ function* SoAConstructor(args: Arguments, { NewTarget }: FunctionCallContext): V
     Buffer: buffer as ArrayBufferObject,
     Length: length,
     Capacity: capacity,
+    Generation: 0,
   });
   return instance;
 }
@@ -229,6 +237,7 @@ function* SoAProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Func
   storage.Buffer = grown as ArrayBufferObject;
   (storage as { ColumnOffsets: readonly number[] }).ColumnOffsets = placement.offsets;
   storage.Capacity = wanted;
+  storage.Generation += 1;
   return Value.undefined;
 }
 
@@ -525,6 +534,7 @@ function* growTo(storage: SoAStorage, capacity: number): PlainEvaluator<void> {
   storage.Buffer = grown as ArrayBufferObject;
   (storage as { ColumnOffsets: readonly number[] }).ColumnOffsets = placement.offsets;
   storage.Capacity = capacity;
+  storage.Generation += 1;
   return undefined;
 }
 
@@ -726,6 +736,7 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
     Buffer: buffer,
     Length: extent,
     Capacity: extent,
+    Generation: 0,
     ViewByteOffset: byteOffset,
     ViewByteLength: placement.byteLength,
   });
@@ -769,6 +780,7 @@ function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
     Buffer: buffer as ArrayBufferObject,
     Length: length,
     Capacity: length,
+    Generation: 0,
   };
   SetSoAStorage(instance, storage);
   for (let i = 0; i < length; i += 1) {
@@ -803,6 +815,7 @@ export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator
     Buffer: buffer as ArrayBufferObject,
     Length: 0,
     Capacity: n,
+    Generation: 0,
   });
   return instance;
 }
@@ -851,6 +864,10 @@ function* SoAProto_fieldsGetter(_args: Arguments, { thisValue }: FunctionCallCon
       // a view of the elements IN USE, which is its length rather than its
       // capacity - a projection describes the elements, not the allocation.
       storage.Extent === 0 ? storage.Length : storage.Extent,
+      // A growable SoA's projection is invalidated by a reallocation; a fixed
+      // one has nothing that could move, so it carries no generation at all and
+      // its accesses have no check to make.
+      storage.Extent === 0 ? storage : undefined,
     );
     X(CreateDataProperty(fields, Value(column.key), view));
   }

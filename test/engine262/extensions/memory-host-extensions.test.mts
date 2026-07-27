@@ -850,3 +850,41 @@ test('soa: fields projects each column as a live view', () => {
   // same bytes a placed instance of that class describes, decoded the same way.
   expect(evaluated(`${proj} const ref r = p[1]; r.origin.x = 7; String(Number(p[1].origin.x)) + "/" + String(Number(p[0].origin.x));`)).toBe('7/0');
 });
+
+test('soa: the three open questions, resolved', () => {
+  // 1. A `fields` projection of a GROWABLE SoA is invalidated by a growth that
+  // reallocates, exactly as a `ref` into the same SoA is. Before this, the
+  // projection kept reading the ABANDONED allocation and disagreed with its
+  // container silently - the one outcome none of the alternatives chose.
+  //
+  // Invalidating rather than preventing is what a GC language can express:
+  // Rust's borrow checker refuses the program outright and pays nothing, but
+  // nothing here marks the end of a projection's life, so a container that
+  // could not grow while one had ever been taken could never grow again.
+  const grow = 'class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
+    + 'g.push(seed); g.push(seed); const col = g.fields.a; ';
+  expect(evaluated(`${grow} String(Number(col[0]));`)).toBe('1');
+  expectThrownKind(`${grow} for (let i = 0; i < 20; i = i + 1) { g.push(seed); } col[0];`, 'TypeError');
+  // A fresh projection after the growth is fine, and a FIXED SoA can never be
+  // invalidated at all - which is the case the performance argument cares
+  // about, since its accesses have no check to make.
+  expect(evaluated(`${grow} for (let i = 0; i < 20; i = i + 1) { g.push(seed); } String(Number(g.fields.a[0]));`)).toBe('1');
+  expect(evaluated('class P { a: uint8; } const f = new SoA.<P, 3>(); const fc = f.fields.a; fc[0] = 5; String(Number(f[0].a));')).toBe('5');
+
+  // 2. `Length` is defaulted, so `SoA.<T>` and `SoA.<T, 0>` name ONE type - as a
+  // defaulted parameter does in C++, TypeScript, and Rust alike. Two interned
+  // records for one type cost a `===` that answers *false* and, under
+  // monomorphization, room for two specializations of the same generic.
+  expect(evaluated('class P { a: uint8; } String((type SoA.<P>) === (type SoA.<P, 0>));')).toBe('true');
+  expect(evaluated('class P { a: uint8; } const g = new SoA.<P>(); String(g.length) + "/" + String(g.capacity);')).toBe('0/0');
+
+  // 3. Each column is aligned to its ELEMENT TYPE and to nothing wider. A vector
+  // width is a property of the host, so folding one in would make the same SoA a
+  // different size on different implementations and cost `byteLength` its place
+  // among the compile-time constants. Where the allocation is PLACED is a
+  // separate question and the implementation's own.
+  expect(evaluated('class P { a: uint8; b: float64; } String((type SoA.<P, 4>).alignment);')).toBe('8');
+  expect(evaluated('class F { x: float32; } String((type SoA.<F, 4>).alignment);')).toBe('4');
+  // And byteLength stays exactly the sum the layout rule computes.
+  expect(evaluated('class P { a: uint8; b: float64; } String((type SoA.<P, 4>).byteLength);')).toBe('40');
+});

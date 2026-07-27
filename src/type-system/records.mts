@@ -193,10 +193,22 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
   if (!libraryTypeNames.has(name)) {
     return null;
   }
+  // proposal-runtime-types soa.md: `class SoA<T, Length: uint32 = 0>` declares a
+  // DEFAULT, and a default means two spellings of one type - `SoA.<T>` and
+  // `SoA.<T, 0>` name the same thing, as `S<T>` and `S<T, 0>` do in C++ and
+  // TypeScript for the same reason. The default is filled in HERE, before
+  // interning, because identity is decided by the record: leaving it out gave
+  // two interned Type Objects, a `===` that answered *false* for one type, and
+  // - under monomorphization - room for two specializations of every generic
+  // instantiated at both spellings.
+  //
+  // Only SoA carries a declared default among the library types; a generic with
+  // a DECLARATION applies its defaults where the declaration is read.
+  const filled = name === 'SoA' && args.length === 1 ? [...args, 0] : args;
   return {
     Kind: 'nominal',
     Declaration: libraryDeclarationSentinel,
-    Arguments: args,
+    Arguments: filled,
     LibraryName: name,
   };
 }
