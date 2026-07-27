@@ -189,6 +189,9 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%URIError.prototype%': ObjectValue;
   '%URIError%': FunctionObject;
   '%WeakMap.prototype%': ObjectValue;
+  // proposal-runtime-types (soa.md): the structure-of-arrays container.
+  '%SoA%': FunctionObject;
+  '%SoA.prototype%': ObjectValue;
   '%WeakRef.prototype%': ObjectValue;
   '%WeakSet.prototype%': ObjectValue;
 }

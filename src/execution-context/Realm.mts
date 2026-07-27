@@ -83,6 +83,8 @@ import { bootstrapTypedArrayPrototypes } from '../intrinsics/TypedArrayPrototype
 import { bootstrapURIHandling } from '../intrinsics/URIHandling.mts';
 import { bootstrapWeakMap } from '../intrinsics/WeakMap.mts';
 import { bootstrapWeakMapPrototype } from '../intrinsics/WeakMapPrototype.mts';
+import { bootstrapSoA } from '../intrinsics/SoA.mts';
+import { bootstrapSoAPrototype } from '../intrinsics/SoAPrototype.mts';
 import { bootstrapWeakRef } from '../intrinsics/WeakRef.mts';
 import { bootstrapWeakRefPrototype } from '../intrinsics/WeakRefPrototype.mts';
 import { bootstrapWeakSet } from '../intrinsics/WeakSet.mts';
@@ -216,6 +218,9 @@ export function CreateIntrinsics(realmRec: Realm) {
   // proposal-runtime-types: the ClassField reflection context, a type, so it
   // follows %Type.prototype% for the same reason %Reflect.never% does.
   bootstrapReflectClassField(realmRec);
+  // proposal-runtime-types (soa.md): the structure-of-arrays container.
+  bootstrapSoAPrototype(realmRec);
+  bootstrapSoA(realmRec);
   // proposal-runtime-types: a meta type this specification declares rather than
   // a program. Needs %Type.prototype% too, so it follows it.
   bootstrapStringPattern(realmRec);
@@ -429,6 +434,9 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'WeakMap',
     'WeakRef',
     'WeakSet',
+    // proposal-runtime-types (soa.md): the structure-of-arrays container, a
+    // built-in exotic in the same way `[].<T>` is.
+    'SoA',
 
     // Other Properties of the Global Object
     // 'Atomics',

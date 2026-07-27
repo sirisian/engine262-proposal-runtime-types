@@ -1,11 +1,12 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
+import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { ObjectValue, type Value } from '../value.mts';
+import { NumberValue, ObjectValue, type Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { surroundingAgent } from '#self';
 import {
@@ -36,6 +37,30 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 7. If IsConstructor(constructor) is false, throw a TypeError exception.
   if (!IsConstructor(constructor)) {
     return Throw.TypeError('$1 is not a constructor', constructor);
+  }
+  // proposal-runtime-types (soa.md): `new SoA.<T, N>()` carries its element type
+  // and extent as TYPE arguments, and the constructor needs them before it can
+  // size anything - the columns ARE the type argument. Resolved here, where the
+  // callee node is in hand, and handed over as a pending value for the same
+  // reason the placement backing is: a constructor takes value arguments, and
+  // these are not values.
+  if (surroundingAgent.feature('runtime-types') && constructExpr.type === 'TypeArgumentsExpression') {
+    const spec = constructExpr as unknown as ParseNode.TypeArgumentsExpression;
+    const baseName = spec.Expression.type === 'IdentifierReference'
+      ? (spec.Expression as unknown as { name: string }).name
+      : undefined;
+    if (baseName === 'SoA') {
+      const soaArgs: TypeRecord[] = [];
+      for (const argNode of spec.TypeArguments.TypeArgumentList) {
+        const record = Q(yield* TypeNodeToTypeRecord(argNode));
+        // The extent arrives as a literal record wrapping a Number, as every
+        // numeric type argument does; the constructor wants the number.
+        soaArgs.push(record.Kind === 'literal' && record.Value instanceof NumberValue
+          ? (Number((record.Value as unknown as { value: number }).value) as unknown as TypeRecord)
+          : record);
+      }
+      SetPendingSoATypeArguments(soaArgs);
+    }
   }
   // The placement is VALIDATED before the constructor runs: the extent depends
   // only on the arguments and the type's layout, and checking it afterwards

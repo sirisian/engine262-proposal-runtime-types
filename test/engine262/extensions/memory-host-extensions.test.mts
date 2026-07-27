@@ -532,3 +532,44 @@ test('memory layout: a placement binds before construction, so no property is cr
   // An unplaced instance is untouched.
   expect(evaluated('class U { x: float32; } String(Object.getOwnPropertyNames(new U()).join(","));')).toBe('x');
 });
+
+test('soa: allocation, capacity, and reserve', () => {
+  // soa.md's class shape: `constructor()`, `constructor(length)` for growable
+  // arrays, `length`, `capacity`, `byteLength`, and `reserve(n)` — "grow every
+  // column to hold at least n elements".
+  //
+  // ONE ALLOCATION with the columns at computed offsets, not one allocation per
+  // column: "a byte view over an `SoA` sees the columns in declaration order,
+  // one after another. That is also its serialization order, and it's why
+  // `byteLength` is a sum of column lengths."
+  const pad = 'class Pad { a: uint8; b: float64; } ';
+
+  // A FIXED extent is its length from construction, as `[N].<T>` is.
+  expect(evaluated(`${pad} const s = new SoA.<Pad, 4>(); String(s.length) + "/" + String(s.capacity);`)).toBe('4/4');
+  // And the instance's byteLength agrees with the TYPE's, which is the check
+  // that the constructor and the layout rule compute the same thing rather than
+  // two things that happen to look alike.
+  expect(evaluated(`${pad} const s = new SoA.<Pad, 4>(); String(s.byteLength) + "/" + String((type SoA.<Pad, 4>).byteLength);`)).toBe('40/40');
+
+  // A GROWABLE form starts empty, and takes an optional initial length.
+  expect(evaluated(`${pad} const g = new SoA.<Pad>(); String(g.length) + "/" + String(g.capacity);`)).toBe('0/0');
+  expect(evaluated(`${pad} const g = new SoA.<Pad>(3); String(g.length) + "/" + String(g.capacity);`)).toBe('3/3');
+
+  // `reserve` grows every column. The size is the discriminating part: for
+  // capacity 8 the `a` column is 8 bytes, the `b` column is aligned to 8 and is
+  // 64, so 72 — which is not 8 times anything, because the columns are padded
+  // and aligned on their own rather than sharing an element stride.
+  expect(evaluated(`${pad} const g = new SoA.<Pad>(); g.reserve(8); String(g.capacity) + "/" + String(g.byteLength);`)).toBe('8/72');
+  // Reserving below the current capacity does nothing.
+  expect(evaluated(`${pad} const g = new SoA.<Pad>(4); g.reserve(2); String(g.capacity);`)).toBe('4');
+
+  // REJECTIONS. A fixed extent has nothing to reallocate — `push`, `pop`, and
+  // `reserve` "are already absent from an `SoA.<T, N>` as they are from a
+  // `[N].<T>`". An SoA needs an element type, since the columns ARE the type
+  // argument. And a `T` that cannot be split into columns is refused here as it
+  // is by the layout rule.
+  expectThrown(`${pad} new SoA.<Pad, 4>().reserve(8);`);
+  expectThrown('new SoA();');
+  expectThrown('SoA();');
+  expectThrown('class Ref { s: string; } new SoA.<Ref, 2>();');
+});
