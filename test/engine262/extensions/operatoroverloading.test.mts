@@ -246,3 +246,32 @@ test('a primitive block may declare an implicit cast into a parameterization', (
     + 'primitive float64 { operator float64.<{ m: 2 }>(): float64.<{ m: 2 }> { return Number(this) * 2; } } ';
   expect(evaluated(`${computing} let d: float64.<{ m: 2 }> = 4; String(Number(d));`)).toBe('8');
 });
+
+test('a parameterized primitive block declares operators per parameterization', () => {
+  // #sec-primitive-operator-blocks: "A declaration of the form `primitive` _T_
+  // _P_ `{` ... `}`, where ... _P_ is an optional TypeParameters constrained by
+  // a meta type, declares operators on _T_ FOR EACH PARAMETERIZATION ITS
+  // PARAMETERS ADMIT."
+  //
+  // Dimensional analysis at its smallest: the block's parameter binds from the
+  // RECEIVER, so `operator +(rhs: float64.<D>): float64.<D>` admits an operand
+  // of the receiver's own parameterization and nothing else, and the result
+  // carries the same metadata.
+  const dim = 'type Dim = { m: number }; '
+    + 'meta Dim { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return true; } } '
+    + 'primitive float64 <D: Dim> { operator +(rhs: float64.<D>): float64.<D> { return this + rhs; } } '
+    + 'const a = (3 := float64.<{ m: 1 }>); ';
+  expect(evaluated(`${dim} const b = (4 := float64.<{ m: 1 }>); const c = a + b; String(Number(c));`)).toBe('7');
+  expect(evaluated(`${dim} const b = (4 := float64.<{ m: 1 }>); const c = a + b; String(c is float64.<{ m: 1 }>);`)).toBe('true');
+  // THE ASSERTION THAT MATTERS. The sum of two same-dimension values is the
+  // same NUMBER as the sum of two mismatched ones, so a test that only adds
+  // matching values proves nothing about whether the parameterization does any
+  // work - plain arithmetic gives 7 either way.
+  expect(evaluated(`${dim} const d = (5 := float64.<{ m: 2 }>); try { const e = a + d; "no"; } catch (x) { "caught"; }`)).toBe('caught');
+  expect(evaluated(`${dim} try { const f = a + 2; "no"; } catch (x) { "caught"; }`)).toBe('caught');
+  // The result must be USABLE as its parameterization, not merely computed:
+  // without the return-annotation exemption for a primitive-block operator the
+  // body's own return re-resolves `float64.<D>` outside the frame that binds D,
+  // and the whole expression throws.
+  expect(evaluated(`${dim} const b = (4 := float64.<{ m: 1 }>); const c = a + b; const g = c + b; String(Number(g));`)).toBe('11');
+});
