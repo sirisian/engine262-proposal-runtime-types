@@ -1046,6 +1046,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const unusable = new Set<string>();
     let construct: { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] } | null = null;
     const accessorKeys = new Set<string>();
+    const getterKeys = new Set<string>();
     const setterTypes = new Map<string, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
       if (el.type === 'MethodDefinition') {
@@ -1100,6 +1101,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
           if (t) {
             Properties.push({ key, type: t, optional: false });
+            getterKeys.add(key);
           }
           continue;
         }
@@ -1219,6 +1221,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // inherit whatever the assignability relation currently makes of subclasses
     // and numeric widths.
     if (baseStructure && baseStructure.Kind === 'object') {
+      // README: "A derived getter may refine its type COVARIANTLY under the
+      // same conversion free rule that governs method returns." So the derived
+      // getter's type must be a subtype of the base's - every caller of the
+      // base's getter still receives what it was promised.
+      //
+      // JUDGED ONLY WHERE THE RELATION IS SOUND, which today is between two
+      // CLASS types. IsSubtype has no primitive case at all, so it reports a
+      // numeric refinement as unrelated in both directions, and a rule that
+      // trusted it would refuse `get x(): uint8` overriding `get x(): uint32` -
+      // legal, and the exact false positive that kept the within-class rule out
+      // twice. Numeric refinement is left unjudged rather than judged wrongly;
+      // what unblocks it is a primitive case carrying the design's table of
+      // free conversions.
+      for (const key of getterKeys) {
+        const own = Properties.find((prop) => prop.key === key);
+        const inherited = baseStructure.Properties.find((prop) => prop.key === key);
+        if (own?.type && inherited?.type
+          && own.type.Kind === 'nominal' && inherited.type.Kind === 'nominal'
+          && !IsAssignable(own.type, inherited.type)) {
+          report(own.type, inherited.type);
+        }
+      }
       for (const key of accessorKeys) {
         const own = Properties.find((prop) => prop.key === key);
         const inherited = baseStructure.Properties.find((prop) => prop.key === key);

@@ -68,10 +68,6 @@ test('PINNED: the three rules stage D has not implemented', () => {
   const accepted = outcome;
   const animals = 'class Animal {} class Dog extends Animal {} ';
 
-  // 1. Derived getter covariance, and its violation. Needs only what the base
-  // Structure carries, so it is the next one to land.
-  expect(accepted(`${animals} class S { get r(): Dog { return new Dog(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('ACCEPTED');
-
   // 2. Derived setter contravariance. Needs the base's SETTER types, which the
   // class type does not expose - `setterTypes` is local to the walk.
   expect(accepted(`${animals} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('ACCEPTED');
@@ -114,4 +110,34 @@ test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
   expect(outcome('class X {} class Y {} let x: X = new Y();')).toBe('TypeError');
   // The run-time judgment it was disagreeing with is unchanged.
   expect(evaluated(`${A} String(new Dog() is Animal);`)).toBe('true');
+});
+
+test('a derived getter must refine COVARIANTLY', () => {
+  // README: "A derived getter may refine its type covariantly under the same
+  // conversion free rule that governs method returns." Every caller of the
+  // base's getter must still receive what the base promised.
+  const A = 'class Animal {} class Dog extends Animal {} ';
+  expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
+  expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('ACCEPTED');
+  // The violation: widening the getter breaks the base's promise.
+  expect(outcome(`${A} class S { get r(): Dog { return new Dog(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('TypeError');
+  // An unrelated class is not a refinement either, which a rule comparing only
+  // "different" rather than "not a subtype" would also catch - but this one
+  // distinguishes it from the covariant case above, which that rule would not.
+  expect(outcome(`${A} class X {} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): X { return new X(); } }`)).toBe('TypeError');
+  expect(outcome(`${A} class K { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
+});
+
+test('PINNED: a NUMERIC getter refinement is left unjudged, deliberately', () => {
+  // `get r(): uint8` overriding `get r(): uint32` is a legal covariant
+  // refinement and is NOT checked. IsSubtype has no primitive case at all, so
+  // it reports every numeric pair as unrelated in both directions; a rule that
+  // trusted it here would refuse this, which is the false positive that kept
+  // the within-class rule out twice.
+  expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('ACCEPTED');
+  // THE UNDERLYING DISAGREEMENT, measured: the RUN TIME widens happily, and
+  // only the checker refuses. Through an untyped parameter - where the checker
+  // cannot see the source type - the same widening succeeds and yields 5.
+  expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
+  expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
 });
