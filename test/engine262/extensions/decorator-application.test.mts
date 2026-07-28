@@ -148,6 +148,58 @@ test('a decorated operator has a context but no grammar', () => {
   expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
 });
 
+test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is not', () => {
+  // An OperatorDefinition is intercepted in the class-body walk (it registers
+  // in the operator table) and never reaches ClassElementEvaluation, which is
+  // where every other member's sub-target decorators are applied. So
+  // `operator +(@f rhs: Op)` PARSED AND SILENTLY DID NOTHING — a decoration
+  // accepted and dropped, which reads as support and is worse than the
+  // SyntaxError the operator's own decorator still gives.
+  //
+  // The two positions are now wired at the interception itself.
+  const opParam = 'let c; function grab(x) { c = x; } class Op { operator +(@grab r: Op): Op { return r; } } ';
+  expect(evaluated(`${opParam} c.kind + ':' + String(c.index);`)).toBe('ClassOperatorParameter:0');
+  // The sub-target reaches its owner, and the owner is named by its OPERATOR.
+  expect(evaluated(`${opParam} c.methodContext.kind + '/' + String(c.methodContext.name);`)).toBe('ClassOperator/+');
+  // Parameters before the return, as everywhere else.
+  const both = 'const log = []; function tag(n) { return (c) => log.push(n + \'(\' + c.kind + \')\'); } '
+    + 'class Op { operator +(@tag(\'p\') r: Op): @tag(\'ret\') Op { return r; } } ';
+  expect(evaluated(`${both} log.join(',');`)).toBe('p(ClassOperatorParameter),ret(ClassMethodReturn)');
+  // THE RETURN TAKES `ClassMethodReturn`, which is the sub-target table's own
+  // answer and worth seeing rather than assuming: decorators.md's context table
+  // has no `ClassOperatorReturn`, so an operator's return has no context of its
+  // own to take. Asserted so that adding one is a deliberate change.
+  expect(evaluated('let k; function grab(x) { k = x.kind; } class Op { operator -(): @grab Op { return this; } } k;')).toBe('ClassMethodReturn');
+  // A static operator is the same declaration on the constructor.
+  expect(evaluated('let c; function grab(x) { c = x; } class Op { static operator +(@grab r: Op): Op { return r; } } String(c.methodContext.name);')).toBe('+');
+
+  // THE DISCRIMINATING ASSERTION, per the invariant that an operator dispatch
+  // must be proved by a case whose fallback computes something else: the
+  // operator still REGISTERS and still runs. Wiring the decorators at the
+  // interception must not disturb the registration that shares it, and
+  // `new Op(2) + new Op(3)` giving 5 is only available from the declared
+  // operator — the fallback on two objects is not a number.
+  expect(evaluated('function f(c) {} class Op { constructor(v) { this.v = v; } operator +(@f r: Op): Op { return new Op(this.v + r.v); } } '
+    + 'String((new Op(2) + new Op(3)).v);')).toBe('5');
+
+  // The operator's OWN decorator is still a SyntaxError, so this stage opened
+  // the sub-targets and nothing else. Stated here rather than assumed, for the
+  // same reason stage A asserted what it did not open.
+  expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
+});
+
+test('an ABSTRACT method\'s parameters and return are decorated too', () => {
+  // An AbstractMethodDefinition is intercepted at the same place and for the
+  // same reason (it has no runtime behaviour to evaluate), so it dropped its
+  // sub-target decorations in exactly the same way. It is a declaration whose
+  // parameters are declared, and decorators.md's `ClassMethodReflection`
+  // carries `abstract` precisely because an abstract method is reflectable.
+  const am = 'let c; function grab(x) { c = x; } abstract class A { abstract m(@grab p: uint8): uint8; } ';
+  expect(evaluated(`${am} c.kind + ':' + String(c.index);`)).toBe('ClassMethodParameter:0');
+  expect(evaluated(`${am} String(c.methodContext.name);`)).toBe('m');
+  expect(evaluated('let k; function grab(x) { k = x.kind; } abstract class A { abstract m(p: uint8): @grab uint8; } k;')).toBe('ClassMethodReturn');
+});
+
 test('sub-targets: parameters and returns apply before their declaration', () => {
   // Stage C of PLAN-decorators.md. decorators.md writes the positions as
   // `d(@f a: uint32): @f uint32` — a decorator before the parameter, and before

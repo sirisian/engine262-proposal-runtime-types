@@ -708,6 +708,27 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
           RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
         }
+        // proposal-runtime-types decorators.md "Order": a declaration's
+        // sub-targets apply before the declaration itself. An OperatorDefinition
+        // and an AbstractMethodDefinition are intercepted here and never reach
+        // ClassElementEvaluation, which is where every other member's
+        // sub-targets are applied - so without this the parameter and return
+        // decorators of these two positions PARSE AND SILENTLY NEVER FIRE,
+        // which reads as support and is worse than the SyntaxError the
+        // operator's own decorator still gives.
+        //
+        // Only on this branch: the one above belongs to the TC39 `decorators`
+        // feature, which is mutually exclusive with `runtime-types` and refused
+        // at the Agent.
+        if (surroundingAgent.feature('runtime-types')) {
+          const isOperator = e.type === 'OperatorDefinition';
+          Q(yield* ApplySubTargetDecorators(
+            e,
+            isOperator ? 'ClassOperator' : 'ClassMethod',
+            isOperator ? Value(operatorTableKey(e)) : MemberKeyOf(e, undefined),
+            (e.static ? F : proto) as Value,
+          ));
+        }
         continue;
       }
       let field;
