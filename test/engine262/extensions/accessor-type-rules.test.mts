@@ -87,21 +87,44 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
   expect(outcome('class C { accessor x: uint8 = 1; }')).toBe('ACCEPTED');
 });
 
-test('PINNED: the rules stage D has not implemented', () => {
-  const accepted = outcome;
-  const animals = 'class Animal {} class Dog extends Animal {} ';
-  // Derived setter contravariance. Needs the base's SETTER types, which the
-  // class type does not expose - `setterTypes` is local to the walk, so a
-  // derived class cannot see its base's.
-  expect(accepted(`${animals} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('ACCEPTED');
-  // Field/accessor substitution, which needs the member KIND recorded.
-  expect(accepted('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
-  // AND THE THING THAT IS NOT A GAP: a numeric type is not implicitly
-  // convertible to another, so the checker refusing `let b: uint32 = a` is
-  // CORRECT (README, "never implicitly becomes"). The run time converts from
-  // `any` because that is a CHECKED conversion at a boundary, which is a
-  // different rule - not a disagreement, as cycle 141 recorded it.
-  expect(accepted('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
+test('a derived setter must be CONTRAVARIANT', () => {
+  // README: "A derived setter is contravariant: it must accept every value the
+  // base setter accepts, and may accept more." The direction is the REVERSE of
+  // the getter rule, so a rule that had copied that one would accept a widening
+  // and a narrowing both - which is why both are asserted.
+  const A = 'class Animal {} class Dog extends Animal {} ';
+  expect(outcome(`${A} class S { set r(v: Dog) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
+  expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
+  expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('TypeError');
+  // Nothing to be contravariant against.
+  expect(outcome(`${A} class S { m() {} } class K extends S { set r(v: Dog) {} }`)).toBe('ACCEPTED');
+  // The base's WRITE type had to be carried on the class type to make this
+  // decidable: a Structure holds one type per property and the getter already
+  // claims it, so a setter is invisible to a derived class without it.
+  expect(outcome('class S { set r(v: uint32) {} } class K extends S { set r(v: uint8) {} }')).toBe('TypeError');
+});
+
+test('README\'s worked Shelter/Kennel example, both directions', () => {
+  // The design's own illustration, which exercises the getter and setter rules
+  // together on ONE property - the case a rule checked in isolation can pass
+  // while the pair still does not hold.
+  const decl = 'class Animal {} class Dog extends Animal {} '
+    + 'class Shelter { get resident(): Animal { return new Animal(); } set resident(value: Animal) {} } ';
+  expect(outcome(`${decl} class Kennel extends Shelter { get resident(): Dog { return new Dog(); } set resident(value: Animal) {} }`)).toBe('ACCEPTED');
+  // README's own commented-out line: "// set resident(value: Dog) {} //
+  // TypeError: the base setter accepts any Animal".
+  expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('TypeError');
+});
+
+test('PINNED: the one rule stage D has not implemented', () => {
+  // Field/accessor substitution, which needs the member KIND recorded on the
+  // class type - only accessor keys are tracked, and only within one walk.
+  expect(outcome('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
+  // NOT a gap, recorded because two cycles read it as one: a value of one value
+  // type never implicitly becomes another, so refusing this is correct. The run
+  // time converting from an untyped parameter is a CHECKED conversion at a
+  // boundary, which is a different rule.
+  expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
   expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
 });
 
@@ -139,18 +162,9 @@ test('a derived getter must refine COVARIANTLY', () => {
   // distinguishes it from the covariant case above, which that rule would not.
   expect(outcome(`${A} class X {} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): X { return new X(); } }`)).toBe('TypeError');
   expect(outcome(`${A} class K { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
-});
-
-test('PINNED: a NUMERIC getter refinement is left unjudged, deliberately', () => {
-  // `get r(): uint8` overriding `get r(): uint32` is a legal covariant
-  // refinement and is NOT checked. IsSubtype has no primitive case at all, so
-  // it reports every numeric pair as unrelated in both directions; a rule that
-  // trusted it here would refuse this, which is the false positive that kept
-  // the within-class rule out twice.
-  expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('ACCEPTED');
-  // THE UNDERLYING DISAGREEMENT, measured: the RUN TIME widens happily, and
-  // only the checker refuses. Through an untyped parameter - where the checker
-  // cannot see the source type - the same widening succeeds and yields 5.
-  expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
-  expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
+  // A NUMERIC refinement is judged too. Cycle 141 restricted this rule to class
+  // types believing such a pair was legal; one value type never implicitly
+  // becomes another, so a differing numeric is a failed refinement like any
+  // other, and the restriction was lifted.
+  expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('TypeError');
 });

@@ -1257,10 +1257,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const key of getterKeys) {
         const own = Properties.find((prop) => prop.key === key);
         const inherited = baseStructure.Properties.find((prop) => prop.key === key);
-        if (own?.type && inherited?.type
-          && own.type.Kind === 'nominal' && inherited.type.Kind === 'nominal'
-          && !IsAssignable(own.type, inherited.type)) {
+        // Judged for every pair of types, not only class ones. Cycle 141
+        // restricted this to nominals believing a numeric refinement would be
+        // wrongly refused; README settles that one value type never implicitly
+        // becomes another, so a differing numeric IS a failed refinement and
+        // the restriction was unnecessary.
+        if (own?.type && inherited?.type && !IsAssignable(own.type, inherited.type)) {
           report(own.type, inherited.type);
+        }
+      }
+      // README: "A derived setter is CONTRAVARIANT: it must accept every value
+      // the base setter accepts, and may accept more." So the BASE's write type
+      // must be assignable to the derived's - the direction that makes a
+      // narrowing (`set r(v: Dog)` over `set r(v: Animal)`) the error and a
+      // widening legal, which is the reverse of the getter rule above.
+      const baseSetters = (base as { SetterTypes?: Map<string, TypeRecord> } | null)?.SetterTypes;
+      if (baseSetters) {
+        for (const [skey, ownWrite] of setterTypes) {
+          const inheritedWrite = baseSetters.get(skey);
+          if (inheritedWrite && ownWrite && !IsAssignable(inheritedWrite, ownWrite)) {
+            report(inheritedWrite, ownWrite);
+          }
         }
       }
       for (const key of accessorKeys) {
@@ -1283,6 +1300,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // walk. Nominal, not structural: two unrelated empty classes stay
       // unrelated, which is the point of the classes being nominal at all.
       Base: base ?? undefined,
+      // The WRITE type of each setter, which a derived class needs to check
+      // its own setters against and which the Structure cannot carry: a
+      // property has one type there, and a getter already claims it. Carried
+      // for the same reason as Base - a relation the record does not hold
+      // cannot be decided.
+      SetterTypes: setterTypes.size > 0 ? new Map(setterTypes) : undefined,
     } as unknown as Known;
     if (construct) {
       constructSignatures.set(n, construct);
