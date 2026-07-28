@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { evaluated, expectThrown, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * proposal-runtime-types #sec-decorator-application, the rest of the clause:
@@ -102,34 +102,67 @@ test('REST parameters absorb the written arguments and the context', () => {
   expect(evaluated(`${rest} const xs = [1, 2, 3]; class A { @f(...xs) a: uint8; } got;`)).toBe('4|1,2,3|ClassField');
 });
 
-test('DEFAULTS: a written argument overrides one, and the rest is pinned', () => {
-  // A default before the context, with the argument written: the written value
-  // wins and the context still lands last.
-  expect(evaluated('let got = "never"; function f(n: uint8 = 5, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } class A { @f(9) a: uint8; } got;')).toBe('9:a');
+test('a DEFAULT before the context is filled, and the context still lands last', () => {
+  // The clause binds the context to the LAST PARAMETER, not to the next
+  // position, which is what makes its preference rule sayable: "a signature
+  // taking the context alone is PREFERRED over one whose remaining parameters
+  // are SATISFIED BY DEFAULTS" describes a signature that is a candidate for a
+  // bare `@f` while having parameters before the context. So a bare `@f` calls
+  // `f(n = 5, c)` with `n` defaulted.
+  const one = 'let got = "never"; function f(n: uint8 = 5, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } ';
+  expect(evaluated(`${one} class A { @f a: uint8; } got;`)).toBe('5:a');
+  expect(evaluated(`${one} class A { @f() a: uint8; } got;`)).toBe('5:a');
+  // And a written argument fills it instead.
+  expect(evaluated(`${one} class A { @f(9) a: uint8; } got;`)).toBe('9:a');
+  // Several defaults, filled from the front: what is written takes the leading
+  // positions and the rest default, wherever the written arguments stop.
+  const two = 'let got = "never"; function f(a: uint8 = 1, b: string = "d", c: Reflect.ClassField) { got = String(a) + "/" + b + "/" + String(c.name); } ';
+  expect(evaluated(`${two} class A { @f z: uint8; } got;`)).toBe('1/d/z');
+  expect(evaluated(`${two} class A { @f(7) z: uint8; } got;`)).toBe('7/d/z');
+  expect(evaluated(`${two} class A { @f(7, "w") z: uint8; } got;`)).toBe('7/w/z');
+  // A gap at a parameter with NO default is not a candidate: there is nothing
+  // for that position to take, so the signature cannot accept a bare `@f`.
+  expectThrownKind('let seen; function f(a: uint8, c: Reflect.ClassField) { seen = String(a) + String(c.name); } class A { @f a: uint8; }', 'TypeError');
+});
 
-  // PINNED, and it is the one piece of the clause still outstanding. The
-  // preference rule reads: "a signature taking the context alone is PREFERRED
-  // over one whose remaining parameters are satisfied by defaults" - which says
-  // a signature `f(n = 5, c: Context)` IS a candidate for a bare `@f`, with `n`
-  // taking its default and the context landing on `c`.
+test('FEWER DEFAULTS WINS, and a tie is ambiguous', () => {
+  // The clause's preference rule. THE DISCRIMINATING FORM is both declaration
+  // orders: a rule that merely took the last, or the first, viable signature
+  // would pass one order and fail the other.
+  const alone = 'function f(c: Reflect.ClassField) { l.push("alone"); } ';
+  const defaulted = 'function f(n: uint8 = 5, c: Reflect.ClassField) { l.push("defaulted"); } ';
+  expect(evaluated(`const l = []; ${alone}${defaulted} class A { @f a: uint8; } l.join(",");`)).toBe('alone');
+  expect(evaluated(`const l = []; ${defaulted}${alone} class A { @f a: uint8; } l.join(",");`)).toBe('alone');
+  // Writing the argument selects the defaulted one, since the context-alone
+  // signature has no position for it.
+  expect(evaluated(`const l = []; ${alone}${defaulted} class A { @f(1) a: uint8; } l.join(",");`)).toBe('defaulted');
+
+  // "Two signatures satisfied only by defaults is a TypeError at the decorated
+  // declaration" - stage A0's third bullet, reachable for the first time.
   //
-  // It cannot be, while the context is an ordinary trailing argument: `@f`
-  // calls `f(context)` and the context lands on `n`, which refuses it. Making
-  // it work means binding the context to the LAST PARAMETER rather than the
-  // next position, and that is a real question for the clause rather than an
-  // oversight here - it changes what "the way any call does" means, and it
-  // interacts with the rest-parameter case above, where the context is
-  // deliberately just another trailing argument.
-  // (The body reads both parameters so the boundary check is not elided: an
-  // unused typed parameter is not enforced, so an empty body would report
-  // NO-THROW here and hide the gap rather than pin it.)
-  expect(rejectionKind('let seen; function f(n: uint8 = 5, c: Reflect.ClassField) { seen = String(n) + String(c.name); } class A { @f a: uint8; }')).toBe('TypeError');
-  // The preference itself is untestable until then: with both declared, the
-  // context-alone signature is selected - but by being the only viable one
-  // rather than by being preferred.
-  const both = 'const l = []; function f(c: Reflect.ClassField) { l.push("alone"); } '
-    + 'function f(n: uint8 = 5, c: Reflect.ClassField) { l.push("defaulted"); } ';
-  expect(evaluated(`${both} class A { @f a: uint8; } l.join(",");`)).toBe('alone');
+  // NOTE FOR ANYONE ADDING TO THIS FILE: this assertion runs the SCRIPT WHOLE -
+  // not through `rejectionKind`'s `eval`, and not through `expectThrownKind`'s
+  // try/catch wrapper. Declarations inside either do not form an OVERLOAD
+  // GROUP, so both would report no error at all and the last declaration would
+  // simply run. That is why the kind is not asserted here: reaching the error
+  // object would need the wrapper that destroys the condition.
+  expectThrown('const l = []; function f(n: uint8 = 1, c: Reflect.ClassField) { l.push("u8"); } '
+    + 'function f(s: string = "x", c: Reflect.ClassField) { l.push("str"); } class A { @f a: uint8; }');
+});
+
+test('a REST parameter in the same setup: defaults before it, context inside it', () => {
+  // The last parameter is where the context binds, and a rest IS a last
+  // parameter - so it absorbs the context as its final element while a default
+  // before it still fills. Read together with the rest test above, this is one
+  // rule and not two.
+  const both = 'let got = "never"; function f(n: uint8 = 5, ...rest: [].<any>) { got = String(n) + "|" + rest.length + "|" + rest[rest.length - 1].kind; } ';
+  expect(evaluated(`${both} class A { @f a: uint8; } got;`)).toBe('5|1|ClassField');
+  expect(evaluated(`${both} class A { @f() a: uint8; } got;`)).toBe('5|1|ClassField');
+  // Written arguments fill the fixed parameter first, then the rest, with the
+  // context still last inside it.
+  expect(evaluated(`${both} class A { @f(9) a: uint8; } got;`)).toBe('9|1|ClassField');
+  expect(evaluated(`${both} class A { @f(9, 8) a: uint8; } got;`)).toBe('9|2|ClassField');
+  expect(evaluated(`${both} class A { @f(9, 8, 7) a: uint8; } got;`)).toBe('9|3|ClassField');
 });
 
 test('the two phases, now that arguments are part of phase one', () => {

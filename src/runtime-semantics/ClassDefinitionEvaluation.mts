@@ -1,5 +1,6 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { CallDecorator } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
@@ -292,7 +293,7 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
   const list = decorators ?? [];
   const applicable: ParseNode.Decorator[] = [];
   const evaluated: Value[] = [];
-  const args: Arguments[] = [];
+  const args: Value[][] = [];
   // Phase one, document order.
   for (const d of list) {
     const control = reservedLayoutControl(d);
@@ -318,13 +319,13 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       // the call, not the whole of it, so the by-name evaluator cannot be used
       // here - it validates that every required parameter has an argument, and
       // the context has not been appended yet.
-      args.push(Q(yield* ArgumentListEvaluation(call.Arguments)));
+      args.push(Q(yield* ArgumentListEvaluation(call.Arguments)) as unknown as Value[]);
     } else {
       const expr = (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression;
       const ref = Q(yield* Evaluate(expr as ParseNode));
       evaluated.push(Q(yield* GetValue(ref as never)));
       // `@f` and `@f()` are ONE FORM: both resolve with no explicit argument.
-      args.push([] as unknown as Arguments);
+      args.push([]);
     }
   }
   // Phase two, reverse source order.
@@ -334,10 +335,12 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       return Throw.TypeError('$1 is not a function', fn);
     }
     // "A decorator is an ordinary function whose LAST PARAMETER is annotated
-    // with a reflection context", and the decoration supplies that argument.
-    // A `@f(x)` form has already evaluated to the function the call returned,
-    // so by here every decorator is called with the context alone.
-    Q(yield* Call(fn, Value.undefined, [...(args[i] as unknown as Value[]), context]));
+    // with a reflection context", and the decoration BINDS the context there
+    // rather than appending it: a parameter between the written arguments and
+    // the context takes its own default, and the candidate needing the fewest
+    // defaults wins. CallDecorator carries that rule, because it has to see
+    // each candidate signature BEFORE resolution rather than after.
+    Q(yield* CallDecorator(fn, args[i]!, context));
   }
   return undefined;
 }

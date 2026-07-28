@@ -10,8 +10,8 @@ import { displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } fro
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
-import { fitsNumericType, IsOfType, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
-import { describeParameters, minimumArity, resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
+import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
+import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
@@ -1548,7 +1548,127 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, args as Value[])));
   };
   const overloaded = CreateBuiltinFunction(behaviour as never, length, name, []);
+  // The signatures are readable from the dispatcher, because a DECORATION binds
+  // its context to each candidate's LAST PARAMETER and so has to see them
+  // before resolution rather than after (DecoratorArgumentPlacement below).
+  (overloaded as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures = signatures;
   return overloaded;
+}
+
+/**
+ * proposal-runtime-types #sec-decorator-application: the argument list a
+ * DECORATION calls its decorator with, for one candidate signature.
+ *
+ * A decoration does not append its context to the arguments; it binds the
+ * context to the signature's LAST PARAMETER - "a decorator is an ordinary
+ * function whose LAST PARAMETER is annotated with a reflection context" - and
+ * the written arguments fill from the front. A parameter left between them
+ * takes its own default, which is what makes the clause's preference rule
+ * sayable at all: "a signature taking the context alone is PREFERRED over one
+ * whose remaining parameters are SATISFIED BY DEFAULTS" describes a signature
+ * that is a candidate for a bare `@f` while having parameters before the
+ * context.
+ *
+ * A REST parameter in last position absorbs the context as its final element,
+ * which is the same rule read on a signature whose last parameter happens to
+ * take many: `@f(1, 2)` on `f(...all)` gives `[1, 2, context]`, and `@f` on
+ * `f(n = 5, ...rest)` gives `n` its default and `rest` the context alone.
+ *
+ * Returns the placed arguments and how many defaults it had to reach past, or
+ * null where the signature cannot take this decoration at all - a gap it would
+ * have to leave at a parameter with no default.
+ */
+export function DecoratorArgumentPlacement(parameters: readonly OverloadParameter[], written: readonly Value[], context: Value): { Arguments: Value[], Gaps: readonly number[] } | null {
+  const last = parameters.length - 1;
+  // Where the context lands: the last parameter's position, or - for a rest -
+  // one past the arguments already written into it.
+  const restLast = last >= 0 && parameters[last]!.Rest;
+  const contextAt = restLast
+    ? Math.max(written.length, last)
+    : Math.max(written.length, last < 0 ? 0 : last);
+  const args: Value[] = [];
+  const gaps: number[] = [];
+  for (let i = 0; i < contextAt; i += 1) {
+    if (i < written.length) {
+      args.push(written[i]!);
+      continue;
+    }
+    // A gap. Only a parameter that can supply its own value may be skipped, and
+    // the argument passed for it is `undefined` - which is what makes the
+    // callee's own default run, exactly as `f(undefined)` does in an ordinary
+    // call. The positions are carried so the type judgment below can tell a gap
+    // from a written `undefined`.
+    const p = parameters[i];
+    if (!p || !(p.HasDefault || p.Optional)) {
+      return null;
+    }
+    gaps.push(i);
+    args.push(Value.undefined);
+  }
+  args.push(context);
+  return { Arguments: args, Gaps: gaps };
+}
+
+/**
+ * proposal-runtime-types #sec-decorator-application: call a decorator with the
+ * written arguments and the context, selecting among the decorator's
+ * declarations "the way any call does" but with the context bound to each
+ * candidate's last parameter first.
+ *
+ * The ranking is the clause's own, and it is why this cannot simply hand a flat
+ * argument list to the ordinary dispatcher: FEWER DEFAULTS WINS, so a signature
+ * taking the context alone beats one that reaches past a default to it, and two
+ * signatures reaching past the same number of defaults are AMBIGUOUS - "two
+ * signatures satisfied only by defaults is a TypeError at the decorated
+ * declaration". Within one number of defaults the ordinary tier ranking decides,
+ * so the type rules stay in one place (F53).
+ */
+export function* CallDecorator(fn: Value, written: readonly Value[], context: Value): ValueEvaluator {
+  const declared = (fn as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
+  const signatures: readonly OverloadSignature[] = declared ?? [Q(yield* OverloadSignatureOf(fn))];
+  const placed: { sig: OverloadSignature, args: Value[], defaulted: number }[] = [];
+  for (const sig of signatures) {
+    // An untyped signature has nothing to place against and nothing to judge:
+    // it is the catch-all, and it takes the flat list.
+    const placement = sig.Untyped
+      ? { Arguments: [...written, context], Gaps: [] as readonly number[] }
+      : DecoratorArgumentPlacement(sig.Parameters, written, context);
+    if (!placement) {
+      continue;
+    }
+    if (!sig.Untyped) {
+      // Judged over TYPES rather than values, because a gap has no value to
+      // type: a position the callee's own default will fill is satisfied by
+      // construction, so it contributes the PARAMETER'S type. Typing the gap as
+      // `undefined` instead would make every defaulted signature non-viable,
+      // which is the whole case this cycle exists to admit.
+      const argumentTypes = placement.Arguments.map((value, i) => (
+        placement.Gaps.includes(i) ? (sig.Parameters[i]?.Type ?? ({ Kind: 'any' } as TypeRecord)) : RuntimeTypeOf(value)
+      ));
+      if (resolveOverloadByTypes([sig], argumentTypes).Kind !== 'resolved') {
+        continue;
+      }
+    }
+    placed.push({ sig, args: placement.Arguments, defaulted: placement.Gaps.length });
+  }
+  if (placed.length === 0) {
+    // No candidate: fall back to the flat call so that the ordinary machinery
+    // reports the mismatch in its own words, and so that a callee this
+    // operation cannot describe (a builtin, a bound function) still runs.
+    return EnsureCompletion(Q(yield* Call(fn, Value.undefined, [...written, context] as Value[])));
+  }
+  let best = placed[0]!;
+  for (const candidate of placed) {
+    if (candidate.defaulted < best.defaulted) {
+      best = candidate;
+    }
+  }
+  const tied = placed.filter((c) => c.defaulted === best.defaulted);
+  if (tied.length > 1) {
+    return Throw.TypeError('the call is ambiguous between two declared signatures');
+  }
+  const target = declared ? best.sig.Function : fn;
+  return EnsureCompletion(Q(yield* Call(target, Value.undefined, best.args)));
 }
 
 /**
