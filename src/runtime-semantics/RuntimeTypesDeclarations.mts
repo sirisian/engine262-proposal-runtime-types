@@ -129,6 +129,52 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       }
       Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly });
     }
+    // proposal-runtime-types decorators.md, #sec-metadata-objects: a `partial
+    // interface` EXTENDS an interface someone else declared, and its members
+    // join that interface's. It may contribute FIELDS where a partial class may
+    // not, and the reason is the whole of why this is an interface: an
+    // interface declares a SHAPE and adds no instance state, so nothing gains a
+    // slot, no class's layout moves, and no sealed hierarchy is enlarged - the
+    // three reasons the partial class clause gives for its own restriction.
+    //
+    // The shape stays complete at compile time, which is what an engine needs
+    // to specialize access to it; what it does not do is put every declared key
+    // on every object.
+    if ((node as { Partial?: boolean }).Partial) {
+      const existingRef = Q(yield* ResolveBinding(Value(name.stringValue())));
+      const existing = Q(yield* GetValue(existingRef));
+      if (!isTypeObject(existing)) {
+        return Throw.TypeError('$1 is not an interface', name);
+      }
+      const priorRecord = existing.TypeRecord as TypeRecord & { Structure?: { Properties?: readonly { key: string }[] } };
+      const prior = priorRecord.Structure?.Properties ?? [];
+      const seen = new Set(prior.map((pp) => pp.key));
+      for (const added of Properties) {
+        if (seen.has(added.key)) {
+          // Two declarations of one member is a conflict rather than a merge:
+          // silently taking the later would make the meaning of an interface
+          // depend on load order.
+          return Throw.TypeError('$1 is already declared on this interface', Value(added.key));
+        }
+      }
+      // The added members COMPLETE the existing record in place rather than
+      // producing a new one to rebind.
+      //
+      // Type identity is by [[Declaration]], and a `partial interface` has a
+      // declaration of its own - so a merged record built here would intern as
+      // a SECOND type, and every type-position reference to the name would keep
+      // resolving through the ORIGINAL declaration to the unmerged one. That is
+      // cycle 104's lesson at a second site: rebinding the name is not the same
+      // as changing the type, because a reference in type position reads the
+      // declaration and not the binding.
+      (priorRecord as { Structure?: { Kind: string, Properties: unknown[], IndexSignatures: unknown[] } }).Structure = {
+        Kind: 'object',
+        Properties: [...prior, ...Properties],
+        IndexSignatures: [],
+      };
+      return undefined;
+    }
+
     const record: TypeRecord = {
       Kind: 'nominal',
       Declaration: node,

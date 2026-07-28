@@ -2659,6 +2659,8 @@ export namespace ParseNode {
   export type InterfaceMember = TypeMember | IndexSignature | OperatorDefinition;
   export interface InterfaceDeclaration extends BaseParseNode {
     readonly type: 'InterfaceDeclaration';
+    /** proposal-runtime-types: `partial interface X` extends an existing one. */
+    readonly Partial?: boolean;
     readonly BindingIdentifier: BindingIdentifier;
     readonly TypeParameters: TypeParameters | null;
     readonly InterfaceMemberList: readonly InterfaceMember[];

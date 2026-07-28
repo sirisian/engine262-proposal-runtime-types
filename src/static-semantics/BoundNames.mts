@@ -51,8 +51,13 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
       }
       return [Value('*default*')];
     // proposal-runtime-types
-    case 'TypeAliasDeclaration':
     case 'InterfaceDeclaration':
+      // A `partial interface` EXTENDS a name someone else bound; it does not
+      // bind one of its own, so it contributes no bound name and no second
+      // binding is created for it during declaration instantiation. Same shape
+      // as a partial class, which also declares nothing.
+      return (node as { Partial?: boolean }).Partial ? [] : BoundNames(node.BindingIdentifier);
+    case 'TypeAliasDeclaration':
     case 'EnumDeclaration':
       return BoundNames(node.BindingIdentifier);
     case 'MetaDeclaration':

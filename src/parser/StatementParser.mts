@@ -169,6 +169,16 @@ export abstract class StatementParser extends TypeParser {
               if (this.test('interface')) {
                 return this.parseInterfaceDeclaration();
               }
+              // proposal-runtime-types decorators.md: `partial interface X { ... }`
+              // extends an interface someone else declared. The keyword is the
+              // same one classes use and it means the same thing - "extend a
+              // declaration deliberately" - but on a declaration kind that adds
+              // NO INSTANCE STATE, which is what lets it do what a partial class
+              // may not: contribute fields. See #sec-metadata-objects.
+              if (this.test('partial') && this.testAhead('interface')) {
+                this.next();
+                return this.parseInterfaceDeclaration(true);
+              }
               if (this.test('meta') && !this.peekAhead().hadLineTerminatorBefore) {
                 return this.parseMetaDeclaration();
               }
@@ -230,7 +240,7 @@ export abstract class StatementParser extends TypeParser {
   // InterfaceMember :
   //   TypeMember
   //   OperatorDefinition
-  parseInterfaceDeclaration(): ParseNode.InterfaceDeclaration {
+  parseInterfaceDeclaration(isPartial = false): ParseNode.InterfaceDeclaration {
     const node = this.startNode<ParseNode.InterfaceDeclaration>();
     this.expect('interface');
     node.BindingIdentifier = this.parseBindingIdentifier();
@@ -262,7 +272,13 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.RBRACE);
     node.InterfaceMemberList = InterfaceMemberList;
     const finished = this.finishNode(node, 'InterfaceDeclaration');
-    this.scope.declare(finished, 'lexical');
+    // A `partial interface` extends a name that is ALREADY declared, so it must not
+    // declare it again - the same reason a partial class does not. The
+    // difference is only in what each may contribute.
+    (finished as { Partial?: boolean }).Partial = isPartial;
+    if (!isPartial) {
+      this.scope.declare(finished, 'lexical');
+    }
     return finished;
   }
 
