@@ -226,6 +226,10 @@ export function* BindingDecoratorContext(kind: string, name: Value, value: Value
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
-  X(CreateDataProperty(context, Value('value'), value));
+  // decorators.md's LetReflection and ConstReflection name this `initial`, and
+  // the name is the accurate one: a decorator sees the value the binding was
+  // DECLARED with, not a live view - a `let` reassigned later still reports what
+  // it started with, which `value` implied it would not.
+  X(CreateDataProperty(context, Value('initial'), value));
   return context;
 }

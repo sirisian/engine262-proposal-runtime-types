@@ -60,6 +60,7 @@ export const metadataInterfaceNames = [
   'ClassMethodReturnMetadata',
   'ClassOperatorMetadata',
   'ClassOperatorParameterMetadata',
+  'ClassOperatorReturnMetadata',
   // The Function family.
   'FunctionMetadata',
   'FunctionParameterMetadata',

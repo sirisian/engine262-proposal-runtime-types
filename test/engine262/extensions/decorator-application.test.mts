@@ -182,12 +182,14 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
   // Parameters before the return, as everywhere else.
   const both = 'const log = []; function tag(n, c) { log.push(n + \'(\' + c.kind + \')\'); } '
     + 'class Op { operator +(@tag(\'p\') r: Op): @tag(\'ret\') Op { return r; } } ';
-  expect(evaluated(`${both} log.join(',');`)).toBe('p(ClassOperatorParameter),ret(ClassMethodReturn)');
-  // THE RETURN TAKES `ClassMethodReturn`, which is the sub-target table's own
-  // answer and worth seeing rather than assuming: decorators.md's context table
-  // has no `ClassOperatorReturn`, so an operator's return has no context of its
-  // own to take. Asserted so that adding one is a deliberate change.
-  expect(evaluated('let k; function grab(x) { k = x.kind; } class Op { operator -(): @grab Op { return this; } } k;')).toBe('ClassMethodReturn');
+  expect(evaluated(`${both} log.join(',');`)).toBe('p(ClassOperatorParameter),ret(ClassOperatorReturn)');
+  // THE RETURN TAKES ITS OWN CONTEXT. It borrowed `ClassMethodReturn` when C1
+  // wired it, because the table had no `ClassOperatorReturn`; the table now has
+  // one. Every other callable member had a return context - ClassGetterReturn,
+  // ClassMethodReturn, FunctionReturn, ObjectGetterReturn, ObjectMethodReturn -
+  // and the borrow made "decorate method returns but not operator returns"
+  // unwriteable, since a context IS the dispatch.
+  expect(evaluated('let k; function grab(x) { k = x.kind; } class Op { operator -(): @grab Op { return this; } } k;')).toBe('ClassOperatorReturn');
   // A static operator is the same declaration on the constructor.
   expect(evaluated('let c; function grab(x) { c = x; } class Op { static operator +(@grab r: Op): Op { return r; } } String(c.methodContext.name);')).toBe('+');
 
@@ -288,8 +290,8 @@ test('the function family and bindings', () => {
   // `Let` and `Const` are the first decorators on a STATEMENT rather than a
   // member, and they fire when the statement executes — so the binding's value
   // is already there to be described.
-  expect(evaluated('let t; function grab(c) { t = c; } @grab let x = 41; t.kind + "/" + String(t.name) + "/" + String(Number(t.value));')).toBe('Let/x/41');
-  expect(evaluated('let t; function grab(c) { t = c; } @grab const y = 7; t.kind + "/" + String(t.name) + "/" + String(Number(t.value));')).toBe('Const/y/7');
+  expect(evaluated('let t; function grab(c) { t = c; } @grab let x = 41; t.kind + "/" + String(t.name) + "/" + String(Number(t.initial));')).toBe('Let/x/41');
+  expect(evaluated('let t; function grab(c) { t = c; } @grab const y = 7; t.kind + "/" + String(t.name) + "/" + String(Number(t.initial));')).toBe('Const/y/7');
 });
 
 test('a decorated function declaration still hoists — a KNOWN DIVERGENCE', () => {

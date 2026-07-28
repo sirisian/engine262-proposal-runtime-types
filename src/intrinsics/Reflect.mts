@@ -776,6 +776,27 @@ export function classSetterParameterContextRecord(): TypeRecord {
 
 const classOperatorParameterContextDeclaration = { type: 'ReflectionContext', name: 'ClassOperatorParameter' } as unknown as ParseNode;
 
+/**
+ * proposal-runtime-types decorators.md: `ClassOperatorReturn`. Every other
+ * callable member has a return context - ClassGetterReturn, ClassMethodReturn,
+ * FunctionReturn, ObjectGetterReturn, ObjectMethodReturn - and the operator was
+ * the only one without, so its return borrowed `ClassMethodReturn`. That made
+ * "decorate method returns but not operator returns" unwriteable, since a
+ * context IS the dispatch. An operator's return is also the one return position
+ * that takes part in overload resolution: ClassOperatorReflection's `signatures`
+ * are where "return-type overloads appear as multiple entries".
+ */
+const classOperatorReturnContextDeclaration = { type: 'ReflectionContext', name: 'ClassOperatorReturn' } as unknown as ParseNode;
+
+export function classOperatorReturnContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classOperatorReturnContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassOperatorReturn',
+  };
+}
+
 export function classOperatorParameterContextRecord(): TypeRecord {
   return {
     Kind: 'nominal',
@@ -1164,6 +1185,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
+  X(reflect.DefineOwnProperty(Value('ClassOperatorReturn'), Descriptor({
+    Value: GetTypeObject(classOperatorReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
   X(reflect.DefineOwnProperty(Value('ClassOperatorParameter'), Descriptor({
     Value: GetTypeObject(classOperatorParameterContextRecord(), realmRec),
     Writable: Value.false,
@@ -1363,6 +1390,9 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   }
   const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(obj, Value('kind'), Value('field')));
+  // The field this describes. Redundant when fetched BY name and necessary when
+  // the whole set is enumerated, which is the form that reads a layout out.
+  X(CreateDataProperty(obj, Value('name'), Value(name)));
   X(CreateDataProperty(obj, Value('offset'), Value(placement.offset)));
   X(CreateDataProperty(obj, Value('byteLength'), Value(placement.layout.byteLength)));
   X(CreateDataProperty(obj, Value('bitLength'), Value(placement.layout.bitLength)));

@@ -46,7 +46,7 @@ export abstract class FunctionParser extends IdentifierParser {
   abstract parseBindingElement(options?: { allowTypedInitializer?: boolean, allowOptionalMarker?: boolean, ref?: boolean }): ParseNode.BindingElementLike;
 
   // proposal-runtime-types: implemented by TypeParser further up the mixin chain.
-  abstract parseTypeAnnotation(): ParseNode.TypeAnnotation;
+  abstract parseTypeAnnotation(allowDecorators?: boolean): ParseNode.TypeAnnotation;
 
   abstract parseTypedInitializer(): ParseNode.TypedInitializer;
 
@@ -121,7 +121,7 @@ export abstract class FunctionParser extends IdentifierParser {
 
       // proposal-runtime-types #sec-annotations-on-the-remaining-function-forms
       if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
-        node.TypeAnnotation = this.parseTypeAnnotation();
+        node.TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
       const body = this.parseFunctionBody(isAsync, isGenerator, false);

@@ -1614,7 +1614,7 @@ export abstract class ExpressionParser extends FunctionParser {
       node.UniqueFormalParameters = this.parseUniqueFormalParameters();
       this.scope.arrowInfoStack.pop();
     });
-    node.TypeAnnotation = surroundingAgent.feature('runtime-types') && this.test(Token.COLON) ? this.parseTypeAnnotation() : null;
+    node.TypeAnnotation = surroundingAgent.feature('runtime-types') && this.test(Token.COLON) ? this.parseTypeAnnotation(true) : null;
     this.semicolon();
     return this.finishNode(node, 'AbstractMethodDefinition');
   }
@@ -2163,7 +2163,7 @@ export abstract class ExpressionParser extends FunctionParser {
 
       // proposal-runtime-types: MethodDefinition return TypeAnnotation, setters excluded.
       if (surroundingAgent.feature('runtime-types') && !isSetter && this.test(Token.COLON)) {
-        (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation();
+        (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
       this.scope.with({

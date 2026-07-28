@@ -1439,7 +1439,7 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
       // gives it a ClassSetterParameter and no ClassSetterReturn.
       return { parameter: 'ClassSetterParameter', ret: 'ClassMethodReturn' };
     case 'ClassOperator':
-      return { parameter: 'ClassOperatorParameter', ret: 'ClassMethodReturn' };
+      return { parameter: 'ClassOperatorParameter', ret: 'ClassOperatorReturn' };
     case 'Function':
       // A plain function's parameters and return take the FUNCTION contexts,
       // not the class ones. Falling through to the default gave a standalone
@@ -1468,6 +1468,31 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
  * reverse-source-order rule applies WITHIN one decorated position - `@a @b p` -
  * and not across positions, which run in the order they are written.
  */
+/**
+ * Whether a declaration carries any SUB-TARGET decoration - on a parameter or on
+ * its return annotation. Mirrors the traversal below, and exists because a
+ * declaration's sub-targets have to be applied whether or not the declaration
+ * ITSELF is decorated: a function's were reached only through its own
+ * decoration, so `function g(@f p: uint8)` fired nothing while
+ * `@d function g(@f p: uint8)` fired both.
+ */
+export function HasSubTargetDecorators(node: ParseNode): boolean {
+  const n = node as unknown as {
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+    PropertySetParameterList?: readonly ParseNode[] | null,
+    FormalParameters?: readonly ParseNode[] | null,
+    TypeAnnotation?: { Decorators?: readonly ParseNode.Decorator[] | null } | null,
+  };
+  const parameters = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  for (const parameter of parameters) {
+    const decorators = (parameter as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    if (decorators && decorators.length > 0) {
+      return true;
+    }
+  }
+  return !!(n.TypeAnnotation?.Decorators && n.TypeAnnotation.Decorators.length > 0);
+}
+
 export function* ApplySubTargetDecorators(node: ParseNode, ownerKind: string, ownerName: Value, classCtor: Value): PlainEvaluator<void> {
   const kinds = subTargetKinds(ownerKind);
   const n = node as unknown as {

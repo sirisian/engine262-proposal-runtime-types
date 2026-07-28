@@ -403,7 +403,7 @@ export abstract class TypeParser extends ExpressionParser {
 
   // TypeAnnotation :
   //   `:` Type
-  parseTypeAnnotation(): ParseNode.TypeAnnotation {
+  parseTypeAnnotation(allowDecorators = false): ParseNode.TypeAnnotation {
     const node = this.startNode<ParseNode.TypeAnnotation>();
     this.expect(Token.COLON);
     // proposal-runtime-types decorators.md: `d(a: uint32): @f uint32` — a
@@ -411,7 +411,15 @@ export abstract class TypeParser extends ExpressionParser {
     // annotation rather than to the type: `Reflect.Type` "is the one reflection
     // target that is not also a decorator context", so this is decorating the
     // return POSITION and not the type in it.
-    if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+    // A DECORATOR MAY PRECEDE A TYPE ONLY IN A POSITION THAT HAS A REFLECTION
+    // CONTEXT, which is a return and nothing else. §7.3 of the decorators plan
+    // asked whether `Reflect.Type` is a decorator context and the design
+    // answers no - "a bare type expression carries no decorator" - but the
+    // grammar had been admitting `let x: @f uint8`, a class field's `a: @f T`,
+    // and a parameter's `p: @f T` and then DROPPING the decoration, which reads
+    // as support. Refused here, where the position is known; the caller passes
+    // `true` at the five return sites.
+    if (allowDecorators && surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
       node.Decorators = this.parseDecorators();
     }
     node.Type = this.parseType();
@@ -703,7 +711,7 @@ export abstract class TypeParser extends ExpressionParser {
       this.expect(Token.LPAREN);
       this.expect(Token.RPAREN);
       if (this.test(Token.COLON)) {
-        node.TypeAnnotation = this.parseTypeAnnotation();
+        node.TypeAnnotation = this.parseTypeAnnotation(true);
       }
       if (this.test(Token.LBRACE)) {
         this.scope.with({
@@ -745,7 +753,7 @@ export abstract class TypeParser extends ExpressionParser {
         this.scope.arrowInfoStack.push(null);
         node.FormalParameters = this.parseFormalParameters();
         if (this.test(Token.COLON)) {
-          node.TypeAnnotation = this.parseTypeAnnotation();
+          node.TypeAnnotation = this.parseTypeAnnotation(true);
         }
         if (this.test(Token.LBRACE)) {
           node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
@@ -783,7 +791,7 @@ export abstract class TypeParser extends ExpressionParser {
           this.scope.arrowInfoStack.push(null);
           node.FormalParameters = this.parseFormalParameters();
           if (this.test(Token.COLON)) {
-            node.TypeAnnotation = this.parseTypeAnnotation();
+            node.TypeAnnotation = this.parseTypeAnnotation(true);
           }
           if (this.test(Token.LBRACE)) {
             node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
@@ -806,7 +814,7 @@ export abstract class TypeParser extends ExpressionParser {
           this.expect(Token.RPAREN);
         }
         if (this.test(Token.COLON)) {
-          node.TypeAnnotation = this.parseTypeAnnotation();
+          node.TypeAnnotation = this.parseTypeAnnotation(true);
         }
         this.scope.with({
           lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
