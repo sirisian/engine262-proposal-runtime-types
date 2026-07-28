@@ -140,25 +140,16 @@ test('PINNED GAPS: positions that parse, run nothing, and report nothing', () =>
   // The merge itself works, so the gap is the decoration and not the partial.
   expect(evaluated('class A { x: uint8 = 1; } partial class A { m() { return "merged"; } } (new A()).m();')).toBe('merged');
 
-  // 3. THE LARGEST OF THE THREE, and it blocks §6.1's third assertion: a
-  // decorator whose last parameter is ANNOTATED WITH ITS CONTEXT - the form
-  // #sec-decorator-application defines ("A decorator is an ordinary function
-  // whose last parameter is annotated with a reflection context") and the form
-  // every example in decorators.md is written in - fails when the decorator
-  // runs, with a ReferenceError naming the context. Only an UNTYPED parameter
-  // works, which is why every positive decorator test in this suite is written
-  // that way.
-  //
-  // So overload resolution BY CONTEXT TYPE, which is what selects among `@f`
-  // declarations and what §6.1 assertion 3 exists to verify, cannot be
-  // exercised at all today. The reflection contexts resolve as VALUES and as
-  // TYPE ARGUMENTS; what fails is a context in type-annotation position.
-  expect(evaluated('try { eval("let x: Reflect.Class = {};"); "NO-THROW"; } catch (e) { e.constructor.name; }')).toBe('ReferenceError');
-  expect(evaluated('function f(c: Reflect.ClassField) {} try { eval("class A { @f a: uint8; }"); "NO-THROW"; } catch (e) { e.constructor.name; }')).toBe('ReferenceError');
-  // The two forms that DO work, so the gap is located rather than described:
-  // the context as a value, and the context as a type ARGUMENT.
-  expect(evaluated('typeof Reflect.Class;')).toBe('object');
-  expect(evaluated('class A { a: uint8; } typeof Reflect.getReflection.<Reflect.ClassField, A>("a");')).toBe('object');
+  // 3. CLOSED (cycle 129), and the pin is kept in its flipped form because
+  // what it guards is worth guarding. It asserted that a decorator whose last
+  // parameter is ANNOTATED WITH ITS CONTEXT - the form
+  // #sec-decorator-application defines and every example in decorators.md is
+  // written in - failed with a ReferenceError naming the context. It works,
+  // and the wrong context is now refused as a TYPE error rather than reported
+  // as a missing global. See decorator-context-annotation.test.mts, which owns
+  // the assertions; what stays here is that the position is no longer a gap.
+  expect(evaluated('let k = "never"; function f(c: Reflect.ClassField) { k = String(c.name); } class A { @f a: uint8; } k;')).toBe('a');
+  expect(rejectionKind('function f(c: Reflect.Class) {} class A { @f a: uint8; }')).toBe('TypeError');
 });
 
 test('a decoration is refused with the feature off', () => {

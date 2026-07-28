@@ -740,6 +740,47 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         return false;
       }
+      // proposal-runtime-types #sec-reflection-contexts: a REFLECTION CONTEXT
+      // is a nominal type whose values are the reflection objects that context
+      // names - what `Reflect.getReflection` returns and what a decoration
+      // supplies as its last argument. decorators.md writes each one as an
+      // object shape (`type ClassFieldReflection = { ... }`, and the
+      // `Reflect.Class` interface extending it), so membership is STRUCTURAL,
+      // and the structure carries its own discriminant: every reflection object
+      // this engine builds sets `kind` to the context's name.
+      //
+      // This branch has to come before the library one below, and that ordering
+      // IS the bug it fixes. A context's [[LibraryName]] is a DOTTED name
+      // ("Reflect.ClassField"), and the library branch resolves a
+      // [[LibraryName]] as a global BINDING - which is right for `Map` and
+      // `Error` and a ReferenceError for every context. The symptom was that
+      // annotating a decorator's last parameter with its context, the form
+      // #sec-decorator-application defines and every example in decorators.md
+      // is written in, threw as soon as the decorator ran; only an UNTYPED
+      // parameter worked, so overload resolution BY CONTEXT TYPE could never be
+      // reached.
+      {
+        const contextDeclaration = t.Declaration as unknown as { type?: string, name?: string };
+        if (contextDeclaration?.type === 'ReflectionContext') {
+          if (!(value instanceof ObjectValue)) {
+            return false;
+          }
+          const kind = Q(yield* Get(value, Value('kind')));
+          if (!(kind instanceof JSStringValue)) {
+            return false;
+          }
+          // `Reflect.Type` is the exception, and it is the one the design
+          // already names: it "is the one reflection target that is not also a
+          // decorator context". Its reflection is discriminated by the
+          // STRUCTURE it reports - ~primitive~, ~union~, ~array~, and the rest
+          // - so the context's own name never appears in one, and the test is
+          // that the value is a discriminated reflection at all.
+          if (contextDeclaration.name === 'Type') {
+            return true;
+          }
+          return kind.stringValue() === contextDeclaration.name;
+        }
+      }
       // proposal-runtime-types (README Global Objects): a library nominal named
       // for a global constructor (Error and its subclasses, Map, Set, Date, and
       // the rest) tests membership by the prototype chain of that global, the same
