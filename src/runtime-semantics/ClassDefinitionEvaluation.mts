@@ -1,5 +1,6 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
 import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
@@ -30,6 +31,7 @@ import {
 } from '../completion.mts';
 import { __ts_cast__, OutOfRange, type Mutable } from '../utils/language.mts';
 import type { Location, ParseNode } from '../parser/ParseNode.mts';
+import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import {
   DefineMethod,
   MethodDefinitionEvaluation,
@@ -290,6 +292,7 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
   const list = decorators ?? [];
   const applicable: ParseNode.Decorator[] = [];
   const evaluated: Value[] = [];
+  const args: Arguments[] = [];
   // Phase one, document order.
   for (const d of list) {
     const control = reservedLayoutControl(d);
@@ -297,11 +300,32 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       continue;
     }
     applicable.push(d);
-    const expr = d.subtype === 'CallExpression'
-      ? (d as unknown as { CallExpression: ParseNode.CallExpression }).CallExpression
-      : (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression;
-    const ref = Q(yield* Evaluate(expr as ParseNode));
-    evaluated.push(Q(yield* GetValue(ref as never)));
+    // #sec-decorator-application: "`@f`, `@f(0)`, and `@f('a')` may name three
+    // declarations of f and SELECT AMONG THEM THE WAY ANY CALL DOES", and the
+    // clause's note: "giving one an argument is EDITING ITS PARAMETER LIST
+    // rather than rewriting it into a factory". So a decoration with arguments
+    // evaluates its CALLEE and its ARGUMENTS - both in document order, both
+    // part of the decorator expression - and calls once, with the written
+    // arguments and the context last. Evaluating `f(0)` as a call and applying
+    // its result to the context is the TC39 factory model, which this clause
+    // exists to replace: it never passes the context to `f` at all.
+    if (d.subtype === 'CallExpression') {
+      const call = (d as unknown as { CallExpression: ParseNode.CallExpression }).CallExpression;
+      const ref = Q(yield* Evaluate(call.CallExpression as ParseNode));
+      const fn = Q(yield* GetValue(ref as never));
+      evaluated.push(fn);
+      // The plain positional evaluation: the written arguments are a PREFIX of
+      // the call, not the whole of it, so the by-name evaluator cannot be used
+      // here - it validates that every required parameter has an argument, and
+      // the context has not been appended yet.
+      args.push(Q(yield* ArgumentListEvaluation(call.Arguments)));
+    } else {
+      const expr = (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression;
+      const ref = Q(yield* Evaluate(expr as ParseNode));
+      evaluated.push(Q(yield* GetValue(ref as never)));
+      // `@f` and `@f()` are ONE FORM: both resolve with no explicit argument.
+      args.push([] as unknown as Arguments);
+    }
   }
   // Phase two, reverse source order.
   for (let i = applicable.length - 1; i >= 0; i -= 1) {
@@ -313,7 +337,7 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
     // with a reflection context", and the decoration supplies that argument.
     // A `@f(x)` form has already evaluated to the function the call returned,
     // so by here every decorator is called with the context alone.
-    Q(yield* Call(fn, Value.undefined, [context]));
+    Q(yield* Call(fn, Value.undefined, [...(args[i] as unknown as Value[]), context]));
   }
   return undefined;
 }
@@ -1086,6 +1110,7 @@ export function CreateDecoratorContextObject(kind: 'class' | ClassElementDefinit
   const contextObj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
   const kindStr = Value(kind);
   X(CreateDataPropertyOrThrow(contextObj, Value('kind'), kindStr));
+  StampReflectionContext(contextObj, kindStr.stringValue());
   if (kind !== 'class') {
     X(CreateDataPropertyOrThrow(contextObj, Value('access'), CreateDecoratorAccessObject(kind, name)));
     if (isStatic !== undefined) {
@@ -1292,6 +1317,7 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
     ClassElementName?: { PrivateIdentifier?: unknown }, Readonly?: boolean, Access?: string,
   };
   X(CreateDataProperty(context, Value('kind'), Value('ClassField')));
+  StampReflectionContext(context, 'ClassField');
   X(CreateDataProperty(context, Value('name'), key));
   // decorators.md's ClassFieldReflection. `static` and `private` are read from
   // the declaration; `protected` and `readonly` follow the access modifiers the
@@ -1321,6 +1347,7 @@ export function* ClassDecoratorContext(className: Value, classCtor: Value): Valu
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value('Class')));
+  StampReflectionContext(context, 'Class');
   X(CreateDataProperty(context, Value('name'), className));
   X(CreateDataProperty(context, Value('type'), classCtor));
   X(CreateDataProperty(context, Value('abstract'), Value.false));
@@ -1338,6 +1365,7 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), key));
   X(CreateDataProperty(context, Value('static'), isStatic ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
@@ -1468,6 +1496,7 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   if (index >= 0) {
     X(CreateDataProperty(context, Value('index'), Value(index)));
   }

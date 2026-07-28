@@ -1,4 +1,5 @@
 import { NumberValue, ObjectValue, Value } from '../value.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -381,6 +382,7 @@ export function* EnumDecoratorContext(kind: string, name: Value, target: Value):
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('type'), target));
   return context;

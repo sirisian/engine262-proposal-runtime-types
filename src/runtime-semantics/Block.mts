@@ -1,4 +1,5 @@
 import { Value } from '../value.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { Q } from '../completion.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import {
@@ -102,6 +103,7 @@ export function* BlockDecoratorContext(kind: string, label: Value): ValueEvaluat
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('label'), label));
   return context;
 }

@@ -15,6 +15,7 @@ import type { TypeRecord } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
+import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
 import {
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
@@ -224,6 +225,18 @@ function elementLiteralTypeOf(value: Value): TypeRecord {
  * value types exist as distinct values, a Number's type is `number`.
  */
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  // proposal-runtime-types #sec-decorator-application: a reflection object
+  // REPORTS the context it reflects, which is what lets `@f`, `@f(0)` and
+  // `@f('a')` "select among them the way any call does" - the ordinary overload
+  // machinery types each argument through here. Only objects this engine BUILT
+  // as reflections are stamped; a hand-made object still satisfies the context
+  // structurally but reports the shape it has.
+  if (value instanceof ObjectValue) {
+    const reflected = ReflectionContextRecordOf(value);
+    if (reflected) {
+      return reflected;
+    }
+  }
   if (value instanceof ReferenceValue) {
     // proposal-runtime-types (references extension): a reference value never
     // reaches a type query; every read that could carry one dereferences first.

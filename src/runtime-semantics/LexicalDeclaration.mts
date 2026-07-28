@@ -1,4 +1,5 @@
 import { EnforceAnnotation } from '../abstract-ops/all.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
@@ -223,6 +224,7 @@ export function* BindingDecoratorContext(kind: string, name: Value, value: Value
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('value'), value));
   return context;

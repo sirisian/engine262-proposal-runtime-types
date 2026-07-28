@@ -81,8 +81,11 @@ test('what the decoration RESOLVES TO is judged, and by kind', () => {
   // a control the implementation does not know.
   expect(rejectionKind('const f = "s"; class A { @f a: uint8; }')).toBe('TypeError');
   expect(rejectionKind('const f = 5; class A { @f a: uint8; }')).toBe('TypeError');
-  // The factory form is judged on its RESULT, not on the callee.
-  expect(rejectionKind('function f(){ return 5; } class A { @f() a: uint8; }')).toBe('TypeError');
+  // `@f()` is judged on the CALLEE, like `@f`: the two are one form, and since
+  // cycle 130 there is no factory whose result could be judged instead. What a
+  // decorator RETURNS is not inspected at all yet - replacement is stage H.
+  expect(rejectionKind('const f = 5; class A { @f() a: uint8; }')).toBe('TypeError');
+  expect(rejectionKind('function f(c) { return 5; } class A { @f() a: uint8; }')).toBe('NO-THROW');
 });
 
 test('a reserved layout control is not shadowable by a user binding', () => {

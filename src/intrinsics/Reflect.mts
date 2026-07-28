@@ -4,6 +4,7 @@ import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { neverType, propertyKeyValue } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
@@ -1337,6 +1338,10 @@ export function bootstrapReflectClassField(realmRec: Realm) {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
+  // The value side of the same table: register every context under the name it
+  // was just bound to, so that a reflection object can REPORT its context type
+  // and the ordinary overload machinery can select on it.
+  RegisterReflectionContexts(reflect);
 }
 
 /**

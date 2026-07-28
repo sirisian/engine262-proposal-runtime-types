@@ -8,6 +8,7 @@ import {
   type FunctionDeclaration,
 } from '../static-semantics/all.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import {
   Q, X,
   NormalCompletion,
@@ -103,6 +104,7 @@ export function* ObjectMemberDecoratorContext(kind: string, name: Value, target:
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
+  StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
   // "For objects the metadata is on the INSTANCE", so an object member's
   // context points at the object rather than at a constructor.

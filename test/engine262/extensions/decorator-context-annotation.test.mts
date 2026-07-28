@@ -87,47 +87,15 @@ test('the library nominals this branch sits in front of are unaffected', () => {
   expect(rejectionKind('let e: Error = 5;')).toBe('TypeError');
 });
 
-test('PINNED: the two pieces of #sec-decorator-application still outstanding', () => {
-  // 1. THE ARGUMENT FORM IS A FACTORY, WHICH THE CLAUSE REJECTS IN AS MANY
-  // WORDS. #sec-decorator-application: "`@f`, `@f(0)`, and `@f('a')` may name
-  // three declarations of f and select among them THE WAY ANY CALL DOES", and
-  // its note: "Types are what remove the `(value, context)` return from a
-  // decorator that takes arguments ... giving one an argument is EDITING ITS
-  // PARAMETER LIST rather than rewriting it into a factory."
-  //
-  // The engine evaluates `@f(0)` as a call and then applies its RESULT to the
-  // context - the TC39 factory model. So `@f(0)` never passes the context to
-  // `f` at all, and a decorator declared as the clause describes, with the
-  // context last after its arguments, receives *undefined* there.
-  expectThrownKind('function f(n: uint8, c: Reflect.ClassField) {} class A { @f(7) a: uint8; }', 'TypeError');
-  // The factory that works instead, pinned so the change is visible when it is
-  // made: `@g()` calls `g`, and the function `g` returns is applied to the
-  // context. Under the clause `@f` and `@f()` are ONE FORM and both would call
-  // `g` with the context alone.
-  expect(evaluated('const l = []; function g() { return (c) => l.push("called:" + String(c.name)); } class B { @g() x: uint8; } l.join(",");')).toBe('called:x');
-
-  // 2. SELECTION AMONG DECLARATIONS BY CONTEXT TYPE DOES NOT HAPPEN YET, and
-  // the reason is one step and not the dispatcher: ApplyDecorators calls the
-  // decorator with the context, the engine's overload dispatch is genuinely
-  // runtime and value-based (`resolveOverload` over argument VALUES), and it
-  // reaches the right answer for ordinary calls - but it types each argument
-  // through `RuntimeTypeOf`, which gives a context object a plain structural
-  // object type and never the context's nominal. No signature is then viable
-  // and the last declaration is what runs.
-  //
-  // THE DISCRIMINATING FORM: the same two declarations succeed or fail on
-  // their ORDER alone, which is exactly what selection would make irrelevant.
-  // Declared ClassField-then-Class, a field decoration gets the Class one and
-  // is refused; declared the other way round it gets the right one by the luck
-  // of being last. Asserting only that the first throws would pass against an
-  // implementation that had merely picked badly.
-  const two = 'function f(c: Reflect.ClassField) {} function f(c: Reflect.Class) {} ';
-  const twoReversed = 'function f(c: Reflect.Class) {} function f(c: Reflect.ClassField) {} ';
-  expect(rejectionKind(`${two} class A { @f a: uint8; }`)).toBe('TypeError');
-  expect(rejectionKind(`${twoReversed} class A { @f a: uint8; }`)).toBe('NO-THROW');
-  expect(rejectionKind(`${two} @f class A {}`)).toBe('NO-THROW');
-  expect(rejectionKind(`${twoReversed} @f class A {}`)).toBe('TypeError');
-  // Ordinary overload resolution is unaffected and correct, which is what
-  // locates the gap at RuntimeTypeOf rather than at the dispatcher.
+test('the rest of #sec-decorator-application, CLOSED (cycle 130)', () => {
+  // Both pieces this file pinned are done, and the pins are kept in flipped
+  // form: the argument form is no longer a factory, and selection by context
+  // type happens. decorator-calling-convention.test.mts owns the assertions;
+  // what stays here is that a reader of the old pins finds the new answer.
+  expect(evaluated('let got = "never"; function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } class A { @f(7) a: uint8; } got;')).toBe('7:a');
+  const decls = 'const l = []; function f(c: Reflect.ClassField) { l.push("field"); } function f(c: Reflect.Class) { l.push("class"); } ';
+  expect(evaluated(`${decls} class A { @f a: uint8; } l.join(",");`)).toBe('field');
+  expect(evaluated(`${decls} @f class N {} l.join(",");`)).toBe('class');
+  // Ordinary overload resolution, unchanged throughout.
   expect(evaluated('function g(x: uint8) { return "u8"; } function g(x: string) { return "str"; } g("s") + "/" + g(1);')).toBe('str/u8');
 });

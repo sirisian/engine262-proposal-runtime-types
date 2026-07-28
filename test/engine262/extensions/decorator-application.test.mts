@@ -15,10 +15,20 @@ import { evaluated, expectThrown, expectThrownKind } from '../readme/harness.mts
 
 test('a decorator on a class field is found and called', () => {
   expect(evaluated('const log = []; function f(c) { log.push("f:" + String(c.name)); } class A { @f a: uint8; } log.join(",");')).toBe('f:a');
-  // "A bare `@f` and an empty `@f()` are equivalent" — the second evaluates to
-  // the function the call returns, and by the time a decorator is applied both
-  // forms are one thing called with the context alone.
-  expect(evaluated('const l = []; function g() { return (c) => l.push("called:" + String(c.name)); } class B { @g() x: uint8; } l.join(",");')).toBe('called:x');
+  // #sec-decorator-application: "`@f` and `@f()` are ONE FORM: both resolve
+  // with no explicit argument." Not because the empty call is evaluated and its
+  // result applied - that was the TC39 FACTORY model, which this clause exists
+  // to replace - but because a decoration calls its decorator ONCE, with the
+  // written arguments and the context last, and `@f()` writes none.
+  const oneForm = 'const l = []; function g(c) { l.push("called:" + String(c.name)); } ';
+  expect(evaluated(`${oneForm} class B { @g() x: uint8; } l.join(",");`)).toBe('called:x');
+  expect(evaluated(`${oneForm} class B { @g x: uint8; } l.join(",");`)).toBe('called:x');
+  // The factory shape is no longer special: `@g()` calls `g` with the context
+  // like any other decoration, so a `g` that ignores it and returns a function
+  // has returned a value nobody asked for. Pinned because this is the behaviour
+  // that CHANGED, and a reader of the old test should find the new answer where
+  // the old one was.
+  expect(evaluated('const l = []; function g() { return (c) => l.push("factory"); } class B { @g() x: uint8; } l.join(",");')).toBe('');
   // The context identifies what was decorated. The rest of decorators.md's
   // ClassFieldReflection — type, static, private, readonly, initial, offset,
   // metadata — is stage B; `kind` and `name` are what stage A needs to show the
@@ -39,8 +49,16 @@ test('decorators evaluate top-down and apply bottom-up', () => {
   // phases collapsed into one — which is the mistake the two-phase rule exists
   // to prevent, since `@a(f()) @b(g()) x` must call `f()` before `g()` while
   // applying `b` before `a`.
-  const stacked = 'const log = []; function tag(n) { log.push("eval:" + n); return (c) => log.push("apply:" + n); } '
-    + 'class A { @tag("outer") @tag("inner") a: uint8; } ';
+  //
+  // With the factory gone the two phases are observed where the clause puts
+  // them: phase one evaluates the decorator EXPRESSION, which now includes its
+  // ARGUMENTS, and phase two calls. So an argument with a side effect records
+  // the evaluation order while the decorator body records the application order
+  // - a sharper test than the factory version, because what is being ordered in
+  // phase one is exactly what the clause says is evaluated there.
+  const stacked = 'const log = []; function ev(n) { log.push("eval:" + n); return n; } '
+    + 'function tag(n, c) { log.push("apply:" + n); } '
+    + 'class A { @tag(ev("outer")) @tag(ev("inner")) a: uint8; } ';
   expect(evaluated(`${stacked} log.join(",");`)).toBe('eval:outer,eval:inner,apply:inner,apply:outer');
 });
 
@@ -109,7 +127,7 @@ test('members apply before their container, in document order', () => {
 
   // And the two rules compose: reverse source order WITHIN a declaration,
   // document order ACROSS declarations, container last.
-  const composed = 'const log = []; function tag(n) { return (c) => log.push(n); } '
+  const composed = 'const log = []; function tag(n, c) { log.push(n); } '
     + '@tag("C2") @tag("C1") class A { @tag("f2") @tag("f1") a: uint8; @tag("g") b: uint8; } ';
   expect(evaluated(`${composed} log.join(",");`)).toBe('f1,f2,g,C1,C2');
 });
@@ -131,7 +149,7 @@ test('each member position takes its own context', () => {
   // MIXED members fire in document order and the class still comes last, which
   // is the composition the ordering rule promises across kinds rather than
   // within one.
-  const mixed = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+  const mixed = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
     + '@tag("C") class A { @tag("f") a: uint8; @tag("m") m() {} @tag("g") get g() { return 1; } } ';
   expect(evaluated(`${mixed} log.join(",");`)).toBe('f(ClassField),m(ClassMethod),g(ClassGetter),C(Class)');
 });
@@ -162,7 +180,7 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
   // The sub-target reaches its owner, and the owner is named by its OPERATOR.
   expect(evaluated(`${opParam} c.methodContext.kind + '/' + String(c.methodContext.name);`)).toBe('ClassOperator/+');
   // Parameters before the return, as everywhere else.
-  const both = 'const log = []; function tag(n) { return (c) => log.push(n + \'(\' + c.kind + \')\'); } '
+  const both = 'const log = []; function tag(n, c) { log.push(n + \'(\' + c.kind + \')\'); } '
     + 'class Op { operator +(@tag(\'p\') r: Op): @tag(\'ret\') Op { return r; } } ';
   expect(evaluated(`${both} log.join(',');`)).toBe('p(ClassOperatorParameter),ret(ClassMethodReturn)');
   // THE RETURN TAKES `ClassMethodReturn`, which is the sub-target table's own
@@ -209,7 +227,7 @@ test('sub-targets: parameters and returns apply before their declaration', () =>
   // decorators.md "Order": "A declaration's sub-targets apply before the
   // declaration itself: parameter decorators in parameter order, then the
   // return's, then the method's own."
-  const method = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + (c.index !== undefined ? ":" + c.index : "") + ")"); } '
+  const method = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + (c.index !== undefined ? ":" + c.index : "") + ")"); } '
     + 'class A { @tag("m") d(@tag("p0") a: uint32, @tag("p1") b: uint32): @tag("ret") uint32 { return a; } } ';
   expect(evaluated(`${method} log.join(",");`)).toBe('p0(ClassMethodParameter:0),p1(ClassMethodParameter:1),ret(ClassMethodReturn),m(ClassMethod)');
 
@@ -221,7 +239,7 @@ test('sub-targets: parameters and returns apply before their declaration', () =>
   // An accessor's sub-targets take their own contexts: a getter has a return
   // and no parameter, a setter a parameter and no return worth naming, which is
   // why decorators.md gives a ClassSetterParameter and no ClassSetterReturn.
-  const accessors = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+  const accessors = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
     + 'class A { @tag("g") get g(): @tag("gret") uint8 { return 1; } @tag("s") set s(@tag("sp") v: uint8) {} } ';
   expect(evaluated(`${accessors} log.join(",");`)).toBe('gret(ClassGetterReturn),g(ClassGetter),sp(ClassSetterParameter),s(ClassSetter)');
 
@@ -240,7 +258,7 @@ test('the whole ordering rule composes across every level', () => {
   // sequence below is the one a reader of decorators.md's "Order" section would
   // predict, and if it ever stops reading that way the ORDER is wrong rather
   // than the test.
-  const everything = 'const log = []; function t(n) { return (c) => log.push(n); } '
+  const everything = 'const log = []; function t(n, c) { log.push(n); } '
     + '@t("C2") @t("C1") '
     + 'class B { '
     + '  @t("f2") @t("f1") a: uint8; '
@@ -261,7 +279,7 @@ test('the function family and bindings', () => {
   // Falling through to the class defaults would have been invisible to any
   // ordering test — the sequence is identical either way — so the kinds are
   // asserted, not just the order.
-  const fn = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+  const fn = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
     + '@tag("fn") function g(@tag("p") x: uint8): @tag("r") uint8 { return x; } ';
   expect(evaluated(`${fn} log.join(",");`)).toBe('p(FunctionParameter),r(FunctionReturn),fn(Function)');
   // The context carries the function itself.
@@ -303,7 +321,7 @@ test('the object family mirrors the class family', () => {
   // if it is not mechanical then B or C generalized wrongly."
   //
   // Mostly mechanical, with ONE exception recorded below.
-  const obj = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ")"); } '
+  const obj = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
     + 'const o = @tag("O") { '
     + '  @tag("f") a: 1, '
     + '  @tag("m") m(@tag("p") x: uint32): @tag("r") uint32 { return x; }, '
@@ -386,7 +404,7 @@ test('the enum family: enumerators before their enum', () => {
   // Zero, ... }`, and the ordering rule applies to a third container kind
   // exactly as it does to a class and an object literal: members first, in
   // document order, container last.
-  const e = 'const log = []; function tag(n) { return (c) => log.push(n + "(" + c.kind + ":" + String(c.name) + ")"); } '
+  const e = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ":" + String(c.name) + ")"); } '
     + '@tag("E") enum Count { @tag("z") Zero, @tag("o") One, Two } ';
   expect(evaluated(`${e} log.join(",");`)).toBe('z(EnumEnumerator:Zero),o(EnumEnumerator:One),E(Enum:Count)');
   // An undecorated enumerator between decorated ones is skipped, not

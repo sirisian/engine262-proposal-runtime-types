@@ -1,4 +1,5 @@
 import { NormalCompletion } from '../completion.mts';
+import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
@@ -40,6 +41,7 @@ export function* FunctionDecoratorContext(name: Value, fn: Value): ValueEvaluato
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value('Function')));
+  StampReflectionContext(context, 'Function');
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('type'), fn));
   return context;
