@@ -47,17 +47,13 @@ test('an operator still takes its contexts from the class-body interception', ()
   expect(evaluated(`${k} class O { operator +(r: O): @f O { return r; } } k;`)).toBe('ClassOperatorReturn');
 });
 
-test('STAGE A LANDED: the grammar exists, and its pins moved', () => {
+test('STAGES A AND B LANDED: the grammar exists and desugars', () => {
   // This file pinned all four `accessor` forms as SyntaxErrors. Stage A opened
-  // the grammar, so they now reach a refusal at EVALUATION instead - the
-  // desugaring is stage B. accessor-grammar.test.mts owns the assertions; what
-  // stays here is that a reader of the old pin finds where it went.
-  const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome('class A { accessor a: uint32 = 5; }')).toBe('TypeError');
-  // The context it will reach exists already, so the grammar opened onto
-  // something built rather than onto nothing.
+  // the grammar and stage B built the desugaring, so a public accessor now
+  // round-trips. accessor-grammar.test.mts and accessor-semantics.test.mts own
+  // the assertions; what stays here is that a reader of the old pin finds them.
+  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 9; String(o.a);')).toBe('9');
   expect(evaluated('typeof Reflect.ClassAccessor;')).toBe('object');
-  expect(evaluated('typeof ClassAccessorMetadata;')).toBe('object');
 });
 
 test('PINNED FOR STAGE A: `accessor` is an ordinary identifier and must stay one', () => {

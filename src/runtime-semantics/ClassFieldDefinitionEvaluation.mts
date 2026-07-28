@@ -6,7 +6,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
   surroundingAgent,
-  CreateBuiltinFunction, DefinePropertyOrThrow, MakeMethod, OrdinaryFunctionCreate, PrivateGet, PrivateSet, SymbolDescriptiveString,
+  CreateBuiltinFunction, DefinePropertyOrThrow, MakeMethod, OrdinaryFunctionCreate, PrivateGet, PrivateSet, SymbolDescriptiveString, Throw,
 } from '#self';
 import {
   ClassElementDefinitionRecord,
@@ -15,7 +15,8 @@ import {
   SymbolValue,
   Value,
   type Arguments,
-  type ECMAScriptFunctionObject, type FunctionCallContext, type FunctionObject, type ObjectValue, PrivateName, type PropertyKeyValue,
+  ObjectValue,
+  type ECMAScriptFunctionObject, type FunctionCallContext, type FunctionObject, PrivateName, type PropertyKeyValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-classfielddefinition-record-specification-type */
@@ -86,6 +87,65 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   if (typeAnnotation && surroundingAgent.feature('runtime-types')) {
     const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
     typeObject = GetTypeObject(record);
+  }
+  // PLAN-accessor.md stage B. README: "An `accessor` field declares a typed
+  // field together with a getter and setter over it. It desugars to a private
+  // typed field and the matching pair."
+  //
+  // The desugaring is REAL rather than special-cased, and that is what makes it
+  // cheap: the backing is an ordinary field record whose [[Name]] is a Private
+  // Name, so DefineField initializes it per instance, applies the declared
+  // type's DEFAULT when no initializer is written, and hangs the TypeObject on
+  // the Private Name - which is what makes PrivateSet enforce the type. The
+  // setter therefore checks its argument without this code checking anything.
+  //
+  // The Private Name is created HERE, once per class evaluation, so every
+  // instance shares one key and no source syntax can name it. That is TC39's
+  // answer (an unnameable BackingStorageKey) and Kotlin's (`field`, reachable
+  // only from inside the accessor); C#'s reflection-visible backing field is
+  // the one this deliberately does not copy.
+  if (surroundingAgent.feature('runtime-types') && (FieldDefinition as { accessor?: boolean }).accessor === true) {
+    // A PRIVATE accessor is stage B's remainder, and it is an open design
+    // question rather than plumbing: PLAN-accessor.md §2.3 asks what
+    // `accessor #internal` desugars to, since "a private field plus a public
+    // pair" becomes a private field plus a PRIVATE pair - two private names for
+    // one declaration. The pair would also have to be a PrivateElement rather
+    // than a property, so this function would have to return two records where
+    // it returns one. Refused explicitly, because passing a Private Name to
+    // DefinePropertyOrThrow asserts inside the host instead.
+    if (name instanceof PrivateName) {
+      return Throw.TypeError('$1 is not supported yet', Value('a private `accessor` field'));
+    }
+    const backing = new PrivateName(Value('accessor storage'));
+    const get = CreateBuiltinFunction(function* accessorGet(_args: Arguments, { thisValue }: FunctionCallContext) {
+      if (!(thisValue instanceof ObjectValue)) {
+        return Throw.TypeError('$1 is not an object', thisValue);
+      }
+      return Q(yield* PrivateGet(thisValue, backing));
+    } as never, 0, name, []);
+    const set = CreateBuiltinFunction(function* accessorSet([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
+      if (!(thisValue instanceof ObjectValue)) {
+        return Throw.TypeError('$1 is not an object', thisValue);
+      }
+      Q(yield* PrivateSet(thisValue, backing, value));
+      return Value.undefined;
+    } as never, 1, name, []);
+    // The pair goes on the home object - the prototype for an instance
+    // accessor, the constructor for a static one - which is where a `get`/`set`
+    // pair written by hand would go. Not enumerable, as an accessor pair is not.
+    Q(yield* DefinePropertyOrThrow(homeObject, name as PropertyKeyValue, Descriptor({
+      Getter: get,
+      Setter: set,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
+    return ClassFieldDefinitionRecord({
+      Name: backing,
+      Initializer: initializer,
+      TypeAnnotation: typeAnnotation,
+      TypeObject: typeObject,
+      Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
+    });
   }
   return ClassFieldDefinitionRecord({
     Name: name,

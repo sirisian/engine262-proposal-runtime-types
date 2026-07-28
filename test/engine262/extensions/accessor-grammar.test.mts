@@ -26,31 +26,22 @@ import { evaluated, evaluatedFlagOff } from '../readme/harness.mts';
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
-test('every form of the declaration parses', () => {
-  // Reaching the refusal means the PARSER accepted it, which is what stage A
-  // delivers. All four forms of README's grammar, plus the two the shape
-  // implies: an accessor need not be typed, and need not be initialized.
-  const past = (source: string) => expect(outcome(source), source).toBe('TypeError');
-  past('class A { accessor a: uint32 = 5; }');
-  past('class A { static accessor count: uint32 = 0; }');
-  past('class A { accessor #internal: int32 = 0; }');
-  past('class A { static accessor #tally: uint32 = 0; }');
-  past('class A { accessor a = 5; }');
-  past('class A { accessor a: uint32; }');
-  // A decoration in front of one parses too, which is the whole point of the
-  // stage: `Reflect.ClassAccessor` is the context this unblocks.
-  past('function f(c) {} class A { @f accessor a: uint32 = 5; }');
-});
-
-test('the refusal is explicit and names itself', () => {
-  // A declaration accepted and quietly evaluated as something else is the state
-  // this project keeps paying for. The message is the same one
-  // `reservedOnlyDecorators` gives for a decorator the engine cannot run.
-  expect(evaluated('try { eval("class A { accessor a: uint32 = 5; }"); "NO-THROW"; } catch (e) { e.message; }'))
-    .toBe('"an `accessor` field" is not supported yet');
-  // And it is refused at the DECLARATION, so nothing half-built escapes: the
-  // class binding is never initialized.
-  expect(evaluated('let made = "no"; try { eval("class A { accessor a: uint32 = 5; } made = typeof A;"); } catch (e) {} made;')).toBe('no');
+test('every form of the declaration parses and works', () => {
+  // All four forms of README's grammar, plus the two the shape implies: an
+  // accessor need not be typed, and need not be initialized. Stage B made these
+  // evaluate rather than be refused, so each is asserted by its RESULT - a
+  // parse-only assertion would now pass against a declaration that parsed and
+  // did nothing.
+  expect(evaluated('class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
+  expect(evaluated('class A { static accessor count: uint32 = 3; } String(A.count);')).toBe('3');
+  expect(evaluated('class A { accessor a = 5; } String(new A().a);')).toBe('5');
+  expect(evaluated('class A { accessor a: uint32; } String(new A().a);')).toBe('0');
+  // A decoration in front of one parses and fires, which is the whole point of
+  // the stage - though the CONTEXT it fires with is stage E's business.
+  expect(evaluated('let n = 0; function f(c) { n += 1; } class A { @f accessor a: uint32 = 5; } String(n);')).toBe('1');
+  // The private forms are stage B's remainder (PLAN-accessor.md §2.3), refused
+  // rather than crashing: see accessor-semantics.test.mts.
+  expect(outcome('class A { accessor #internal: int32 = 0; }')).toBe('TypeError');
 });
 
 test('the positions the design refuses stay refused', () => {
