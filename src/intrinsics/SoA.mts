@@ -332,10 +332,18 @@ function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: nu
     const ctor = (column.type as { Constructor?: ObjectValue }).Constructor as { InstanceLayout?: ClassLayout | null } | undefined;
     const layout = ctor?.InstanceLayout;
     if (layout) {
+      // A nested column is written and read FIELD BY FIELD, by name - so a
+      // class with a PRIVATE field cannot be one: the private slot is part of
+      // the layout (README: private fields participate exactly as public ones
+      // do) and no `Get` can reach it. Refused rather than written with the
+      // slot left as whatever the buffer held.
+      if (layout.fields.some((f) => typeof f.key !== 'string')) {
+        return Throw.TypeError('a column of this type cannot be written');
+      }
       const backing = { Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout };
       for (const field of layout.fields) {
-        const fieldValue = Q(yield* Get(value, Value(field.key)));
-        Q(yield* WritePlacedField(backing, field.key, field.type, Q(yield* RequireType(fieldValue, field.type))));
+        const fieldValue = Q(yield* Get(value, Value(field.key as string)));
+        Q(yield* WritePlacedField(backing, field.key as string, field.type, Q(yield* RequireType(fieldValue, field.type))));
       }
       return true;
     }

@@ -925,19 +925,34 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         ? baseCtor.InstanceLayout ?? null
         : null;
       const classControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
-      const laidOut: { key: string, type: TypeRecord, controls?: FieldControls }[] = [];
+      const laidOut: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
       let complete = true;
       for (const field of instanceFields) {
         const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
         const name = (field as { Name?: unknown }).Name;
-        if (!typeObject?.TypeRecord || typeof (name as { stringValue?: unknown })?.stringValue !== 'function') {
-          // An untyped field, or a private name: the table's "a class with an
-          // untyped field" row gives the whole class no layout.
+        if (!typeObject?.TypeRecord) {
+          // #table-layout-qualification, the row "a class with an UNTYPED
+          // field": that field has no size, so the class has no layout.
           complete = false;
           break;
         }
+        // A PRIVATE field is laid out, and this used to be the same branch as an
+        // untyped one - so a single `#x: uint8` gave its whole class no layout,
+        // and every offset and byteLength on it threw. README: "Private fields
+        // participate in the memory layout EXACTLY AS PUBLIC FIELDS DO, which is
+        // why the value type rule counts both." Only the absence of a TYPE
+        // disqualifies; the KIND of the key never did.
+        //
+        // The key stays the Private Name rather than becoming its description,
+        // which is what keeps the other half of the design true: "a `#` field is
+        // invisible to bracket access and REFLECTION". Every reflection lookup
+        // compares the key against a string, so a Private Name occupies its slot
+        // and answers no lookup - and two `#x` in a base and a derived class stay
+        // distinct, which a description would have collided.
         laidOut.push({
-          key: (name as { stringValue(): string }).stringValue(),
+          key: typeof (name as { stringValue?: unknown })?.stringValue === 'function'
+            ? (name as { stringValue(): string }).stringValue()
+            : (name as PrivateName),
           type: typeObject.TypeRecord,
           controls: (field as { LayoutControls?: FieldControls }).LayoutControls,
         });

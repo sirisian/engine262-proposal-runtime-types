@@ -1,3 +1,4 @@
+import type { PrivateName } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
@@ -201,7 +202,7 @@ export function LayoutOf(t: TypeRecord): Layout | null {
 
 /** One field's placement, which is what a reflection reports as its `offset`. */
 export interface FieldPlacement {
-  readonly key: string;
+  readonly key: string | PrivateName;
   /** The field's declared type, which a column of it needs (soa.md's `fields`). */
   readonly type: TypeRecord;
   /** The containing byte. A bit-field has no byte address of its own; this is where its byte begins. */
@@ -264,7 +265,7 @@ export interface FieldControls {
 
 export function ComputeClassLayout(
   baseLayout: ClassLayout | null,
-  fields: readonly { key: string, type: TypeRecord, controls?: FieldControls }[],
+  fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[],
   controls: ClassControls = {},
   declaringClass?: unknown,
 ): ClassLayout | null | { cycle: string } {
@@ -307,7 +308,7 @@ export function ComputeClassLayout(
       // wrong in that direction costs precision; being wrong in the other would
       // refuse a program the clause admits.
       if (declaringClass !== undefined && field.type.Declaration === declaringClass) {
-        return { cycle: field.key };
+        return { cycle: typeof field.key === 'string' ? field.key : field.key.Description.stringValue() };
       }
       return null;
     }
@@ -422,6 +423,14 @@ export function SoAColumnsOf(element: TypeRecord): SoAColumn[] | null {
     if (field.isBitField) {
       // A bit-field is not byte-addressable, and a column of them would have to
       // be a bit-vector rather than an array. Refused rather than guessed at.
+      return null;
+    }
+    if (typeof field.key !== 'string') {
+      // A PRIVATE field. It occupies its slot in the instance layout (README:
+      // private fields participate exactly as public ones do), but an SoA reads
+      // and writes each column BY NAME, and a private slot has no name to reach
+      // it by - so a class carrying one has no column form. Refused rather than
+      // split into columns one of which nothing could ever fill.
       return null;
     }
     columns.push({ key: field.key, type: field.type, layout: field.layout });
