@@ -1045,6 +1045,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const methods = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
     const unusable = new Set<string>();
     let construct: { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] } | null = null;
+    const accessorKeys = new Set<string>();
     const setterTypes = new Map<string, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
       if (el.type === 'MethodDefinition') {
@@ -1143,6 +1144,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = resolveType(f.TypeAnnotation.Type);
       if (t) {
         Properties.push({ key, type: t, optional: false });
+        // An `accessor` is a FieldDefinition carrying the marker, and it is the
+        // one member kind whose OVERRIDE is invariant - recorded here because
+        // the Properties list keeps a type per key and no member kind.
+        if ((f as { accessor?: boolean }).accessor === true) {
+          accessorKeys.add(key);
+        }
       }
     }
     for (const [key, writeType] of setterTypes) {
@@ -1198,6 +1205,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const baseStructure = base && base.Kind === 'nominal'
       ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
       : null;
+    // AN ACCESSOR OVERRIDE IS INVARIANT, which README does not say and which
+    // falls out of the two variance rules it does state meeting on ONE
+    // declaration. A `get`/`set` pair may refine its halves separately - "a
+    // derived getter may refine its type covariantly", "a derived setter is
+    // contravariant" - but an `accessor` generates both halves from a single
+    // annotation, so narrowing it breaks the setter (the base accepted more)
+    // and widening it breaks the getter (the base promised less). Both
+    // directions refused leaves equality.
+    //
+    // Checked with SameType rather than assignability in both directions
+    // deliberately: it is the relation the rule actually names, and it does not
+    // inherit whatever the assignability relation currently makes of subclasses
+    // and numeric widths.
+    if (baseStructure && baseStructure.Kind === 'object') {
+      for (const key of accessorKeys) {
+        const own = Properties.find((prop) => prop.key === key);
+        const inherited = baseStructure.Properties.find((prop) => prop.key === key);
+        if (own?.type && inherited?.type && !SameType(own.type, inherited.type)) {
+          report(own.type, inherited.type);
+        }
+      }
+    }
     const merged = baseStructure && baseStructure.Kind === 'object'
       ? [...baseStructure.Properties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
       : Properties;
@@ -1815,6 +1844,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           interfaceNodes.set(name, n);
         }
       }
+    }
+    // FORCE each class's instance type, once the whole list is recorded so a
+    // class may still name one declared later.
+    //
+    // The member walk is where a class's own declarations are judged, and it
+    // had been reached only ON DEMAND - when something asked for the class's
+    // type. A class that nothing references was never walked, so a rule checked
+    // there fired only if the program happened to mention the class elsewhere,
+    // which is no rule at all. `instanceTypeOf` memoizes, so forcing it here
+    // runs the walk exactly once per class and every later demand is a cache
+    // hit: the errors below are reported once, not once per reference.
+    for (const n of classNodes.values()) {
+      instanceTypeOf(n);
     }
   };
 
