@@ -57,6 +57,7 @@ import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
+import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
@@ -347,6 +348,13 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
         })));
       }
     }
+
+    // proposal-runtime-types #sec-decorator-metadata: the intrinsic metadata
+    // interfaces bind as globals the same way, `ClassMetadata` through
+    // `EnumEnumeratorMetadata` - each an interface declaring nothing, whose
+    // whole vocabulary is what a program's `partial interface` declarations
+    // contribute.
+    bindMetadataInterfaceGlobals(realmRec);
 
     // proposal-runtime-types (temporal.md): when Temporal is present, its classes
     // and enums become types. This runs after the Temporal intrinsics exist and
