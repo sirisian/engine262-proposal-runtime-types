@@ -1199,6 +1199,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // README, the accessor rules: "The within-class rule still applies to the
+    // resulting pair, so the derived setter must also accept everything the
+    // derived getter can return." Stated there of a DERIVED pair, but it is a
+    // rule about any pair: a property whose getter yields a value its own setter
+    // would refuse cannot round-trip, and `o.x = o.x` does not type.
+    //
+    // Assignability is exactly the right relation, INCLUDING for numerics, and
+    // that took three cycles to see. Two of them treated `get x(): uint8` with
+    // `set x(v: uint32)` as a legal pair the rule would wrongly refuse - but
+    // README is explicit that "a value of one value type never implicitly
+    // becomes a value of another. `uint8` does not widen to `uint16`", the rule
+    // Rust, Swift, and Go use. So that pair genuinely does not round-trip and
+    // the refusal is correct. What made it look wrong was the SUBCLASS case,
+    // which was a real gap and is fixed.
+    for (const [skey, stype] of setterTypes) {
+      const getter = Properties.find((prop) => prop.key === skey);
+      if (getter?.type && stype && !IsAssignable(getter.type, stype)) {
+        report(getter.type, stype);
+      }
+    }
     const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
     const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
       ? (heritage as { name: string }).name

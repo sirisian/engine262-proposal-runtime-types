@@ -61,35 +61,48 @@ test('a class NOTHING REFERENCES is checked, which is the infrastructure', () =>
   expect(outcome('class B { accessor a: uint32 = 1; } class D extends B { accessor a: uint8 = 2; } 1;')).toBe('TypeError');
 });
 
-test('PINNED: the three rules stage D has not implemented', () => {
-  // Each needs something the checker does not record, and each is stated by
-  // README. Pinned in its CURRENT state so the next cycle sees the gap rather
-  // than rediscovering it.
+test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', () => {
+  // README: "the derived setter must also accept everything the derived getter
+  // can return." A property whose getter yields a value its own setter would
+  // refuse cannot round-trip - `o.x = o.x` does not type.
+  const A = 'class Animal {} class Dog extends Animal {} ';
+  // A WIDER setter is legal: every Dog the getter yields is an Animal.
+  expect(outcome(`${A} class C { get x(): Dog { return new Dog(); } set x(v: Animal) {} }`)).toBe('ACCEPTED');
+  expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Animal) {} }`)).toBe('ACCEPTED');
+  // A NARROWER setter is not: the getter can yield an Animal that is no Dog.
+  expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('TypeError');
+
+  // TWO DIFFERING NUMERIC TYPES ARE ALSO AN ERROR, and this is the assertion
+  // two earlier cycles got backwards. Both treated this as a legal pair the
+  // rule would wrongly refuse, and held the rule back on that basis. README is
+  // explicit: "A value of one value type never implicitly becomes a value of
+  // another. `uint8` does not widen to `uint16`" - the rule Rust, Swift, and Go
+  // use. So the pair genuinely does not round-trip.
+  expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint32) {} }')).toBe('TypeError');
+  expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint8) {} }')).toBe('ACCEPTED');
+
+  // An untyped pair is unjudged, and an `accessor` cannot violate the rule at
+  // all - both halves come from one annotation.
+  expect(outcome('class C { get x() { return 1; } set x(v) {} }')).toBe('ACCEPTED');
+  expect(outcome('class C { accessor x: uint8 = 1; }')).toBe('ACCEPTED');
+});
+
+test('PINNED: the rules stage D has not implemented', () => {
   const accepted = outcome;
   const animals = 'class Animal {} class Dog extends Animal {} ';
-
-  // 2. Derived setter contravariance. Needs the base's SETTER types, which the
-  // class type does not expose - `setterTypes` is local to the walk.
+  // Derived setter contravariance. Needs the base's SETTER types, which the
+  // class type does not expose - `setterTypes` is local to the walk, so a
+  // derived class cannot see its base's.
   expect(accepted(`${animals} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('ACCEPTED');
-
-  // 3. The WITHIN-CLASS rule - "the setter must accept everything the getter
-  // can return" - which needs no new bookkeeping and STILL cannot be written
-  // yet. Implemented against today's assignability it refuses pairs README
-  // permits, because that relation rejects even a widening: measured, `let b:
-  // uint32 = a` on a `uint8` is a TypeError today, as is `let a: Animal = new
-  // Dog()`. So the rule waits on assignability, not on bookkeeping - and the
-  // invariance rule above is immune to that, because it asks for equality.
-  expect(accepted(`${animals} class A { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('ACCEPTED');
-  // HALF OF THAT BLOCKER IS GONE (cycle 140): a class is now a subtype of the
-  // class it extends, so `let a: Animal = new Dog()` is accepted. What remains
-  // is NUMERIC widening, which the relation still refuses - so the within-class
-  // rule would still manufacture a false positive on `get x(): uint8 / set
-  // x(v: uint32)`, which is legal.
-  expect(accepted(`${animals} let a: Animal = new Dog();`)).toBe('ACCEPTED');
-  expect(accepted('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
-
-  // 4. Field/accessor substitution, which needs the member KIND recorded.
+  // Field/accessor substitution, which needs the member KIND recorded.
   expect(accepted('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
+  // AND THE THING THAT IS NOT A GAP: a numeric type is not implicitly
+  // convertible to another, so the checker refusing `let b: uint32 = a` is
+  // CORRECT (README, "never implicitly becomes"). The run time converts from
+  // `any` because that is a CHECKED conversion at a boundary, which is a
+  // different rule - not a disagreement, as cycle 141 recorded it.
+  expect(accepted('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
+  expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
 });
 
 test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
