@@ -147,6 +147,18 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         fieldDefinition.Decorators = decorators;
         return fieldDefinition;
       } else {
+        // PLAN-accessor.md stage A opens the GRAMMAR and nothing else. An
+        // `accessor` field desugars to a private typed field and a get/set pair
+        // whose backing participates in the memory layout (stage B), and none of
+        // that is built - so the declaration is REFUSED rather than evaluated as
+        // the plain field it currently resembles. A plain field would get and
+        // set, which is close enough to an accessor to read as support while
+        // reflecting as `ClassField` and occupying the wrong kind of slot.
+        // Refusing is the honest state, and it is the same answer
+        // `reservedOnlyDecorators` gives for a decorator this engine cannot run.
+        if (surroundingAgent.feature('runtime-types') && (node as { accessor?: boolean }).accessor === true) {
+          return Throw.TypeError('$1 is not supported yet', Value('an `accessor` field'));
+        }
         const plain = Q(yield* ClassFieldDefinitionEvaluation(node, object));
         if (surroundingAgent.feature('runtime-types')) {
           // The decorators run AFTER the field definition is evaluated, because

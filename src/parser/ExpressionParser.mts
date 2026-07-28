@@ -2020,7 +2020,22 @@ export abstract class ExpressionParser extends FunctionParser {
       }
 
       if (!staticOrAccessorButNotKeyword) {
-        const accessor = surroundingAgent.feature('decorators') && this.test('accessor') ? this.parseIdentifierName() : null;
+        // TWO PROPOSALS PUT AN `accessor` FIELD HERE, and this engine must never
+        // reach TC39's semantics from this one: `decorators` and
+        // `runtime-types` are mutually exclusive and the Agent refuses the
+        // combination. What is shared below is ONLY THE DISAMBIGUATION, which is
+        // pure syntax and identical in both - `accessor` is not a reserved word,
+        // so it is the modifier only when a property name follows on the SAME
+        // LINE, and otherwise it is the member's own name (`accessor = 1`).
+        //
+        // Testing both features here does not enable either, and every SEMANTIC
+        // path stays forked: ClassElementEvaluation's FieldDefinition arm
+        // branches on `feature('decorators')` and the runtime-types accessor is
+        // built entirely on `[[Fields]]`. Writing the lookahead twice was the
+        // alternative and is worse - a rule written twice drifts, and this one
+        // is subtle enough that the copy would drift silently.
+        const accessorAllowed = surroundingAgent.feature('decorators') || surroundingAgent.feature('runtime-types');
+        const accessor = accessorAllowed && this.test('accessor') ? this.parseIdentifierName() : null;
         const next = this.peek();
         if (accessor && !next.hadLineTerminatorBefore && this.tokenIsPropertyName(next.type)) {
           isAccessorField = true;
