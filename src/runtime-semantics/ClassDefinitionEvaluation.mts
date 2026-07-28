@@ -1385,17 +1385,30 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
  * declaration says which: an `AccessorKind` for the first three, an
  * `OperatorName` for an operator, and a method otherwise.
  */
-function memberContextKind(node: ParseNode): string {
-  const n = node as unknown as {
-    OperatorName?: string, Accessor?: boolean,
+function memberContextKind(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod): string {
+  const n = node as {
     UniqueFormalParameters?: unknown, PropertySetParameterList?: unknown,
   };
-  if (typeof n.OperatorName === 'string') {
-    return 'ClassOperator';
-  }
-  if (n.Accessor === true) {
-    return 'ClassAccessor';
-  }
+  // TWO BRANCHES USED TO STAND HERE AND NEITHER COULD EVER RUN, which an
+  // `as unknown as { ... }` cast is what allowed: the cast INVENTED a shape, so
+  // no field name in it was checked against any node that reaches this
+  // function. The parameter type above is the fix - the four method forms are
+  // the only callers, and a field this function reads must now exist on one of
+  // them.
+  //
+  // `ClassOperator` was decided on an `OperatorName` that lives only on an
+  // OperatorDefinition, and an OperatorDefinition never arrives here: the class
+  // body walk intercepts it to register the operator and never calls
+  // ClassElementEvaluation. Its contexts are named at that interception
+  // instead.
+  //
+  // `ClassAccessor` was decided on an `Accessor` field NO PARSER SETS - the
+  // spelling is `accessor`, lower case - and it could not have run even
+  // spelled right, because `accessor` produces a FIELD DEFINITION and this
+  // function is reached only from the method arm. When the grammar lands
+  // (PLAN-accessor.md stage A) the decision belongs in the FieldDefinition arm
+  // beside `ClassFieldDecoratorContext`, reading `node.accessor`.
+  //
   // A MethodDefinition carries no accessor marker; the PARAMETER LIST is what
   // distinguishes the three, and it is what MethodDefinitionEvaluation itself
   // switches on. A setter has a PropertySetParameterList, a method has
