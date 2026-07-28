@@ -290,6 +290,17 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         && tn.Arguments.length === 0 && s.Arguments.length > 0) {
         return true;
       }
+      // A CLASS IS A SUBTYPE OF THE CLASS IT EXTENDS. The relation held
+      // nowhere, and the engine disagreed with itself about it: `new Dog() is
+      // Animal` was true and `f(new Dog())` against an `Animal` parameter
+      // passed, while `let a: Animal = new Dog()` was refused - the run time
+      // walks a prototype chain and the checker had nothing to walk. Carried
+      // the way an enum carries its underlying type (F62), for the same reason:
+      // a relation the record does not hold cannot be decided.
+      const base = (s as { Base?: TypeRecord }).Base;
+      if (base) {
+        return IsSubtype(base, t, next);
+      }
       return false;
     }
     default:

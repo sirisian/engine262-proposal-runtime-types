@@ -84,9 +84,34 @@ test('PINNED: the three rules stage D has not implemented', () => {
   // Dog()`. So the rule waits on assignability, not on bookkeeping - and the
   // invariance rule above is immune to that, because it asks for equality.
   expect(accepted(`${animals} class A { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('ACCEPTED');
+  // HALF OF THAT BLOCKER IS GONE (cycle 140): a class is now a subtype of the
+  // class it extends, so `let a: Animal = new Dog()` is accepted. What remains
+  // is NUMERIC widening, which the relation still refuses - so the within-class
+  // rule would still manufacture a false positive on `get x(): uint8 / set
+  // x(v: uint32)`, which is legal.
+  expect(accepted(`${animals} let a: Animal = new Dog();`)).toBe('ACCEPTED');
   expect(accepted('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
-  expect(accepted(`${animals} let a: Animal = new Dog();`)).toBe('TypeError');
 
   // 4. Field/accessor substitution, which needs the member KIND recorded.
   expect(accepted('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
+});
+
+test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
+  // The prerequisite the remaining rules were waiting on, and the engine had
+  // been disagreeing with ITSELF about it: `new Dog() is Animal` was true and a
+  // `Dog` argument satisfied an `Animal` parameter, while `let a: Animal = new
+  // Dog()` was refused. The run time walks a prototype chain; the checker had
+  // no chain to walk, so the class type now carries the class it extends -
+  // exactly as an enum carries its underlying type (F62).
+  const A = 'class Animal {} class Dog extends Animal {} class Puppy extends Dog {} ';
+  expect(outcome(`${A} let a: Animal = new Dog();`)).toBe('ACCEPTED');
+  // Transitive, which a one-level check would miss.
+  expect(outcome(`${A} let a: Animal = new Puppy();`)).toBe('ACCEPTED');
+  // And still NOMINAL, which is the half a structural fix would have broken:
+  // the base is not a subtype of the derived, and two unrelated EMPTY classes
+  // are unrelated though their structures are identical.
+  expect(outcome(`${A} let d: Dog = new Animal();`)).toBe('TypeError');
+  expect(outcome('class X {} class Y {} let x: X = new Y();')).toBe('TypeError');
+  // The run-time judgment it was disagreeing with is unchanged.
+  expect(evaluated(`${A} String(new Dog() is Animal);`)).toBe('true');
 });

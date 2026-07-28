@@ -1235,6 +1235,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Declaration: n,
       Arguments: [],
       Structure: { Kind: 'object', Properties: merged, IndexSignatures: [] },
+      // The class this one extends, so the subtype relation has a chain to
+      // walk. Nominal, not structural: two unrelated empty classes stay
+      // unrelated, which is the point of the classes being nominal at all.
+      Base: base ?? undefined,
     } as unknown as Known;
     if (construct) {
       constructSignatures.set(n, construct);
