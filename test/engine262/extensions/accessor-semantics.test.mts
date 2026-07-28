@@ -87,11 +87,9 @@ test('PINNED: what stage B does not do', () => {
     .toBe('"a private `accessor` field" is not supported yet');
   expect(evaluated('try { eval("class A { static accessor #t: uint32 = 0; }"); "NO-THROW"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 
-  // 2. A decorated accessor fires with `ClassField`, not `ClassAccessor` -
-  // stage E's whole content. The declaration takes the FieldDefinition arm, and
-  // that arm builds a field context; stage 0 established that the accessor
-  // decision belongs there, and stage E is where it gets made.
-  expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } class A { @f accessor a: uint32 = 5; } k;')).toBe('ClassField');
+  // 2. CLOSED by stage E: a decorated accessor fires with `ClassAccessor`.
+  // accessor-context.test.mts owns the assertions.
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } class A { @f accessor a: uint32 = 5; } k;')).toBe('ClassAccessor');
 
   // 3. Nothing here asserts LAYOUT. Whether the backing occupies a slot is
   // stage C, and it is blocked on §2.1 - README says the backing "participates

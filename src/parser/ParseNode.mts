@@ -2161,6 +2161,8 @@ export namespace ParseNode {
     // proposal-runtime-types: a `readonly` field may be assigned only in its own
     // initializer and in a constructor of the declaring class.
     readonly readonly?: boolean;
+    /** proposal-runtime-types: the `protected` access modifier. */
+    readonly protected?: boolean;
     readonly ClassElementName: ClassElementName;
     readonly Initializer: Initializer | null;
   }

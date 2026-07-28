@@ -32,6 +32,7 @@ import {
 } from '../completion.mts';
 import { __ts_cast__, OutOfRange, type Mutable } from '../utils/language.mts';
 import type { Location, ParseNode } from '../parser/ParseNode.mts';
+import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import {
   DefineMethod,
@@ -162,8 +163,19 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // "a decorator runs when the declaration it decorates is evaluated"
           // and a context that described a half-built field would be describing
           // something the program never has.
-          const key = (plain as { Name?: Value }).Name;
-          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassFieldDecoratorContext(
+          // PLAN-accessor.md stage E. An `accessor` is a FieldDefinition
+          // carrying the marker, so this arm is where the two part - stage 0
+          // established that, after finding the decision written in
+          // `memberContextKind`, which the method arm alone reaches.
+          //
+          // The KEY comes from the node rather than from the record: an
+          // accessor's record carries its BACKING Private Name (stage B), and
+          // the context must name what was declared, not the storage.
+          const isAccessor = (node as { accessor?: boolean }).accessor === true;
+          const key = isAccessor
+            ? (Q(yield* Evaluate_PropertyName((node as ParseNode.FieldDefinition).ClassElementName)) as Value)
+            : (plain as { Name?: Value }).Name;
+          Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor ? ClassAccessorDecoratorContext : ClassFieldDecoratorContext)(
             key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value,
           ))));
         }
@@ -1336,13 +1348,43 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  * A partial context is stated here rather than implied, so that a stage B that
  * forgets a field fails a test rather than shipping a hole.
  */
+/**
+ * decorators.md's `ClassAccessorReflection`: `type`, `name`, `static`,
+ * `private`, `protected`, `initial`, `metadata`. Note what is NOT there - a
+ * `readonly`, which `ClassFieldReflection` has and this does not.
+ *
+ * It fires ONCE, as `ClassAccessor`, and not as a ClassGetter and a ClassSetter
+ * - decorators.md is explicit that the declaration form fixes the context:
+ * "Accessor is required so that all decorators see the same context ... `signal`
+ * runs before `validate` and both see an accessor." A desugaring-first
+ * implementation would naturally have produced the pair, which is why the count
+ * is asserted and not just the kind.
+ */
+export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  const decl = node as ParseNode.FieldDefinition;
+  X(CreateDataProperty(context, Value('kind'), Value('ClassAccessor')));
+  StampReflectionContext(context, 'ClassAccessor');
+  X(CreateDataProperty(context, Value('name'), key));
+  X(CreateDataProperty(context, Value('static'), decl.static === true ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
+  return context;
+}
+
 export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-  const decl = node as unknown as {
-    static?: boolean, TypeAnnotation?: { Type?: ParseNode } | null,
-    ClassElementName?: { PrivateIdentifier?: unknown }, Readonly?: boolean, Access?: string,
-  };
+  // Typed to the NODE this is given, not to an invented shape. The cast here
+  // named `Readonly` and `Access`, which are the FIELD RECORD's spellings; a
+  // FieldDefinition node carries `readonly` and `protected`. So both properties
+  // reported FALSE for every field, however the member was declared - the same
+  // failure as the `Accessor`/`accessor` branch stage 0 removed, and the same
+  // cause: `as unknown as { ... }` invents a shape, so no name in it is checked
+  // against the node that arrives.
+  const decl = node as ParseNode.FieldDefinition;
   X(CreateDataProperty(context, Value('kind'), Value('ClassField')));
   StampReflectionContext(context, 'ClassField');
   X(CreateDataProperty(context, Value('name'), key));
@@ -1351,8 +1393,8 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
   // class extension defines.
   X(CreateDataProperty(context, Value('static'), decl.static ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
-  X(CreateDataProperty(context, Value('protected'), decl.Access === 'protected' ? Value.true : Value.false));
-  X(CreateDataProperty(context, Value('readonly'), decl.Readonly ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('readonly'), decl.readonly === true ? Value.true : Value.false));
   if (decl.TypeAnnotation?.Type) {
     const t = EnsureCompletion(yield* TypeNodeToTypeRecord(decl.TypeAnnotation.Type as never));
     if (t.Type === 'normal') {
@@ -1477,6 +1519,13 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
       return { parameter: 'ClassSetterParameter', ret: 'ClassMethodReturn' };
     case 'ClassOperator':
       return { parameter: 'ClassOperatorParameter', ret: 'ClassOperatorReturn' };
+    case 'ClassAccessor':
+      // An `accessor` has no parameter list and no return annotation - its
+      // TypeAnnotation is a FIELD's, and cycle 132 made a decorator there a
+      // SyntaxError. Named anyway rather than left to the default arm, which
+      // would hand an accessor the METHOD contexts: relying on a position being
+      // unreachable is how C1's operator bug survived.
+      return { parameter: 'ClassAccessor', ret: 'ClassAccessor' };
     case 'Function':
       // A plain function's parameters and return take the FUNCTION contexts,
       // not the class ones. Falling through to the default gave a standalone

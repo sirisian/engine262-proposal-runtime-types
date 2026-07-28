@@ -1997,6 +1997,34 @@ export abstract class ExpressionParser extends FunctionParser {
         }
       } else node.static = false;
 
+      // proposal-runtime-types (README, protected members): "Like `readonly` and
+      // `static` it is a modifier on an ordinary member, in the public layout
+      // slot." Parsed exactly as `readonly` is, and BEFORE it, so
+      // `protected readonly x` reads in the order the design writes it.
+      //
+      // `protected` is a FutureReservedWord in strict mode and a class body is
+      // always strict, which is why this needs its own test rather than falling
+      // out of the identifier path the way `readonly` and `accessor` do - and
+      // why a member NAMED `protected` still has to work: the same
+      // following-token check that keeps `readonly = 1` a field keeps
+      // `protected = 1` one.
+      node.protected = false;
+      if (!staticOrAccessorButNotKeyword
+          && surroundingAgent.feature('runtime-types')
+          && this.test('protected')) {
+        const protectedId = this.parseIdentifierName();
+        if (this.test(Token.ASSIGN)
+          || this.test(Token.SEMICOLON)
+          || this.peek().hadLineTerminatorBefore
+          || isAutomaticSemicolon(this.peek().type)
+          || this.test(Token.LPAREN)) {
+          staticOrAccessorButNotKeyword = protectedId;
+          this.markNodeStart(node);
+        } else {
+          node.protected = true;
+        }
+      }
+
       // proposal-runtime-types: a `readonly` field modifier, permitted after
       // `static` (as `static readonly x`) and before the field name. As with
       // `static`, a following `=`, `;`, or line terminator means `readonly` is

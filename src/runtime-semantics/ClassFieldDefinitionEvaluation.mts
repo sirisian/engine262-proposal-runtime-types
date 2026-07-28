@@ -22,6 +22,13 @@ import {
 /** https://tc39.es/ecma262/#sec-classfielddefinition-record-specification-type */
 export interface ClassFieldDefinitionRecord {
   readonly Name: PropertyKeyValue | PrivateName;
+  /**
+   * proposal-runtime-types: the member's access modifier, `'protected'` or
+   * absent. An access RULE rather than a layout one - README: "a protected
+   * field occupies the normal layout and stays reachable through reflection or
+   * an `any`-typed reference, the erasure other languages apply to it".
+   */
+  readonly Access?: 'protected' | undefined;
   readonly Initializer: ECMAScriptFunctionObject | undefined;
   // proposal-runtime-types: the field's type annotation, if any, so a field
   // declared without an initializer can take its type's default (spec
@@ -145,6 +152,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       TypeAnnotation: typeAnnotation,
       TypeObject: typeObject,
       Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
+    Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,
     });
   }
   return ClassFieldDefinitionRecord({
@@ -153,6 +161,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     TypeAnnotation: typeAnnotation,
     TypeObject: typeObject,
     Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
+    Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,
   });
 }
 
