@@ -15,7 +15,7 @@ import { TypedRandom } from '../intrinsics/Math.mts';
 import { X } from '../completion.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
-import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
+import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
   surroundingAgent,
@@ -239,6 +239,50 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         const name = Q(yield* ToString(nameValue));
         return Q(ClassFieldReflection(classRecord, name.stringValue(), surroundingAgent.currentRealmRecord));
       }
+    }
+    // decorators.md: `getReflectionByIndex.<`Context`, `T`>(`member`)` returns
+    // a member's parameters INDEXED BY POSITION - a list, not a name-keyed
+    // object, which is what separates it from the enumerating forms.
+    const getByIndex = Q(yield* Get(reflectObj, Value('getReflectionByIndex')));
+    if (SameValue(func, getByIndex)) {
+      const contextRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const targetRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+      const constructor = (targetRecord as { Constructor?: Value }).Constructor;
+      const isParameterContext = contextRecord.Kind === 'nominal'
+        && typeof contextRecord.LibraryName === 'string'
+        && contextRecord.LibraryName.endsWith('Parameter');
+      if (!isParameterContext) {
+        return ThrowError.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getReflectionByIndex'));
+      }
+      if (constructor === undefined) {
+        return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getReflectionByIndex'));
+      }
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      const memberValue = argList.length > 0 ? argList[0]! : Value.undefined;
+      const memberName = Q(yield* ToString(memberValue));
+      const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
+      if (declaration === undefined) {
+        return ThrowError.TypeError('$1 is not a member of this type', memberName);
+      }
+      const realm = surroundingAgent.currentRealmRecord;
+      const list = Q(ArrayCreate(0));
+      const base1 = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
+      for (const parameter of declaration.parameters) {
+        const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        X(CreateDataProperty(one, Value('kind'), Value(contextRecord.LibraryName.slice('Reflect.'.length))));
+        X(CreateDataProperty(one, Value('name'), Value(parameter.name)));
+        X(CreateDataProperty(one, Value('index'), Value(parameter.index)));
+        // `initial` is the DECLARED default, and a parameter's default is an
+        // expression evaluated per call - so what is reported is whether one
+        // was written, not a value. Same reason a field's `initial` is the
+        // declared default rather than a per-instance one.
+        X(CreateDataProperty(one, Value('hasDefault'), parameter.hasDefault ? Value.true : Value.false));
+        X(CreateDataProperty(one, Value('metadata'),
+          MetadataObjectFor(constructor, base1, `${memberName.stringValue()}:${parameter.index}`)));
+        X(CreateDataProperty(list, Value(String(parameter.index)), one));
+      }
+      X(CreateDataProperty(list, Value('length'), Value(declaration.parameters.length)));
+      return list;
     }
     // decorators.md: `Reflect.getMetadata.<`Context`, `T`>()` reads back what a
     // decorator wrote. THE SAME OBJECT, not a copy - metadata is a channel, and

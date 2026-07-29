@@ -263,9 +263,6 @@ test('inventory: the specified-but-absent operations are the deferrals they shou
     // type, so its Math additions have nothing to operate on.
     'Math.conj': 'complex extension, value level deferred',
     'Math.arg': 'complex extension, value level deferred',
-    // Recorded in the decorators sequence: the reflection surface lands before
-    // the syntax gate, and the by-index form is a step of it.
-    'Reflect.getReflectionByIndex': 'decorators, reflection surface step 2',
     // Structural matching. The clause itself calls it optional rather than
     // load-bearing: "the design's own catalog needed this operation exactly zero
     // times, which is the measurement that makes it optional".

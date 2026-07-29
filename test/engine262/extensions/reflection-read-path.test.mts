@@ -105,10 +105,31 @@ test('the two FIELD paths are merged into one read', () => {
   expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("z");')).toBe('TypeError');
 });
 
-test('PINNED: getReflectionByIndex, the last step', () => {
-  // decorators.md declares it only for the PARAMETER contexts - it returns a
-  // parameter list indexed by position. So it needs what no record holds yet: a
-  // member's PARAMETERS, their names, types and defaults. That is a second
-  // record of the same shape as the member one, filled from the same walk.
-  expect(evaluated('typeof Reflect.getReflectionByIndex;')).toBe('undefined');
+test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
+  // Step 4, and the last of phase three. decorators.md declares it only for the
+  // PARAMETER contexts, and it returns a LIST indexed by position - which is
+  // what separates it from the enumerating forms, whose result is keyed by
+  // name.
+  const m = 'class A { m(a: uint8, b: uint8) {} } ';
+  expect(evaluated(`${m} const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); `
+    + 'String(p.length) + "/" + p[0].name + "/" + p[1].name;')).toBe('2/a/b');
+  expect(evaluated(`${m} String(Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m")[1].index);`)).toBe('1');
+  // `hasDefault` rather than a value: a parameter's default is an expression
+  // evaluated PER CALL, so what can be reported at reflection time is whether
+  // one was written - the same reason a field's `initial` is the declared
+  // default rather than a per-instance one.
+  expect(evaluated('class A { m(a: uint8, b: uint8 = 2) {} } '
+    + 'const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); '
+    + 'String(p[0].hasDefault) + "/" + String(p[1].hasDefault);')).toBe('false/true');
+  // A member with no parameters answers with an empty list, not a rejection.
+  expect(evaluated('class A { m() {} } String(Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m").length);')).toBe('0');
+  // A SETTER's single parameter comes from a different formals list on the
+  // node, so it is asserted separately - one list per member shape, and reading
+  // only the method's would have left setters empty.
+  expect(evaluated('class A { set v(x: uint8) {} } String(Reflect.getReflectionByIndex.<Reflect.ClassSetterParameter, A>("v")[0].name);')).toBe('x');
+  // A context that is not a PARAMETER one is refused: this form is for
+  // parameter lists, and answering a member context with a list would invent a
+  // reading the design does not give.
+  expect(outcome('class A { m() {} } Reflect.getReflectionByIndex.<Reflect.ClassMethod, A>("m");')).toBe('TypeError');
+  expect(outcome('Reflect.getReflectionByIndex();')).toBe('TypeError');
 });

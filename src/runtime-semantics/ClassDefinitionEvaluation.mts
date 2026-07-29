@@ -1668,12 +1668,24 @@ const classMetadata = new WeakMap<Value, Map<string, ObjectValue>>();
  * Keyed the way the metadata store is, and recorded where the class body is
  * walked, so a read is a lookup rather than a second traversal.
  */
+export interface MemberParameterDeclaration {
+  readonly name: string;
+  readonly index: number;
+  readonly hasDefault: boolean;
+}
 export interface MemberDeclaration {
   readonly kind: string;
   readonly static: boolean;
   readonly private: boolean;
   readonly protected: boolean;
   readonly abstract: boolean;
+  /**
+   * The member's PARAMETERS, in declaration order. `getReflectionByIndex` is
+   * declared only for the parameter contexts and returns this list indexed by
+   * position - so a parameter's name and default have to be recorded where the
+   * class body is walked, exactly as the member's own facts are.
+   */
+  readonly parameters: readonly MemberParameterDeclaration[];
 }
 const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
 
@@ -1840,8 +1852,24 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
       owner = back;
     }
   }
-  const n = node as { static?: boolean, protected?: boolean, ClassElementName?: { type?: string } };
+  const n = node as {
+    static?: boolean, protected?: boolean, ClassElementName?: { type?: string },
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+    PropertySetParameterList?: readonly ParseNode[] | null,
+    FormalParameters?: readonly ParseNode[] | null,
+  };
+  const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  const parameters: MemberParameterDeclaration[] = [];
+  formals.forEach((parameter, index) => {
+    const p = parameter as { BindingIdentifier?: { name?: string }, Initializer?: unknown };
+    parameters.push({
+      name: p.BindingIdentifier?.name ?? '',
+      index,
+      hasDefault: p.Initializer !== undefined && p.Initializer !== null,
+    });
+  });
   RecordMemberDeclaration(owner, key.stringValue(), {
+    parameters,
     kind,
     static: n.static === true,
     private: n.ClassElementName?.type === 'PrivateIdentifier',

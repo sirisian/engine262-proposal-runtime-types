@@ -562,6 +562,17 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
  * arguments were written, which cannot name a context and so cannot name a
  * metadata object.
  */
+/**
+ * proposal-runtime-types decorators.md:
+ * `Reflect.getReflectionByIndex.<`_Context_`, `_T_`>(`_member_`)` returns a
+ * member's PARAMETERS as a list indexed by position. Declared only for the
+ * parameter contexts, so it belongs with the sub-target reads rather than the
+ * member ones. Reaching this body means no type arguments were written.
+ */
+function Reflect_getReflectionByIndex() {
+  return Throw.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getReflectionByIndex'));
+}
+
 function Reflect_getMetadata() {
   return Throw.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getMetadata'));
 }
@@ -611,6 +622,7 @@ export function bootstrapReflect(realmRec: Realm) {
       ['typeOf', Reflect_typeOf, 1] as [string, typeof Reflect_typeOf, number],
       ['getReflection', Reflect_getReflection, 1] as [string, typeof Reflect_getReflection, number],
       ['getMetadata', Reflect_getMetadata, 1] as [string, typeof Reflect_getMetadata, number],
+      ['getReflectionByIndex', Reflect_getReflectionByIndex, 1] as [string, typeof Reflect_getReflectionByIndex, number],
       ['makeType', Reflect_makeType, 1] as [string, typeof Reflect_makeType, number],
       ['isAssignable', Reflect_isAssignable, 2] as [string, typeof Reflect_isAssignable, number],
     ] : []),
