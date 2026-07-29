@@ -62,7 +62,7 @@ test('MEMBERSHIP handles symbol keys; the STATIC CHECKER is what does not', () =
   expect(evaluated('interface J { s: string; } String({ s: 5 } is J);')).toBe('false');
 });
 
-test('PINNED: interface member types are enforced STATICALLY, and only so', () => {
+test('interface member types are enforced STATICALLY, and only so - for BOTH key kinds', () => {
   // The refusals this suite reads as "enforcement" are the CHECKER's, and they
   // stop where the checker's view stops - for STRING keys just as much as
   // symbol ones. Through a function parameter, or from a value the checker
@@ -85,7 +85,10 @@ test('PINNED: interface member types are enforced STATICALLY, and only so', () =
   // assertion that says the gap is the checker's reach and not the key.
   expect(outcome2(`${T} function f(o) { o.s = 5; } let m: J = { s: "ok" }; f(m);`)).toBe('ACCEPTED');
   expect(outcome2(`${T} function g(v) { let m: J = v; return m; } g({ s: 5 });`)).toBe('ACCEPTED');
-  // And a symbol key is unjudged in the positions a string key IS judged.
-  expect(outcome2(`${S} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('ACCEPTED');
-  expect(outcome2(`${S} let m: I = { [k]: 5 };`)).toBe('ACCEPTED');
+  // A SYMBOL key is now judged wherever a string key is (cycle 152) - the
+  // difference this test was named for is gone, and what remains is the
+  // checker's REACH, which was always the real boundary.
+  expect(outcome2(`${S} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
+  expect(outcome2(`${S} let m: I = { [k]: 5 };`)).toBe('TypeError');
+  expect(outcome2(`${S} function f(o) { o[k] = 5; } let m: I = { [k]: "ok" }; f(m);`)).toBe('ACCEPTED');
 });

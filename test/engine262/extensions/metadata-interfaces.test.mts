@@ -102,14 +102,14 @@ test('PINNED GAPS for stage H, the metadata half', () => {
   // member: its presence is required, and a second declaration of it is the
   // conflict a string-keyed one is. symbol-metadata-keys.test.mts owns those.
   //
-  // What is still open is the STATIC CHECKER, which cannot judge a symbol-keyed
-  // member - not the structural walk, which reads symbol keys correctly. And
-  // the checker's reach is the real boundary for EITHER kind of key: a wrong
-  // store it cannot see is accepted with a string key too. See
-  // symbol-metadata-keys.test.mts.
+  // CLOSED (cycle 152): the checker judges a symbol-keyed member too, by the
+  // minted key of the `const` its computed name resolves to. What bounds BOTH
+  // key kinds is the checker's reach - a wrong store it cannot see is accepted
+  // with a string key as much as a symbol one. See symbol-literal-keys.test.mts
+  // and symbol-metadata-keys.test.mts.
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
-  expect(evaluated(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; try { m[k] = 5; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('ACCEPTED');
+  expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
   expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('TypeError');
   // 2. The static checker does not know the intrinsic names: the same wrong
   // kind a user interface rejects in a never-called function (F37's

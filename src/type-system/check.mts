@@ -1,4 +1,4 @@
-import { BigIntValue, NumberValue, Value, type ObjectValue } from '../value.mts';
+import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
@@ -486,10 +486,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         PropertyName?: { name?: string, value?: string } | null,
         AssignmentExpression?: ParseNode,
       };
-      const key = def.PropertyName?.name ?? def.PropertyName?.value;
-      const declared = typeof key === 'string'
-        ? target.Properties.find((prop) => prop.key === key)
-        : undefined;
+      const key = memberKeyOf(def.PropertyName);
+      const declared = key === undefined
+        ? undefined
+        : target.Properties.find((prop) => prop.key === key);
       if (declared && def.AssignmentExpression) {
         requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type);
       }
@@ -599,6 +599,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const interfaceNodes = new Map<string, ParseNode>();
   /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
   const symbolConsts = new Map<string, ParseNode>();
+  /**
+   * One stable Symbol per symbol-`const` DECLARATION, minted for the checker's
+   * own use. A Property Type Record's [[Key]] is "a String or a Symbol", so a
+   * symbol-keyed member needs a Symbol to be keyed by - and a checker has no
+   * access to the one the program will create at run time. Minting per
+   * declaration gives the identity §6.6 asks for: two consts mint two symbols
+   * and compare unequal, one const named twice resolves to one symbol and
+   * compares equal, which is exactly the rule read where no value exists.
+   */
+  const symbolKeys = new Map<ParseNode, SymbolValue>();
+  const symbolKeyFor = (declaration: ParseNode): SymbolValue => {
+    let minted = symbolKeys.get(declaration);
+    if (!minted) {
+      minted = new SymbolValue(Value('symbol key'));
+      symbolKeys.set(declaration, minted);
+    }
+    return minted;
+  };
+  /**
+   * The comparable key a member name denotes: its literal text, or the minted
+   * Symbol of the `const` a computed name resolves to. Shared by the interface
+   * walk and the object-literal check so a declaration and a use agree by
+   * construction rather than by two rules that must be kept in step (F58).
+   */
+  const memberKeyOf = (propertyName: { name?: string, value?: string, ComputedPropertyName?: { type?: string, name?: string } } | null | undefined): string | SymbolValue | undefined => {
+    const literal = propertyName?.name ?? propertyName?.value;
+    if (typeof literal === 'string') {
+      return literal;
+    }
+    const computed = propertyName?.ComputedPropertyName;
+    if (computed?.type === 'IdentifierReference' && typeof computed.name === 'string') {
+      const declaration = symbolConsts.get(computed.name);
+      if (declaration) {
+        return symbolKeyFor(declaration);
+      }
+    }
+    return undefined;
+  };
   const interfaceTypeMemo = new Map<ParseNode, Known>();
   const interfaceTypeOf = (name: string): Known => {
     const node = interfaceNodes.get(name);
@@ -621,7 +659,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
         MethodSignature?: { FunctionTypeParameterList?: readonly ParseNode[] | null, TypeAnnotation?: ParseNode.TypeAnnotation | null } | null,
       };
-      const key = tm.PropertyName?.name ?? tm.PropertyName?.value;
+      const key = memberKeyOf(tm.PropertyName);
+      if (key !== undefined && typeof key !== 'string') {
+        // A SYMBOL-keyed member, keyed by the minted Symbol of the `const` its
+        // computed name resolves to. Recorded like any other member from here
+        // on, which is what lets a use site be compared against it.
+        const memberType = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
+        if (memberType) {
+          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional });
+        }
+        continue;
+      }
       if (typeof key !== 'string') {
         // A COMPUTED key. §6.6 types one whose expression is a symbol literal -
         // a `const` bound to `Symbol(...)` - and nothing else can be typed at
@@ -2671,6 +2719,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A store satisfies the property's WRITE type where one is declared
             // separately, which is what a setter's parameter gives (F61).
             target = prop ? ((prop as { writeType?: TypeRecord }).writeType ?? prop.type) : null;
+          } else if (objType && objType.Kind === 'object' && m.Expression) {
+            // A SYMBOL-keyed store, `m[k] = v`. The computed expression names a
+            // symbol `const`, so it resolves to the same minted key the
+            // declaration was recorded under - which is the whole point of
+            // minting per declaration rather than per mention.
+            const computed = m.Expression as { type?: string, name?: string };
+            const declaration = computed.type === 'IdentifierReference' && typeof computed.name === 'string'
+              ? symbolConsts.get(computed.name)
+              : undefined;
+            if (declaration) {
+              const symbolKey = symbolKeyFor(declaration) as unknown as string;
+              const prop = objType.Properties.find((p) => p.key === symbolKey);
+              target = prop ? ((prop as { writeType?: TypeRecord }).writeType ?? prop.type) : null;
+            }
           } else if (objType && objType.Kind === 'array' && m.Expression) {
             target = objType.Element;
           }

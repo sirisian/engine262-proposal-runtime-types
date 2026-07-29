@@ -59,15 +59,18 @@ test('an interface NOTHING REFERENCES is judged, which needed forcing', () => {
   expect(outcome('let k = Symbol("k"); interface Unused { [k]: string; } 1;')).toBe('TypeError');
 });
 
-test('PINNED: recognition is not yet JUDGEMENT', () => {
-  // What this step does NOT do. A symbol-keyed member is accepted and still not
-  // type-checked at a store or at construction - §6.6's remaining work is to
-  // carry the symbol literal type into the checker's property list, which is
-  // keyed by string today. The refusal above is what makes that work total when
-  // it lands: every member that survives is one the type can be produced for.
+test('recognition became JUDGEMENT (cycle 152)', () => {
+  // What the previous cycle pinned as outstanding. A symbol-keyed member is now
+  // type-checked at construction and at a store, by the minted key of the
+  // `const` its computed name resolves to.
   const decl = 'const k = Symbol("k"); interface I { [k]: string; } ';
-  expect(outcome(`${decl} let m: I = { [k]: 5 };`)).toBe('ACCEPTED');
-  expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('ACCEPTED');
-  // The string-keyed control, which IS judged - the difference is still the key.
+  expect(outcome(`${decl} let m: I = { [k]: 5 };`)).toBe('TypeError');
+  expect(outcome(`${decl} let m: I = { [k]: "ok" };`)).toBe('ACCEPTED');
+  expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
+  expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = "fine";`)).toBe('ACCEPTED');
+  // IDENTITY, which is the whole of §6.6: a DIFFERENT const is a different key,
+  // so supplying it leaves the declared member missing.
+  expect(outcome('const a = Symbol("x"); const b = Symbol("x"); interface I { [a]: string; } let m: I = { [b]: "ok" };')).toBe('TypeError');
+  // The string-keyed control, unchanged throughout.
   expect(outcome('interface J { s: string; } let m: J = { s: 5 };')).toBe('TypeError');
 });
