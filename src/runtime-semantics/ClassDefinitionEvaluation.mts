@@ -861,7 +861,39 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // 24. Let staticElements be a new empty List.
     const staticElements: (ClassFieldDefinitionRecord | ClassStaticBlockDefinitionRecord)[] = [];
     // 25. For each ClassElement e of elements, do
-    for (const e of elements) {
+    //
+    // Walked over the WHOLE body rather than NonConstructorElements, so the
+    // constructor keeps its DOCUMENT POSITION among the members. The
+    // specification says "a constructor is a `ClassMethod` whose name is
+    // *"constructor"*", and it was the one member a decorator could be written
+    // on and never fire: excluded from NonConstructorElements, it never reached
+    // ClassElementEvaluation at all. It is DECORATED here and not redefined -
+    // the class IS the constructor, so there is nothing to install.
+    // ClassBody IS the element list, so the whole body is walked directly and
+    // `elements` (NonConstructorElements) is used only when there is no body.
+    const bodyElements: readonly ParseNode.ClassElement[] = ClassBody ?? elements;
+    for (const e of bodyElements) {
+      // The CONSTRUCTOR is exactly what NonConstructorElements filtered out, so
+      // it is identified by that list rather than by re-deriving the test.
+      // Re-deriving it missed the forms `PropName` normalizes - a string-literal
+      // or computed `"constructor"` - and a missed constructor fell through to
+      // be DEFINED as an ordinary method, putting a `constructor` property on
+      // the prototype and changing every instance's structural type.
+      if (!elements.includes(e)) {
+        if (e.type === 'MethodDefinition' && surroundingAgent.feature('runtime-types')) {
+          // SUB-TARGETS UNCONDITIONALLY, the member's own only where written.
+          // Gating the parameters on the constructor's own decorator list is
+          // the defect A4 found for plain functions and C1 for operators: a
+          // parameter's decorator belongs to the parameter.
+          Q(yield* ApplySubTargetDecorators(e as never, 'ClassMethod', Value('constructor'), F as Value));
+          if (e.Decorators?.length) {
+            Q(yield* ApplyDecorators(e.Decorators, Q(yield* ClassMemberDecoratorContext(
+              'ClassMethod', Value('constructor'), false, currentClassName ?? Value.undefined, F as Value,
+            ))));
+          }
+        }
+        continue;
+      }
       if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
         // proposal-runtime-types: named operators with bodies register in the
         // class operator table; abstract methods have no runtime behaviour.
@@ -1165,15 +1197,42 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
         RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
       }
+      if (surroundingAgent.feature('runtime-types') && e.type === 'OperatorDefinition') {
+        Q(yield* ApplySubTargetDecorators(e as never, 'ClassOperator', Value(operatorTableKey(e)), (e.static ? F : proto) as Value));
+      }
       continue;
     }
+    // A PARTIAL BODY'S MEMBERS ARE DECORATED, which they were not: its methods
+    // go through MethodDefinitionEvaluation directly and so never reached the
+    // arm that applies a member's decorators. decorators.md gives no exception
+    // for a partial body, and a `partial class` is where a program adds
+    // behaviour to a class it does not own - which is where a decorator earns
+    // its keep.
+    const decorateMember = function* decorateMember(method: Value): PlainEvaluator<void> {
+      if (!surroundingAgent.feature('runtime-types')) {
+        return undefined;
+      }
+      const home = (e as { static?: boolean }).static === true ? F : proto;
+      Q(yield* ApplySubTargetDecorators(e, memberContextKind(e as never), MemberKeyOf(e, method), home as Value));
+      if ((e as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators?.length) {
+        Q(yield* ApplyDecorators((e as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators, Q(yield* ClassMemberDecoratorContext(
+          memberContextKind(e as never),
+          MemberKeyOf(e, method),
+          (e as { static?: boolean }).static === true,
+          Q(yield* Get(F, Value('name'))),
+          home as Value,
+        ))));
+      }
+      return undefined;
+    };
     if (e.type === 'FieldDefinition' || e.type === 'ClassStaticBlock') {
       // A partial class adds behaviour, not state. A field or static block in a
       // partial body is not merged; its members are methods and operators.
       continue;
     }
     const target = IsStatic(e) ? (F as ObjectValue) : proto;
-    Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
+    const merged = Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
+    Q(yield* decorateMember(merged as unknown as Value));
   }
   // Restored before the exit. The merge evaluates no user code between the lift
   // and here, so nothing can observe the prototype unfrozen.

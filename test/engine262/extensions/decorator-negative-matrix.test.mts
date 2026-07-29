@@ -116,43 +116,37 @@ test('a reserved layout control is not shadowable by a user binding', () => {
   expect(rejectionKind('class A { @notAControl a: uint8; }')).toBe('ReferenceError');
 });
 
-test('PINNED GAPS: positions that parse, run nothing, and report nothing', () => {
-  // Three positions are accepted by the grammar and silently do nothing. Each
-  // reads as support and is worse than a SyntaxError, which is why they are
-  // pinned here rather than left in the negative matrix's shadow: a test that
-  // asserts the CURRENT answer and names the rule it contradicts is what turns
-  // a discovery into a known gap (the same treatment stage D's hoisting
-  // divergence has).
+test('the two positions that once parsed and did nothing now FIRE', () => {
+  // Both were pinned here as accepted-and-silent. Phase two of
+  // PLAN-decorators-remaining.md closed them.
+  //
+  // 1. A CONSTRUCTOR is "a `ClassMethod` whose name is *\"constructor\"*", and it
+  // was the one member a decorator could be written on and never fire - it is
+  // filtered out of NonConstructorElements, so it never reached the arm that
+  // applies a member's decorators. The whole body is walked now, so it also
+  // keeps its DOCUMENT POSITION among the members.
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } class A { @f constructor() {} } k;')).toBe('ClassMethod/constructor');
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } class A { constructor(@f p: uint8) {} } k;')).toBe('ClassMethodParameter:0');
+  expect(evaluated('const l = []; function t(n, c) { l.push(n); } '
+    + 'class A { @t("a") x: uint8 = 1; @t("ctor") constructor() {} @t("b") y: uint8 = 2; } l.join(",");')).toBe('a,ctor,b');
+  // THE CONSTRUCTOR IS IDENTIFIED BY THE FILTER THAT EXCLUDED IT, not by
+  // re-deriving the test - re-deriving missed the forms `PropName` normalizes,
+  // and a missed constructor was DEFINED as an ordinary method, putting a
+  // `constructor` property on the prototype and changing every instance's
+  // structural type. Asserted so the shortcut is not taken again.
+  expect(evaluated('class A { constructor() { this.v = 5; } } String(new A().v);')).toBe('5');
+  expect(evaluated('class A { "constructor"() { this.v = 5; } } String(Object.getOwnPropertyNames(A.prototype).length);')).toBe('1');
 
-  // 1. A CONSTRUCTOR takes a decorator and it never fires. The specification
-  // is explicit that there is a context for it: "A constructor is a
-  // `ClassMethod` whose name is *"constructor"*, and its parameters are that
-  // method's, so a construct signature needs no context of its own." The
-  // constructor is excluded from NonConstructorElements and so never reaches
-  // the evaluation that applies a member's decorators.
-  expect(evaluated('let k = "never fired"; function f(c) { k = c.kind; } class A { @f constructor() {} } k;')).toBe('never fired');
-
-  // 2. A PARTIAL CLASS body fires no decorators at all - not a member's, not a
-  // sub-target's - because its members go through MethodDefinitionEvaluation
-  // directly rather than through ClassElementEvaluation. decorators.md gives
-  // no exception for a partial body, and a `partial class` is where a program
-  // adds behaviour to a class it does not own, which is exactly where a
-  // decorator is most useful.
-  expect(evaluated('class A { x: uint8 = 1; } let k = "never fired"; function f(c) { k = c.kind; } partial class A { @f m() {} } k;')).toBe('never fired');
-  expect(evaluated('class A { x: uint8 = 1; } let k = "never fired"; function f(c) { k = c.kind; } partial class A { m(@f p: uint8) {} } k;')).toBe('never fired');
-  // The merge itself works, so the gap is the decoration and not the partial.
-  expect(evaluated('class A { x: uint8 = 1; } partial class A { m() { return "merged"; } } (new A()).m();')).toBe('merged');
-
-  // 3. CLOSED (cycle 129), and the pin is kept in its flipped form because
-  // what it guards is worth guarding. It asserted that a decorator whose last
-  // parameter is ANNOTATED WITH ITS CONTEXT - the form
-  // #sec-decorator-application defines and every example in decorators.md is
-  // written in - failed with a ReferenceError naming the context. It works,
-  // and the wrong context is now refused as a TYPE error rather than reported
-  // as a missing global. See decorator-context-annotation.test.mts, which owns
-  // the assertions; what stays here is that the position is no longer a gap.
-  expect(evaluated('let k = "never"; function f(c: Reflect.ClassField) { k = String(c.name); } class A { @f a: uint8; } k;')).toBe('a');
-  expect(rejectionKind('function f(c: Reflect.Class) {} class A { @f a: uint8; }')).toBe('TypeError');
+  // 2. A PARTIAL CLASS body fires its members' decorators and its sub-targets.
+  // Its methods go through MethodDefinitionEvaluation directly and so never
+  // reached that arm either; decorators.md gives a partial body no exception,
+  // and it is where a program adds behaviour to a class it does not own.
+  const base = 'class A { x: uint8 = 1; } ';
+  expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } partial class A { @f m() {} } k;`)).toBe('ClassMethod/m');
+  expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } partial class A { m(@f p: uint8) {} } k;`)).toBe('ClassMethodParameter:0');
+  expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind; } partial class A { @f get v(): uint8 { return 1; } } k;`)).toBe('ClassGetter');
+  // The merge itself is undisturbed.
+  expect(evaluated(`${base} partial class A { m() { return "merged"; } } (new A()).m();`)).toBe('merged');
 });
 
 test('a decoration is refused with the feature off', () => {
