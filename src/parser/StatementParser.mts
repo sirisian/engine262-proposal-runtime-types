@@ -837,15 +837,40 @@ export abstract class StatementParser extends TypeParser {
   // IfStatement :
   //  `if` `(` Expression `)` Statement `else` Statement
   //  `if` `(` Expression `)` Statement [lookahead != `else`]
+  /**
+   * proposal-runtime-types decorators.md: a block's decorator context is
+   * `IfBlock`, `ElseBlock`, `WhileBlock`, `ForBlock` and the rest by the
+   * statement that OWNS it - and the block node carried no record of that, so
+   * all eight reported the bare `Block`. Marked here, where the owning form is
+   * known; the evaluator reads it back. An `else if` marks the inner `if`'s
+   * consequent as `ElseIfBlock`, which is the one subkind that is not simply
+   * the keyword above it.
+   */
+  protected markBlockKind<T>(statement: T, kind: string): T {
+    if (surroundingAgent.feature('runtime-types')
+        && (statement as { type?: string })?.type === 'Block') {
+      (statement as { BlockKind?: string }).BlockKind = kind;
+    }
+    return statement;
+  }
+
   parseIfStatement(): ParseNode.IfStatement {
     const node = this.startNode<ParseNode.IfStatement>();
     this.expect(Token.IF);
     this.expect(Token.LPAREN);
     node.Expression = this.parseExpression();
     this.expect(Token.RPAREN);
-    node.Statement_a = this.parseStatement();
+    node.Statement_a = this.markBlockKind(this.parseStatement(), 'IfBlock');
     if (this.eat(Token.ELSE)) {
-      node.Statement_b = this.parseStatement();
+      const alternative = this.parseStatement();
+      // `else if (...) { }` is an IfStatement in the alternative position; its
+      // CONSEQUENT is the ElseIfBlock, and a bare `else { }` is the ElseBlock.
+      if ((alternative as { type?: string }).type === 'IfStatement') {
+        this.markBlockKind((alternative as unknown as { Statement_a?: unknown }).Statement_a, 'ElseIfBlock');
+        node.Statement_b = alternative;
+      } else {
+        node.Statement_b = this.markBlockKind(alternative, 'ElseBlock');
+      }
     }
     return this.finishNode(node, 'IfStatement');
   }
@@ -858,7 +883,7 @@ export abstract class StatementParser extends TypeParser {
     node.Expression = this.parseExpression();
     this.expect(Token.RPAREN);
     this.scope.with({ label: 'loop' }, () => {
-      node.Statement = this.parseStatement();
+      node.Statement = this.markBlockKind(this.parseStatement(), 'WhileBlock');
     });
     return this.finishNode(node, 'WhileStatement');
   }
@@ -874,6 +899,7 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.RPAREN);
     // Semicolons are completely optional after a do-while, even without a newline
     this.eat(Token.SEMICOLON);
+    this.markBlockKind((node as { Statement?: unknown }).Statement, 'DoWhileBlock');
     return this.finishNode(node, 'DoWhileStatement');
   }
 
@@ -916,7 +942,8 @@ export abstract class StatementParser extends TypeParser {
         }
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        return this.finishNode(node, 'ForStatement');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+    return this.finishNode(node, 'ForStatement');
       }
       const isLexicalStart = () => {
         switch (this.peekAhead().type) {
@@ -963,7 +990,8 @@ export abstract class StatementParser extends TypeParser {
           }
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          return this.finishNode(node, 'ForStatement');
+          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+    return this.finishNode(node, 'ForStatement');
         }
         inner.ForBinding = this.repurpose(list[0], 'ForBinding', (_, oldNode) => {
           if (oldNode.Initializer) {
@@ -981,12 +1009,14 @@ export abstract class StatementParser extends TypeParser {
           node.Expression = this.parseExpression();
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          return this.finishNode(node, 'ForInStatement');
+          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
+    return this.finishNode(node, 'ForInStatement');
         }
         this.expect('of');
         node.AssignmentExpression = this.parseAssignmentExpression();
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
         return this.finishNode(node, isAwait ? 'ForAwaitStatement' : 'ForOfStatement');
       }
       if (this.eat(Token.VAR)) {
@@ -1011,7 +1041,8 @@ export abstract class StatementParser extends TypeParser {
           }
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          return this.finishNode(node, 'ForStatement');
+          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+    return this.finishNode(node, 'ForStatement');
         }
         node.ForBinding = this.repurpose(list[0], 'ForBinding', (_, oldNode) => {
           if (oldNode.Initializer) {
@@ -1026,6 +1057,7 @@ export abstract class StatementParser extends TypeParser {
         }
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
+        this.markBlockKind((node as { Statement?: unknown }).Statement, node.AssignmentExpression ? 'ForOfBlock' : 'ForInBlock');
         return this.finishNode(node, node.AssignmentExpression ? 'ForOfStatement' : 'ForInStatement');
       }
 
@@ -1046,7 +1078,8 @@ export abstract class StatementParser extends TypeParser {
         node.Expression = this.parseExpression();
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        return this.finishNode(node, 'ForInStatement');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
+    return this.finishNode(node, 'ForInStatement');
       }
       const isExactlyAsync = expression.type === 'IdentifierReference'
         && !expression.escaped
@@ -1058,6 +1091,7 @@ export abstract class StatementParser extends TypeParser {
         node.AssignmentExpression = this.parseAssignmentExpression();
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
         return this.finishNode(node, isAwait ? 'ForAwaitStatement' : 'ForOfStatement');
       }
 
@@ -1079,7 +1113,8 @@ export abstract class StatementParser extends TypeParser {
       this.expect(Token.RPAREN);
 
       node.Statement = this.parseStatement();
-      return this.finishNode(node, 'ForStatement');
+      this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+    return this.finishNode(node, 'ForStatement');
     });
   }
 

@@ -55,7 +55,7 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
 //  Block :
 //    `{` `}`
 //    `{` StatementList `}`
-export function* Evaluate_Block({ StatementList, Decorators }: ParseNode.Block) {
+export function* Evaluate_Block({ StatementList, Decorators, BlockKind }: ParseNode.Block & { BlockKind?: string }) {
   // proposal-runtime-types decorators.md "Order": "Block, `let`, and `const`
   // decorators are on the other timeline: they fire when the STATEMENT EXECUTES
   // rather than when a declaration is evaluated. A block decorator on a loop
@@ -72,7 +72,13 @@ export function* Evaluate_Block({ StatementList, Decorators }: ParseNode.Block) 
   // here. Macro AST is out of scope. The Expression is a placeholder." They are
   // absent rather than *undefined* so a reader meets the deferral.
   if (surroundingAgent.feature('runtime-types') && Decorators?.length) {
-    Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext('Block', Value.undefined))));
+    // The SUBKIND the parser recorded, if the block is a statement's body. All
+    // eight reported the bare `Block` because the node carried no record of the
+    // form that owns it - the design gives `IfBlock`, `ElseIfBlock`,
+    // `ElseBlock`, `WhileBlock`, `DoWhileBlock`, `ForBlock`, `ForInBlock` and
+    // `ForOfBlock` their own contexts, and a bare block keeps `Block`.
+    const blockKind = BlockKind ?? 'Block';
+    Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined))));
   }
   if (StatementList.length === 0) {
     // 1. Return NormalCompletion(empty).

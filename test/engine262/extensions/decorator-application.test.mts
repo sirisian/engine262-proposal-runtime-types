@@ -406,15 +406,26 @@ test('a block reflection carries its label and nothing more — DEFERRED, not miss
   // would look like a bug; a reader who meets this test meets the deferral.
   expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,label');
   expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } c.kind;')).toBe('Block');
-  // The nine contexts exist, ready for the day the grammar distinguishes the
-  // positions and an AST exists to fill them.
+  // THE NINE CONTEXTS ARE NOW DISTINGUISHED (phase five): the parser records
+  // the form that OWNS a block and the evaluator reads it back, so a bare block
+  // keeps `Block` and each statement's body reports its own. What stays
+  // deferred is only the AST-valued fields above.
+  const k = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${k} if (true) @f { let a = 1; } c.kind;`)).toBe('IfBlock');
+  expect(evaluated(`${k} if (false) { } else @f { let a = 1; } c.kind;`)).toBe('ElseBlock');
+  expect(evaluated(`${k} if (false) { } else if (true) @f { let a = 1; } c.kind;`)).toBe('ElseIfBlock');
+  expect(evaluated(`${k} let i = 0; while (i < 1) @f { i += 1; } c.kind;`)).toBe('WhileBlock');
+  expect(evaluated(`${k} let n = 0; do @f { n += 1; } while (n < 1); c.kind;`)).toBe('DoWhileBlock');
+  expect(evaluated(`${k} for (let i = 0; i < 1; i += 1) @f { let a = 1; } c.kind;`)).toBe('ForBlock');
+  expect(evaluated(`${k} for (const x of [1]) @f { let a = 1; } c.kind;`)).toBe('ForOfBlock');
+  expect(evaluated(`${k} for (const x in { a: 1 }) @f { let a = 1; } c.kind;`)).toBe('ForInBlock');
   expect(evaluated('[typeof Reflect.Block, typeof Reflect.IfBlock, typeof Reflect.ElseIfBlock, typeof Reflect.ElseBlock, '
     + 'typeof Reflect.WhileBlock, typeof Reflect.DoWhileBlock, typeof Reflect.ForBlock, typeof Reflect.ForInBlock, '
     + 'typeof Reflect.ForOfBlock].join(",");')).toBe('object,object,object,object,object,object,object,object,object');
   // KNOWN LIMIT: every position currently reports `Block` rather than its own
-  // kind, because the block node does not record which statement form contains
-  // it. Pinned so the narrowing is a task rather than a surprise.
-  expect(evaluated('let c; function f(x) { c = x; } if (true) @f { let a = 1; } c.kind;')).toBe('Block');
+  // kind, because the block node DOES now record which statement form contains
+  // it (phase five): the parser marks the body and the evaluator reads it back.
+  expect(evaluated('let c; function f(x) { c = x; } if (true) @f { let a = 1; } c.kind;')).toBe('IfBlock');
 });
 
 test('the enum family: enumerators before their enum', () => {
