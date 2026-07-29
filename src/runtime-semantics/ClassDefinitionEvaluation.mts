@@ -32,6 +32,7 @@ import {
 } from '../completion.mts';
 import { __ts_cast__, OutOfRange, type Mutable } from '../utils/language.mts';
 import type { Location, ParseNode } from '../parser/ParseNode.mts';
+import { DefinePropertyOrThrow } from '../abstract-ops/all.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import {
@@ -130,13 +131,40 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // operator by CONTEXT TYPE rather than by a `kind` string a decorator
           // has to test, so the position decides which context is built and
           // overload resolution does the rest.
-          Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassMemberDecoratorContext(
-            memberContextKind(node),
+          // A method, getter, or setter may be REPLACED by what its decorator
+          // returns (decorators.md's replacement table). The replacement is
+          // installed where the member was defined - MethodDefinitionEvaluation
+          // has already put it on the home object, so this redefines it.
+          const memberKind = memberContextKind(node);
+          const replacement = Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassMemberDecoratorContext(
+            memberKind,
             MemberKeyOf(node, method),
             (node as { static?: boolean }).static === true,
             currentClassName ?? Value.undefined,
             object as Value,
-          ))));
+          )), true));
+          if (replacement !== undefined) {
+            const memberKey = MemberKeyOf(node, method);
+            if (memberKey !== Value.undefined && !(memberKey instanceof PrivateName)) {
+              const existing = Q(yield* object.GetOwnProperty(memberKey as PropertyKeyValue));
+              const descriptor = memberKind === 'ClassGetter'
+                ? Descriptor({ Getter: replacement as never, Enumerable: Value.false, Configurable: Value.true })
+                : memberKind === 'ClassSetter'
+                  ? Descriptor({ Setter: replacement as never, Enumerable: Value.false, Configurable: Value.true })
+                  : Descriptor({ Value: replacement, Writable: Value.true, Enumerable: Value.false, Configurable: Value.true });
+              // A getter and a setter of one name share a property, so the half
+              // that was not replaced has to be carried across rather than
+              // dropped.
+              const priorPair = existing instanceof Descriptor ? existing as { Getter?: Value, Setter?: Value } : undefined;
+              if (memberKind === 'ClassGetter' && priorPair?.Setter) {
+                (descriptor as { Setter?: Value }).Setter = priorPair.Setter;
+              }
+              if (memberKind === 'ClassSetter' && priorPair?.Getter) {
+                (descriptor as { Getter?: Value }).Getter = priorPair.Getter;
+              }
+              Q(yield* DefinePropertyOrThrow(object, memberKey as PropertyKeyValue, descriptor));
+            }
+          }
         }
         return method;
       }
@@ -310,11 +338,29 @@ export function readFieldControls(decorators: readonly ParseNode.Decorator[] | n
  * is not a function call and has no expression to evaluate — which is also what
  * lets `@packed @audit a: uint8;` carry one of each.
  */
-export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined, context: Value): PlainEvaluator<void> {
+/**
+ * decorators.md "Replacement": "Decorators can optionally return a replacement
+ * for the decorated target. If a decorator returns `void` (or `undefined`), no
+ * replacement occurs. If it returns a value, that value replaces the original
+ * target."
+ *
+ * Returns the replacement, or *undefined* where none was offered - the CALLER
+ * installs it, because what "replace" means differs per position: redefining a
+ * property, rebinding a class, changing a field's initial value. A decorator
+ * that offers one feeds the next, so with `@a @b m` the replacement `b` returns
+ * is what `a` replaces in turn; the CONTEXT is unchanged throughout, which is
+ * what decorators.md means by both decorators seeing the same thing.
+ *
+ * The table is closed: sub-target and structural contexts "do not support
+ * return replacement", so their callers pass `replaceable` false and a returned
+ * value is discarded rather than silently applied somewhere.
+ */
+export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined, context: Value, replaceable = false): PlainEvaluator<Value | undefined> {
   const list = decorators ?? [];
   const applicable: ParseNode.Decorator[] = [];
   const evaluated: Value[] = [];
   const args: Value[][] = [];
+  let replacement: Value | undefined;
   // Phase one, document order.
   for (const d of list) {
     const control = reservedLayoutControl(d);
@@ -361,9 +407,12 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
     // the context takes its own default, and the candidate needing the fewest
     // defaults wins. CallDecorator carries that rule, because it has to see
     // each candidate signature BEFORE resolution rather than after.
-    Q(yield* CallDecorator(fn, args[i]!, context));
+    const returned = Q(yield* CallDecorator(fn, args[i]!, context));
+    if (replaceable && returned !== Value.undefined && !(returned instanceof UndefinedValue)) {
+      replacement = returned;
+    }
   }
-  return undefined;
+  return replacement;
 }
 
 /**

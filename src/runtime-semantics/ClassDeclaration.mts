@@ -10,7 +10,7 @@ import {
   ApplyDecorators, ClassDecoratorContext,
 } from './all.mts';
 import {
-  surroundingAgent, ResolveBinding, GetValue, IsConstructor, Throw,
+  surroundingAgent, ResolveBinding, GetValue, PutValue, IsConstructor, Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-bindingclassdeclarationevaluation */
@@ -81,11 +81,21 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
       ? Value((ClassDeclaration.BindingIdentifier as { name: string }).name)
       : Value.undefined;
     let ctor: Value = Value.undefined;
+    let binding;
     if (ClassDeclaration.BindingIdentifier) {
-      const ref = Q(yield* ResolveBinding(name as never));
-      ctor = Q(yield* GetValue(ref));
+      binding = Q(yield* ResolveBinding(name as never));
+      ctor = Q(yield* GetValue(binding));
     }
-    Q(yield* ApplyDecorators(ClassDeclaration.Decorators, Q(yield* ClassDecoratorContext(name, ctor))));
+    // decorators.md: a class decorator's return "replaces the class itself".
+    // BindingClassDeclarationEvaluation has already initialized the binding, so
+    // the replacement is WRITTEN BACK through it - assigning the local read
+    // above would replace nothing, since every later reference resolves the
+    // name again. An anonymous class expression has no binding to write to and
+    // so cannot be replaced this way; pinned rather than guessed at.
+    const replacement = Q(yield* ApplyDecorators(ClassDeclaration.Decorators, Q(yield* ClassDecoratorContext(name, ctor)), true));
+    if (replacement !== undefined && binding !== undefined) {
+      Q(yield* PutValue(binding, replacement));
+    }
     return NormalCompletion(undefined);
   } else if (ClassDeclaration.Decorators) {
     decorators = Q(yield* DecoratorListEvaluation(ClassDeclaration.Decorators));
