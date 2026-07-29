@@ -169,7 +169,16 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Class') {
         return MetadataObjectFor(constructor, base);
       }
-      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
+      // EVERY class-family MEMBER context reads the same per-declaration store,
+      // because a declaration is a field or a method or an accessor and never
+      // two of them: the context decides the metadata's TYPE, and the name
+      // decides which object. So `ClassMethod`, `ClassAccessor`, `ClassGetter`,
+      // `ClassSetter` and `ClassOperator` need no cases of their own.
+      const memberContext = contextRecord.Kind === 'nominal'
+        && typeof contextRecord.LibraryName === 'string'
+        && contextRecord.LibraryName.startsWith('Reflect.Class')
+        && contextRecord.LibraryName !== 'Reflect.Class';
+      if (memberContext) {
         const argList = Q(yield* ArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
         const name = Q(yield* ToString(nameValue));

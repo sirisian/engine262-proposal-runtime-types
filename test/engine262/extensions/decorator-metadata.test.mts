@@ -93,3 +93,55 @@ test('every class-family context carries metadata, and it READS BACK', () => {
   // The untyped call names no context and so names no metadata object.
   expect(evaluated('try { Reflect.getMetadata(); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
+
+test('the FUNCTION, OBJECT and ENUM families carry metadata too', () => {
+  // decorators.md gives `metadata` to every context of the Class, Function,
+  // Object and Enum families. The class family landed first; these three
+  // complete it.
+  const t = 'let t = "?"; function f(c) { t = typeof c.metadata; } ';
+  expect(evaluated(`${t} @f function g() {} t;`)).toBe('object');
+  expect(evaluated(`${t} const o = { @f a: 1 }; t;`)).toBe('object');
+  expect(evaluated(`${t} const o = { @f m() {} }; t;`)).toBe('object');
+  expect(evaluated(`${t} @f enum E { A } t;`)).toBe('object');
+  expect(evaluated(`${t} enum E { @f A } t;`)).toBe('object');
+});
+
+test('each declaration gets its OWN object, which is what keying is for', () => {
+  // Two members of one object literal do not share. "For objects the metadata
+  // is on the INSTANCE", so two objects of the same shape do not share either -
+  // the case a shape-keyed store would get wrong.
+  const write = 'const k = Symbol("k"); function w(c) { c.metadata[k] = "written"; } ';
+  const read = 'let seen = "?"; function r(c) { seen = String(c.metadata[k]); } ';
+  expect(evaluated(`${write}${read} const o = { @w a: 1, @r b: 2 }; seen;`)).toBe('undefined');
+  expect(evaluated(`${write}${read} const o1 = { @w a: 1 }; const o2 = { @r a: 1 }; seen;`)).toBe('undefined');
+  // An enum's own metadata is not its enumerator's.
+  expect(evaluated(`${write}${read} @w enum E { @r A } seen;`)).toBe('undefined');
+  // And a function's is its own.
+  expect(evaluated(`${write} let seen2 = "?"; function r2(c) { seen2 = String(c.metadata[k]); } `
+    + '@w function g() {} @r2 function h() {} seen2;')).toBe('undefined');
+});
+
+test('getMetadata serves every class-family MEMBER context', () => {
+  // A declaration is a field or a method or an accessor and never two of them,
+  // so every member context reads the same per-declaration store: the context
+  // decides the metadata's TYPE and the name decides which object. That is why
+  // these need no cases of their own.
+  const w = 'const k = Symbol("k"); function f(c) { c.metadata[k] = "v"; } ';
+  expect(evaluated(`${w} class A { @f m() {} } String(Reflect.getMetadata.<Reflect.ClassMethod, A>("m")[k]);`)).toBe('v');
+  expect(evaluated(`${w} class A { @f accessor v: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassAccessor, A>("v")[k]);`)).toBe('v');
+  expect(evaluated(`${w} class A { @f get v(): uint8 { return 1; } } String(Reflect.getMetadata.<Reflect.ClassGetter, A>("v")[k]);`)).toBe('v');
+  expect(evaluated(`${w} class A { @f set v(x: uint8) {} } String(Reflect.getMetadata.<Reflect.ClassSetter, A>("v")[k]);`)).toBe('v');
+  // A context that names no class declaration is refused rather than answered
+  // with an empty object.
+  expect(evaluated('try { eval("Reflect.getMetadata.<Reflect.Let, uint8>();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+});
+
+test('PINNED: getMetadata reaches the class family only', () => {
+  // The Function, Object and Enum families CARRY metadata and cannot be read
+  // back through `getMetadata` yet: its target type argument names a class, and
+  // a function or an object literal has no such type to name. decorators.md's
+  // signatures for those take an instance rather than a type, which is a
+  // different interception than the one the class family uses.
+  expect(evaluated('const k = Symbol("k"); let seen = "?"; function f(c) { c.metadata[k] = "fn"; seen = String(c.metadata[k]); } '
+    + '@f function g() {} seen;')).toBe('fn');
+});

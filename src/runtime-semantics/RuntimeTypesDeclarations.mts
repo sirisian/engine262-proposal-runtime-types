@@ -11,9 +11,11 @@ import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { JSStringValue as JSStringValueClass } from '../value.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
+import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
@@ -413,5 +415,9 @@ export function* EnumDecoratorContext(kind: string, name: Value, target: Value):
   StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('type'), target));
+  // The enum's own metadata under the empty member, an enumerator's under its
+  // name - so `@f enum E { @g A }` gives two objects rather than one shared.
+  const memberName = kind === 'Enum' ? '' : (name instanceof JSStringValueClass ? name.stringValue() : kind);
+  X(CreateDataProperty(context, Value('metadata'), MetadataObjectFor(target, undefined, memberName)));
   return context;
 }

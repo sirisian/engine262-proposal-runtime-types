@@ -5,6 +5,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyDecorators, ApplySubTargetDecorators, HasSubTargetDecorators } from './ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { CreateDataProperty, GetValue, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-evaluation */
@@ -53,5 +54,9 @@ export function* FunctionDecoratorContext(name: Value, fn: Value): ValueEvaluato
   StampReflectionContext(context, 'Function');
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('type'), fn));
+  // A function has no base declaration, so its metadata inherits nothing - the
+  // prototype chain that carries a class member's is a CLASS structure, and
+  // decorators.md's inheritance rule is written about one.
+  X(CreateDataProperty(context, Value('metadata'), MetadataObjectFor(fn, undefined)));
   return context;
 }

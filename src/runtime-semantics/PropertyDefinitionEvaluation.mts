@@ -20,6 +20,7 @@ import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
 import { ApplyDecorators, ApplySubTargetDecorators } from './ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   Assert,
@@ -109,6 +110,11 @@ export function* ObjectMemberDecoratorContext(kind: string, name: Value, target:
   // "For objects the metadata is on the INSTANCE", so an object member's
   // context points at the object rather than at a constructor.
   X(CreateDataProperty(context, Value('objectContext'), target));
+  // Keyed by the OBJECT and the member: "for objects the metadata is on the
+  // instance", so two objects of the same shape have separate metadata and two
+  // members of one object have separate metadata from each other.
+  const memberName = name instanceof JSStringValue ? name.stringValue() : undefined;
+  X(CreateDataProperty(context, Value('metadata'), MetadataObjectFor(target, undefined, memberName ?? kind)));
   return context;
 }
 
