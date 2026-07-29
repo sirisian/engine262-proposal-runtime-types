@@ -1491,6 +1491,17 @@ export abstract class ExpressionParser extends FunctionParser {
 
   parseClassElement(): ParseNode.ClassElement {
     let element;
+    // proposal-runtime-types decorators.md: `Reflect.ClassOperator` is a
+    // decorator context, and `@f operator +` had no grammar - the operator
+    // branch below is chosen BEFORE `parseBracketedDefinition` reads a
+    // decorator list, so a decorated operator reached the bracketed path and
+    // was a SyntaxError. The list is read here instead, ahead of the dispatch,
+    // and attached to whichever element follows; the bracketed path then reads
+    // an empty one. This is also what admits `@f static m() {}`, since the
+    // list precedes `static` as well.
+    const leadingDecorators = surroundingAgent.feature('runtime-types') && this.test(Token.AT)
+      ? this.parseDecorators()
+      : null;
     if (this.test('static') && this.testAhead(Token.LBRACE)) {
       const node = this.startNode<ParseNode.ClassStaticBlock>();
       this.expect('static');
@@ -1519,6 +1530,16 @@ export abstract class ExpressionParser extends FunctionParser {
       element = this.parseAbstractMethodDefinition();
     } else {
       element = this.parseBracketedDefinition('class element');
+    }
+    if (leadingDecorators && leadingDecorators.length > 0) {
+      // A STATIC BLOCK is not in the context table and takes no decorator.
+      // Reading the list before the dispatch made `@f static { }` parse, where
+      // it had been a SyntaxError - so the refusal is restored here rather than
+      // falling out of the parse by accident.
+      if (element.type === 'ClassStaticBlock') {
+        this.addEarlyError(Throw.SyntaxError('A class static block takes no decorator'), element);
+      }
+      (element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = leadingDecorators;
     }
     return element;
   }

@@ -917,12 +917,24 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // at the Agent.
         if (surroundingAgent.feature('runtime-types')) {
           const isOperator = e.type === 'OperatorDefinition';
-          Q(yield* ApplySubTargetDecorators(
-            e,
-            isOperator ? 'ClassOperator' : 'ClassMethod',
-            isOperator ? Value(operatorTableKey(e)) : MemberKeyOf(e, undefined),
-            (e.static ? F : proto) as Value,
-          ));
+          const ownerKind = isOperator ? 'ClassOperator' : 'ClassMethod';
+          const ownerName = isOperator ? Value(operatorTableKey(e)) : MemberKeyOf(e, undefined);
+          const home = (e.static ? F : proto) as Value;
+          Q(yield* ApplySubTargetDecorators(e, ownerKind, ownerName, home));
+          // The operator's OWN decorator, which had no grammar until the
+          // parser admitted it. Its replacement is the eleventh row of
+          // decorators.md's table - "the operator function" - and it is
+          // installed by RE-REGISTERING the operator, since an operator lives
+          // in the class operator table rather than as a property.
+          const ownDecorators = (e as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+          if (ownDecorators?.length) {
+            const replacement = Q(yield* ApplyDecorators(ownDecorators, Q(yield* ClassMemberDecoratorContext(
+              ownerKind, ownerName, e.static === true, currentClassName ?? Value.undefined, home,
+            )), true));
+            if (replacement !== undefined && isOperator) {
+              RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), replacement as never);
+            }
+          }
         }
         continue;
       }

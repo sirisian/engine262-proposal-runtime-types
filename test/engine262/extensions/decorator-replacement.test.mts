@@ -120,10 +120,14 @@ test('the FUNCTION and OBJECT rows', () => {
   expect(evaluated('function rep(c) { return 99; } const o = { @rep a: 1 }; String(o.a);')).toBe('1');
 });
 
-test('PINNED: the one row that remains', () => {
-  // `Reflect.ClassOperator`. Unreachable rather than unimplemented: `@f
-  // operator +` is a SyntaxError, so there is no decoration to return from.
-  // PLAN-decorators-remaining.md §5 has the grammar; this row lands with it.
-  expect(evaluated('function rep(c) { return function(r) { return r; }; } '
-    + 'try { eval("class O { @rep operator +(r: O): O { return r; } }"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('SyntaxError');
+test('the ELEVENTH row: an operator is replaced by re-registration', () => {
+  // Unreachable until phase five opened `@f operator +`. An operator lives in
+  // the class operator table rather than as a property, so its replacement is
+  // installed by registering the returned function in place of the declared
+  // one - and `2 + 3` answering 99 is only reachable through that table.
+  expect(evaluated('function rep(c) { return function(r) { return new O(99); }; } '
+    + 'class O { constructor(v) { this.v = v; } @rep operator +(r: O): O { return new O(1); } } '
+    + 'String((new O(2) + new O(3)).v);')).toBe('99');
+  expect(evaluated('function nop(c) {} class O { constructor(v) { this.v = v; } '
+    + '@nop operator +(r: O): O { return new O(this.v + r.v); } } String((new O(2) + new O(3)).v);')).toBe('5');
 });

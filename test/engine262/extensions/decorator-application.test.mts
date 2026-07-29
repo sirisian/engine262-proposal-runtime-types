@@ -154,16 +154,27 @@ test('each member position takes its own context', () => {
   expect(evaluated(`${mixed} log.join(",");`)).toBe('f(ClassField),m(ClassMethod),g(ClassGetter),C(Class)');
 });
 
-test('a decorated operator has a context but no grammar', () => {
-  // `Reflect.ClassOperator` exists and `memberContextKind` selects it, but the
-  // GRAMMAR admits no decorator before `operator`: `@f operator +(rhs: T): T`
-  // is a SyntaxError while the same operator without a decorator parses.
-  //
-  // Pinned as a gap rather than left to be discovered. The context is built and
-  // reachable the moment the grammar admits the position, so this is a parser
-  // change and not a semantics one.
-  expect(evaluated('class Op { operator +(rhs: Op): Op { return this; } } "parses";')).toBe('parses');
-  expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
+test('an operator takes its OWN decorator, which had no grammar', () => {
+  // `Reflect.ClassOperator` existed and `memberContextKind` selected it, and
+  // `@f operator +` was a SyntaxError - the class element parser chose the
+  // operator branch BEFORE a decorator list was read, so a decorated operator
+  // reached the bracketed path instead. The list is read ahead of the dispatch
+  // now.
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } '
+    + 'class O { @f operator +(rhs: O): O { return rhs; } } k;')).toBe('ClassOperator/+');
+  expect(evaluated('let k = "NO"; function f(c) { k = String(c.static); } '
+    + 'class O { @f static operator +(rhs: O): O { return rhs; } } k;')).toBe('true');
+  // THE DISCRIMINATING ASSERTION, as ever for an operator: the registration
+  // that shares this interception still works, and `2 + 3` giving 5 is only
+  // reachable through the declared operator.
+  expect(evaluated('function f(c) {} class O { constructor(v) { this.v = v; } '
+    + '@f operator +(r: O): O { return new O(this.v + r.v); } } String((new O(2) + new O(3)).v);')).toBe('5');
+  // And the ELEVENTH replacement row, which was unreachable until now: an
+  // operator's replacement is re-REGISTERED, since an operator lives in the
+  // class operator table rather than as a property.
+  expect(evaluated('function rep(c) { return function(r) { return new O(99); }; } '
+    + 'class O { constructor(v) { this.v = v; } @rep operator +(r: O): O { return new O(1); } } '
+    + 'String((new O(2) + new O(3)).v);')).toBe('99');
 });
 
 test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is not', () => {
@@ -205,7 +216,12 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
   // The operator's OWN decorator is still a SyntaxError, so this stage opened
   // the sub-targets and nothing else. Stated here rather than assumed, for the
   // same reason stage A asserted what it did not open.
-  expectThrown('function f(c) {} class Op { @f operator +(rhs: Op): Op { return this; } }');
+  // The operator's own decorator now has a grammar too (phase five), so what
+  // this asserts is that the two are INDEPENDENT: the sub-targets fire whether
+  // or not the operator itself is decorated, which is the rule a shared `if`
+  // has broken three times.
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } '
+    + 'class Op { operator +(@f rhs: Op): Op { return this; } } k;')).toBe('ClassOperatorParameter');
 });
 
 test('an ABSTRACT method\'s parameters and return are decorated too', () => {

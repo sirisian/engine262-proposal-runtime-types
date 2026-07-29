@@ -202,6 +202,7 @@ export interface Throw {
   | 'A class cannot have static and instance private methods with the same name'
   | 'A class element cannot be named as "constructor"'
   | 'A class element cannot be named as "prototype" or "constructor"'
+  | 'A class static block takes no decorator'
   | 'A class static field cannot be named as "constructor"'
   | 'A partial class requires a name'
   | 'AbstractModuleSource cannot be constructed'
