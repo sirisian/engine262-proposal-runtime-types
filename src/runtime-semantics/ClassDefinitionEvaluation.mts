@@ -361,6 +361,27 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
   const evaluated: Value[] = [];
   const args: Value[][] = [];
   let replacement: Value | undefined;
+  // decorators.md's `addInitializer` table, which is a CLOSED list rather than
+  // a property of the position: `Reflect.Function` has replacement and no
+  // addInitializer, and `Reflect.ObjectField` has neither though
+  // `Reflect.ClassField` has both. Read off the context's own `kind` so the
+  // list lives in ONE place and cannot drift from the call sites - the failure
+  // the sub-target table's default arm produced twice.
+  const initializers: Value[] = [];
+  const contextKind = context instanceof ObjectValue
+    ? Q(yield* Get(context, Value('kind')))
+    : Value.undefined;
+  const initializable = contextKind instanceof JSStringValue && INITIALIZABLE_CONTEXTS.includes(contextKind.stringValue());
+  if (initializable && context instanceof ObjectValue) {
+    const addInitializer = CreateBuiltinFunction(function* addInitializerSteps([initializer = Value.undefined]: Arguments): ValueEvaluator {
+      if (!IsCallable(initializer)) {
+        return Throw.TypeError('$1 is not a function', initializer);
+      }
+      initializers.push(initializer);
+      return Value.undefined;
+    } as never, 1, Value('addInitializer'), []);
+    X(CreateDataProperty(context, Value('addInitializer'), addInitializer));
+  }
   // Phase one, document order.
   for (const d of list) {
     const control = reservedLayoutControl(d);
@@ -412,8 +433,29 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       replacement = returned;
     }
   }
+  // decorators.md "Order", rule 4: "`addInitializer` callbacks run AFTER EVERY
+  // DECORATOR of that declaration has been applied, in the order they were
+  // added." So they run here rather than as each decorator returns - which is
+  // what lets one decorator's initializer observe what a later-applied
+  // decorator did, including its replacement - and in ADD order, not the
+  // reverse order the decorators themselves ran in.
+  for (const initializer of initializers) {
+    Q(yield* Call(initializer, Value.undefined, []));
+  }
   return replacement;
 }
+
+/**
+ * The contexts decorators.md gives an `addInitializer`: "declaration sites where
+ * initialization logic can be injected". A closed list, and not derivable from
+ * the position - `Reflect.Function` has return replacement and no
+ * addInitializer, while `Reflect.ObjectField` has neither though
+ * `Reflect.ClassField` has both.
+ */
+const INITIALIZABLE_CONTEXTS: readonly string[] = [
+  'Class', 'ClassField', 'ClassAccessor', 'ClassGetter', 'ClassSetter',
+  'ClassMethod', 'ClassOperator', 'ObjectMethod', 'ObjectGetter', 'ObjectSetter',
+];
 
 /**
  * Under `runtime-types` the ONLY decorators this engine implements are the
