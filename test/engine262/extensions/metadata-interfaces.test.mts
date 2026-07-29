@@ -102,10 +102,11 @@ test('PINNED GAPS for stage H, the metadata half', () => {
   // member: its presence is required, and a second declaration of it is the
   // conflict a string-keyed one is. symbol-metadata-keys.test.mts owns those.
   //
-  // What is still open is the TYPE judgment, which reads string keys only - so
-  // a store through the symbol is unchecked where a store through a string is
-  // refused. Asserted as the pair, because the string case is what says the
-  // difference is the KEY and not the rule.
+  // What is still open is the STATIC CHECKER, which cannot judge a symbol-keyed
+  // member - not the structural walk, which reads symbol keys correctly. And
+  // the checker's reach is the real boundary for EITHER kind of key: a wrong
+  // store it cannot see is accepted with a string key too. See
+  // symbol-metadata-keys.test.mts.
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
   expect(evaluated(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; try { m[k] = 5; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('ACCEPTED');

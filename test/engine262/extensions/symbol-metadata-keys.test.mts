@@ -50,13 +50,42 @@ test('a user interface gets the same treatment, not just the intrinsics', () => 
   expect(evaluated('const k = Symbol("k"); interface I { [k]: string; } let m: I = { [k]: "ok" }; m[k];')).toBe('ok');
 });
 
-test('PINNED: the TYPE judgment still reads string keys only', () => {
-  // The half that remains. A store through a symbol key is unchecked where a
-  // store through a string key is refused, and the pair is asserted together
-  // because the string case is what says the difference is the KEY rather than
-  // the rule. Same for a wrong type supplied at construction.
-  const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
-  expect(evaluated(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; try { m[k] = 5; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('ACCEPTED');
-  expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('TypeError');
-  expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: 5 };`)).toBe('ACCEPTED');
+test('MEMBERSHIP handles symbol keys; the STATIC CHECKER is what does not', () => {
+  // Cycle 148 recorded this as "the structural walk reads string keys only".
+  // That was wrong, and the correction matters for what closing it takes: the
+  // run-time membership judgment reads symbol keys CORRECTLY - it builds a
+  // property key from the record's key, string or symbol - and `is` answers
+  // both directions for both kinds.
+  const S = 'const k = Symbol("k"); interface I { [k]: string; } ';
+  expect(evaluated(`${S} String({ [k]: "ok" } is I);`)).toBe('true');
+  expect(evaluated(`${S} String({ [k]: 5 } is I);`)).toBe('false');
+  expect(evaluated('interface J { s: string; } String({ s: 5 } is J);')).toBe('false');
+});
+
+test('PINNED: interface member types are enforced STATICALLY, and only so', () => {
+  // The refusals this suite reads as "enforcement" are the CHECKER's, and they
+  // stop where the checker's view stops - for STRING keys just as much as
+  // symbol ones. Through a function parameter, or from a value the checker
+  // types as `any`, a wrong store is accepted with either kind of key.
+  //
+  // So the symbol gap is not "the runtime checks strings and not symbols". It
+  // is that the CHECKER cannot judge a symbol-keyed member at all, and that is
+  // a design question rather than a missing branch: a symbol's IDENTITY is not
+  // statically knowable. Matching by the binding a computed key names would be
+  // the tractable rule, and matching by DESCRIPTION would repeat exactly the
+  // collision the symbol key exists to prevent - which is why this is left for
+  // a decision rather than guessed at here.
+  const T = 'interface J { s: string; } ';
+  const S = 'const k = Symbol("k"); interface I { [k]: string; } ';
+  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  // What the checker sees, it refuses - for a string key.
+  expect(outcome2(`${T} let m: J = { s: "ok" }; m.s = 5;`)).toBe('TypeError');
+  expect(outcome2(`${T} let m: J = { s: 5 };`)).toBe('TypeError');
+  // What it does not see, it does not - ALSO for a string key. This is the
+  // assertion that says the gap is the checker's reach and not the key.
+  expect(outcome2(`${T} function f(o) { o.s = 5; } let m: J = { s: "ok" }; f(m);`)).toBe('ACCEPTED');
+  expect(outcome2(`${T} function g(v) { let m: J = v; return m; } g({ s: 5 });`)).toBe('ACCEPTED');
+  // And a symbol key is unjudged in the positions a string key IS judged.
+  expect(outcome2(`${S} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('ACCEPTED');
+  expect(outcome2(`${S} let m: I = { [k]: 5 };`)).toBe('ACCEPTED');
 });
