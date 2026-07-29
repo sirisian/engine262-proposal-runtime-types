@@ -1,4 +1,4 @@
-import { NumberValue, ObjectValue, Value } from '../value.mts';
+import { NumberValue, ObjectValue, SymbolValue, Value } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -11,6 +11,7 @@ import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+ import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
@@ -109,14 +110,37 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // a later milestone.
     // The interface's structure is a real ~object~ record now; membership
     // rides the structural IsOfType case, while identity stays nominal.
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+    const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
     for (const member of node.InterfaceMemberList) {
       if (member.type !== 'TypeMember') {
         continue;
       }
-      const m = member as unknown as { PropertyName?: { name?: string, value?: string }, Readonly?: boolean, Optional?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null, MethodSignature?: unknown };
-      const key = m.PropertyName?.name ?? m.PropertyName?.value;
-      if (typeof key !== 'string') {
+      const m = member as unknown as { PropertyName?: ParseNode & { name?: string, value?: string }, Readonly?: boolean, Optional?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null, MethodSignature?: unknown };
+      // A SYMBOL-KEYED member is written `[k]: T`, a COMPUTED property name -
+      // an index signature needs an identifier and a `:` inside the brackets,
+      // so the two forms do not collide. Its key has to be EVALUATED, and this
+      // walk had taken only a literal name and dropped everything else: a
+      // Property Type Record's [[Key]] is "a property key", which is a String
+      // or a Symbol, and the record has held both since it was widened - only
+      // this walk never produced one.
+      //
+      // That is what blocked the metadata half of the decorators extension.
+      // decorators.md adds metadata through `partial interface ClassMetadata {
+      // [myMetadata]: string }`, and a symbol key is the collision escape hatch
+      // the design gives third-party libraries; the member merged and then
+      // vanished, so nothing was ever enforced against it.
+      let key: string | SymbolValue | undefined = m.PropertyName?.name ?? m.PropertyName?.value;
+      if (typeof key !== 'string' && m.PropertyName) {
+        const evaluated = EnsureCompletion(yield* Evaluate_PropertyName(m.PropertyName as never));
+        if (evaluated.Type !== 'normal') {
+          return evaluated;
+        }
+        const evaluatedKey = evaluated.Value;
+        key = evaluatedKey instanceof SymbolValue
+          ? evaluatedKey
+          : (evaluatedKey as { stringValue?: () => string }).stringValue?.();
+      }
+      if (key === undefined) {
         continue;
       }
       let resolved: TypeRecord = { Kind: 'any' };
@@ -147,7 +171,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       if (!isTypeObject(existing)) {
         return Throw.TypeError('$1 is not an interface', name);
       }
-      const priorRecord = existing.TypeRecord as TypeRecord & { Structure?: { Properties?: readonly { key: string }[] } };
+      const priorRecord = existing.TypeRecord as TypeRecord & { Structure?: { Properties?: readonly { key: string | SymbolValue }[] } };
       const prior = priorRecord.Structure?.Properties ?? [];
       const seen = new Set(prior.map((pp) => pp.key));
       for (const added of Properties) {
@@ -155,7 +179,11 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
           // Two declarations of one member is a conflict rather than a merge:
           // silently taking the later would make the meaning of an interface
           // depend on load order.
-          return Throw.TypeError('$1 is already declared on this interface', Value(added.key));
+          // A symbol key has no string spelling, so it is named by its
+          // description in the message rather than rendered as one.
+          return Throw.TypeError('$1 is already declared on this interface', typeof added.key === 'string'
+            ? Value(added.key)
+            : (added.key as SymbolValue));
         }
       }
       // The added members COMPLETE the existing record in place rather than

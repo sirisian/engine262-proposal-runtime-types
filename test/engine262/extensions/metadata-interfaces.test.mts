@@ -97,14 +97,19 @@ test('the names bind as the primitive type names do', () => {
 });
 
 test('PINNED GAPS for stage H, the metadata half', () => {
-  // 1. A Symbol-keyed member on a partial interface DECLARES and is NOT
-  // enforced: the store of the wrong type is accepted where the declaration
-  // says `[k]: string`. #sec-decorator-metadata's channel is "typed and
-  // Symbol-keyed" members, so this is the half stage H's metadata work closes;
-  // today the interface member walk carries string keys only, and a computed
-  // key is dropped before the record sees it. The declaration half is real
-  // (the partial parses and merges), which is why the pin asserts the STORE.
-  expect(evaluated('const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } let m: ClassFieldMetadata = {}; m[k] = 5; typeof m[k];')).toBe('number');
+  // 1. HALF CLOSED (cycle 148). The interface member walk now EVALUATES a
+  // computed key instead of dropping it, so a Symbol-keyed member is a REAL
+  // member: its presence is required, and a second declaration of it is the
+  // conflict a string-keyed one is. symbol-metadata-keys.test.mts owns those.
+  //
+  // What is still open is the TYPE judgment, which reads string keys only - so
+  // a store through the symbol is unchecked where a store through a string is
+  // refused. Asserted as the pair, because the string case is what says the
+  // difference is the KEY and not the rule.
+  const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
+  expect(evaluated(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; try { m[k] = 5; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('ACCEPTED');
+  expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('TypeError');
   // 2. The static checker does not know the intrinsic names: the same wrong
   // kind a user interface rejects in a never-called function (F37's
   // convention) passes here, and only the runtime boundary refuses. That is
