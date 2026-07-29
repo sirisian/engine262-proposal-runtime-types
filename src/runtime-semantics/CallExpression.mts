@@ -12,8 +12,10 @@ import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
+import { X } from '../completion.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
+import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
   surroundingAgent,
@@ -145,6 +147,29 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Type') {
         const subject = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         return Q(TypeStructureReflection(subject, surroundingAgent.currentRealmRecord));
+      }
+      // decorators.md's `ClassReflection`: `name`, `type`, `abstract`,
+      // `metadata`. The whole-class read every other class-family read hangs
+      // off, and the first of the thirty-nine contexts that answered nothing.
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Class') {
+        const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const constructor = (classRecord as { Constructor?: Value }).Constructor;
+        if (constructor === undefined) {
+          return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getReflection'));
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        X(CreateDataProperty(reflection, Value('kind'), Value('Class')));
+        X(CreateDataProperty(reflection, Value('name'), Q(yield* Get(constructor as ObjectValueClass, Value('name')))));
+        X(CreateDataProperty(reflection, Value('type'), constructor));
+        // `abstract` is read from the constructor rather than re-derived: an
+        // abstract class is refused at `new`, and the flag that does the
+        // refusing is the same fact this reports.
+        X(CreateDataProperty(reflection, Value('abstract'),
+          (constructor as { IsAbstract?: boolean }).IsAbstract === true ? Value.true : Value.false));
+        const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
+        X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base)));
+        return reflection;
       }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
