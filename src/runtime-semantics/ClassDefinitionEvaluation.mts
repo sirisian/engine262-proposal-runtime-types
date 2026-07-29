@@ -200,10 +200,13 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // accessor's record carries its BACKING Private Name (stage B), and
           // the context must name what was declared, not the storage.
           const isAccessor = (node as { accessor?: boolean }).accessor === true;
+          const accessorPair = (plain as { AccessorPair?: { Getter: Value, Setter: Value } }).AccessorPair;
           const key = isAccessor
             ? (Q(yield* Evaluate_PropertyName((node as ParseNode.FieldDefinition).ClassElementName)) as Value)
             : (plain as { Name?: Value }).Name;
-          Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor ? ClassAccessorDecoratorContext : ClassFieldDecoratorContext)(
+          Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor
+            ? (k: Value, n: ParseNode, cn: Value, cc: Value) => ClassAccessorDecoratorContext(k, n, cn, cc, accessorPair)
+            : ClassFieldDecoratorContext)(
             key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value,
           ))));
         }
@@ -1052,10 +1055,16 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // compares the key against a string, so a Private Name occupies its slot
         // and answers no lookup - and two `#x` in a base and a derived class stay
         // distinct, which a description would have collided.
+        // An accessor reports its DECLARED name rather than its backing Private
+        // Name, so its slot is nameable in a layout walk exactly as a field's
+        // is. A genuine `#x` keeps its Private Name and stays invisible - the
+        // two are different cases and only one of them was ever written to be
+        // reached by name.
+        const layoutKey = (field as { LayoutName?: Value }).LayoutName ?? name;
         laidOut.push({
-          key: typeof (name as { stringValue?: unknown })?.stringValue === 'function'
-            ? (name as { stringValue(): string }).stringValue()
-            : (name as PrivateName),
+          key: typeof (layoutKey as { stringValue?: unknown })?.stringValue === 'function'
+            ? (layoutKey as { stringValue(): string }).stringValue()
+            : (layoutKey as PrivateName),
           type: typeObject.TypeRecord,
           controls: (field as { LayoutControls?: FieldControls }).LayoutControls,
         });
@@ -1451,7 +1460,7 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  * implementation would naturally have produced the pair, which is why the count
  * is asserted and not just the kind.
  */
-export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value): ValueEvaluator {
+export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value, pair?: { Getter: Value, Setter: Value }): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   const decl = node as ParseNode.FieldDefinition;
@@ -1462,6 +1471,15 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
+  // `access`: the pair this accessor generated, so a decorator that REPLACES
+  // the accessor can delegate to the storage the layout already allotted rather
+  // than closing over storage of its own and leaving the slot dead.
+  if (pair) {
+    const access = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+    X(CreateDataProperty(access, Value('get'), pair.Getter));
+    X(CreateDataProperty(access, Value('set'), pair.Setter));
+    X(CreateDataProperty(context, Value('access'), access));
+  }
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
 }

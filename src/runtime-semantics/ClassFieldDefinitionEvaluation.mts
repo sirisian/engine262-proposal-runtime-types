@@ -29,6 +29,15 @@ export interface ClassFieldDefinitionRecord {
    * an `any`-typed reference, the erasure other languages apply to it".
    */
   readonly Access?: 'protected' | undefined;
+  /**
+   * proposal-runtime-types: the name a laid-out slot is reported under, where
+   * that differs from [[Name]]. Only an `accessor` sets it - its [[Name]] is
+   * the unnameable Private Name that backs the pair, and the layout reports the
+   * accessor's own name instead.
+   */
+  readonly LayoutName?: PropertyKeyValue | undefined;
+  /** proposal-runtime-types: an `accessor`'s generated get/set pair. */
+  readonly AccessorPair?: { Getter: Value, Setter: Value } | undefined;
   readonly Initializer: ECMAScriptFunctionObject | undefined;
   // proposal-runtime-types: the field's type annotation, if any, so a field
   // declared without an initializer can take its type's default (spec
@@ -148,6 +157,23 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     })));
     return ClassFieldDefinitionRecord({
       Name: backing,
+      // The name the LAYOUT reports for this slot. An accessor's backing is an
+      // unnameable Private Name, and a slot no program can name leaves a hole
+      // in a layout walk - a serializer sees bytes it cannot label. README
+      // settles that an accessor "participates in the memory layout exactly as
+      // a field does", so it is reflected as one, under the name that was
+      // actually written. This is deliberately NOT C#'s answer: a generated
+      // `<a>k__BackingField` leaks a compiler artifact into every reflective
+      // enumeration, and every tool then has to filter it back out.
+      LayoutName: name,
+      // decorators.md's replacement for `Reflect.ClassAccessor` is a
+      // `{ get, set }` pair, and a replacement that cannot reach the ORIGINAL
+      // storage has to invent its own - orphaning the layout slot the backing
+      // occupies. Carrying the pair here lets the context expose `access`, so a
+      // replacement delegates to the slot instead of abandoning it. Same
+      // reasoning as TC39's `context.access`, and the reason the slot can stay
+      // unconditional: layout must not depend on whether a decorator ran.
+      AccessorPair: { Getter: get, Setter: set },
       Initializer: initializer,
       TypeAnnotation: typeAnnotation,
       TypeObject: typeObject,
