@@ -87,7 +87,7 @@ test('PINNED: what stage E does not do', () => {
   // one.
   const grab = 'let c; function f(x) { c = x; } ';
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.initial);`)).toBe('undefined');
-  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.metadata);`)).toBe('undefined');
+  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } typeof c.metadata;`)).toBe('object');
   expect(evaluated(`${grab} class A { @f a: uint32 = 5; } String(c.initial);`)).toBe('undefined');
   // The `protected` ACCESS RULE is not enforced: README makes it "an access rule
   // checked where the static type is known", and nothing checks it yet. The

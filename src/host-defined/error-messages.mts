@@ -561,6 +561,7 @@ export interface Throw {
   | '$1 is too small'
   | '$1 needs an element type, as in `new SoA.<T, N>()`'
   | '$1 of a negative value is not defined'
+  | '$1 requires a reflection context as a type argument'
   | '$1 requires an argument'
   | '$1 requires an argument of a sized integer type'
   | '$1 requires new'

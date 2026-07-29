@@ -3,6 +3,7 @@ import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
@@ -11,7 +12,9 @@ import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
+import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
+import { Throw as ThrowError } from '#self';
 import {
   surroundingAgent,
   GetValue,
@@ -53,7 +56,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       return Q(yield* TypedJSONParse(text, typeRecord));
     }
   }
-  // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` — "Empty, capacity
+  // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` ï¿½ "Empty, capacity
   // >= n". Its element type is a TYPE argument rather than inferred, because
   // there is no value to infer it from, so the call is intercepted where the
   // type arguments are in scope.
@@ -150,6 +153,29 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         const name = Q(yield* ToString(nameValue));
         return Q(ClassFieldReflection(classRecord, name.stringValue(), surroundingAgent.currentRealmRecord));
       }
+    }
+    // decorators.md: `Reflect.getMetadata.<`Context`, `T`>()` reads back what a
+    // decorator wrote. THE SAME OBJECT, not a copy - metadata is a channel, and
+    // a reader handed a copy would not see what a later decorator added.
+    const getMetadata = Q(yield* Get(reflectObj, Value('getMetadata')));
+    if (SameValue(func, getMetadata)) {
+      const contextRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const targetRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+      const constructor = (targetRecord as { Constructor?: Value }).Constructor;
+      if (constructor === undefined) {
+        return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getMetadata'));
+      }
+      const base: Value = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Class') {
+        return MetadataObjectFor(constructor, base);
+      }
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
+        const name = Q(yield* ToString(nameValue));
+        return MetadataObjectFor(constructor, base, name.stringValue());
+      }
+      return ThrowError.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getMetadata'));
     }
   }
   // proposal-runtime-types (random.md): the no-argument typed form

@@ -101,7 +101,7 @@ test('the class family: contexts exist and carry their declaration', () => {
 
   // The widened ClassField carries the declaration, not only the layout.
   const field = 'let c; function f(x) { c = x; } class A { @f static s: uint8; } ';
-  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,classContext,addInitializer');
+  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,metadata,classContext,addInitializer');
   expect(evaluated(`${field} String(c.static) + "/" + String(c.private) + "/" + String(c.type === uint8);`)).toBe('true/false/true');
   expect(evaluated('let c; function f(x) { c = x; } class B { @f #p: uint8; } String(c.private);')).toBe('true');
 
@@ -144,7 +144,7 @@ test('each member position takes its own context', () => {
   expect(evaluated('let c; function grab(x) { c = x; } class A { @grab static m() {} } String(c.static);')).toBe('true');
   // A method's context carries the same `classContext` a field's does.
   expect(evaluated('let c; function grab(x) { c = x; } class Named { @grab m() {} } c.classContext.kind + "/" + String(c.classContext.name);')).toBe('Class/Named');
-  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab m() {} } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,name,static,private,abstract,classContext,addInitializer');
+  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab m() {} } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,name,static,private,abstract,classContext,metadata,addInitializer');
 
   // MIXED members fire in document order and the class still comes last, which
   // is the composition the ordering rule promises across kinds rather than

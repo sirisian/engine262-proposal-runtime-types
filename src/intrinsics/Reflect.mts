@@ -553,6 +553,18 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
   return node;
 }
 
+/**
+ * proposal-runtime-types decorators.md: `Reflect.getMetadata.<`_Context_`, `_T_`>()`
+ * reads back the metadata object a decorator wrote to. The CONTEXT and the
+ * target ride on the callee as type arguments, so every real call is
+ * intercepted at the call expression - reaching this body means no type
+ * arguments were written, which cannot name a context and so cannot name a
+ * metadata object.
+ */
+function Reflect_getMetadata() {
+  return Throw.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getMetadata'));
+}
+
 function Reflect_getReflection([type = Value.undefined]: Arguments) {
   // proposal-runtime-types #sec-getreflection (the Reflect.Type context).
   if (!isTypeObject(type)) {
@@ -597,6 +609,7 @@ export function bootstrapReflect(realmRec: Realm) {
     ...(surroundingAgent.feature('runtime-types') ? [
       ['typeOf', Reflect_typeOf, 1] as [string, typeof Reflect_typeOf, number],
       ['getReflection', Reflect_getReflection, 1] as [string, typeof Reflect_getReflection, number],
+      ['getMetadata', Reflect_getMetadata, 1] as [string, typeof Reflect_getMetadata, number],
       ['makeType', Reflect_makeType, 1] as [string, typeof Reflect_makeType, number],
       ['isAssignable', Reflect_isAssignable, 2] as [string, typeof Reflect_isAssignable, number],
     ] : []),

@@ -1461,6 +1461,7 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   X(CreateDataProperty(context, Value('static'), decl.static === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
 }
@@ -1495,6 +1496,7 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
   // "classContext: Reflect.Class.<TClass>" - a field's context carries its
   // class's, which is what lets one decorator reach the declaration it belongs
   // to without the class having to pass itself.
+  X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
 }
@@ -1520,18 +1522,63 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
  * One object per declaration, kept so that a later read finds what a decorator
  * wrote - the object a decorator receives IS the one that persists, not a copy.
  */
-const classMetadata = new WeakMap<Value, ObjectValue>();
+const classMetadata = new WeakMap<Value, Map<string, ObjectValue>>();
 
-export function MetadataObjectFor(target: Value, inheritsFrom: Value | undefined): ObjectValue {
-  const existing = classMetadata.get(target);
+/**
+ * The metadata object for one DECLARATION: a class, or a member of one. Keyed
+ * by the owner and the member, so a class's own metadata and each member's are
+ * separate objects with separate chains - decorators.md gives each context its
+ * own intrinsic interface, and a field's metadata inherits the BASE'S FIELD's
+ * rather than the base class's.
+ *
+ * `''` is the owner's own metadata; any other key is the member of that name.
+ */
+export function MetadataObjectFor(target: Value, inheritsFrom: Value | undefined, member = ''): ObjectValue {
+  let byMember = classMetadata.get(target);
+  if (!byMember) {
+    byMember = new Map();
+    classMetadata.set(target, byMember);
+  }
+  const existing = byMember.get(member);
   if (existing) {
     return existing;
   }
   const realm = surroundingAgent.currentRealmRecord;
-  const base = inheritsFrom !== undefined ? classMetadata.get(inheritsFrom) : undefined;
-  const created = OrdinaryObjectCreate(base ?? realm.Intrinsics['%Object.prototype%']);
-  classMetadata.set(target, created);
+  const inherited = inheritsFrom !== undefined ? classMetadata.get(inheritsFrom)?.get(member) : undefined;
+  const created = OrdinaryObjectCreate(inherited ?? realm.Intrinsics['%Object.prototype%']);
+  byMember.set(member, created);
   return created;
+}
+
+/**
+ * The metadata a member's context carries, prototype-linked to the SAME
+ * member's metadata on the base class. `classCtor` is the home object a member
+ * was defined on - a prototype for an instance member - so the base is found by
+ * walking one link from the constructor the class binds.
+ */
+function* MemberMetadataFor(classCtor: Value, key: Value): PlainEvaluator<ObjectValue> {
+  const member = key instanceof JSStringValue ? key.stringValue() : undefined;
+  if (member === undefined) {
+    // A symbol- or private-named member has no string key to inherit along;
+    // give it its own object rather than sharing one keyed by the empty name.
+    const realm = surroundingAgent.currentRealmRecord;
+    return OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  }
+  // KEYED BY THE CONSTRUCTOR, not by the home object. A member context is built
+  // with the object the member was defined on - a PROTOTYPE for an instance
+  // member - while `Reflect.getMetadata.<Reflect.ClassField, T>` reaches the
+  // class through its constructor. Storing under the home object put the two on
+  // different keys, so a field's metadata was written where nothing would read
+  // it. A class prototype names its constructor, which is the link back.
+  let owner = classCtor;
+  if (classCtor instanceof ObjectValue) {
+    const back = Q(yield* Get(classCtor, Value('constructor')));
+    if (back instanceof ObjectValue) {
+      owner = back;
+    }
+  }
+  const base = owner instanceof ObjectValue ? Q(yield* owner.GetPrototypeOf()) : Value.undefined;
+  return MetadataObjectFor(owner, base, member);
 }
 
 export function* ClassDecoratorContext(className: Value, classCtor: Value): ValueEvaluator {
@@ -1570,6 +1617,7 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
     X(CreateDataProperty(context, Value('abstract'), Value.false));
   }
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
+  X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   return context;
 }
 

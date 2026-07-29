@@ -64,14 +64,32 @@ test('a class with no base still has a metadata object', () => {
     + '@f class A {} @g class B {} seen;')).toBe('undefined');
 });
 
-test('PINNED: what the metadata half does not yet do', () => {
-  // 1. Only the CLASS context carries `metadata`. decorators.md gives it to
-  // every context of the Class, Function, Object, and Enum families, each
-  // holding an instance of its own intrinsic interface - the twenty-seven H1
-  // declared.
-  expect(evaluated('let t = "?"; function f(c) { t = typeof c.metadata; } class A { @f a: uint8 = 1; } t;')).toBe('undefined');
-  expect(evaluated('let t = "?"; function f(c) { t = typeof c.metadata; } class A { @f m() {} } t;')).toBe('undefined');
-  // 2. `Reflect.getMetadata` does not exist, so metadata is reachable only from
-  // a decorator's context and not read back afterwards.
-  expect(evaluated('typeof Reflect.getMetadata;')).toBe('undefined');
+test('every class-family context carries metadata, and it READS BACK', () => {
+  // decorators.md gives `metadata` to every context of the Class, Function,
+  // Object and Enum families. The class family is wired here.
+  const t = 'let t = "?"; function f(c) { t = typeof c.metadata; } ';
+  expect(evaluated(`${t} class A { @f a: uint8 = 1; } t;`)).toBe('object');
+  expect(evaluated(`${t} class A { @f m() {} } t;`)).toBe('object');
+  expect(evaluated(`${t} class A { @f accessor a: uint8 = 1; } t;`)).toBe('object');
+
+  // `Reflect.getMetadata` reads back what a decorator wrote - THE SAME OBJECT,
+  // not a copy, which is what makes metadata a channel rather than a snapshot.
+  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "written"; } '
+    + '@f class A {} String(Reflect.getMetadata.<Reflect.Class, A>()[k]);')).toBe('written');
+  expect(evaluated('const k = Symbol("k"); let seen; function f(c) { seen = c.metadata; } '
+    + '@f class A {} String(seen === Reflect.getMetadata.<Reflect.Class, A>());')).toBe('true');
+  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "field"; } '
+    + 'class A { @f a: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassField, A>("a")[k]);')).toBe('field');
+
+  // A MEMBER's metadata is keyed by the CONSTRUCTOR, not by the home object it
+  // was defined on - an instance member's home object is the prototype, so
+  // storing it there wrote where nothing would read.
+  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "A"; } '
+    + 'class A { @f a: uint8 = 1; } class B extends A { a: uint8 = 2; } '
+    + 'String(Reflect.getMetadata.<Reflect.ClassField, B>("a")[k]);')).toBe('A');
+  // And two members do not share one object.
+  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "a"; } '
+    + 'class A { @f a: uint8 = 1; b: uint8 = 2; } String(Reflect.getMetadata.<Reflect.ClassField, A>("b")[k]);')).toBe('undefined');
+  // The untyped call names no context and so names no metadata object.
+  expect(evaluated('try { Reflect.getMetadata(); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
