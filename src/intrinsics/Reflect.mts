@@ -4,6 +4,7 @@ import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { neverType, propertyKeyValue } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
@@ -1394,15 +1395,30 @@ export function bootstrapReflectClassField(realmRec: Realm) {
 export function ClassFieldReflection(classRecord: TypeRecord, name: string, realmRec: Realm): ValueCompletion {
   const constructor = (classRecord as { Constructor?: { InstanceLayout?: ClassLayout | null } }).Constructor;
   const layout = constructor?.InstanceLayout ?? null;
-  if (!layout) {
-    return Throw.TypeError('this type has no layout, so it has no $1', Value('offset'));
-  }
-  const placement = layout.fields.find((f) => f.key === name);
-  if (!placement) {
+  const placement = layout ? layout.fields.find((f) => f.key === name) : undefined;
+  // TWO SOURCES, ONE READ. The DECLARATION record says what the field was
+  // declared as - and reaches a field on a class with no layout, which is every
+  // class carrying an untyped one. The LAYOUT says where it sits, and only a
+  // laid-out class has that to say. Reading one without the other is what left
+  // these as two paths that disagreed: a declared field on a `dynamic`-shaped
+  // class was unreflectable although the record held it.
+  const declaration = MemberDeclarationOf(constructor as unknown as Value, name);
+  if (!placement && declaration === undefined) {
     return Throw.TypeError('$1 is not a field of this type', Value(name));
   }
   const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(obj, Value('kind'), Value('field')));
+  if (declaration !== undefined) {
+    X(CreateDataProperty(obj, Value('static'), declaration.static ? Value.true : Value.false));
+    X(CreateDataProperty(obj, Value('private'), declaration.private ? Value.true : Value.false));
+    X(CreateDataProperty(obj, Value('protected'), declaration.protected ? Value.true : Value.false));
+  }
+  if (!placement) {
+    // Declared but not placed: the class has no layout, so the PLACEMENT half
+    // is absent rather than *undefined*, which is how this suite reports a
+    // deferral a reader should meet.
+    return obj;
+  }
   // The field this describes. Redundant when fetched BY name and necessary when
   // the whole set is enumerated, which is the form that reads a layout out.
   X(CreateDataProperty(obj, Value('name'), Value(name)));

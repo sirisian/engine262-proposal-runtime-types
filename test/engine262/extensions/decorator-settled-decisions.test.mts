@@ -42,7 +42,7 @@ test('DECISION 2: the layout reflection says which field it describes', () => {
   // The bit-field surface stays where it is and is now documented as the
   // memory-layout extension's own reflection rather than left unwritten.
   expect(evaluated('class A { a: uint8; b: uint16; } Object.keys(Reflect.getReflection.<Reflect.ClassField, A>("b")).join(",");'))
-    .toBe('kind,name,offset,byteLength,bitLength,alignment,offsetBit,isBitField');
+    .toBe('kind,static,private,protected,name,offset,byteLength,bitLength,alignment,offsetBit,isBitField');
 });
 
 test('DECISION 3: a binding reflection reports `initial`, not `value`', () => {

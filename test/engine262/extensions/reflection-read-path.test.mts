@@ -88,14 +88,27 @@ test('the ENUMERATING forms, and `{ own: true }`', () => {
     + 'String(Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).length);')).toBe('1');
 });
 
-test('PINNED: what the read path still lacks', () => {
-  // A FIELD's named read answers through the instance LAYOUT, so it throws for
-  // a class that has none - the reason a method needed a declaration record at
-  // all. The two paths have not been unified.
-  expect(evaluated('class A { a: uint8; } String(typeof Reflect.getReflection.<Reflect.ClassField, A>("a"));')).toBe('object');
-  expect(outcome('class A { a; } Reflect.getReflection.<Reflect.ClassField, A>("a");')).toBe('TypeError');
-  // `getReflectionByIndex` is step 4, and decorators.md declares it only for the
-  // PARAMETER contexts - it returns a parameter list indexed by position, so it
-  // belongs with the sub-target reads rather than these.
+test('the two FIELD paths are merged into one read', () => {
+  // A field's reflection drew on the LAYOUT alone, so it answered only for a
+  // class that had one - and the declaration record built for methods held
+  // fields too. Two paths that disagreed about the same question. Merged: the
+  // record supplies what was DECLARED, the layout supplies where it SITS.
+  expect(evaluated('class A { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('4');
+  expect(evaluated('class A { static s: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassField, A>("s").static);')).toBe('true');
+  // A class with NO layout reads its declaration facts and reports no
+  // placement - absent rather than *undefined* would be wrong here, since the
+  // field genuinely has no offset to report.
+  expect(evaluated('class A { a; b: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("b").kind;')).toBe('field');
+  expect(evaluated('class A { a; b: uint8; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('undefined');
+  // A name that was never declared is still refused, which is what says the
+  // merge widened the answer rather than the acceptance.
+  expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("z");')).toBe('TypeError');
+});
+
+test('PINNED: getReflectionByIndex, the last step', () => {
+  // decorators.md declares it only for the PARAMETER contexts - it returns a
+  // parameter list indexed by position. So it needs what no record holds yet: a
+  // member's PARAMETERS, their names, types and defaults. That is a second
+  // record of the same shape as the member one, filled from the same walk.
   expect(evaluated('typeof Reflect.getReflectionByIndex;')).toBe('undefined');
 });

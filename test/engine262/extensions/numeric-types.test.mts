@@ -363,9 +363,14 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   // `Reflect.never` is one.
   expect(evaluated('String(typeof Reflect.ClassField);')).toBe('object');
 
-  // Rejections. A class with no layout has no offsets to report, and a name
-  // that is not a field of the class is not answered with a number.
-  expectThrownKind('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a");', 'TypeError');
+  // A class with no layout now READS, and reports no placement. The reflection
+  // draws on two sources: the DECLARATION record says what the field was
+  // declared as and reaches a field on any class, while the LAYOUT says where
+  // it sits and only a laid-out class has that to say. Before they were merged
+  // this threw, so a declared field on a class carrying an untyped one was
+  // unreflectable although the record held it.
+  expect(evaluated('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a").kind;')).toBe('field');
+  expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassField, U>("a").offset);')).toBe('undefined');
   expectThrownKind('class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
   // The one-argument form is untouched.
   expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type');
