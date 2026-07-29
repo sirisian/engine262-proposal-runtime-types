@@ -232,7 +232,23 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   const initializer = fieldRecord.Initializer;
   // 3. If initializer is not empty, then
   let initValue;
-  if (initializer !== undefined) {
+  // decorators.md's replacement table: a `Reflect.ClassField` decorator's
+  // return replaces "THE FIELD'S INITIAL VALUE", of type T - not an initializer
+  // FUNCTION, which is what a TC39 field decorator returns. A decorator runs
+  // ONCE at class definition while a field initializer runs per INSTANCE, so
+  // the returned value is captured there and used for every instance here, in
+  // place of running the initializer at all.
+  const replaced = (fieldRecord as { ReplacedInitial?: Value }).ReplacedInitial;
+  if (replaced !== undefined) {
+    // Still checked against the field's declared type: "the return type must be
+    // compatible with the original", and a replacement is a store like any
+    // other.
+    if (fieldTypeObject) {
+      initValue = Q(yield* RequireType(replaced, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
+    } else {
+      initValue = replaced;
+    }
+  } else if (initializer !== undefined) {
     // a. Let initValue be ? Call(initializer, receiver).
     initValue = Q(yield* Call(initializer, receiver));
   } else if (fieldAnnotation) {

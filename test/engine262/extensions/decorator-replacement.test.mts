@@ -74,17 +74,56 @@ test('the positions the table EXCLUDES do not replace', () => {
   expect(evaluated('function rep(c) { return 99; } @rep { let a = 1; } "block ran";')).toBe('block ran');
 });
 
-test('PINNED: what the replacement half does not yet cover', () => {
-  // The table's remaining rows. Each is a different INSTALL point rather than a
-  // different rule, which is why they are separable: a field's replacement is
-  // its initial VALUE (not a function, unlike TC39's), an accessor's is a
-  // `{ get, set }` pair, an operator's has to go back into the operator table,
-  // and the Function and Object families have their own definition sites.
-  expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } String(new A().a);')).toBe('1');
+test('the FIELD row: the return is the initial VALUE, not an initializer', () => {
+  // decorators.md's table: a `Reflect.ClassField` decorator's return replaces
+  // "the field's INITIAL VALUE", of type T. THIS DIFFERS FROM TC39, where a
+  // field decorator returns an initializer FUNCTION - and the difference is
+  // visible: a decorator runs once at class definition while an initializer
+  // runs per instance, so the value is captured once and used for every one.
+  expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } String(new A().a);')).toBe('99');
+  expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } '
+    + 'const x = new A(), y = new A(); String(x.a) + "/" + String(y.a);')).toBe('99/99');
+  // "The return type must be compatible with the original", so a replacement is
+  // checked like any other store - out of range is the RangeError F12's split
+  // gives, not a TypeError.
+  expect(evaluated('function rep(c) { return 300; } '
+    + 'try { eval("class A { @rep a: uint8 = 1; } new A();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+  expect(evaluated('function nop(c) {} class A { @nop a: uint8 = 1; } String(new A().a);')).toBe('1');
+});
+
+test('the ACCESSOR row: a pair replaces the pair, over the SAME slot', () => {
   expect(evaluated('function rep(c) { return { get() { return 42; }, set(v) {} }; } '
-    + 'class A { @rep accessor a: uint8 = 1; } String(new A().a);')).toBe('1');
-  expect(evaluated('function rep(c) { return function() { return "replaced"; }; } '
-    + '@rep function f() { return "original"; } f();')).toBe('original');
-  expect(evaluated('function rep(c) { return function() { return "replaced"; }; } '
-    + 'const o = { @rep m() { return "original"; } }; o.m();')).toBe('original');
+    + 'class A { @rep accessor a: uint8 = 1; } String(new A().a);')).toBe('42');
+  // THE ASSERTION THAT JUSTIFIES `access`: a replacement that DELEGATES reads
+  // and writes the storage the layout already allotted, instead of closing over
+  // storage of its own and leaving the slot dead. Doubling on read makes the
+  // delegation visible - a pair that had invented its own storage would report
+  // whatever it was last given, not twice it.
+  expect(evaluated('function rep(c) { const a = c.access; '
+    + 'return { get() { return a.get.call(this) * 2; }, set(v) { a.set.call(this, v); } }; } '
+    + 'class A { @rep accessor a: uint8 = 5; } const o = new A(); o.a = 4; String(o.a);')).toBe('8');
+});
+
+test('the FUNCTION and OBJECT rows', () => {
+  // A function declaration's binding is initialized before its decorators run -
+  // hoisting sees to that - so the replacement is written back through it, as a
+  // class declaration's is.
+  expect(evaluated('function rep(c) { return function() { return "R"; }; } '
+    + '@rep function f() { return "O"; } f();')).toBe('R');
+  expect(evaluated('function nop(c) {} @nop function f() { return "O"; } f();')).toBe('O');
+  expect(evaluated('function rep(c) { return function() { return "R"; }; } '
+    + 'const o = { @rep m() { return "O"; } }; o.m();')).toBe('R');
+  expect(evaluated('function rep(c) { return function() { return 42; }; } '
+    + 'const o = { @rep get v() { return 1; } }; String(o.v);')).toBe('42');
+  // `Reflect.ObjectField` has NO row in the table - "the field's initial value"
+  // is a CLASS row, and an object literal's field is already its value.
+  expect(evaluated('function rep(c) { return 99; } const o = { @rep a: 1 }; String(o.a);')).toBe('1');
+});
+
+test('PINNED: the one row that remains', () => {
+  // `Reflect.ClassOperator`. Unreachable rather than unimplemented: `@f
+  // operator +` is a SyntaxError, so there is no decoration to return from.
+  // PLAN-decorators-remaining.md §5 has the grammar; this row lands with it.
+  expect(evaluated('function rep(c) { return function(r) { return r; }; } '
+    + 'try { eval("class O { @rep operator +(r: O): O { return r; } }"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('SyntaxError');
 });

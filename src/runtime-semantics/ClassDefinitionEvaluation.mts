@@ -204,11 +204,32 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           const key = isAccessor
             ? (Q(yield* Evaluate_PropertyName((node as ParseNode.FieldDefinition).ClassElementName)) as Value)
             : (plain as { Name?: Value }).Name;
-          Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor
+          const memberReplacement = Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor
             ? (k: Value, n: ParseNode, cn: Value, cc: Value) => ClassAccessorDecoratorContext(k, n, cn, cc, accessorPair)
             : ClassFieldDecoratorContext)(
             key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value,
-          ))));
+          )), true));
+          if (memberReplacement !== undefined) {
+            if (isAccessor) {
+              // An accessor's replacement is a `{ get, set }` PAIR, installed
+              // over the pair the desugaring put on the home object. The layout
+              // slot stays either way (a layout may not depend on whether a
+              // decorator ran), which is what `context.access` is for: a
+              // replacement that wants the storage delegates to it.
+              const replacementGet = Q(yield* Get(memberReplacement as ObjectValue, Value('get')));
+              const replacementSet = Q(yield* Get(memberReplacement as ObjectValue, Value('set')));
+              Q(yield* DefinePropertyOrThrow(object, key as PropertyKeyValue, Descriptor({
+                Getter: replacementGet as never,
+                Setter: replacementSet as never,
+                Enumerable: Value.false,
+                Configurable: Value.true,
+              })));
+            } else {
+              // A FIELD's replacement is its initial VALUE, used by DefineField
+              // for every instance rather than installed anywhere now.
+              (plain as { ReplacedInitial?: Value }).ReplacedInitial = memberReplacement;
+            }
+          }
         }
         (plain as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
         return plain;

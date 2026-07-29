@@ -6,6 +6,7 @@ import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyDecorators, ApplySubTargetDecorators, HasSubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
+import { PutValue } from '#self';
 import { CreateDataProperty, GetValue, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-evaluation */
@@ -37,9 +38,18 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
     }
     Q(yield* ApplySubTargetDecorators(FunctionDeclaration as never, 'Function', typeof name === 'string' ? Value(name) : Value.undefined, fn));
     if (FunctionDeclaration.Decorators?.length) {
-      Q(yield* ApplyDecorators(FunctionDeclaration.Decorators, Q(yield* FunctionDecoratorContext(
+      const replacement = Q(yield* ApplyDecorators(FunctionDeclaration.Decorators, Q(yield* FunctionDecoratorContext(
         typeof name === 'string' ? Value(name) : Value.undefined, fn,
-      ))));
+      )), true));
+      // decorators.md's table: a `Reflect.Function` decorator's return "replaces
+      // the function". The binding is already initialized by the time the
+      // decorators run - hoisting sees to that - so the replacement is WRITTEN
+      // BACK through it, exactly as a class declaration's is: assigning the
+      // local read of it would replace nothing, since every later reference
+      // resolves the name again.
+      if (replacement !== undefined && typeof name === 'string') {
+        Q(yield* PutValue(Q(yield* ResolveBinding(Value(name))), replacement));
+      }
     }
   }
   // 1. Return NormalCompletion(empty).

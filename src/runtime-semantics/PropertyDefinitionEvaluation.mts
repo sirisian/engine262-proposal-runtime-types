@@ -64,7 +64,21 @@ function* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition: Pa
     // written for the undecorated-owner case can find.
     Q(yield* ApplySubTargetDecorators(PropertyDefinition as never, kind, name, object as Value));
     if (decorators?.length) {
-      Q(yield* ApplyDecorators(decorators, Q(yield* ObjectMemberDecoratorContext(kind, name, object as Value))));
+      const replacement = Q(yield* ApplyDecorators(decorators, Q(yield* ObjectMemberDecoratorContext(kind, name, object as Value)), true));
+      // The table gives ObjectMethod, ObjectGetter and ObjectSetter a
+      // replacement and gives ObjectField none - "the field's initial value" is
+      // a CLASS row, and an object literal's field is already its value, so
+      // there is nothing separate to replace.
+      if (replacement !== undefined && kind !== 'ObjectField' && name instanceof JSStringValue) {
+        const existing = Q(yield* (object as ObjectValue).GetOwnProperty(name));
+        const prior = existing instanceof Descriptor ? existing as { Getter?: Value, Setter?: Value } : undefined;
+        const descriptor = kind === 'ObjectGetter'
+          ? Descriptor({ Getter: replacement as never, Setter: prior?.Setter as never, Enumerable: enumerable, Configurable: Value.true })
+          : kind === 'ObjectSetter'
+            ? Descriptor({ Setter: replacement as never, Getter: prior?.Getter as never, Enumerable: enumerable, Configurable: Value.true })
+            : Descriptor({ Value: replacement, Writable: Value.true, Enumerable: enumerable, Configurable: Value.true });
+        Q(yield* DefinePropertyOrThrow(object as ObjectValue, name, descriptor));
+      }
     }
     return result;
   }
