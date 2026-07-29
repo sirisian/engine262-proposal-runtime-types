@@ -193,6 +193,22 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         // `reservedOnlyDecorators` gives for a decorator this engine cannot run.
         const plain = Q(yield* ClassFieldDefinitionEvaluation(node, object));
         if (surroundingAgent.feature('runtime-types')) {
+          // Recorded for EVERY field and accessor, decorated or not - the same
+          // rule the method arm needed, and the reason an undecorated member
+          // was unreflectable when the recording sat inside the decorator
+          // block. The NAME comes from the node: an accessor's record carries
+          // its backing Private Name, and a reflection names what was declared.
+          const declaredKey = (node as ParseNode.FieldDefinition).ClassElementName
+            ? (Q(yield* Evaluate_PropertyName((node as ParseNode.FieldDefinition).ClassElementName)) as Value)
+            : Value.undefined;
+          Q(yield* RecordMemberDeclarationFor(
+            node,
+            (node as { accessor?: boolean }).accessor === true ? 'ClassAccessor' : 'ClassField',
+            declaredKey,
+            object,
+          ));
+        }
+        if (surroundingAgent.feature('runtime-types')) {
           // The decorators run AFTER the field definition is evaluated, because
           // "a decorator runs when the declaration it decorates is evaluated"
           // and a context that described a half-built field would be describing
@@ -1675,6 +1691,38 @@ export function RecordMemberDeclaration(owner: Value, member: string, declaratio
  * "includes inherited members BY DEFAULT", so the base chain is walked - the
  * same chain the checker and the metadata store walk.
  */
+/**
+ * Every member of `kind` on `owner`, and on the classes it extends unless `own`.
+ *
+ * decorators.md: "Reflection includes inherited members BY DEFAULT ... To query
+ * only the members a class declares itself, pass `{ own: true }`." The chain is
+ * walked from the DERIVED class outward and a name already seen is not
+ * replaced, so a redeclaration SHADOWS the base's rather than the base
+ * overwriting it - the same direction the metadata prototype chain resolves in.
+ */
+export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean): Map<string, MemberDeclaration> {
+  const collected = new Map<string, MemberDeclaration>();
+  let current: Value | undefined = owner;
+  while (current !== undefined && current !== Value.null) {
+    const byMember = memberDeclarations.get(current);
+    if (byMember) {
+      for (const [name, declaration] of byMember) {
+        if (declaration.kind === kind && !collected.has(name)) {
+          collected.set(name, declaration);
+        }
+      }
+    }
+    if (own) {
+      break;
+    }
+    const next: unknown = current instanceof ObjectValue
+      ? (current as unknown as { Prototype?: Value }).Prototype
+      : undefined;
+    current = next as Value | undefined;
+  }
+  return collected;
+}
+
 export function MemberDeclarationOf(owner: Value, member: string): MemberDeclaration | undefined {
   let current: Value | undefined = owner;
   while (current !== undefined && current !== Value.null) {

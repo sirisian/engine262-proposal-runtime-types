@@ -13,7 +13,7 @@ import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
 import { X } from '../completion.mts';
-import { MetadataObjectFor, MemberDeclarationOf } from './ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { Throw as ThrowError } from '#self';
@@ -188,6 +188,33 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         const argList = Q(yield* ArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
+        // THE ENUMERATING FORM: no name, or `{ own: true }`. It returns
+        // "{ [name]: Reflection }" - an object keyed by member name, which is
+        // the shape decorators.md's signature gives - and includes inherited
+        // members unless `own` says otherwise.
+        if (nameValue === Value.undefined || nameValue instanceof ObjectValueClass) {
+          let own = false;
+          if (nameValue instanceof ObjectValueClass) {
+            own = Q(yield* Get(nameValue, Value('own'))) === Value.true;
+          }
+          const kindName = (contextRecord.LibraryName as string).slice('Reflect.'.length);
+          const all = AllMemberDeclarationsOf(constructor, kindName, own);
+          const realm = surroundingAgent.currentRealmRecord;
+          const collection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          const base0 = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
+          for (const [name, declaration] of all) {
+            const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+            X(CreateDataProperty(one, Value('kind'), Value(declaration.kind)));
+            X(CreateDataProperty(one, Value('name'), Value(name)));
+            X(CreateDataProperty(one, Value('static'), declaration.static ? Value.true : Value.false));
+            X(CreateDataProperty(one, Value('private'), declaration.private ? Value.true : Value.false));
+            X(CreateDataProperty(one, Value('protected'), declaration.protected ? Value.true : Value.false));
+            X(CreateDataProperty(one, Value('abstract'), declaration.abstract ? Value.true : Value.false));
+            X(CreateDataProperty(one, Value('metadata'), MetadataObjectFor(constructor, base0, name)));
+            X(CreateDataProperty(collection, Value(name), one));
+          }
+          return collection;
+        }
         const memberName = Q(yield* ToString(nameValue));
         const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
         if (declaration === undefined) {

@@ -56,16 +56,46 @@ test('the class-family MEMBER reads answer, from a declaration record', () => {
   expect(outcome('class A {} Reflect.getReflection.<Reflect.ClassMethod, A>("z");')).toBe('TypeError');
 });
 
-test('PINNED: the FIELD-shaped members and the remaining forms', () => {
-  // An ACCESSOR takes the FieldDefinition arm rather than the method arm, so it
-  // is not in the declaration record yet. A FIELD answers through the instance
-  // LAYOUT, which is why it throws for a class that has none - the reason a
-  // method needed a record at all.
-  expect(outcome('class A { accessor a: uint8 = 1; } Reflect.getReflection.<Reflect.ClassAccessor, A>("a");')).toBe('TypeError');
+test('an ACCESSOR reads back too', () => {
+  // An accessor takes the FieldDefinition arm rather than the method arm, so it
+  // needed its own recording - placed where the arm runs for EVERY field and
+  // accessor, decorated or not, which is the rule the method arm had to learn
+  // as well. The NAME comes from the node: an accessor's record carries its
+  // backing Private Name, and a reflection names what was declared.
+  expect(evaluated('class A { accessor a: uint8 = 1; } const r = Reflect.getReflection.<Reflect.ClassAccessor, A>("a"); r.kind + "/" + String(r.name);')).toBe('ClassAccessor/a');
+  expect(evaluated('class A { accessor plain: uint8 = 1; } Reflect.getReflection.<Reflect.ClassAccessor, A>("plain").kind;')).toBe('ClassAccessor');
+  expect(evaluated('class A { static accessor a: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassAccessor, A>("a").static);')).toBe('true');
+});
+
+test('the ENUMERATING forms, and `{ own: true }`', () => {
+  // decorators.md's signature returns "{ [name]: Reflection }" - an object
+  // keyed by member name, not a list.
+  expect(evaluated('class A { m() {} n() {} } Object.keys(Reflect.getReflection.<Reflect.ClassMethod, A>()).sort().join(",");')).toBe('m,n');
+  // "Reflection includes inherited members BY DEFAULT."
+  expect(evaluated('class B { base() {} } class D extends B { own() {} } '
+    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).sort().join(",");')).toBe('base,own');
+  // "To query only the members a class declares itself, pass `{ own: true }`."
+  expect(evaluated('class B { base() {} } class D extends B { own() {} } '
+    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>({ own: true })).join(",");')).toBe('own');
+  // The CONTEXT filters the kind, so a getter is not among the methods.
+  expect(evaluated('class A { m() {} get v(): uint8 { return 1; } } '
+    + 'Object.keys(Reflect.getReflection.<Reflect.ClassGetter, A>()).join(",");')).toBe('v');
+  // A REDECLARATION SHADOWS rather than doubling: the chain is walked from the
+  // derived class outward and a name already seen is not replaced, which is the
+  // same direction the metadata prototype chain resolves in. Counting is what
+  // catches the other order - both would contain `m`.
+  expect(evaluated('class B { m() {} } class D extends B { m() {} } '
+    + 'String(Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).length);')).toBe('1');
+});
+
+test('PINNED: what the read path still lacks', () => {
+  // A FIELD's named read answers through the instance LAYOUT, so it throws for
+  // a class that has none - the reason a method needed a declaration record at
+  // all. The two paths have not been unified.
   expect(evaluated('class A { a: uint8; } String(typeof Reflect.getReflection.<Reflect.ClassField, A>("a"));')).toBe('object');
   expect(outcome('class A { a; } Reflect.getReflection.<Reflect.ClassField, A>("a");')).toBe('TypeError');
-  // Steps 3 to 5: the enumerating forms, `getReflectionByIndex` (parameter
-  // contexts only), and `{ own: true }`.
-  expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>();')).toBe('TypeError');
+  // `getReflectionByIndex` is step 4, and decorators.md declares it only for the
+  // PARAMETER contexts - it returns a parameter list indexed by position, so it
+  // belongs with the sub-target reads rather than these.
   expect(evaluated('typeof Reflect.getReflectionByIndex;')).toBe('undefined');
 });
