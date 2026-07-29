@@ -13,7 +13,7 @@ import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
 import { X } from '../completion.mts';
-import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor, MemberDeclarationOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { Throw as ThrowError } from '#self';
@@ -169,6 +169,40 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           (constructor as { IsAbstract?: boolean }).IsAbstract === true ? Value.true : Value.false));
         const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base)));
+        return reflection;
+      }
+      // The class-family MEMBER reads. Each is one lookup in the declaration
+      // record the class walk fills, plus the per-declaration metadata - the
+      // context decides the reflection's TYPE and the name decides which
+      // member, exactly as `getMetadata` does. Inherited members are included,
+      // which decorators.md makes the default, by walking the base chain.
+      const memberRead = contextRecord.Kind === 'nominal'
+        && typeof contextRecord.LibraryName === 'string'
+        && ['Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
+          'Reflect.ClassAccessor', 'Reflect.ClassOperator'].includes(contextRecord.LibraryName);
+      if (memberRead) {
+        const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const constructor = (classRecord as { Constructor?: Value }).Constructor;
+        if (constructor === undefined) {
+          return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getReflection'));
+        }
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
+        const memberName = Q(yield* ToString(nameValue));
+        const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
+        if (declaration === undefined) {
+          return ThrowError.TypeError('$1 is not a member of this type', memberName);
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        X(CreateDataProperty(reflection, Value('kind'), Value(declaration.kind)));
+        X(CreateDataProperty(reflection, Value('name'), memberName));
+        X(CreateDataProperty(reflection, Value('static'), declaration.static ? Value.true : Value.false));
+        X(CreateDataProperty(reflection, Value('private'), declaration.private ? Value.true : Value.false));
+        X(CreateDataProperty(reflection, Value('protected'), declaration.protected ? Value.true : Value.false));
+        X(CreateDataProperty(reflection, Value('abstract'), declaration.abstract ? Value.true : Value.false));
+        const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
+        X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base, memberName.stringValue())));
         return reflection;
       }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {

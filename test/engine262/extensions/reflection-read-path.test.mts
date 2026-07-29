@@ -4,50 +4,68 @@ import { evaluated } from '../readme/harness.mts';
 /**
  * PLAN-decorators-remaining.md phase three: the REFLECTION READ PATH.
  *
- * `sec-decorators` specifies reflection and decoration as ONE facility under
- * one name, and the read half answered two of forty-one contexts. This is the
- * first step of the plan's staged order: `Reflect.Class`, the whole-class read
- * that every other class-family read hangs off.
+ * `sec-decorators` specifies reflection and decoration as ONE facility, and the
+ * read half answered two of forty-one contexts. Steps 1 and 2 of the plan's
+ * staged order: the whole-class read, and the class-family member reads.
  */
+
+/** The kind a rejection carries, through `eval` so an early error is catchable. */
+const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('Reflect.Class reads the class back', () => {
   // decorators.md's `ClassReflection`: `name`, `type`, `abstract`, `metadata`.
   expect(evaluated('class A {} Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.Class, A>()).join(",");')).toBe('kind,name,type,abstract,metadata');
   expect(evaluated('class Named {} String(Reflect.getReflection.<Reflect.Class, Named>().name);')).toBe('Named');
-  // `type` is the CONSTRUCTOR itself, asserted by identity rather than by
-  // typeof - a fresh function would satisfy `typeof === "function"`.
+  // `type` is the CONSTRUCTOR, asserted by identity - a fresh function would
+  // satisfy a `typeof` check.
   expect(evaluated('class A {} String(Reflect.getReflection.<Reflect.Class, A>().type === A);')).toBe('true');
   expect(evaluated('abstract class A {} String(Reflect.getReflection.<Reflect.Class, A>().abstract);')).toBe('true');
   expect(evaluated('class A {} String(Reflect.getReflection.<Reflect.Class, A>().abstract);')).toBe('false');
   // The metadata is the SAME object a decorator wrote to, which is what makes
-  // the read path and the metadata channel one facility rather than two.
-  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "m"; } @f class A {} '
-    + 'String(Reflect.getReflection.<Reflect.Class, A>().metadata[k]);')).toBe('m');
+  // the read path and the metadata channel one facility rather than two that
+  // agree.
   expect(evaluated('const k = Symbol("k"); let seen; function f(c) { seen = c.metadata; } @f class A {} '
     + 'String(seen === Reflect.getReflection.<Reflect.Class, A>().metadata);')).toBe('true');
-  // A target that names no class is refused rather than answered with an empty
-  // reflection.
-  expect(evaluated('try { eval("Reflect.getReflection.<Reflect.Class, uint8>();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+  expect(outcome('Reflect.getReflection.<Reflect.Class, uint8>();')).toBe('TypeError');
 });
 
-test('PINNED: the member reads need declaration facts nothing stores', () => {
-  // The next step of phase three, and it is NOT more of the same. The FIELD
-  // read works by walking the class's INSTANCE LAYOUT - which is why it answers
-  // only for a class that HAS a layout, measured here: a `dynamic`-shaped class
-  // with an untyped field has none, and the read throws.
-  expect(evaluated('class A { a: uint8; } String(typeof Reflect.getReflection.<Reflect.ClassField, A>("a"));')).toBe('object');
-  expect(evaluated('class A { a; } try { eval("Reflect.getReflection.<Reflect.ClassField, A>(\\"a\\");"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+test('the class-family MEMBER reads answer, from a declaration record', () => {
+  // The reflections want `static`, `private`, `protected` and `abstract` -
+  // DECLARATION facts that live in the AST at class definition and were
+  // recorded nowhere reachable from the type. A per-class record keeps them
+  // now, keyed the way the metadata store is, so a read is a lookup.
+  expect(evaluated('class A { m() {} } Reflect.getReflection.<Reflect.ClassMethod, A>("m").kind;')).toBe('ClassMethod');
+  expect(evaluated('class A { get v(): uint8 { return 1; } } Reflect.getReflection.<Reflect.ClassGetter, A>("v").kind;')).toBe('ClassGetter');
+  expect(evaluated('class A { set v(x: uint8) {} } Reflect.getReflection.<Reflect.ClassSetter, A>("v").kind;')).toBe('ClassSetter');
+  // A STATIC member's home object IS the constructor while an instance
+  // member's is the prototype. Told apart by the NODE rather than by probing
+  // the object: walking `constructor` from a constructor reaches `Function`,
+  // and the record would be filed under the wrong owner.
+  expect(evaluated('class A { static m() {} } String(Reflect.getReflection.<Reflect.ClassMethod, A>("m").static);')).toBe('true');
+  expect(evaluated('class A { m() {} } String(Reflect.getReflection.<Reflect.ClassMethod, A>("m").static);')).toBe('false');
+  // "Reflection includes inherited members BY DEFAULT" - the same base chain
+  // the checker and the metadata store walk.
+  expect(evaluated('class B { m() {} } class D extends B {} Reflect.getReflection.<Reflect.ClassMethod, D>("m").kind;')).toBe('ClassMethod');
+  expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "m"; } class A { @f m() {} } '
+    + 'String(Reflect.getReflection.<Reflect.ClassMethod, A>("m").metadata[k]);')).toBe('m');
+  // MEMBERS ARE RECORDED WHETHER OR NOT THEY ARE DECORATED. The first attempt
+  // hooked a line inside the decorator guard, so an undecorated method was
+  // unreflectable - a reflection describes what was DECLARED, and whether a
+  // decorator ran is no part of that.
+  expect(evaluated('class A { undecorated() {} } Reflect.getReflection.<Reflect.ClassMethod, A>("undecorated").kind;')).toBe('ClassMethod');
+  expect(outcome('class A {} Reflect.getReflection.<Reflect.ClassMethod, A>("z");')).toBe('TypeError');
+});
 
-  // A METHOD has no layout slot, so there is nothing equivalent to walk. Its
-  // reflection wants `static`, `private`, `protected`, `abstract` and
-  // `signatures` - DECLARATION facts that live in the AST at class definition
-  // and are recorded nowhere reachable from the type afterwards. So the next
-  // step is a per-class record of member declarations, not another lookup.
-  expect(evaluated('class A { m() {} } try { eval("Reflect.getReflection.<Reflect.ClassMethod, A>(\\"m\\");"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
-  expect(evaluated('class A { get v(): uint8 { return 1; } } '
-    + 'try { eval("Reflect.getReflection.<Reflect.ClassGetter, A>(\\"v\\");"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
-  // And the enumerating and indexed forms, which are steps 3 and 4.
-  expect(evaluated('class A { a: uint8; } '
-    + 'try { eval("Reflect.getReflection.<Reflect.ClassField, A>();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+test('PINNED: the FIELD-shaped members and the remaining forms', () => {
+  // An ACCESSOR takes the FieldDefinition arm rather than the method arm, so it
+  // is not in the declaration record yet. A FIELD answers through the instance
+  // LAYOUT, which is why it throws for a class that has none - the reason a
+  // method needed a record at all.
+  expect(outcome('class A { accessor a: uint8 = 1; } Reflect.getReflection.<Reflect.ClassAccessor, A>("a");')).toBe('TypeError');
+  expect(evaluated('class A { a: uint8; } String(typeof Reflect.getReflection.<Reflect.ClassField, A>("a"));')).toBe('object');
+  expect(outcome('class A { a; } Reflect.getReflection.<Reflect.ClassField, A>("a");')).toBe('TypeError');
+  // Steps 3 to 5: the enumerating forms, `getReflectionByIndex` (parameter
+  // contexts only), and `{ own: true }`.
+  expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>();')).toBe('TypeError');
   expect(evaluated('typeof Reflect.getReflectionByIndex;')).toBe('undefined');
 });

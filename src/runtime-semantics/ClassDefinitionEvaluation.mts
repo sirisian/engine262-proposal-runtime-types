@@ -124,6 +124,12 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // the return's, then the method's own." A method's decorator
           // therefore sees a method whose parts are already decorated, which is
           // the same reason a class decorator runs after its members.
+          // Recorded for EVERY member, not only a decorated one: a reflection
+          // describes what was DECLARED, and whether a decorator ran is no part
+          // of that. The first attempt hooked a line inside the decorator
+          // guard, so an undecorated method was unreflectable - the same
+          // owner-gating shape the sub-target rule keeps meeting.
+          Q(yield* RecordMemberDeclarationFor(node, memberContextKind(node), MemberKeyOf(node, method), object));
           Q(yield* ApplySubTargetDecorators(node, memberContextKind(node), MemberKeyOf(node, method), object as Value));
         }
         if (surroundingAgent.feature('runtime-types') && node.Decorators) {
@@ -1635,6 +1641,56 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
 const classMetadata = new WeakMap<Value, Map<string, ObjectValue>>();
 
 /**
+ * proposal-runtime-types: what a member was DECLARED as, per class and member.
+ *
+ * The reflections want `static`, `private`, `protected` and `abstract`, and
+ * those are declaration facts - they live in the AST at class definition and
+ * are recorded nowhere reachable from the type afterwards. A FIELD's reflection
+ * escapes this by walking the instance LAYOUT, which is why it answers only for
+ * a class that has one; a method has no slot and nothing equivalent to walk.
+ *
+ * Keyed the way the metadata store is, and recorded where the class body is
+ * walked, so a read is a lookup rather than a second traversal.
+ */
+export interface MemberDeclaration {
+  readonly kind: string;
+  readonly static: boolean;
+  readonly private: boolean;
+  readonly protected: boolean;
+  readonly abstract: boolean;
+}
+const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
+
+export function RecordMemberDeclaration(owner: Value, member: string, declaration: MemberDeclaration): void {
+  let byMember = memberDeclarations.get(owner);
+  if (!byMember) {
+    byMember = new Map();
+    memberDeclarations.set(owner, byMember);
+  }
+  byMember.set(member, declaration);
+}
+
+/**
+ * The declaration of `member` on `owner` or a class it extends. Reflection
+ * "includes inherited members BY DEFAULT", so the base chain is walked - the
+ * same chain the checker and the metadata store walk.
+ */
+export function MemberDeclarationOf(owner: Value, member: string): MemberDeclaration | undefined {
+  let current: Value | undefined = owner;
+  while (current !== undefined && current !== Value.null) {
+    const found = memberDeclarations.get(current)?.get(member);
+    if (found) {
+      return found;
+    }
+    const next: unknown = current instanceof ObjectValue
+      ? (current as unknown as { properties?: unknown, Prototype?: Value }).Prototype
+      : undefined;
+    current = next as Value | undefined;
+  }
+  return undefined;
+}
+
+/**
  * The metadata object for one DECLARATION: a class, or a member of one. Keyed
  * by the owner and the member, so a class's own metadata and each member's are
  * separate objects with separate chains - decorators.md gives each context its
@@ -1715,6 +1771,38 @@ export function* ClassDecoratorContext(className: Value, classCtor: Value): Valu
  * decorator dispatches on, so they are built together and differ by `kind` and
  * by what only some of them have.
  */
+/**
+ * Record one member's declaration facts under the CONSTRUCTOR, which is what a
+ * reflection reaches the class by - a member context is built with the home
+ * object, and for an instance member that is the prototype.
+ */
+function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, home: ObjectValue): PlainEvaluator<void> {
+  if (!surroundingAgent.feature('runtime-types') || !(key instanceof JSStringValue)) {
+    return undefined;
+  }
+  // A STATIC member's home object IS the constructor; an instance member's is
+  // the prototype, which names its constructor. Walking `constructor` from the
+  // constructor would reach `Function`, so the two cases are told apart by the
+  // node rather than by probing the object.
+  const n0 = node as { static?: boolean };
+  let owner: Value = home;
+  if (n0.static !== true) {
+    const back = Q(yield* Get(home, Value('constructor')));
+    if (back instanceof ObjectValue) {
+      owner = back;
+    }
+  }
+  const n = node as { static?: boolean, protected?: boolean, ClassElementName?: { type?: string } };
+  RecordMemberDeclaration(owner, key.stringValue(), {
+    kind,
+    static: n.static === true,
+    private: n.ClassElementName?.type === 'PrivateIdentifier',
+    protected: n.protected === true,
+    abstract: node.type === 'AbstractMethodDefinition',
+  });
+  return undefined;
+}
+
 export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
