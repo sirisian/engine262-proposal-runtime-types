@@ -1503,6 +1503,37 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
  * decorators.md's `ClassReflection`: `name`, `type` (the constructor),
  * `abstract`, and `metadata`.
  */
+/**
+ * decorators.md, Metadata Inheritance: "Each member's metadata is inherited
+ * through the PROTOTYPE CHAIN ... If B redeclares the field and applies its own
+ * decorators, B gets a new metadata object (PROTOTYPICALLY INHERITING FROM A'S)
+ * where B's decorators write their values, SHADOWING A'S WITHOUT MUTATING
+ * THEM."
+ *
+ * So a metadata object is an ORDINARY OBJECT whose [[Prototype]] is the
+ * corresponding metadata of the base declaration - which is what makes "symbol
+ * key lookups fall through the prototype" true by construction rather than by a
+ * lookup rule written here. It is also why the metadata channel is a `partial
+ * interface` and not a `partial class`: an instance of a class with a typed
+ * field is not extensible and could not be prototypically linked at all.
+ *
+ * One object per declaration, kept so that a later read finds what a decorator
+ * wrote - the object a decorator receives IS the one that persists, not a copy.
+ */
+const classMetadata = new WeakMap<Value, ObjectValue>();
+
+export function MetadataObjectFor(target: Value, inheritsFrom: Value | undefined): ObjectValue {
+  const existing = classMetadata.get(target);
+  if (existing) {
+    return existing;
+  }
+  const realm = surroundingAgent.currentRealmRecord;
+  const base = inheritsFrom !== undefined ? classMetadata.get(inheritsFrom) : undefined;
+  const created = OrdinaryObjectCreate(base ?? realm.Intrinsics['%Object.prototype%']);
+  classMetadata.set(target, created);
+  return created;
+}
+
 export function* ClassDecoratorContext(className: Value, classCtor: Value): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -1511,6 +1542,12 @@ export function* ClassDecoratorContext(className: Value, classCtor: Value): Valu
   X(CreateDataProperty(context, Value('name'), className));
   X(CreateDataProperty(context, Value('type'), classCtor));
   X(CreateDataProperty(context, Value('abstract'), Value.false));
+  // The class's own metadata, prototype-linked to its base class's so that a
+  // key the base set is visible here and a key set here shadows it.
+  const baseClass: Value = classCtor instanceof ObjectValue
+    ? Q(yield* classCtor.GetPrototypeOf())
+    : Value.undefined;
+  X(CreateDataProperty(context, Value('metadata'), MetadataObjectFor(classCtor, baseClass)));
   return context;
 }
 
