@@ -393,6 +393,7 @@ export interface Throw {
   | 'WeakSet cannot be invoked without new'
   | 'a column of this type cannot be read'
   | 'a column of this type cannot be written'
+  | 'a computed member name must be a literal or a `const` bound to a Symbol'
   | 'a field of this type cannot be placed in a buffer'
   | 'a fixed-extent SoA cannot be grown'
   | 'a fixed-extent SoA cannot be shortened'

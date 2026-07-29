@@ -597,6 +597,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * pick up the members of an interface it implements.
    */
   const interfaceNodes = new Map<string, ParseNode>();
+  /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
+  const symbolConsts = new Map<string, ParseNode>();
   const interfaceTypeMemo = new Map<ParseNode, Known>();
   const interfaceTypeOf = (name: string): Known => {
     const node = interfaceNodes.get(name);
@@ -621,6 +623,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       const key = tm.PropertyName?.name ?? tm.PropertyName?.value;
       if (typeof key !== 'string') {
+        // A COMPUTED key. §6.6 types one whose expression is a symbol literal -
+        // a `const` bound to `Symbol(...)` - and nothing else can be typed at
+        // all: a `let`, a parameter, or any other expression has no identity a
+        // checker can compare. TypeScript refuses exactly this case ("A
+        // computed property name in an interface must refer to an expression
+        // whose type is a literal type or a 'unique symbol' type"), and
+        // refusing is what makes the rule TOTAL - every member that is declared
+        // is one the checker can judge, rather than some being declared and
+        // unjudgeable, which reads as support.
+        const computed = (tm.PropertyName as { ComputedPropertyName?: { type?: string, name?: string } } | null | undefined)?.ComputedPropertyName;
+        // "a literal type OR a unique symbol type": a written string or number
+        // is a literal type as much as a `const` symbol is, so `["s"]` and `[1]`
+        // are as judgeable as `s` and `1` - they are the same member spelled
+        // through brackets.
+        const isWrittenLiteral = computed?.type === 'StringLiteral' || computed?.type === 'NumericLiteral';
+        const namesSymbolConst = computed?.type === 'IdentifierReference'
+          && typeof computed.name === 'string' && symbolConsts.has(computed.name);
+        if (computed && !namesSymbolConst && !isWrittenLiteral) {
+          const completion = Throw.TypeError('a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
         continue;
       }
       if (tm.MethodSignature) {
@@ -1926,8 +1949,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // which is no rule at all. `instanceTypeOf` memoizes, so forcing it here
     // runs the walk exactly once per class and every later demand is a cache
     // hit: the errors below are reported once, not once per reference.
+    // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
+    // position IS the unique symbol type, without a keyword". A checker has no
+    // VALUES, so that identity is carried by the DECLARATION - two consts are
+    // two types, and one const named twice is one type, which is exactly what
+    // §6.6's identity rule means where no symbol can be held.
+    for (const n of list) {
+      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
+        continue;
+      }
+      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
+        const b = binding as unknown as {
+          BindingIdentifier?: { name?: string } | null,
+          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
+        };
+        const bound = b.BindingIdentifier?.name;
+        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
+        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol') {
+          symbolConsts.set(bound, binding);
+        }
+      }
+    }
     for (const n of classNodes.values()) {
       instanceTypeOf(n);
+    }
+    // An interface's member walk is lazy for the same reason the class one was,
+    // and a rule checked there needs the same forcing: an interface nothing
+    // references would never be walked, so its computed keys would never be
+    // judged.
+    for (const n of interfaceNodes.values()) {
+      interfaceTypeOf((n as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name ?? '');
     }
   };
 
