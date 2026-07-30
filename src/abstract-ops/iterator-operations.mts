@@ -23,6 +23,7 @@ import type { AsyncFromSyncIteratorObject } from '../intrinsics/AsyncFromSyncIte
 import type {
   Evaluator, PlainEvaluator, YieldEvaluator,
 } from '../evaluator.mts';
+import { IsComposite } from '../intrinsics/Composite.mts';
 import {
   Assert,
   Call,
@@ -41,6 +42,8 @@ import {
   Yield,
   type GeneratorObject,
 } from './all.mts';
+import { CreateArrayIterator } from './array-objects.mts';
+import { IsArray } from './testing-comparison.mts';
 import { surroundingAgent } from '#self';
 import {
   type ValueCompletion, type PromiseObject, type OrdinaryObject, Throw,
@@ -85,6 +88,20 @@ export function* GetIteratorFromMethod(obj: Value, method: FunctionObject): Plai
 
 /** https://tc39.es/ecma262/#sec-getiterator */
 export function* GetIterator(obj: Value, kind: 'sync' | 'async'): PlainEvaluator<IteratorRecord> {
+  // proposal-runtime-types `sec-composite-getiterator`: a TUPLE COMPOSITE is
+  // iterated BY KIND rather than through a `Symbol.iterator`. Its prototype is
+  // deliberately *null*, so there is nowhere for the method to live - which is
+  // one of the three prototype objections the design answers by dissolving
+  // rather than accepting: "iteration stops being a prototype lookup".
+  if (surroundingAgent.feature('runtime-types') && IsComposite(obj) && IsArray(obj) === Value.true) {
+    const iterator = X(CreateArrayIterator(obj as ObjectValue, 'value'));
+    const nextMethod = Q(yield* Get(iterator, Value('next')));
+    const iteratorRecord = { Iterator: iterator, NextMethod: nextMethod, Done: Value.false } as unknown as IteratorRecord;
+    if (kind === 'async') {
+      return CreateAsyncFromSyncIterator(iteratorRecord);
+    }
+    return iteratorRecord;
+  }
   let method;
   if (kind === 'async') {
     method = Q(yield* GetMethod(obj, wellKnownSymbols.asyncIterator));

@@ -46,13 +46,32 @@ test('Composite[Symbol.customMatcher] tests membership with NO side effect', () 
   expect(evaluated('Object.getOwnPropertyNames(Composite).join(",");')).toBe('length,name,isComposite');
 });
 
-test('PINNED: hasInstance, and the JSON and structured-clone mappings', () => {
-  // `Composite[%Symbol.hasInstance%]` is specified beside the matcher so that
-  // `instanceof` answers membership; it is not wired, so `instanceof` falls back
-  // to the ordinary prototype walk against a function with no `prototype`.
-  expect(outcome('Composite({ x: 1 }) instanceof Composite;')).toBe('TypeError');
-  // The JSON and structured clone mappings - "data on the wire, re-interned on
-  // read" - are the last piece of the extension.
-  expect(evaluated('JSON.stringify(Composite({ x: 1 }));')).toBe('{"x":1}');
-  expect(evaluated('String(Composite.isComposite(JSON.parse(JSON.stringify(Composite({ x: 1 })))));')).toBe('false');
+test('`instanceof` answers membership through hasInstance', () => {
+  // `sec-composite-hasinstance`: "The Composite function has no *\"prototype\"*
+  // property, so without this method `value instanceof Composite` would THROW
+  // through OrdinaryHasInstance."
+  expect(evaluated('String(Composite({ x: 1 }) instanceof Composite);')).toBe('true');
+  expect(evaluated('String(Composite([1]) instanceof Composite);')).toBe('true');
+  expect(evaluated('String({} instanceof Composite);')).toBe('false');
+  expect(evaluated('String(1 instanceof Composite);')).toBe('false');
+});
+
+test('JSON: data on the wire, RE-INTERNED on read', () => {
+  // `sec-composite-json`. Stringify needs no change - a record composite is an
+  // object whose own enumerable properties are its contents, and a tuple
+  // composite is an array.
+  expect(evaluated('JSON.stringify(Composite({ x: 1, y: 2 }));')).toBe('{"x":1,"y":2}');
+  expect(evaluated('JSON.stringify(Composite([1, 2]));')).toBe('[1,2]');
+  // The TYPED PARSE re-interns, which is the half that needed code: "interning
+  // is deliberately not on the wire; it is an identity within one heap, not a
+  // serialization format". The assertion is IDENTITY with a locally-created
+  // composite - a parse that merely produced the right shape would fail it.
+  expect(evaluated('interface I { x: uint8 } String(Composite.isComposite(JSON.parse.<Composite.<I>>(\'{"x":1}\')));')).toBe('true');
+  expect(evaluated('interface I { x: uint8 } String(JSON.parse.<Composite.<I>>(\'{"x":1}\') === Composite.<I>({ x: 1 }));')).toBe('true');
+  // "The top composite type is rejected there, because it states no shape to
+  // validate against."
+  expect(outcome('JSON.parse.<Composite>(\'{"x":1}\');')).toBe('TypeError');
+  // An UNTYPED parse still yields a plain object, which is what says the
+  // re-interning belongs to the typed read rather than to `JSON.parse`.
+  expect(evaluated('String(Composite.isComposite(JSON.parse(\'{"x":1}\')));')).toBe('false');
 });

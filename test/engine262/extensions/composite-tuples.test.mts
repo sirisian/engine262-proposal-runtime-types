@@ -55,15 +55,22 @@ test('typed tuple creation converts each position', () => {
   expect(outcome('type T = [uint8, uint8]; Composite.<T>([1]);')).toBe('TypeError');
 });
 
-test('PINNED: iteration and the mutating array methods', () => {
-  // `sec-composite-getiterator`: untyped `for..of` and spread should recognize
-  // the kind and iterate the elements directly, so no `Symbol.iterator` has to
-  // live on an object whose prototype is deliberately null. Not wired yet - the
-  // manual spelling the design gives does work, which is what says the elements
-  // are where iteration would find them.
+test('a tuple composite ITERATES BY KIND, with no Symbol.iterator', () => {
+  // `sec-composite-getiterator`. Its prototype is deliberately *null*, so there
+  // is nowhere for a `Symbol.iterator` to live - which is one of the three
+  // prototype objections the design answers by DISSOLVING rather than
+  // accepting: "iteration stops being a prototype lookup".
+  expect(evaluated('let out = []; for (const x of Composite([1, 2, 3])) { out.push(x); } out.join(",");')).toBe('1,2,3');
+  expect(evaluated('[...Composite([1, 2])].join(",");')).toBe('1,2');
+  expect(evaluated('const [a, b] = Composite([7, 8]); String(a) + "/" + String(b);')).toBe('7/8');
+  // The manual protocol spelling the design gives.
   expect(evaluated('String(Array.prototype.slice.call(Composite([1, 2])).join(","));')).toBe('1,2');
-  expect(outcome('for (const x of Composite([1, 2])) { x; }')).toBe('TypeError');
-  // A mutating method throws on a frozen receiver as it does for any frozen
-  // array - that half needs no code.
+  // A RECORD composite is not iterable, which is what says the recognition is
+  // by KIND and not by being a composite.
+  expect(outcome('for (const x of Composite({ x: 1 })) { x; }')).toBe('TypeError');
+  // And an ordinary array is untouched.
+  expect(evaluated('[...[1, 2]].join(",");')).toBe('1,2');
+  // A mutating method still throws on the frozen receiver, as for any frozen
+  // array - that half needed no code.
   expect(outcome('Composite([1, 2]).push(3);')).toBe('TypeError');
 });

@@ -458,6 +458,18 @@ function Composite_customMatcher([subject = Value.undefined]: Arguments) {
   return IsComposite(subject) ? Value.true : Value.false;
 }
 
+/**
+ * `sec-composite-hasinstance`: `Composite [ %Symbol.hasInstance% ] ( value )`.
+ *
+ * "The Composite function has no *\"prototype\"* property, so without this
+ * method `value instanceof Composite` would THROW through OrdinaryHasInstance."
+ * With it, `instanceof` against the bare function answers membership in the top
+ * composite type.
+ */
+function Composite_hasInstance([value = Value.undefined]: Arguments) {
+  return IsComposite(value) ? Value.true : Value.false;
+}
+
 /** `Composite.isComposite ( value )`. */
 function Composite_isComposite([value = Value.undefined]: Arguments) {
   return IsComposite(value) ? Value.true : Value.false;
@@ -484,6 +496,13 @@ export function bootstrapComposite(realmRec: Realm) {
   // useless: `when Composite:` would CALL `Composite(subject)`, match every
   // object, run the subject's getters, and intern a composite as the side effect
   // of a test.
+  const hasInstance = CreateBuiltinFunction(Composite_hasInstance as never, 1, Value('[Symbol.hasInstance]'), [], realmRec);
+  X(DefinePropertyOrThrow(composite, wellKnownSymbols.hasInstance, Descriptor({
+    Value: hasInstance,
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
   const matcher = CreateBuiltinFunction(Composite_customMatcher as never, 2, Value('[Symbol.customMatcher]'), [], realmRec);
   X(DefinePropertyOrThrow(composite, wellKnownSymbols.customMatcher, Descriptor({
     Value: matcher,

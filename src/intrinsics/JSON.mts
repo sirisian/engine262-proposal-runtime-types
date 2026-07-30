@@ -47,6 +47,7 @@ import {
 import { bootstrapPrototype } from './bootstrap.mts';
 import { isBooleanObject } from './Boolean.mts';
 import { isBigIntObject } from './BigInt.mts';
+import { CompositeFromShape } from './Composite.mts';
 import {
   surroundingAgent,
   Assert,
@@ -486,6 +487,21 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
     case 'reference':
       return Q(yield* CoerceJSON(value, t.Target, path));
     case 'primitive': {
+      // proposal-runtime-types `sec-composite-json`: the typed parse
+      // RE-INTERNS. "Interning is deliberately not on the wire; it is an
+      // identity within one heap, not a serialization format" - so the READ
+      // side is where a composite comes back, by coercing against the shape and
+      // going through the ordinary creation. Placed FIRST in this arm because a
+      // composite type IS of ~primitive~ kind, so the numeric tests below would
+      // otherwise see it.
+      if (t.Name === 'Composite') {
+        if (t.Arguments.length === 0) {
+          // "The top composite type is rejected there, because it states no
+          // shape to validate against."
+          return jsonTypeError(path, t, value);
+        }
+        return Q(yield* CompositeFromShape(t.Arguments[0] as TypeRecord, value));
+      }
       const name = t.Name;
       if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
         if (!(value instanceof NumberValue)) {
