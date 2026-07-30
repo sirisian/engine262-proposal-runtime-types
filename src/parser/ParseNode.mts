@@ -2752,10 +2752,71 @@ export namespace ParseNode {
   }
 
   // RelationalExpression :
-  //   RelationalExpression [no LineTerminator here] `is` Type
+  //   RelationalExpression [no LineTerminator here] `is` MatchPattern
+  //
+  // proposal-runtime-types `sec-is-pattern`: the right operand is "widened from
+  // |Type| to |MatchPattern|, OF WHICH A |Type| IS ONE FORM, so every existing
+  // `is` keeps its parse and its meaning" - which is why `Type` stays on this
+  // node and a pattern arrives beside it rather than replacing it. A node with
+  // `Type` set is the type pattern, spelled exactly as it was.
   export interface IsExpression extends BaseParseNode {
     readonly type: 'IsExpression';
     readonly Expression: RelationalExpressionOrHigher;
+    readonly Type: Type | null;
+    readonly Pattern?: MatchPattern | null;
+  }
+
+  /**
+   * proposal-runtime-types `sec-match-patterns`.
+   *
+   * The pattern forms get their OWN node kinds rather than reusing
+   * `ObjectBindingPattern`/`ArrayBindingPattern`: a binding pattern always binds
+   * and admits defaults, while a match pattern TESTS, admits sub-patterns
+   * everywhere, has `_` and combinators, and has no defaults - and an absent
+   * optional member FAILS a pattern where a binding pattern yields *undefined*.
+   */
+  export type MatchPattern =
+    | MatchOrPattern
+    | MatchAndPattern
+    | MatchNotPattern
+    | MatchWildcardPattern
+    | MatchLiteralPattern
+    | MatchInterpolationPattern
+    | MatchTypePattern;
+
+  export interface MatchOrPattern extends BaseParseNode {
+    readonly type: 'MatchOrPattern';
+    readonly Left: MatchPattern;
+    readonly Right: MatchPattern;
+  }
+  export interface MatchAndPattern extends BaseParseNode {
+    readonly type: 'MatchAndPattern';
+    readonly Left: MatchPattern;
+    readonly Right: MatchPattern;
+  }
+  export interface MatchNotPattern extends BaseParseNode {
+    readonly type: 'MatchNotPattern';
+    readonly Operand: MatchPattern;
+  }
+  /** `_`: matches anything, binds nothing. */
+  export interface MatchWildcardPattern extends BaseParseNode {
+    readonly type: 'MatchWildcardPattern';
+  }
+  /** A literal, compared by MatchConstant with the bare-zero rule. */
+  export interface MatchLiteralPattern extends BaseParseNode {
+    readonly type: 'MatchLiteralPattern';
+    readonly Literal: ParseNode;
+    /** Whether the source wrote a bare `0` rather than `+0` or `-0`. */
+    readonly BareZero: boolean;
+  }
+  /** `${expr}`: evaluates and compares, the escape hatch from every other rule. */
+  export interface MatchInterpolationPattern extends BaseParseNode {
+    readonly type: 'MatchInterpolationPattern';
+    readonly Expression: ParseNode;
+  }
+  /** A type, tested by IsOfType - the form every existing `is` already had. */
+  export interface MatchTypePattern extends BaseParseNode {
+    readonly type: 'MatchTypePattern';
     readonly Type: Type;
   }
 
@@ -3499,7 +3560,15 @@ export type ParseNode =
   | ParseNode.TypeParameters
   | ParseNode.TypeParameter
   | ParseNode.WhereClause
-  | ParseNode.ConditionalRefinement;
+  | ParseNode.ConditionalRefinement
+  // proposal-runtime-types `sec-match-patterns`
+  | ParseNode.MatchOrPattern
+  | ParseNode.MatchAndPattern
+  | ParseNode.MatchNotPattern
+  | ParseNode.MatchWildcardPattern
+  | ParseNode.MatchLiteralPattern
+  | ParseNode.MatchInterpolationPattern
+  | ParseNode.MatchTypePattern;
 
 /**
  * A type that contains a mapping of {@link ParseNode} type names to their corresponding {@link ParseNode} type.

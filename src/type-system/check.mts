@@ -1444,11 +1444,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       break;
     }
     if (e.type === 'IsExpression') {
-      const ie = e as unknown as { Expression: ParseNode, Type: ParseNode };
+      const ie = e as unknown as {
+        Expression: ParseNode, Type: ParseNode | null,
+        Pattern?: { type?: string, Type?: ParseNode } | null,
+      };
       if (ie.Expression.type !== 'IdentifierReference') {
         return undefined;
       }
-      const t = resolveType(ie.Type as ParseNode.Type);
+      // proposal-runtime-types `sec-is-pattern`: "a |Type| is one |MatchPattern|
+      // form, so every existing `is` keeps its parse AND ITS MEANING" - and its
+      // meaning to the CHECKER is the narrowing it drives. Routing every `is`
+      // through a pattern node without seeing through a bare TYPE pattern made
+      // narrowing stop: the test still answered correctly at run time and
+      // narrowed nothing, which is the promise half-kept. A pattern that is NOT
+      // a bare type narrows nothing yet - phase five - and that is the pin.
+      const asType = ie.Type ?? (ie.Pattern?.type === 'MatchTypePattern' ? ie.Pattern.Type : null);
+      if (!asType) {
+        return undefined;
+      }
+      const t = resolveType(asType as ParseNode.Type);
       return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated } : undefined;
     }
     // `a && b` implies its LEFT operand only where the whole is true, and
@@ -2409,7 +2423,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // by resolving it here and at the bare cast below.
         const ie = n as ParseNode.IsExpression;
         walk(ie.Expression as ParseNode);
-        resolveType(ie.Type);
+        const iePattern = ie.Pattern as { type?: string, Type?: ParseNode } | null | undefined;
+        const ieType = ie.Type ?? (iePattern?.type === 'MatchTypePattern' ? iePattern.Type : null);
+        if (ieType) {
+          resolveType(ieType as ParseNode.Type);
+        }
         return;
       }
       case 'TypedConversionExpression': {

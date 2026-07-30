@@ -577,7 +577,26 @@ export abstract class ExpressionParser extends FunctionParser {
           const node: ParseNode.Unfinished<ParseNode.IsExpression> = this.startNode(result);
           node.Expression = result;
           this.next();
-          node.Type = this.parseType();
+          // proposal-runtime-types `sec-is-pattern`: the right operand is
+          // "widened from |Type| to |MatchPattern|, OF WHICH A |Type| IS ONE
+          // FORM, so every existing `is` keeps its parse and its meaning". The
+          // pattern forms that a |Type| cannot be are tried first; anything else
+          // falls through to `parseType` UNCHANGED, which is what keeps that
+          // promise literal rather than approximate.
+          // "Every existing `is` keeps its PARSE and its meaning" - and a
+          // parse-shape test reads `Type` off this node, which IS the parse. So
+          // a BARE type pattern is unwrapped back onto `Type` and only a
+          // genuinely non-type pattern populates `Pattern`. Wrapping every type
+          // in a `MatchTypePattern` preserved the meaning and changed the shape,
+          // which is half the promise.
+          const parsed = this.parseMatchPattern();
+          if (parsed.type === 'MatchTypePattern') {
+            node.Type = parsed.Type;
+            node.Pattern = null;
+          } else {
+            node.Pattern = parsed;
+            node.Type = null;
+          }
           result = this.finishNode(node, 'IsExpression');
           continue;
         }
@@ -1487,6 +1506,67 @@ export abstract class ExpressionParser extends FunctionParser {
     }
 
     return this.finishNode(node, 'ClassTail');
+  }
+
+  /**
+   * proposal-runtime-types `sec-match-patterns`.
+   *
+   * The combinator layer sits ABOVE the type form, not beside it - a |Type| is
+   * one |MatchPattern|, so `uint8 or number` and `not uint8` are ordinary
+   * combinations of it. Parsing the special forms first and falling back to
+   * `parseType` for everything else put the fallback OUTSIDE the combinators,
+   * which silently dropped the operator: `1 is uint8 or number` threw and
+   * `"s" is not uint8` answered *false*.
+   */
+  parseMatchPattern(): ParseNode.MatchPattern {
+    let left = this.parseMatchUnaryPattern();
+    while (this.test('and')) {
+      const node = this.startNode<ParseNode.MatchAndPattern>(left);
+      this.next();
+      node.Left = left;
+      node.Right = this.parseMatchUnaryPattern();
+      left = this.finishNode(node, 'MatchAndPattern');
+    }
+    while (this.test('or')) {
+      const node = this.startNode<ParseNode.MatchOrPattern>(left);
+      this.next();
+      node.Left = left;
+      node.Right = this.parseMatchPattern();
+      left = this.finishNode(node, 'MatchOrPattern');
+    }
+    return left;
+  }
+
+  /** `not` binds tightest. */
+  parseMatchUnaryPattern(): ParseNode.MatchPattern {
+    if (this.test('not')) {
+      const node = this.startNode<ParseNode.MatchNotPattern>();
+      this.next();
+      node.Operand = this.parseMatchUnaryPattern();
+      return this.finishNode(node, 'MatchNotPattern');
+    }
+    // `_` matches anything and binds nothing.
+    if (this.test('_')) {
+      const node = this.startNode<ParseNode.MatchWildcardPattern>();
+      this.next();
+      return this.finishNode(node, 'MatchWildcardPattern');
+    }
+    const t = this.peek();
+    if (t.type === Token.NUMBER || t.type === Token.STRING
+        || t.type === Token.TRUE || t.type === Token.FALSE || t.type === Token.NULL
+        || t.type === Token.ADD || t.type === Token.SUB) {
+      const node = this.startNode<ParseNode.MatchLiteralPattern>();
+      // A BARE `0` matches both zeros of the position's type; an explicit `+0`
+      // or `-0` distinguishes them. Recorded at the PARSE because only the
+      // source can tell them apart - by the time there is a value they are one.
+      node.BareZero = !(t.type === Token.ADD || t.type === Token.SUB);
+      node.Literal = this.parseUnaryExpression();
+      return this.finishNode(node, 'MatchLiteralPattern');
+    }
+    // Everything else is a |Type|, parsed exactly as `is` always parsed it.
+    const node = this.startNode<ParseNode.MatchTypePattern>();
+    node.Type = this.parseType();
+    return this.finishNode(node, 'MatchTypePattern');
   }
 
   parseClassElement(): ParseNode.ClassElement {

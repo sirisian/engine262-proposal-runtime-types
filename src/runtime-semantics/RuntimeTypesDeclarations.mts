@@ -12,6 +12,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
+import { SameValue } from '../abstract-ops/all.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -264,12 +265,80 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
  * `:=` applies the conversion rule, and `type` produces the interned Type
  * Object.
  */
-export function* Evaluate_IsExpression({ Expression, Type }: ParseNode.IsExpression): ValueEvaluator {
+export function* Evaluate_IsExpression({ Expression, Type, Pattern }: ParseNode.IsExpression): ValueEvaluator {
   const ref = Q(yield* Evaluate(Expression));
   const value = Q(yield* GetValue(ref));
-  const record = Q(yield* TypeNodeToTypeRecord(Type));
+  // proposal-runtime-types `sec-is-pattern`: "`subject is P` is the one-arm
+  // `match`, exactly." A |Type| is one |MatchPattern| form and keeps the path it
+  // always had, so every existing `is` is unchanged.
+  if (Pattern) {
+    const matched = Q(yield* PatternMatches(Pattern, value));
+    return matched ? Value.true : Value.false;
+  }
+  const record = Q(yield* TypeNodeToTypeRecord(Type!));
   const result = Q(yield* IsOfType(value, record));
   return result ? Value.true : Value.false;
+}
+
+/**
+ * `sec-matchconstant`: the sameValue comparison WITHIN ONE TYPE - *false* where
+ * the operands' types differ, the type's sameValue where they are of one
+ * numeric type, SameValue otherwise.
+ *
+ * A third relation beside SameValue and SameValueZero. The BARE-ZERO rule is
+ * deliberately NOT here: `PatternMatches`' literal step applies it, because
+ * inside this operation it would reach every constant comparison, including
+ * interpolations and enumerators.
+ */
+export function MatchConstant(a: Value, b: Value): boolean {
+  return SameValue(a, b);
+}
+
+/**
+ * `sec-patternmatches`, the forms phase one of PLAN-pattern-matching.md
+ * carries: combinators, `_`, literals, and the type pattern.
+ *
+ * It returns at the FIRST failure, so "user code a pattern can reach ... runs at
+ * most once and only up to the deciding test" - which is why `and` returns
+ * before evaluating its right operand on a miss, rather than computing both and
+ * combining.
+ */
+export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value): PlainEvaluator<boolean> {
+  switch (P.type) {
+    case 'MatchOrPattern': {
+      if (Q(yield* PatternMatches(P.Left, subject))) {
+        return true;
+      }
+      return Q(yield* PatternMatches(P.Right, subject));
+    }
+    case 'MatchAndPattern': {
+      if (!Q(yield* PatternMatches(P.Left, subject))) {
+        return false;
+      }
+      return Q(yield* PatternMatches(P.Right, subject));
+    }
+    case 'MatchNotPattern':
+      return !Q(yield* PatternMatches(P.Operand, subject));
+    case 'MatchWildcardPattern':
+      return true;
+    case 'MatchLiteralPattern': {
+      const ref = Q(yield* Evaluate(P.Literal as never));
+      const literal = Q(yield* GetValue(ref as never));
+      // The BARE-ZERO step: a bare `0` matches both zeros of the position's
+      // type, while an explicit `+0` or `-0` distinguishes them.
+      if (P.BareZero && literal instanceof NumberValue && R(literal) === 0
+          && subject instanceof NumberValue && R(subject) === 0) {
+        return true;
+      }
+      return MatchConstant(subject, literal);
+    }
+    case 'MatchTypePattern': {
+      const record = Q(yield* TypeNodeToTypeRecord(P.Type));
+      return Q(yield* IsOfType(subject, record));
+    }
+    default:
+      return false;
+  }
 }
 
 export function* Evaluate_TypedConversionExpression({ Expression, Type }: ParseNode.TypedConversionExpression): ValueEvaluator {
