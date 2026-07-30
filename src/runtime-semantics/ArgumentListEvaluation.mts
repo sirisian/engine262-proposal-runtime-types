@@ -348,6 +348,21 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
   for (const v of restCollected) {
     result.push(v);
   }
+  // proposal-runtime-types, PLAN-rest-parameters.md phase 4/6.6: a rest may be
+  // followed by further parameters, and a named argument may name one of them.
+  // The assembly stopped at the rest, so `f(1, 2, b: "x")` for
+  // `function f(...a: [].<number>, b: string)` dropped the b entirely and the
+  // call failed as unassignable. Values named for parameters after the rest are
+  // appended in parameter order; one that is absent is simply not supplied, and
+  // the binding rejects it if the parameter is required, which is the same
+  // answer by the same rule that governs a positional call.
+  if (restIndex !== -1) {
+    for (let i = restIndex + 1; i < names.length; i += 1) {
+      if (byName.has(names[i])) {
+        result.push(byName.get(names[i])!);
+      }
+    }
+  }
   return result as Arguments;
 }
 

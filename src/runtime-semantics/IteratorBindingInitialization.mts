@@ -1,5 +1,6 @@
 import { Value, ReferenceValue } from '../value.mts';
 import {
+  EnsureCompletion,
   NormalCompletion,
   Q, X,
 } from '../completion.mts';
@@ -108,7 +109,18 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
         row.push(true);
         continue;
       }
-      const declared = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+      // The assignment is a DISTRIBUTION, not the enforcement: each parameter's
+      // own annotation check runs when it is bound, below, and rejects what
+      // does not fit. So a type this cannot resolve - a generic parameter whose
+      // substitution is not in scope here, which `...a: [].<T>` is - admits
+      // rather than throwing, and the distribution falls back to positions
+      // while the enforcement stays exact.
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+      if (resolved.Type === 'throw') {
+        row.push(true);
+        continue;
+      }
+      const declared = resolved.Value;
       const wanted = p.type === 'BindingRestElement' ? restElementType(declared) : declared;
       row.push(Q(yield* IsOfType(arg, wanted)));
     }

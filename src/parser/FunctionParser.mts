@@ -415,8 +415,22 @@ export abstract class FunctionParser extends IdentifierParser {
     const params: Mutable<ParseNode.FormalParameters> = [];
     this.scope.with({ parameters: true }, () => {
       while (true) {
+        // proposal-runtime-types decorators.md: a parameter carries its own
+        // decorators, and a rest parameter IS a parameter. They were read
+        // inside parseFormalParameter, which a rest never reaches, so
+        // `@d ...a: [].<number>` was a Syntax Error while `@d a: number` was
+        // not - a gap that predates the rest positions of this phase. Reading
+        // them here serves both, since a decorator list is arbitrarily long and
+        // cannot be looked past to see which follows.
+        let pendingDecorators: readonly ParseNode.Decorator[] | null = null;
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
+          pendingDecorators = this.parseDecorators();
+        }
         if (this.test(Token.ELLIPSIS)) {
           const element = this.parseBindingRestElement();
+          if (pendingDecorators) {
+            (element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = pendingDecorators;
+          }
           this.scope.declare(element, 'parameter');
           params.push(element);
           // proposal-runtime-types #sec-type-annotations, PLAN-rest-parameters.md
@@ -434,6 +448,9 @@ export abstract class FunctionParser extends IdentifierParser {
           }
         } else {
           const formal = this.parseFormalParameter();
+          if (pendingDecorators) {
+            (formal as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = pendingDecorators;
+          }
           this.scope.declare(formal, 'parameter');
           params.push(formal);
         }
