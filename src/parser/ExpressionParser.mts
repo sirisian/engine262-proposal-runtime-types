@@ -1878,7 +1878,17 @@ export abstract class ExpressionParser extends FunctionParser {
       // function body would rebind all five at once.
       clause.IsBlock = !clause.IsThrow && this.test(Token.LBRACE);
       if (clause.IsBlock) {
-        clause.Body = (this as unknown as { parseBlock(): ParseNode }).parseBlock();
+        const armBlock = (this as unknown as { parseBlock(): ParseNode.Block }).parseBlock();
+        clause.Body = armBlock;
+        // proposal-runtime-types #sec-do-expression-modifications: a match
+        // arm's Block IS a `do` expression's Block, so it carries that form's
+        // Early Errors. An arm ending in a declaration was a silent ~void~
+        // under the narrow rule this replaces, and a complaint at whatever read
+        // the match's value; it names the declaration now.
+        const armTail = endsInIterationOrDeclaration(armBlock.StatementList);
+        if (armTail) {
+          this.addEarlyError(Throw.SyntaxError('a match arm may not end in $1', Value(armTail)), armBlock);
+        }
       } else {
         clause.Body = this.parseAssignmentExpression();
         this.eat(Token.SEMICOLON);

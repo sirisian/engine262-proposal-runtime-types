@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { evaluated, expectError } from '../readme/harness.mts';
 
 /**
  * PLAN-pattern-matching.md phase four: the `match` expression.
@@ -85,15 +85,28 @@ test('PINNED: the cache holds on the PATTERN path and not the TYPE path', () => 
     + 'match (o) { when { g: 2 }: 1; when { g: 1 }: 2; default: 3; }; String(n);')).toBe('2');
 });
 
-test('a BLOCK arm is a block, and its value is its final expression', () => {
-  // "A block arm's value is its final statement where that is an expression
-  // statement, and `void` otherwise" - which is the completion value a Block
-  // already produces, so nothing special is computed for it.
+test('a BLOCK arm is a do expression\'s block', () => {
+  // proposal-runtime-types #sec-do-expression-modifications. An arm's Block IS
+  // a `do` expression's Block: its value is its completion value, which a Block
+  // already produces, so nothing special is computed for it - that was true
+  // under the narrower rule this replaces as well, and no program changes
+  // meaning.
   expect(evaluated('String(match (1) { when 1: { 42; } default: 0; });')).toBe('42');
   expect(evaluated('String((() => { let n = 0; return match (1) { when 1: { n = 5; n * 2; } default: 0; }; })());')).toBe('10');
-  expect(evaluated('String(match (1) { when 1: { let a = 1; } default: 0; });')).toBe('undefined');
   // An expression arm is unaffected.
   expect(evaluated('String(match (1) { when 1: 7; default: 0; });')).toBe('7');
+
+  // What DOES change, in both directions. An arm may now end in an `if` with an
+  // `else`, a `try`, or a `switch`, which the old rule made `void` and so
+  // unreadable at the use site.
+  expect(evaluated('String(match (1) { when 1: { if (true) 5; else 6; } default: 0; });')).toBe('5');
+  expect(evaluated('String(match (1) { when 1: { try { 5 } catch { 6 } } default: 0; });')).toBe('5');
+
+  // And an arm ending in a declaration is a Syntax Error naming it, where it
+  // used to be a silent `void` - this line asserted 'undefined' before, which
+  // was the old rule's answer and the reason the error is better.
+  expectError('const x = match (1) { when 1: { let a = 1; } default: 0; };');
+  expectError('const ys = []; const x = match (1) { when 1: { for (const y of ys) { 1 } } default: 0; };');
 });
 
 test('PINNED: an abrupt completion cannot leave a block arm', () => {

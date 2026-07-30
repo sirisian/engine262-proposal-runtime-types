@@ -419,11 +419,16 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       continue;
     }
     if (clause.IsBlock) {
-      // "A block arm's value is its final statement where that is an expression
-      // statement, and `void` otherwise" - which is the completion value a
-      // Block already produces, so nothing special is computed here. A `return`
-      // or `break` inside propagates as the abrupt completion it is, which is
-      // what makes the arm a block rather than a function body.
+      // proposal-runtime-types #sec-do-expression-modifications: a match arm's
+      // Block IS a `do` expression's Block, and its value is its completion
+      // value - which a Block already produces, so nothing special is computed
+      // here. That was true under the narrower rule this replaces as well, so
+      // no program changes meaning: what changes is that an arm may now END in
+      // an `if` with an `else`, a `try`, or a `switch`, where the old rule made
+      // those ~void~ and unreadable at the use site, and that an arm ending in
+      // a declaration is a Syntax Error naming it rather than a silent ~void~.
+      // A `return` or `break` inside propagates as the abrupt completion it is,
+      // which is what makes the arm a block rather than a function body.
       const blockResult = EnsureCompletion(yield* Evaluate(clause.Body as never));
       if (blockResult.Type !== 'normal') {
         return blockResult as never;
