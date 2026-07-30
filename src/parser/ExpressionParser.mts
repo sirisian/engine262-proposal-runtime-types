@@ -1667,31 +1667,42 @@ export abstract class ExpressionParser extends FunctionParser {
    * which silently dropped the operator: `1 is uint8 or number` threw and
    * `"s" is not uint8` answered *false*.
    */
-  parseMatchPattern(): ParseNode.MatchPattern {
-    let left = this.parseMatchUnaryPattern();
+  /**
+   * `colonTerminates` says whether a `:` ENDS this pattern rather than
+   * belonging to it.
+   *
+   * In a `match` CLAUSE it does - `when P:` - so an annotated binding needs a
+   * SECOND colon to be told from the clause's. In `is` position, and in an
+   * object pattern's member position, it does NOT, so `let x: T` is complete as
+   * written. The rule genuinely differs by position, and speculating on a
+   * second colon at each site got two of the three wrong; passing the context
+   * down settles all of them at once.
+   */
+  parseMatchPattern(colonTerminates = false): ParseNode.MatchPattern {
+    let left = this.parseMatchUnaryPattern(colonTerminates);
     while (this.test('and')) {
       const node = this.startNode<ParseNode.MatchAndPattern>(left);
       this.next();
       node.Left = left;
-      node.Right = this.parseMatchUnaryPattern();
+      node.Right = this.parseMatchUnaryPattern(colonTerminates);
       left = this.finishNode(node, 'MatchAndPattern');
     }
     while (this.test('or')) {
       const node = this.startNode<ParseNode.MatchOrPattern>(left);
       this.next();
       node.Left = left;
-      node.Right = this.parseMatchPattern();
+      node.Right = this.parseMatchPattern(colonTerminates);
       left = this.finishNode(node, 'MatchOrPattern');
     }
     return left;
   }
 
   /** `not` binds tightest. */
-  parseMatchUnaryPattern(): ParseNode.MatchPattern {
+  parseMatchUnaryPattern(colonTerminates = false): ParseNode.MatchPattern {
     if (this.test('not')) {
       const node = this.startNode<ParseNode.MatchNotPattern>();
       this.next();
-      node.Operand = this.parseMatchUnaryPattern();
+      node.Operand = this.parseMatchUnaryPattern(colonTerminates);
       return this.finishNode(node, 'MatchNotPattern');
     }
     // `let x` / `const x`, with an optional annotation. "An unadorned name is a
@@ -1703,24 +1714,29 @@ export abstract class ExpressionParser extends FunctionParser {
       this.next();
       node.Name = this.parseBindingIdentifier().name;
       node.TypeAnnotation = null;
-      // THE COLON IS AMBIGUOUS: `when let x: T:` annotates, and `when let x:`
-      // ends the pattern and begins the arm. Speculate - take the annotation
-      // only if ANOTHER colon follows it, since a clause always has one.
+      // Where a colon does NOT terminate the pattern, `let x: T` is complete as
+      // written. Where it DOES - a clause - the annotation is taken only if a
+      // second colon follows, which is the clause's own.
       if (this.test(Token.COLON)) {
-        const savedEarly = new Set(this.earlyErrors);
-        const cp = this.getLexerCheckpoint();
-        this.next();
-        let annotation = null;
-        try {
-          annotation = this.parseType();
-        } catch {
-          annotation = null;
-        }
-        if (annotation && this.test(Token.COLON)) {
-          node.TypeAnnotation = annotation;
+        if (!colonTerminates) {
+          this.next();
+          node.TypeAnnotation = this.parseType();
         } else {
-          this.restoreLexerCheckpoint(cp);
-          this.earlyErrors = savedEarly;
+          const savedEarly = new Set(this.earlyErrors);
+          const cp = this.getLexerCheckpoint();
+          this.next();
+          let annotation = null;
+          try {
+            annotation = this.parseType();
+          } catch {
+            annotation = null;
+          }
+          if (annotation && this.test(Token.COLON)) {
+            node.TypeAnnotation = annotation;
+          } else {
+            this.restoreLexerCheckpoint(cp);
+            this.earlyErrors = savedEarly;
+          }
         }
       }
       return this.finishNode(node, 'MatchBindingPattern');
@@ -1869,7 +1885,7 @@ export abstract class ExpressionParser extends FunctionParser {
         clause.Pattern = null;
       } else if (this.test('when')) {
         this.next();
-        clause.Pattern = this.parseMatchPattern();
+        clause.Pattern = this.parseMatchPattern(true);
       } else {
         this.restoreLexerCheckpoint(checkpoint);
         this.earlyErrors = savedEarlyErrors;

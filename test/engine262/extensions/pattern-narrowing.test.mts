@@ -66,12 +66,13 @@ test('an ANNOTATED binding types as its annotation', () => {
   expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
 });
 
-test('PINNED: the binding colon is ambiguous in a MEMBER position too', () => {
-  // `{ a: let n: uint8 }` needs the same second-colon rule a clause has, and a
-  // member position has no clause colon to speculate on - the same
-  // context-dependence pattern-bindings.test.mts pins for `is`.
+test('a MEMBER binding may be annotated too', () => {
+  // The third position the colon rule reaches, settled by the same context flag
+  // - a member position has no clause colon, so `let n: uint8` is complete.
   const outcome3 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome3('function f(v: { a: uint8 }) { return match (v) { when { a: let n: uint8 }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('SyntaxError');
-  // The UNANNOTATED member binding works.
+  expect(outcome3('function f(v: { a: uint8 }) { return match (v) { when { a: let n: uint8 }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
+  expect(evaluated('String(match ({ a: uint8(1) }) { when { a: let n: uint8 }: 1; default: 0; });')).toBe('1');
+  // The annotation TESTS, so a member of the wrong type falls through.
+  expect(evaluated('String(match ({ a: 1 }) { when { a: let n: uint8 }: 1; default: 0; });')).toBe('0');
   expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
 });

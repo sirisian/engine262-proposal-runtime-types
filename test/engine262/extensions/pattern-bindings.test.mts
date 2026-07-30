@@ -46,19 +46,25 @@ test('`is` creates an environment for its bindings too', () => {
   expect(evaluated('String(1 is let x);')).toBe('true');
 });
 
-test('PINNED: the binding COLON is context-dependent', () => {
-  // `when let x: T:` annotates and `when let x:` ends the pattern - the colon is
-  // ambiguous, and it is resolved by speculating: take the annotation only if
-  // ANOTHER colon follows, since a clause always has one.
+test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
+  // `when let x: T:` annotates and `when let x:` ends the pattern, so a colon
+  // means different things in different positions. The parsers carry a
+  // `colonTerminates` flag: TRUE in a clause, where a second colon distinguishes
+  // an annotation from the clause's own, and FALSE in `is` and member positions,
+  // where `let x: T` is complete as written.
   //
-  // In `is` position there is NO clause colon, so an annotated binding cannot be
-  // told apart by that rule and is refused. Getting it right means passing the
-  // CONTEXT into the parse rather than inferring it from lookahead - the two
-  // positions genuinely differ.
+  // Speculating on a second colon at each site got two of the three positions
+  // WRONG - `is` and member bindings were refused - because the speculation
+  // encoded a clause's rule everywhere. Passing the context down settles all
+  // three at once.
+  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  // Clause position, both spellings.
   expect(evaluated('String(match (uint8(1)) { when let x: uint8: "yes"; default: "no"; });')).toBe('yes');
-  expect(outcome('uint8(1) is let x: uint8;')).toBe('SyntaxError');
-  // The unannotated form works in both.
-  expect(evaluated('String(match (1) { when let x: x; default: 0; });')).toBe('1');
+  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+  // `is` position, where there is no clause colon to find.
+  expect(outcome2('uint8(1) is let x: uint8;')).toBe('ACCEPTED');
+  expect(evaluated('String(uint8(1) is let x: uint8);')).toBe('true');
+  expect(evaluated('String(1 is let x: uint8);')).toBe('false');
   expect(evaluated('String(1 is let x);')).toBe('true');
 });
 
