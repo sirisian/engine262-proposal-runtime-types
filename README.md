@@ -126,6 +126,13 @@ See the [example](https://github.com/engine262/engine262/blob/main/lib-src/node/
 
 `npm run test:test262` will run the [test262][] test suite. Run `npm run test:test262 -- --help` to see the test runner options.
 
+test262 is a submodule, and `npm run build` needs it: the build bundles the
+harness, so without a checkout `prebuild:bundle_test262_harness` fails and every
+later step with it. Run `git submodule update --init --depth 1
+test/test262/test262` once. The runner takes paths, so
+`node test/test262/test262.mts language/statements/do-while` runs one directory
+where the full suite is 52,000 tests and takes hours.
+
 `npm start` start the engine262 CLI.
 
 `npm run inspector` start the website (debugging engine262 mainly happens here).

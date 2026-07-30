@@ -114,7 +114,10 @@ export function importBundledTest262Harness(
   realm: ManagedRealm,
   nameMapper = (str: string) => `https://github.com/tc39/test262/blob/main/harness/${str}`,
 ) {
-  for (const [specifier, file] of Object.entries(harness)) {
+  // The bundled harness is generated JSON, whose values TypeScript widens to
+  // `unknown`; each is a source text. This surfaces only when the file is real,
+  // so it went unseen while the generated file was absent.
+  for (const [specifier, file] of Object.entries(harness) as [string, string][]) {
     if (specifier.includes('atomicsHelper.js')) continue;
     const completion = realm.evaluateScriptSkipDebugger(file, { specifier: nameMapper(specifier) });
     if (completion instanceof ThrowCompletion) {
