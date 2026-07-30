@@ -293,6 +293,12 @@ export abstract class FunctionParser extends IdentifierParser {
           } else {
             asNew.BindingPattern = this.convertArrowParameter(AssignmentExpression).BindingPattern;
           }
+          // The cover kept the rest's annotation; the binding is where it lives.
+          // A SpreadElement (a call-site spread) has none, hence the read.
+          const covered = asOld as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
+          if (covered.TypeAnnotation) {
+            asNew.TypeAnnotation = covered.TypeAnnotation;
+          }
           delete asPartial.AssignmentExpression;
         });
         this.scope.declare(BindingRestElement, 'parameter');
@@ -413,8 +419,19 @@ export abstract class FunctionParser extends IdentifierParser {
           const element = this.parseBindingRestElement();
           this.scope.declare(element, 'parameter');
           params.push(element);
-          this.expect(Token.RPAREN);
-          break;
+          // proposal-runtime-types #sec-type-annotations, PLAN-rest-parameters.md
+          // phase 1b: a rest is an ORDINARY element of the parameter list. It
+          // may be followed by further parameters and a list may hold several,
+          // which is what the design's `f(a: string, ...args: [].<uint32>,
+          // ...args2: [].<string>, callback: () => void)` needs. Which run each
+          // rest takes is decided by the types (phase 2's assignment).
+          //
+          // With the feature OFF the base language's rule stands exactly: a
+          // rest ends the list, and anything after it is a Syntax Error.
+          if (!surroundingAgent.feature('runtime-types')) {
+            this.expect(Token.RPAREN);
+            break;
+          }
         } else {
           const formal = this.parseFormalParameter();
           this.scope.declare(formal, 'parameter');

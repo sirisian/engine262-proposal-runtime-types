@@ -974,6 +974,12 @@ export namespace ParseNode {
   export interface AssignmentRestElement extends BaseParseNode {
     readonly type: 'AssignmentRestElement';
     readonly AssignmentExpression: AssignmentExpressionOrHigher;
+    /**
+     * proposal-runtime-types, PLAN-rest-parameters.md phase 1: a rest inside the
+     * arrow cover grammar may carry a type annotation, which the refinement to
+     * BindingRestElement transfers. A spread at a CALL site never has one.
+     */
+    readonly TypeAnnotation?: TypeAnnotation | null;
   }
 
   // proposal-runtime-types: a named argument at a call site, `name: expr`. The

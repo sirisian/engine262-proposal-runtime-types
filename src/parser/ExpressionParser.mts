@@ -1825,7 +1825,29 @@ export abstract class ExpressionParser extends FunctionParser {
             inner.BindingIdentifier = this.parseBindingIdentifier();
             break;
         }
+        // proposal-runtime-types, PLAN-rest-parameters.md phase 1: an arrow's
+        // parameters come through this cover, so a typed rest is read here.
+        // Without it `(...a: [].<uint32>) => a` never parsed at ANY position,
+        // which is a gap that predates multiple rests.
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+          inner.TypeAnnotation = this.parseTypeAnnotation();
+        }
         expressions.push(this.finishNode(inner, 'BindingRestElement'));
+        // A rest is an ordinary element of the list under the feature: it may be
+        // followed by further parameters and there may be several. With the
+        // feature off the base language's rule stands - a rest ends the list.
+        if (!surroundingAgent.feature('runtime-types')) {
+          this.expect(Token.RPAREN);
+          break;
+        }
+        arrowOnly = true;
+        if (this.eat(Token.COMMA)) {
+          if (this.eat(Token.RPAREN)) {
+            rparenAfterComma = this.currentToken;
+            break;
+          }
+          continue;
+        }
         this.expect(Token.RPAREN);
         break;
       }
