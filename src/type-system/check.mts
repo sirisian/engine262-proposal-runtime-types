@@ -1628,12 +1628,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // narrowing stop: the test still answered correctly at run time and
       // narrowed nothing, which is the promise half-kept. A pattern that is NOT
       // a bare type narrows nothing yet - phase five - and that is the pin.
-      const asType = ie.Type ?? (ie.Pattern?.type === 'MatchTypePattern' ? ie.Pattern.Type : null);
+      // A `not` over a bare type NEGATES the narrowing rather than abandoning
+      // it: `v is not uint8` leaves `v` everything it was except `uint8` in the
+      // true branch, which is what union subtraction can represent. Combinators
+      // over non-type patterns still narrow nothing, since "a failed structural
+      // pattern narrows nothing" and negation types do not exist here.
+      let patternNode = ie.Pattern as { type?: string, Type?: ParseNode, Operand?: { type?: string, Type?: ParseNode } } | null | undefined;
+      let patternNegated = negated;
+      while (patternNode?.type === 'MatchNotPattern') {
+        patternNegated = !patternNegated;
+        patternNode = patternNode.Operand as typeof patternNode;
+      }
+      const asType = ie.Type ?? (patternNode?.type === 'MatchTypePattern' ? patternNode.Type : null);
       if (!asType) {
         return undefined;
       }
       const t = resolveType(asType as ParseNode.Type);
-      return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated } : undefined;
+      return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated: patternNegated } : undefined;
     }
     // `a && b` implies its LEFT operand only where the whole is true, and
     // `a || b` implies the left is false only where the whole is false. So a

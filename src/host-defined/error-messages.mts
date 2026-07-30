@@ -678,6 +678,7 @@ export interface Throw {
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
   | 'a do expression may not end in $1'
+  | 'a match arm may not end in $1'
   | 'a meta declaration requires a $1 hook'
   | 'a string is not a conversion source for $1; use its parse or tryParse'
   | 'a using declaration cannot be typed $1, whose values carry no disposal method'
