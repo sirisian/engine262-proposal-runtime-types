@@ -109,8 +109,10 @@ test('PINNED: what phase two does not do', () => {
   // the intern key, so answering with a record now would mint objects that
   // phase must invalidate.
   expect(outcome('Composite([1, 2]);')).toBe('TypeError');
-  // Composite TYPES are phase three - `Composite.<T>` and the typed creation.
-  expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('TypeError');
+  // Composite TYPES landed in phase three; the TYPED CREATION form
+  // `Composite.<T>({...})` is phase four, so a shape can be NAMED but not yet
+  // CREATED at.
+  expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
   // The weak-position refusal and the custom matcher are phase five.
   expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('ACCEPTED');
   expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('undefined');

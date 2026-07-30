@@ -222,6 +222,33 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (t.Kind === 'union') {
     return t.Members.some((m) => IsSubtype(s, m, next));
   }
+  // proposal-runtime-types `sec-composite-types`, the steps at #sec-issubtype:
+  // "If _s_ is a composite type, then if _t_ is the top composite type, return
+  // *true*; if _s_ is not the top composite type and _t_ is a composite type
+  // that is not the top, return IsSubtype(sShape, the shape of t)."
+  //
+  // A composite type is COVARIANT IN ITS SHAPE, "which the frozenness of every
+  // composite makes sound" - the usual reason width and depth subtyping is
+  // unsound for objects is that a wider value can be written through a narrower
+  // view, and a frozen object cannot be written at all.
+  const sComposite = s.Kind === 'primitive' && s.Name === 'Composite';
+  const tComposite = t.Kind === 'primitive' && t.Name === 'Composite';
+  if (sComposite) {
+    if (tComposite && t.Arguments.length === 0) {
+      return true;
+    }
+    if (tComposite && s.Arguments.length > 0) {
+      return IsSubtype(s.Arguments[0] as TypeRecord, t.Arguments[0] as TypeRecord, next);
+    }
+    // A composite also satisfies an ordinary object type through its shape,
+    // which is what makes "a composite satisfies the interface" a CHECK - the
+    // interface-satisfaction rule that must never cast, since a composite is
+    // frozen and shared and writing member types onto it would be action at a
+    // distance.
+    if (t.Kind === 'object' && s.Arguments.length > 0) {
+      return IsSubtype(s.Arguments[0] as TypeRecord, t, next);
+    }
+  }
   // #sec-enums: "An enum type is a subtype of its underlying type, so a value
   // of an enum type is usable wherever the underlying type is required and no
   // conversion is written." The relation held nowhere, because the enum's

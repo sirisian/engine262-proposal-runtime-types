@@ -5,7 +5,9 @@ import {
 } from '../value.mts';
 import { Q, X, type ValueCompletion } from '../completion.mts';
 import type { Realm } from '../execution-context/Realm.mts';
-import { orderKey, type TypeRecord } from '../type-system/records.mts';
+import { orderKey, makePrimitive, type TypeRecord } from '../type-system/records.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { isTypeObject } from '../type-system/intern.mts';
 import { R } from "../abstract-ops/all.mjs";
 import {
   OrdinaryObjectCreate, DefinePropertyOrThrow, Get,
@@ -179,6 +181,64 @@ function objectIdentity(value: object): number {
   return id;
 }
 
+/**
+ * `sec-compositeshape`: the shape a composite's contents determine.
+ *
+ * The type of each field is the runtime type of its value, WITH THREE
+ * EXCEPTIONS the clause states and which are easy to miss: a field whose value
+ * is an Object records `any`, a field whose value is a composite records that
+ * composite's OWN type, and a field whose value is a Type Object records
+ * `type`. Without the first, two composites holding different objects would
+ * claim different shapes, and shapes are what type identity is computed from.
+ */
+export function CompositeShape(entries: readonly CompositeEntryRecord[]): TypeRecord {
+  const Properties = entries.map((entry) => ({
+    key: entry.Key.stringValue(),
+    type: compositeFieldType(entry.Value),
+    optional: false,
+    readonly: true,
+  }));
+  return { Kind: 'object', Properties, IndexSignatures: [] } as TypeRecord;
+}
+
+/** `sec-compositefieldtype`. */
+function compositeFieldType(value: Value): TypeRecord {
+  const stamped = compositeTypes.get(value as ObjectValue);
+  if (stamped) {
+    return stamped;
+  }
+  if (isTypeObject(value)) {
+    return makePrimitive('type');
+  }
+  if (value instanceof ObjectValue) {
+    return makePrimitive('any');
+  }
+  return RuntimeTypeOf(value);
+}
+
+/**
+ * `sec-composite-types`: "A Type Record is a composite type when its [[Kind]] is
+ * ~primitive~ and its [[Name]] is *\"Composite\"*", with [[Arguments]] the
+ * shape. NOT a Type Record kind of its own - which is why no `switch` over
+ * kinds needed touching, and why these canonicalize through the ordinary type
+ * interning by canonicalizing the shape in [[Arguments]].
+ */
+export function CompositeTypeOver(shape: TypeRecord): TypeRecord {
+  return makePrimitive('Composite', [shape]);
+}
+
+/** The top composite type, `Composite` with no arguments. */
+export function TopCompositeType(): TypeRecord {
+  return makePrimitive('Composite', []);
+}
+
+/** Every composite's own type, so `Reflect.typeOf` and a nested field find it. */
+const compositeTypes = new WeakMap<ObjectValue, TypeRecord>();
+
+export function CompositeTypeRecordOf(value: Value): TypeRecord | undefined {
+  return value instanceof ObjectValue ? compositeTypes.get(value) : undefined;
+}
+
 /** `sec-findorcreatecomposite`. */
 export function FindOrCreateComposite(entries: readonly CompositeEntryRecord[]): ValueCompletion {
   const sorted = CompositeCanonicalOrder(entries);
@@ -198,6 +258,7 @@ export function FindOrCreateComposite(entries: readonly CompositeEntryRecord[]):
     })));
   }
   c.Extensible = Value.false;
+  compositeTypes.set(c, CompositeTypeOver(CompositeShape(sorted)));
   composites.add(c);
   registry.set(key, c);
   return c;

@@ -926,6 +926,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'CallExpression': {
+        // proposal-runtime-types `sec-composite-types`: "The Static Type of a
+        // call of the Composite function is the top composite type where the
+        // call supplies no TypeArguments and no contextual type reaches it."
+        // Without this the checker derives an ordinary object type for the
+        // call, so `let c: Composite = Composite({x: 1})` was refused - the
+        // runtime knew the value's type and the checker did not.
+        const calleeNode = (node as { CallExpression?: ParseNode }).CallExpression;
+        if (calleeNode?.type === 'IdentifierReference'
+          && (calleeNode as { name?: string }).name === 'Composite') {
+          // The TOP composite type, which states no shape - and a shapeless
+          // type satisfies no specific interface, so `let i: I = Composite(...)`
+          // is refused and `Composite.<I>({...})` is what a program writes.
+          // That is the clause's rule read plainly, and it is also the design's
+          // OWN advice: "an unannotated `Composite` call in typed code produces
+          // `number` fields, and code that means anything else should say so at
+          // the creation site". Deriving a shape from the argument was tried and
+          // is not this rule; the shape belongs to the typed creation form,
+          // where the type is stated rather than guessed.
+          return makePrimitive('Composite', []);
+        }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
         const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);

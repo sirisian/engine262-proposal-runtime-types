@@ -11,6 +11,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '..
 import { EnsureCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { TypeRecord } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue } from './records.mts';
@@ -235,6 +236,15 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     const reflected = ReflectionContextRecordOf(value);
     if (reflected) {
       return reflected;
+    }
+    // proposal-runtime-types `sec-composite-types`: "`Reflect.typeOf` on a
+    // composite returns the Type Object of its [[RuntimeType]], the same object
+    // either spelling denotes" - so a composite reports its interned structural
+    // composite type rather than the ordinary object shape it would otherwise
+    // derive.
+    const composite = CompositeTypeRecordOf(value);
+    if (composite) {
+      return composite;
     }
   }
   if (value instanceof ReferenceValue) {

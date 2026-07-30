@@ -241,6 +241,14 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     return makePrimitive(m[1], [Number(m[2])]);
   }
   switch (name) {
+    // proposal-runtime-types `sec-composite-types`: "A Type Record is a
+    // composite type when its [[Kind]] is ~primitive~ and its [[Name]] is
+    // *"Composite"*", with [[Arguments]] the shape - so `Composite` resolves
+    // here among the primitive names rather than as a library nominal, and
+    // `Composite.<T>` is an ordinary parameterized spelling of the same family.
+    // The top composite type states no shape and is the type of every
+    // composite.
+    case 'Composite': return makePrimitive('Composite', args);
     case 'any': return anyType;
     case 'never': return neverType;
     case 'boolean1': return makePrimitive('uint', [1]);
