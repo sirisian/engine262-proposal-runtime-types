@@ -12,7 +12,10 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
-import { SameValue, HasProperty, Get } from '../abstract-ops/all.mts';
+import {
+  SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
+} from '../abstract-ops/all.mts';
+import { R as MathematicalValue } from "../abstract-ops/all.mjs";
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -387,6 +390,88 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
         }
       }
       return true;
+    }
+    case 'MatchArrayPattern': {
+      // `sec-match-array`: matched "through ITERATION rather than through an
+      // array test, which is what reaches every array-shaped value of this
+      // proposal - a `[N].<T>` need not be an Array exotic object, a tuple
+      // composite is iterable by kind rather than by prototype, and a typed
+      // view answers no array predicate". A pattern that meant `Array.isArray`
+      // would match the one shape that needed it least.
+      let memo = cache.Iterations.find((it) => it.Object === subject);
+      if (!memo) {
+        memo = { Object: subject, Elements: [], Done: false };
+        cache.Iterations.push(memo);
+      }
+      // Elements are pulled AS PATTERNS NEED THEM and memoized per subject, so
+      // alternatives over array patterns of different lengths pull each element
+      // once between them.
+      const need = P.Elements.length + 1;
+      if (!memo.Done && memo.Elements.length < need) {
+        const iter = EnsureCompletion(yield* GetIterator(subject, 'sync'));
+        if (iter.Type !== 'normal') {
+          return false;
+        }
+        const iterated = EnsureCompletion(yield* IteratorToList(iter.Value as never));
+        if (iterated.Type !== 'normal') {
+          return false;
+        }
+        memo.Elements = iterated.Value as Value[];
+        memo.Done = true;
+      }
+      // Without a rest element the iterator must be EXHAUSTED at the pattern's
+      // length: `[let a, let b]` matches exactly two.
+      if (memo.Elements.length !== P.Elements.length) {
+        return false;
+      }
+      for (let i = 0; i < P.Elements.length; i += 1) {
+        if (!Q(yield* PatternMatches(P.Elements[i]!, memo.Elements[i]!, cache))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    case 'MatchRangePattern': {
+      // `sec-matchrange`: containment, "at most two comparisons" - the form
+      // that makes a FLOAT subject matchable at all, since a float has no cases
+      // to enumerate.
+      const ref = Q(yield* Evaluate(P.Range as never));
+      const range = Q(yield* GetValue(ref as never));
+      if (!(range instanceof ObjectValue)) {
+        return false;
+      }
+      const contains = Q(yield* Get(range, Value('contains')));
+      if (!IsCallable(contains)) {
+        return false;
+      }
+      const answer = Q(yield* Call(contains, range, [subject]));
+      return answer === Value.true;
+    }
+    case 'MatchRegExpPattern': {
+      // `sec-matchregexp`: it matches the ENTIRE subject - "the whole-string
+      // discipline this proposal uses everywhere a pattern constrains a
+      // string" - so a search is spelled by writing the pattern as one.
+      if (!(subject instanceof JSStringValueClass)) {
+        return false;
+      }
+      const ref = Q(yield* Evaluate(P.RegExp as never));
+      const re = Q(yield* GetValue(ref as never));
+      if (!(re instanceof ObjectValue)) {
+        return false;
+      }
+      const exec = Q(yield* Get(re, Value('exec')));
+      if (!IsCallable(exec)) {
+        return false;
+      }
+      const result = Q(yield* Call(exec, re, [subject]));
+      if (!(result instanceof ObjectValue)) {
+        return false;
+      }
+      const matched = Q(yield* Get(result, Value('0')));
+      const index = Q(yield* Get(result, Value('index')));
+      return matched instanceof JSStringValueClass
+        && index instanceof NumberValue && MathematicalValue(index) === 0
+        && matched.stringValue().length === subject.stringValue().length;
     }
     case 'MatchTypePattern': {
       const record = Q(yield* TypeNodeToTypeRecord(P.Type));

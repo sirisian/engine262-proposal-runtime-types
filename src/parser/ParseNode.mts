@@ -2783,6 +2783,9 @@ export namespace ParseNode {
     | MatchLiteralPattern
     | MatchInterpolationPattern
     | MatchObjectPattern
+    | MatchArrayPattern
+    | MatchRangePattern
+    | MatchRegExpPattern
     | MatchTypePattern;
 
   export interface MatchOrPattern extends BaseParseNode {
@@ -2829,6 +2832,21 @@ export namespace ParseNode {
     readonly type: 'MatchProperty';
     readonly Key: string;
     readonly Pattern: MatchPattern;
+  }
+  /** `[p1, p2, ...]`: matched through ITERATION, not an array test. */
+  export interface MatchArrayPattern extends BaseParseNode {
+    readonly type: 'MatchArrayPattern';
+    readonly Elements: readonly MatchPattern[];
+  }
+  /** A range literal, matched by containment. */
+  export interface MatchRangePattern extends BaseParseNode {
+    readonly type: 'MatchRangePattern';
+    readonly Range: ParseNode;
+  }
+  /** A regular expression literal, matched against the ENTIRE subject. */
+  export interface MatchRegExpPattern extends BaseParseNode {
+    readonly type: 'MatchRegExpPattern';
+    readonly RegExp: ParseNode;
   }
 
   // RelationalExpression :
@@ -3574,6 +3592,9 @@ export type ParseNode =
   | ParseNode.ConditionalRefinement
   | ParseNode.MatchObjectPattern
   | ParseNode.MatchProperty
+  | ParseNode.MatchArrayPattern
+  | ParseNode.MatchRangePattern
+  | ParseNode.MatchRegExpPattern
   // proposal-runtime-types `sec-match-patterns`
   | ParseNode.MatchOrPattern
   | ParseNode.MatchAndPattern

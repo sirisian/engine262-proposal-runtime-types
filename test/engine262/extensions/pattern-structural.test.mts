@@ -70,18 +70,68 @@ test('the TYPE path is unchanged where the two spellings agree', () => {
   expect(evaluated('String({ x: 1 } is { x: _ });')).toBe('true');
 });
 
+test('ARRAY patterns match through ITERATION', () => {
+  // `sec-match-array`: "through iteration rather than through an array test,
+  // which is what reaches every array-shaped value of this proposal - a
+  // `[N].<T>` need not be an Array exotic object, a tuple composite is iterable
+  // by kind rather than by prototype, and a typed view answers no array
+  // predicate". A pattern meaning `Array.isArray` would match the one shape
+  // that needed it least.
+  expect(evaluated('String([1, 2] is [1, _]);')).toBe('true');
+  expect(evaluated('String([1, 2] is [2, _]);')).toBe('false');
+  // "Without a rest element the pattern requires the iterator to be EXHAUSTED
+  // at the pattern's length: `[let a, let b]` matches exactly two."
+  expect(evaluated('String([1, 2, 3] is [1, _]);')).toBe('false');
+  expect(evaluated('String([1] is [1, _]);')).toBe('false');
+  // A TUPLE COMPOSITE is iterable by kind, which is the case the iteration rule
+  // exists for - it has a null prototype and no `Symbol.iterator`.
+  expect(evaluated('String(Composite([1, 2]) is [1, _]);')).toBe('true');
+  // A non-iterable subject fails rather than throwing.
+  expect(evaluated('String(1 is [_]);')).toBe('false');
+});
+
+test('RANGE patterns match by containment', () => {
+  // "Exactly as a range `case` label does", and "at most two comparisons" - the
+  // form that makes a FLOAT subject matchable at all, since a float has no
+  // cases to enumerate.
+  expect(evaluated('String(5 is 1..10);')).toBe('true');
+  expect(evaluated('String(50 is 1..10);')).toBe('false');
+  expect(evaluated('String(1.5 is 1..2);')).toBe('true');
+  expect(evaluated('String(5 is 1..3 or 4..6);')).toBe('true');
+});
+
+test('REGEXP patterns match the ENTIRE subject', () => {
+  // "The whole-string discipline this proposal uses everywhere a pattern
+  // constrains a string ... and a search is spelled by writing the pattern as a
+  // search."
+  expect(evaluated('String("aaa" is /^a+$/);')).toBe('true');
+  expect(evaluated('String("xaaay" is /a+/);')).toBe('false');
+  expect(evaluated('String("xaaay" is /.*a+.*/);')).toBe('true');
+  expect(evaluated('String(1 is /1/);')).toBe('false');
+});
+
+test('THE SPECULATION DECLINES what a type can express', () => {
+  // The braced and bracketed forms are patterns only where they hold something
+  // a |Type| cannot. Two ways of getting that wrong were found by the suite:
+  //
+  // A REST element belongs to a type - and a nested parse that THROWS rather
+  // than declining escapes the speculation entirely, since the checkpoint is
+  // only restored on the paths the function takes.
+  expect(evaluated("String([1, 'a', 'b'] is [number, ...[].<string>]);")).toBe('true');
+  // And a LITERAL is a literal TYPE as much as a literal pattern, so a union of
+  // them stays a type - counting a literal as non-type stole the form and left
+  // the `| 'b'` unconsumed.
+  expect(evaluated("String({ kind: 'a' } is { kind: 'a' | 'b' });")).toBe('true');
+  expect(evaluated("String({ kind: 'c' } is { kind: 'a' | 'b' });")).toBe('false');
+});
+
 test('PINNED: what the structural core still lacks', () => {
-  // ARRAY patterns and the `[[Iterations]]` half of the cache, which is what
-  // makes "alternatives over array patterns of different lengths pull each
-  // element once" true. `[1, 2]` parses as a TUPLE TYPE today, so it answers
-  // through the type path exactly as `{ x: 1 }` does - pinned by its RESULT so
-  // the day an array pattern diverges from a tuple type is visible.
-  expect(evaluated('String([1, 2] is [1, 2]);')).toBe('true');
-  expect(evaluated('String([1, 2] is [1, 3]);')).toBe('false');
-  // A REST binding needs bindings, which need the scoping rule.
-  expect(outcome('({ x: 1 }) is { ...let rest };')).toBe('SyntaxError');
-  // RANGE and REGEXP patterns. A range is not a type, so the type path cannot
-  // stand in for the pattern here - which is why this one REJECTS rather than
-  // coinciding.
-  expect(outcome('5 is 1..10;')).toBe('TypeError');
+  const bindings = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  // BINDINGS and the REST binding need the scoping rule - "in scope in exactly
+  // the positions the truth of the test governs" - which is checker work.
+  expect(bindings('const v = 1; v is let x;')).toBe('SyntaxError');
+  expect(bindings('({ x: 1 }) is { ...let rest };')).toBe('SyntaxError');
+  // And a regexp's typed match result is not yet available to a juxtaposed
+  // object pattern, which is where the capture types would flow into bindings.
+  expect(bindings('"a1" is /(?<d>\\d)/ { d: _ };')).toBe('SyntaxError');
 });

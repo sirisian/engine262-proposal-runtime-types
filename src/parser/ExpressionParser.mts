@@ -1560,7 +1560,18 @@ export abstract class ExpressionParser extends FunctionParser {
       // or `-0` distinguishes them. Recorded at the PARSE because only the
       // source can tell them apart - by the time there is a value they are one.
       node.BareZero = !(t.type === Token.ADD || t.type === Token.SUB);
-      node.Literal = this.parseUnaryExpression();
+      // A RANGE literal is a pattern matching by CONTAINMENT, "exactly as a
+      // range `case` label does". Parsed at the RANGE level rather than the
+      // unary one: a range is `lower .. upper`, so a unary parse takes the
+      // lower bound and leaves the `..` behind - which made `5 is 1..10` a
+      // parse error rather than a containment test.
+      const literal = this.parseRangeExpression();
+      if ((literal as { type?: string }).type === 'RangeExpression') {
+        const range = this.startNode<ParseNode.MatchRangePattern>(literal);
+        range.Range = literal;
+        return this.finishNode(range, 'MatchRangePattern');
+      }
+      node.Literal = literal;
       return this.finishNode(node, 'MatchLiteralPattern');
     }
     // `${expr}`: evaluate and compare - "the escape hatch from every cleverer
@@ -1576,6 +1587,24 @@ export abstract class ExpressionParser extends FunctionParser {
       node.Expression = this.parseAssignmentExpression();
       this.expect(Token.RBRACE);
       return this.finishNode(node, 'MatchInterpolationPattern');
+    }
+    // A REGULAR EXPRESSION pattern. A |Type| is never written this way, so no
+    // speculation is needed - and it matches the ENTIRE subject, "the
+    // whole-string discipline this proposal uses everywhere a pattern
+    // constrains a string".
+    if (this.test(Token.DIV) || this.test(Token.ASSIGN_DIV)) {
+      const node = this.startNode<ParseNode.MatchRegExpPattern>();
+      node.RegExp = this.parsePrimaryExpression();
+      return this.finishNode(node, 'MatchRegExpPattern');
+    }
+    // An ARRAY pattern, under the same rule as objects below: taken only where
+    // the brackets hold something a |Type| cannot, since `[1, 2]` is a TUPLE
+    // TYPE of two literal types and answers identically through that path.
+    if (this.test(Token.LBRACK)) {
+      const arrayPattern = this.tryParseMatchArrayPattern();
+      if (arrayPattern) {
+        return arrayPattern;
+      }
     }
     // An OBJECT pattern, but only where the braces hold something a |Type|
     // cannot - `_`, a combinator, an interpolation. `{ x: uint8 }` is spelled
@@ -1595,6 +1624,67 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   /**
+   * Whether a sub-pattern is something a |Type| CANNOT express, which is what
+   * decides whether a braced or bracketed form is a pattern or a type.
+   *
+   * A LITERAL is not one of them: `'a'` is a literal TYPE as much as a literal
+   * pattern, so `{ kind: 'a' | 'b' }` is a type with a union member and must
+   * stay on the type path - counting a literal as non-type stole it and left
+   * the `| 'b'` unconsumed.
+   */
+  static matchPatternNeedsPatternPath(p: ParseNode.MatchPattern): boolean {
+    switch (p.type) {
+      case 'MatchTypePattern':
+      case 'MatchLiteralPattern':
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Speculatively parse `[p1, p2, ...]`, returning *null* where the brackets
+   * are a |Type| after all - the same discipline the object form uses, and for
+   * the same reason: `[1, 2]` is a tuple type of two literal types and gives
+   * the same answer through the type path.
+   */
+  tryParseMatchArrayPattern(): ParseNode.MatchArrayPattern | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.MatchArrayPattern>();
+    const Elements: ParseNode.MatchPattern[] = [];
+    let sawNonType = false;
+    this.expect(Token.LBRACK);
+    while (!this.test(Token.RBRACK)) {
+      // A REST element belongs to a |Type| here: patterns do not carry one yet,
+      // and a nested parse that THROWS rather than declining would escape the
+      // speculation entirely - the checkpoint is only restored on the paths
+      // this function takes, not on an exception from inside it. Declining
+      // early is what keeps `[number, ...[].<string>]` a tuple type.
+      if (this.test(Token.ELLIPSIS)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      const element = this.parseMatchPattern();
+      if (ExpressionParser.matchPatternNeedsPatternPath(element)) {
+        sawNonType = true;
+      }
+      Elements.push(element);
+      if (!this.eat(Token.COMMA)) {
+        break;
+      }
+    }
+    if (!this.eat(Token.RBRACK) || !sawNonType) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    node.Elements = Elements;
+    return this.finishNode(node, 'MatchArrayPattern');
+  }
+
+  /**
    * Speculatively parse `{ key: pattern, ... }`, returning *null* where the
    * braces are a |Type| after all. The checkpoint-and-restore is the same
    * mechanism `tryParseAnnotatedArrowParameter` uses.
@@ -1607,6 +1697,16 @@ export abstract class ExpressionParser extends FunctionParser {
     let sawNonType = false;
     this.expect(Token.LBRACE);
     while (!this.test(Token.RBRACE)) {
+      // A REST element belongs to a |Type| here: patterns do not carry one yet,
+      // and a nested parse that THROWS rather than declining would escape the
+      // speculation entirely - the checkpoint is only restored on the paths
+      // this function takes, not on an exception from inside it. Declining
+      // early is what keeps a spread in an object type a type.
+      if (this.test(Token.ELLIPSIS)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
       const prop = this.startNode<ParseNode.MatchProperty>();
       if (!this.test(Token.IDENTIFIER) && !this.test(Token.STRING)) {
         this.restoreLexerCheckpoint(checkpoint);
@@ -1621,7 +1721,7 @@ export abstract class ExpressionParser extends FunctionParser {
       }
       // A member's sub-pattern is a FULL pattern, combinators included.
       const sub = this.parseMatchPattern();
-      if (sub.type !== 'MatchTypePattern') {
+      if (ExpressionParser.matchPatternNeedsPatternPath(sub)) {
         sawNonType = true;
       }
       prop.Pattern = sub;
