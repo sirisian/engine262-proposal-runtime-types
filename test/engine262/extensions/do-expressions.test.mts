@@ -164,3 +164,62 @@ test('return in a do * sets the generator\'s return value', () => {
 test('async do * is an async generator', () => {
   expect(evaluated('const g = async do * { yield 1; }; String(typeof g.next);')).toBe('function');
 });
+
+/**
+ * PLAN-do-expressions.md phase 4: the checker, per #sec-completiontypeof.
+ *
+ * The type is a union over the TAILS, with divergence - phase 0's analysis,
+ * which until now had no caller - removing the paths that cannot produce one.
+ */
+
+test('the type is the union over the tails', () => {
+  expect(ok('const x: number = do { 1 };')).toBe(true);
+  expect(ok("const x: uint8 = do { 'a' };")).toBe(false);
+  expect(ok("const c = true; const x: number | string = do { if (c) 1; else 'a' };")).toBe(true);
+  expect(ok("const c = true; const x: number = do { if (c) 1; else 'a' };")).toBe(false);
+  expect(ok('const x: number = do { try { 1 } catch { 2 } };')).toBe(true);
+  expect(ok("const x: number = do { try { 1 } catch { 'a' } };")).toBe(false);
+});
+
+test('a diverging tail contributes nothing, and all of them is never', () => {
+  // never is the empty union and a subtype of everything, so a `do` that only
+  // throws satisfies any annotation. The binding is unreachable, so its
+  // declared type constrains nothing.
+  expect(ok('function f() { const port: uint16 = do { throw new Error(); }; return port; }')).toBe(true);
+  // A throwing branch drops out of the union rather than widening it.
+  expect(ok('const c = true; function f() { const x: number = do { if (c) 1; else throw new Error(); }; }')).toBe(true);
+});
+
+test('a switch with no default contributes undefined', () => {
+  expect(ok("const s = 'a'; const x: number = do { switch (s) { case 'a': 1; } };")).toBe(false);
+  expect(ok("const s = 'a'; const x: number | undefined = do { switch (s) { case 'a': 1; } };")).toBe(true);
+  expect(ok("const s = 'a'; const x: number = do { switch (s) { case 'a': 1; break; default: 2; } };")).toBe(true);
+});
+
+/**
+ * A gap recorded rather than asserted as correct.
+ *
+ * #sec-completiontypeof says an EXHAUSTIVE switch contributes no `undefined`,
+ * and this engine only recognizes a literal `default` clause as making one
+ * exhaustive. The enum and sealed-hierarchy exhaustiveness the design reserves
+ * the word for is computed inline in the checker's SwitchStatement walk and is
+ * not reachable as a function, so an enum switch covering every enumerator
+ * still contributes `undefined` here.
+ *
+ * That is the conservative direction - a wider type, never a narrower one - and
+ * it makes `const x: number = do { switch (e) { case E.A: 1; case E.B: 2; } }`
+ * an error that the specification would accept. Extracting the exhaustiveness
+ * computation is what closes it.
+ */
+
+test('do * infers its Generator type', () => {
+  expect(ok('const g: Generator.<number, void, void> = do * { yield 1; };')).toBe(true);
+  expect(ok("const g: Generator.<number | string, void, void> = do * { yield 1; yield 'a'; };")).toBe(true);
+  expect(ok('const g: Generator.<string, void, void> = do * { yield 1; };')).toBe(false);
+  // A yield* contributes the DELEGATED generator's yield type, not the
+  // generator itself.
+  expect(ok(`
+    function* inner(): Generator.<number, void, void> { yield 1; }
+    const g: Generator.<number, void, void> = do * { yield* inner(); };
+  `)).toBe(true);
+});

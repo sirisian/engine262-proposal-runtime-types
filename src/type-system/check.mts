@@ -3,8 +3,10 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
-  parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters } from './records.mts';
+  parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
+  neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
+import { Diverges } from './divergence.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -904,8 +906,160 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** #sec-do-expressions: `do {}` is `void 0`, a value, and not the ~void~ type. */
+  const undefinedType: TypeRecord = makePrimitive('undefined');
+
+  /**
+   * The yielded and returned types of a generator body.
+   *
+   * A `yield*` contributes its operand's Y rather than the operand itself, and
+   * a nested function boundary contributes nothing - its yields and returns are
+   * its own.
+   */
+  const collectGeneratorTypes = (node: ParseNode | undefined, yielded: TypeRecord[], returned: TypeRecord[]): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    const n = node as { type?: string, AssignmentExpression?: ParseNode | null, hasStar?: boolean, Expression?: ParseNode | null };
+    if (n.type === 'FunctionExpression' || n.type === 'FunctionDeclaration'
+      || n.type === 'ArrowFunction' || n.type === 'GeneratorExpression'
+      || n.type === 'GeneratorDeclaration' || n.type === 'AsyncFunctionExpression'
+      || n.type === 'AsyncArrowFunction' || n.type === 'ClassExpression'
+      || n.type === 'ClassDeclaration' || n.type === 'DoExpression') {
+      return;
+    }
+    if (n.type === 'YieldExpression') {
+      const operand = n.AssignmentExpression ? staticType(n.AssignmentExpression) : null;
+      if (n.hasStar) {
+        const delegated = generatorParameters(operand);
+        if (delegated) {
+          yielded.push(delegated.Yield);
+        }
+      } else if (operand) {
+        yielded.push(operand);
+      }
+    }
+    if (n.type === 'ReturnStatement' && n.Expression) {
+      const t = staticType(n.Expression);
+      if (t) {
+        returned.push(t);
+      }
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (node as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(child)) {
+        child.forEach((c) => collectGeneratorTypes(c as ParseNode, yielded, returned));
+      } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+        collectGeneratorTypes(child as ParseNode, yielded, returned);
+      }
+    }
+  };
+
+  /**
+   * The type of a statement list's completion value.
+   *
+   * PLAN-do-expressions.md phase 4, per #sec-completiontypeof: a union over the
+   * TAILS, with divergence removing the paths that cannot produce one. Nothing
+   * in it is new - divergence is phase 0's analysis, and the Early Errors of
+   * #sec-do-expression-early-errors have already removed the forms whose
+   * completion type would have been hard to state.
+   */
+  const completionTypeOf = (list: readonly ParseNode[] | undefined): Known => {
+    if (!list || list.length === 0) {
+      return undefinedType;
+    }
+    const last = list[list.length - 1] as ParseNode & {
+      Expression?: ParseNode, StatementList?: readonly ParseNode[],
+      Statement_a?: ParseNode, Statement_b?: ParseNode | null,
+      LabelledItem?: ParseNode, Block?: { StatementList?: readonly ParseNode[] },
+      Catch?: { Block?: { StatementList?: readonly ParseNode[] } } | null,
+      CaseBlock?: { CaseClauses_a?: readonly ParseNode[], DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] },
+    };
+    // A diverging tail contributes nothing, and a list all of whose paths
+    // diverge is the empty union - `never` - which is a subtype of everything,
+    // so `const port: uint16 = do { throw new E(); }` is accepted.
+    if (Diverges(last, { switchCoversDiscriminant: () => false })) {
+      return neverType;
+    }
+    const unionOf = (members: Known[]): Known => {
+      const present = members.filter((m): m is TypeRecord => !!m);
+      if (present.length !== members.length || present.length === 0) {
+        return null;
+      }
+      return present.length === 1 ? present[0] : CanonicalizeType({ Kind: 'union', Members: present });
+    };
+    switch (last.type) {
+      case 'ExpressionStatement':
+        return last.Expression ? staticType(last.Expression) : undefinedType;
+      case 'Block':
+        return completionTypeOf(last.StatementList);
+      case 'LabelledStatement':
+        return completionTypeOf(last.LabelledItem ? [last.LabelledItem] : undefined);
+      case 'IfStatement':
+        if (!last.Statement_b) {
+          // Refused by the Early Errors; the type is stated for completeness.
+          return undefinedType;
+        }
+        return unionOf([
+          completionTypeOf([last.Statement_a!]),
+          completionTypeOf([last.Statement_b]),
+        ]);
+      case 'TryStatement': {
+        const members: Known[] = [completionTypeOf(last.Block?.StatementList)];
+        if (last.Catch?.Block) {
+          members.push(completionTypeOf(last.Catch.Block.StatementList));
+        }
+        // A `finally` contributes nothing: its completion is discarded unless
+        // it is abrupt.
+        return unionOf(members);
+      }
+      case 'SwitchStatement': {
+        const block = last.CaseBlock;
+        const clauses = [
+          ...(block?.CaseClauses_a ?? []),
+          ...(block?.DefaultClause ? [block.DefaultClause] : []),
+          ...(block?.CaseClauses_b ?? []),
+        ];
+        const members = clauses.map((c) => completionTypeOf((c as { StatementList?: readonly ParseNode[] }).StatementList));
+        // #sec-completiontypeof: an exhaustive switch takes no path where no
+        // clause ran, so it contributes no `undefined`. Exhaustiveness here is
+        // the SWITCH's, which this design reserves to enums and sealed
+        // hierarchies and which is deliberately narrower than a `match`'s atoms
+        // - a switch over a boolean covering true and false is not exhaustive
+        // for this operation, and the clause says so.
+        if (!block?.DefaultClause) {
+          members.push(undefinedType);
+        }
+        return unionOf(members);
+      }
+      default:
+        return undefinedType;
+    }
+  };
+
   const staticType = (node: ParseNode): Known => {
     switch (node.type) {
+      case 'DoExpression': {
+        const d = node as ParseNode.DoExpression;
+        if (!d.star) {
+          return completionTypeOf(d.Block?.StatementList);
+        }
+        // #sec-do-generator-expressions: Y, R, and N are found rather than
+        // declared, there being no annotation site. N is `void` unless a
+        // contextual type supplies it, since nothing in a body determines what
+        // a caller will send to `next`.
+        const yielded: TypeRecord[] = [];
+        const returned: TypeRecord[] = [];
+        collectGeneratorTypes(d.GeneratorBody as ParseNode | undefined, yielded, returned);
+        const Y = yielded.length === 0 ? neverType
+          : (yielded.length === 1 ? yielded[0] : CanonicalizeType({ Kind: 'union', Members: yielded }));
+        const R = returned.length === 0 ? voidType
+          : (returned.length === 1 ? returned[0] : CanonicalizeType({ Kind: 'union', Members: returned }));
+        return libraryType(d.async ? 'AsyncGenerator' : 'Generator', [Y, R, voidType]);
+      }
       case 'NumericLiteral': {
         // A BIGINT literal is a literal of `bigint`, not of `number`. It was
         // labelled `number`, which F38 pinned as cosmetic - it is not: with
