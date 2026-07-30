@@ -113,3 +113,54 @@ test('async do without a star is not a form', () => {
   // different feature with its own history; this proposal does not take it.
   expectError('const x = async do { 1 };');
 });
+
+/**
+ * PLAN-do-expressions.md phase 3b: `do *`, per #sec-do-generator-expressions.
+ *
+ * A `do *` evaluates to a generator object, and the construction is a generator
+ * function's with one difference that is the entire point of the form: the
+ * closure is created with lexical `this`, as an arrow's is. Building it from the
+ * generator-expression path instead gives back a generator whose `this` is
+ * undefined in strict code - a failure that shows up only where the body reads
+ * `this`, which is why that test is here rather than implied.
+ */
+
+test('a do * is a generator object', () => {
+  expect(evaluated('String([...do * { yield 1; yield 2; }]);')).toBe('1,2');
+  expect(evaluated('String([...do * { yield* [1, 2]; yield* [3]; }]);')).toBe('1,2,3');
+  expect(evaluated('let n = 0; for (const x of do * { yield 1; yield 2; }) { n += x; } String(n);')).toBe('3');
+  expect(evaluated('String([...do * { }].length);')).toBe('0');
+});
+
+test('a do * binds `this` lexically', () => {
+  // The `.call(this)` this syntax exists to delete. An object method's `this`
+  // reaches the body without being threaded through a call.
+  expect(evaluated(`
+    const o = { xs: [1, 2], m() { return [...do * { for (const x of this.xs) yield x; }]; } };
+    String(o.m());
+  `)).toBe('1,2');
+});
+
+test('the Early Errors do not apply to a do *', () => {
+  // A do * has no completion value - its body's completion is discarded, as any
+  // generator body's is - so the restrictions have nothing to restrict. The
+  // design's motivating example ends in a loop.
+  expect(evaluated('const xs = [1, 2]; String([...do * { for (const x of xs) yield x; }]);')).toBe('1,2');
+  expect(ok('const g = do * { let t = 1; };')).toBe(true);
+  expect(ok('const c = true; const g = do * { if (c) yield 1; };')).toBe(true);
+  // While the plain form still refuses each.
+  expectError('const xs = []; const x = do { for (const y of xs) { 1 } };');
+});
+
+test('return in a do * sets the generator\'s return value', () => {
+  // The sharpest edge in the feature: adding a `*` changes what `return` does.
+  // In a `do` it leaves the enclosing function; here it completes the generator.
+  expect(evaluated('const g = do * { return 7; }; String(g.next().value);')).toBe('7');
+  expect(evaluated('function f() { const g = do * { return 7; }; return g.next().value + 1; } String(f());')).toBe('8');
+  // Against the plain form, where the same source returns from `f`.
+  expect(evaluated('function f() { const x = do { return 7; }; return 0; } String(f());')).toBe('7');
+});
+
+test('async do * is an async generator', () => {
+  expect(evaluated('const g = async do * { yield 1; }; String(typeof g.next);')).toBe('function');
+});
