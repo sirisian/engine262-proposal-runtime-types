@@ -240,12 +240,25 @@ test('the do block contexts are registered', () => {
 });
 
 test('a decorated do block reports its own kind', () => {
+  // The decorator goes BEFORE the keyword, as doexpressions.md writes it: it
+  // names the thing that produces the value, which is the expression.
   expect(evaluated(`
     let k = '';
     function d(c: Reflect.DoBlock) { k = c.kind; }
-    const x = do @d { 1 };
+    const x = @d do { 1 };
     k;
   `)).toBe('DoBlock');
+  // And the value still flows through.
+  expect(evaluated('function d(c: Reflect.DoBlock) {} String(@d do { 5 });')).toBe('5');
+  // A `do *` reaches its own context, though its body is a generator body
+  // rather than a Block, so Evaluate_Block never sees it and the decorators are
+  // applied where the generator is built.
+  expect(evaluated(`
+    let k = '';
+    function d(c: Reflect.DoGeneratorBlock) { k = c.kind; }
+    const g = @d do * { yield 1; };
+    [...g].join('') + '/' + k;
+  `)).toBe('1/DoGeneratorBlock');
   // A bare block still reports `Block`, so the subkind did not leak.
   expect(evaluated(`
     let k = '';
@@ -261,7 +274,7 @@ test('a do block decorator fires on every entry', () => {
   expect(evaluated(`
     let n = 0;
     function d(c: Reflect.DoBlock) { n += 1; }
-    for (let i = 0; i < 3; i += 1) { const v = do @d { i }; }
+    for (let i = 0; i < 3; i += 1) { const v = @d do { i }; }
     String(n);
   `)).toBe('3');
 });
@@ -276,11 +289,9 @@ test('a do block decorator fires on every entry', () => {
  * every other block. Without it `@memo do { ... }` runs the decorator and
  * ignores what it returns.
  *
- * And the SPELLING differs from the design's. doexpressions.md writes
- * `@memo do { ... }`, with the decorator before the keyword; this engine reads
- * it after, as `do @memo { ... }`, because the `@` is parsed by parseBlock and
- * a `do` in expression position is dispatched on the `do` token. One of the two
- * has to move, and which is a design question rather than an implementation
- * one: the design's reads better and decorates the EXPRESSION, while the
- * engine's decorates the BLOCK and needs no new decorator position.
+ * The spelling is the design's - `@memo do { ... }`, the decorator before the
+ * keyword - which was settled in favour of the design after the engine first
+ * read it the other way round. `do @memo { ... }` also parses, and means what
+ * it says: that decorates the BLOCK, which is the general block-decorator
+ * feature and not this one.
  */

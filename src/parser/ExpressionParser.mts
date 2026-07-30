@@ -1242,6 +1242,22 @@ export abstract class ExpressionParser extends FunctionParser {
             (literal as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
             return literal;
           }
+          // proposal-runtime-types #sec-do-expressions: `@memo do { ... }`
+          // decorates the do EXPRESSION, which is how the design writes it and
+          // where a reader expects it - the decorator names the thing that
+          // produces the value. The list is carried to the block, which is what
+          // fires it, so the DoBlock context reaches the decorator either way.
+          const isAsyncDo = this.test('async') && !this.peek().hadLineTerminatorBefore && this.testAhead(Token.DO);
+          if (this.test(Token.DO) || isAsyncDo) {
+            const doExpression = this.parseDoExpression(isAsyncDo);
+            const target = (doExpression.Block ?? doExpression.GeneratorBody) as {
+              Decorators?: readonly ParseNode.Decorator[] | null,
+            } | undefined;
+            if (target) {
+              target.Decorators = decorators;
+            }
+            return doExpression as unknown as ParseNode.PrimaryExpression;
+          }
           // parseClassExpression takes no decorator list; the class path
           // re-reads them from the token stream, so this only reaches here when
           // the decorators were not followed by an object literal.

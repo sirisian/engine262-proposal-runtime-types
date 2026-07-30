@@ -3,7 +3,8 @@ import {
   EnsureCompletion, Q, X, type Completion, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { Evaluate_Block } from './all.mts';
+import { BlockDecoratorContext, Evaluate_Block } from './all.mts';
+import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import {
   Call, DefinePropertyOrThrow, OrdinaryFunctionCreate, OrdinaryObjectCreate,
   sourceTextMatchedBy, surroundingAgent,
@@ -53,6 +54,15 @@ export function* Evaluate_DoExpression(node: ParseNode.DoExpression): ValueEvalu
  * returns is the expression's value.
  */
 function* EvaluateDoGenerator(node: ParseNode.DoExpression): ValueEvaluator {
+  // A `do *`'s body is a generator body rather than a Block, so Evaluate_Block
+  // - which is what fires a block decorator - never sees it. The decorators are
+  // applied here instead, with the DoGeneratorBlock context, and "every entry"
+  // means every evaluation of the expression, which isevery time a generator is
+  // produced rather than every `next`.
+  const decorated = node.GeneratorBody as { Decorators?: readonly ParseNode.Decorator[] | null } | undefined;
+  if (surroundingAgent.feature('runtime-types') && decorated?.Decorators?.length) {
+    Q(yield* ApplyDecorators(decorated.Decorators, Q(yield* BlockDecoratorContext('DoGeneratorBlock', Value.undefined))));
+  }
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privateScope = surroundingAgent.runningExecutionContext.PrivateEnvironment;
   const sourceText = sourceTextMatchedBy(node);
