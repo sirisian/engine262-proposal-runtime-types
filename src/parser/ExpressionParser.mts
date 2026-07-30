@@ -1140,6 +1140,10 @@ export abstract class ExpressionParser extends FunctionParser {
         this.unexpected();
       }
       node.Block = this.parseBlock();
+      // The block reports `DoBlock` rather than the bare `Block` a decorator
+      // would otherwise see, which is what gives a `do`'s decorator its own
+      // context (#sec-do-expression-modifications).
+      (node.Block as { BlockKind?: string }).BlockKind = 'DoBlock';
       // proposal-runtime-types #sec-do-expression-early-errors. Each is about a
       // completion value a reader would not predict, and each applies to the
       // PLAIN form only: a `do *` has no completion value, its body being a
@@ -1151,6 +1155,7 @@ export abstract class ExpressionParser extends FunctionParser {
       }
     } else {
       node.GeneratorBody = this.parseFunctionBody(isAsync, true, false) as ParseNode.FunctionBodyLike;
+      (node.GeneratorBody as { BlockKind?: string }).BlockKind = 'DoGeneratorBlock';
     }
     return this.finishNode(node, 'DoExpression');
   }

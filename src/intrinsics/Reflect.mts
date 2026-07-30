@@ -1102,6 +1102,38 @@ export function forOfBlockContextRecord(): TypeRecord {
   };
 }
 
+// proposal-runtime-types #sec-do-expression-modifications: a `do` block and a
+// `do *` block are blocks, so each takes a block decorator, and each has its own
+// context. Two rather than one with a flag, because what the block IS differs -
+// a block in one case and a generator body in the other - which is the same
+// reason `ForBlock` and `ForOfBlock` are two.
+//
+// They are also the first block contexts that COULD admit a return replacement,
+// since every other block produces nothing and these two produce a value and a
+// generator. The exclusion of blocks from replacement was never about their
+// being structural positions; it was about their having nothing to replace.
+const doBlockContextDeclaration = { type: 'ReflectionContext', name: 'DoBlock' } as unknown as ParseNode;
+
+export function doBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: doBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.DoBlock',
+  };
+}
+
+const doGeneratorBlockContextDeclaration = { type: 'ReflectionContext', name: 'DoGeneratorBlock' } as unknown as ParseNode;
+
+export function doGeneratorBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: doGeneratorBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.DoGeneratorBlock',
+  };
+}
+
 const enumContextDeclaration = { type: 'ReflectionContext', name: 'Enum' } as unknown as ParseNode;
 
 export function enumContextRecord(): TypeRecord {
@@ -1374,6 +1406,18 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ForOfBlock'), Descriptor({
     Value: GetTypeObject(forOfBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('DoBlock'), Descriptor({
+    Value: GetTypeObject(doBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('DoGeneratorBlock'), Descriptor({
+    Value: GetTypeObject(doGeneratorBlockContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

@@ -223,3 +223,64 @@ test('do * infers its Generator type', () => {
     const g: Generator.<number, void, void> = do * { yield* inner(); };
   `)).toBe(true);
 });
+
+/**
+ * PLAN-do-expressions.md phase 5: the decorator contexts, per
+ * #sec-do-expression-modifications.
+ *
+ * `DoBlock` and `DoGeneratorBlock` are two contexts rather than one with a
+ * flag, because what the block IS differs - a block in one case and a generator
+ * body in the other - which is the same reason `ForBlock` and `ForOfBlock` are
+ * two.
+ */
+
+test('the do block contexts are registered', () => {
+  expect(evaluated('String(Reflect.DoBlock !== undefined);')).toBe('true');
+  expect(evaluated('String(Reflect.DoGeneratorBlock !== undefined);')).toBe('true');
+});
+
+test('a decorated do block reports its own kind', () => {
+  expect(evaluated(`
+    let k = '';
+    function d(c: Reflect.DoBlock) { k = c.kind; }
+    const x = do @d { 1 };
+    k;
+  `)).toBe('DoBlock');
+  // A bare block still reports `Block`, so the subkind did not leak.
+  expect(evaluated(`
+    let k = '';
+    function d(c: Reflect.Block) { k = c.kind; }
+    @d { 1 }
+    k;
+  `)).toBe('Block');
+});
+
+test('a do block decorator fires on every entry', () => {
+  // The per-entry rule is what makes a block decorator different from every
+  // other kind: it observes an execution rather than a declaration.
+  expect(evaluated(`
+    let n = 0;
+    function d(c: Reflect.DoBlock) { n += 1; }
+    for (let i = 0; i < 3; i += 1) { const v = do @d { i }; }
+    String(n);
+  `)).toBe('3');
+});
+
+/**
+ * Two things phase 5 does NOT do, recorded rather than left to be discovered.
+ *
+ * The RETURN REPLACEMENT is the new capability the design gives these two
+ * contexts - a `DoBlock` decorator returning a value of the expression's type,
+ * a `DoGeneratorBlock` decorator returning a generator - and it is not wired:
+ * ApplyDecorators' result is still discarded by Evaluate_Block, as it is for
+ * every other block. Without it `@memo do { ... }` runs the decorator and
+ * ignores what it returns.
+ *
+ * And the SPELLING differs from the design's. doexpressions.md writes
+ * `@memo do { ... }`, with the decorator before the keyword; this engine reads
+ * it after, as `do @memo { ... }`, because the `@` is parsed by parseBlock and
+ * a `do` in expression position is dispatched on the `do` token. One of the two
+ * has to move, and which is a design question rather than an implementation
+ * one: the design's reads better and decorates the EXPRESSION, while the
+ * engine's decorates the BLOCK and needs no new decorator position.
+ */
