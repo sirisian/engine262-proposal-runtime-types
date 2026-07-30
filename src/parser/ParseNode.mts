@@ -2822,6 +2822,7 @@ export namespace ParseNode {
     | MatchAndPattern
     | MatchNotPattern
     | MatchWildcardPattern
+    | MatchBindingPattern
     | MatchLiteralPattern
     | MatchInterpolationPattern
     | MatchObjectPattern
@@ -2844,6 +2845,19 @@ export namespace ParseNode {
   export interface MatchNotPattern extends BaseParseNode {
     readonly type: 'MatchNotPattern';
     readonly Operand: MatchPattern;
+  }
+  /**
+   * `let x`, `const x`, or either with a type annotation.
+   *
+   * "A binding always matches and always binds - and it is written with `let` or
+   * `const` because an unadorned name is a CONSTANT to compare against, not a
+   * binding site."
+   */
+  export interface MatchBindingPattern extends BaseParseNode {
+    readonly type: 'MatchBindingPattern';
+    readonly Name: string;
+    readonly IsConst: boolean;
+    readonly TypeAnnotation: Type | null;
   }
   /** `_`: matches anything, binds nothing. */
   export interface MatchWildcardPattern extends BaseParseNode {
@@ -3661,6 +3675,7 @@ export type ParseNode =
   | ParseNode.MatchAndPattern
   | ParseNode.MatchNotPattern
   | ParseNode.MatchWildcardPattern
+  | ParseNode.MatchBindingPattern
   | ParseNode.MatchLiteralPattern
   | ParseNode.MatchInterpolationPattern
   | ParseNode.MatchTypePattern;

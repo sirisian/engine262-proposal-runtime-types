@@ -70,10 +70,10 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
 
 test('PINNED: the forms still outstanding after phase two', () => {
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  // BINDINGS (`let`/`const`) need the scoping rule - "in scope in exactly the
-  // positions the truth of the test governs" - which is checker work, so their
-  // runtime lands with it.
-  expect(outcome('const v = 1; v is let x;')).toBe('SyntaxError');
+  // BINDINGS landed in phase five: `is` creates a declarative environment for
+  // them exactly as a clause does. Their SCOPE - "in exactly the positions the
+  // truth of the test governs" - is still the checker's business.
+  expect(evaluated('String(1 is let x);')).toBe('true');
   // ARRAY patterns, and the `[[Iterations]]` half of the cache with them.
   // `[1, 2]` currently parses as a TUPLE TYPE of two literal types, so the
   // answer coincides with what an array pattern would give - the same

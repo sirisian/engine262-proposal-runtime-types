@@ -129,8 +129,11 @@ test('PINNED: what the structural core still lacks', () => {
   const bindings = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // BINDINGS and the REST binding need the scoping rule - "in scope in exactly
   // the positions the truth of the test governs" - which is checker work.
-  expect(bindings('const v = 1; v is let x;')).toBe('SyntaxError');
+  expect(evaluated('String(1 is let x);')).toBe('true');
   expect(bindings('({ x: 1 }) is { ...let rest };')).toBe('SyntaxError');
+  // A PLAIN binding in a member position does work - phase five landed it, and
+  // the rest binding needs the run-after-the-fixed-elements rule as well.
+  expect(evaluated('String(match ({ a: 7 }) { when { a: let v }: v; default: 0; });')).toBe('7');
   // And a regexp's typed match result is not yet available to a juxtaposed
   // object pattern, which is where the capture types would flow into bindings.
   expect(bindings('"a1" is /(?<d>\\d)/ { d: _ };')).toBe('SyntaxError');

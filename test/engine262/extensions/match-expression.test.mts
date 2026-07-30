@@ -121,6 +121,7 @@ test('PINNED: what phase four does not yet carry', () => {
   // COVER the spec describes is what a conforming parser needs, and the
   // speculation reaches the same programs here.
   expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('ACCEPTED');
-  // BINDINGS need the scoping rule and land with the checker.
-  expect(outcome('match (1) { when let x: x; default: 0; }')).toBe('SyntaxError');
+  // BINDINGS landed in phase five - pattern-bindings.test.mts owns them. What
+  // remains of the checker half is NARROWING and EXHAUSTIVENESS.
+  expect(evaluated('String(match (1) { when let x: x + 1; default: 0; });')).toBe('2');
 });

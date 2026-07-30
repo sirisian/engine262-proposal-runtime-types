@@ -1673,6 +1673,37 @@ export abstract class ExpressionParser extends FunctionParser {
       node.Operand = this.parseMatchUnaryPattern();
       return this.finishNode(node, 'MatchNotPattern');
     }
+    // `let x` / `const x`, with an optional annotation. "An unadorned name is a
+    // CONSTANT to compare against, not a binding site", which is why the
+    // keyword is required rather than inferred from the name being fresh.
+    if (this.test('let') || this.test(Token.CONST)) {
+      const node = this.startNode<ParseNode.MatchBindingPattern>();
+      node.IsConst = this.test(Token.CONST);
+      this.next();
+      node.Name = this.parseBindingIdentifier().name;
+      node.TypeAnnotation = null;
+      // THE COLON IS AMBIGUOUS: `when let x: T:` annotates, and `when let x:`
+      // ends the pattern and begins the arm. Speculate - take the annotation
+      // only if ANOTHER colon follows it, since a clause always has one.
+      if (this.test(Token.COLON)) {
+        const savedEarly = new Set(this.earlyErrors);
+        const cp = this.getLexerCheckpoint();
+        this.next();
+        let annotation = null;
+        try {
+          annotation = this.parseType();
+        } catch {
+          annotation = null;
+        }
+        if (annotation && this.test(Token.COLON)) {
+          node.TypeAnnotation = annotation;
+        } else {
+          this.restoreLexerCheckpoint(cp);
+          this.earlyErrors = savedEarly;
+        }
+      }
+      return this.finishNode(node, 'MatchBindingPattern');
+    }
     // `_` matches anything and binds nothing.
     if (this.test('_')) {
       const node = this.startNode<ParseNode.MatchWildcardPattern>();

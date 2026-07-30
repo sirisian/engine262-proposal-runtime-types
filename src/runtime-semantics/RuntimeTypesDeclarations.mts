@@ -18,6 +18,7 @@ import {
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
+import { DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -277,8 +278,26 @@ export function* Evaluate_IsExpression({ Expression, Type, Pattern }: ParseNode.
   // `match`, exactly." A |Type| is one |MatchPattern| form and keeps the path it
   // always had, so every existing `is` is unchanged.
   if (Pattern) {
-    const matched = Q(yield* PatternMatches(Pattern, value));
-    return matched ? Value.true : Value.false;
+    // `sec-is-pattern`: `is` evaluates with "a FRESH Match Cache Record", and a
+    // pattern that binds needs somewhere to bind - so the bindings are created
+    // in a declarative environment here, exactly as a clause's are. Their SCOPE
+    // is the checker's business; what the runtime owes is a place for them.
+    const outerEnv = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+    const isEnv = new DeclarativeEnvironmentRecord(outerEnv);
+    for (const { name, isConst } of MatchPatternBoundNames(Pattern)) {
+      if (isConst) {
+        X(isEnv.CreateImmutableBinding(Value(name), Value.true));
+      } else {
+        X(isEnv.CreateMutableBinding(Value(name), Value.false));
+      }
+    }
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = isEnv;
+    const attempt = EnsureCompletion(yield* PatternMatches(Pattern, value));
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
+    if (attempt.Type !== 'normal') {
+      return attempt as never;
+    }
+    return attempt.Value ? Value.true : Value.false;
   }
   const record = Q(yield* TypeNodeToTypeRecord(Type!));
   const result = Q(yield* IsOfType(value, record));
@@ -320,14 +339,73 @@ export function MatchConstant(a: Value, b: Value): boolean {
  * exhaustiveness rules make that throw statically impossible exactly where the
  * types can prove it", which is phase five's half.
  */
+/** The names a clause's pattern binds, with whether each is `const`. */
+function MatchClauseBoundNames(clause: ParseNode.MatchClause): { name: string, isConst: boolean }[] {
+  return MatchPatternBoundNames(clause.Pattern);
+}
+
+/** The names a pattern binds, with whether each is `const`. */
+function MatchPatternBoundNames(pattern: ParseNode.MatchPattern | null): { name: string, isConst: boolean }[] {
+  const names: { name: string, isConst: boolean }[] = [];
+  const walk = (p: ParseNode.MatchPattern | null): void => {
+    if (!p) {
+      return;
+    }
+    switch (p.type) {
+      case 'MatchBindingPattern':
+        names.push({ name: p.Name, isConst: p.IsConst });
+        break;
+      case 'MatchOrPattern':
+      case 'MatchAndPattern':
+        walk(p.Left);
+        walk(p.Right);
+        break;
+      case 'MatchNotPattern':
+        walk(p.Operand);
+        break;
+      case 'MatchObjectPattern':
+        p.Properties.forEach((prop) => walk(prop.Pattern));
+        break;
+      case 'MatchArrayPattern':
+        p.Elements.forEach(walk);
+        break;
+      case 'MatchExtractorPattern':
+        p.Elements.forEach(walk);
+        break;
+      default:
+        break;
+    }
+  };
+  walk(pattern);
+  return names;
+}
+
 export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): ValueEvaluator {
   const subjectRef = Q(yield* Evaluate(node.Expression as never));
   const subject = Q(yield* GetValue(subjectRef as never));
   const cache = NewMatchCache();
   for (const clause of node.Clauses) {
+    // "A fresh declarative environment per clause with the clause's BoundNames
+    // created" - so a binding of one arm is invisible to the next, and a `const`
+    // binding is immutable where a `let` one is not.
+    const outerEnv = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+    const clauseEnv = new DeclarativeEnvironmentRecord(outerEnv);
+    for (const { name, isConst } of MatchClauseBoundNames(clause)) {
+      if (isConst) {
+        X(clauseEnv.CreateImmutableBinding(Value(name), Value.true));
+      } else {
+        X(clauseEnv.CreateMutableBinding(Value(name), Value.false));
+      }
+    }
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = clauseEnv;
     let matched = clause.Pattern === null;
     if (clause.Pattern) {
-      matched = Q(yield* PatternMatches(clause.Pattern, subject, cache));
+      const attempt = EnsureCompletion(yield* PatternMatches(clause.Pattern, subject, cache));
+      if (attempt.Type !== 'normal') {
+        surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
+        return attempt as never;
+      }
+      matched = attempt.Value as unknown as boolean;
     }
     // A GUARD runs AFTER the pattern matches, and "a falsy guard fails the arm
     // and matching continues" - it does not abandon the match.
@@ -337,6 +415,7 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       matched = ToBoolean(guard) === Value.true;
     }
     if (!matched) {
+      surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
       continue;
     }
     if (clause.IsBlock) {
@@ -398,6 +477,19 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
       return !Q(yield* PatternMatches(P.Operand, subject, cache));
     case 'MatchWildcardPattern':
       return true;
+    case 'MatchBindingPattern': {
+      // "A binding always matches and always binds", and an ANNOTATED binding
+      // tests first - which is `catch (e: TypeError)` in a new position.
+      if (P.TypeAnnotation) {
+        const record = Q(yield* TypeNodeToTypeRecord(P.TypeAnnotation));
+        if (!Q(yield* IsOfType(subject, record))) {
+          return false;
+        }
+      }
+      const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+      X(env.InitializeBinding(Value(P.Name), subject));
+      return true;
+    }
     case 'MatchLiteralPattern': {
       const ref = Q(yield* Evaluate(P.Literal as never));
       const literal = Q(yield* GetValue(ref as never));
