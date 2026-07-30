@@ -2439,6 +2439,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MatchNotPattern':
         declareMatchPatternBindings(pattern.Operand, positionType);
         break;
+      case 'MatchLiteralPattern': {
+        // proposal-runtime-types: "a numeric literal takes the CONTEXTUAL TYPE
+        // of the pattern's position", so `when 27:` against a `uint8` field is
+        // a `uint8` 27 - and a literal that CANNOT take the position type is a
+        // compile-time TypeError, the same impossible-test rule the checker
+        // enforces for a comparison.
+        // A NEGATIVE literal is a unary minus over a NumericLiteral, not a
+        // NumericLiteral - so reading only the literal node let `when -1:`
+        // against a `uint8` through, which is the very case the rule exists to
+        // catch: an unsigned type has no negative values at all.
+        const lit = pattern.Literal as {
+          type?: string, value?: unknown,
+          operator?: string, UnaryExpression?: { type?: string, value?: unknown },
+        };
+        let numeric: number | null = null;
+        if (lit.type === 'NumericLiteral') {
+          numeric = Number(lit.value);
+        } else if ((lit.operator === '-' || lit.operator === '+') && lit.UnaryExpression?.type === 'NumericLiteral') {
+          const magnitude = Number(lit.UnaryExpression.value);
+          numeric = lit.operator === '-' ? -magnitude : magnitude;
+        }
+        if (numeric !== null && positionType) {
+          const numericFamilies = ['uint', 'int', 'float16', 'float32', 'float64', 'float128'];
+          if (positionType.Kind === 'primitive' && numericFamilies.includes(positionType.Name)
+              && !fitsNumericType(numeric, positionType.Name, positionType.Arguments)) {
+            const completion = Throw.TypeError('$1 is not a value of $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          } else if (positionType.Kind === 'union') {
+            // "A numeric literal against a union of NUMERIC types is a type
+            // error, because matching only one would be a silent half-answer."
+            // This one needs a RULE rather than inference - there is no
+            // principled way to pick a member.
+            // NUMERIC means the numeric families, not "a primitive that is not
+            // `number`" - `string` is a primitive too, and counting it made
+            // `uint8 | string` ambiguous when it has exactly ONE numeric member
+            // and is therefore perfectly clear.
+            const numericNames = ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128'];
+            const numericMembers = positionType.Members.filter((m) => m.Kind === 'primitive' && numericNames.includes(m.Name));
+            if (numericMembers.length > 1) {
+              const completion = Throw.TypeError('$1 is ambiguous against $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        break;
+      }
       case 'MatchObjectPattern':
         // The subject's type is WALKED ALONGSIDE the pattern: each member's
         // sub-pattern sees the type of the property it names, so `{ a: let n }`

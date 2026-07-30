@@ -40,10 +40,10 @@ test('PINNED: what narrowing does NOT do, by the design\'s own account', () => {
   // the opposite of what a permissive implementation would produce.
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('TypeError');
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const s: string = v; return s; } return ""; } f("a");')).toBe('TypeError');
-  // LITERAL PROPAGATION into patterns: `when 27:` against a `uint8` subject
-  // should be a `uint8` 27, and a literal that CANNOT take the position type a
-  // compile-time TypeError. `when 300:` against a `uint8` is accepted today.
-  expect(outcome('function f(v: uint8) { return match (v) { when 300: 1; default: 0; }; } f(uint8(1));')).toBe('ACCEPTED');
+  // SEALED-CLASS exhaustiveness, which the clause names beside enums and which
+  // must be BUILT rather than extended - the checker tracks no `sealed`
+  // machinery at all.
+  expect(outcome('class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('ACCEPTED');
 });
 
 
@@ -106,4 +106,34 @@ test('a binding in a STRUCTURAL position types from its slot', () => {
   // The runtime is unchanged throughout.
   expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
   expect(evaluated('String(match ([1, 9]) { when [1, let b]: b; default: 0; });')).toBe('9');
+});
+
+
+test('a numeric literal takes the CONTEXTUAL TYPE of its position', () => {
+  // "`when 27:` against a `uint8` field is a `uint8` 27", and a literal that
+  // CANNOT take the position type is a compile-time TypeError - the same
+  // impossible-test rule the checker enforces for a comparison.
+  const outcome6 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome6('function f(v: uint8) { return match (v) { when 27: 1; default: 0; }; } f(uint8(1));')).toBe('ACCEPTED');
+  expect(outcome6('function f(v: uint8) { return match (v) { when 300: 1; default: 0; }; } f(uint8(1));')).toBe('TypeError');
+  // A NEGATIVE literal is a unary minus over a NumericLiteral rather than a
+  // NumericLiteral, so reading only the literal node let this through - and an
+  // unsigned type has no negative values at all, which is the case the rule
+  // most exists for.
+  expect(outcome6('function f(v: uint8) { return match (v) { when -1: 1; default: 0; }; } f(uint8(1));')).toBe('TypeError');
+  expect(outcome6('function f(v: int8) { return match (v) { when -128: 1; default: 0; }; } f(int8(1));')).toBe('ACCEPTED');
+  // A plain `number` position takes any numeric literal.
+  expect(outcome6('function f(v: number) { return match (v) { when 300: 1; default: 0; }; } f(1);')).toBe('ACCEPTED');
+});
+
+test('a numeric literal against a UNION of numeric types is ambiguous', () => {
+  // "Matching only one would be a silent half-answer" - and there is no
+  // principled way to pick a member, so this needs a RULE rather than
+  // inference. It is the one case the design calls out by name.
+  const outcome7 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome7('function f(v: uint8 | float32) { return match (v) { when 5: 1; default: 0; }; } f(uint8(5));')).toBe('TypeError');
+  // A union with only ONE numeric member is not ambiguous.
+  expect(outcome7('function f(v: uint8 | string) { return match (v) { when 5: 1; default: 0; }; } f(uint8(5));')).toBe('ACCEPTED');
+  // The runtime is unchanged.
+  expect(evaluated('String(match (5) { when 5: "five"; default: "other"; });')).toBe('five');
 });
