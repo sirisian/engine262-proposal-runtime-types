@@ -13,7 +13,8 @@ import { isTypeObject } from '../type-system/intern.mts';
 import { R } from "../abstract-ops/all.mjs";
 import {
   OrdinaryObjectCreate, DefinePropertyOrThrow, Get,
-  IsArray, Throw, surroundingAgent, CreateBuiltinFunction,
+  IsArray, Throw, surroundingAgent, CreateBuiltinFunction, ArrayCreate,
+  LengthOfArrayLike, skipDebugger,
 } from '#self';
 
 
@@ -267,6 +268,53 @@ export function FindOrCreateComposite(entries: readonly CompositeEntryRecord[]):
 }
 
 /**
+ * `sec-findorcreatetuplecomposite`.
+ *
+ * A tuple composite is an EXOTIC ARRAY: frozen, null-prototyped,
+ * `Array.isArray` true, integer-indexed, with an own NON-ENUMERABLE `length`.
+ *
+ * **The intern key includes the KIND.** `length` is non-enumerable and so does
+ * not participate in enumerable-key equality, which would let `Composite([1])`
+ * and `Composite({0: 1})` collide while disagreeing about shape - so a tuple
+ * composite and a record composite are NEVER equal. That is also what keeps the
+ * reflection split crisp: `Reflect.Tuple` reflects the array-backed kind and
+ * `Reflect.Record` the object-backed one.
+ */
+export function FindOrCreateTupleComposite(elements: readonly Value[]): ValueCompletion {
+  const registry = registryOfHeap();
+  const entries = elements.map((value, index) => ({ Key: Value(String(index)), Value: value }));
+  const key = registryKeyFor('tuple', entries);
+  const found = registry.get(key);
+  if (found) {
+    return found;
+  }
+  const c = X(ArrayCreate(elements.length));
+  c.Prototype = Value.null;
+  elements.forEach((value, index) => {
+    X(DefinePropertyOrThrow(c, Value(String(index)), Descriptor({
+      Value: value,
+      Writable: Value.false,
+      Enumerable: Value.true,
+      Configurable: Value.false,
+    })));
+  });
+  X(skipDebugger(c.DefineOwnProperty(Value('length'), Descriptor({ Writable: Value.false }))));
+  c.Extensible = Value.false;
+  compositeTypes.set(c, CompositeTypeOver(TupleShape(elements)));
+  composites.add(c);
+  registry.set(key, c);
+  return c;
+}
+
+/** The ~tuple~ shape: element types in position order. */
+function TupleShape(elements: readonly Value[]): TypeRecord {
+  return {
+    Kind: 'tuple',
+    Elements: elements.map((value) => ({ Type: compositeFieldType(value), Rest: false, Initial: 'none' })),
+  } as TypeRecord;
+}
+
+/**
  * `sec-compositefromshape`: the TYPED creation.
  *
  * "each supplied value is CONVERTED to its member's type, a required absence
@@ -289,12 +337,36 @@ export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEval
   // rather than the name. Reading `Kind === 'object'` alone sent every
   // interface down the tuple path, which is what a name-shaped type looks like
   // when only the structural spelling was considered.
-  const structural = shape.Kind === 'object'
+  // A shape is an ~object~ or a ~tuple~ record, or a NAME carrying one as its
+  // `Structure`. Keeping only `object` here sent every interface down the
+  // wrong path first, and then every tuple TYPE ALIAS after the tuple kind
+  // landed - `type T = [uint8, uint8]` resolves to a ~tuple~ record directly
+  // and has no `Structure` to read.
+  const structural = shape.Kind === 'object' || shape.Kind === 'tuple'
     ? shape
     : (shape as { Structure?: TypeRecord }).Structure;
+  if (structural && structural.Kind === 'tuple') {
+    const len = Q(yield* LengthOfArrayLike(source));
+    const elements: Value[] = [];
+    for (let i = 0; i < len; i += 1) {
+      const v = Q(yield* Get(source, Value(String(i))));
+      const element = structural.Elements[i];
+      const converted = element ? Q(yield* ConvertValue(v, element.Type as TypeRecord)) : v;
+      elements.push(CanonicalizeCompositeValue(converted));
+    }
+    // A required POSITION absent is the tuple's version of a required member
+    // absent: an element past the source's length with no [[Initial]] throws.
+    for (let i = len; i < structural.Elements.length; i += 1) {
+      const element = structural.Elements[i]!;
+      if (!element.Rest && element.Initial === 'none') {
+        return Throw.TypeError('$1 is missing from this composite', Value(String(i)));
+      }
+    }
+    return Q(FindOrCreateTupleComposite(elements));
+  }
   if (!structural || structural.Kind !== 'object') {
     // The tuple half is phase four's second part, with the tuple kind itself.
-    return Throw.TypeError('$1 is not supported yet', Value('a typed tuple composite'));
+    return Throw.TypeError('$1 is not an object or tuple type', Value('the shape'));
   }
   const properties = structural.Properties;
   const entries: CompositeEntryRecord[] = [];
@@ -354,7 +426,15 @@ function* CompositeFunction([source = Value.undefined]: Arguments, { NewTarget }
     // silently treated as a record: `sec-composite-deviations` keeps the array
     // form and gives it its OWN kind in the intern key, so answering with a
     // record here would produce an object that a later phase must invalidate.
-    return Throw.TypeError('$1 is not supported yet', Value('a tuple composite'));
+    // "`Array.isArray` on the argument decides the kind": an array source makes
+    // a TUPLE composite from its elements 0 through length - 1.
+    const len = Q(yield* LengthOfArrayLike(source));
+    const elements: Value[] = [];
+    for (let i = 0; i < len; i += 1) {
+      const v = Q(yield* Get(source, Value(String(i))));
+      elements.push(CanonicalizeCompositeValue(v));
+    }
+    return Q(FindOrCreateTupleComposite(elements));
   }
   const entries: CompositeEntryRecord[] = [];
   const keys = Q(yield* source.OwnPropertyKeys());

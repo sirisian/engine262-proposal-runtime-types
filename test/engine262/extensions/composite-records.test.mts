@@ -104,11 +104,10 @@ test('CANONICALIZATION: a stored zero is the class representative', () => {
 });
 
 test('PINNED: what phase two does not do', () => {
-  // The TUPLE kind is phase four. It is REFUSED rather than falling through to
-  // the record path: `sec-composite-deviations` gives tuples their own kind in
-  // the intern key, so answering with a record now would mint objects that
-  // phase must invalidate.
-  expect(outcome('Composite([1, 2]);')).toBe('TypeError');
+  // The TUPLE kind landed in phase five, and the reason it was refused rather
+  // than answered as a record is now assertable: the intern key includes the
+  // KIND, so the two never collide. composite-tuples.test.mts owns it.
+  expect(evaluated('String(Composite([1, 2]) === Composite({ 0: 1, 1: 2 }));')).toBe('false');
   // Composite TYPES landed in phase three; the TYPED CREATION form
   // `Composite.<T>({...})` is phase four, so a shape can be NAMED but not yet
   // CREATED at.

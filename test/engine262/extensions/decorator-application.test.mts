@@ -443,17 +443,21 @@ test('the enum family: enumerators before their enum', () => {
   expect(evaluated('let c; function grab(x) { c = x; } @grab enum E3 { A } String(c.type === E3);')).toBe('true');
 });
 
-test('Tuple and Record contexts exist but have no values yet — BLOCKED, not missing', () => {
+test('the Tuple and Record contexts now have VALUES to decorate', () => {
   // decorators.md: `const e = @f Composite([0]); // Reflect.Tuple` and
   // `const d = @f Composite({ a: 1 }); // Reflect.Record`.
   //
-  // `Composite` is the TC39 COMPOSITES PROPOSAL, which this engine does not
-  // implement — the README describes it as an external proposal this one builds
-  // on. So the two structural contexts have nothing to decorate: the blocker is
-  // another proposal's absence rather than anything in this stage.
-  //
-  // The contexts are built and ready, which is the useful half; pinned here so
-  // the dependency is visible.
+  // Pinned as BLOCKED on composites, which the engine did not implement. It
+  // does now - and the two structural contexts split exactly as the composite
+  // KINDS do, which is why the intern key carries the kind: `Reflect.Tuple`
+  // reflects the array-backed composite and `Reflect.Record` the object-backed
+  // one.
   expect(evaluated('[typeof Reflect.Enum, typeof Reflect.EnumEnumerator, typeof Reflect.Tuple, typeof Reflect.Record].join(",");')).toBe('object,object,object,object');
-  expectThrown('Composite([0]);');
+  expect(evaluated('String(Composite.isComposite(Composite([0])));')).toBe('true');
+  expect(evaluated('String(Array.isArray(Composite([0])));')).toBe('true');
+  expect(evaluated('String(Array.isArray(Composite({ a: 1 })));')).toBe('false');
+  // The DECORATOR POSITIONS are still unreached: a decorator on an expression
+  // is not a declaration site this engine reaches, which is a decorators-side
+  // gap rather than a composites one.
+  expectThrown('function f(c) {} const e = @f Composite([0]);');
 });
