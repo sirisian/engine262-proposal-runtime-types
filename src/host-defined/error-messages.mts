@@ -534,6 +534,7 @@ export interface Throw {
   | '$1 is not a type'
   | '$1 is not a type node'
   | '$1 is not a valid array length'
+  | '$1 is not a valid composite key'
   | '$1 is not a valid epoch nanoseconds'
   | '$1 is not a valid literal'
   | '$1 is not a valid member key'

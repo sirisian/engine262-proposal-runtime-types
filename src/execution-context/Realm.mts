@@ -56,6 +56,7 @@ import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
+import { bootstrapComposite } from '../intrinsics/Composite.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
@@ -210,6 +211,10 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapProxy(realmRec);
 
   bootstrapReflect(realmRec);
+  // proposal-runtime-types (composites.md): a global, feature-gated.
+  if (surroundingAgent.feature('runtime-types')) {
+    bootstrapComposite(realmRec);
+  }
   bootstrapTypePrototype(realmRec);
   // proposal-runtime-types: an enum's Type Object gets %Enum.prototype%, which
   // inherits from %Type.prototype%, so it follows it.
@@ -445,6 +450,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // proposal-runtime-types (soa.md): the structure-of-arrays container, a
     // built-in exotic in the same way `[].<T>` is.
     'SoA',
+    // proposal-runtime-types (composites.md): the interned frozen object.
+    'Composite',
 
     // Other Properties of the Global Object
     // 'Atomics',

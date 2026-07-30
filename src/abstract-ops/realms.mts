@@ -191,6 +191,8 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%WeakMap.prototype%': ObjectValue;
   // proposal-runtime-types (soa.md): the structure-of-arrays container.
   '%SoA%': FunctionObject;
+  /** proposal-runtime-types (composites.md) */
+  '%Composite%': FunctionObject;
   '%SoA.prototype%': ObjectValue;
   '%WeakRef.prototype%': ObjectValue;
   '%WeakSet.prototype%': ObjectValue;
