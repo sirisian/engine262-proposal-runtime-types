@@ -2782,6 +2782,7 @@ export namespace ParseNode {
     | MatchWildcardPattern
     | MatchLiteralPattern
     | MatchInterpolationPattern
+    | MatchObjectPattern
     | MatchTypePattern;
 
   export interface MatchOrPattern extends BaseParseNode {
@@ -2818,6 +2819,16 @@ export namespace ParseNode {
   export interface MatchTypePattern extends BaseParseNode {
     readonly type: 'MatchTypePattern';
     readonly Type: Type;
+  }
+  /** `{ key: pattern, ... }`: presence by `in`, then the sub-pattern. */
+  export interface MatchObjectPattern extends BaseParseNode {
+    readonly type: 'MatchObjectPattern';
+    readonly Properties: readonly MatchProperty[];
+  }
+  export interface MatchProperty extends BaseParseNode {
+    readonly type: 'MatchProperty';
+    readonly Key: string;
+    readonly Pattern: MatchPattern;
   }
 
   // RelationalExpression :
@@ -3561,6 +3572,8 @@ export type ParseNode =
   | ParseNode.TypeParameter
   | ParseNode.WhereClause
   | ParseNode.ConditionalRefinement
+  | ParseNode.MatchObjectPattern
+  | ParseNode.MatchProperty
   // proposal-runtime-types `sec-match-patterns`
   | ParseNode.MatchOrPattern
   | ParseNode.MatchAndPattern

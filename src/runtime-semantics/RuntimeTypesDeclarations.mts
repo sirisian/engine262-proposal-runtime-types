@@ -12,7 +12,7 @@ import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type
 import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
-import { SameValue } from '../abstract-ops/all.mts';
+import { SameValue, HasProperty, Get } from '../abstract-ops/all.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -303,22 +303,41 @@ export function MatchConstant(a: Value, b: Value): boolean {
  * before evaluating its right operand on a miss, rather than computing both and
  * combining.
  */
-export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value): PlainEvaluator<boolean> {
+export interface MatchCacheRecord {
+  readonly Reads: { Object: Value, Key: string, Present: boolean, Value: Value }[];
+  readonly Iterations: { Object: Value, Elements: Value[], Done: boolean }[];
+}
+
+/**
+ * `sec-match-expression`: "A Match Cache Record has a [[Reads]] field ... and an
+ * [[Iterations]] field ... It memoizes what a `match` reads of its subject, so
+ * that a property is read at most once and an iterator is obtained at most once
+ * however many patterns look, and every pattern of one `match` sees the same
+ * values."
+ *
+ * A CORRECTNESS requirement, not an optimization: a getter that ran per test
+ * would give different arms different values of one member.
+ */
+export function NewMatchCache(): MatchCacheRecord {
+  return { Reads: [], Iterations: [] };
+}
+
+export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache: MatchCacheRecord = NewMatchCache()): PlainEvaluator<boolean> {
   switch (P.type) {
     case 'MatchOrPattern': {
-      if (Q(yield* PatternMatches(P.Left, subject))) {
+      if (Q(yield* PatternMatches(P.Left, subject, cache))) {
         return true;
       }
-      return Q(yield* PatternMatches(P.Right, subject));
+      return Q(yield* PatternMatches(P.Right, subject, cache));
     }
     case 'MatchAndPattern': {
-      if (!Q(yield* PatternMatches(P.Left, subject))) {
+      if (!Q(yield* PatternMatches(P.Left, subject, cache))) {
         return false;
       }
-      return Q(yield* PatternMatches(P.Right, subject));
+      return Q(yield* PatternMatches(P.Right, subject, cache));
     }
     case 'MatchNotPattern':
-      return !Q(yield* PatternMatches(P.Operand, subject));
+      return !Q(yield* PatternMatches(P.Operand, subject, cache));
     case 'MatchWildcardPattern':
       return true;
     case 'MatchLiteralPattern': {
@@ -331,6 +350,43 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value): Plai
         return true;
       }
       return MatchConstant(subject, literal);
+    }
+    case 'MatchInterpolationPattern': {
+      // "`${expression}` evaluates the expression and matches by SameValue
+      // against the result, whatever the result is" - the escape hatch from
+      // every cleverer rule, where a type pattern would test membership and an
+      // expression pattern would consult a matcher.
+      const ref = Q(yield* Evaluate(P.Expression as never));
+      const value = Q(yield* GetValue(ref as never));
+      return MatchConstant(subject, value);
+    }
+    case 'MatchObjectPattern': {
+      // `sec-match-structural`. Presence is the `in` test, so an OPTIONAL
+      // MEMBER THAT IS ABSENT FAILS the pattern rather than matching
+      // *undefined* - and a member the pattern does not name is ignored, since
+      // this type system has width subtyping and no exact object type.
+      if (!(subject instanceof ObjectValue)) {
+        return false;
+      }
+      for (const prop of P.Properties) {
+        let read = cache.Reads.find((r) => r.Object === subject && r.Key === prop.Key);
+        if (!read) {
+          // ONE cached touch per key: a HasProperty and at most one Get,
+          // however many patterns name it, so a getter runs once and every
+          // pattern of one match sees the same value.
+          const present = Q(yield* HasProperty(subject, Value(prop.Key)));
+          const value = present === Value.true ? Q(yield* Get(subject, Value(prop.Key))) : Value.undefined;
+          read = { Object: subject, Key: prop.Key, Present: present === Value.true, Value: value };
+          cache.Reads.push(read);
+        }
+        if (!read.Present) {
+          return false;
+        }
+        if (!Q(yield* PatternMatches(prop.Pattern, read.Value, cache))) {
+          return false;
+        }
+      }
+      return true;
     }
     case 'MatchTypePattern': {
       const record = Q(yield* TypeNodeToTypeRecord(P.Type));

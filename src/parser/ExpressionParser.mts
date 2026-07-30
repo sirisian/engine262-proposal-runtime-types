@@ -1563,10 +1563,82 @@ export abstract class ExpressionParser extends FunctionParser {
       node.Literal = this.parseUnaryExpression();
       return this.finishNode(node, 'MatchLiteralPattern');
     }
+    // `${expr}`: evaluate and compare - "the escape hatch from every cleverer
+    // rule", and unambiguous, since a |Type| is never written this way.
+    //
+    // NOT a TEMPLATE token: `${` is template syntax only INSIDE a template
+    // literal, and in pattern position it is a `$` identifier followed by `{`.
+    // The two characters are lexed separately here for that reason.
+    if (this.test(Token.IDENTIFIER) && this.peek().value === '$' && this.testAhead(Token.LBRACE)) {
+      const node = this.startNode<ParseNode.MatchInterpolationPattern>();
+      this.next();
+      this.expect(Token.LBRACE);
+      node.Expression = this.parseAssignmentExpression();
+      this.expect(Token.RBRACE);
+      return this.finishNode(node, 'MatchInterpolationPattern');
+    }
+    // An OBJECT pattern, but only where the braces hold something a |Type|
+    // cannot - `_`, a combinator, an interpolation. `{ x: uint8 }` is spelled
+    // identically as a type and as an object pattern, and where every member's
+    // sub-pattern IS a type the two agree; so the type path keeps those, and
+    // every existing `is` keeps its parse, its meaning and its node shape.
+    if (this.test(Token.LBRACE)) {
+      const objectPattern = this.tryParseMatchObjectPattern();
+      if (objectPattern) {
+        return objectPattern;
+      }
+    }
     // Everything else is a |Type|, parsed exactly as `is` always parsed it.
     const node = this.startNode<ParseNode.MatchTypePattern>();
     node.Type = this.parseType();
     return this.finishNode(node, 'MatchTypePattern');
+  }
+
+  /**
+   * Speculatively parse `{ key: pattern, ... }`, returning *null* where the
+   * braces are a |Type| after all. The checkpoint-and-restore is the same
+   * mechanism `tryParseAnnotatedArrowParameter` uses.
+   */
+  tryParseMatchObjectPattern(): ParseNode.MatchObjectPattern | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.MatchObjectPattern>();
+    const Properties: ParseNode.MatchProperty[] = [];
+    let sawNonType = false;
+    this.expect(Token.LBRACE);
+    while (!this.test(Token.RBRACE)) {
+      const prop = this.startNode<ParseNode.MatchProperty>();
+      if (!this.test(Token.IDENTIFIER) && !this.test(Token.STRING)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      prop.Key = this.parseIdentifierName().name;
+      if (!this.eat(Token.COLON)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      // A member's sub-pattern is a FULL pattern, combinators included.
+      const sub = this.parseMatchPattern();
+      if (sub.type !== 'MatchTypePattern') {
+        sawNonType = true;
+      }
+      prop.Pattern = sub;
+      Properties.push(this.finishNode(prop, 'MatchProperty'));
+      if (!this.eat(Token.COMMA)) {
+        break;
+      }
+    }
+    if (!this.eat(Token.RBRACE) || !sawNonType) {
+      // Either it did not parse, or every member is a type - in which case the
+      // TYPE path gives the same answer and keeps the existing node shape.
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    node.Properties = Properties;
+    return this.finishNode(node, 'MatchObjectPattern');
   }
 
   parseClassElement(): ParseNode.ClassElement {

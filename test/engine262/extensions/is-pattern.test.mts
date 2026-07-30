@@ -68,25 +68,17 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
   expect(evaluated('String("s" is not uint8);')).toBe('true');
 });
 
-test('PINNED: the forms phase one does not carry', () => {
+test('PINNED: the forms still outstanding after phase two', () => {
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // BINDINGS (`let`/`const`) need the scoping rule - "in scope in exactly the
-  // positions the truth of the test governs" - which is checker work, so the
-  // runtime for them lands with it.
-  expect(outcome('const v = 1; String(v is let x);')).toBe('SyntaxError');
-  // INTERPOLATION, and OBJECT and ARRAY patterns. The last two are spelled
-  // identically to types (`{ x: uint8 }` is both), and settling that
-  // coincidence belongs with the structural matching that needs the read cache.
-  expect(outcome('const k = 1; String(1 is ${k});')).toBe('SyntaxError');
-  // `{ x: 1 }` is spelled identically as a TYPE and as an object pattern, and
-  // it currently parses as the type - whose member type is the literal type 1,
-  // so the answer coincides with what the object pattern would give. That
-  // coincidence is exactly why settling the form belongs with the structural
-  // matching that needs the read cache, and it is pinned by what it PRODUCES so
-  // that the day the two diverge is visible.
-  expect(evaluated('String({ x: 1 } is { x: 1 });')).toBe('true');
-  expect(evaluated('String({ x: 2 } is { x: 1 });')).toBe('false');
-  // NARROWING is phase five: a pattern-carrying `is` types as boolean and
-  // narrows nothing yet.
+  // positions the truth of the test governs" - which is checker work, so their
+  // runtime lands with it.
+  expect(outcome('const v = 1; v is let x;')).toBe('SyntaxError');
+  // ARRAY patterns, and the `[[Iterations]]` half of the cache with them.
+  // `[1, 2]` currently parses as a TUPLE TYPE of two literal types, so the
+  // answer coincides with what an array pattern would give - the same
+  // coincidence objects have, pinned by its RESULT.
+  expect(evaluated('String([1, 2] is [1, 2]);')).toBe('true');
+  // NARROWING is phase five: a non-type pattern narrows nothing yet.
   expect(evaluated('String(typeof (1 is 1));')).toBe('boolean');
 });
