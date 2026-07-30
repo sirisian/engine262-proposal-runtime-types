@@ -1,5 +1,8 @@
 import { SameValue } from '../abstract-ops/all.mts';
 import type { TypeRecord, TupleElementRecord } from './records.mts';
+import {
+  maximumSupply, parameterArgumentType, parameterReceiving, requiredArity,
+} from './records.mts';
 
 /**
  * proposal-runtime-types #sec-structural-identity and #sec-subtyping-and-assignability
@@ -362,13 +365,49 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
   return propsOk && indexOk;
 }
 
-/** Contravariant parameters, covariant return, over paired signatures. */
+/**
+ * Contravariant parameters, covariant return, over paired signatures.
+ *
+ * PLAN-rest-parameters.md phase 5, per #sec-issignaturesubtype. Two defects
+ * were live here and neither needed a rest to be DECLARED to bite, since a
+ * function type may carry one:
+ *
+ * - A rest was compared by its own type, which is the ARRAY it collects into,
+ *   against an argument's type. `IsSubtype(uint32, [].<uint32>)` is false, so
+ *   `(...a: [].<uint32>) => void` was assignable to nothing that took a
+ *   `uint32` - the comparison is against the rest's ELEMENT type.
+ * - Arity was a parameter COUNT on both sides. A source whose extra parameters
+ *   are optional or a rest requires fewer arguments than it declares, and a
+ *   target carrying a rest may supply more, so counting rejected pairs that
+ *   relate. The clause asks whether "a requires more arguments than b may
+ *   supply", which is what is asked now.
+ *
+ * The positional walk also ran over the SOURCE's parameters, so a target
+ * position past the source's length was never checked at all. It runs over the
+ * target's - the arguments that will actually arrive - and asks which source
+ * parameter receives each.
+ */
 function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extract<TypeRecord, { Kind: 'function' }>, assumptions: readonly Assumption[]): boolean {
   return t.Signatures.every((tg) => s.Signatures.some((sg) => {
-    if (sg.Parameters.length > tg.Parameters.length) {
+    if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
       return false;
     }
-    if (!sg.Parameters.every((sp, i) => IsSubtype(tg.Parameters[i].Type, sp.Type, assumptions))) {
+    // A list with several rests has no determined position mapping until
+    // SequenceAssignment lands (phase 2); until then it relates to nothing
+    // rather than relating by a guess.
+    if (sg.Parameters.filter((p) => p.Rest).length > 1 || tg.Parameters.filter((p) => p.Rest).length > 1) {
+      return false;
+    }
+    const positionsOk = tg.Parameters.every((tp, j) => {
+      const sp = parameterReceiving(sg.Parameters, j);
+      if (!sp) {
+        // The source takes fewer arguments than the target supplies, which the
+        // language ignores; the clause admits it.
+        return true;
+      }
+      return IsSubtype(parameterArgumentType(tp), parameterArgumentType(sp), assumptions);
+    });
+    if (!positionsOk) {
       return false;
     }
     if (sg.Return && tg.Return) {

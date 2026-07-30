@@ -62,6 +62,79 @@ export interface ParameterRecord {
   readonly Initial?: Value;
 }
 
+/**
+ * The ELEMENT type of a rest parameter: what ONE argument reaching it must be.
+ *
+ * PLAN-rest-parameters.md phase 5. A rest's own [[Type]] is what it COLLECTS -
+ * `...args: [].<uint32>` has the array type - so every operation that compares
+ * a single argument against a rest must compare against this instead. The
+ * specification says so where it defines the annotation ("an operation
+ * comparing a single argument against a rest compares against its element
+ * type"), and IsFunctionSubtype was comparing against the array, which is why
+ * no signature carrying a rest related to one taking that element.
+ *
+ * An ~array~ contributes its [[Element]]; a ~tuple~ the union of its elements'
+ * types, since any of its positions may be the one an argument lands in; and
+ * anything else contributes itself, which keeps an untyped or malformed rest
+ * behaving as it did.
+ */
+export function restElementType(t: TypeRecord): TypeRecord {
+  if (t.Kind === 'array') {
+    return t.Element;
+  }
+  if (t.Kind === 'tuple') {
+    const members = t.Elements.map((e) => e.Type);
+    if (members.length === 0) {
+      return { Kind: 'union', Members: [] };
+    }
+    return members.length === 1 ? members[0] : { Kind: 'union', Members: members };
+  }
+  return t;
+}
+
+/** The type ONE argument must satisfy to be taken by this parameter. */
+export function parameterArgumentType(p: ParameterRecord): TypeRecord {
+  return p.Rest ? restElementType(p.Type) : p.Type;
+}
+
+/**
+ * The parameter that receives the argument at index `j`, or undefined where the
+ * list cannot take one there.
+ *
+ * Exact while at most one parameter is a rest, which is every list the engine
+ * can currently declare: a rest receives its own position and every later one.
+ * PLAN-rest-parameters.md phase 2 replaces this with SequenceAssignment, which
+ * is what a list with SEVERAL rests needs, and this returns undefined for that
+ * case rather than guessing.
+ */
+export function parameterReceiving(params: readonly ParameterRecord[], j: number): ParameterRecord | undefined {
+  if (params.filter((p) => p.Rest).length > 1) {
+    return undefined;
+  }
+  const restIndex = params.findIndex((p) => p.Rest);
+  if (restIndex >= 0 && j >= restIndex) {
+    return params[restIndex];
+  }
+  return params[j];
+}
+
+/** The greatest number of arguments a parameter list may be supplied. */
+export function maximumSupply(params: readonly ParameterRecord[]): number {
+  return params.some((p) => p.Rest) ? Infinity : params.length;
+}
+
+/** The least number of arguments a parameter list requires. */
+export function requiredArity(params: readonly ParameterRecord[]): number {
+  let n = 0;
+  for (const p of params) {
+    if (p.Optional || p.Rest) {
+      break;
+    }
+    n += 1;
+  }
+  return n;
+}
+
 /** #sec-signature-records: [[Reference]] restates the parameter's type. */
 export function IsReferenceParameter(p: ParameterRecord): boolean {
   return p.Type.Kind === 'reference';
