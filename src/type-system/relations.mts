@@ -1,7 +1,7 @@
 import { SameValue } from '../abstract-ops/all.mts';
 import type { TypeRecord, TupleElementRecord } from './records.mts';
 import {
-  maximumSupply, parameterArgumentType, parameterReceiving, requiredArity,
+  maximumSupply, parameterArgumentType, parameterReceiving, requiredArity, restElementType,
 } from './records.mts';
 
 /**
@@ -184,15 +184,68 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   }
 }
 
+/**
+ * The least length a tuple admits.
+ *
+ * PLAN-rest-parameters.md phase 3, per #sec-array-membership: the count of the
+ * elements carrying neither a rest nor a default, WHEREVER THEY SIT. This
+ * stopped at the first rest, which undercounts the moment an element follows
+ * one: `[...[].<uint8>, string]` requires one element and was reported as
+ * requiring none.
+ */
 function tupleMinLength(t: readonly TupleElementRecord[]): number {
   let n = 0;
   for (const e of t) {
-    if (e.Rest) {
-      break;
+    if (!e.Rest && e.Initial === 'none') {
+      n += 1;
     }
-    n += 1;
   }
   return n;
+}
+
+/**
+ * The range of positions the element at `k` can receive, as [least, greatest].
+ *
+ * A rest before an element can take nothing, so the element's earliest position
+ * is the number of NON-REST elements before it; and a rest at or before it can
+ * take any number, so its latest position is unbounded. Where no rest precedes
+ * it, an element receives exactly its own index.
+ */
+function tuplePositionRange(t: readonly TupleElementRecord[], k: number): [number, number] {
+  let least = 0;
+  let restBefore = false;
+  for (let i = 0; i < k; i += 1) {
+    if (t[i].Rest) {
+      restBefore = true;
+    } else {
+      least += 1;
+    }
+  }
+  const unbounded = restBefore || t[k].Rest;
+  return [least, unbounded ? Infinity : k];
+}
+
+/**
+ * The type a SOURCE tuple can put at position `i`: the union of the types of
+ * every element that could receive it, or null where none can.
+ *
+ * With one rest at most this is the familiar single type. With several, a
+ * position may be reachable by more than one element, and requiring EACH of
+ * them to be within the target's position is what keeps the relation sound -
+ * the source may put any of them there.
+ */
+function tupleSourceTypesAt(t: readonly TupleElementRecord[], i: number): TypeRecord[] {
+  const types: TypeRecord[] = [];
+  for (let k = 0; k < t.length; k += 1) {
+    const [least, greatest] = tuplePositionRange(t, k);
+    if (i >= least && i <= greatest) {
+      // A rest element's Type is the ARRAY it stands for; what it puts at ONE
+      // position is that array's element (phase 5's restElementType, the same
+      // unwrapping a rest parameter needs and for the same reason).
+      types.push(t[k].Rest ? restElementType(t[k].Type) : t[k].Type);
+    }
+  }
+  return types;
 }
 
 function tupleMaxLength(t: readonly TupleElementRecord[]): number {
@@ -203,7 +256,7 @@ function tupleTypeAt(elements: readonly TupleElementRecord[], i: number): TypeRe
   let position = 0;
   for (const e of elements) {
     if (e.Rest) {
-      return e.Type;
+      return restElementType(e.Type);
     }
     if (position === i) {
       return e.Type;
@@ -294,14 +347,32 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if (tupleMaxLength(s.Elements) > tupleMaxLength(tt.Elements)) {
         return false;
       }
+      // PLAN-rest-parameters.md phase 3, per #sec-issubtype. Where the TARGET
+      // has more than one rest its positions are not determined by their index,
+      // and the exact relation is inclusion between two regular languages - a
+      // product construction, which a subtyping check cannot afford to run at
+      // every use. The rule is conservative there and says so: the element
+      // lists must correspond one for one, which is sound and is exact whenever
+      // they do.
+      if (tt.Elements.filter((e) => e.Rest).length > 1) {
+        if (s.Elements.length !== tt.Elements.length) {
+          return false;
+        }
+        return s.Elements.every((se, i) => se.Rest === tt.Elements[i].Rest
+          && IsSubtype(
+            se.Rest ? restElementType(se.Type) : se.Type,
+            tt.Elements[i].Rest ? restElementType(tt.Elements[i].Type) : tt.Elements[i].Type,
+            next,
+          ));
+      }
       const count = Math.max(s.Elements.length, tt.Elements.length);
       for (let i = 0; i < count; i += 1) {
-        const st = tupleTypeAt(s.Elements, i);
-        if (st === null) {
+        const sourceTypes = tupleSourceTypesAt(s.Elements, i);
+        if (sourceTypes.length === 0) {
           continue;
         }
         const ttI = tupleTypeAt(tt.Elements, i);
-        if (ttI !== null && !IsSubtype(st, ttI, next)) {
+        if (ttI !== null && !sourceTypes.every((st) => IsSubtype(st, ttI, next))) {
           return false;
         }
       }

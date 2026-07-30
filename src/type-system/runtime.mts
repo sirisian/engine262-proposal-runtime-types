@@ -13,6 +13,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
+import { SequenceAssignment } from './sequence-assignment.mts';
+import { restElementType } from './records.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
@@ -685,26 +687,47 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         return true;
       }
-      // A [[Rest]] element receives its own position and every later one.
-      const restIndex = t.Elements.findIndex((e) => e.Rest);
-      if (restIndex === -1) {
+      // PLAN-rest-parameters.md phase 3, per #sec-array-membership.
+      //
+      // A tuple with NO rest is positional and exact, which is the common case
+      // and reads each element once. Any rest at all goes through
+      // SequenceAssignment: which element receives which run is its answer, and
+      // hand-rolling the mapping is what left two defects here. The length
+      // check ignored elements AFTER a rest, so `[1]` satisfied
+      // `[number, ...[].<string>, boolean]` with the required boolean missing;
+      // and a rest element's Type is the ARRAY it stands for, so comparing an
+      // element against it directly meant no rest ever matched anything.
+      const restCount = t.Elements.filter((e) => e.Rest).length;
+      if (restCount === 0) {
         if (len !== t.Elements.length) {
           return false;
         }
-      } else if (len < restIndex) {
-        return false;
+        for (let i = 0; i < len; i += 1) {
+          const el = Q(yield* Get(value, Value(String(i))));
+          if (!Q(yield* IsOfType(el, t.Elements[i].Type))) {
+            return false;
+          }
+        }
+        return true;
       }
+      // The predicate SequenceAssignment takes is synchronous and IsOfType is
+      // not, so the admissions are computed first: one Get per position, and one
+      // IsOfType per (position, element). A rest is asked about its ELEMENT
+      // type, which is what one item reaching it must be.
+      const items: Value[] = [];
       for (let i = 0; i < len; i += 1) {
-        const element = restIndex !== -1 && i >= restIndex ? t.Elements[restIndex] : t.Elements[i];
-        if (!element) {
-          return false;
-        }
-        const el = Q(yield* Get(value, Value(String(i))));
-        if (!Q(yield* IsOfType(el, element.Type))) {
-          return false;
-        }
+        items.push(Q(yield* Get(value, Value(String(i)))));
       }
-      return true;
+      const admitted: boolean[][] = [];
+      for (let i = 0; i < len; i += 1) {
+        const row: boolean[] = [];
+        for (const e of t.Elements) {
+          row.push(Q(yield* IsOfType(items[i], e.Rest ? restElementType(e.Type) : e.Type)));
+        }
+        admitted.push(row);
+      }
+      const slots = t.Elements.map((e) => ({ Rest: e.Rest, Optional: e.Initial !== 'none' }));
+      return SequenceAssignment(slots, len, (i, k) => admitted[i][k]) !== 'unmatched';
     }
     case 'reference':
       return Q(yield* IsOfType(value, t.Target));
