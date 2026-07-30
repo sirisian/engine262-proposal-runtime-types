@@ -1599,7 +1599,7 @@ export function DecoratorArgumentPlacement(parameters: readonly OverloadParamete
     // call. The positions are carried so the type judgment below can tell a gap
     // from a written `undefined`.
     const p = parameters[i];
-    if (!p || !(p.HasDefault || p.Optional)) {
+    if (!p || !p.Optional) {
       return null;
     }
     gaps.push(i);

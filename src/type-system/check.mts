@@ -2,7 +2,8 @@ import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
-  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord } from './records.mts';
+  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
+  parameter, type ParameterRecord, anyType as anyTypeRecord } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import {
@@ -695,17 +696,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (tm.MethodSignature) {
-        const Parameters: Known[] = [];
-        const Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+        const Parameters: ParameterRecord[] = [];
         for (const p of tm.MethodSignature.FunctionTypeParameterList ?? []) {
           const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          Parameters.push(ann ? resolveType(ann.Type) : null);
-          Shapes.push({ Optional: false, Rest: false, HasDefault: false });
+          Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
         }
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
         Properties.push({
           key,
-          type: { Kind: 'function', Signatures: [{ Parameters, Return, Shapes, Untyped: false }] } as unknown as TypeRecord,
+          type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false }] } as unknown as TypeRecord,
           optional: tm.Optional === true,
         });
         continue;
@@ -731,7 +730,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return node ? instanceTypeOf(node) : null;
   };
   /** Construct signatures by class node, for checking `new C(...)` (F59). */
-  const constructSignatures = new Map<ParseNode, { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] }>();
+  const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
 
   const lookupAlias = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -853,14 +852,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: 'tuple', Elements };
       }
       case 'FunctionType': {
-        const Parameters = [];
+        const Parameters: ParameterRecord[] = [];
         for (const p of node.FunctionTypeParameterList) {
-          const pt = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const pn = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Type?: ParseNode.Type | null, Rest?: boolean, Optional?: boolean, BindingIdentifier?: { name?: string } };
+          // An unnamed parameter stores its type in [[Type]] and a named one
+          // behind [[TypeAnnotation]]; `...[].<uint8>` is the unnamed form, so
+          // reading only the annotation lost its type and made it `any`.
+          const pt = pn.TypeAnnotation ?? (pn.Type ? ({ Type: pn.Type } as ParseNode.TypeAnnotation) : null);
           const r = pt ? resolveType(pt.Type) : { Kind: 'any' as const };
           if (!r) {
             return null;
           }
-          Parameters.push(r);
+          // PLAN-rest-parameters.md phase 0: a function TYPE's parameters carry
+          // the same record a declaration's do, which is what lets a rest be
+          // written in a type at all.
+          Parameters.push(parameter(r, {
+            Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true,
+          }));
         }
         const Return = resolveType(node.ReturnType);
         return { Kind: 'function', Signatures: [{ Parameters, Return }] };
@@ -1133,9 +1141,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // property's type, since that is what reading the property yields; a setter
     // contributes nothing yet, and is the natural next step for checking a
     // store through an accessor.
-    const methods = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
+    const methods = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     const unusable = new Set<string>();
-    let construct: { Parameters: Known[], Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] } | null = null;
+    let construct: { Parameters: ParameterRecord[] } | null = null;
     const accessorKeys = new Set<string>();
     const getterKeys = new Set<string>();
     const setterTypes = new Map<string, TypeRecord>();
@@ -1157,8 +1165,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // the instance shape: `c.constructor` is the class, and typing it as
           // a method taking the constructor's parameters would be wrong twice
           // over. It is collected separately, for `new C(...)` (F59).
-          const cparams: Known[] = [];
-          const cshapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+          const cparams: ParameterRecord[] = [];
           let cusable = true;
           for (const p of md.UniqueFormalParameters ?? []) {
             if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
@@ -1166,11 +1173,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               break;
             }
             const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
-            cparams.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
-            cshapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
+            cparams.push(parameter((pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
+              Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
+              Optional: pp.Optional === true || !!pp.Initializer,
+            }));
           }
           if (cusable) {
-            construct = { Parameters: cparams, Shapes: cshapes };
+            construct = { Parameters: cparams };
           }
           continue;
         }
@@ -1196,8 +1205,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        const Parameters: Known[] = [];
-        const shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+        const Parameters: ParameterRecord[] = [];
+        const annotated: Known[] = [];
         let usable = true;
         for (const p of md.UniqueFormalParameters) {
           if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
@@ -1205,17 +1214,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             break;
           }
           const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
-          Parameters.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
-          shapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
+          const resolved = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
+          annotated.push(resolved);
+          Parameters.push(parameter(resolved ?? anyTypeRecord, { Optional: pp.Optional === true || !!pp.Initializer }));
         }
         if (!usable) {
           unusable.add(key);
           continue;
         }
         const Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
-        const Untyped = !md.TypeAnnotation && Parameters.every((t) => t === null);
+        const Untyped = !md.TypeAnnotation && annotated.every((t) => t === null);
         const sigs = methods.get(key) ?? [];
-        sigs.push({ Parameters, Return, Shapes: shapes, Untyped });
+        sigs.push({ Parameters, Return, Untyped });
         methods.set(key, sigs);
         continue;
       }
@@ -1802,16 +1812,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const collectionMethodSignature = (library: string, name: string, args: readonly (TypeRecord | number)[], receiver: TypeRecord): Known => {
     const boolType = makePrimitive('boolean');
     const anyType = { Kind: 'any' as const };
-    const shapes = (n: number, optionalFrom: number) => Array.from({ length: n }, (_unused, i) => ({
-      Optional: i >= optionalFrom, Rest: false, HasDefault: false,
-    }));
+    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
     const arg = (i: number): TypeRecord => {
       const a = args[i];
       return a === undefined || typeof a === 'number' ? anyType as TypeRecord : a;
     };
     const sig = (Parameters: TypeRecord[], Return: TypeRecord, optionalFrom = Parameters.length) => ({
       Kind: 'function',
-      Signatures: [{ Parameters, Return, Shapes: shapes(Parameters.length, optionalFrom), Untyped: false }],
+      Signatures: [{ Parameters: shapes(Parameters, optionalFrom), Return, Untyped: false }],
     } as unknown as Known);
     if (library === 'Set' || library === 'WeakSet') {
       const element = arg(0);
@@ -1861,19 +1869,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const anyType = { Kind: 'any' as const };
     const numberType = makePrimitive('number');
     const boolType = makePrimitive('boolean');
-    const shapes = (n: number, optionalFrom: number) => Array.from({ length: n }, (_unused, i) => ({
-      Optional: i >= optionalFrom, Rest: false, HasDefault: false,
-    }));
+    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
     switch (name) {
       case 'includes':
-        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType], Return: boolType, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
       case 'indexOf':
       case 'lastIndexOf':
-        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType], Return: numberType, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: numberType, Untyped: false }] } as unknown as Known;
       case 'fill':
-        return { Kind: 'function', Signatures: [{ Parameters: [element, numberType, numberType], Return: anyType, Shapes: shapes(3, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType, numberType], 1), Return: anyType, Untyped: false }] } as unknown as Known;
       case 'at':
-        return { Kind: 'function', Signatures: [{ Parameters: [numberType], Return: element, Shapes: shapes(1, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([numberType], 1), Return: element, Untyped: false }] } as unknown as Known;
       // A result drawn from the receiver's own elements is an array of the same
       // element type: `filter` selects, `slice` copies a range, `reverse` and
       // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
@@ -1895,14 +1901,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const callback = {
           Kind: 'function',
           Signatures: [{
-            Parameters: [element, builtinTypeRecord('uint', [32]) ?? numberType, receiver],
+            Parameters: shapes([element, builtinTypeRecord('uint', [32]) ?? numberType, receiver], 1),
             Return: anyType,
-            Shapes: shapes(3, 1),
             Untyped: false,
           }],
         } as unknown as TypeRecord;
         const result = name === 'map' ? anyType : (name === 'find' || name === 'findLast' ? element : anyType);
-        return { Kind: 'function', Signatures: [{ Parameters: [callback, anyType], Return: result, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: result, Untyped: false }] } as unknown as Known;
       }
       case 'filter': {
         // Selects from the receiver's own elements, so the result keeps the
@@ -1910,13 +1915,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const callback = {
           Kind: 'function',
           Signatures: [{
-            Parameters: [element, builtinTypeRecord('uint', [32]) ?? numberType, receiver],
+            Parameters: shapes([element, builtinTypeRecord('uint', [32]) ?? numberType, receiver], 1),
             Return: anyType,
-            Shapes: shapes(3, 1),
             Untyped: false,
           }],
         } as unknown as TypeRecord;
-        return { Kind: 'function', Signatures: [{ Parameters: [callback, anyType], Return: receiver, Shapes: shapes(2, 1), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
       }
       case 'slice':
       case 'reverse':
@@ -1924,7 +1928,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'toReversed':
       case 'toSorted':
       case 'concat':
-        return { Kind: 'function', Signatures: [{ Parameters: [anyType, anyType], Return: receiver, Shapes: shapes(2, 0), Untyped: false }] } as unknown as Known;
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
       default:
         return null;
     }
@@ -1939,7 +1943,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The argument check at a call site fires only for a SINGLE-signature
     // type, so an overloaded name keeps resolving where it did before, at run
     // time, until the checker learns to rank signatures.
-    const collected = new Map<string, { Parameters: Known[], Return: Known, Shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[], Untyped: boolean }[]>();
+    const collected = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     const rejected = new Set<string>();
     for (const n of list) {
       if (n.type !== 'FunctionDeclaration') {
@@ -1954,8 +1958,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!name) {
         continue;
       }
-      const Parameters: Known[] = [];
-      const shapes: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] = [];
+      const Parameters: ParameterRecord[] = [];
+      const annotated: Known[] = [];
       let usable = true;
       for (const p of fn.FormalParameters ?? []) {
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
@@ -1969,8 +1973,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           Initializer?: ParseNode | null,
           Optional?: boolean,
         };
-        Parameters.push(pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null);
-        shapes.push({ Optional: pp.Optional === true, Rest: false, HasDefault: !!pp.Initializer });
+        const resolved2 = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
+        annotated.push(resolved2);
+        Parameters.push(parameter(resolved2 ?? anyTypeRecord, {
+          Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
+          Optional: pp.Optional === true || !!pp.Initializer,
+        }));
       }
       if (!usable) {
         rejected.add(name);
@@ -1982,8 +1990,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // anywhere is the catch-all that ranks last. Declaring a return type is
       // what makes a zero-parameter function typed, which the clause spells
       // out.
-      const Untyped = !fn.TypeAnnotation && Parameters.every((t) => t === null);
-      signatures.push({ Parameters, Return, Shapes: shapes, Untyped });
+      const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
+      signatures.push({ Parameters, Return, Untyped });
       collected.set(name, signatures);
     }
     for (const [name, Signatures] of collected) {
@@ -2555,7 +2563,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = staticType(c.CallExpression);
         if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
-          let sig: { Parameters: readonly Known[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
+          let sig: { Parameters: readonly ParameterRecord[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
           if (!sig && callee.Signatures.length > 1) {
             // #sec-overload-resolution, statically: rank the declared
             // signatures against the argument types by the SHARED resolver, so
@@ -2577,11 +2585,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return t && t.Kind === 'literal' ? t.Base : t;
             });
             if (argTypes.every((t) => t !== null)) {
+              // PLAN-rest-parameters.md phase 0: the parameters ARE the records
+              // now, so the zip of a Shapes sidecar with a type list is gone.
               const candidates = callee.Signatures.map((s) => ({
-                Parameters: ((s as unknown as { Shapes?: { Optional: boolean, Rest: boolean, HasDefault: boolean }[] }).Shapes ?? []).map((shape, i) => ({
-                  Type: (s.Parameters[i] ?? { Kind: 'any' }) as TypeRecord,
-                  ...shape,
-                })),
+                Parameters: s.Parameters,
                 Function: Value.undefined as unknown as Value,
                 Untyped: (s as unknown as { Untyped?: boolean }).Untyped === true,
               }));
@@ -2606,14 +2613,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (i >= chosen.Parameters.length || arg.type === 'AssignmentRestElement') {
                 return;
               }
-              const param = chosen.Parameters[i];
+              const param = chosen.Parameters[i]?.Type;
               // A FUNCTION LITERAL in a position whose type is a function type
               // takes that type's parameters as its own, which is how a
               // callback learns the element type (F80). Recorded here and read
               // when the walk reaches the literal.
               if (param && param.Kind === 'function' && param.Signatures.length === 1
                   && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
-                contextualParameterTypes.set(arg, param.Signatures[0].Parameters as readonly Known[]);
+                contextualParameterTypes.set(arg, param.Signatures[0].Parameters.map((pr) => pr.Type) as readonly Known[]);
                 // `map`'s result element type is the CALLBACK'S RETURN, which
                 // is why it could not be claimed before the callback was typed
                 // (F79 left it ~any~ deliberately). It is readable for a
@@ -2626,7 +2633,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   const body = arrow.ConciseBody;
                   if (body && body.type !== 'FunctionBody') {
                     pushBlock(() => {
-                      (param.Signatures[0].Parameters as readonly Known[]).forEach((pt, pi) => {
+                      param.Signatures[0].Parameters.forEach((pr, pi) => {
+                        const pt = pr.Type;
                         const p = arrow.ArrowParameters?.[pi];
                         if (pt && p && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
                           declare((p as ParseNode.SingleNameBinding).BindingIdentifier!.name, pt);
@@ -2661,7 +2669,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (sig) {
             ne.Arguments.forEach((arg, i) => {
               if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
-                const p = sig.Parameters[i];
+                const p = sig.Parameters[i]?.Type;
                 if (p) {
                   requireAssignable(staticTypeIn(arg, p), p);
                 }

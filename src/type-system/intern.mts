@@ -79,7 +79,7 @@ export function CanonicalizeType(t: TypeRecord): TypeRecord {
     return {
       Kind: 'function',
       Signatures: t.Signatures.map((g) => ({
-        Parameters: g.Parameters.map(CanonicalizeType),
+        Parameters: g.Parameters.map((p) => ({ ...p, Type: CanonicalizeType(p.Type) })),
         Return: g.Return === null ? null : CanonicalizeType(g.Return),
         ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType),
       })),

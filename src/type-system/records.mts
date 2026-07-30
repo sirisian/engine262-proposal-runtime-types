@@ -33,8 +33,49 @@ export interface PropertyTypeRecord {
   readonly initial?: Value;
 }
 
+/**
+ * One parameter of a signature (spec: #sec-signature-records, "A Parameter
+ * Record has a [[Name]], a [[Type]], an [[Optional]] field, a [[Rest]] field,
+ * an [[Initial]] field, and a [[Reference]] field").
+ *
+ * PLAN-rest-parameters.md phase 0. A signature's parameters were a bare
+ * `TypeRecord[]`, so the type system - the half that interns, relates, and
+ * reflects - could not say that a parameter was a rest, was optional, or had a
+ * name. The information existed twice elsewhere and in neither of those places:
+ * `OverloadParameter` carried Type/Optional/Rest/HasDefault for resolution, and
+ * the checker carried a parallel `Shapes` array beside each signature's types.
+ * Three representations of one thing is how they drifted; this is the one.
+ *
+ * [[Optional]] is *true* when the parameter is marked `?` OR carries a default,
+ * which is what the specification says and what collapses the separate
+ * HasDefault flag. [[Reference]] is deliberately not a field: the specification
+ * notes that it "restates the type for convenience, and reflection reads the
+ * fact from the type", and a field that must equal `Type.Kind === 'reference'`
+ * is a field that can disagree with it. Read it with `IsReferenceParameter`.
+ */
+export interface ParameterRecord {
+  readonly Name: string;
+  readonly Type: TypeRecord;
+  readonly Optional: boolean;
+  readonly Rest: boolean;
+  /** The declared default's value, where it is known at check time. */
+  readonly Initial?: Value;
+}
+
+/** #sec-signature-records: [[Reference]] restates the parameter's type. */
+export function IsReferenceParameter(p: ParameterRecord): boolean {
+  return p.Type.Kind === 'reference';
+}
+
+/** A parameter record, for the many sites that build a plain positional one. */
+export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord, 'Type'>>): ParameterRecord {
+  return {
+    Name: extra?.Name ?? '', Type, Optional: extra?.Optional ?? false, Rest: extra?.Rest ?? false, ...(extra?.Initial !== undefined ? { Initial: extra.Initial } : {}),
+  };
+}
+
 export interface SignatureRecord {
-  readonly Parameters: readonly TypeRecord[];
+  readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
   // proposal-runtime-types: the declared `this` type, or null where none is
   // declared (the spec's [[ThisType]], a Type Record or ~none~). Part of the
@@ -324,7 +365,11 @@ export function orderKey(t: TypeRecord): string {
     case 'array': return `array:${orderKey(t.Element)}:${t.Extent}`;
     case 'reference': return `reference:${orderKey(t.Target)}`;
     case 'object': return `object:${t.Properties.map((p) => `${p.readonly ? 'readonly ' : ''}${p.key}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
-    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}(${g.Parameters.map(orderKey).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
+    // PLAN-rest-parameters.md phase 0: a parameter's Rest and Optional flags are
+    // part of a signature's identity, so they belong in the canonical order key.
+    // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`
+    // produce the same key and intern as ONE Type Object.
+    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}(${g.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Optional ? '?' : ''}${orderKey(p.Type)}`).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
     default: return 'unknown';
   }
 }

@@ -162,7 +162,13 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       const tf = t as Extract<TypeRecord, { Kind: 'function' }>;
       return t.Kind === 'function' && s.Signatures.length === tf.Signatures.length
         && s.Signatures.every((g, i) => g.Parameters.length === tf.Signatures[i].Parameters.length
-          && g.Parameters.every((p, j) => SameTypeWithAssumptions(p, tf.Signatures[i].Parameters[j], next))
+          && g.Parameters.every((p, j) => {
+            // PLAN-rest-parameters.md phase 0: Rest and Optional are part of a
+            // signature's identity, not decoration on the type.
+            const q = tf.Signatures[i].Parameters[j];
+            return p.Rest === q.Rest && p.Optional === q.Optional
+              && SameTypeWithAssumptions(p.Type, q.Type, next);
+          })
           // [[ThisType]]: both ~none~ is equal; one ~none~ is unequal; both
           // present are compared as types (spec SameSignature).
           && ((g.ThisType ?? null) === null) === ((tf.Signatures[i].ThisType ?? null) === null)
@@ -362,7 +368,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     if (sg.Parameters.length > tg.Parameters.length) {
       return false;
     }
-    if (!sg.Parameters.every((sp, i) => IsSubtype(tg.Parameters[i], sp, assumptions))) {
+    if (!sg.Parameters.every((sp, i) => IsSubtype(tg.Parameters[i].Type, sp.Type, assumptions))) {
       return false;
     }
     if (sg.Return && tg.Return) {

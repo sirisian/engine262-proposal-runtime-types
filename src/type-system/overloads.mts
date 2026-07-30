@@ -9,24 +9,21 @@
 
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Value } from '../value.mts';
-import type { TypeRecord } from './records.mts';
+import type { ParameterRecord, TypeRecord } from './records.mts';
 import { anyType } from './records.mts';
 import { IsAssignable } from './relations.mts';
 import { RuntimeTypeOf } from './runtime.mts';
 
 /**
- * One parameter of a signature, as overload resolution reads it: its declared
- * type (the `any` type where none is written), and whether it is optional, a rest
- * parameter, or carries a default. An optional parameter, a defaulted parameter,
- * and a rest parameter each let the signature accept an argument list shorter than
- * its written length.
+ * One parameter of a signature, as overload resolution reads it.
+ *
+ * PLAN-rest-parameters.md phase 0: this was a second parameter model, carrying
+ * Type/Optional/Rest/HasDefault where the type system's SignatureRecord carried
+ * bare types. It is now the one model. HasDefault is gone: a defaulted parameter
+ * IS an optional one by #sec-signature-records, and keeping the two apart is
+ * what let a signature be optional in one file and defaulted in another.
  */
-export interface OverloadParameter {
-  readonly Type: TypeRecord;
-  readonly Optional: boolean;
-  readonly Rest: boolean;
-  readonly HasDefault: boolean;
-}
+export type OverloadParameter = ParameterRecord;
 
 /**
  * A signature as a candidate for resolution: its parameters and the concrete
@@ -58,6 +55,21 @@ export interface OverloadSignature {
  * declares, but resolution only needs its position and that it absorbs the tail,
  * so the element type is not required here.
  */
+/** A parameter's declared name, for the records the type system now carries. */
+function parameterName(p: ParseNode): string {
+  const seek = (n: unknown): string => {
+    const node = n as { type?: string, name?: string, BindingIdentifier?: unknown, BindingElement?: unknown };
+    if (!node || typeof node !== 'object') {
+      return '';
+    }
+    if (node.type === 'BindingIdentifier' && typeof node.name === 'string') {
+      return node.name;
+    }
+    return seek(node.BindingIdentifier) || seek(node.BindingElement) || '';
+  };
+  return seek(p);
+}
+
 export function describeParameters(
   formals: readonly ParseNode[],
   typeOf: (annotation: ParseNode.TypeAnnotation) => TypeRecord,
@@ -71,14 +83,21 @@ export function describeParameters(
       Initializer?: unknown,
       BindingElement?: { Initializer?: unknown },
     };
+    const name = parameterName(p);
     if (node.type === 'BindingRestElement') {
-      params.push({ Type: anyType, Optional: false, Rest: true, HasDefault: false });
+      // The rest's own annotation is read in a later phase; resolution needs its
+      // position and that it absorbs a run, which is what Rest says.
+      params.push({
+        Name: name, Type: node.TypeAnnotation ? typeOf(node.TypeAnnotation) : anyType, Optional: false, Rest: true,
+      });
       continue;
     }
     const annotation = node.TypeAnnotation;
     const type = annotation ? typeOf(annotation) : anyType;
     const hasDefault = node.Initializer !== undefined && node.Initializer !== null;
-    params.push({ Type: type, Optional: node.Optional === true, Rest: false, HasDefault: hasDefault });
+    params.push({
+      Name: name, Type: type, Optional: node.Optional === true || hasDefault, Rest: false,
+    });
   }
   return params;
 }
@@ -91,7 +110,7 @@ export function describeParameters(
 export function minimumArity(params: readonly OverloadParameter[]): number {
   let n = 0;
   for (const p of params) {
-    if (p.Optional || p.HasDefault || p.Rest) {
+    if (p.Optional || p.Rest) {
       break;
     }
     n += 1;

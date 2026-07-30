@@ -6,7 +6,7 @@ import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
-import { neverType, propertyKeyValue } from '../type-system/records.mts';
+import { neverType, propertyKeyValue, parameter, type ParameterRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -373,7 +373,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
           return Throw.TypeError('$1 is not a signature', sig);
         }
         const paramsV = Q(yield* Get(sig, Value('parameters')));
-        const Parameters: TypeRecord[] = [];
+        const Parameters: ParameterRecord[] = [];
         if (paramsV instanceof ObjectValue) {
           const len = Q(yield* LengthOfArrayLike(paramsV));
           for (let i = 0; i < len; i += 1) {
@@ -381,7 +381,17 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
             if (!(p instanceof ObjectValue)) {
               return Throw.TypeError('$1 is not a parameter', p);
             }
-            Parameters.push(Q(yield* nodeToTypeRecord(Q(yield* Get(p, Value('type'))))));
+            // PLAN-rest-parameters.md phase 0: a reflected parameter node
+            // carries its own flags, so the record is built rather than the
+            // bare type pushed.
+            const restV = Q(yield* Get(p, Value('rest')));
+            const optionalV = Q(yield* Get(p, Value('optional')));
+            const nameV = Q(yield* Get(p, Value('name')));
+            Parameters.push(parameter(Q(yield* nodeToTypeRecord(Q(yield* Get(p, Value('type'))))), {
+              Name: nameV instanceof JSStringValue ? nameV.stringValue() : '',
+              Rest: restV === Value.true,
+              Optional: optionalV === Value.true,
+            }));
           }
         }
         const returnV = Q(yield* Get(sig, Value('return')));
@@ -526,10 +536,17 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       set('kind', Value('function'));
       const signatures = t.Signatures.map((sig) => {
         const sr = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-        const params = sig.Parameters.map((pt, i) => {
+        const params = sig.Parameters.map((pr, i) => {
           const p = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-          X(CreateDataProperty(p, Value('type'), typeObj(pt)));
+          X(CreateDataProperty(p, Value('type'), typeObj(pr.Type)));
           X(CreateDataProperty(p, Value('index'), Value(i)));
+          // typeprogramming.md R1: `rest` on a parameter record, which the
+          // node model needs and which phase 0 makes available to report.
+          X(CreateDataProperty(p, Value('rest'), pr.Rest ? Value.true : Value.false));
+          X(CreateDataProperty(p, Value('optional'), pr.Optional ? Value.true : Value.false));
+          if (pr.Name) {
+            X(CreateDataProperty(p, Value('name'), Value(pr.Name)));
+          }
           return p as Value;
         });
         X(CreateDataProperty(sr, Value('parameters'), CreateArrayFromList(params)));

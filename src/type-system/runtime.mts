@@ -12,9 +12,9 @@ import { EnsureCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
-import type { TypeRecord } from './records.mts';
+import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue } from './records.mts';
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
@@ -1557,7 +1557,7 @@ export function fitsNumericType(v: number, name: string, args: readonly (TypeRec
 }
 
 function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null): PlainEvaluator<TypeRecord> {
-  const Parameters: TypeRecord[] = [];
+  const Parameters: ParameterRecord[] = [];
   let ThisType: TypeRecord | null = null;
   for (const p of params) {
     const annotation = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -1582,7 +1582,15 @@ function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypePar
     if (t) {
       paramType = Q(yield* TypeNodeToTypeRecord(t.Type));
     }
-    Parameters.push(paramType);
+    // PLAN-rest-parameters.md phase 0: a signature's parameters are records.
+    Parameters.push(parameter(paramType, {
+      Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
+      // A FunctionTypeParameter carries its own `Rest` flag (TypeParser sets it
+      // from the ELLIPSIS); a declaration's rest is a BindingRestElement node.
+      // Both spellings reach here, so both are read.
+      Rest: (p as { Rest?: boolean }).Rest === true || (p as { type?: string }).type === 'BindingRestElement',
+      Optional: (p as { Optional?: boolean }).Optional === true,
+    }));
   }
   let Return: TypeRecord | null = null;
   if (returnAnnotation) {
