@@ -162,7 +162,8 @@ export namespace ParseNode {
     | RegularExpressionLiteral
     | TemplateLiteral
     | CoverParenthesizedExpressionAndArrowParameterList
-    | ParenthesizedExpression;
+    | ParenthesizedExpression
+    | DoExpression;
 
   // PrimaryExpression (partial) :
   //   `this`
@@ -971,6 +972,23 @@ export namespace ParseNode {
   // ArgumentList (partial) :
   //   `...` AssignmentExpression
   //   ArgumentList `,` `...` AssignmentExpression
+  /**
+   * proposal-runtime-types #sec-do-expressions.
+   *
+   * `do` Block is the plain form, whose value is its completion value and whose
+   * Block carries the enclosing function's Return, Yield, and Await
+   * permissions. `do *` opens a GeneratorBody instead - a function boundary,
+   * where `yield` belongs to the do-generator and `return` sets its return
+   * value rather than returning from the enclosing function.
+   */
+  export interface DoExpression extends BaseParseNode {
+    readonly type: 'DoExpression';
+    readonly Block?: Block;
+    readonly GeneratorBody?: FunctionBodyLike;
+    readonly async: boolean;
+    readonly star: boolean;
+  }
+
   export interface AssignmentRestElement extends BaseParseNode {
     readonly type: 'AssignmentRestElement';
     readonly AssignmentExpression: AssignmentExpressionOrHigher;
@@ -3448,6 +3466,7 @@ export namespace ParseNode.RegExp {
 }
 
 export type ParseNode =
+  | ParseNode.DoExpression
   | ParseNode.PrivateIdentifier
   | ParseNode.IdentifierName
   | ParseNode.IdentifierReference

@@ -43,6 +43,7 @@ export * from './FunctionExpression.mts';
 export * from './NamedEvaluation.mts';
 export * from './TryStatement.mts';
 export * from './Block.mts';
+export * from './DoExpression.mts';
 export * from './ArrayLiteral.mts';
 export * from './UnaryExpression.mts';
 export * from './RefExpression.mts';

@@ -18,8 +18,59 @@ import { isLineTerminator, type TokenData } from './Lexer.mts';
 import { FunctionParser, FunctionKind } from './FunctionParser.mts';
 import { RegExpParser, type RegExpParserContext } from './RegExpParser.mts';
 import type { Location, ParseNode } from './ParseNode.mts';
-import { surroundingAgent, type Feature } from '#self';
+import { surroundingAgent, type Feature, Value } from '#self';
 import { Throw } from '#self';
+
+/**
+ * What a statement list ends in, where that is a shape a `do` may not end in.
+ *
+ * proposal-runtime-types #sec-do-expression-early-errors, which adopts the
+ * upstream proposal's EndsInIterationOrDeclaration unchanged. The rule is on the
+ * COMPLETION rather than on the syntax, so it reaches through nesting: an
+ * `if`/`else` one branch of which ends in a loop is refused too, since that
+ * branch's value would be the loop's.
+ *
+ * Returns a description for the diagnostic, or null where the list is fine.
+ */
+function endsInIterationOrDeclaration(list: readonly ParseNode[] | undefined): string | null {
+  if (!list || list.length === 0) {
+    return null;
+  }
+  const last = list[list.length - 1] as { type: string, StatementList?: readonly ParseNode[], Statement_a?: ParseNode, Statement_b?: ParseNode | null, LabelledItem?: ParseNode, Block?: { StatementList?: readonly ParseNode[] } };
+  switch (last.type) {
+    case 'LexicalDeclaration':
+    case 'VariableStatement':
+    case 'FunctionDeclaration':
+    case 'GeneratorDeclaration':
+    case 'AsyncFunctionDeclaration':
+    case 'AsyncGeneratorDeclaration':
+    case 'ClassDeclaration':
+      return 'a declaration';
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+    case 'ForStatement':
+    case 'ForInStatement':
+    case 'ForOfStatement':
+      return 'a loop';
+    case 'IfStatement': {
+      // An `if` with no `else` is its own error: the value is the consequent's
+      // or undefined by a condition the reader has to trace.
+      if (!last.Statement_b) {
+        return 'an if with no else';
+      }
+      return endsInIterationOrDeclaration([last.Statement_a!])
+        ?? endsInIterationOrDeclaration([last.Statement_b]);
+    }
+    case 'Block':
+      return endsInIterationOrDeclaration(last.StatementList);
+    case 'LabelledStatement':
+      return endsInIterationOrDeclaration([last.LabelledItem!]);
+    case 'TryStatement':
+      return endsInIterationOrDeclaration(last.Block?.StatementList);
+    default:
+      return null;
+  }
+}
 
 export abstract class ExpressionParser extends FunctionParser {
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
@@ -41,6 +92,10 @@ export abstract class ExpressionParser extends FunctionParser {
 
   // proposal-runtime-types: implemented by TypeParser further up the mixin chain.
   abstract tryParseArrowReturnTypeAnnotation(): ParseNode.TypeAnnotation | null;
+
+  // proposal-runtime-types #sec-do-expressions: a `do` expression's plain form
+  // parses a Block, which the statement parser owns.
+  protected abstract parseBlock(lexical?: boolean): ParseNode.Block;
 
   protected abstract parseOperatorDefinition(): ParseNode.OperatorDefinition;
 
@@ -1055,6 +1110,51 @@ export abstract class ExpressionParser extends FunctionParser {
 
   // PrimaryExpression :
   //   ...
+  /**
+   * proposal-runtime-types #sec-do-expressions.
+   *
+   *   DoExpression :
+   *     `do` Block
+   *     `do` `*` `{` GeneratorBody `}`
+   *     `async` [no LineTerminator here] `do` `*` `{` AsyncGeneratorBody `}`
+   *
+   * The parameterization carries the whole distinction between the forms. The
+   * plain one parses a Block with the enclosing permissions, so `return`,
+   * `break`, `continue`, `await`, and `yield` inside it mean what they mean in
+   * the surrounding code. The starred one opens a generator body, which is a
+   * FUNCTION BOUNDARY: `yield` becomes the do-generator's own and `return` sets
+   * its return value.
+   */
+  parseDoExpression(isAsync: boolean): ParseNode.DoExpression {
+    const node = this.startNode<ParseNode.DoExpression>();
+    if (isAsync) {
+      this.expect('async');
+    }
+    this.expect(Token.DO);
+    node.async = isAsync;
+    node.star = this.eat(Token.MUL);
+    if (!node.star) {
+      if (isAsync) {
+        // `async do` without a star is not a form: an async block whose value
+        // is a promise of its completion value is a different feature.
+        this.unexpected();
+      }
+      node.Block = this.parseBlock();
+      // proposal-runtime-types #sec-do-expression-early-errors. Each is about a
+      // completion value a reader would not predict, and each applies to the
+      // PLAIN form only: a `do *` has no completion value, its body being a
+      // generator body whose completion is discarded, so it may end in a loop
+      // or a declaration and the design's motivating example does.
+      const tail = endsInIterationOrDeclaration(node.Block.StatementList);
+      if (tail) {
+        this.addEarlyError(Throw.SyntaxError('a do expression may not end in $1', Value(tail)), node.Block);
+      }
+    } else {
+      node.GeneratorBody = this.parseFunctionBody(isAsync, true, false) as ParseNode.FunctionBodyLike;
+    }
+    return this.finishNode(node, 'DoExpression');
+  }
+
   parsePrimaryExpression(): ParseNode.PrimaryExpression {
     // proposal-runtime-types: ClassExpression : ClassModifiers? `class` ...
     if (this.testClassModifierRun()) {
@@ -1071,6 +1171,22 @@ export abstract class ExpressionParser extends FunctionParser {
       if (matchExpression) {
         return matchExpression as unknown as ParseNode.PrimaryExpression;
       }
+    }
+    // proposal-runtime-types #sec-do-expressions. `do` is a RESERVED word, so
+    // this form costs the grammar less than `match` did: there is no cover
+    // grammar and no program whose meaning changes, only a position where the
+    // word was previously a Syntax Error. A `do` in STATEMENT position begins a
+    // `do`-`while` and is parsed there; this is only reached from expression
+    // position.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.DO)) {
+      return this.parseDoExpression(false) as unknown as ParseNode.PrimaryExpression;
+    }
+    // `async do *`. The lookahead restriction is what keeps `async` contextual:
+    // `async` on one line and `do *` on the next must remain an identifier
+    // reference followed by something else.
+    if (surroundingAgent.feature('runtime-types') && this.test('async')
+        && !this.peek().hadLineTerminatorBefore && this.testAhead(Token.DO)) {
+      return this.parseDoExpression(true) as unknown as ParseNode.PrimaryExpression;
     }
     switch (this.peek().type) {
       case Token.IDENTIFIER:
