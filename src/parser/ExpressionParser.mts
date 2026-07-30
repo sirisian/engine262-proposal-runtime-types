@@ -1327,9 +1327,20 @@ export abstract class ExpressionParser extends FunctionParser {
             }
             return doExpression as unknown as ParseNode.PrimaryExpression;
           }
+          // decorators.md: `const e = @f Composite([0]); // Reflect.Tuple` and
+          // `const d = @f Composite({ a: 1 }); // Reflect.Record`. The
+          // decorated thing is an ordinary EXPRESSION, and which context fires
+          // is decided by the VALUE it produces rather than by its syntax - a
+          // composite backed by an array is a Tuple and one backed by an object
+          // is a Record, the same split the composites' intern key carries.
+          if (!this.test(Token.CLASS)) {
+            const node = this.startNode<ParseNode.DecoratedExpression>();
+            node.Decorators = decorators ?? [];
+            node.Expression = this.parseAssignmentExpression();
+            return this.finishNode(node, 'DecoratedExpression') as unknown as ParseNode.PrimaryExpression;
+          }
           // parseClassExpression takes no decorator list; the class path
-          // re-reads them from the token stream, so this only reaches here when
-          // the decorators were not followed by an object literal.
+          // re-reads them from the token stream.
           return this.parseClassExpression();
         }
         return this.parseClassExpression();

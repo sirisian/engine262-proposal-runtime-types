@@ -443,21 +443,23 @@ test('the enum family: enumerators before their enum', () => {
   expect(evaluated('let c; function grab(x) { c = x; } @grab enum E3 { A } String(c.type === E3);')).toBe('true');
 });
 
-test('the Tuple and Record contexts now have VALUES to decorate', () => {
+test('the Tuple and Record contexts FIRE, on a decorated expression', () => {
   // decorators.md: `const e = @f Composite([0]); // Reflect.Tuple` and
   // `const d = @f Composite({ a: 1 }); // Reflect.Record`.
   //
-  // Pinned as BLOCKED on composites, which the engine did not implement. It
-  // does now - and the two structural contexts split exactly as the composite
-  // KINDS do, which is why the intern key carries the kind: `Reflect.Tuple`
-  // reflects the array-backed composite and `Reflect.Record` the object-backed
-  // one.
-  expect(evaluated('[typeof Reflect.Enum, typeof Reflect.EnumEnumerator, typeof Reflect.Tuple, typeof Reflect.Record].join(",");')).toBe('object,object,object,object');
-  expect(evaluated('String(Composite.isComposite(Composite([0])));')).toBe('true');
-  expect(evaluated('String(Array.isArray(Composite([0])));')).toBe('true');
-  expect(evaluated('String(Array.isArray(Composite({ a: 1 })));')).toBe('false');
-  // The DECORATOR POSITIONS are still unreached: a decorator on an expression
-  // is not a declaration site this engine reaches, which is a decorators-side
-  // gap rather than a composites one.
-  expectThrown('function f(c) {} const e = @f Composite([0]);');
+  // These were pinned as blocked on composites, then - once composites landed -
+  // on the EXPRESSION position, since `@f Composite([0])` was a SyntaxError and
+  // so was `@f ({})`: the gap was the position, not anything composite-specific.
+  // A decorator on an ordinary expression closes both.
+  //
+  // WHICH CONTEXT FIRES IS DECIDED BY THE VALUE, not by the syntax - and the
+  // array/object split is exactly the one a composite's KIND already makes,
+  // which is why the intern key carries it.
+  expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const e = @f Composite([0]); return k; })();')).toBe('Tuple');
+  expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const d = @f Composite({ a: 1 }); return k; })();')).toBe('Record');
+  // The decorated expression still EVALUATES to its value.
+  expect(evaluated('(() => { function f(c) {} const e = @f Composite([7]); return String(e[0]); })();')).toBe('7');
+  // A decorated OBJECT LITERAL keeps reporting `Object`, which is what says the
+  // new path did not swallow the existing one.
+  expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const b = @f { a: 1 }; return k; })();')).toBe('Object');
 });

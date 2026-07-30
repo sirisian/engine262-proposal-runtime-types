@@ -14,6 +14,7 @@ import {
   Evaluate_RuntimeTypesBindingDeclaration,
   Evaluate_IsExpression,
   Evaluate_MatchExpression,
+  Evaluate_DecoratedExpression,
   Evaluate_TypedConversionExpression,
   Evaluate_TypeOperatorExpression,
   Evaluate_MetaDeclaration,
@@ -255,6 +256,8 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     // proposal-runtime-types
     case 'IsExpression':
       return yield* Evaluate_IsExpression(node);
+    case 'DecoratedExpression':
+      return yield* Evaluate_DecoratedExpression(node);
     case 'MatchExpression':
       return yield* Evaluate_MatchExpression(node);
     case 'TypedConversionExpression':

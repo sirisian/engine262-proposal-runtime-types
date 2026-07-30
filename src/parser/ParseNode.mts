@@ -2817,6 +2817,20 @@ export namespace ParseNode {
     readonly IsBlock: boolean;
   }
 
+  /**
+   * proposal-runtime-types decorators.md: `const e = @f Composite([0]);`
+   *
+   * A decorator on an ordinary expression. Which context fires is decided by
+   * the VALUE the expression produces, not by its syntax - an array-backed
+   * composite is `Reflect.Tuple` and an object-backed one `Reflect.Record`,
+   * which is the same split the composites' intern key carries.
+   */
+  export interface DecoratedExpression extends BaseParseNode {
+    readonly type: 'DecoratedExpression';
+    readonly Decorators: readonly Decorator[];
+    readonly Expression: ParseNode;
+  }
+
   export type MatchPattern =
     | MatchOrPattern
     | MatchAndPattern
@@ -3669,6 +3683,7 @@ export type ParseNode =
   | ParseNode.MatchRegExpPattern
   | ParseNode.MatchExtractorPattern
   | ParseNode.MatchExpression
+  | ParseNode.DecoratedExpression
   | ParseNode.MatchClause
   // proposal-runtime-types `sec-match-patterns`
   | ParseNode.MatchOrPattern
