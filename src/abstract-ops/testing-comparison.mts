@@ -145,7 +145,25 @@ export function IsStringPrefix(p: JSStringValue, q: JSStringValue) {
 // their payloads match; a typed number is never the same value as a plain
 // Number. Returns a verdict when at least one operand is typed, else null so
 // the caller falls through to the ordinary Number path.
-function typedNumberIdentity(x: Value, y: Value): boolean | null {
+/**
+ * proposal-runtime-types R1: typed numbers have value-type identity.
+ *
+ * `zeroInsensitive` is what parts SameValue from SameValueZero for them. The
+ * specification enumerates the SameValueZero equivalence classes with more than
+ * one member as "the signed zeros, handled above for the Number type and EACH
+ * BINARY FLOAT WIDTH, and the decimal cohorts" - so `float32(-0)` and
+ * `float32(+0)` are ONE class, exactly as `-0` and `+0` are for Number, while
+ * SameValue keeps them apart.
+ *
+ * This was one comparison serving both, on the reasoning that "a value type has
+ * no separate zero identity ... there is no distinct -0 typed value here".
+ * There is: `float32(-0)` is a value and `Object.is` tells it from `float32(0)`.
+ * The consequence was that a typed negative zero and a typed positive zero were
+ * two Map keys where the specification makes them one - and that is the relation
+ * composite interning is defined over, so a composite would have stored a value
+ * unequal to the one its own clause says it stores.
+ */
+function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boolean | null {
   const xt = x instanceof TypedNumberValue;
   const yt = y instanceof TypedNumberValue;
   if (!xt && !yt) {
@@ -161,7 +179,12 @@ function typedNumberIdentity(x: Value, y: Value): boolean | null {
   // comparison. A typed number is no longer a NumberValue, so it lacks the
   // isNaN/isFinite helpers Number::sameValue calls; unwrapToNumber gives a real
   // NumberValue with the same payload.
-  return NumberValue.sameValue(unwrapToNumber(x as TypedNumberValue), unwrapToNumber(y as TypedNumberValue)) === Value.true;
+  const xn = unwrapToNumber(x as TypedNumberValue);
+  const yn = unwrapToNumber(y as TypedNumberValue);
+  if (zeroInsensitive) {
+    return NumberValue.sameValueZero(xn, yn) === Value.true;
+  }
+  return NumberValue.sameValue(xn, yn) === Value.true;
 }
 
 export function SameValue(x: Value, y: Value): boolean {
@@ -197,10 +220,11 @@ export function SameValueZero(x: Value, y: Value): boolean {
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
     return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
   }
-  // proposal-runtime-types R1: typed numbers have value-type identity. A
-  // value type has no separate zero identity, so SameValueZero coincides with
-  // SameValue for typed operands (there is no distinct -0 typed value here).
-  const typed = typedNumberIdentity(x, y);
+  // proposal-runtime-types R1: typed numbers have value-type identity, and
+  // SameValueZero compares NUMERICAL VALUE within a type where SameValue
+  // distinguishes representations - so a typed signed zero pairs with its
+  // opposite here and not there.
+  const typed = typedNumberIdentity(x, y, true);
   if (typed !== null) {
     return typed;
   }
