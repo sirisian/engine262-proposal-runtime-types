@@ -1617,6 +1617,15 @@ export abstract class ExpressionParser extends FunctionParser {
         return objectPattern;
       }
     }
+    // An EXTRACTOR, `Expr(p1, p2, ...)`. Speculative for the same reason the
+    // braced and bracketed forms are: a |Type| can be a parameterized name, and
+    // only the shape after the head tells them apart.
+    if (this.test(Token.IDENTIFIER)) {
+      const extractor = this.tryParseMatchExtractorPattern();
+      if (extractor) {
+        return extractor;
+      }
+    }
     // Everything else is a |Type|, parsed exactly as `is` always parsed it.
     const node = this.startNode<ParseNode.MatchTypePattern>();
     node.Type = this.parseType();
@@ -1640,6 +1649,46 @@ export abstract class ExpressionParser extends FunctionParser {
       default:
         return true;
     }
+  }
+
+  /**
+   * Speculatively parse `Expr(p1, p2, ...)`, returning *null* where it is not
+   * one - a |Type| may be a plain name or a parameterized one, and the
+   * parentheses are what distinguish the extractor.
+   */
+  tryParseMatchExtractorPattern(): ParseNode.MatchExtractorPattern | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.MatchExtractorPattern>();
+    const head = this.parseIdentifierReference();
+    if (!this.test(Token.LPAREN)) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    this.expect(Token.LPAREN);
+    const Elements: ParseNode.MatchPattern[] = [];
+    while (!this.test(Token.RPAREN)) {
+      // A rest element is not a pattern form yet, and a speculation must
+      // DECLINE rather than let a nested parse throw past its restore.
+      if (this.test(Token.ELLIPSIS)) {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      Elements.push(this.parseMatchPattern());
+      if (!this.eat(Token.COMMA)) {
+        break;
+      }
+    }
+    if (!this.eat(Token.RPAREN)) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    node.Head = head;
+    node.Elements = Elements;
+    return this.finishNode(node, 'MatchExtractorPattern');
   }
 
   /**

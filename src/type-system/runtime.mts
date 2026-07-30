@@ -20,6 +20,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
+import { IsSubtype } from './relations.mts';
 import {
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
@@ -578,6 +579,23 @@ export function* EvaluateWhereClauses(value: Value, whereClauses: readonly Parse
 }
 
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
+  // proposal-runtime-types `sec-composite-types`: the top composite type "is the
+  // type of every composite", and a composite type over a shape is satisfied by
+  // a composite whose own type is a subtype of it. Membership is answered
+  // through the value's RUNTIME type and IsSubtype rather than by a rule here,
+  // which is what keeps the covariance-in-the-shape judgment in one place.
+  //
+  // Without this, `let c: Composite = Composite({x: 1})` was accepted - the
+  // assignment goes through IsSubtype - while `Composite({x: 1}) is Composite`
+  // answered *false*. One relation said yes and the other no about the same
+  // pair, which a pattern form made visible.
+  if (t.Kind === 'primitive' && t.Name === 'Composite') {
+    const composite = CompositeTypeRecordOf(value);
+    if (!composite) {
+      return false;
+    }
+    return IsSubtype(composite, t, []);
+  }
   switch (t.Kind) {
     case 'any':
       return true;

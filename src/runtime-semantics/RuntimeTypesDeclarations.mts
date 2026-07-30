@@ -1,4 +1,4 @@
-import { NumberValue, ObjectValue, SymbolValue, Value } from '../value.mts';
+import { NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -14,6 +14,7 @@ import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
   SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
+  GetMethod, LengthOfArrayLike, ToBoolean,
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
  import { Evaluate_PropertyName } from './PropertyName.mts';
@@ -473,9 +474,77 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
         && index instanceof NumberValue && MathematicalValue(index) === 0
         && matched.stringValue().length === subject.stringValue().length;
     }
+    case 'MatchExtractorPattern': {
+      // `sec-patternmatches`, the `MatchNamePattern ( MatchPatternList? )`
+      // steps. "The typed protocol is a method, usually static, from the
+      // subject to a tuple or `null`."
+      const ref = Q(yield* Evaluate(P.Head as never));
+      const head = Q(yield* GetValue(ref as never));
+      if (!(head instanceof ObjectValue)) {
+        return Throw.TypeError('$1 is not an object', head);
+      }
+      const matcher = Q(yield* GetMethod(head, wellKnownSymbols.customMatcher));
+      if (matcher === Value.undefined) {
+        return Throw.TypeError('$1 has no custom matcher', head);
+      }
+      const r = Q(yield* Call(matcher, head, [subject]));
+      // "`null` is no match."
+      if (r === Value.null) {
+        return false;
+      }
+      if (!(r instanceof ObjectValue)) {
+        // A BOOLEAN matcher takes no parentheses - "a boolean matcher with
+        // parentheses, or a tuple matcher without them, is a type error, so the
+        // two protocols cannot be confused silently".
+        return Throw.TypeError('$1 is not a tuple', r);
+      }
+      const len = Q(yield* LengthOfArrayLike(r));
+      if (len !== P.Elements.length) {
+        // "A runtime TypeError where the counts disagree, so an extractor
+        // reached through `any` FAILS LOUDLY rather than part-matching."
+        return Throw.TypeError('$1 does not match the pattern\'s length', r);
+      }
+      for (let i = 0; i < P.Elements.length; i += 1) {
+        const element = Q(yield* Get(r, Value(String(i))));
+        if (!Q(yield* PatternMatches(P.Elements[i]!, element, cache))) {
+          return false;
+        }
+      }
+      return true;
+    }
     case 'MatchTypePattern': {
-      const record = Q(yield* TypeNodeToTypeRecord(P.Type));
-      return Q(yield* IsOfType(subject, record));
+      // A bare name that resolves to a VALUE with a custom matcher is a
+      // MEMBERSHIP TEST through it - the parenthesis-free form `Composite`
+      // uses. Reached here because a bare name parses as a |Type|; the type
+      // path answers first where the name denotes one, which is what makes
+      // `when Circle:` and `when Count.Zero:` read as the tests they are.
+      const asType = EnsureCompletion(yield* TypeNodeToTypeRecord(P.Type));
+      if (asType.Type === 'normal') {
+        return Q(yield* IsOfType(subject, asType.Value as TypeRecord));
+      }
+      // Not a type: evaluate the name as the member expression it spells and
+      // dispatch on the VALUE. A boolean matcher reached WITHOUT parentheses is
+      // a membership test - the form `Composite` uses - and "a matcher that
+      // returns an object there is a TypeError, as parentheses on a boolean
+      // matcher are, so the two protocols cannot be confused silently".
+      const nameRef = EnsureCompletion(yield* Evaluate(P.Type as never));
+      if (nameRef.Type !== 'normal') {
+        return Q(asType);
+      }
+      const named = Q(yield* GetValue(nameRef.Value as never));
+      if (named instanceof ObjectValue) {
+        const nameMatcher = Q(yield* GetMethod(named, wellKnownSymbols.customMatcher));
+        if (nameMatcher !== Value.undefined) {
+          const answer = Q(yield* Call(nameMatcher, named, [subject]));
+          if (answer instanceof ObjectValue) {
+            return Throw.TypeError('$1 returned a tuple where a Boolean was required', named);
+          }
+          return ToBoolean(answer) === Value.true;
+        }
+      }
+      // "Anything else is a constant compared by SameValue, which for an
+      // interned composite is one pointer comparison."
+      return MatchConstant(subject, named);
     }
     default:
       return false;

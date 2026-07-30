@@ -2786,6 +2786,7 @@ export namespace ParseNode {
     | MatchArrayPattern
     | MatchRangePattern
     | MatchRegExpPattern
+    | MatchExtractorPattern
     | MatchTypePattern;
 
   export interface MatchOrPattern extends BaseParseNode {
@@ -2842,6 +2843,20 @@ export namespace ParseNode {
   export interface MatchRangePattern extends BaseParseNode {
     readonly type: 'MatchRangePattern';
     readonly Range: ParseNode;
+  }
+  /**
+   * `Expr(p1, p2, ...)`: matched through `Expr`'s `[Symbol.customMatcher]`.
+   *
+   * The typed protocol is "a method, usually static, from the subject to a
+   * tuple or `null`": *null* is no match, a tuple is a match whose elements the
+   * sub-patterns match positionally, and a COUNT MISMATCH is a runtime
+   * TypeError - "so an extractor reached through `any` fails loudly rather than
+   * part-matching".
+   */
+  export interface MatchExtractorPattern extends BaseParseNode {
+    readonly type: 'MatchExtractorPattern';
+    readonly Head: ParseNode;
+    readonly Elements: readonly MatchPattern[];
   }
   /** A regular expression literal, matched against the ENTIRE subject. */
   export interface MatchRegExpPattern extends BaseParseNode {
@@ -3595,6 +3610,7 @@ export type ParseNode =
   | ParseNode.MatchArrayPattern
   | ParseNode.MatchRangePattern
   | ParseNode.MatchRegExpPattern
+  | ParseNode.MatchExtractorPattern
   // proposal-runtime-types `sec-match-patterns`
   | ParseNode.MatchOrPattern
   | ParseNode.MatchAndPattern

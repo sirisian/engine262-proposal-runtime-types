@@ -440,6 +440,7 @@ export interface Throw {
   | 'directionParam is required'
   | 'division of a rational by zero'
   | 'largestUnit must be larger than smallestUnit'
+  | 'no assignment of the arguments satisfies the parameter list'
   | 'object.constructor[Symbol.species] is not a constructor'
   | 'only a fixed-extent SoA can view a buffer'
   | 'relativeTo is required for calendar units'
@@ -500,6 +501,8 @@ export interface Throw {
   | '$1 cannot be weakly referenced'
   | '$1 could not be appended'
   | '$1 does not look like a TemporalTimeLike object'
+  | "$1 does not match the pattern's length"
+  | '$1 has no custom matcher'
   | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a typed class and cannot be proxied'
@@ -532,6 +535,7 @@ export interface Throw {
   | '$1 is not a signature'
   | '$1 is not a string'
   | '$1 is not a supported calendar'
+  | '$1 is not a tuple'
   | '$1 is not a tuple element'
   | '$1 is not a type'
   | '$1 is not a type node'
@@ -570,6 +574,7 @@ export interface Throw {
   | '$1 requires an argument'
   | '$1 requires an argument of a sized integer type'
   | '$1 requires new'
+  | '$1 returned a tuple where a Boolean was required'
   | '$1 with a negative exponent is not defined for an integer type'
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 that is incompatible with the existing property in the proxy target"
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 to the non-extensible proxy target"
