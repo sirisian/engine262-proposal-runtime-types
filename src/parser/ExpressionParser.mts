@@ -72,6 +72,58 @@ function endsInIterationOrDeclaration(list: readonly ParseNode[] | undefined): s
   }
 }
 
+/** Whether `node` contains a |VariableStatement|, not crossing a function. */
+function containsVarStatement(node: unknown): boolean {
+  return containsMatching(node, (t) => t === 'VariableStatement');
+}
+
+/** Whether `node` contains an unlabelled `break` or `continue`. */
+function containsUnlabelledBreakOrContinue(node: unknown): boolean {
+  return containsMatching(node, (t, n) => (t === 'BreakStatement' || t === 'ContinueStatement')
+    && !(n as { LabelIdentifier?: unknown }).LabelIdentifier);
+}
+
+const FUNCTION_BOUNDARIES = new Set([
+  'FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'GeneratorExpression',
+  'GeneratorDeclaration', 'AsyncFunctionExpression', 'AsyncFunctionDeclaration',
+  'AsyncArrowFunction', 'AsyncGeneratorExpression', 'AsyncGeneratorDeclaration',
+  'ClassExpression', 'ClassDeclaration',
+]);
+
+/**
+ * A walk that stops at a function boundary, since a `var` hoists to the nearest
+ * function and a `break` cannot cross one - so neither reaches out of a nested
+ * one to the position being asked about.
+ */
+function containsMatching(node: unknown, predicate: (type: string, n: unknown) => boolean): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  const n = node as { type?: string };
+  if (n.type && FUNCTION_BOUNDARIES.has(n.type)) {
+    return false;
+  }
+  if (n.type && predicate(n.type, node)) {
+    return true;
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'parent' || key === 'location') {
+      continue;
+    }
+    const child = (node as Record<string, unknown>)[key];
+    if (Array.isArray(child)) {
+      if (child.some((c) => containsMatching(c, predicate))) {
+        return true;
+      }
+    } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+      if (containsMatching(child, predicate)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export abstract class ExpressionParser extends FunctionParser {
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
   // the conditional's own colon, so arrow return annotations are suppressed
@@ -92,6 +144,9 @@ export abstract class ExpressionParser extends FunctionParser {
 
   // proposal-runtime-types: implemented by TypeParser further up the mixin chain.
   abstract tryParseArrowReturnTypeAnnotation(): ParseNode.TypeAnnotation | null;
+
+  /** Set while an iteration statement's head is being parsed (#sec-do-expression-early-errors). */
+  protected inIterationHead = false;
 
   // proposal-runtime-types #sec-do-expressions: a `do` expression's plain form
   // parses a Block, which the statement parser owns.
@@ -1152,6 +1207,20 @@ export abstract class ExpressionParser extends FunctionParser {
       const tail = endsInIterationOrDeclaration(node.Block.StatementList);
       if (tail) {
         this.addEarlyError(Throw.SyntaxError('a do expression may not end in $1', Value(tail)), node.Block);
+      }
+      // The two context-sensitive errors, which need to know WHERE the `do`
+      // sits rather than what it ends with.
+      //
+      // A `var` inside a `do` in a parameter expression has no function body to
+      // hoist into yet - the one it would reach is the one being declared.
+      if (this.scope.inParameters() && containsVarStatement(node.Block)) {
+        this.addEarlyError(Throw.SyntaxError('a var declaration may not appear in a do expression in a parameter'), node.Block);
+      }
+      // An unlabelled `break` or `continue` in a loop head targets a loop that
+      // is not yet entered, so which one it means is a puzzle rather than a
+      // rule.
+      if (this.inIterationHead && containsUnlabelledBreakOrContinue(node.Block)) {
+        this.addEarlyError(Throw.SyntaxError('an unlabelled break or continue may not appear in a do expression in a loop head'), node.Block);
       }
     } else {
       node.GeneratorBody = this.parseFunctionBody(isAsync, true, false) as ParseNode.FunctionBodyLike;

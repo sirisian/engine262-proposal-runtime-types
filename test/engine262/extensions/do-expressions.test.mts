@@ -365,3 +365,47 @@ test('a DoGeneratorBlock decorator may replace the generator', () => {
     String([...@d do * { yield 1; yield 2; }]);
   `)).toBe('1,2');
 });
+
+/**
+ * The context-sensitive Early Errors, per #sec-do-expression-early-errors.
+ *
+ * These three need the parser to know WHERE the `do` sits rather than what it
+ * ends with, which is why they arrived after the structural two.
+ */
+
+test('a var may not appear in a do in a parameter expression', () => {
+  // There is no function body for the binding to hoist into yet: the one it
+  // would reach is the one being declared.
+  expectError('function f(x = do { var v = 1; v }) { return x; }');
+  // A `var` in a `do` anywhere else is fine, and so is a `var` in a function
+  // whose parameters have defaults - the rule is about the conjunction.
+  expect(evaluated('function f() { const x = do { var v = 1; v }; return x; } String(f());')).toBe('1');
+  expect(evaluated('function f(a = 1) { var v = 2; return a + v; } String(f());')).toBe('3');
+});
+
+test('an unlabelled break may not appear in a do in a loop head', () => {
+  // The loop is not yet entered, so which loop it targets is a puzzle.
+  expectError('for (let i = do { break; }; ; ) {}');
+  expectError('while (do { break; }) {}');
+
+  // The body is a different place: a `break` in a `do` there targets the loop
+  // it is in, which is ordinary.
+  expect(evaluated(`
+    let n = 0;
+    for (let i = 0; i < 5; i += 1) { const x = do { if (i > 1) break; i }; n += x; }
+    String(n);
+  `)).toBe('1');
+  // And a `do` in a head with no break is fine.
+  expect(evaluated('let n = 0; for (let i = do { 0 }; i < 3; i += 1) { n += 1; } String(n);')).toBe('3');
+  // A LABELLED break in a head names a loop that already exists.
+  expect(ok('outer: for (let i = do { 0 }; i < 1; i += 1) { break outer; }')).toBe(true);
+});
+
+/**
+ * The third, `return` in a computed property name, is refused - but by the base
+ * language's rule that a `return` may not appear outside a function, which
+ * fires first and says "Unexpected token". The behaviour is what the clause
+ * asks for; the diagnostic is not the one it names. Recorded rather than
+ * asserted on the message, since pinning the wrong message would make the
+ * better one a test failure.
+ */

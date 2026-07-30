@@ -880,7 +880,12 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.WhileStatement>();
     this.expect(Token.WHILE);
     this.expect(Token.LPAREN);
+    // proposal-runtime-types #sec-do-expression-early-errors: an unlabelled
+    // break or continue inside a `do` in a loop HEAD targets a loop that has
+    // not been entered, so the flag marks the head rather than the body.
+    this.inIterationHead = true;
     node.Expression = this.parseExpression();
+    this.inIterationHead = false;
     this.expect(Token.RPAREN);
     this.scope.with({ label: 'loop' }, () => {
       node.Statement = this.markBlockKind(this.parseStatement(), 'WhileBlock');
@@ -929,6 +934,10 @@ export abstract class StatementParser extends TypeParser {
         this.state.hasTopLevelAwait = true;
       }
       this.expect(Token.LPAREN);
+      // The whole of a `for` head, per #sec-do-expression-early-errors: the
+      // initializer, the test, and the update are all before the loop is
+      // entered, so an unlabelled break in any of them targets nothing yet.
+      this.inIterationHead = true;
       if (isAwait && this.test(Token.SEMICOLON)) {
         this.unexpected();
       }
@@ -940,6 +949,8 @@ export abstract class StatementParser extends TypeParser {
         if (!this.test(Token.RPAREN)) {
           node.Expression_c = this.parseExpression();
         }
+        // The head ends here; the body is parsed after it.
+        this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
@@ -988,6 +999,8 @@ export abstract class StatementParser extends TypeParser {
           if (!this.test(Token.RPAREN)) {
             node.Expression_b = this.parseExpression();
           }
+          // The head ends here; the body is parsed after it.
+          this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
           this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
@@ -1007,13 +1020,17 @@ export abstract class StatementParser extends TypeParser {
           });
         if (!isAwait && this.eat(Token.IN)) {
           node.Expression = this.parseExpression();
+          // The head ends here; the body is parsed after it.
+          this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
     return this.finishNode(node, 'ForInStatement');
         }
         this.expect('of');
         node.AssignmentExpression = this.parseAssignmentExpression();
+        // The head ends here; the body is parsed after it.
+        this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
@@ -1024,6 +1041,8 @@ export abstract class StatementParser extends TypeParser {
           node.ForBinding = this.parseForBinding();
           this.expect('of');
           node.AssignmentExpression = this.parseAssignmentExpression();
+          // The head ends here; the body is parsed after it.
+          this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
           return this.finishNode(node, 'ForAwaitStatement');
@@ -1039,6 +1058,8 @@ export abstract class StatementParser extends TypeParser {
           if (!this.test(Token.RPAREN)) {
             node.Expression_b = this.parseExpression();
           }
+          // The head ends here; the body is parsed after it.
+          this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
           this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
@@ -1055,6 +1076,8 @@ export abstract class StatementParser extends TypeParser {
           this.expect(Token.IN);
           node.Expression = this.parseExpression();
         }
+        // The head ends here; the body is parsed after it.
+        this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, node.AssignmentExpression ? 'ForOfBlock' : 'ForInBlock');
@@ -1076,6 +1099,8 @@ export abstract class StatementParser extends TypeParser {
         validateLHS(expression);
         node.LeftHandSideExpression = expression as ParseNode.LeftHandSideExpression; // NOTE: unsound cast
         node.Expression = this.parseExpression();
+        // The head ends here; the body is parsed after it.
+        this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
@@ -1089,6 +1114,8 @@ export abstract class StatementParser extends TypeParser {
         validateLHS(expression);
         node.LeftHandSideExpression = expression as ParseNode.LeftHandSideExpression; // NOTE: unsound cast
         node.AssignmentExpression = this.parseAssignmentExpression();
+        // The head ends here; the body is parsed after it.
+        this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
@@ -1110,6 +1137,8 @@ export abstract class StatementParser extends TypeParser {
       if (!this.test(Token.RPAREN)) {
         node.Expression_c = this.parseExpression();
       }
+      // The head ends here; the body is parsed after it.
+      this.inIterationHead = false;
       this.expect(Token.RPAREN);
 
       node.Statement = this.parseStatement();
