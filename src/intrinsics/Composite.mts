@@ -7,6 +7,8 @@ import { Q, X, type ValueCompletion } from '../completion.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import { orderKey, makePrimitive, type TypeRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import { R } from "../abstract-ops/all.mjs";
 import {
@@ -262,6 +264,79 @@ export function FindOrCreateComposite(entries: readonly CompositeEntryRecord[]):
   composites.add(c);
   registry.set(key, c);
   return c;
+}
+
+/**
+ * `sec-compositefromshape`: the TYPED creation.
+ *
+ * "each supplied value is CONVERTED to its member's type, a required absence
+ * throws, an undeclared property throws, and an optional member's declared
+ * default is FILLED, before canonicalization and interning."
+ *
+ * The default matters most and is the rule composites make unarguable: a
+ * default belongs to CONSTRUCTION and is written before freezing, so it is part
+ * of the contents that intern - `Composite.<CacheKey>({id: 7})` and
+ * `Composite.<CacheKey>({id: 7, page: 0})` are one object. A CHECK of a
+ * composite that already exists writes nothing, because a frozen shared object
+ * is where filling at a check is not merely undesirable but impossible.
+ */
+export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEvaluator {
+  if (!(source instanceof ObjectValue)) {
+    return Throw.TypeError('$1 is not an object', source);
+  }
+  // "the S that is T's STRUCTURAL FORM" - an interface resolves to a ~nominal~
+  // record carrying its structure, and the clause is written over the structure
+  // rather than the name. Reading `Kind === 'object'` alone sent every
+  // interface down the tuple path, which is what a name-shaped type looks like
+  // when only the structural spelling was considered.
+  const structural = shape.Kind === 'object'
+    ? shape
+    : (shape as { Structure?: TypeRecord }).Structure;
+  if (!structural || structural.Kind !== 'object') {
+    // The tuple half is phase four's second part, with the tuple kind itself.
+    return Throw.TypeError('$1 is not supported yet', Value('a typed tuple composite'));
+  }
+  const properties = structural.Properties;
+  const entries: CompositeEntryRecord[] = [];
+  const keys = Q(yield* source.OwnPropertyKeys());
+  for (const key of keys) {
+    const desc = Q(yield* source.GetOwnProperty(key as PropertyKeyValue));
+    if (desc !== Value.undefined && (desc as Descriptor).Enumerable === Value.true) {
+      if (!(key instanceof JSStringValue)) {
+        return Throw.TypeError('$1 is not a valid composite key', key as Value);
+      }
+      const declared = properties.find((prop) => prop.key === key.stringValue());
+      if (!declared) {
+        // "an undeclared property throws" - the shape states the members, and a
+        // composite created at a shape has exactly them.
+        return Throw.TypeError('$1 is not a member of this type', key);
+      }
+      const v = Q(yield* Get(source, key));
+      const converted = Q(yield* ConvertValue(v, declared.type as TypeRecord));
+      entries.push({ Key: key, Value: CanonicalizeCompositeValue(converted) });
+    }
+  }
+  for (const declared of properties) {
+    if (entries.some((entry) => entry.Key.stringValue() === declared.key)) {
+      continue;
+    }
+    const initial = (declared as { initial?: Value }).initial;
+    if (initial !== undefined) {
+      // CONVERTED to the member's type, exactly as a supplied value is. Filling
+      // the raw default made `Composite.<K>({id: 7})` store a Number `page`
+      // where `Composite.<K>({id: 7, page: 0})` stored a `uint8` - so the two
+      // spellings of one key did NOT intern, which is the property the clause's
+      // own example asserts.
+      const convertedDefault = Q(yield* ConvertValue(initial, declared.type as TypeRecord));
+      entries.push({ Key: Value(declared.key as string), Value: CanonicalizeCompositeValue(convertedDefault) });
+      continue;
+    }
+    if (!declared.optional) {
+      // "a required absence throws".
+      return Throw.TypeError('$1 is missing from this composite', Value(declared.key as string));
+    }
+  }
+  return Q(FindOrCreateComposite(entries));
 }
 
 /** `sec-composite-arg`: `Composite ( source )`. */

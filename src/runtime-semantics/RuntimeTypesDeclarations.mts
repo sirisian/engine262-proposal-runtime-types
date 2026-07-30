@@ -112,7 +112,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // a later milestone.
     // The interface's structure is a real ~object~ record now; membership
     // rides the structural IsOfType case, while identity stays nominal.
-    const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+    const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean, initial?: Value }[] = [];
     for (const member of node.InterfaceMemberList) {
       if (member.type !== 'TypeMember') {
         continue;
@@ -154,7 +154,18 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       } else if (m.MethodSignature) {
         resolved = { Kind: 'function', Signatures: [] };
       }
-      Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly });
+      // The DECLARED DEFAULT travels with the member: a typed composite
+      // creation fills it before freezing, so it is part of the contents that
+      // intern.
+      let initial;
+      const memberInitializer = (m as { Initializer?: ParseNode | null }).Initializer;
+      if (memberInitializer) {
+        const attempt = EnsureCompletion(yield* Evaluate(memberInitializer));
+        if (attempt.Type === 'normal') {
+          initial = Q(yield* GetValue(attempt.Value as never));
+        }
+      }
+      Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly, initial });
     }
     // proposal-runtime-types decorators.md, #sec-metadata-objects: a `partial
     // interface` EXTENDS an interface someone else declared, and its members

@@ -13,6 +13,7 @@ import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom } from '../intrinsics/Math.mts';
 import { X } from '../completion.mts';
+import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
@@ -132,6 +133,22 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // arguments, exactly as `JSON.parse.<T>`'s does, so the interception is the
   // same shape - which is why this sits beside it rather than inside
   // getReflection, where the type arguments are not in scope.
+  // proposal-runtime-types `sec-composite-typeobject-call`: the TYPED creation
+  // `Composite.<T>(source)`. The clause frames it as CALLING THE TYPE OBJECT of
+  // the composite type - "the construction boundary a parameterized type
+  // already has" - but `Composite` is a FUNCTION here, so `Composite.<T>` is
+  // type arguments applied to it and the call is intercepted where the other
+  // typed builtins are. The operation performed is the clause's either way.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const compositeFn = surroundingAgent.currentRealmRecord.Intrinsics['%Composite%'];
+    if (compositeFn !== undefined && SameValue(func, compositeFn)) {
+      const shape = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      return Q(yield* CompositeFromShape(shape, argList.length > 0 ? argList[0]! : Value.undefined));
+    }
+  }
   if (surroundingAgent.feature('runtime-types')
       && memberExpr.type === 'TypeArgumentsExpression'
       && memberExpr.TypeArguments.TypeArgumentList.length === 2) {

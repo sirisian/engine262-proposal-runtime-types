@@ -20,6 +20,17 @@ export interface PropertyTypeRecord {
   readonly type: TypeRecord;
   readonly optional: boolean;
   readonly readonly: boolean;
+  /**
+   * proposal-runtime-types: an optional member's DECLARED DEFAULT, `c?: T = v`.
+   *
+   * A default is a CONSTRUCTION feature - it is written where a value of the
+   * type is being built, and never by a check of a value that exists - so it
+   * has to reach the construction sites, of which a typed composite creation is
+   * one. It was dropped at the interface walk, so `Composite.<K>({id: 7})` left
+   * an optional member absent where the clause fills it, and the two spellings
+   * of one key did not intern together.
+   */
+  readonly initial?: Value;
 }
 
 export interface SignatureRecord {

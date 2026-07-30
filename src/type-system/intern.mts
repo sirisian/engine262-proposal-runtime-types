@@ -1,4 +1,5 @@
 import type { ObjectValue, Arguments } from '../value.mts';
+import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
@@ -152,6 +153,15 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   (obj as CallableTypeObject).Call = function* Call(_thisArgument: Value, argumentsList: Arguments): ValueEvaluator {
     const arg: Value = argumentsList[0] ?? Value.undefined;
     const record = (this as TypeObject).TypeRecord;
+    // proposal-runtime-types `sec-composite-typeobject-call`: "Calling the Type
+    // Object of a composite type over a shape S ... returns the result of
+    // CompositeFromShape(S, source). This is the CONSTRUCTION BOUNDARY of the
+    // composite types, as calling any parameterized Type Object is its type's."
+    // So the typed creation is not a new call form - it is this one, given a
+    // composite type.
+    if (record.Kind === 'primitive' && record.Name === 'Composite' && record.Arguments.length > 0) {
+      return Q(yield* CompositeFromShape(record.Arguments[0] as TypeRecord, arg));
+    }
     if (record.Kind === 'nominal' && record.EnumMembers !== undefined) {
       for (const member of record.EnumMembers) {
         if (SameValue(arg, member)) {

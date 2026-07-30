@@ -57,12 +57,9 @@ test('PINNED: a shape must be NAMED at the creation site, not inferred', () => {
   // "an unannotated `Composite` call in typed code produces `number` fields,
   // and code that means anything else should say so at the creation site".
   expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('TypeError');
-  // The remedy is the TYPED CREATION form, and it is phase four. The syntax
-  // already parses and runs - so the trap is that it looks like it works: the
-  // type argument is IGNORED, the fields take their literal types, and the
-  // result is the same object a bare call would give. Pinned by what it
-  // produces rather than by whether it throws, because a `toBe('ACCEPTED')`
-  // here would have recorded the feature as present.
-  expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('false');
-  expect(evaluated('interface I { x: uint8 } String(Composite.<I>({ x: 1 }) === Composite({ x: 1 }));')).toBe('true');
+  // The remedy is the TYPED CREATION form, which phase four landed - and which
+  // this pin used to record as present-looking-but-inert: the syntax parsed and
+  // ran with the type argument IGNORED. composite-typed-creation.test.mts owns
+  // the assertions now.
+  expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('true');
 });
