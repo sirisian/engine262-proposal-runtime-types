@@ -3,7 +3,7 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
-  parameter, type ParameterRecord, anyType as anyTypeRecord } from './records.mts';
+  parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import {
@@ -1028,6 +1028,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return null;
       }
+      case 'YieldExpression': {
+        // PLAN-do-expressions.md phase 1, #sec-generator-types. A `yield`
+        // evaluates to what the caller sends to `next`, which is the enclosing
+        // generator's N; a `yield*` evaluates to what the DELEGATED generator
+        // RETURNED, which is its R. The second is the rule everyone gets
+        // backwards, and it follows from the run time: `yield*` drives the
+        // operand to completion and takes its return value.
+        const y = node as { hasStar?: boolean, AssignmentExpression?: ParseNode | null };
+        if (y.hasStar) {
+          const operand = y.AssignmentExpression ? staticType(y.AssignmentExpression) : null;
+          const delegated = generatorParameters(operand);
+          return delegated ? delegated.Return : null;
+        }
+        const enclosing = generatorParameters(generatorTypes[generatorTypes.length - 1] ?? null);
+        return enclosing ? enclosing.Next : null;
+      }
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.IdentifierName && m.MemberExpression) {
@@ -1960,7 +1976,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const collected = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     const rejected = new Set<string>();
     for (const n of list) {
-      if (n.type !== 'FunctionDeclaration') {
+      // PLAN-do-expressions.md phase 1, #sec-generator-types. A generator
+      // declaration was skipped entirely, so a call of one had no type at all.
+      // It is collected now, and its annotation is read by the shorthand: a
+      // bare `T` is the YIELD type of a `Generator.<T, void, void>`.
+      const isGenerator = n.type === 'GeneratorDeclaration' || n.type === 'AsyncGeneratorDeclaration';
+      const isAsyncGenerator = n.type === 'AsyncGeneratorDeclaration';
+      if (n.type !== 'FunctionDeclaration' && !isGenerator) {
         continue;
       }
       const fn = n as unknown as {
@@ -2004,8 +2026,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // anywhere is the catch-all that ranks last. Declaring a return type is
       // what makes a zero-parameter function typed, which the clause spells
       // out.
+      let declared = Return;
+      if (isGenerator) {
+        declared = generatorDeclaredType(Return, isAsyncGenerator);
+        if (declared === null) {
+          // An AsyncGenerator annotation on a synchronous generator, or the
+          // reverse: the annotation names the wrong protocol.
+          const completion = Throw.TypeError('a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          declared = Return;
+        }
+      }
       const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
-      signatures.push({ Parameters, Return, Untyped });
+      signatures.push({ Parameters, Return: declared, Untyped });
       collected.set(name, signatures);
     }
     for (const [name, Signatures] of collected) {
@@ -2224,9 +2257,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const returnsProven: boolean[] = [];
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[]) => {
+  /**
+   * The enclosing generator's declared type, for `yield` to read its N.
+   *
+   * PLAN-do-expressions.md phase 1. It cannot live in `returnTypes`: a `return`
+   * inside a generator sets the generator's R rather than producing the
+   * generator, so checking one against `Generator.<Y, R, N>` would be checking
+   * it against the wrong thing. That is why the generator forms enter with a
+   * null return annotation, and why the type they DO have needs its own frame.
+   */
+  const generatorTypes: Known[] = [];
+
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
     frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
+    generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
     let index = 0;
     for (const p of params ?? []) {
@@ -2252,6 +2297,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       elidableAnnotations.add(returnAnnotation);
     }
     returnTypes.pop();
+    generatorTypes.pop();
     frames.pop();
   };
 
@@ -2838,9 +2884,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'GeneratorMethod':
       case 'AsyncMethod':
       case 'AsyncGeneratorMethod':
-        // Return annotations of generator and async forms describe the
-        // produced iterator or promise; those judgments arrive later.
-        enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, false);
+        // Return annotations of the ASYNC forms describe the promise a call
+        // produces, and that judgment still arrives later. A GENERATOR's
+        // annotation is read now (#sec-generator-types): it does not become the
+        // frame's return type, since a `return` inside sets the generator's R,
+        // but it is carried so that a `yield` can read the N it declares.
+        {
+          const gen = n.type === 'GeneratorDeclaration' || n.type === 'GeneratorExpression' || n.type === 'GeneratorMethod'
+            || n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
+          const isAsyncGen = n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
+          const ann = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const declared = gen ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen) : null;
+          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, false, undefined, declared);
+        }
         return;
       default: {
         for (const key of Object.keys(n)) {

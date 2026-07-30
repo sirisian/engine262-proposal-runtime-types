@@ -134,6 +134,47 @@ export function requiredArity(params: readonly ParameterRecord[]): number {
   return n;
 }
 
+/**
+ * The declared type of a generator from its return annotation.
+ *
+ * #sec-generator-types: an annotation that is already a `Generator`
+ * instantiation - `AsyncGenerator` for an async generator - is the declared type
+ * as written; any other type `T` is the SHORTHAND and means
+ * `Generator.<T, void, void>`, so `function* f(): int32` declares a generator of
+ * `int32`. Reading a bare annotation as the YIELD type rather than as the whole
+ * generator type is the design's choice and the useful one: a generator's return
+ * and next types are `void` in almost every generator anyone writes.
+ *
+ * Returns null where the annotation is the wrong form for the generator - an
+ * `AsyncGenerator` on a synchronous one or the reverse - which the caller
+ * reports as a type error.
+ */
+export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: boolean): TypeRecord | null {
+  const want = isAsync ? 'AsyncGenerator' : 'Generator';
+  const other = isAsync ? 'Generator' : 'AsyncGenerator';
+  if (annotation && annotation.Kind === 'nominal' && annotation.LibraryName === other) {
+    return null;
+  }
+  if (annotation && annotation.Kind === 'nominal' && annotation.LibraryName === want) {
+    return annotation;
+  }
+  const yielded = annotation ?? { Kind: 'any' as const };
+  return libraryTypeRecord(want, [yielded, voidType, voidType]);
+}
+
+/** The Y, R, and N of a generator type, or null where the type is not one. */
+export function generatorParameters(t: TypeRecord | null | undefined): { Yield: TypeRecord, Return: TypeRecord, Next: TypeRecord } | null {
+  if (!t || t.Kind !== 'nominal' || (t.LibraryName !== 'Generator' && t.LibraryName !== 'AsyncGenerator')) {
+    return null;
+  }
+  const args = t.Arguments ?? [];
+  const at = (i: number): TypeRecord => {
+    const a = args[i];
+    return typeof a === 'number' || a === undefined ? voidType : a;
+  };
+  return { Yield: at(0), Return: at(1), Next: at(2) };
+}
+
 /** #sec-signature-records: [[Reference]] restates the parameter's type. */
 export function IsReferenceParameter(p: ParameterRecord): boolean {
   return p.Type.Kind === 'reference';
@@ -306,6 +347,13 @@ const libraryTypeNames = new Set([
   'Range',
   // proposal-runtime-types (rational.md): the rational value type is a usable type name.
   'rational',
+  // proposal-runtime-types #sec-generator-types: the generic whose instances are
+  // the objects a generator function returns, and the async one. The design
+  // writes `Generator.<Y, R, N>` throughout and the core already parses a return
+  // annotation on a generator; neither this engine nor the specification had the
+  // TYPE until PLAN-do-expressions.md phase 1, so nothing said what a call of a
+  // generator returns or what a yield expression evaluates to.
+  'Generator', 'AsyncGenerator',
 ]);
 
 /**
