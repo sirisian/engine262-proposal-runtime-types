@@ -40,12 +40,38 @@ test('PINNED: what narrowing does NOT do, by the design\'s own account', () => {
   // the opposite of what a permissive implementation would produce.
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('TypeError');
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const s: string = v; return s; } return ""; } f("a");')).toBe('TypeError');
-  // A BOUND NAME types loosely - `x` here is `any`, which is why assigning it
-  // to an unrelated type succeeds. Typing a binding as what the pattern
-  // established is the remaining narrowing work.
+  // An UNANNOTATED binding still types loosely: it is left undeclared rather
+  // than declared as `any`, so it resolves outward the way any free name does.
+  // Typing it as the SUBJECT's narrowed type is the remaining work - and
+  // declaring `any` here would have looked exactly like that work was done.
   expect(outcome('function f(v: uint8) { return match (v) { when let x: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('ACCEPTED');
   // LITERAL PROPAGATION into patterns: `when 27:` against a `uint8` subject
   // should be a `uint8` 27, and a literal that cannot take the position type a
   // compile-time TypeError.
   expect(outcome('function f(v: uint8) { return match (v) { when 300: 1; default: 0; }; } f(uint8(1));')).toBe('ACCEPTED');
+});
+
+
+test('an ANNOTATED binding types as its annotation', () => {
+  // The narrowing a pattern can always justify: `let x: uint8` makes `x` a
+  // `uint8` in the arm, and a clause is its own scope - "a fresh declarative
+  // environment per clause" at run time, a frame in the checker.
+  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+  // THE DISCRIMINATING ASSERTION: assigning the bound name to an unrelated type
+  // is REFUSED, which is what says the annotation reached the arm rather than
+  // the name staying `any`.
+  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('TypeError');
+  // And the runtime is unchanged by the checker knowing more.
+  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+});
+
+test('PINNED: the binding colon is ambiguous in a MEMBER position too', () => {
+  // `{ a: let n: uint8 }` needs the same second-colon rule a clause has, and a
+  // member position has no clause colon to speculate on - the same
+  // context-dependence pattern-bindings.test.mts pins for `is`.
+  const outcome3 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome3('function f(v: { a: uint8 }) { return match (v) { when { a: let n: uint8 }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('SyntaxError');
+  // The UNANNOTATED member binding works.
+  expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
 });

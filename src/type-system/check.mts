@@ -2317,6 +2317,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * Declare what a pattern binds, at the type the pattern established.
+   *
+   * An ANNOTATED binding types as its annotation - `let x: uint8` makes `x` a
+   * `uint8` - which is the narrowing a pattern can always justify. An
+   * UNANNOTATED binding is left undeclared rather than declared as `any`, so it
+   * resolves outward the way any other free name does; typing it as the
+   * SUBJECT's narrowed type is the remaining work, and declaring `any` here
+   * would silently look like that work was done.
+   */
+  const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null): void => {
+    if (!pattern) {
+      return;
+    }
+    switch (pattern.type) {
+      case 'MatchBindingPattern':
+        if (pattern.TypeAnnotation) {
+          const t = resolveType(pattern.TypeAnnotation);
+          if (t) {
+            declare(pattern.Name, t);
+          }
+        }
+        break;
+      case 'MatchOrPattern':
+      case 'MatchAndPattern':
+        declareMatchPatternBindings(pattern.Left);
+        declareMatchPatternBindings(pattern.Right);
+        break;
+      case 'MatchNotPattern':
+        declareMatchPatternBindings(pattern.Operand);
+        break;
+      case 'MatchObjectPattern':
+        pattern.Properties.forEach((prop) => declareMatchPatternBindings(prop.Pattern));
+        break;
+      case 'MatchArrayPattern':
+      case 'MatchExtractorPattern':
+        pattern.Elements.forEach(declareMatchPatternBindings);
+        break;
+      default:
+        break;
+    }
+  };
+
+
   // The enum a binding should be tracked as holding, from its initializer or its
   // type annotation. `let e = E.Member` and `let e: E` both make `e` enum-typed;
   // `E.Member` is a MemberExpression on an enum name, and `E` as an annotation is
@@ -2707,10 +2751,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const me = n as ParseNode.MatchExpression;
         walk(me.Expression as ParseNode);
         me.Clauses.forEach((clause) => {
+          // proposal-runtime-types `sec-match-narrowing`: an arm sees what its
+          // pattern ESTABLISHED. A clause is its own scope - "a fresh
+          // declarative environment per clause" at run time - so the checker
+          // gives it a frame and declares the pattern's bindings in it, which is
+          // what stops one arm's binding from leaking into the next.
+          frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          declareMatchPatternBindings(clause.Pattern);
           if (clause.Guard) {
+            // The guard sees the bindings, which is what makes it a refinement
+            // of this clause rather than a second, independent test.
             walk(clause.Guard as ParseNode);
           }
           walk(clause.Body as ParseNode);
+          frames.pop();
         });
         const subject = me.Expression;
         const subjectName = subject.type === 'IdentifierReference' ? (subject as { name: string }).name : null;
