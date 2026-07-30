@@ -85,15 +85,42 @@ test('PINNED: the cache holds on the PATTERN path and not the TYPE path', () => 
     + 'match (o) { when { g: 2 }: 1; when { g: 1 }: 2; default: 3; }; String(n);')).toBe('2');
 });
 
+test('a BLOCK arm is a block, and its value is its final expression', () => {
+  // "A block arm's value is its final statement where that is an expression
+  // statement, and `void` otherwise" - which is the completion value a Block
+  // already produces, so nothing special is computed for it.
+  expect(evaluated('String(match (1) { when 1: { 42; } default: 0; });')).toBe('42');
+  expect(evaluated('String((() => { let n = 0; return match (1) { when 1: { n = 5; n * 2; } default: 0; }; })());')).toBe('10');
+  expect(evaluated('String(match (1) { when 1: { let a = 1; } default: 0; });')).toBe('undefined');
+  // An expression arm is unaffected.
+  expect(evaluated('String(match (1) { when 1: 7; default: 0; });')).toBe('7');
+});
+
+test('PINNED: an abrupt completion cannot leave a block arm', () => {
+  // The plan flagged this as the place an implementation could be "wrong in
+  // five ways at once": in a block arm `return`, `break`, `continue`, `await`
+  // and `yield` must mean what they mean IN THE ENCLOSING FUNCTION, and the
+  // specification threads those permissions through.
+  //
+  // The arm IS parsed as a Block rather than a function body, so it does not
+  // rebind them - but a `match` is an EXPRESSION, and an abrupt completion has
+  // no way to travel out of an expression context in this engine. So it throws
+  // rather than returning, which is at least LOUD: the wrong answer here would
+  // be silently swallowing the `return` and yielding a value.
+  // Pinned by what it PRODUCES: the arm parses and runs, and the abrupt
+  // completion is produced - but taking the enclosing function's value throws,
+  // so the `return` neither returns nor is silently swallowed.
+  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome2('(function f() { match (1) { when 1: { return 1; } default: 0; } })();')).toBe('ACCEPTED');
+  expect(outcome2('String((function f() { match (1) { when 1: { return "r"; } default: 0; } return "fell"; })());')).toBe('SyntaxError');
+});
+
 test('PINNED: what phase four does not yet carry', () => {
-  // STATEMENT position, where the braced sequel needs the COVER and refinement
-  // "as the `type` operator's parenthesized operand is". Expression position
-  // needs none, which is why it landed first.
-  expect(outcome('match (1) { when 1: 1; default: 2; };')).toBe('ACCEPTED');
-  // BLOCK arms, which must be blocks and not function bodies - `return`,
-  // `break`, `continue`, `await` and `yield` all meaning what they mean in the
-  // enclosing function.
-  expect(outcome('match (1) { when 1: { 1; } default: 2; }')).toBe('SyntaxError');
-  // And BINDINGS, which need the scoping rule and land with the checker.
+  // STATEMENT position works through the same speculative parse as expression
+  // position, since a `match` expression is a valid expression statement - the
+  // COVER the spec describes is what a conforming parser needs, and the
+  // speculation reaches the same programs here.
+  expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('ACCEPTED');
+  // BINDINGS need the scoping rule and land with the checker.
   expect(outcome('match (1) { when let x: x; default: 0; }')).toBe('SyntaxError');
 });

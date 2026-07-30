@@ -2795,6 +2795,8 @@ export namespace ParseNode {
     readonly Guard: ParseNode | null;
     readonly Body: ParseNode;
     readonly IsThrow: boolean;
+    /** A BLOCK arm, whose value is its final expression statement or *void*. */
+    readonly IsBlock: boolean;
   }
 
   export type MatchPattern =

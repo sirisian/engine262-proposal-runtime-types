@@ -1725,8 +1725,17 @@ export abstract class ExpressionParser extends FunctionParser {
       if (clause.IsThrow) {
         this.next();
       }
-      clause.Body = this.parseAssignmentExpression();
-      this.eat(Token.SEMICOLON);
+      // A BLOCK arm is a BLOCK, not a function body: "`return`, `break`,
+      // `continue`, `await` and `yield` mean in it what they mean in the
+      // enclosing function". Parsing it as a block is what makes that true - a
+      // function body would rebind all five at once.
+      clause.IsBlock = !clause.IsThrow && this.test(Token.LBRACE);
+      if (clause.IsBlock) {
+        clause.Body = (this as unknown as { parseBlock(): ParseNode }).parseBlock();
+      } else {
+        clause.Body = this.parseAssignmentExpression();
+        this.eat(Token.SEMICOLON);
+      }
       Clauses.push(this.finishNode(clause, 'MatchClause'));
     }
     if (!this.eat(Token.RBRACE) || Clauses.length === 0) {

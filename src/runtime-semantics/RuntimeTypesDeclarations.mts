@@ -339,6 +339,18 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
     if (!matched) {
       continue;
     }
+    if (clause.IsBlock) {
+      // "A block arm's value is its final statement where that is an expression
+      // statement, and `void` otherwise" - which is the completion value a
+      // Block already produces, so nothing special is computed here. A `return`
+      // or `break` inside propagates as the abrupt completion it is, which is
+      // what makes the arm a block rather than a function body.
+      const blockResult = EnsureCompletion(yield* Evaluate(clause.Body as never));
+      if (blockResult.Type !== 'normal') {
+        return blockResult as never;
+      }
+      return (blockResult.Value ?? Value.undefined) as unknown as Value;
+    }
     const bodyRef = Q(yield* Evaluate(clause.Body as never));
     const body = Q(yield* GetValue(bodyRef as never));
     if (clause.IsThrow) {
