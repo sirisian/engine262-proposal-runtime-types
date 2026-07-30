@@ -756,6 +756,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   // The enum a binding holds an enumerator of, if it is known to.
+  /**
+   * The enumerators a `switch` covers, and which enum it is over.
+   *
+   * PLAN-do-expressions.md: extracted so that the coverage is computed ONCE.
+   * It was inline in the SwitchStatement walk, which is where the diagnostics
+   * are raised, and completionTypeOf needed the same answer - a second copy
+   * would have been a second thing to keep in step, and the two would have
+   * disagreed the first time either moved.
+   */
+  const switchEnumCoverage = (n: ParseNode): { enumName: string, names: readonly string[], covered: Set<string>, invalid: { shown: string }[] } | null => {
+    const sw = n as { Expression?: ParseNode, CaseBlock?: { CaseClauses_a?: readonly ParseNode[], CaseClauses_b?: readonly ParseNode[], DefaultClause?: ParseNode | null } };
+    const disc = sw.Expression;
+    const discName = disc && disc.type === 'IdentifierReference' ? (disc as { name: string }).name : null;
+    const enumName = discName ? lookupEnumBinding(discName) : null;
+    const info = enumName ? lookupEnum(enumName) : null;
+    if (!info || !enumName) {
+      return null;
+    }
+    const clauses = [
+      ...(sw.CaseBlock?.CaseClauses_a ?? []),
+      ...(sw.CaseBlock?.CaseClauses_b ?? []),
+    ];
+    const covered = new Set<string>();
+    const invalid: { shown: string }[] = [];
+    for (const clause of clauses) {
+      const label = (clause as { Expression?: ParseNode }).Expression;
+      let member: string | null = null;
+      let labelEnum: string | null = null;
+      if (label && label.type === 'MemberExpression') {
+        const m = label as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+        if (m.MemberExpression && m.MemberExpression.type === 'IdentifierReference' && m.IdentifierName) {
+          labelEnum = (m.MemberExpression as { name: string }).name;
+          member = m.IdentifierName.name;
+        }
+      }
+      if (member === null || labelEnum !== enumName || !info.names.includes(member)) {
+        invalid.push({ shown: member !== null && labelEnum !== null ? `${labelEnum}.${member}` : 'a non-enumerator case' });
+      } else {
+        covered.add(member);
+      }
+    }
+    return {
+      enumName, names: info.names, covered, invalid,
+    };
+  };
+
+  /**
+   * Whether a `switch` covers every value its discriminant can take.
+   *
+   * #sec-completiontypeof reads this to decide whether a switch tail
+   * contributes `undefined`, and the design reserves the word to enums and
+   * sealed hierarchies - deliberately narrower than the atoms a `match` reads,
+   * so a switch over a `boolean` is not exhaustive for this purpose.
+   */
+  const switchCoversDiscriminant = (n: ParseNode): boolean => {
+    const block = (n as { CaseBlock?: { DefaultClause?: ParseNode | null } }).CaseBlock;
+    if (block?.DefaultClause) {
+      return true;
+    }
+    const coverage = switchEnumCoverage(n);
+    if (!coverage) {
+      return false;
+    }
+    return coverage.names.every((nm) => coverage.covered.has(nm));
+  };
+
   const lookupEnumBinding = (name: string): string | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const e = frames[i].enumBindings.get(name);
@@ -981,7 +1047,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A diverging tail contributes nothing, and a list all of whose paths
     // diverge is the empty union - `never` - which is a subtype of everything,
     // so `const port: uint16 = do { throw new E(); }` is accepted.
-    if (Diverges(last, { switchCoversDiscriminant: () => false })) {
+    if (Diverges(last, { switchCoversDiscriminant })) {
       return neverType;
     }
     const unionOf = (members: Known[]): Known => {
@@ -1023,14 +1089,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ...(block?.DefaultClause ? [block.DefaultClause] : []),
           ...(block?.CaseClauses_b ?? []),
         ];
-        const members = clauses.map((c) => completionTypeOf((c as { StatementList?: readonly ParseNode[] }).StatementList));
+        // A clause's trailing `break` has an EMPTY completion, so the value
+        // falls back to the statement before it - that is what UpdateEmpty does
+        // at run time, and `case E.A: 1; break;` completes with 1. Dropping it
+        // here rather than in the general rule is deliberate: a `do` whose own
+        // tail is a `break` genuinely diverges, since that break leaves the
+        // expression, and only a clause's break is caught by its switch.
+        const members = clauses.map((c) => {
+          const list = (c as { StatementList?: readonly ParseNode[] }).StatementList ?? [];
+          const trimmed = list.length > 0 && list[list.length - 1].type === 'BreakStatement'
+            && !(list[list.length - 1] as { LabelIdentifier?: unknown }).LabelIdentifier
+            ? list.slice(0, -1)
+            : list;
+          return completionTypeOf(trimmed);
+        });
         // #sec-completiontypeof: an exhaustive switch takes no path where no
         // clause ran, so it contributes no `undefined`. Exhaustiveness here is
         // the SWITCH's, which this design reserves to enums and sealed
         // hierarchies and which is deliberately narrower than a `match`'s atoms
         // - a switch over a boolean covering true and false is not exhaustive
         // for this operation, and the clause says so.
-        if (!block?.DefaultClause) {
+        if (!switchCoversDiscriminant(last)) {
           members.push(undefinedType);
         }
         return unionOf(members);
@@ -2823,43 +2902,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // enumerator must label its cases with enumerators of that enum, and a
         // switch with no default must cover every enumerator. The discriminant is
         // enum-typed when it is a binding tracked as holding an enumerator.
-        const disc = n.Expression;
-        const discName = disc.type === 'IdentifierReference' ? (disc as { name: string }).name : null;
-        const enumName = discName ? lookupEnumBinding(discName) : null;
-        const info = enumName ? lookupEnum(enumName) : null;
-        if (info) {
-          const block = n.CaseBlock;
-          const clauses: ParseNode.CaseClause[] = [
-            ...(block.CaseClauses_a ?? []),
-            ...(block.CaseClauses_b ?? []),
-          ] as ParseNode.CaseClause[];
-          const covered = new Set<string>();
-          for (const clause of clauses) {
-            const label = clause.Expression;
-            // A valid label is `EnumName.Member`. Any other label in an enum
-            // switch is not an enumerator of the enum and is a type error.
-            let member: string | null = null;
-            let labelEnum: string | null = null;
-            if (label.type === 'MemberExpression') {
-              const m = label as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
-              if (m.MemberExpression && m.MemberExpression.type === 'IdentifierReference' && m.IdentifierName) {
-                labelEnum = (m.MemberExpression as { name: string }).name;
-                member = m.IdentifierName.name;
-              }
-            }
-            if (member === null || labelEnum !== enumName || !info.names.includes(member)) {
-              const shown = member !== null && labelEnum !== null ? `${labelEnum}.${member}` : 'a non-enumerator case';
-              const completion = Throw.TypeError('$1 is not a case of enum $2', Value(shown), Value(enumName!)) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-            } else {
-              covered.add(member);
-            }
+        const coverage = switchEnumCoverage(n);
+        if (coverage) {
+          // A valid label is `EnumName.Member`. Any other label in an enum
+          // switch is not an enumerator of the enum and is a type error.
+          for (const { shown } of coverage.invalid) {
+            const completion = Throw.TypeError('$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
           }
-          const hasDefault = block.DefaultClause !== undefined && block.DefaultClause !== null;
+          const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
           if (!hasDefault) {
-            const missing = info.names.filter((nm) => !covered.has(nm));
+            const missing = coverage.names.filter((nm) => !coverage.covered.has(nm));
             if (missing.length > 0) {
-              const completion = Throw.TypeError('switch over enum $1 is missing $2 and has no default', Value(enumName!), Value(missing.join(', '))) as ThrowCompletion;
+              const completion = Throw.TypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }

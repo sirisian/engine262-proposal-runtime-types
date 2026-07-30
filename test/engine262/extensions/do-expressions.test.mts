@@ -196,21 +196,39 @@ test('a switch with no default contributes undefined', () => {
   expect(ok("const s = 'a'; const x: number = do { switch (s) { case 'a': 1; break; default: 2; } };")).toBe(true);
 });
 
-/**
- * A gap recorded rather than asserted as correct.
- *
- * #sec-completiontypeof says an EXHAUSTIVE switch contributes no `undefined`,
- * and this engine only recognizes a literal `default` clause as making one
- * exhaustive. The enum and sealed-hierarchy exhaustiveness the design reserves
- * the word for is computed inline in the checker's SwitchStatement walk and is
- * not reachable as a function, so an enum switch covering every enumerator
- * still contributes `undefined` here.
- *
- * That is the conservative direction - a wider type, never a narrower one - and
- * it makes `const x: number = do { switch (e) { case E.A: 1; case E.B: 2; } }`
- * an error that the specification would accept. Extracting the exhaustiveness
- * computation is what closes it.
- */
+test('an exhaustive enum switch contributes no undefined', () => {
+  // #sec-completiontypeof. Exhaustiveness is the SWITCH's, which the design
+  // reserves to enums and sealed hierarchies, so the coverage the checker
+  // already computes for its own diagnostics is what this reads - one
+  // computation, consulted from both places, rather than two that drift.
+  expect(ok(`
+    enum E: uint8 { A, B }
+    function f(e: E) { const x: number = do { switch (e) { case E.A: 1; break; case E.B: 2; break; } }; }
+  `)).toBe(true);
+
+  // Missing an enumerator, so a path takes no clause and the type carries
+  // `undefined`.
+  expect(ok(`
+    enum E: uint8 { A, B }
+    function f(e: E) { const x: number = do { switch (e) { case E.A: 1; break; } }; }
+  `)).toBe(false);
+
+  // A discriminant the design does not reserve the word for still needs a
+  // `default`, which is the asymmetry with `match` the clause records.
+  expect(ok("const s = 'a'; const x: number = do { switch (s) { case 'a': 1; break; } };")).toBe(false);
+});
+
+test('a clause\'s trailing break has an empty completion', () => {
+  // `case E.A: 1; break;` completes with 1, not with nothing: a break's own
+  // completion is empty and the value falls back to the statement before it,
+  // which is what UpdateEmpty does at run time. Read as a divergence instead,
+  // every clause would have typed as `never` and an exhaustive switch would
+  // have been assignable to anything - passing for the wrong reason.
+  expect(ok(`
+    enum E: uint8 { A, B }
+    function f(e: E) { const x: string = do { switch (e) { case E.A: 1; break; case E.B: 2; break; } }; }
+  `)).toBe(false);
+});
 
 test('do * infers its Generator type', () => {
   expect(ok('const g: Generator.<number, void, void> = do * { yield 1; };')).toBe(true);
