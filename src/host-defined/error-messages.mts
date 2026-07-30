@@ -198,6 +198,7 @@ export interface Throw {
   | "'ownKeys' on proxy: trap returned duplicate entries"
   | "'preventExtensions' on proxy: trap returned truthy but the proxy target is extensible"
   | "'setPrototypeOf' on proxy: trap returned truthy for setting a new prototype on the non-extensible proxy target"
+  | 'A `default` clause must be last'
   | 'A class cannot be both sealed and dynamic'
   | 'A class cannot have static and instance private methods with the same name'
   | 'A class element cannot be named as "constructor"'
@@ -568,6 +569,7 @@ export interface Throw {
   | '$1 is out of range for the type'
   | '$1 is too large'
   | '$1 is too small'
+  | '$1 matched no clause of this match'
   | '$1 needs an element type, as in `new SoA.<T, N>()`'
   | '$1 of a negative value is not defined'
   | '$1 requires a reflection context as a type argument'

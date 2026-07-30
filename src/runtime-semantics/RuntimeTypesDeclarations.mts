@@ -17,6 +17,7 @@ import {
   GetMethod, LengthOfArrayLike, ToBoolean,
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
+import { ThrowCompletion } from '../completion.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -307,6 +308,47 @@ export function MatchConstant(a: Value, b: Value): boolean {
  * before evaluating its right operand on a miss, rather than computing both and
  * combining.
  */
+/**
+ * `sec-match-evaluation`.
+ *
+ * THE SUBJECT IS EVALUATED ONCE, before any pattern, and ONE cache serves every
+ * clause - which is what makes "every pattern of one `match` sees the same
+ * values" true and what lets arms agree about a getter they both name.
+ *
+ * Clauses are tried in source order and the first whose pattern matches
+ * evaluates its body; "if no clause matches, a `TypeError` is thrown - and the
+ * exhaustiveness rules make that throw statically impossible exactly where the
+ * types can prove it", which is phase five's half.
+ */
+export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): ValueEvaluator {
+  const subjectRef = Q(yield* Evaluate(node.Expression as never));
+  const subject = Q(yield* GetValue(subjectRef as never));
+  const cache = NewMatchCache();
+  for (const clause of node.Clauses) {
+    let matched = clause.Pattern === null;
+    if (clause.Pattern) {
+      matched = Q(yield* PatternMatches(clause.Pattern, subject, cache));
+    }
+    // A GUARD runs AFTER the pattern matches, and "a falsy guard fails the arm
+    // and matching continues" - it does not abandon the match.
+    if (matched && clause.Guard) {
+      const guardRef = Q(yield* Evaluate(clause.Guard as never));
+      const guard = Q(yield* GetValue(guardRef as never));
+      matched = ToBoolean(guard) === Value.true;
+    }
+    if (!matched) {
+      continue;
+    }
+    const bodyRef = Q(yield* Evaluate(clause.Body as never));
+    const body = Q(yield* GetValue(bodyRef as never));
+    if (clause.IsThrow) {
+      return ThrowCompletion(body) as never;
+    }
+    return body;
+  }
+  return Throw.TypeError('$1 matched no clause of this match', subject);
+}
+
 export interface MatchCacheRecord {
   readonly Reads: { Object: Value, Key: string, Present: boolean, Value: Value }[];
   readonly Iterations: { Object: Value, Elements: Value[], Done: boolean }[];

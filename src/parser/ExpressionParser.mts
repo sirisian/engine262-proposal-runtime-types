@@ -1060,6 +1060,18 @@ export abstract class ExpressionParser extends FunctionParser {
     if (this.testClassModifierRun()) {
       return this.parseClassExpression();
     }
+    // proposal-runtime-types `sec-match-expression`. `match` is a CONTEXTUAL
+    // keyword and in EXPRESSION position "there is no overlap at all, since a
+    // call followed by `{` is already a Syntax Error there" - so a speculative
+    // parse suffices to keep `match(x)` a call: it declines unless a `{`
+    // follows the parenthesized subject.
+    if (surroundingAgent.feature('runtime-types')
+        && this.test('match') && !this.peek().hadLineTerminatorBefore) {
+      const matchExpression = this.tryParseMatchExpression();
+      if (matchExpression) {
+        return matchExpression as unknown as ParseNode.PrimaryExpression;
+      }
+    }
     switch (this.peek().type) {
       case Token.IDENTIFIER:
       case Token.ESCAPED_KEYWORD:
@@ -1649,6 +1661,88 @@ export abstract class ExpressionParser extends FunctionParser {
       default:
         return true;
     }
+  }
+
+  /**
+   * `match (` Expression `) {` MatchClauses `}`, or *null* where the source is
+   * an ordinary call to something named `match`.
+   *
+   * `MatchClauses` requires AT LEAST ONE CLAUSE, which is what keeps
+   * `match(x) {}` a call followed by a block.
+   */
+  tryParseMatchExpression(): ParseNode.MatchExpression | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.MatchExpression>();
+    this.next();
+    if (!this.test(Token.LPAREN)) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    this.expect(Token.LPAREN);
+    node.Expression = this.parseExpression();
+    if (!this.eat(Token.RPAREN) || !this.test(Token.LBRACE)) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    this.expect(Token.LBRACE);
+    const Clauses: ParseNode.MatchClause[] = [];
+    while (!this.test(Token.RBRACE)) {
+      const clause = this.startNode<ParseNode.MatchClause>();
+      // `default` is RESERVED, so it is a keyword token rather than an
+      // identifier - `test('default')` never matched, the clause fell to the
+      // decline path, and the whole `match` silently became a call. That is the
+      // failure mode a speculative parse turns a small bug into: not an error,
+      // a different parse.
+      if (this.test(Token.DEFAULT)) {
+        this.next();
+        clause.Pattern = null;
+      } else if (this.test('when')) {
+        this.next();
+        clause.Pattern = this.parseMatchPattern();
+      } else {
+        this.restoreLexerCheckpoint(checkpoint);
+        this.earlyErrors = savedEarlyErrors;
+        return null;
+      }
+      // A GUARD runs after the pattern matches, "with the pattern's bindings in
+      // scope and the subject narrowed; a falsy guard fails the arm and matching
+      // continues".
+      clause.Guard = null;
+      if (clause.Pattern && this.test(Token.IF)) {
+        this.next();
+        this.expect(Token.LPAREN);
+        clause.Guard = this.parseExpression();
+        this.expect(Token.RPAREN);
+      }
+      this.expect(Token.COLON);
+      // An arm body is an expression, a `throw` expression, or a block. `throw`
+      // is admitted "because an arm that reports an impossible case is the
+      // commonest arm a total `match` has".
+      clause.IsThrow = this.test(Token.THROW);
+      if (clause.IsThrow) {
+        this.next();
+      }
+      clause.Body = this.parseAssignmentExpression();
+      this.eat(Token.SEMICOLON);
+      Clauses.push(this.finishNode(clause, 'MatchClause'));
+    }
+    if (!this.eat(Token.RBRACE) || Clauses.length === 0) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    // "It is a Syntax Error if a `default` MatchClause is not the last of its
+    // MatchClauses."
+    Clauses.forEach((clause, index) => {
+      if (clause.Pattern === null && index !== Clauses.length - 1) {
+        this.addEarlyError(Throw.SyntaxError('A `default` clause must be last'), clause);
+      }
+    });
+    node.Clauses = Clauses;
+    return this.finishNode(node, 'MatchExpression');
   }
 
   /**

@@ -2775,6 +2775,28 @@ export namespace ParseNode {
    * everywhere, has `_` and combinators, and has no defaults - and an absent
    * optional member FAILS a pattern where a binding pattern yields *undefined*.
    */
+  /**
+   * proposal-runtime-types `sec-match-expression`.
+   *
+   * `match` is a CONTEXTUAL keyword, a keyword only in positions that are Syntax
+   * Errors today. In EXPRESSION position there is no overlap at all, since a
+   * call followed by `{` is already a Syntax Error there - which is why this
+   * form needs no speculation where most `match` expressions appear.
+   */
+  export interface MatchExpression extends BaseParseNode {
+    readonly type: 'MatchExpression';
+    readonly Expression: ParseNode;
+    readonly Clauses: readonly MatchClause[];
+  }
+  export interface MatchClause extends BaseParseNode {
+    readonly type: 'MatchClause';
+    /** *null* for a `default` clause, which matches anything and must be last. */
+    readonly Pattern: MatchPattern | null;
+    readonly Guard: ParseNode | null;
+    readonly Body: ParseNode;
+    readonly IsThrow: boolean;
+  }
+
   export type MatchPattern =
     | MatchOrPattern
     | MatchAndPattern
@@ -3611,6 +3633,8 @@ export type ParseNode =
   | ParseNode.MatchRangePattern
   | ParseNode.MatchRegExpPattern
   | ParseNode.MatchExtractorPattern
+  | ParseNode.MatchExpression
+  | ParseNode.MatchClause
   // proposal-runtime-types `sec-match-patterns`
   | ParseNode.MatchOrPattern
   | ParseNode.MatchAndPattern
