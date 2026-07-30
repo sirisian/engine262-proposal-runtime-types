@@ -409,3 +409,56 @@ test('an unlabelled break may not appear in a do in a loop head', () => {
  * asserted on the message, since pinning the wrong message would make the
  * better one a test failure.
  */
+
+/**
+ * The surfaces PLAN-do-expressions.md §6.7 asks for, and the compositions §6.8
+ * does. All of these worked as soon as the forms did; none was pinned, which is
+ * the difference between a behaviour that holds and one that is known to.
+ */
+
+test('async do * is an AsyncGenerator and is iterable with for await', () => {
+  expect(ok('const g: AsyncGenerator.<number, void, void> = async do * { yield 1; };')).toBe(true);
+  expect(ok('const g: Generator.<number, void, void> = async do * { yield 1; };')).toBe(false);
+  expect(ok(`
+    async function f() { let n = 0; for await (const v of do * { yield 1; yield 2; }) { n += v; } return n; }
+  `)).toBe(true);
+});
+
+test('arguments inside a do is the enclosing function\'s', () => {
+  // A `do` is a block, not a function boundary, so `arguments` is the one the
+  // surrounding function has.
+  expect(evaluated('function f(a, b) { return do { arguments.length }; } String(f(1, 2, 3));')).toBe('3');
+  // And a `do *` IS a function boundary, but binds `arguments` lexically as an
+  // arrow does - which is the same choice that makes `this` work, and is what
+  // the `.call(this)` the form replaces was threading by hand.
+  expect(evaluated('function f(a) { return [...do * { yield arguments.length; }]; } String(f(1, 2));')).toBe('2');
+});
+
+test('a do composes with the value types', () => {
+  // The shape doexpressions.md gives for it: a temporary or two to build a key,
+  // kept in the scope that needed them rather than hoisted above the const.
+  expect(evaluated(`
+    const k = do { const n = 2; Composite({ page: n }) };
+    String(k === Composite({ page: 2 }));
+  `)).toBe('true');
+  // The value is an ordinary one, so typeOf answers about it as about any other.
+  expect(evaluated('String(Reflect.typeOf(do { 1 }) === Reflect.typeOf(1));')).toBe('true');
+});
+
+test('the do contexts are reflectable', () => {
+  expect(evaluated('const n = Reflect.getReflection.<Reflect.Type>(Reflect.DoBlock); String(n !== undefined);')).toBe('true');
+  expect(evaluated('const n = Reflect.getReflection.<Reflect.Type>(Reflect.DoGeneratorBlock); String(n !== undefined);')).toBe('true');
+});
+
+test('a do nests inside the constructs that take expressions', () => {
+  // A match arm, where the arm is an EXPRESSION arm rather than a block one -
+  // the parenthesis is what keeps the `do` out of statement position.
+  expect(evaluated('String(match (1) { when 1: (do { 5 }); default: 0; });')).toBe('5');
+  // A do * inside a do, and a do inside a do *.
+  expect(evaluated('String([...do { (do * { yield 1; }) }]);')).toBe('1');
+  expect(evaluated('String([...do * { yield do { 2 }; }]);')).toBe('2');
+  // And in the ordinary expression positions.
+  expect(evaluated('String([do { 1 }, do { 2 }]);')).toBe('1,2');
+  expect(evaluated('String(({ k: do { 3 } }).k);')).toBe('3');
+  expect(evaluated('function f(x) { return x; } String(f(do { 4 }));')).toBe('4');
+});
