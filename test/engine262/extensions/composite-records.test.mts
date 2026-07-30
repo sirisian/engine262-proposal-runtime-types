@@ -112,7 +112,8 @@ test('PINNED: what phase two does not do', () => {
   // `Composite.<T>({...})` is phase four, so a shape can be NAMED but not yet
   // CREATED at.
   expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
-  // The weak-position refusal and the custom matcher are phase five.
-  expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('ACCEPTED');
-  expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('undefined');
+  // The weak-position refusal and the custom matcher landed in phase six.
+  // composite-integrations.test.mts owns them.
+  expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('TypeError');
+  expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('symbol');
 });

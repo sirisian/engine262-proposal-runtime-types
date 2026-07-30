@@ -1,3 +1,4 @@
+import { IsComposite } from '../intrinsics/Composite.mts';
 import {
   type FinalizationRegistryObject, Q, NormalCompletion, ObjectValue, SymbolValue, Assert, HostCallJobCallback, type JobCallbackRecord, UndefinedValue, Value, type ValueEvaluator, KeyForSymbol,
   GetActiveScriptOrModule,
@@ -83,6 +84,16 @@ export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
     if (surroundingAgent.feature('runtime-types')) {
       const builtBy = (v as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
       if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+        return false;
+      }
+      // proposal-runtime-types `sec-composite-canbeheldweakly`: a COMPOSITE is
+      // refused in the same positions, "for the MIRROR-IMAGE reason, an identity
+      // that coincides with contents rather than none at all". A typed instance
+      // has no identity to observe; an interned composite's identity IS its
+      // contents, and a value that is structurally reachable has no
+      // identity-based lifetime for a weak reference to observe either. Both
+      // merge into this one predicate, which is what the clause asks for.
+      if (IsComposite(v)) {
         return false;
       }
     }

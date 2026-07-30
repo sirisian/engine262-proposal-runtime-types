@@ -1,6 +1,6 @@
 import {
   Value, ObjectValue, JSStringValue, SymbolValue, NumberValue,
-  Descriptor, TypedNumberValue, unwrapToNumber,
+  Descriptor, TypedNumberValue, unwrapToNumber, wellKnownSymbols,
   type PropertyKeyValue, type Arguments,
 } from '../value.mts';
 import { Q, X, type ValueCompletion } from '../completion.mts';
@@ -453,6 +453,11 @@ function* CompositeFunction([source = Value.undefined]: Arguments, { NewTarget }
   return Q(FindOrCreateComposite(entries));
 }
 
+/** `sec-composite-custommatcher`: `Composite [ %Symbol.customMatcher% ] ( subject, hint )`. */
+function Composite_customMatcher([subject = Value.undefined]: Arguments) {
+  return IsComposite(subject) ? Value.true : Value.false;
+}
+
 /** `Composite.isComposite ( value )`. */
 function Composite_isComposite([value = Value.undefined]: Arguments) {
   return IsComposite(value) ? Value.true : Value.false;
@@ -468,6 +473,21 @@ export function bootstrapComposite(realmRec: Realm) {
   X(DefinePropertyOrThrow(composite, Value('isComposite'), Descriptor({
     Value: isComposite,
     Writable: Value.true,
+    Enumerable: Value.false,
+    Configurable: Value.true,
+  })));
+  // `sec-composite-custommatcher`: "Return IsComposite(subject)." A membership
+  // test with no side effect - which is the point, since `Composite` is a
+  // FUNCTION rather than a Type Object, and a name pattern holding a function is
+  // otherwise a constant compared by SameValue. In an ecosystem whose default
+  // matcher invokes a callable as a predicate, its absence would be worse than
+  // useless: `when Composite:` would CALL `Composite(subject)`, match every
+  // object, run the subject's getters, and intern a composite as the side effect
+  // of a test.
+  const matcher = CreateBuiltinFunction(Composite_customMatcher as never, 2, Value('[Symbol.customMatcher]'), [], realmRec);
+  X(DefinePropertyOrThrow(composite, wellKnownSymbols.customMatcher, Descriptor({
+    Value: matcher,
+    Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.true,
   })));

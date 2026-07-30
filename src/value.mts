@@ -289,6 +289,14 @@ export class SymbolValue extends PrimitiveValue {
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types-symbol-type */
 export const wellKnownSymbols = {
   asyncIterator: new SymbolValue(Value('Symbol.asyncIterator')),
+  /**
+   * proposal-runtime-types (pattern matching, `sec-composite-custommatcher`).
+   * The pattern-matching proposal's protocol symbol, needed here so that
+   * `Composite[%Symbol.customMatcher%]` can exist - without it the bare pattern
+   * `when Composite:` would compare the subject against the FUNCTION by
+   * SameValue, "a test nothing sensible ever passes".
+   */
+  customMatcher: new SymbolValue(Value('Symbol.customMatcher')),
   dispose: new SymbolValue(Value('Symbol.dispose')),
   hasInstance: new SymbolValue(Value('Symbol.hasInstance')),
   isConcatSpreadable: new SymbolValue(Value('Symbol.isConcatSpreadable')),
