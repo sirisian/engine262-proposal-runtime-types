@@ -40,13 +40,9 @@ test('PINNED: what narrowing does NOT do, by the design\'s own account', () => {
   // the opposite of what a permissive implementation would produce.
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('TypeError');
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const s: string = v; return s; } return ""; } f("a");')).toBe('TypeError');
-  // An UNANNOTATED binding now types as the SUBJECT - see the test below. What
-  // remains loose is a binding in a STRUCTURAL position, which needs the
-  // subject's type walked alongside the pattern.
-  expect(outcome('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: (() => { const s: string = n; return s; })(); default: ""; }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
   // LITERAL PROPAGATION into patterns: `when 27:` against a `uint8` subject
-  // should be a `uint8` 27, and a literal that cannot take the position type a
-  // compile-time TypeError.
+  // should be a `uint8` 27, and a literal that CANNOT take the position type a
+  // compile-time TypeError. `when 300:` against a `uint8` is accepted today.
   expect(outcome('function f(v: uint8) { return match (v) { when 300: 1; default: 0; }; } f(uint8(1));')).toBe('ACCEPTED');
 });
 
@@ -91,4 +87,23 @@ test('an UNANNOTATED binding types as the SUBJECT', () => {
   expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
   // A COMBINATOR does not change the position, so both sides see the same type.
   expect(outcome4('function f(v: uint8) { return match (v) { when let x and uint8: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+});
+
+
+test('a binding in a STRUCTURAL position types from its slot', () => {
+  // The subject's type is WALKED ALONGSIDE the pattern: a member's sub-pattern
+  // sees the type of the property it names, and a tuple element sees its
+  // position's. Passing the whole subject type down would have typed a member
+  // binding as the OBJECT - worse than leaving it loose, because it would be
+  // confidently wrong.
+  const outcome5 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome5('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
+  expect(outcome5('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: (() => { const s: string = n; return s; })(); default: ""; }; } f({ a: uint8(1) });')).toBe('TypeError');
+  // A TUPLE subject types each element BY POSITION, so the second element's
+  // type is not the first's.
+  expect(outcome5('function f(v: [uint8, string]) { return match (v) { when [let a, let b]: a; default: uint8(0); }; } f([uint8(1), "s"]);')).toBe('ACCEPTED');
+  expect(outcome5('function f(v: [uint8, string]) { return match (v) { when [let a, let b]: (() => { const s: string = a; return s; })(); default: ""; }; } f([uint8(1), "s"]);')).toBe('TypeError');
+  // The runtime is unchanged throughout.
+  expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
+  expect(evaluated('String(match ([1, 9]) { when [1, let b]: b; default: 0; });')).toBe('9');
 });

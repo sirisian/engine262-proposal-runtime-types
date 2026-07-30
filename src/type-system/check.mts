@@ -2440,9 +2440,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         declareMatchPatternBindings(pattern.Operand, positionType);
         break;
       case 'MatchObjectPattern':
-        pattern.Properties.forEach((prop) => declareMatchPatternBindings(prop.Pattern));
+        // The subject's type is WALKED ALONGSIDE the pattern: each member's
+        // sub-pattern sees the type of the property it names, so `{ a: let n }`
+        // against `{ a: uint8 }` types `n` as `uint8`. Passing the whole
+        // subject type down would have typed `n` as the OBJECT, which is worse
+        // than leaving it loose - it would be confidently wrong.
+        pattern.Properties.forEach((prop) => {
+          let memberType: Known = null;
+          const shape = positionType && positionType.Kind === 'object'
+            ? positionType
+            : (positionType as { Structure?: TypeRecord } | undefined)?.Structure;
+          if (shape && shape.Kind === 'object') {
+            const declared = shape.Properties.find((pr) => pr.key === prop.Key);
+            memberType = declared ? (declared.type as Known) : null;
+          }
+          declareMatchPatternBindings(prop.Pattern, memberType ?? undefined);
+        });
         break;
       case 'MatchArrayPattern':
+        // A TUPLE subject types each element by POSITION; an array subject
+        // types every element the same. An extractor's elements come from a
+        // matcher's return and are not typed here - "that narrowing is a claim
+        // the matcher's author makes", and this walk has no claim to read.
+        pattern.Elements.forEach((el, index) => {
+          let elementType: Known = null;
+          if (positionType && positionType.Kind === 'tuple') {
+            const slot = positionType.Elements[index];
+            elementType = slot ? (slot.Type as Known) : null;
+          } else if (positionType && positionType.Kind === 'array') {
+            elementType = positionType.Element as Known;
+          }
+          declareMatchPatternBindings(el, elementType ?? undefined);
+        });
+        break;
       case 'MatchExtractorPattern':
         pattern.Elements.forEach((el) => declareMatchPatternBindings(el));
         break;
