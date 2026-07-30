@@ -10,7 +10,8 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Value } from '../value.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
-import { anyType } from './records.mts';
+import { anyType, restElementType } from './records.mts';
+import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
 import { IsAssignable } from './relations.mts';
 import { RuntimeTypeOf } from './runtime.mts';
 
@@ -119,19 +120,57 @@ export function minimumArity(params: readonly OverloadParameter[]): number {
 }
 
 /**
- * Whether a signature's arity admits a call of `count` arguments: at least its
- * minimum arity, and no more than its fixed parameters unless it ends in a rest
- * parameter, which absorbs any number of trailing arguments.
+ * Assign a call's argument types to a signature's parameters, or null where no
+ * assignment admits them all.
+ *
+ * PLAN-rest-parameters.md phase 4, per #sec-bindarguments. Viability WAS an
+ * arity count: at least the minimum, and no more than the parameter count
+ * unless the LAST parameter was a rest. That is the single-trailing-rest rule,
+ * and it answers wrongly for every list this feature admits - a rest in the
+ * middle made the count an upper bound again, and a second rest was invisible.
+ *
+ * The assignment is the answer to both questions at once: whether the list can
+ * be satisfied, and which parameter receives each argument. A list with at most
+ * one rest, which is every signature written before this feature, takes the
+ * direct path and never reaches the matcher.
  */
-function arityAdmits(params: readonly OverloadParameter[], count: number): boolean {
-  if (count < minimumArity(params)) {
-    return false;
+function assignArguments(params: readonly OverloadParameter[], argTypes: readonly TypeRecord[]): number[] | null {
+  const restCount = params.filter((p) => p.Rest).length;
+  if (restCount <= 1) {
+    // The familiar rule, stated as an assignment so that both callers read the
+    // same shape: fixed parameters take one each, the rest takes what is left
+    // after the parameters that follow it are satisfied.
+    if (argTypes.length < minimumArity(params)) {
+      return null;
+    }
+    const restIndex = params.findIndex((p) => p.Rest);
+    if (restIndex === -1) {
+      if (argTypes.length > params.length) {
+        return null;
+      }
+      return params.map((_p, i) => (i < argTypes.length ? 1 : 0));
+    }
+    const after = params.length - restIndex - 1;
+    const taken = argTypes.length - restIndex - after;
+    if (taken < 0) {
+      return null;
+    }
+    return params.map((_p, i) => {
+      if (i < restIndex) {
+        return 1;
+      }
+      if (i === restIndex) {
+        return taken;
+      }
+      return 1;
+    });
   }
-  const hasRest = params.length > 0 && params[params.length - 1].Rest;
-  if (hasRest) {
-    return true;
-  }
-  return count <= params.length;
+  const slots = params.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
+  const counts = SequenceAssignment(slots, argTypes.length, (i, k) => {
+    const p = params[k];
+    return argumentTier(argTypes[i], p.Rest ? restElementType(p.Type) : p.Type) !== null;
+  });
+  return counts === 'unmatched' ? null : counts;
 }
 
 /** The match tier of one argument against one parameter, or null if it does not fit. */
@@ -215,12 +254,17 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[])
     // A catch-all takes any argument list, at the tier that ranks last.
     return argTypes.map(() => Tier.CatchAll);
   }
-  if (!arityAdmits(sig.Parameters, argTypes.length)) {
+  const counts = assignArguments(sig.Parameters, argTypes);
+  if (counts === null) {
     return null;
   }
   const tiers: Tier[] = [];
   for (let i = 0; i < argTypes.length; i += 1) {
-    const param = sig.Parameters[i] ?? sig.Parameters[sig.Parameters.length - 1];
+    const k = slotReceiving(counts, i);
+    const param = k === -1 ? undefined : sig.Parameters[k];
+    if (!param) {
+      return null;
+    }
     // A rest parameter's element type is not read here, so an argument it
     // receives matches at the catch-all tier.
     if (param.Rest) {
@@ -260,7 +304,10 @@ function compareTiers(a: readonly Tier[], b: readonly Tier[]): number {
  * equally ranked the fixed one is preferred.
  */
 function hasRest(sig: OverloadSignature): boolean {
-  return sig.Parameters.length > 0 && sig.Parameters[sig.Parameters.length - 1].Rest;
+  // PLAN-rest-parameters.md phase 4: ANY rest, not only a trailing one. The
+  // tiebreak is about matching by absorption rather than by fixed parameters,
+  // and where a rest sits has nothing to do with that.
+  return sig.Parameters.some((p) => p.Rest);
 }
 
 /** The outcome of resolving a call against a set of signatures. */

@@ -111,15 +111,33 @@ test('the admissions and refusals that were already right stay right', () => {
   `)).toBe('true');
 });
 
-test('a list with several rests relates to nothing until it can be assigned', () => {
-  // PLAN-rest-parameters.md phase 2 brings SequenceAssignment, which is what
-  // determines which rest receives which position. Until then a multi-rest list
-  // has no position mapping, and this refuses rather than guessing one. The
-  // assertion is a MARKER: when phase 2 lands it should become 'true', and a
-  // reader finding it should change it rather than read it as a requirement.
+test('a source with several rests relates by the assignment', () => {
+  // PLAN-rest-parameters.md phase 4 flipped this. It was false while nothing
+  // could say which rest receives which position; SequenceAssignment says, so
+  // the exact question - is there an assignment of the target's parameters that
+  // the source admits - is now the one asked.
   expect(evaluated(`
     type S = (...[].<uint32>, ...[].<string>) => void;
     type T = (uint32, string) => void;
     String(Reflect.isAssignable(S, T));
+  `)).toBe('true');
+
+  // And it is an assignment rather than a wildcard: the order still matters.
+  expect(evaluated(`
+    type S = (...[].<uint32>, ...[].<string>) => void;
+    type T = (string, uint32) => void;
+    String(Reflect.isAssignable(S, T));
   `)).toBe('false');
+});
+
+test('a TARGET with several rests stays conservative', () => {
+  // The target's positions are not determined by their index and the exact
+  // relation is regular-language inclusion, which a subtyping check cannot
+  // afford at every use. The rule requires the lists to correspond - sound, and
+  // exact whenever they do.
+  expect(evaluated(`
+    type S = (...[].<uint32>, ...[].<string>) => void;
+    type T = (...[].<uint32>, ...[].<string>) => void;
+    String(Reflect.isAssignable(S, T));
+  `)).toBe('true');
 });

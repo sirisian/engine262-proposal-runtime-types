@@ -1,7 +1,8 @@
 import { SameValue } from '../abstract-ops/all.mts';
-import type { TypeRecord, TupleElementRecord } from './records.mts';
+import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
+import { SequenceAssignment } from './sequence-assignment.mts';
 import {
-  maximumSupply, parameterArgumentType, parameterReceiving, requiredArity, restElementType,
+  maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
 
 /**
@@ -211,7 +212,7 @@ function tupleMinLength(t: readonly TupleElementRecord[]): number {
  * take any number, so its latest position is unbounded. Where no rest precedes
  * it, an element receives exactly its own index.
  */
-function tuplePositionRange(t: readonly TupleElementRecord[], k: number): [number, number] {
+function positionRange(t: readonly { readonly Rest: boolean }[], k: number): [number, number] {
   let least = 0;
   let restBefore = false;
   for (let i = 0; i < k; i += 1) {
@@ -237,7 +238,7 @@ function tuplePositionRange(t: readonly TupleElementRecord[], k: number): [numbe
 function tupleSourceTypesAt(t: readonly TupleElementRecord[], i: number): TypeRecord[] {
   const types: TypeRecord[] = [];
   for (let k = 0; k < t.length; k += 1) {
-    const [least, greatest] = tuplePositionRange(t, k);
+    const [least, greatest] = positionRange(t, k);
     if (i >= least && i <= greatest) {
       // A rest element's Type is the ARRAY it stands for; what it puts at ONE
       // position is that array's element (phase 5's restElementType, the same
@@ -463,20 +464,51 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
       return false;
     }
-    // A list with several rests has no determined position mapping until
-    // SequenceAssignment lands (phase 2); until then it relates to nothing
-    // rather than relating by a guess.
-    if (sg.Parameters.filter((p) => p.Rest).length > 1 || tg.Parameters.filter((p) => p.Rest).length > 1) {
-      return false;
+    // PLAN-rest-parameters.md phase 4. Where the TARGET has several rests its
+    // positions are not determined by their index and the exact relation is
+    // regular-language inclusion, which is the same conservative case tuples
+    // have: require the lists to correspond.
+    if (tg.Parameters.filter((p) => p.Rest).length > 1) {
+      if (sg.Parameters.length !== tg.Parameters.length) {
+        return false;
+      }
+      return sg.Parameters.every((sp, i) => sp.Rest === tg.Parameters[i].Rest
+        && IsSubtype(parameterArgumentType(tg.Parameters[i]), parameterArgumentType(sp), assumptions))
+        && (!sg.Return || !tg.Return || IsSubtype(sg.Return, tg.Return, assumptions));
+    }
+    // Where the SOURCE has several rests and the target supplies a finite list,
+    // the exact question is whether some assignment of that list to the source's
+    // parameters admits it - which is the matcher's question, asked over types
+    // instead of values. Requiring every parameter that COULD receive a position
+    // to accept it is sound but refuses lists the source can plainly take.
+    if (sg.Parameters.filter((p) => p.Rest).length > 1 && !tg.Parameters.some((p) => p.Rest)) {
+      const slots = sg.Parameters.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
+      const assigned = SequenceAssignment(slots, tg.Parameters.length, (j, k) => IsSubtype(
+        parameterArgumentType(tg.Parameters[j]),
+        parameterArgumentType(sg.Parameters[k]),
+        assumptions,
+      ));
+      if (assigned === 'unmatched') {
+        return false;
+      }
+      return !sg.Return || !tg.Return || IsSubtype(sg.Return, tg.Return, assumptions);
     }
     const positionsOk = tg.Parameters.every((tp, j) => {
-      const sp = parameterReceiving(sg.Parameters, j);
-      if (!sp) {
+      // A source with several rests may receive a position at more than one
+      // parameter, and EACH of them must accept what the target supplies there.
+      const candidates: ParameterRecord[] = [];
+      for (let k = 0; k < sg.Parameters.length; k += 1) {
+        const [least, greatest] = positionRange(sg.Parameters, k);
+        if (j >= least && j <= greatest) {
+          candidates.push(sg.Parameters[k]);
+        }
+      }
+      if (candidates.length === 0) {
         // The source takes fewer arguments than the target supplies, which the
         // language ignores; the clause admits it.
         return true;
       }
-      return IsSubtype(parameterArgumentType(tp), parameterArgumentType(sp), assumptions);
+      return candidates.every((sp) => IsSubtype(parameterArgumentType(tp), parameterArgumentType(sp), assumptions));
     });
     if (!positionsOk) {
       return false;

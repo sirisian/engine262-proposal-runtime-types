@@ -101,11 +101,10 @@ export function parameterArgumentType(p: ParameterRecord): TypeRecord {
  * The parameter that receives the argument at index `j`, or undefined where the
  * list cannot take one there.
  *
- * Exact while at most one parameter is a rest, which is every list the engine
- * can currently declare: a rest receives its own position and every later one.
- * PLAN-rest-parameters.md phase 2 replaces this with SequenceAssignment, which
- * is what a list with SEVERAL rests needs, and this returns undefined for that
- * case rather than guessing.
+ * Exact while at most one parameter is a rest: a rest receives its own position
+ * and every later one. A list with SEVERAL rests has no such mapping and this
+ * returns undefined for it rather than guessing; the callers that need one ask
+ * SequenceAssignment, which computes the whole assignment at once.
  */
 export function parameterReceiving(params: readonly ParameterRecord[], j: number): ParameterRecord | undefined {
   if (params.filter((p) => p.Rest).length > 1) {

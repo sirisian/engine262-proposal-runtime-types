@@ -7,11 +7,16 @@ import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
   StringValue,
   IsAnonymousFunctionDefinition,
+  HasInitializer,
 } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
+import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
+import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { restElementType } from '../type-system/records.mts';
+import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   Assert,
@@ -41,6 +46,23 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
     return NormalCompletion(undefined);
   }
 
+  // proposal-runtime-types, PLAN-rest-parameters.md phase 4c. A rest away from
+  // the end, or more than one, has no meaning to the streaming walk below: it
+  // binds each parameter in turn from the argument iterator, and a rest that is
+  // not last would take one argument like any other parameter. Which run each
+  // rest receives is SequenceAssignment's answer, and reaching it needs the
+  // arguments in hand rather than an iterator, so that path materializes them.
+  //
+  // The base language's shape - at most one rest, and last - takes the walk
+  // unchanged and never reaches the assignment. That is deliberate: this is the
+  // hottest path in the engine, and it is the one place in this feature where a
+  // mistake MISBINDS a program rather than rejecting it.
+  const restCount = FormalParameters.filter((p) => p.type === 'BindingRestElement').length;
+  const restIsLast = FormalParameters[FormalParameters.length - 1].type === 'BindingRestElement';
+  if (restCount > 1 || (restCount === 1 && !restIsLast)) {
+    return yield* IteratorBindingInitialization_AssignedParameters(FormalParameters, iteratorRecord, environment);
+  }
+
   for (const FormalParameter of FormalParameters.slice(0, -1)) {
     Q(yield* IteratorBindingInitialization_FormalParameter(FormalParameter, iteratorRecord, environment));
   }
@@ -50,6 +72,69 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
     return yield* IteratorBindingInitialization_FunctionRestParameter(last, iteratorRecord, environment);
   }
   return yield* IteratorBindingInitialization_FormalParameter(last, iteratorRecord, environment);
+}
+
+/**
+ * Bind a parameter list whose rests are not simply trailing.
+ *
+ * The arguments are drained from the iterator, assigned to the parameters by
+ * SequenceAssignment over their RUN-TIME types, and each parameter is then bound
+ * from a fresh iterator over the run it received. Binding through the ordinary
+ * per-parameter operations is what keeps defaults, destructuring patterns, `ref`
+ * borrowing, and the annotation checks working exactly as they do elsewhere.
+ *
+ * The predicate is the run-time type test rather than the checker's static one,
+ * which is what a call arriving through `any`, `apply`, or a spread of unknown
+ * length needs; for a call the checker has already accepted, the two agree.
+ */
+function* IteratorBindingInitialization_AssignedParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+  const args: Value[] = [];
+  while (iteratorRecord.Done === Value.false) {
+    const next = Q(yield* IteratorStepValue(iteratorRecord));
+    if (next === 'done') {
+      break;
+    }
+    args.push(next);
+  }
+  // A parameter admits an argument when it is of the parameter's declared type,
+  // its ELEMENT type where the parameter is a rest, since that is what one
+  // argument reaching it must be. An unannotated parameter admits anything.
+  const admitted: boolean[][] = [];
+  for (const arg of args) {
+    const row: boolean[] = [];
+    for (const p of FormalParameters) {
+      const annotation = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+      if (!annotation) {
+        row.push(true);
+        continue;
+      }
+      const declared = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+      const wanted = p.type === 'BindingRestElement' ? restElementType(declared) : declared;
+      row.push(Q(yield* IsOfType(arg, wanted)));
+    }
+    admitted.push(row);
+  }
+  const slots = FormalParameters.map((p) => ({
+    Rest: p.type === 'BindingRestElement',
+    Optional: HasInitializer(p as ParseNode.FormalParameter),
+  }));
+  const counts = SequenceAssignment(slots, args.length, (i, k) => admitted[i][k]);
+  if (counts === 'unmatched') {
+    return Throw.TypeError('no assignment of the arguments satisfies the parameter list');
+  }
+  let at = 0;
+  for (let k = 0; k < FormalParameters.length; k += 1) {
+    const run = args.slice(at, at + counts[k]);
+    at += counts[k];
+    const runIterator = CreateListIteratorRecord(run);
+    const p = FormalParameters[k];
+    if (p.type === 'BindingRestElement') {
+      Q(yield* IteratorBindingInitialization_FunctionRestParameter(p, runIterator, environment));
+    } else {
+      Q(yield* IteratorBindingInitialization_FormalParameter(p, runIterator, environment));
+    }
+  }
+  return NormalCompletion(undefined);
 }
 
 // FormalParameter : BindingElement
