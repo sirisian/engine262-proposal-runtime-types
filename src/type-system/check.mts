@@ -2406,33 +2406,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * SUBJECT's narrowed type is the remaining work, and declaring `any` here
    * would silently look like that work was done.
    */
-  const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null): void => {
+  const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType?: Known): void => {
     if (!pattern) {
       return;
     }
     switch (pattern.type) {
       case 'MatchBindingPattern':
         if (pattern.TypeAnnotation) {
+          // An ANNOTATED binding types as its annotation, which is the
+          // narrowing the pattern itself justifies.
           const t = resolveType(pattern.TypeAnnotation);
           if (t) {
             declare(pattern.Name, t);
           }
+        } else if (positionType) {
+          // An UNANNOTATED binding types as the SUBJECT at that position - "a
+          // binding always matches", so it establishes nothing about the value
+          // beyond what the position already said. Left undeclared where the
+          // position's type is unknown rather than declared as `any`, since
+          // `any` would look exactly like this work having been done.
+          declare(pattern.Name, positionType);
         }
         break;
       case 'MatchOrPattern':
       case 'MatchAndPattern':
-        declareMatchPatternBindings(pattern.Left);
-        declareMatchPatternBindings(pattern.Right);
+        // A combinator does not change the POSITION, so both sides see the
+        // same type. `and` could narrow the right side by the left, which is
+        // the refinement still outstanding.
+        declareMatchPatternBindings(pattern.Left, positionType);
+        declareMatchPatternBindings(pattern.Right, positionType);
         break;
       case 'MatchNotPattern':
-        declareMatchPatternBindings(pattern.Operand);
+        declareMatchPatternBindings(pattern.Operand, positionType);
         break;
       case 'MatchObjectPattern':
         pattern.Properties.forEach((prop) => declareMatchPatternBindings(prop.Pattern));
         break;
       case 'MatchArrayPattern':
       case 'MatchExtractorPattern':
-        pattern.Elements.forEach(declareMatchPatternBindings);
+        pattern.Elements.forEach((el) => declareMatchPatternBindings(el));
         break;
       default:
         break;
@@ -2829,6 +2841,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // case does rather than building a second one.
         const me = n as ParseNode.MatchExpression;
         walk(me.Expression as ParseNode);
+        const subjectType = staticType(me.Expression as ParseNode);
         me.Clauses.forEach((clause) => {
           // proposal-runtime-types `sec-match-narrowing`: an arm sees what its
           // pattern ESTABLISHED. A clause is its own scope - "a fresh
@@ -2836,7 +2849,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
           frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
-          declareMatchPatternBindings(clause.Pattern);
+          // The SUBJECT's static type is what a top-level binding takes.
+          // Computed once for the whole `match`, since every clause matches the
+          // same subject.
+          declareMatchPatternBindings(clause.Pattern, subjectType);
           if (clause.Guard) {
             // The guard sees the bindings, which is what makes it a refinement
             // of this clause rather than a second, independent test.

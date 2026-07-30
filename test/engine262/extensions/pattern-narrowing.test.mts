@@ -40,11 +40,10 @@ test('PINNED: what narrowing does NOT do, by the design\'s own account', () => {
   // the opposite of what a permissive implementation would produce.
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('TypeError');
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const s: string = v; return s; } return ""; } f("a");')).toBe('TypeError');
-  // An UNANNOTATED binding still types loosely: it is left undeclared rather
-  // than declared as `any`, so it resolves outward the way any free name does.
-  // Typing it as the SUBJECT's narrowed type is the remaining work - and
-  // declaring `any` here would have looked exactly like that work was done.
-  expect(outcome('function f(v: uint8) { return match (v) { when let x: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('ACCEPTED');
+  // An UNANNOTATED binding now types as the SUBJECT - see the test below. What
+  // remains loose is a binding in a STRUCTURAL position, which needs the
+  // subject's type walked alongside the pattern.
+  expect(outcome('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: (() => { const s: string = n; return s; })(); default: ""; }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
   // LITERAL PROPAGATION into patterns: `when 27:` against a `uint8` subject
   // should be a `uint8` 27, and a literal that cannot take the position type a
   // compile-time TypeError.
@@ -75,4 +74,21 @@ test('a MEMBER binding may be annotated too', () => {
   // The annotation TESTS, so a member of the wrong type falls through.
   expect(evaluated('String(match ({ a: 1 }) { when { a: let n: uint8 }: 1; default: 0; });')).toBe('0');
   expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
+});
+
+
+test('an UNANNOTATED binding types as the SUBJECT', () => {
+  // "A binding always matches", so it establishes nothing about the value
+  // beyond what the position already said - which makes the subject's type
+  // exactly right for a top-level binding.
+  const outcome4 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+  // THE DISCRIMINATING ASSERTION: assigning it to an unrelated type is REFUSED,
+  // where before it was accepted because the name was undeclared and resolved
+  // outward as a free name.
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('TypeError');
+  // The runtime is unchanged by the checker knowing more.
+  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+  // A COMBINATOR does not change the position, so both sides see the same type.
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x and uint8: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
 });
