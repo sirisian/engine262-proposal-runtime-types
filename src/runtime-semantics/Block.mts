@@ -78,7 +78,13 @@ export function* Evaluate_Block({ StatementList, Decorators, BlockKind }: ParseN
     // `ElseBlock`, `WhileBlock`, `DoWhileBlock`, `ForBlock`, `ForInBlock` and
     // `ForOfBlock` their own contexts, and a bare block keeps `Block`.
     const blockKind = BlockKind ?? 'Block';
-    Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined))));
+    // proposal-runtime-types #sec-do-expression-modifications: a `do` block's
+    // decorators are fired by the do EXPRESSION rather than here, because they
+    // may REPLACE its value - the one thing a block decorator can do that no
+    // other block has a use for - and the expression is what holds the value.
+    if (blockKind !== 'DoBlock') {
+      Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined))));
+    }
   }
   if (StatementList.length === 0) {
     // 1. Return NormalCompletion(empty).

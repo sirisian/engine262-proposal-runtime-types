@@ -295,3 +295,55 @@ test('a do block decorator fires on every entry', () => {
  * it says: that decorates the BLOCK, which is the general block-decorator
  * feature and not this one.
  */
+
+/**
+ * The return replacement, per #sec-do-expression-modifications.
+ *
+ * The capability these two contexts exist for, and the reason the exclusion of
+ * blocks from replacement had no content once a block had a value: every other
+ * block produces nothing, so there was never anything for a block decorator to
+ * replace.
+ *
+ * It fires on ENTRY, as every block decorator does, so a replacement means the
+ * block is not evaluated at all - which is what makes `@memo do { ... }` a
+ * memoization rather than a wrapper.
+ */
+
+test('a DoBlock decorator may replace the value', () => {
+  expect(evaluated('function d(c: Reflect.DoBlock) { return 99; } String(@d do { 1 });')).toBe('99');
+  // The block does not run: the decorator answered instead of wrapping.
+  expect(evaluated(`
+    let ran = false;
+    function d(c: Reflect.DoBlock) { return 99; }
+    const x = @d do { ran = true; 1 };
+    String(ran);
+  `)).toBe('false');
+  // Returning nothing leaves the expression alone.
+  expect(evaluated('function d(c: Reflect.DoBlock) {} String(@d do { 1 });')).toBe('1');
+});
+
+test('which is what memoization needs', () => {
+  // Two evaluations of the expression, one evaluation of the block.
+  expect(evaluated(`
+    let calls = 0;
+    let memo;
+    function d(c: Reflect.DoBlock) { return memo; }
+    function run() { return @d do { calls += 1; memo = 7; 7 }; }
+    const a = run();
+    const b = run();
+    String(a + ',' + b + ',' + calls);
+  `)).toBe('7,7,1');
+});
+
+test('a DoGeneratorBlock decorator may replace the generator', () => {
+  // What it replaces is an ITERATOR, and wrapping one - filtering, limiting,
+  // buffering a sequence - is what a decorator over a sequence is for.
+  expect(evaluated(`
+    function swap(c: Reflect.DoGeneratorBlock) { return [9, 8][Symbol.iterator](); }
+    String([...@swap do * { yield 1; yield 2; yield 3; }]);
+  `)).toBe('9,8');
+  expect(evaluated(`
+    function d(c: Reflect.DoGeneratorBlock) {}
+    String([...@d do * { yield 1; yield 2; }]);
+  `)).toBe('1,2');
+});

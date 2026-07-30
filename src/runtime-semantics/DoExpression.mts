@@ -28,6 +28,20 @@ export function* Evaluate_DoExpression(node: ParseNode.DoExpression): ValueEvalu
   if (node.star) {
     return yield* EvaluateDoGenerator(node);
   }
+  // #sec-do-expression-modifications: a DoBlock decorator may RETURN a
+  // replacement, which is the capability the design gives these two contexts and
+  // the reason the exclusion of blocks from replacement had no content once a
+  // block had a value. It fires on ENTRY, as every block decorator does, so a
+  // replacement means the block is not evaluated at all - which is what makes
+  // `@memo do { expensive() }` a memoization rather than a wrapper.
+  const decorators = (node.Block as { Decorators?: readonly ParseNode.Decorator[] | null } | undefined)?.Decorators;
+  if (surroundingAgent.feature('runtime-types') && decorators?.length) {
+    const context = Q(yield* BlockDecoratorContext('DoBlock', Value.undefined));
+    const replacement = Q(yield* ApplyDecorators(decorators, context, true));
+    if (replacement !== undefined && replacement !== Value.undefined) {
+      return replacement;
+    }
+  }
   const completion = EnsureCompletion(yield* Evaluate_Block(node.Block!)) as Completion<Value | void>;
   if (completion.Type !== 'normal') {
     // `return`, `break`, and `continue` leave the expression untouched, which
@@ -61,7 +75,14 @@ function* EvaluateDoGenerator(node: ParseNode.DoExpression): ValueEvaluator {
   // produced rather than every `next`.
   const decorated = node.GeneratorBody as { Decorators?: readonly ParseNode.Decorator[] | null } | undefined;
   if (surroundingAgent.feature('runtime-types') && decorated?.Decorators?.length) {
-    Q(yield* ApplyDecorators(decorated.Decorators, Q(yield* BlockDecoratorContext('DoGeneratorBlock', Value.undefined))));
+    const context = Q(yield* BlockDecoratorContext('DoGeneratorBlock', Value.undefined));
+    const replacement = Q(yield* ApplyDecorators(decorated.Decorators, context, true));
+    if (replacement !== undefined && replacement !== Value.undefined) {
+      // What a `do *` decorator replaces is an ITERATOR, and wrapping one -
+      // filtering, limiting, buffering a sequence - is what a decorator over a
+      // sequence is for.
+      return replacement;
+    }
   }
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privateScope = surroundingAgent.runningExecutionContext.PrivateEnvironment;
