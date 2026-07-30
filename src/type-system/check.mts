@@ -593,6 +593,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const classNodes = new Map<string, ParseNode>();
   /**
+   * A sealed class's direct subclasses, keyed by DECLARATION NODE.
+   *
+   * README: "A `sealed` class restricts `extends` to the module that declares
+   * it. The set of direct subclasses is therefore FIXED AND KNOWN when the
+   * module finishes evaluating" - so there is no `permits` clause to read and
+   * the set is whatever this declaration list holds.
+   *
+   * Keyed by NODE rather than by name because a class instance type carries a
+   * `Declaration`, not a `Name` - looking for a name is what made an earlier
+   * attempt silently inert. Node identity also settles shadowing for free.
+   */
+  const sealedSubclasses = new Map<ParseNode, ParseNode[]>();
+  /**
    * Interface declarations by name, and their structures (F61). The checker
    * resolved an interface name in a type position to NOTHING, so
    * `function f(i: I) { i.k = 300 }` was unchecked entirely - a bigger gap than
@@ -2299,6 +2312,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (name) {
           classNodes.set(name, n);
         }
+        // `ClassModifiers` is a list of STRINGS, not of nodes.
+        const modifiers = (n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+        if (modifiers.includes('sealed') && !sealedSubclasses.has(n)) {
+          sealedSubclasses.set(n, []);
+        }
       } else if (n.type === 'InterfaceDeclaration') {
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
@@ -2335,6 +2353,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol') {
           symbolConsts.set(bound, binding);
         }
+      }
+    }
+    // Linked in a SECOND pass, after every class is in `classNodes`: a subclass
+    // may be declared before its sealed base, and the set is fixed "when the
+    // MODULE finishes evaluating" rather than when a declaration is reached.
+    for (const n of list) {
+      if (n.type !== 'ClassDeclaration') {
+        continue;
+      }
+      const heritage = (n as unknown as {
+        ClassTail?: { ClassHeritage?: { name?: string } | null } | null,
+      }).ClassTail?.ClassHeritage;
+      const baseName = heritage && typeof heritage.name === 'string' ? heritage.name : null;
+      const baseNode = baseName ? classNodes.get(baseName) : undefined;
+      if (baseNode && sealedSubclasses.has(baseNode)) {
+        sealedSubclasses.get(baseNode)!.push(n);
       }
     }
     for (const n of classNodes.values()) {
@@ -2983,6 +3017,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const missing = matchInfo.names.filter((nm) => !covered.has(nm));
             if (missing.length > 0) {
               const completion = Throw.TypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        // A SEALED-CLASS subject is a closed set too, and `sec-match-exhaustiveness`
+        // names it beside enums - so it is checked here rather than in a second
+        // pass that could disagree about coverage.
+        const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
+        const subclasses = sealedDecl && sealedDecl.Kind === 'nominal' && sealedDecl.Declaration
+          ? sealedSubclasses.get(sealedDecl.Declaration)
+          : undefined;
+        if (subclasses && subclasses.length > 0) {
+          const coveredClasses = new Set<ParseNode>();
+          let sealedDefault = false;
+          for (const clause of me.Clauses) {
+            if (clause.Pattern === null) {
+              sealedDefault = true;
+              continue;
+            }
+            // A guarded arm proves nothing here for the same reason it proves
+            // nothing over an enum: the checker does not evaluate guards.
+            if (clause.Guard || clause.Pattern.type !== 'MatchTypePattern') {
+              continue;
+            }
+            const armType = resolveType(clause.Pattern.Type);
+            const armDecl = (armType as { Declaration?: ParseNode } | null | undefined)?.Declaration;
+            if (armDecl) {
+              coveredClasses.add(armDecl);
+            }
+          }
+          if (!sealedDefault) {
+            const missingClasses = subclasses.filter((c) => !coveredClasses.has(c));
+            if (missingClasses.length > 0) {
+              const shown = missingClasses
+                .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
+                .join(', ');
+              const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
+              const completion = Throw.TypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }

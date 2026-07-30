@@ -415,6 +415,7 @@ export interface Throw {
   | 'a ref for-of loop requires an array or an SoA whose elements can be referenced'
   | 'a typed own property cannot be added to an instance of a non-dynamic typed class'
   | 'a using declaration requires an object with a Symbol.dispose method'
+  | 'a var declaration may not appear in a do expression in a parameter'
   | 'a view element cannot have a zero byte length'
   | 'a view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array'
   | 'a view needs an element type with a layout'
@@ -424,6 +425,7 @@ export interface Throw {
   | 'an SoA view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array'
   | 'an array may not be resized while a reference into it is live'
   | 'an element of this type cannot be viewed in a buffer'
+  | 'an unlabelled break or continue may not appear in a do expression in a loop head'
   | 'argument[0] must be a string'
   | 'argument[0] must be an ArrayBuffer'
   | 'arguments cannot be referenced in a class field initializer'
@@ -766,6 +768,7 @@ export interface Throw {
   | 'a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them'
   | 'getter ($1) in a property descriptor $2 must be a function'
   | 'match over enum $1 is missing $2 and has no default'
+  | 'match over sealed class $1 is missing $2 and has no default'
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'
   , $1: Formattable, $2: Formattable): ThrowCompletion;

@@ -61,6 +61,40 @@ test('PINNED: what the checker half still lacks', () => {
   // pattern established - and LITERAL PROPAGATION into patterns, where
   // `when 27:` against a `uint8` field should be a `uint8` 27.
   expect(evaluated('String(typeof (1 is 1));')).toBe('boolean');
-  // Sealed-class exhaustiveness, which the clause names beside enums.
-  expect(outcome('class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('ACCEPTED');
+  // Sealed-class exhaustiveness landed - see below.
+});
+
+
+test('a SEALED class is a closed set too', () => {
+  // README: "A `sealed` class restricts `extends` to the module that declares
+  // it. The set of direct subclasses is therefore FIXED AND KNOWN when the
+  // module finishes evaluating." There is no `permits` clause to read - the set
+  // is whatever the declaration list holds.
+  const outcome8 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  const S = 'sealed class S {} class T extends S {} class U extends S {} ';
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('TypeError');
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; default: 0; }; } f(new T());`)).toBe('ACCEPTED');
+  // A guarded arm proves nothing, for the same reason it proves nothing over an
+  // enum: the checker does not evaluate guards.
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U if (true): 2; }; } f(new T());`)).toBe('TypeError');
+  // An UNSEALED base is not a closed set, so nothing is required of it - which
+  // is what says the check reads `sealed` rather than any class hierarchy.
+  expect(outcome8('class B {} class C extends B {} function f(b: B) { return match (b) { when C: 1; }; } f(new C());')).toBe('ACCEPTED');
+});
+
+test('PINNED: the shape a class instance type carries', () => {
+  // A class instance type carries a `Declaration` NODE, not a `Name` - and an
+  // earlier attempt at this check looked for a name, found nothing, and was
+  // SILENTLY INERT: every probe returned ACCEPTED including the one that should
+  // have failed. It was reverted rather than shipped, because inert code that
+  // looks implemented is worse than an open gap.
+  //
+  // Keying by node also settles shadowing for free, which a name could not.
+  const outcome9 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  expect(outcome9('sealed class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('ACCEPTED');
+  // A subclass declared BEFORE its sealed base is still collected, since the
+  // set is fixed when the MODULE finishes rather than when a declaration is
+  // reached - which is why the linking is a second pass.
+  expect(outcome9('class T extends S {} sealed class S {} class U extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('TypeError');
 });
