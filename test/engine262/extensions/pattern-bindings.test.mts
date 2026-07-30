@@ -67,7 +67,8 @@ test('PINNED: the checker half of phase five', () => {
   // EXHAUSTIVENESS extending `check.mts`'s SwitchStatement machinery. A bound
   // name currently types loosely rather than as the pattern established.
   expect(evaluated('String(typeof (1 is 1));')).toBe('boolean');
-  // A `match` over an enum still needs a `default`, since exhaustiveness is not
-  // yet read from the clauses.
-  expect(outcome('enum E { A, B } function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);')).toBe('ACCEPTED');
+  // EXHAUSTIVENESS landed - match-exhaustiveness.test.mts owns it. This pin
+  // had asserted a fully-covered enum was ACCEPTED, which stayed true for a
+  // DIFFERENT reason once the check arrived, so it never noticed: a pin on a
+  // case the change does not alter is not a pin at all.
 });

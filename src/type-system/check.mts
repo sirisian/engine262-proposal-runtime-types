@@ -2687,6 +2687,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         frames[frames.length - 1].enums.set(n.BindingIdentifier.name, { names });
         return;
       }
+      case 'MatchExpression': {
+        // proposal-runtime-types `sec-match-exhaustiveness`: "A `match` over an
+        // enum-typed or sealed-class-typed subject is exhaustive under the same
+        // rules a `switch` is, and this clause adds no new ones - it SHARES
+        // them." So this reads the same enum-name table the `SwitchStatement`
+        // case does rather than building a second one.
+        const me = n as ParseNode.MatchExpression;
+        walk(me.Expression as ParseNode);
+        me.Clauses.forEach((clause) => {
+          if (clause.Guard) {
+            walk(clause.Guard as ParseNode);
+          }
+          walk(clause.Body as ParseNode);
+        });
+        const subject = me.Expression;
+        const subjectName = subject.type === 'IdentifierReference' ? (subject as { name: string }).name : null;
+        const matchEnumName = subjectName ? lookupEnumBinding(subjectName) : null;
+        const matchInfo = matchEnumName ? lookupEnum(matchEnumName) : null;
+        if (matchInfo) {
+          const covered = new Set<string>();
+          let hasDefault = false;
+          for (const clause of me.Clauses) {
+            if (clause.Pattern === null) {
+              hasDefault = true;
+              continue;
+            }
+            // "A GUARDED ARM PROVES NOTHING, since the checker does not evaluate
+            // guards" - so a guarded clause does not count towards coverage
+            // however exhaustive its pattern looks.
+            if (clause.Guard) {
+              continue;
+            }
+            const pattern = clause.Pattern;
+            if (pattern.type !== 'MatchTypePattern') {
+              continue;
+            }
+            // `E.A` as a PATTERN is a |TypeReference| whose |TypeName| carries
+            // an IdentifierReference and a list of MemberNames - NOT the
+            // MemberExpression shape a switch CASE LABEL has, which is an
+            // expression. The same enumerator spelled in the two positions
+            // reaches the checker as two different node shapes, and reading the
+            // label shape here found nothing: every clause looked uncovered and
+            // an exhaustive `match` was reported as missing every member.
+            const label = pattern.Type as unknown as {
+              TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly { name: string }[] },
+            };
+            const typeName = label.TypeName;
+            const labelEnum = typeName?.IdentifierReference?.name;
+            const members = typeName?.MemberNames ?? [];
+            if (labelEnum === matchEnumName && members.length === 1) {
+              const member = members[0]!.name;
+              if (matchInfo.names.includes(member)) {
+                covered.add(member);
+              }
+            }
+          }
+          if (!hasDefault) {
+            const missing = matchInfo.names.filter((nm) => !covered.has(nm));
+            if (missing.length > 0) {
+              const completion = Throw.TypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        return;
+      }
       case 'SwitchStatement': {
         // proposal-runtime-types (spec sec-enums, sec-narrowing): a switch over an
         // enumerator must label its cases with enumerators of that enum, and a

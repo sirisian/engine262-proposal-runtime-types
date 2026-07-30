@@ -677,6 +677,7 @@ export interface Throw {
   | 'Unsupported import attribute "$1"'
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
+  | 'a do expression may not end in $1'
   | 'a meta declaration requires a $1 hook'
   | 'a string is not a conversion source for $1; use its parse or tryParse'
   | 'a using declaration cannot be typed $1, whose values carry no disposal method'
@@ -758,8 +759,10 @@ export interface Throw {
   | 'The return value ($1) of the next() on an iterator ($2) must be an object'
   | 'The return value ($1) of the return() on an iterator ($2) must be an object'
   | 'The return value ($1) of the throw() on an iterator ($2) must be an object'
+  | 'a $1 annotation is not a $2'
   | 'a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them'
   | 'getter ($1) in a property descriptor $2 must be a function'
+  | 'match over enum $1 is missing $2 and has no default'
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'
   , $1: Formattable, $2: Formattable): ThrowCompletion;
