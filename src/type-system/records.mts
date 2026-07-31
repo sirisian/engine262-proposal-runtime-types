@@ -375,6 +375,12 @@ const libraryTypeNames = new Set([
   // generator returns or what a yield expression evaluates to.
   'Generator', 'AsyncGenerator',
   // proposal-runtime-types #sec-iteration-types.
+  // proposal-runtime-types #sec-iteration-types: the carrier the helper methods
+  // return. NOT the name a user writes - `Iterator.<T>` stays the interface, so
+  // a hand-written iterator still satisfies it - and it exists so a chain's
+  // next step has a receiver carrying its element type, which an interface
+  // record cannot do. Declared to implement the same interfaces.
+  'IteratorHelper', 'AsyncIteratorHelper',
   'IteratorResult', 'Iterable', 'IterableIterator',
   'AsyncIterable', 'AsyncIterableIterator',
 ]);

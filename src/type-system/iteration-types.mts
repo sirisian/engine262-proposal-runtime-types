@@ -195,6 +195,18 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
     iterationInterfaceRecord('AsyncIterator', a)!,
     iterationInterfaceRecord('AsyncIterable', [a[0]])!,
   ],
+  // The carrier the helpers return, declared to implement exactly what a
+  // generator does so a chain assigns to any of the protocols.
+  IteratorHelper: (a) => [
+    iterationInterfaceRecord('IterableIterator', a)!,
+    iterationInterfaceRecord('Iterator', a)!,
+    iterationInterfaceRecord('Iterable', [a[0]])!,
+  ],
+  AsyncIteratorHelper: (a) => [
+    iterationInterfaceRecord('AsyncIterableIterator', a)!,
+    iterationInterfaceRecord('AsyncIterator', a)!,
+    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
+  ],
   Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
   Map: (a) => [iterationInterfaceRecord('Iterable', [
     { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,

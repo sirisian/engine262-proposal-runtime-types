@@ -1345,7 +1345,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // every case, which is what the shared shorthand guarantees.
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
               && (receiver.LibraryName === 'Generator' || receiver.LibraryName === 'AsyncGenerator'
-                || receiver.LibraryName === 'Iterator' || receiver.LibraryName === 'AsyncIterator')) {
+                || receiver.LibraryName === 'IteratorHelper' || receiver.LibraryName === 'AsyncIteratorHelper')) {
             const first = receiver.Arguments[0];
             if (first !== undefined && typeof first !== 'number') {
               const sig = iteratorMethodSignature((m.IdentifierName as { name: string }).name, first);
@@ -2180,21 +2180,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } as unknown as Known);
     // (value, index) => U, the shape every helper callback takes.
     const cb = (ret: TypeRecord) => fn([element, u32], ret);
-    // An interface record, which means a chain's SECOND helper cannot find the
-    // element type: an interface carries members, not arguments, and the
-    // member-access dispatch below keys on a nominal's [[Arguments]].
-    //
-    // Returning the CLASS instead would fix that - it is what the run time
-    // returns, and the declared-implements table would carry it to the
-    // interfaces - but registering `Iterator` as a library type name makes the
-    // NAME resolve to the class in annotation position too, and a hand-written
-    // `{ next() { … } }` then stops satisfying `Iterator.<T>`. That was tried
-    // and reverted; three tests caught it.
-    //
-    // The shape that works is a library name the helpers return which is not
-    // the name users write - an internal `IteratorHelper` carrying the element,
-    // declared to implement the same interfaces. That is the next step here.
-    const iteratorOf = (t: TypeRecord) => iterationInterfaceRecord('IterableIterator', [t])!;
+    // The carrier, not the interface: a chain's next step needs a receiver
+    // carrying its element type, and an interface record carries members rather
+    // than arguments. `IteratorHelper` is a library name users do not write, so
+    // `Iterator.<T>` stays the interface a hand-written iterator satisfies.
+    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidTypeRecord, voidTypeRecord])!;
     switch (name) {
       case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
       case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));

@@ -132,12 +132,7 @@ test('a mistyped chain fails at the annotation rather than silently', () => {
   // satisfy every annotation.
   const g = 'function* g(): uint8 { yield 1; } ';
   expect(ok(`${g}const a: [].<string> = g().toArray();`)).toBe(false);
-  // A chain of TWO helpers does not yet carry its element type: the first
-  // helper returns an interface record, and an interface carries members rather
-  // than arguments, so the second cannot find the element. The comment on
-  // `iteratorOf` in check.mts records the shape that fixes it and why the
-  // obvious fix - returning the class - was tried and reverted.
-  // expect(ok(`${g}const a: [].<string> = g().filter((x) => x > 1).toArray();`)).toBe(false);
+  expect(ok(`${g}const a: [].<string> = g().filter((x) => x > 1).toArray();`)).toBe(false);
 });
 
 test('the terminal helpers have their own types', () => {
@@ -145,4 +140,28 @@ test('the terminal helpers have their own types', () => {
   expect(ok(`${g}const a: boolean = g().some((x) => x > 0);`)).toBe(true);
   expect(ok(`${g}const a: boolean = g().every((x) => x > 0);`)).toBe(true);
   expect(ok(`${g}const a: string = g().some((x) => x > 0);`)).toBe(false);
+});
+
+test('a chain of several helpers carries its element type', () => {
+  // What the carrier exists for. Each helper returns a record holding the
+  // element, so the next one can find it; an interface record carries members
+  // rather than arguments and the chain went permissive after one step.
+  const g = 'function* g(): uint8 { yield 1; yield 2; } ';
+  expect(ok(`${g}const a: [].<uint8> = g().filter((x) => x > 1).take(1).toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<string> = g().filter((x) => x > 1).take(1).toArray();`)).toBe(false);
+
+  // And a chain is still one of the protocols, through the declared-implements
+  // table - the carrier is an implementation detail, not a leak into the types
+  // a program writes.
+  expect(ok(`${g}const a: Iterable.<uint8> = g().filter((x) => x > 1);`)).toBe(true);
+  expect(ok(`${g}const a: IterableIterator.<uint8> = g().take(1);`)).toBe(true);
+});
+
+test('the carrier does not displace the interface reading', () => {
+  // The regression the first attempt caused: reaching the carrier by
+  // registering `Iterator` as a library name made the NAME resolve to it in
+  // annotation position, and hand-written iterators stopped satisfying
+  // `Iterator.<T>`. A separate name is what keeps both true at once.
+  expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
 });
