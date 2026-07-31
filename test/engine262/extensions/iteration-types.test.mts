@@ -9,7 +9,7 @@ import { ok, evaluated } from '../readme/harness.mts';
  * member-access site, so it has no structural form to compare against an
  * interface. The declared-implements table is what makes a generator an
  * iterable iterator, and the entries in that table are exactly the assertions
- * in this file â€” which is the point of writing them here, since a
+ * in this file — which is the point of writing them here, since a
  * hand-maintained table of claims is only as true as its tests.
  */
 
@@ -29,7 +29,7 @@ test('a hand-written object satisfies Iterator', () => {
 });
 
 test('the shorthand interns', () => {
-  // Not merely assignable â€” the same interned type. A shorthand producing an
+  // Not merely assignable — the same interned type. A shorthand producing an
   // equal-but-distinct record would pass an assignability check and fail this.
   expect(ok('const a: boolean = Iterator.<uint8> === Iterator.<uint8, void, void>;')).toBe(true);
 });
@@ -64,8 +64,8 @@ test('no per-collection iteration types', () => {
 
 test('the iteration types are values, so they work on object-literal initializers', () => {
   // The last blocker, and the control that found it. Contextually typing an
-  // object literal RESOLVES ITS ANNOTATION AS A VALUE Ã¢â‚¬â€� the type has to be in
-  // hand before the literal is checked against it Ã¢â‚¬â€� so a name with no binding
+  // object literal RESOLVES ITS ANNOTATION AS A VALUE — the type has to be in
+  // hand before the literal is checked against it — so a name with no binding
   // was undefined there while the same annotation on a parameter resolved
   // through a resolver and worked. `Iterator` was the one member of the family
   // that worked, and it differed in nothing except being a real global, which

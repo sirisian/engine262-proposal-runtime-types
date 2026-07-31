@@ -111,3 +111,28 @@ test('generics: a class type parameter reaches a field annotation', () => {
  * at the call, and the frame pushed here covers field evaluation only. The same
  * frame needs pushing where a method's signature is resolved.
  */
+
+/**
+ * The method-call fix: attempted, reverted, and what it taught.
+ *
+ * Binding the enclosing class's type parameters in InferGenericCallBindings
+ * makes a generic class's method callable - `new B.<uint8>().m(1)` goes from
+ * "T is not defined" to working. Two things have to be right about it, and the
+ * second was not.
+ *
+ * The parameters must be bound to `any`, NOT to opaque ~parameter~ records. At
+ * the call the parameter has a binding, and substituting it is the
+ * specialization work; an opaque parameter resolves the name and then refuses
+ * every argument, since nothing is assignable to a parameter. That is stricter
+ * than correct rather than looser - "T is not defined" becomes "1 is not
+ * assignable to parameter", which breaks code that works rather than code that
+ * does not.
+ *
+ * And the walk to the enclosing parameters must stop at a CLASS. Walking to any
+ * enclosing declaration carrying type parameters caught a parameterized
+ * `primitive` block's operators, bound their parameters to `any`, and broke
+ * operator declaration per parameterization. One test caught it, which is why
+ * this is reverted rather than committed. The fix is a narrower predicate, not
+ * a shorter walk: a walk up the parent chain finds more than the case it was
+ * written for.
+ */
