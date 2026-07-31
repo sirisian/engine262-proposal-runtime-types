@@ -56,6 +56,7 @@ import {
 } from '#self';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
+import { anyType } from '../type-system/records.mts';
 import {
   Assert,
   Call,
@@ -2081,6 +2082,55 @@ function DeclaredConstantOf(init: { type?: string, value?: unknown } | null | un
   return Value.undefined;
 }
 
+/**
+ * The FUNCTION type of a method, getter or setter declaration - its parameters
+ * and its return - which is what decorators.md's `type` field on those contexts
+ * holds. *undefined* where the declaration annotates nothing.
+ */
+function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeRecord | undefined> {
+  const n = node as {
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+    PropertySetParameterList?: readonly ParseNode[] | null,
+    FormalParameters?: readonly ParseNode[] | null,
+    TypeAnnotation?: { Type?: ParseNode } | null,
+  };
+  const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  const Parameters = [];
+  let annotated = false;
+  for (const formal of formals) {
+    const binding = formal as {
+      BindingIdentifier?: { name?: string } | null,
+      TypeAnnotation?: { Type?: ParseNode } | null,
+    };
+    let paramType: TypeRecord = anyType;
+    if (binding.TypeAnnotation?.Type) {
+      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(binding.TypeAnnotation.Type as never));
+      if (t.Type === 'normal') {
+        paramType = t.Value as unknown as TypeRecord;
+        annotated = true;
+      }
+    }
+    Parameters.push({
+      Name: binding.BindingIdentifier?.name ?? '',
+      Type: paramType,
+      Optional: false,
+      Rest: false,
+    });
+  }
+  let Return: TypeRecord | null = null;
+  if (n.TypeAnnotation?.Type) {
+    const t = EnsureCompletion(yield* TypeNodeToTypeRecord(n.TypeAnnotation.Type as never));
+    if (t.Type === 'normal') {
+      Return = t.Value as unknown as TypeRecord;
+      annotated = true;
+    }
+  }
+  if (!annotated) {
+    return undefined;
+  }
+  return { Kind: 'function', Signatures: [{ Parameters, Return }] } as TypeRecord;
+}
+
 export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -2092,17 +2142,19 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   if (kind === 'ClassMethod' || kind === 'ClassOperator') {
     X(CreateDataProperty(context, Value('abstract'), Value.false));
   }
-  // decorators.md's `ClassMethodReflection` gives `type` - the method's declared
-  // RETURN type. This builder took no NODE at all, which is why it could not
-  // report it: it was handed a kind, a key and a flag, none of which knows the
-  // declaration.
+  // decorators.md: `ClassMethodReflection<T extends (...args) => any>` has
+  // `type: T`, and `ClassGetterReflection` has `type: () => T`. **Both are the
+  // member's FUNCTION type, not its return type** - easy to miss, and missed
+  // here in cycle 197, which reported the RETURN type and so made a getter's
+  // `type` indistinguishable from its RETURN sub-target's.
+  //
+  // A member that annotates nothing reports nothing, rather than a function
+  // type of all-`any` - so "unannotated" stays distinguishable from "annotated
+  // as any".
   if (node) {
-    const returnType = (node as { TypeAnnotation?: { Type?: ParseNode } | null }).TypeAnnotation?.Type;
-    if (returnType) {
-      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(returnType as never));
-      if (t.Type === 'normal') {
-        X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
-      }
+    const fnType = Q(yield* MemberFunctionTypeRecord(node));
+    if (fnType) {
+      X(CreateDataProperty(context, Value('type'), GetTypeObject(fnType, realm) as Value));
     }
   }
   // decorators.md: "signatures: [].<FunctionSignatureReflection> - Length 1 when
@@ -2270,7 +2322,11 @@ export function* ApplySubTargetDecorators(node: ParseNode, ownerKind: string, ow
     Q(yield* ApplyDecorators(decorators, Q(yield* SubTargetContext(kinds.parameter, i, ownerKind, ownerName, classCtor, parameters[i]))));
   }
   if (n.TypeAnnotation?.Decorators && n.TypeAnnotation.Decorators.length > 0) {
-    Q(yield* ApplyDecorators(n.TypeAnnotation.Decorators, Q(yield* SubTargetContext(kinds.ret, -1, ownerKind, ownerName, classCtor))));
+    // decorators.md's `ClassMethodReturnReflection` and its siblings give the
+    // RETURN sub-target a `type` - the annotated type ITSELF, where the owning
+    // member's `type` is the whole function type. Passing the annotation node
+    // is what lets the two differ, which is the distinction the pair exists for.
+    Q(yield* ApplyDecorators(n.TypeAnnotation.Decorators, Q(yield* SubTargetContext(kinds.ret, -1, ownerKind, ownerName, classCtor, n.TypeAnnotation as unknown as ParseNode))));
   }
   return undefined;
 }
@@ -2292,7 +2348,17 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
   // `initial` beside `index`. The builder took no NODE, so it could report only
   // what its arguments carried - the same gap the method context had, and the
   // parameter node was sitting in the loop that calls this.
-  if (node) {
+  if (node && index < 0) {
+    // A RETURN sub-target: the node IS the annotation, and `type` is the
+    // annotated type itself.
+    const annotation = node as { Type?: ParseNode };
+    if (annotation.Type) {
+      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type as never));
+      if (t.Type === 'normal') {
+        X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+      }
+    }
+  } else if (node) {
     const binding = node as {
       BindingIdentifier?: { name?: string } | null,
       TypeAnnotation?: { Type?: ParseNode } | null,

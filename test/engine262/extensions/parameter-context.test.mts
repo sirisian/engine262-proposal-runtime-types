@@ -42,11 +42,13 @@ test('the rest of the sub-target family is unchanged', () => {
   // `index` still identifies WHICH parameter.
   expect(evaluated('(() => { let i; function g(c) { i = c.index; } '
     + 'class A { m(a: uint8, @g x: uint32) {} } return String(i); })();')).toBe('1');
-  // A RETURN sub-target carries no index and gains none of these - "a parameter
-  // carries its `index`; a return does not, which is what distinguishes the two
-  // beyond the context type".
+  // A RETURN sub-target carries no index - "a parameter carries its `index`; a
+  // return does not, which is what distinguishes the two beyond the context
+  // type" - and no `name` or `initial`, which a return has not got. It DOES
+  // carry `type`: the annotated type itself, where the owning member's `type`
+  // is the whole FUNCTION type.
   expect(evaluated('(() => { let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } '
-    + 'class A { m(): @g uint8 { return uint8(1); } } return f; })();')).toBe('kind,metadata,methodContext');
+    + 'class A { m(): @g uint8 { return uint8(1); } } return f; })();')).toBe('kind,type,metadata,methodContext');
 });
 
 test('a parameter carries METADATA, keyed by method AND position', () => {

@@ -9,20 +9,28 @@ import { evaluated } from '../readme/harness.mts';
  * kind, a key and a flag, none of which knows the declaration.
  */
 
-test('a method context reports its declared RETURN type', () => {
-  expect(evaluated('(() => { let t; function g(c) { t = c.type; } '
-    + 'class A { @g m(): uint8 { return uint8(1); } } return String(t === (type uint8)); })();')).toBe('true');
-  // A DIFFERENT return type is reported as itself, which is what says the
-  // annotation is read rather than a constant returned.
-  expect(evaluated('(() => { let t; function g(c) { t = c.type; } '
-    + 'class A { @g m(): string { return ""; } } return String(t === (type string)); })();')).toBe('true');
-  expect(evaluated('(() => { let t; function g(c) { t = c.type; } '
-    + 'class A { @g m(): string { return ""; } } return String(t === (type uint8)); })();')).toBe('false');
-  // An UNANNOTATED method reports *undefined* rather than inventing a type.
-  expect(evaluated('(() => { let t = "X"; function g(c) { t = String(c.type); } '
-    + 'class A { @g m() {} } return t; })();')).toBe('undefined');
+test('a method context reports its FUNCTION type', () => {
+  // decorators.md: `ClassMethodReflection<T extends (...args) => any>` has
+  // `type: T`, and `ClassGetterReflection` has `type: () => T`. BOTH ARE THE
+  // MEMBER'S FUNCTION TYPE, not its return type - which cycle 197 got wrong,
+  // reporting the return and so making a getter's `type` indistinguishable from
+  // its RETURN sub-target's.
+  expect(evaluated('type F = (x: uint32) => uint8; let r; function g(c) { r = String(c.type === (type F)); } '
+    + 'class A { @g m(x: uint32): uint8 { return uint8(1); } } r;')).toBe('true');
+  // The discriminating assertion: it is NOT the return type.
+  expect(evaluated('let r; function g(c) { r = String(c.type === (type uint8)); } '
+    + 'class A { @g m(x: uint32): uint8 { return uint8(1); } } r;')).toBe('false');
+  // A GETTER's is `() => T`, which is what makes it differ from its RETURN
+  // sub-target, whose `type` is T itself.
+  expect(evaluated('type G = () => uint8; let r; function g(c) { r = String(c.type === (type G)); } '
+    + 'class A { @g get s(): uint8 { return uint8(1); } } r;')).toBe('true');
+  expect(evaluated('let r; function g(c) { r = String(c.type === (type uint8)); } '
+    + 'class A { m(): @g uint8 { return uint8(1); } } r;')).toBe('true');
+  // A member that annotates NOTHING reports nothing, rather than a function
+  // type of all-`any` - so "unannotated" stays distinguishable from "annotated
+  // as any".
+  expect(evaluated('let r; function g(c) { r = String(c.type); } class A { @g m() {} } r;')).toBe('undefined');
 });
-
 test('the rest of the method context is unchanged', () => {
   expect(evaluated('(() => { let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } '
     + 'class A { @g m(): uint8 { return uint8(1); } } return f; })();'))
