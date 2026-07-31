@@ -108,3 +108,41 @@ test('a class instance and a hand-written object both satisfy Iterator', () => {
   expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
   expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
 });
+
+/**
+ * PLAN-iteration-types-engine.md phase 5: the helper surface.
+ *
+ * The helpers live on the `Iterator` class at run time and are reached here
+ * from whatever the receiver's type is, because the receiver's static type is
+ * the protocol rather than the class - a hand-written iterator has to satisfy
+ * the same annotation. `map` is the method that changes the element type and
+ * `toArray` is the one that leaves the family; the rest follow those two.
+ */
+
+test('a helper chain carries the element type', () => {
+  const g = 'function* g(): uint8 { yield 1; yield 2; } ';
+  expect(ok(`${g}const a: [].<uint8> = g().toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<uint8> = g().filter((x) => x > 1).toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<uint8> = g().take(1).toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<uint8> = g().drop(1).toArray();`)).toBe(true);
+});
+
+test('a mistyped chain fails at the annotation rather than silently', () => {
+  // What keeps the four above from passing vacuously: an untyped chain would
+  // satisfy every annotation.
+  const g = 'function* g(): uint8 { yield 1; } ';
+  expect(ok(`${g}const a: [].<string> = g().toArray();`)).toBe(false);
+  // A chain of TWO helpers does not yet carry its element type: the first
+  // helper returns an interface record, and an interface carries members rather
+  // than arguments, so the second cannot find the element. The comment on
+  // `iteratorOf` in check.mts records the shape that fixes it and why the
+  // obvious fix - returning the class - was tried and reverted.
+  // expect(ok(`${g}const a: [].<string> = g().filter((x) => x > 1).toArray();`)).toBe(false);
+});
+
+test('the terminal helpers have their own types', () => {
+  const g = 'function* g(): uint8 { yield 1; } ';
+  expect(ok(`${g}const a: boolean = g().some((x) => x > 0);`)).toBe(true);
+  expect(ok(`${g}const a: boolean = g().every((x) => x > 0);`)).toBe(true);
+  expect(ok(`${g}const a: string = g().some((x) => x > 0);`)).toBe(false);
+});

@@ -182,6 +182,19 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
     iterationInterfaceRecord('AsyncIterator', a)!,
     iterationInterfaceRecord('AsyncIterable', [a[0]])!,
   ],
+  // The helper methods return the CLASS - which is what the run time returns -
+  // and it satisfies the protocols through this table, so a chain stays on a
+  // record that carries its element type and the next helper can find it.
+  Iterator: (a) => [
+    iterationInterfaceRecord('IterableIterator', a)!,
+    iterationInterfaceRecord('Iterator', a)!,
+    iterationInterfaceRecord('Iterable', [a[0]])!,
+  ],
+  AsyncIterator: (a) => [
+    iterationInterfaceRecord('AsyncIterableIterator', a)!,
+    iterationInterfaceRecord('AsyncIterator', a)!,
+    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
+  ],
   Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
   Map: (a) => [iterationInterfaceRecord('Iterable', [
     { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,

@@ -7,6 +7,7 @@ import {
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
+import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
@@ -1339,6 +1340,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return sig;
             }
           }
+          // An iterating receiver: a Generator, an AsyncGenerator, or one of the
+          // iteration interfaces. The element is the first type argument in
+          // every case, which is what the shared shorthand guarantees.
+          if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
+              && (receiver.LibraryName === 'Generator' || receiver.LibraryName === 'AsyncGenerator'
+                || receiver.LibraryName === 'Iterator' || receiver.LibraryName === 'AsyncIterator')) {
+            const first = receiver.Arguments[0];
+            if (first !== undefined && typeof first !== 'number') {
+              const sig = iteratorMethodSignature((m.IdentifierName as { name: string }).name, first);
+              if (sig) {
+                return sig;
+              }
+            }
+          }
           // The same for a typed COLLECTION, which reaches the checker as the
           // nominal its annotation resolved to, carrying its type arguments.
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
@@ -2140,6 +2155,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return Members.length === 1 ? Members[0]! : { Kind: 'union', Members };
     });
+  };
+
+  /**
+   * The iterator helper methods, on a receiver that iterates.
+   *
+   * #sec-iteration-types. These live on the `Iterator` class at run time, and
+   * are reached here from whatever the receiver's type is - a `Generator`, an
+   * `Iterator`, or anything else the declared-implements table says iterates -
+   * because the receiver's static type is the protocol rather than the class
+   * (a hand-written iterator has to satisfy the annotation too).
+   *
+   * `map` is the method that CHANGES the element type, so its callback's return
+   * is what every downstream step infers from; `toArray` is the one that leaves
+   * the family. The rest keep the element and follow those two.
+   */
+  const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
+    const boolType = makePrimitive('boolean');
+    const u32 = builtinTypeRecord('uint', [32])!;
+    const anyT = { Kind: 'any' as const } as TypeRecord;
+    const fn = (params: TypeRecord[], Return: TypeRecord) => ({
+      Kind: 'function',
+      Signatures: [{ Parameters: params.map((t, i) => parameter(t, { Name: `a${i}` })), Return, Untyped: false }],
+    } as unknown as Known);
+    // (value, index) => U, the shape every helper callback takes.
+    const cb = (ret: TypeRecord) => fn([element, u32], ret);
+    // An interface record, which means a chain's SECOND helper cannot find the
+    // element type: an interface carries members, not arguments, and the
+    // member-access dispatch below keys on a nominal's [[Arguments]].
+    //
+    // Returning the CLASS instead would fix that - it is what the run time
+    // returns, and the declared-implements table would carry it to the
+    // interfaces - but registering `Iterator` as a library type name makes the
+    // NAME resolve to the class in annotation position too, and a hand-written
+    // `{ next() { … } }` then stops satisfying `Iterator.<T>`. That was tried
+    // and reverted; three tests caught it.
+    //
+    // The shape that works is a library name the helpers return which is not
+    // the name users write - an internal `IteratorHelper` carrying the element,
+    // declared to implement the same interfaces. That is the next step here.
+    const iteratorOf = (t: TypeRecord) => iterationInterfaceRecord('IterableIterator', [t])!;
+    switch (name) {
+      case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
+      case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
+      case 'take':
+      case 'drop': return fn([u32], iteratorOf(element));
+      case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
+      case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
+      case 'forEach': return fn([cb(voidTypeRecord) as TypeRecord], voidTypeRecord);
+      case 'some':
+      case 'every': return fn([cb(boolType) as TypeRecord], boolType);
+      case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidTypeRecord] } as unknown as TypeRecord);
+      case 'reduce': return fn([fn([anyT, element, u32], anyT) as TypeRecord, anyT], anyT);
+      default: return null;
+    }
   };
 
   const collectionMethodSignature = (library: string, name: string, args: readonly (TypeRecord | number)[], receiver: TypeRecord): Known => {
