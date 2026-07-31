@@ -935,9 +935,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // numeric (`int.<8>`) or a library type (`RegExp.<C, G>`, `Promise.<T>`,
           // `Map.<K, V>`). Without the library fallback a `RegExp.<C, G>` annotation
           // resolves to nothing here and its capture checking never runs.
-          return builtinTypeRecord(node.TypeName.IdentifierReference.name, args)
-            ?? iterationInterfaceRecord(node.TypeName.IdentifierReference.name, args)
-            ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
+          const parameterizedName = node.TypeName.IdentifierReference.name;
+          const builtinOrLibrary = builtinTypeRecord(parameterizedName, args)
+            ?? iterationInterfaceRecord(parameterizedName, args)
+            ?? libraryTypeRecord(parameterizedName, args);
+          if (builtinOrLibrary) {
+            return builtinOrLibrary;
+          }
+          // proposal-runtime-types #sec-generics: a USER class applied in an
+          // annotation - `A.<uint16>` - reached none of the above and resolved
+          // to nothing, so the arguments were dropped on this side too. Both
+          // sides dropping them is why `const x: A.<uint16> = new A.<uint8>()`
+          // matched: two empty argument lists agree.
+          const userClass = classTypeOf(parameterizedName);
+          if (userClass && userClass.Kind === 'nominal') {
+            return CanonicalizeType({ ...userClass, Arguments: args });
+          }
+          return userClass;
         }
         const name = node.TypeName.IdentifierReference.name;
         return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
@@ -1425,6 +1439,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
         if (target && target.type === 'IdentifierReference') {
           return classTypeOf((target as { name: string }).name);
+        }
+        // proposal-runtime-types #sec-generics: `new A.<uint8>()` is an
+        // instance of the APPLICATION, not of the bare class. The arguments
+        // were parsed and then dropped here, so the instance's type carried an
+        // empty argument list and `const x: A.<uint16> = new A.<uint8>()` had
+        // nothing to disagree with. Comparison needed no change: SameArgumentList
+        // already refuses a mismatch, which every library generic relies on.
+        if (target && target.type === 'TypeArgumentsExpression') {
+          const spec = target as unknown as {
+            Expression: ParseNode, TypeArguments: { TypeArgumentList: readonly ParseNode[] },
+          };
+          if (spec.Expression.type === 'IdentifierReference') {
+            const base = classTypeOf((spec.Expression as unknown as { name: string }).name);
+            if (base && base.Kind === 'nominal') {
+              const args = spec.TypeArguments.TypeArgumentList
+                .map((a) => resolveType(a as unknown as ParseNode.Type))
+                .filter((a): a is TypeRecord => !!a);
+              if (args.length === spec.TypeArguments.TypeArgumentList.length) {
+                return CanonicalizeType({ ...base, Arguments: args });
+              }
+            }
+            return base;
+          }
         }
         return null;
       }

@@ -175,8 +175,32 @@ test('generics: a method of a generic class is callable', () => {
  * written for.
  */
 
+test('generics: an application is a distinct type', () => {
+  // generics.md: "Each application - A.<uint8>, A.<uint16> - is a distinct type
+  // with its own type object." Both sides had been dropping their arguments, so
+  // two empty argument lists agreed and every application matched every other.
+  const A = 'class A<T> { m(v: T) {} } ';
+  expect(ok(`${A}const x: A.<uint8> = new A.<uint8>();`)).toBe(true);
+  expect(ok(`${A}const x: A.<uint16> = new A.<uint8>();`)).toBe(false);
+});
+
+test('generics: a user generic is invariant', () => {
+  // Asserted for a USER class. Invariance was only ever tested through a
+  // library type before, which reaches a different path.
+  expect(ok(`
+    class S {} class C extends S {}
+    class Box<T> { m(v: T) {} }
+    const b: Box.<S> = new Box.<C>();
+  `)).toBe(false);
+  expect(ok(`
+    class S {}
+    class Box<T> { m(v: T) {} }
+    const b: Box.<S> = new Box.<S>();
+  `)).toBe(true);
+});
+
 /**
- * PHASE 3 - substitution - narrowed to one missing link.
+ * PHASE 3 - done. Kept for the diagnosis, which was most of the work.
  *
  * `const x: A.<uint16> = new A.<uint8>()` is accepted, and invariance does not
  * hold for a user generic. Neither is a gap in the comparison: nominal argument
