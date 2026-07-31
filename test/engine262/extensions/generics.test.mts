@@ -95,6 +95,8 @@ test('generics: a class type parameter reaches a field annotation', () => {
   expect(ok('class B<T> { constructor(v: T) {} }')).toBe(true);
   expect(ok('class B<T> { m(v: T) {} }')).toBe(true);
   expect(ok('class B<T> { m(): T { return null; } }')).toBe(true);
+  expect(ok('class B<T> { get v(): T { return null; } }')).toBe(true);
+  expect(ok('class B<T> { m() { const x: T = null; } }')).toBe(true);
   expect(ok('class P<T> {} class B<T> extends P.<T> {}')).toBe(true);
 });
 
@@ -244,4 +246,29 @@ test('generics: a type parameter is reachable as a value', () => {
   // And an ordinary undefined name still throws, which is what keeps the
   // lookup from swallowing real errors.
   expectThrown('String(nope);');
+});
+
+test('generics: the deferred surface is refused, not silently wrong', () => {
+  // table-extension-hooks defers most of generics.md to the generics
+  // extension. These assert what the engine does with the deferred forms today,
+  // so a change is visible rather than a surprise - and so the markers are
+  // measured rather than assumed.
+
+  // A specialized overload - a second declaration at a concrete argument - is
+  // refused. The message names T, which is not the clearest way to say
+  // "unsupported", and is worth improving when the feature lands.
+  expect(ok(`
+    function f<T>(x: T): T { return x; }
+    function f<uint8>(x: uint8): uint8 { return x; }
+  `)).toBe(false);
+
+  // Generic parameters on a decorator do not parse. This is the form that
+  // appears in generics.md and in neither specification table until phase 1
+  // put it in the hooks row.
+  expect(ok('function d<T>(c: Reflect.ClassField) {} class C { @d.<uint8> f: uint8 = 1; }')).toBe(false);
+
+  // A VALUE type parameter declares, which is worth pinning separately: the
+  // hooks row defers "argument-bound value generics and inference from an
+  // expected type", not the declaration form, and the two are easy to conflate.
+  expect(ok('class A<N: uint32> {}')).toBe(true);
 });
