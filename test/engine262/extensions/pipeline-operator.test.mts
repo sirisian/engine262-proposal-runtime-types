@@ -148,3 +148,21 @@ test('the topic goes where any expression goes', () => {
  * and inference read the topic's type like any argument's, is specified in
  * #sec-pipeline-static-semantics and will be testable when the declarations are.
  */
+
+test('the topic is refused in every binding position, not just assignment', () => {
+  // Each of these is caught by the base grammar rather than by a rule of this
+  // extension — a TopicReference is not a valid assignment target — but the
+  // plan lists them, so they are asserted rather than assumed.
+  expectError('5 |> ([%] = [1]);');
+  expectError('5 |> ({ a: % } = { a: 1 });');
+  expectError('[1] |> (function () { for (% of [1]) {} })();');
+});
+
+test('|> may not be declared as an operator, while % may', () => {
+  // The contrast is what makes this worth pinning. `%` is an ordinary binary
+  // operator a class may give a meaning to; `|>` is not an operation at all —
+  // it binds one operand and evaluates the other, so resolution has nothing to
+  // search the left operand's type for.
+  expectError('class V { operator |>(o: V): V { return o; } }');
+  expect(ok('class V { operator %(o: V): V { return o; } }')).toBe(true);
+});
