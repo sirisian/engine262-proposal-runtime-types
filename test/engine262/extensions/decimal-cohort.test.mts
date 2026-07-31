@@ -174,3 +174,49 @@ test('STAGE B: every other literal is UNAFFECTED', () => {
   expect(evaluated('let b: bigint = 9007199254740993; String(b);')).toBe('9007199254740993');
   expect(evaluated('let u: uint8 = 3; String(u);')).toBe('3');
 });
+
+test('STAGE D: a composite stores the REDUCED cohort member', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // composites.md: "Where the type declares no scale, the REDUCED member is
+  // stored: trailing zeros are stripped, THE ONE MEMBER COMPUTABLE FROM THE
+  // NUMERICAL VALUE ALONE, independent of the width."
+  expect(evaluated(`Composite({ v: ${D('1.00')} }).v.toString();`)).toBe('1');
+  expect(evaluated(`Composite({ v: ${D('19.90')} }).v.toString();`)).toBe('19.9');
+  expect(evaluated(`Composite({ v: ${D('0.00')} }).v.toString();`)).toBe('0');
+  // A value with no trailing zeros is already its own reduced member.
+  expect(evaluated(`Composite({ v: ${D('19.99')} }).v.toString();`)).toBe('19.99');
+});
+
+test('STAGE D: the reduction is what makes the composite ORDER-FREE', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // The argument for reducing rather than keeping what arrived. A composite is
+  // interned by structure, so its contents are OBSERVABLE - and any other rule
+  // makes them depend on which member reached the creation FIRST.
+  //
+  // Python's `Decimal` hashes a dict key by value and keeps whichever
+  // representation was inserted first. That is fine for a dict and wrong here.
+  expect(evaluated(`const a = Composite({ v: ${D('1.00')} }); const b = Composite({ v: ${D('1.0')} }); `
+    + 'a.v.toString() + "," + b.v.toString();')).toBe('1,1');
+  expect(evaluated(`const b = Composite({ v: ${D('1.0')} }); const a = Composite({ v: ${D('1.00')} }); `
+    + 'a.v.toString() + "," + b.v.toString();')).toBe('1,1');
+  // And the two ARE one composite, which is the property the reduction exists
+  // to give: SameValueZero equates the members, so the registry must too.
+  expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: ${D('1.00')} })));`)).toBe('true');
+  // Distinct VALUES stay distinct, and so do distinct WIDTHS - `decimal64` and
+  // `decimal128` are different types, and SameValueZero tells them apart.
+  expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: ${D('2.0')} })));`)).toBe('false');
+  expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: decimal64("1.0") })));`)).toBe('false');
+});
+
+test('PINNED: the SCALE half of the rule has no metadata to read', () => {
+  // "Where the field's type declares a scale, the value arrives at that scale -
+  // quantization at an assignment boundary is the decimal rule, and a
+  // composite's field is such a boundary - so the cohort has collapsed before
+  // interning sees it."
+  //
+  // `DecimalContext` is the primitive-metadata extension's, and does not exist
+  // here - so the quantization never happens and the reduction above is the
+  // only half in force. A money type would keep its two places through this
+  // step once it can be written.
+  expect(evaluated('try { eval("type Cents = decimal128.<{ scale: 2 }>;"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).not.toBe('ACCEPTED');
+});

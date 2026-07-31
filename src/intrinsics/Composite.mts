@@ -16,6 +16,7 @@ import {
   IsArray, Throw, surroundingAgent, CreateBuiltinFunction, ArrayCreate,
   LengthOfArrayLike, skipDebugger,
 } from '#self';
+import { isDecimalObject, ReduceDecimal, CreateDecimalValue } from './Decimal.mts';
 
 
 /**
@@ -77,10 +78,18 @@ export function IsComposite(value: Value): boolean {
  * Objects, and rationals, the last because the type keeps every value in lowest
  * terms.
  *
- * THE DECIMAL STEPS ARE ABSENT DELIBERATELY. The decimal types resolve and
- * annotate in this engine and no value of one can be made, so there is no
- * cohort to reduce; writing the steps would be writing code no value reaches.
- * typed-zero-equality.test.mts pins that absence.
+ * THE DECIMAL STEP (PLAN-decimal.md stage D). composites.md: "Where the type
+ * declares no scale, the REDUCED member is stored: trailing zeros are stripped,
+ * THE ONE MEMBER COMPUTABLE FROM THE NUMERICAL VALUE ALONE, independent of the
+ * width, and the value the hash had to be taken over in any case."
+ *
+ * That last clause is the argument. A composite is interned by structure, so its
+ * stored contents are OBSERVABLE - and any rule other than "reduce" makes them
+ * depend on which member reached the creation first. Python's `Decimal` hashes a
+ * dict key by value and keeps whichever representation was inserted first, which
+ * is fine for a dict and wrong here: `Composite({v: 1.0})` and
+ * `Composite({v: 1.00})` are ONE composite, and what it holds must not depend on
+ * creation order.
  */
 export function CanonicalizeCompositeValue(value: Value): Value {
   // Detected with SameValue against `-0`, NOT by reading a mathematical value:
@@ -99,6 +108,17 @@ export function CanonicalizeCompositeValue(value: Value): Value {
       if (typeof positive === 'function') {
         return positive.call(value, +0);
       }
+    }
+  }
+  // A decimal reduces to the member with no trailing zeros - `1.00` stores as
+  // `1` - which is the representative computable from the numerical value
+  // alone. Where the field's type declares a SCALE, quantization has already
+  // happened at the assignment boundary and the cohort collapsed before
+  // interning saw it, so this step finds nothing left to do.
+  if (isDecimalObject(value)) {
+    const reduced = ReduceDecimal(value.DecimalSignificand, value.DecimalExponent);
+    if (reduced.significand !== value.DecimalSignificand || reduced.exponent !== value.DecimalExponent) {
+      return CreateDecimalValue(reduced.significand, reduced.exponent, value.DecimalWidth, surroundingAgent.currentRealmRecord);
     }
   }
   return value;
@@ -155,6 +175,16 @@ function valueKeyFor(value: Value): string {
     const record = (value as unknown as { TypeRecord?: TypeRecord }).TypeRecord;
     const typeKey = record ? orderKey(record) : '?';
     return `t:${typeKey}:${R(unwrapToNumber(value as TypedNumberValue))}`;
+  }
+  // A DECIMAL keys on its REDUCED member and its WIDTH. The value reaching here
+  // has already been canonicalized, so the reduction is a second application of
+  // an idempotent step rather than a second RULE - but keying on the object
+  // would intern by identity, and two decimals of one value are two objects.
+  // This is the same agreement the typed-number case above records: SameValueZero
+  // tells values apart and the registry must not disagree.
+  if (isDecimalObject(value)) {
+    const reduced = ReduceDecimal(value.DecimalSignificand, value.DecimalExponent);
+    return `d:${value.DecimalWidth}:${reduced.significand}e${reduced.exponent}`;
   }
   if (value instanceof NumberValue) {
     return `n:${R(value as NumberValue)}`;
