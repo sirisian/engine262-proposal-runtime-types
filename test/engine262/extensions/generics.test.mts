@@ -221,3 +221,27 @@ test('generics: a user generic is invariant', () => {
  * instance's type record. The comparison then does the rest for free, and the
  * assertion that will show it is `new B.<uint8>().m('s')`, accepted today.
  */
+
+test('generics: a type parameter is reachable as a value', () => {
+  // sec-generic-parameters-as-values. A type is a value here, so a parameter
+  // bound to one is readable as one inside the declaration - but it is not a
+  // VALUE binding, so ResolveBinding cannot find it and the reference arrives
+  // unresolvable. The parameter frames are where it lives.
+  expect(evaluated(`
+    function f<T>(x: T): boolean { return T === uint8; }
+    const n: uint8 = 1;
+    String(f(n));
+  `)).toBe('true');
+
+  // It is the bound type, not the declared name: an argument of a different
+  // type binds a different T.
+  expect(evaluated(`
+    function f<T>(x: T): boolean { return T === uint8; }
+    const s: uint16 = 1;
+    String(f(s));
+  `)).toBe('false');
+
+  // And an ordinary undefined name still throws, which is what keeps the
+  // lookup from swallowing real errors.
+  expectThrown('String(nope);');
+});

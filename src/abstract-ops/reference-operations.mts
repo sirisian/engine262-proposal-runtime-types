@@ -1,3 +1,5 @@
+import { lookupTypeParameter } from '../type-system/runtime.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
   Value,
@@ -72,6 +74,18 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   }
   // 2. If IsUnresolvableReference(V) is true, throw a ReferenceError exception.
   if (IsUnresolvableReference(V) === Value.true) {
+    // proposal-runtime-types #sec-generic-parameters-as-values: a generic
+    // parameter is reachable AS A VALUE inside its declaration, since a type is
+    // a value here. It is not a value binding, so ResolveBinding cannot find
+    // it and the reference arrives unresolvable; the parameter frames are
+    // where it lives. This is the same lookup a builder-call argument already
+    // performs for a bare parameter name, generalized to any expression.
+    if (surroundingAgent.feature('runtime-types') && typeof V.ReferencedName === 'object' && 'stringValue' in V.ReferencedName) {
+      const bound = lookupTypeParameter((V.ReferencedName as JSStringValue).stringValue());
+      if (bound !== null) {
+        return GetTypeObject(bound);
+      }
+    }
     return Throw.ReferenceError('$1 is not defined', V.ReferencedName);
   }
   // 3. If IsPropertyReference(V) is true, then
