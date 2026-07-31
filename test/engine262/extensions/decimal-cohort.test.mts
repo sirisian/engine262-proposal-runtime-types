@@ -220,3 +220,43 @@ test('PINNED: the SCALE half of the rule has no metadata to read', () => {
   // step once it can be written.
   expect(evaluated('try { eval("type Cents = decimal128.<{ scale: 2 }>;"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).not.toBe('ACCEPTED');
 });
+
+test('STAGE E: a decimal field has the IEEE 754 width and alignment', () => {
+  const R = (f: string, p: string) => `String(Reflect.getReflection.<Reflect.ClassField, C>("${f}").${p})`;
+  // IEEE 754-2008's interchange formats: decimal32 is 4 bytes, decimal64 is 8,
+  // decimal128 is 16. **The width is a property of the TYPE, not of the
+  // representation** - the interpreter holds a BigInt significand and an
+  // exponent, and a laid-out field still occupies the format's bytes.
+  expect(evaluated(`class C { d: decimal32 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('4/4');
+  expect(evaluated(`class C { d: decimal64 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('8/8');
+  expect(evaluated(`class C { d: decimal128 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('16/16');
+  expect(evaluated(`class C { d: decimal128 = 1.0; } ${R('d', 'bitLength')};`)).toBe('128');
+  // And it PARTICIPATES in the layout: a decimal64 after a uint32 aligns to 8.
+  expect(evaluated(`class C { x: uint32 = 0; d: decimal64 = 1.0; } ${R('d', 'offset')};`)).toBe('8');
+});
+
+test('STAGE E: a decimal field stores and reads, cohort intact', () => {
+  // The property that matters for a field: the significance survives storage,
+  // which a double-backed field could not have given.
+  expect(evaluated('class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
+  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); c.d.toString();')).toBe('2.50');
+  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); '
+    + 'String(Object.is(c.d, decimal128("2.50")));')).toBe('true');
+  // A wrong-width value is refused, as any typed field refuses one.
+  expect(evaluated('class C { d: decimal32 = 1.0; } const c = new C(); '
+    + 'try { c.d = decimal128("2.5"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+});
+
+test('PINNED: buffer round-trip is not a DECIMAL question', () => {
+  // A placement view does not read another view's write - and NEITHER DOES A
+  // `float64`, measured. So the buffer round-trip is a pre-existing limitation
+  // of placement in this engine rather than something decimals lack, and
+  // fixing it belongs to whatever owns placement.
+  //
+  // Recorded with its BASELINE beside it, because without the baseline this
+  // reads as a decimal gap and would be chased as one.
+  expect(evaluated('class C { f: float64 = 1; } const b = new ArrayBuffer(64); '
+    + 'const c1 = new C.<placement>(b, 0); c1.f = 7.25; const c2 = new C.<placement>(b, 0); String(c2.f);')).toBe('1');
+  expect(evaluated('class C { d: decimal64 = 1.0; } const b = new ArrayBuffer(64); '
+    + 'const c1 = new C.<placement>(b, 0); c1.d = decimal64("7.25"); const c2 = new C.<placement>(b, 0); c2.d.toString();')).toBe('1.0');
+});
