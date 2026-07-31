@@ -165,3 +165,63 @@ test('the carrier does not displace the interface reading', () => {
   expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
   expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
 });
+
+/**
+ * PLAN-iteration-types-engine.md phase 6: the interactions.
+ *
+ * A type whose purpose is composition is proven by what it composes with. Each
+ * of these worked untyped before; the assertions are that they still work and
+ * now carry a type.
+ */
+
+test('the collections are iterable', () => {
+  // The declared-implements table beyond the generators, which is most of its
+  // value: each of these is true today and was unwritable.
+  expect(ok('const s: Set.<uint8> = new Set(); const i: Iterable.<uint8> = s;')).toBe(true);
+  expect(ok('const m: Map.<string, uint8> = new Map(); const i: Iterable.<[string, uint8]> = m;')).toBe(true);
+  // The element still has to match: a Map iterates entries, not values.
+  expect(ok('const m: Map.<string, uint8> = new Map(); const i: Iterable.<uint8> = m;')).toBe(false);
+});
+
+test('spread and for-of consume a typed iterator', () => {
+  const g = 'function* g(): uint8 { yield 1; yield 2; } ';
+  expect(ok(`${g}const a: [].<uint8> = [...g()];`)).toBe(true);
+  expect(ok(`${g}for (const a: uint8 of g()) {}`)).toBe(true);
+  expect(evaluated(`${g}String([...g()]);`)).toBe('1,2');
+});
+
+test('yield* delegates to an iterable', () => {
+  expect(ok(`
+    function* inner(): uint8 { yield 1; }
+    function* outer(): uint8 { yield* inner(); }
+  `)).toBe(true);
+  expect(evaluated(`
+    function* inner(): uint8 { yield 1; }
+    function* outer(): uint8 { yield* inner(); yield 2; }
+    String([...outer()]);
+  `)).toBe('1,2');
+});
+
+test('a do * generator satisfies the protocols', () => {
+  // It produces a generator, so it satisfies them through the same table entry
+  // and needs no rule of its own.
+  expect(ok('const i: Iterable.<uint8> = do * { yield uint8.parse("1"); };')).toBe(true);
+  expect(evaluated('String([...do * { yield 1; yield 2; }]);')).toBe('1,2');
+});
+
+test('a pipeline carries an iterator through a chain', () => {
+  const g = 'function* g(): uint8 { yield 1; yield 2; } ';
+  expect(ok(`${g}const a: [].<uint8> = g() |> %.take(1) |> %.toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<string> = g() |> %.take(1) |> %.toArray();`)).toBe(false);
+});
+
+/**
+ * One gap, and it is not this feature's.
+ *
+ * `for (const a: string of xs)` is accepted for an `xs` of `[].<uint8>`, so the
+ * loop variable's annotation is not checked against the element type. It
+ * reproduces over a plain array with no iterator type involved, so it predates
+ * this work and is recorded rather than fixed here — but #sec-iteration-types
+ * is what makes it statable, since the rule it needs is that the element is the
+ * `Iterable`'s parameter.
+ */

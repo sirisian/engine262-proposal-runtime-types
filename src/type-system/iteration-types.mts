@@ -208,8 +208,14 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
     iterationInterfaceRecord('AsyncIterable', [a[0]])!,
   ],
   Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
+  // A tuple's Elements are TupleElementRecords, not bare types - built by hand
+  // the entry produced a record nothing matched, and `Map` silently was not
+  // iterable while `Set` was.
   Map: (a) => [iterationInterfaceRecord('Iterable', [
-    { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,
+    {
+      Kind: 'tuple',
+      Elements: [a[0], a[1]].map((t) => ({ Type: t as TypeRecord, Rest: false, Initial: 'none' })),
+    } as unknown as TypeRecord,
   ])!],
 };
 
