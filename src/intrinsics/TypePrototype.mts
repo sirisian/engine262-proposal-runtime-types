@@ -6,6 +6,8 @@ import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols } from '#self';
+import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
+import { surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types: %Type.prototype%, the prototype of every Type
@@ -39,6 +41,25 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
   const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64');
+  // decimal.md names `decimal128.parse('19.99')` as the EXACT construction form,
+  // beside a literal: "an exact decimal comes from a literal or a string, never
+  // from a round trip through binary". So parse reads the DIGITS and takes the
+  // cohort member from them - going through `Number` first would lose the
+  // significance this form exists to keep.
+  //
+  // Answered BEFORE the integer and float paths so their narrowing of `t` is
+  // left exactly as it was.
+  if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
+    if (!(S instanceof JSStringValue)) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    const digits = ParseDecimalDigits(S.stringValue());
+    if (!digits) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    const decimalWidth = t.Name === 'decimal32' ? 32 : t.Name === 'decimal64' ? 64 : 128;
+    return CreateDecimalValue(digits.significand, digits.exponent, decimalWidth, surroundingAgent.currentRealmRecord);
+  }
   if (!isInteger && !isFloat) {
     return Throw.TypeError('parse is not defined for $1', thisValue);
   }

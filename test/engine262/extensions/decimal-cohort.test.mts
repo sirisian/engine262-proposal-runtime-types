@@ -297,3 +297,23 @@ test('PINNED: buffer round-trip is not a DECIMAL question', () => {
   expect(evaluated('class C { d: decimal64 = 1.0; } const b = new ArrayBuffer(64); '
     + 'const c1 = new C.<placement>(b, 0); c1.d = decimal64("7.25"); const c2 = new C.<placement>(b, 0); c2.d.toString();')).toBe('1.0');
 });
+
+test('`parse` reads the DIGITS, like the constructor call', () => {
+  // decimal.md names this beside a literal as the exact form: "an exact decimal
+  // comes from a literal or a string, NEVER FROM A ROUND TRIP THROUGH BINARY".
+  // So it must not go through `Number` first, which would lose the significance
+  // this form exists to keep.
+  expect(evaluated('decimal128.parse("19.99").toString();')).toBe('19.99');
+  expect(evaluated('decimal128.parse("1.00").toString();')).toBe('1.00');
+  expect(evaluated('decimal32.parse("1.0").toString();')).toBe('1.0');
+  // It agrees with the constructor about the COHORT MEMBER, which is what says
+  // the two forms are one facility rather than two that happen to coincide.
+  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128("1.00")));')).toBe('true');
+  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128("1.0")));')).toBe('false');
+  // A malformed string is a SyntaxError, "like a malformed literal" - the same
+  // answer the integer and float paths give.
+  expect(evaluated('try { decimal128.parse("abc"); "OK"; } catch (e) { e.constructor.name; }')).toBe('SyntaxError');
+  // And the other numeric families are unaffected.
+  expect(evaluated('String(float64.parse("1.5"));')).toBe('1.5');
+  expect(evaluated('String(uint8.parse("3"));')).toBe('3');
+});
