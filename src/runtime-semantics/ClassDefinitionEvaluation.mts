@@ -2112,7 +2112,7 @@ export function* ApplySubTargetDecorators(node: ParseNode, ownerKind: string, ow
     if (!decorators || decorators.length === 0) {
       continue;
     }
-    Q(yield* ApplyDecorators(decorators, Q(yield* SubTargetContext(kinds.parameter, i, ownerKind, ownerName, classCtor))));
+    Q(yield* ApplyDecorators(decorators, Q(yield* SubTargetContext(kinds.parameter, i, ownerKind, ownerName, classCtor, parameters[i]))));
   }
   if (n.TypeAnnotation?.Decorators && n.TypeAnnotation.Decorators.length > 0) {
     Q(yield* ApplyDecorators(n.TypeAnnotation.Decorators, Q(yield* SubTargetContext(kinds.ret, -1, ownerKind, ownerName, classCtor))));
@@ -2125,13 +2125,52 @@ export function* ApplySubTargetDecorators(node: ParseNode, ownerKind: string, ow
  * carries its `index`; a return does not, which is what distinguishes the two
  * beyond the context type.
  */
-export function* SubTargetContext(kind: string, index: number, ownerKind: string, ownerName: Value, classCtor: Value): ValueEvaluator {
+export function* SubTargetContext(kind: string, index: number, ownerKind: string, ownerName: Value, classCtor: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
   if (index >= 0) {
     X(CreateDataProperty(context, Value('index'), Value(index)));
+  }
+  // decorators.md's `ClassMethodParameterReflection` gives `type`, `name` and
+  // `initial` beside `index`. The builder took no NODE, so it could report only
+  // what its arguments carried - the same gap the method context had, and the
+  // parameter node was sitting in the loop that calls this.
+  if (node) {
+    const binding = node as {
+      BindingIdentifier?: { name?: string } | null,
+      TypeAnnotation?: { Type?: ParseNode } | null,
+      Initializer?: ParseNode | null,
+    };
+    const paramName = binding.BindingIdentifier?.name;
+    if (paramName !== undefined) {
+      X(CreateDataProperty(context, Value('name'), Value(paramName)));
+    }
+    if (binding.TypeAnnotation?.Type) {
+      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(binding.TypeAnnotation.Type as never));
+      if (t.Type === 'normal') {
+        X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+      }
+    }
+    // `initial` is the DECLARED default, on the same terms a field's is: a
+    // constant is reported, anything else is *undefined* rather than evaluated,
+    // since evaluating a parameter default at class definition would run it at
+    // the wrong time and once rather than per call.
+    const init = binding.Initializer as { type?: string, value?: unknown } | null | undefined;
+    let initial: Value = Value.undefined;
+    if (init) {
+      if (init.type === 'NumericLiteral') {
+        initial = Value(Number(init.value));
+      } else if (init.type === 'StringLiteral') {
+        initial = Value(String(init.value));
+      } else if (init.type === 'BooleanLiteral') {
+        initial = init.value ? Value.true : Value.false;
+      } else if (init.type === 'NullLiteral') {
+        initial = Value.null;
+      }
+    }
+    X(CreateDataProperty(context, Value('initial'), initial));
   }
   // "methodContext: Reflect.ClassMethod.<TMethod, TClass>" - a sub-target
   // reaches the declaration it is part of, as a member reaches its class.
