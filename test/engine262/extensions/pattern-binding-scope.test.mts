@@ -51,20 +51,24 @@ test('an ABRUPT COMPLETION leaves a block arm and means what it means outside', 
   expect(evaluated('let out = ""; for (const q of [1, 2, 3]) { match (q) { when 2: { break; } default: 0; }; out += q; } out;')).toBe('1');
 });
 
-test('PINNED: a `match` STATEMENT needs an explicit semicolon', () => {
-  // ASI does not apply after a `match` expression statement, even across a
-  // newline - so `match (x) { ... }` followed by any statement is a parse
-  // error. **This is what made abrupt completions look broken for several
-  // cycles**: the programs testing them never parsed, and the failure was read
-  // as evidence about completions rather than about ASI.
-  expect(outcome('function f() { match (1) { when 1: 7; default: 0; } return 3; }')).toBe('SyntaxError');
-  // Narrower than it first appeared: ASI DOES apply at TOP LEVEL across a
-  // newline, and fails inside a function body - so the defect is in how the
-  // statement terminates there, not in ASI generally.
-  expect(outcome('match (1) { when 1: 7; default: 0; }\n"after";')).toBe('ACCEPTED');
-  // With the semicolon, both are fine.
-  expect(outcome('function f() { match (1) { when 1: 7; default: 0; }; return 3; }')).toBe('ACCEPTED');
-  expect(evaluated('match (1) { when 1: 7; default: 0; }; "after";')).toBe('after');
-  // A match as the LAST statement of a body needs none, since nothing follows.
-  expect(evaluated('function f() { match (1) { when 1: 7; default: 0; } } String(f());')).toBe('undefined');
+test('PINNED: a `match` statement gets no ASI inside a FUNCTION BODY', () => {
+  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
+  // Characterised precisely, after two rounds of describing it wrongly.
+  //
+  // At TOP LEVEL, ASI applies across a newline as it does for any expression
+  // statement.
+  expect(outcome2('match (1) { when 1: 7; default: 0; }\n5;')).toBe('ACCEPTED');
+  // Inside a FUNCTION BODY it does not - although ordinary expression
+  // statements in the same position DO, which is what says the defect belongs
+  // to `match` rather than to the body's statement list.
+  expect(outcome2('function f() {\nmatch (1) { when 1: 7; default: 0; }\nreturn 3;\n}')).toBe('SyntaxError');
+  expect(outcome2('function g(){} function f() {\ng()\nreturn 3;\n}')).toBe('ACCEPTED');
+  expect(outcome2('function f() {\n({a:1})\nreturn 3;\n}')).toBe('ACCEPTED');
+  // An explicit semicolon works everywhere - the usable workaround, and what
+  // every `match`-statement test in this suite relies on.
+  expect(outcome2('function f() { match (1) { when 1: 7; default: 0; }; return 3; }')).toBe('ACCEPTED');
+  // NOT a defect: an expression statement followed by another with NO separator
+  // is a SyntaxError in any JavaScript, so this pair is correct.
+  expect(outcome2('match (1) { when 1: 7; default: 0; } 5;')).toBe('SyntaxError');
+  expect(outcome2('function f() { match (1) { when 1: 7; default: 0; } }')).toBe('ACCEPTED');
 });

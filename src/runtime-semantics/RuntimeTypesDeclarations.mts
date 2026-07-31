@@ -572,6 +572,29 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
           return false;
         }
       }
+      // "The rest binding, where present, collects the REMAINING own enumerable
+      // members" - remaining meaning those the pattern did not name, which is
+      // why the named keys are excluded rather than the read ones: a key read
+      // through the cache by an EARLIER pattern is still a member this one did
+      // not name.
+      const rest = (P as { Rest?: ParseNode.MatchBindingPattern | null }).Rest;
+      if (rest) {
+        const named = new Set(P.Properties.map((prop) => prop.Key));
+        const remaining = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+        const keys = Q(yield* subject.OwnPropertyKeys());
+        for (const key of keys) {
+          if (!(key instanceof JSStringValueClass) || named.has((key as JSStringValueClass).stringValue())) {
+            continue;
+          }
+          const desc = Q(yield* subject.GetOwnProperty(key as never));
+          if (desc !== Value.undefined && (desc as { Enumerable?: unknown }).Enumerable === Value.true) {
+            X(CreateDataProperty(remaining, key, Q(yield* Get(subject, key))));
+          }
+        }
+        if (!Q(yield* PatternMatches(rest, remaining, cache))) {
+          return false;
+        }
+      }
       return true;
     }
     case 'MatchArrayPattern': {

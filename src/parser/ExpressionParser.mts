@@ -2237,15 +2237,28 @@ export abstract class ExpressionParser extends FunctionParser {
     let sawNonType = false;
     this.expect(Token.LBRACE);
     while (!this.test(Token.RBRACE)) {
-      // A REST element belongs to a |Type| here: patterns do not carry one yet,
-      // and a nested parse that THROWS rather than declining would escape the
-      // speculation entirely - the checkpoint is only restored on the paths
-      // this function takes, not on an exception from inside it. Declining
-      // early is what keeps a spread in an object type a type.
+      // `...let rest` is a REST BINDING - the remaining own enumerable members.
+      // A spread of anything else belongs to a |Type|, and declining early is
+      // what keeps it one: a nested parse that THROWS rather than declining
+      // would escape the speculation entirely, since the checkpoint is restored
+      // only on the paths this function takes.
       if (this.test(Token.ELLIPSIS)) {
-        this.restoreLexerCheckpoint(checkpoint);
-        this.earlyErrors = savedEarlyErrors;
-        return null;
+        if (!this.testAhead('let') && !this.testAhead(Token.CONST)) {
+          this.restoreLexerCheckpoint(checkpoint);
+          this.earlyErrors = savedEarlyErrors;
+          return null;
+        }
+        this.next();
+        const rest = this.parseMatchUnaryPattern();
+        if (rest.type !== 'MatchBindingPattern') {
+          this.restoreLexerCheckpoint(checkpoint);
+          this.earlyErrors = savedEarlyErrors;
+          return null;
+        }
+        node.Rest = rest;
+        sawNonType = true;
+        this.eat(Token.COMMA);
+        break;
       }
       const prop = this.startNode<ParseNode.MatchProperty>();
       if (!this.test(Token.IDENTIFIER) && !this.test(Token.STRING)) {

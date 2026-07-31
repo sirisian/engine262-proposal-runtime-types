@@ -2918,6 +2918,8 @@ export namespace ParseNode {
   export interface MatchObjectPattern extends BaseParseNode {
     readonly type: 'MatchObjectPattern';
     readonly Properties: readonly MatchProperty[];
+    /** `...let rest`: the remaining own enumerable members, as an object. */
+    readonly Rest?: MatchBindingPattern | null;
   }
   export interface MatchProperty extends BaseParseNode {
     readonly type: 'MatchProperty';
