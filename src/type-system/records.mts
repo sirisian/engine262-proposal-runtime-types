@@ -354,6 +354,9 @@ const libraryTypeNames = new Set([
   // TYPE until PLAN-do-expressions.md phase 1, so nothing said what a call of a
   // generator returns or what a yield expression evaluates to.
   'Generator', 'AsyncGenerator',
+  // proposal-runtime-types #sec-iteration-types.
+  'IteratorResult', 'Iterable', 'IterableIterator',
+  'AsyncIterable', 'AsyncIterableIterator',
 ]);
 
 /**

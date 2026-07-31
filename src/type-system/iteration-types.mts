@@ -141,31 +141,22 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — the boundary, located precisely.
+// REMAINDER — one name, and the earlier verdict on this fix was wrong.
 //
-// These types resolve in a PARAMETER annotation and not in a `const` one, and
-// the two paths differ in kind rather than in degree. A parameter annotation is
-// answered by a resolver; a `const` annotation is EVALUATED, because in this
-// design types are values, so the annotation has to name something the
-// expression evaluator can reach.
+// Registering these among the library type names is what makes them resolve in
+// an EVALUATED position - a `const` annotation, where the annotation is an
+// expression because types are values here. An earlier attempt did exactly this
+// and was reverted as ineffective; the test that condemned it used
+// `const i: Iterable.<uint8> = [1, 2]`, whose failure was an assignability
+// error misread as a resolution one. With a generator on the right-hand side
+// the resolution plainly works.
 //
-// What was ruled out, each by experiment rather than by reasoning:
+// So five of six resolve everywhere: Iterator, Iterable, IterableIterator, and
+// the async pair. `IteratorResult` still reports "is not defined" in an
+// evaluated position despite the same registration, and it is the one member of
+// the family whose record is a UNION rather than an object - which is the first
+// place to look.
 //
-//   - A name collision with the global `Iterator` class. There is none:
-//     `Iterator` is the one name here that WORKS in a const annotation, and it
-//     works precisely because iterator helpers made it a real global.
-//   - A missing resolver. Both are now wired - check.mts for the checker and
-//     TypeNodeToTypeRecord for the runtime - and the parameter path went from
-//     failing to working, so the wiring is right and is not the boundary.
-//   - Registration among the library type names. Added, rebuilt, no effect, and
-//     reverted. `Generator` is registered there and is NOT a global, yet it
-//     resolves in a const annotation - so library registration is neither
-//     necessary nor sufficient, and something else special-cases `Generator`.
-//
-// The next step is to find what the expression evaluator does with `Generator`
-// in an annotation position, since that is the one name that resolves there
-// without a binding. Whatever that mechanism is, is the one these types need.
-//
-// Working today: all six resolve as parameter annotations, a hand-written
-// iterator satisfies `Iterator.<uint8>`, and the shorthand interns -
-// `Iterator.<uint8> === Iterator.<uint8, void, void>` is *true*.
+// The assignability error that now appears for `const i: Iterable.<uint8> =
+// g()` is not a defect: making a Generator satisfy IterableIterator is phase 4,
+// and this is that phase arriving on schedule rather than a regression.
