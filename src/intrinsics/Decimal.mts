@@ -106,6 +106,157 @@ export function decimalEquals(x: DecimalObject, y: DecimalObject): boolean {
   return a.significand === b.significand && a.exponent === b.exponent;
 }
 
+/**
+ * The significant digits each width admits, from IEEE 754-2008 Table 3.1.
+ * `decimal128` carrying 34 is the figure decimal.md quotes.
+ */
+export function DecimalPrecision(width: 32 | 64 | 128): number {
+  return width === 32 ? 7 : width === 64 ? 16 : 34;
+}
+
+/** How many decimal digits a magnitude has. */
+function digitCount(v: bigint): number {
+  const m = v < 0n ? -v : v;
+  return m === 0n ? 1 : m.toString().length;
+}
+
+/**
+ * Round a significand to at most `precision` digits, HALF-EVEN, raising the
+ * exponent to match. Half-even is IEEE's default rounding direction and the one
+ * decimal.md names ("rounds ties to even by default").
+ */
+function roundToPrecision(significand: bigint, exponent: number, precision: number): { significand: bigint, exponent: number } {
+  const excess = digitCount(significand) - precision;
+  if (excess <= 0) {
+    return { significand, exponent };
+  }
+  const scale = 10n ** BigInt(excess);
+  const negative = significand < 0n;
+  const magnitude = negative ? -significand : significand;
+  const quotient = magnitude / scale;
+  const remainder = magnitude % scale;
+  const half = scale / 2n;
+  let rounded = quotient;
+  if (remainder > half || (remainder === half && quotient % 2n === 1n)) {
+    rounded += 1n;
+  }
+  return { significand: negative ? -rounded : rounded, exponent: exponent + excess };
+}
+
+/**
+ * IEEE 754-2008 clause 5.1: an operation delivers its PREFERRED EXPONENT where
+ * the result is exact, and otherwise the exponent closest to it that represents
+ * the result.
+ *
+ * This is why `1.5 + 1.50` is `3.00` and not `3.0`: addition's preferred
+ * exponent is min(Q(x), Q(y)), which is -2 here. **The rule is the standard's,
+ * not this proposal's**, and taking it from the standard is what stops the
+ * cohort member of a result from being invented per operation.
+ */
+function atPreferredExponent(significand: bigint, exponent: number, preferred: number, width: 32 | 64 | 128): DecimalParts {
+  let s = significand;
+  let e = exponent;
+  // Lower the exponent toward the preferred one by lengthening the significand,
+  // which is exact.
+  while (e > preferred && digitCount(s) < DecimalPrecision(width)) {
+    s *= 10n;
+    e -= 1;
+  }
+  // Raise it toward the preferred one only where doing so loses nothing.
+  while (e < preferred && s % 10n === 0n && s !== 0n) {
+    s /= 10n;
+    e += 1;
+  }
+  return roundToPrecision(s, e, DecimalPrecision(width));
+}
+
+export interface DecimalParts { significand: bigint, exponent: number }
+
+/** Both operands at one exponent, which is the lower of the two - always exact. */
+function align(x: DecimalObject, y: DecimalObject): { xs: bigint, ys: bigint, exponent: number } {
+  const exponent = Math.min(x.DecimalExponent, y.DecimalExponent);
+  const xs = x.DecimalSignificand * 10n ** BigInt(x.DecimalExponent - exponent);
+  const ys = y.DecimalSignificand * 10n ** BigInt(y.DecimalExponent - exponent);
+  return { xs, ys, exponent };
+}
+
+/** The wider of two widths - a mixed-width operation answers at the wider. */
+function widerOf(x: DecimalObject, y: DecimalObject): 32 | 64 | 128 {
+  return (Math.max(x.DecimalWidth, y.DecimalWidth) as 32 | 64 | 128);
+}
+
+export function decimalAdd(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+  const { xs, ys, exponent } = align(x, y);
+  const width = widerOf(x, y);
+  // Addition's preferred exponent is min(Q(x), Q(y)), which is what `align`
+  // already computed.
+  return { parts: atPreferredExponent(xs + ys, exponent, exponent, width), width };
+}
+
+export function decimalSubtract(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+  const { xs, ys, exponent } = align(x, y);
+  const width = widerOf(x, y);
+  return { parts: atPreferredExponent(xs - ys, exponent, exponent, width), width };
+}
+
+export function decimalMultiply(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+  // Multiplication's preferred exponent is Q(x) + Q(y).
+  const exponent = x.DecimalExponent + y.DecimalExponent;
+  const width = widerOf(x, y);
+  return {
+    parts: atPreferredExponent(x.DecimalSignificand * y.DecimalSignificand, exponent, exponent, width),
+    width,
+  };
+}
+
+/**
+ * Division, which is where exactness runs out: `1 / 3` has no finite decimal
+ * expansion, so the quotient is computed to the type's PRECISION and rounded
+ * half-even. Where the division IS exact, the preferred exponent Q(x) - Q(y)
+ * applies as the other operations' do.
+ */
+export function decimalDivide(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' {
+  if (y.DecimalSignificand === 0n) {
+    return 'divide-by-zero';
+  }
+  const width = widerOf(x, y);
+  const precision = DecimalPrecision(width);
+  const preferred = x.DecimalExponent - y.DecimalExponent;
+  // Lengthen the dividend so the quotient has at least `precision` digits, then
+  // round - which makes an exact division exact and an inexact one correctly
+  // rounded.
+  const extra = precision + 1 + Math.max(0, digitCount(y.DecimalSignificand) - digitCount(x.DecimalSignificand));
+  const scaled = x.DecimalSignificand * 10n ** BigInt(extra);
+  const quotient = scaled / y.DecimalSignificand;
+  const exact = scaled % y.DecimalSignificand === 0n;
+  const parts = exact
+    ? atPreferredExponent(quotient, preferred - extra, preferred, width)
+    : roundToPrecision(quotient, preferred - extra, precision);
+  return { parts, width };
+}
+
+/** IEEE's remainder: x - y * n, where n is x/y rounded to nearest-even. */
+export function decimalRemainder(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' {
+  if (y.DecimalSignificand === 0n) {
+    return 'divide-by-zero';
+  }
+  const { xs, ys, exponent } = align(x, y);
+  const width = widerOf(x, y);
+  // Remainder's preferred exponent is min(Q(x), Q(y)), and the result is always
+  // exact, so no rounding is reachable here.
+  return { parts: atPreferredExponent(xs % ys, exponent, exponent, width), width };
+}
+
+export function decimalNegate(x: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+  return { parts: { significand: -x.DecimalSignificand, exponent: x.DecimalExponent }, width: x.DecimalWidth };
+}
+
+/** -1, 0 or 1, comparing NUMERICAL VALUE - IEEE's `compareQuietLess` and friends. */
+export function decimalCompare(x: DecimalObject, y: DecimalObject): number {
+  const { xs, ys } = align(x, y);
+  return xs < ys ? -1 : xs > ys ? 1 : 0;
+}
+
 /** The decimal `significand x 10^exponent`, as an object of the given width. */
 export function CreateDecimalValue(significand: bigint, exponent: number, width: 32 | 64 | 128, realmRec: Realm): DecimalObject {
   const proto = realmRec.Intrinsics['%decimal.prototype%'];

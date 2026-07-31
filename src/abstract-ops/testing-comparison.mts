@@ -14,7 +14,7 @@ import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
-import { isDecimalObject, decimalEquals, decimalSameValue } from '../intrinsics/Decimal.mts';
+import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import {
   Assert,
   surroundingAgent,
@@ -294,6 +294,13 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
   if (surroundingAgent.feature('runtime-types') && isRationalObject(x) && isRationalObject(y)) {
     return rationalCompare(x, y) < 0 ? Value.true : Value.false;
   }
+  // proposal-runtime-types (decimal.md): a decimal comparison is over NUMERICAL
+  // VALUE, so `1.0 < 1.00` is false as `1.0 == 1.00` is true - the cohort is
+  // invisible to the order, which is IEEE's `compareQuietLess` against its
+  // `totalOrder`.
+  if (surroundingAgent.feature('runtime-types') && isDecimalObject(x) && isDecimalObject(y)) {
+    return decimalCompare(x, y) < 0 ? Value.true : Value.false;
+  }
   let px;
   let py;
   // 1. If the LeftFirst flag is true, then
@@ -529,6 +536,12 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
   // else. This is what makes a rational usable as a Map or Set key by value.
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
     return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
+  }
+  // proposal-runtime-types (decimal.md): "`==` compares numerical value, so
+  // `1.0 == 1.00` is `true`". This is the half of the split that SameValue does
+  // NOT make, and the pair is IEEE's `compareQuietEqual` against `totalOrder`.
+  if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
+    return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
   }
   // proposal-runtime-types R1: === distinguishes value types. Two typed numbers
   // are strictly equal iff same type and same payload; a typed number is never

@@ -15,6 +15,10 @@ import {
 import { Q } from '../completion.mts';
 import { IsOfType } from '../type-system/runtime.mts';
 import {
+  isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder,
+  CreateDecimalValue,
+} from '../intrinsics/Decimal.mts';
+import {
   Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
 
@@ -204,6 +208,46 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // operands are rationals, +, -, *, /, and ** are exact and canonical; a zero
   // divisor or a zero base to a negative power is a RangeError, and an operator
   // with no rational meaning is a TypeError.
+  // proposal-runtime-types (PLAN-decimal.md stage C): the decimal operator set,
+  // with IEEE 754-2008 clause 5.1's PREFERRED EXPONENT deciding which cohort
+  // member results. `1.5 + 1.50` is `3.00`, not `3.0`, because addition's
+  // preferred exponent is min(Q(x), Q(y)) - the rule is the standard's, and
+  // taking it from there is what stops a result's significance being invented
+  // per operation.
+  if (surroundingAgent.feature('runtime-types') && (isDecimalObject(lval) || isDecimalObject(rval))) {
+    if (!isDecimalObject(lval) || !isDecimalObject(rval)) {
+      // A decimal mixes with nothing implicitly: the other operand would have to
+      // be converted, and `float64` -> decimal is the conversion the spec flags
+      // as hard. Refusing is the same answer stage A gave to `decimal128(0.1)`.
+      return Throw.TypeError('a decimal operand requires a decimal on both sides');
+    }
+    const realmRec = surroundingAgent.currentRealmRecord;
+    const make = (r: { parts: { significand: bigint, exponent: number }, width: 32 | 64 | 128 }) => CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+    switch (opText) {
+      case '+':
+        return make(decimalAdd(lval, rval));
+      case '-':
+        return make(decimalSubtract(lval, rval));
+      case '*':
+        return make(decimalMultiply(lval, rval));
+      case '/': {
+        const q = decimalDivide(lval, rval);
+        if (q === 'divide-by-zero') {
+          return Throw.RangeError('division of a decimal by zero');
+        }
+        return make(q);
+      }
+      case '%': {
+        const r = decimalRemainder(lval, rval);
+        if (r === 'divide-by-zero') {
+          return Throw.RangeError('remainder of a decimal by zero');
+        }
+        return make(r);
+      }
+      default:
+        return Throw.TypeError('this operator is not defined for a decimal');
+    }
+  }
   if (surroundingAgent.feature('runtime-types') && isRationalObject(lval) && isRationalObject(rval)) {
     const realmRec = surroundingAgent.currentRealmRecord;
     switch (opText) {

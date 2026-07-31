@@ -31,6 +31,7 @@ import {
   Throw,
   isArrayIndex,
 } from '#self';
+import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `delete` UnaryExpression
@@ -186,6 +187,13 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   const rawValue = Q(yield* GetValue(expr));
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('-', rawValue as TypedNumberValue);
+  }
+  // proposal-runtime-types (decimal.md): unary minus on a decimal keeps its
+  // COHORT MEMBER - `-1.50` is `-1.50`, not `-1.5` - since negation changes the
+  // sign and nothing about the significance.
+  if (surroundingAgent.feature('runtime-types') && isDecimalObject(rawValue)) {
+    const negated = decimalNegate(rawValue);
+    return CreateDecimalValue(negated.parts.significand, negated.parts.exponent, negated.width, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types (operatoroverloading.md): a class unary operator.
   const unaryOp = findUnaryClassOperator(rawValue, '-');

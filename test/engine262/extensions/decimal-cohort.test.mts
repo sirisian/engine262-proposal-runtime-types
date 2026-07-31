@@ -74,20 +74,71 @@ test('PINNED: a NUMBER argument is refused', () => {
   expect(evaluated('try { decimal128(1); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
 
-test('PINNED: stage A is the representation ALONE', () => {
-  // No arithmetic, no literals in a decimal context, no conversions, no width
-  // limits - each is a later stage, and each is pinned rather than left to be
-  // discovered.
-  // A `valueOf` returning the digit STRING would make `+` CONCATENATE - measured,
-  // it gave '1.02.0' - and one returning a Number would give a silently rounded
-  // ANSWER through the very double this type exists to avoid. Both are worse
-  // than an error, so `valueOf` refuses until stage C.
-  expect(evaluated('try { decimal128("1.0") + decimal128("2.0"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
-  // A decimal32 does not yet refuse a value too wide for it.
-  expect(evaluated('decimal32("9.999999999999999999999999999999999").toString();'))
-    .toBe('9.999999999999999999999999999999999');
+test('STAGE C: IEEE 754 clause 5.1 decides WHICH COHORT MEMBER results', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // ADDITION's preferred exponent is min(Q(x), Q(y)) - so `1.5 + 1.50` is
+  // `3.00`, not `3.0`. **The rule is the standard's**, and taking it from there
+  // is what stops a result's significance being invented per operation.
+  expect(evaluated(`(${D('1.5')} + ${D('1.50')}).toString();`)).toBe('3.00');
+  expect(evaluated(`(${D('1.0')} + ${D('2.0')}).toString();`)).toBe('3.0');
+  expect(evaluated(`(${D('1.30')} - ${D('1.07')}).toString();`)).toBe('0.23');
+  // MULTIPLICATION's is Q(x) + Q(y): -2 and -1 give -3.
+  expect(evaluated(`(${D('1.20')} * ${D('1.2')}).toString();`)).toBe('1.440');
+  // Unary minus changes the sign and NOTHING about the significance.
+  expect(evaluated(`(-${D('1.50')}).toString();`)).toBe('-1.50');
 });
 
+test('STAGE C: the arithmetic is EXACT where binary floats are not', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // The reason the type exists. `0.1 + 0.2` is `0.30000000000000004` in binary
+  // and `0.3` here.
+  expect(evaluated(`(${D('0.1')} + ${D('0.2')}).toString();`)).toBe('0.3');
+  expect(evaluated('String(0.1 + 0.2);')).toBe('0.30000000000000004');
+  // A price times a quantity, which is what money arithmetic asks for.
+  expect(evaluated(`(${D('19.99')} * ${D('3')}).toString();`)).toBe('59.97');
+  expect(evaluated(`(${D('7')} % ${D('2')}).toString();`)).toBe('1');
+});
+
+test('STAGE C: DIVISION is where exactness runs out, and rounds half-even', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // An exact quotient stays exact.
+  expect(evaluated(`(${D('1')} / ${D('8')}).toString();`)).toBe('0.125');
+  // `1/3` has no finite decimal expansion, so it is computed to the type's
+  // PRECISION - 34 significant digits for `decimal128`, IEEE 754-2008 Table
+  // 3.1 - and rounded.
+  expect(evaluated(`(${D('1')} / ${D('3')}).toString();`)).toBe('0.3333333333333333333333333333333333');
+  // Division by zero is a RangeError, as decimal.md says: "decimals raise a
+  // RangeError, since their range is a property of the type rather than of the
+  // format".
+  expect(evaluated(`try { ${D('1')} / ${D('0')}; "OK"; } catch (e) { e.constructor.name; }`)).toBe('RangeError');
+  expect(evaluated(`try { ${D('1')} % ${D('0')}; "OK"; } catch (e) { e.constructor.name; }`)).toBe('RangeError');
+});
+
+test('STAGE C: `==` and `<` compare NUMERICAL VALUE, Object.is does not', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // The split, now complete across all three predicates: "`==` compares
+  // numerical value, so `1.0 == 1.00` is `true`", while SameValue distinguishes
+  // the cohort members. IEEE provides both as `compareQuietEqual` and
+  // `totalOrder`.
+  expect(evaluated(`String(${D('1.0')} == ${D('1.00')});`)).toBe('true');
+  expect(evaluated(`String(Object.is(${D('1.0')}, ${D('1.00')}));`)).toBe('false');
+  // The ORDER is over numerical value too, so a cohort is invisible to it.
+  expect(evaluated(`String(${D('1.0')} < ${D('2.0')});`)).toBe('true');
+  expect(evaluated(`String(${D('1.0')} < ${D('1.00')});`)).toBe('false');
+  expect(evaluated(`String(${D('2.5')} >= ${D('2.50')});`)).toBe('true');
+});
+
+test('PINNED: a decimal mixes with nothing implicitly', () => {
+  const D = (x: string) => `decimal128("${x}")`;
+  // The other operand would have to be converted, and `float64` -> decimal is
+  // the conversion the specification flags as hard - "the difficulty is not
+  // arithmetic but WHICH COHORT MEMBER RESULTS". Stage F owns it; refusing is
+  // the same answer stage A gave to `decimal128(0.1)`.
+  expect(evaluated(`try { ${D('1.0')} + 1; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+  expect(evaluated(`try { ${D('1.0')} * uint8(2); "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+  // And an operator with no decimal meaning is refused rather than answered.
+  expect(evaluated(`try { ${D('1.0')} ** ${D('2.0')}; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+});
 test('STAGE B: a literal at a decimal type is read from its SOURCE TEXT', () => {
   // "In a decimal context the literal `0.1` is the decimal one tenth, where in a
   // `float64` context the same `0.1` is the nearest binary float."
