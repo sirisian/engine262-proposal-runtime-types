@@ -112,6 +112,44 @@ test('generics: a class type parameter reaches a field annotation', () => {
  * frame needs pushing where a method's signature is resolved.
  */
 
+test('generics: a generic class is usable end to end', () => {
+  // generics.md's opening example, verbatim. It failed at three separate
+  // points before this: the field annotation could not resolve T, an
+  // uninitialized field of a parameter type was checked against it, and the
+  // constructor could not be called.
+  expect(ok(`
+    class A<T = uint8> {
+      a: T;
+      constructor(a: T) { this.a = a; }
+    }
+    const a = new A(5);
+    const b = new A.<uint32>(1024);
+  `)).toBe(true);
+});
+
+test('generics: a method of a generic class is callable', () => {
+  expect(ok('class B<T> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
+  expect(ok('class B<T> { static v: T; }')).toBe(true);
+  expect(ok('class B<T> { v: T; } new B.<uint8>();')).toBe(true);
+});
+
+/**
+ * What an unsubstituted parameter admits, and why it is permissive.
+ *
+ * A parameter is opaque INSIDE its declaration - a subtype of itself and its
+ * constraint, which is what lets `m(v: T): T` return its argument. At a use
+ * site it is not opaque at all: `new B.<uint8>()` has bound T, and substituting
+ * that binding is the specialization work of the next phase.
+ *
+ * Until substitution exists, both the method frame and RequireType treat an
+ * unbound parameter as admitting anything. That is deliberate and it is the
+ * looser of the two errors available: enforcing against an opaque parameter
+ * refuses every argument, which breaks code that works rather than code that
+ * does not. When specialization lands, these become real checks - and the test
+ * that will show it is `new B.<uint8>().m('s')`, which is accepted today and
+ * should not be.
+ */
+
 /**
  * The method-call fix: attempted, reverted, and what it taught.
  *

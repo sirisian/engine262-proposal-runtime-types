@@ -6,7 +6,7 @@ import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValu
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
-import { displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
+import { anyType, displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
@@ -70,6 +70,16 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
  * operation at every boundary is the invariant here; the engine had two.
  */
 export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
+  // value. At the point a field of type `T` is defined, the application has
+  // bound `T` - `new B.<uint8>()` means uint8 - and substituting that binding
+  // is the specialization work. Until it exists, checking against the opaque
+  // parameter refuses everything, which is stricter than correct rather than
+  // looser: it rejects `class B<T> { v: T; }` at `new B.<uint8>()`, a
+  // declaration the design's opening example depends on.
+  if (t.Kind === 'parameter') {
+    return value;
+  }
   return Q(yield* CheckedConvertValue(value, t));
 }
 
@@ -1357,6 +1367,29 @@ export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNod
 export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[]): PlainEvaluator<Map<string, TypeRecord> | null> {
   const typeParameters = functionTypeParameters(fn);
   if (!typeParameters) {
+    // proposal-runtime-types: a METHOD of a generic class has no type
+    // parameters of its own and its signature names the CLASS's, so `m(v: T)`
+    // resolved to nothing at the call and reported "T is not defined".
+    //
+    // Two things this has to get right, both learned by getting them wrong.
+    // The walk stops at a CLASS: walking to any enclosing declaration carrying
+    // type parameters caught a parameterized `primitive` block's operators and
+    // broke operator declaration per parameterization. And each parameter binds
+    // to `any` rather than to an opaque parameter record: at the call the
+    // parameter HAS a binding, and substituting it is the specialization work -
+    // an opaque parameter would resolve the name and then refuse every
+    // argument, which is stricter than correct rather than looser.
+    const owner = enclosingClassTypeParameters(fn.ECMAScriptCode as ParseNode | undefined);
+    if (owner && owner.length > 0) {
+      const frame = new Map<string, TypeRecord>();
+      for (const tp of owner) {
+        const name = (tp as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
+        if (name) {
+          frame.set(name, anyType);
+        }
+      }
+      return frame;
+    }
     return null;
   }
   const formals = (fn.FormalParameters as readonly ParseNode[] | undefined) ?? [];
@@ -1786,4 +1819,24 @@ export function MergeOperatorResultMetadata(
 export function MetaTypeForConstraint(constraint: TypeRecord): object | undefined {
   const typeObject = GetTypeObject(constraint) as unknown as object;
   return LookupMetaTypeName(typeObject) === undefined ? undefined : typeObject;
+}
+
+
+/**
+ * The type parameters of the nearest enclosing CLASS, or undefined.
+ *
+ * Stops at a class deliberately. Any declaration may carry type parameters -
+ * a `primitive` block's operators among them - and binding those would change
+ * what an operator declaration means.
+ */
+function enclosingClassTypeParameters(node: ParseNode | undefined): readonly ParseNode[] | undefined {
+  let n = node;
+  while (n) {
+    if (n.type === 'ClassDeclaration' || n.type === 'ClassExpression') {
+      return (n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } })
+        .TypeParameters?.TypeParameterList;
+    }
+    n = (n as unknown as { parent?: ParseNode }).parent;
+  }
+  return undefined;
 }
