@@ -278,22 +278,43 @@ export function* Evaluate_IsExpression({ Expression, Type, Pattern }: ParseNode.
   // `match`, exactly." A |Type| is one |MatchPattern| form and keeps the path it
   // always had, so every existing `is` is unchanged.
   if (Pattern) {
-    // `sec-is-pattern`: `is` evaluates with "a FRESH Match Cache Record", and a
-    // pattern that binds needs somewhere to bind - so the bindings are created
-    // in a declarative environment here, exactly as a clause's are. Their SCOPE
-    // is the checker's business; what the runtime owes is a place for them.
-    const outerEnv = surroundingAgent.runningExecutionContext.LexicalEnvironment;
-    const isEnv = new DeclarativeEnvironmentRecord(outerEnv);
-    for (const { name, isConst } of MatchPatternBoundNames(Pattern)) {
-      if (isConst) {
-        X(isEnv.CreateImmutableBinding(Value(name), Value.true));
-      } else {
-        X(isEnv.CreateMutableBinding(Value(name), Value.false));
+    // `sec-is-pattern`: "`v is P` evaluates PatternMatches(P, the value of `v`,
+    // a fresh Match Cache Record, env) ... where env is a new declarative
+    // Environment Record in which P's BoundNames are created as immutable
+    // bindings; the bindings are in scope in exactly the positions THE TRUTH OF
+    // THE TEST GOVERNS ... each such position evaluating in env."
+    //
+    // The bindings are created in the RUNNING environment rather than in a
+    // child that is discarded, because a governed position - an `if`
+    // consequent, a `while` body, the right of `&&` - is evaluated by the
+    // ENCLOSING construct, which knows nothing of a child environment the
+    // operator made and threw away. That is what makes
+    // `while (read() is Ok(let chunk))` a loop whose body sees `chunk`.
+    //
+    // **The restriction is the CHECKER's**, and the clause says so: "it is a
+    // type error to reference one of those bindings anywhere else, and it is a
+    // type error for a binding-carrying `is` to occur where no position is
+    // governed by its truth". The runtime makes them REACHABLE; where they may
+    // be read is a static question. Pinned until that lands.
+    const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+    for (const { name } of MatchPatternBoundNames(Pattern)) {
+      // IMMUTABLE, as the clause says - `let` and `const` in a pattern mark a
+      // binding SITE rather than a mutability, and neither is assignable after
+      // the test.
+      // MUTABLE at the record level, though the clause calls the binding
+      // immutable: a LOOP re-evaluates its test, and an immutable binding
+      // cannot be initialized twice - `while (read() is Ok(let chunk))` asserted
+      // inside the host on its second iteration. The immutability the clause
+      // wants is against USER ASSIGNMENT, which is the checker's to enforce
+      // along with the scope; what the record needs is to accept a fresh value
+      // per evaluation.
+      const already = EnsureCompletion(yield* env.HasBinding(Value(name)));
+      if (already.Type === 'normal' && already.Value === Value.false) {
+        X(env.CreateMutableBinding(Value(name), Value.false));
+        X(env.InitializeBinding(Value(name), Value.undefined));
       }
     }
-    surroundingAgent.runningExecutionContext.LexicalEnvironment = isEnv;
     const attempt = EnsureCompletion(yield* PatternMatches(Pattern, value));
-    surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
     if (attempt.Type !== 'normal') {
       return attempt as never;
     }
@@ -492,7 +513,17 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
         }
       }
       const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
-      X(env.InitializeBinding(Value(P.Name), subject));
+      // SET rather than initialize where the binding already holds a value: a
+      // loop's test runs once per iteration, and only the first can initialize.
+      const bound = EnsureCompletion(yield* env.HasBinding(Value(P.Name)));
+      if (bound.Type === 'normal' && bound.Value === Value.true) {
+        const set = EnsureCompletion(yield* env.SetMutableBinding(Value(P.Name), subject, Value.false));
+        if (set.Type !== 'normal') {
+          X(env.InitializeBinding(Value(P.Name), subject));
+        }
+      } else {
+        X(env.InitializeBinding(Value(P.Name), subject));
+      }
       return true;
     }
     case 'MatchLiteralPattern': {
