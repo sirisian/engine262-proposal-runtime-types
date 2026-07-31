@@ -51,24 +51,30 @@ test('an ABRUPT COMPLETION leaves a block arm and means what it means outside', 
   expect(evaluated('let out = ""; for (const q of [1, 2, 3]) { match (q) { when 2: { break; } default: 0; }; out += q; } out;')).toBe('1');
 });
 
-test('PINNED: a `match` statement gets no ASI inside a FUNCTION BODY', () => {
+test('PINNED: a `match` statement gets no ASI inside any BLOCK', () => {
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  // Characterised precisely, after two rounds of describing it wrongly.
+  // Characterised over three rounds, each narrowing the claim.
   //
-  // At TOP LEVEL, ASI applies across a newline as it does for any expression
-  // statement.
+  // At TOP LEVEL, ASI applies across a newline as for any expression statement.
   expect(outcome2('match (1) { when 1: 7; default: 0; }\n5;')).toBe('ACCEPTED');
-  // Inside a FUNCTION BODY it does not - although ordinary expression
-  // statements in the same position DO, which is what says the defect belongs
-  // to `match` rather than to the body's statement list.
+  // Inside ANY BLOCK - a function body, an arrow body, a bare block - it does
+  // not. **So `match` is inconsistent WITH ITSELF**, which is the sharpest
+  // statement of the defect and the reason it is a defect at all.
   expect(outcome2('function f() {\nmatch (1) { when 1: 7; default: 0; }\nreturn 3;\n}')).toBe('SyntaxError');
-  expect(outcome2('function g(){} function f() {\ng()\nreturn 3;\n}')).toBe('ACCEPTED');
+  expect(outcome2('{\nmatch (1) { when 1: 7; default: 0; }\n5;\n}')).toBe('SyntaxError');
+  // ORDINARY brace-ending expressions in the same position are fine, so the
+  // block's statement list is not at fault.
   expect(outcome2('function f() {\n({a:1})\nreturn 3;\n}')).toBe('ACCEPTED');
-  // An explicit semicolon works everywhere - the usable workaround, and what
-  // every `match`-statement test in this suite relies on.
+  expect(outcome2('function f() {\n(class {})\nreturn 3;\n}')).toBe('ACCEPTED');
+  // A `do` EXPRESSION fails at BOTH levels, so it is NOT the comparison it
+  // first appeared to be: `do { }` followed by anything is ambiguous with a
+  // do-while missing its `while`, which is a legitimate refusal rather than the
+  // same defect.
+  expect(outcome2('do { 1; }\n5;')).toBe('SyntaxError');
+  // An explicit `;` works everywhere and is what every `match`-statement test
+  // in this suite relies on.
   expect(outcome2('function f() { match (1) { when 1: 7; default: 0; }; return 3; }')).toBe('ACCEPTED');
-  // NOT a defect: an expression statement followed by another with NO separator
-  // is a SyntaxError in any JavaScript, so this pair is correct.
+  // NOT part of the defect: an expression statement followed by another with no
+  // separator is a SyntaxError in any JavaScript.
   expect(outcome2('match (1) { when 1: 7; default: 0; } 5;')).toBe('SyntaxError');
-  expect(outcome2('function f() { match (1) { when 1: 7; default: 0; } }')).toBe('ACCEPTED');
 });
