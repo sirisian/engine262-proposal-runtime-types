@@ -225,3 +225,41 @@ test('a pipeline carries an iterator through a chain', () => {
  * is what makes it statable, since the rule it needs is that the element is the
  * `Iterable`'s parameter.
  */
+
+test('map erases the element type, as it does for arrays', () => {
+  // The plan called `map` the method that CHANGES the element type. It does
+  // not, here or for arrays: the side-table mechanism these signatures use has
+  // no way to bind a callback's return as a type parameter, so both return
+  // `any`. Asserted rather than left implied, because the plan's own text says
+  // otherwise and someone will check.
+  const g = 'function* g(): uint8 { yield 1; } ';
+  // The two erase it differently, which is worth pinning. An array's `map`
+  // returns bare `any`, which is assignable to anything, so a wrong annotation
+  // is ACCEPTED. An iterator's returns a carrier of `any`, so `toArray` gives
+  // `[].<any>`, and array invariance REFUSES a wrong annotation. Neither
+  // carries the callback's return type; they fail in opposite directions.
+  expect(ok(`${g}const a: [].<string> = g().map((x) => 's').toArray();`)).toBe(false);
+  expect(ok("const xs: [].<uint8> = [1]; const a: [].<string> = xs.map((x) => 's');")).toBe(true);
+  // Which is why `filter` and `take`, which KEEP the element, are the ones the
+  // chain tests above lean on.
+});
+
+test('destructuring reads a typed iterator', () => {
+  const g = 'function* g(): uint8 { yield 1; yield 2; } ';
+  expect(ok(`${g}const [a, b] = g();`)).toBe(true);
+  expect(evaluated(`${g}const [a, b] = g(); String(a + b);`)).toBe('3');
+});
+
+test('composites are unaffected', () => {
+  // The existing caller of the structural form, which the plan names as the
+  // suite to run first on every iteration.
+  expect(evaluated('const k = Composite({ a: 1 }); String(k === Composite({ a: 1 }));')).toBe('true');
+});
+
+test('an iterator composes with using', () => {
+  // A helper chain over a resource is the motivating case for both features.
+  expect(ok(`
+    function* g(): uint8 { yield 1; }
+    { using d = { [Symbol.dispose]() {} }; const i: Iterable.<uint8> = g(); }
+  `)).toBe(true);
+});
