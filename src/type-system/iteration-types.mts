@@ -32,7 +32,12 @@ function objectType(properties: { key: string | symbol, type: TypeRecord, option
         : (wellKnownSymbols as unknown as Record<string, unknown>)[p.key.description!],
       type: p.type,
       optional: p.optional ?? false,
+      readonly: false,
     })),
+    // Required by the record shape and omitted at first, which is what made the
+    // RUNTIME walk crash while the checker was happy: EnforceAnnotation reads
+    // IndexSignatures without guarding, where the checker never reaches it.
+    IndexSignatures: [],
   } as unknown as TypeRecord;
 }
 
@@ -136,22 +141,21 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// PHASE 2 REMAINDER — diagnosed, and the first diagnosis was wrong.
+// REMAINDER — one name left, and the reason changed again.
 //
-// `Iterator` and `IteratorResult` resolve in a parameter annotation and not in
-// a `const` one. The first guess was that `Iterator` collided with the global
-// constructor iterator helpers introduced. It does not. There are TWO type-name
-// resolvers: the checker's, in check.mts, which this module is wired into, and
-// the runtime's — TypeNodeToTypeRecord in runtime.mts — which it is not. A
-// parameter annotation is answered statically and works; a `const` annotation
-// is enforced at run time and reaches the second resolver.
+// `Iterator` and the four protocol interfaces now resolve in every position,
+// including a `const` annotation, once the records carried IndexSignatures and
+// the runtime resolver was wired. `Iterator.<uint8> === Iterator.<uint8, void,
+// void>` is *true*, so the shorthand interns.
 //
-// Wiring that resolver is one line and is NOT sufficient. The runtime consumes
-// a Type Record differently from the checker: EnforceAnnotation walks it
-// against a value, and the records built here are shaped for the checker alone,
-// so the annotation path crashes on them rather than answering. That change was
-// written, produced a crash in EnforceAnnotation, and was reverted rather than
-// committed. What it needs is records the runtime can enforce, and that is the
-// whole of what stands between here and phase 3.
+// `IteratorResult` still fails, and no longer with "is not a type" — it now
+// reports "is not defined", which is a different thing. That is a VALUE lookup
+// failing, not a type lookup: in this design types are values, so a `const T =`
+// annotation evaluates its annotation as an expression, and `Iterator` survives
+// that because it is a real global while `IteratorResult` is not bound at all.
 //
-// The other five resolve and check today.
+// So the remaining work is not another resolver. These types need to be
+// BINDINGS — global Type Objects, the way the built-in numeric type names are —
+// rather than only entries a resolver can answer with. That is the mechanism to
+// find next, and it is likely to make the resolver entries redundant for the
+// names that get bindings.

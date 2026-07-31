@@ -15,6 +15,7 @@ import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { restElementType } from './records.mts';
+import { iterationInterfaceRecord } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
@@ -1285,6 +1286,15 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const named = namedNumericLiteralRecord(name);
       if (named) {
         return named;
+      }
+      // proposal-runtime-types #sec-iteration-types. This is the RUNTIME
+      // resolver, separate from the checker's in check.mts: a `const`
+      // annotation is enforced here where a parameter annotation is answered
+      // statically, so wiring only one makes a type resolve in some positions
+      // and not others.
+      const iteration = iterationInterfaceRecord(name, argRecords);
+      if (iteration) {
+        return iteration;
       }
       return Throw.TypeError('$1 is not a type', Value(name));
     }
