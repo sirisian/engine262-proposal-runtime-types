@@ -54,6 +54,7 @@ import {
 
   CreateDataPropertyOrThrow, HasProperty, InitializeFieldOrAccessor, InitializePrivateMethods, IsPropertyKey, markBuiltinFunctionAsConstructor, PrivateElementFind, PrivateGet, PrivateSet, Set, Throw,
 } from '#self';
+import { DefaultValueOf } from '../type-system/runtime.mts';
 import {
   Assert,
   Call,
@@ -1574,6 +1575,50 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  * implementation would naturally have produced the pair, which is why the count
  * is asserted and not just the kind.
  */
+/**
+ * decorators.md's `initial`: "the DECLARED default - a typed field's zero value,
+ * or a constant initializer."
+ *
+ * "A field's initializer runs per INSTANCE at construction while a field
+ * decorator fires at CLASS DEFINITION, so there is no instance value to report
+ * here; `addInitializer` is what reaches one." So a NON-CONSTANT initializer
+ * reports *undefined* rather than being evaluated - evaluating it would run user
+ * code at the wrong time and once per class rather than once per instance.
+ *
+ * ONE derivation, shared by the field and accessor contexts. decorators.md gives
+ * `initial` on `ClassFieldReflection` AND `ClassAccessorReflection`, and the two
+ * describe the same declaration - writing it twice is how the two paths in this
+ * plan have repeatedly drifted.
+ */
+export function* DeclaredInitialOf(decl: ParseNode.FieldDefinition): ValueEvaluator {
+  const initialiser = (decl as { Initializer?: ParseNode | null }).Initializer;
+  if (initialiser) {
+    const literal = initialiser as { type?: string, value?: unknown };
+    if (literal.type === 'NumericLiteral') {
+      return Value(Number(literal.value));
+    }
+    if (literal.type === 'StringLiteral') {
+      return Value(String(literal.value));
+    }
+    if (literal.type === 'BooleanLiteral') {
+      return literal.value ? Value.true : Value.false;
+    }
+    if (literal.type === 'NullLiteral') {
+      return Value.null;
+    }
+    return Value.undefined;
+  }
+  if (decl.TypeAnnotation?.Type) {
+    // A typed member with no initializer reports its type's ZERO VALUE, which
+    // is what the class will actually give the instance.
+    const t = EnsureCompletion(yield* TypeNodeToTypeRecord(decl.TypeAnnotation.Type as never));
+    if (t.Type === 'normal') {
+      return DefaultValueOf(t.Value as unknown as TypeRecord) ?? Value.undefined;
+    }
+  }
+  return Value.undefined;
+}
+
 export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value, pair?: { Getter: Value, Setter: Value }): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -1584,6 +1629,7 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   X(CreateDataProperty(context, Value('static'), decl.static === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
+  X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   // `access`: the pair this accessor generated, so a decorator that REPLACES
   // the accessor can delegate to the storage the layout already allotted rather
@@ -1625,6 +1671,15 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
       X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
     }
   }
+  X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
+  // decorators.md also gives `offset` and `byteLength`, "present when the
+  // declaring class has one". NOT ADDED YET, deliberately: the layout reflection
+  // reaches a placement through the TYPE RECORD's `Constructor`, and the
+  // constructor value this context is handed does not carry `InstanceLayout` -
+  // measured, since a first attempt reported *undefined* for a field the read
+  // path places at offset 4. Two always-undefined properties would look
+  // implemented and be worse than their absence, which is how this suite reads
+  // a deferral.
   // "classContext: Reflect.Class.<TClass>" - a field's context carries its
   // class's, which is what lets one decorator reach the declaration it belongs
   // to without the class having to pass itself.

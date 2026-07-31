@@ -101,7 +101,7 @@ test('the class family: contexts exist and carry their declaration', () => {
 
   // The widened ClassField carries the declaration, not only the layout.
   const field = 'let c; function f(x) { c = x; } class A { @f static s: uint8; } ';
-  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,metadata,classContext,addInitializer');
+  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,initial,metadata,classContext,addInitializer');
   expect(evaluated(`${field} String(c.static) + "/" + String(c.private) + "/" + String(c.type === uint8);`)).toBe('true/false/true');
   expect(evaluated('let c; function f(x) { c = x; } class B { @f #p: uint8; } String(c.private);')).toBe('true');
 

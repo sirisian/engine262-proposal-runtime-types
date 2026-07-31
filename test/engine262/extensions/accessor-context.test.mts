@@ -86,9 +86,19 @@ test('PINNED: what stage E does not do', () => {
   // not carry either - so it is one change across both rather than an accessor
   // one.
   const grab = 'let c; function f(x) { c = x; } ';
-  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.initial);`)).toBe('undefined');
+  // `initial` LANDED on both contexts (PLAN-decorators-remaining.md phase four).
+  // decorators.md gives it on `ClassAccessorReflection` as well as
+  // `ClassFieldReflection`, and the two describe the same declaration - so ONE
+  // derivation serves both rather than two that can drift, which is the shape
+  // this plan has repeatedly been bitten by.
+  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.initial);`)).toBe('5');
+  // A typed accessor with no initializer reports its type's ZERO VALUE.
+  expect(evaluated(`${grab} class A { @f accessor a: uint32; } String(c.initial);`)).toBe('0');
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } typeof c.metadata;`)).toBe('object');
-  expect(evaluated(`${grab} class A { @f a: uint32 = 5; } String(c.initial);`)).toBe('undefined');
+  // The plain FIELD context reports it too, from the SAME derivation - which is
+  // the point of sharing one: a field and an accessor describe the same
+  // declaration and cannot disagree about its declared default.
+  expect(evaluated(`${grab} class A { @f a: uint32 = 5; } String(c.initial);`)).toBe('5');
   // The `protected` ACCESS RULE is not enforced: README makes it "an access rule
   // checked where the static type is known", and nothing checks it yet. The
   // modifier parses, lays out, and reflects - which is what stage E needed.
