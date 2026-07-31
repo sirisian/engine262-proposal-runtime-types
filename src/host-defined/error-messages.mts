@@ -463,6 +463,7 @@ export interface Throw {
   | 'the first placement argument must be an ArrayBuffer'
   | 'the placement extent exceeds the buffer'
   | 'the reciprocal of zero is undefined'
+  | 'the topic is a value, not a reference'
   | 'the topic is not bound here'
   | 'the type in a property descriptor must be a type'
   | 'the view extent exceeds the buffer'

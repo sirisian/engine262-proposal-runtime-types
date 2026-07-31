@@ -109,3 +109,42 @@ test('the base language is untouched with the feature off', () => {
   expectErrorFlagOff('const x = 5 |> % + 1;');
   expect(evaluatedFlagOff('String(5 | 2);')).toBe('7');
 });
+
+test('the topic is immutable', () => {
+  expectError('5 |> (% = 1);');
+  expectError('5 |> %++;');
+});
+
+test('the topic is a value, not a place', () => {
+  // A reference parameter binds the caller's LOCATION; the topic holds the
+  // value the left operand produced, so a reference through it would bind a
+  // temporary and the write would reach nothing observable.
+  expectError('function inc(ref a: int32) { a++; } let n: int32 = 0; n |> inc(ref %);');
+  // The same call written without the pipe is the one that works, and is
+  // shorter — which is why the refusal costs nothing.
+  expect(evaluated('function inc(ref a: int32) { a++; } let n: int32 = 0; inc(ref n); String(n);')).toBe('1');
+});
+
+test('await and yield in a step are the enclosing function\'s', () => {
+  expect(evaluated(`
+    async function f() { return 1 |> Promise.resolve(%) |> await % |> % + 1; }
+    String(typeof f().then);
+  `)).toBe('function');
+  expect(evaluated('function* g() { 1 |> (yield %); } String([...g()].join(","));')).toBe('1');
+});
+
+test('the topic goes where any expression goes', () => {
+  expect(evaluated('function f(...xs) { return xs.length; } String([1, 2, 3] |> f(...%));')).toBe('3');
+  expect(evaluated('function f(a, b, c) { return a + b + c; } String(2 |> f(1, %, 3));')).toBe('6');
+  expect(evaluated('String(({ v: 1 } |> %.v));')).toBe('1');
+});
+
+/**
+ * Two corpus items from PLAN-pipeline-operator.md §5.5 are not testable here,
+ * and the reason is not the pipeline. Overload declarations
+ * (`function f(v: uint32): string;`) and generic function declarations
+ * (`function id.<T>(v: T): T`) are not parsed by this engine at all — both fail
+ * identically without a pipe. The pipeline's part of each rule, that resolution
+ * and inference read the topic's type like any argument's, is specified in
+ * #sec-pipeline-static-semantics and will be testable when the declarations are.
+ */

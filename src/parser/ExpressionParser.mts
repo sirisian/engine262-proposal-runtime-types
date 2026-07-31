@@ -1619,7 +1619,13 @@ export abstract class ExpressionParser extends FunctionParser {
           && (this.peekAhead().type === Token.IDENTIFIER
             || this.peekAhead().type === Token.THIS
             || this.peekAhead().type === Token.YIELD
-            || this.peekAhead().type === Token.AWAIT)) {
+            || this.peekAhead().type === Token.AWAIT
+            // The topic, so that `ref %` reaches the refusal below with its own
+            // diagnostic. Without this the lookahead declines, `ref` parses as
+            // an identifier, and the `%` that follows is an unexplained
+            // "Unexpected token" - refused, but for a reason the reader has to
+            // work out.
+            || (this.peekAhead().type === Token.MOD && this.pipelineBodyDepth > 0))) {
         // proposal-runtime-types (references extension): a `ref` argument
         // passes the operand's storage location rather than its value. `ref` is
         // contextual: `f(ref)` and `f(ref, x)` still pass an identifier named
