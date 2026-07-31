@@ -141,22 +141,25 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — one name, and the earlier verdict on this fix was wrong.
+// REMAINDER — one name, and the cause narrowed to the record's KIND.
 //
-// Registering these among the library type names is what makes them resolve in
-// an EVALUATED position - a `const` annotation, where the annotation is an
-// expression because types are values here. An earlier attempt did exactly this
-// and was reverted as ineffective; the test that condemned it used
-// `const i: Iterable.<uint8> = [1, 2]`, whose failure was an assignability
-// error misread as a resolution one. With a generator on the right-hand side
-// the resolution plainly works.
+// Five of six resolve in every position. `IteratorResult` resolves BARE in an
+// evaluated position and APPLIED in a parameter annotation, and fails only when
+// it is applied in an evaluated one - `const r: IteratorResult.<uint8> = …`
+// reports "is not defined".
 //
-// So five of six resolve everywhere: Iterator, Iterable, IterableIterator, and
-// the async pair. `IteratorResult` still reports "is not defined" in an
-// evaluated position despite the same registration, and it is the one member of
-// the family whose record is a UNION rather than an object - which is the first
-// place to look.
+// Ruled out by test: the arity, since the one-argument form fails too; and the
+// `void` type argument, since `Promise.<uint8, void>` resolves.
 //
-// The assignability error that now appears for `const i: Iterable.<uint8> =
-// g()` is not a defect: making a Generator satisfy IterableIterator is phase 4,
-// and this is that phase arriving on schedule rather than a regression.
+// What is left is the record. `IteratorResult` is the only member of this
+// family built as a ~union~; every other is an ~object~. Applying type
+// arguments in an evaluated position appears to need a record that can carry
+// them - a union has no [[Arguments]] to attach to - so the applied form finds
+// nothing to apply to and reports the name as undefined.
+//
+// Two directions, neither started. Teach the evaluated application path to
+// handle a union by substituting into its members, which is the general fix and
+// helps every future union-shaped library type. Or give `IteratorResult` a
+// carrier - a nominal type whose structural form is the union - which is
+// narrower and reuses the class/interface split the specification already
+// describes.
