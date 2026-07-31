@@ -230,6 +230,17 @@ export interface TupleElementRecord {
 export type TypeRecord =
   | { readonly Kind: 'any' }
   | { readonly Kind: 'void' }
+  /**
+   * proposal-runtime-types table-type-record-kinds: a generic parameter,
+   * standing for the type an application will bind, within the body and
+   * signatures of its declaration.
+   *
+   * Without this a declaration's own annotations had nothing to resolve `T` to,
+   * so a field naming it failed outright and a method signature naming it
+   * failed when the method was CALLED - which is why generic classes declared
+   * without complaint and did not work.
+   */
+  | { readonly Kind: 'parameter', readonly Name: string, readonly Constraint?: TypeRecord }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
   | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
   // proposal-runtime-types (table-metadata-values): a pattern, carried as its
@@ -590,4 +601,9 @@ export function propertyKeyValue(key: string | SymbolValue): JSStringValue | Sym
 /** A Property Type Record's [[Key]] as display text. */
 export function displayPropertyKey(key: string | SymbolValue): string {
   return typeof key === 'string' ? key : `[${key.Description instanceof JSStringValue ? key.Description.stringValue() : ''}]`;
+}
+
+/** A generic parameter standing for what an application will bind. */
+export function parameterTypeRecord(Name: string, Constraint?: TypeRecord): TypeRecord {
+  return Constraint ? { Kind: 'parameter', Name, Constraint } : { Kind: 'parameter', Name };
 }

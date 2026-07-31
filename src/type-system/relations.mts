@@ -131,6 +131,20 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       && builtinImplements(s.LibraryName, s.Arguments, (declared) => IsSubtype(declared, t, [...assumptions, { First: s, Second: t }]))) {
     return true;
   }
+  // proposal-runtime-types: a generic parameter is opaque within its own
+  // declaration. It is a subtype of itself - which is what lets `m(v: T): T`
+  // return its argument - and of its constraint, since a constrained parameter
+  // is known to be at least that. Nothing else relates to it, because within
+  // the declaration nothing else is known about it.
+  if (s.Kind === 'parameter' || t.Kind === 'parameter') {
+    if (s.Kind === 'parameter' && t.Kind === 'parameter') {
+      return s.Name === t.Name;
+    }
+    if (s.Kind === 'parameter' && s.Constraint) {
+      return IsSubtype(s.Constraint, t, [...assumptions, { First: s, Second: t }]);
+    }
+    return false;
+  }
   if (s.Kind !== t.Kind) {
     return false;
   }

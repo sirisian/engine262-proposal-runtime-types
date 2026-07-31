@@ -80,3 +80,33 @@ test('generics: a variadic generic parameter is deferred (documents the gap)', (
   // parse today.
   expectThrown('function f<...I: [].<uint32>>() { return 1; } f();');
 });
+
+test('generics: a class type parameter reaches a field annotation', () => {
+  // generics.md's opening example depends on this, and it failed with "T is
+  // not defined": a field is evaluated during class definition, where nothing
+  // bound the class's parameters. Each is bound to a ~parameter~ record now -
+  // the kind table-type-record-kinds specifies and the engine lacked.
+  expect(ok('class B<T> { v: T = null; }')).toBe(true);
+  expect(ok('class B<T> { accessor v: T = null; }')).toBe(true);
+  // The positions that already worked must keep working.
+  expect(ok('class B<T> { constructor(v: T) {} }')).toBe(true);
+  expect(ok('class B<T> { m(v: T) {} }')).toBe(true);
+  expect(ok('class B<T> { m(): T { return null; } }')).toBe(true);
+  expect(ok('class P<T> {} class B<T> extends P.<T> {}')).toBe(true);
+});
+
+/**
+ * Two parts of the generics work remain, both narrowed to a cause.
+ *
+ * An UNINITIALIZED field of a parameter type is refused - `class B<T> { v: T; }`
+ * reports "undefined is not assignable to parameter" - where the same field at
+ * a concrete type is accepted. The parameter rule in relations.mts says nothing
+ * relates to a parameter but itself and its constraint, which is right for a
+ * declaration's interior and wrong for the initialization check that runs over
+ * it. The concrete path skips that check; the parameter path does not.
+ *
+ * And a generic class's METHOD still fails when CALLED - `new B.<uint8>().m(1)`
+ * reports "T is not defined" - because a method signature is resolved lazily,
+ * at the call, and the frame pushed here covers field evaluation only. The same
+ * frame needs pushing where a method's signature is resolved.
+ */

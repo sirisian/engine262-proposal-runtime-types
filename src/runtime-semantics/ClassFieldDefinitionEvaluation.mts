@@ -1,5 +1,8 @@
 import { X, Q } from '../completion.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import {
+  TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame,
+} from '../type-system/runtime.mts';
+import { parameterTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -114,8 +117,32 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   const typeAnnotation = (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   let typeObject;
   if (typeAnnotation && surroundingAgent.feature('runtime-types')) {
-    const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
-    typeObject = GetTypeObject(record);
+    // proposal-runtime-types: a field annotation inside a GENERIC class names
+    // the class's type parameters, and nothing bound them here - so
+    // `class B<T> { v: T; }` failed with "T is not defined", which is the
+    // opening example of generics.md. Each parameter is bound to a ~parameter~
+    // record, standing for what an application will supply.
+    const owner = enclosingGenericDeclaration(FieldDefinition as unknown as ParseNode);
+    const params = owner?.TypeParameters?.TypeParameterList ?? [];
+    if (params.length > 0) {
+      const frame = new Map<string, TypeRecord>();
+      for (const p of params) {
+        const name = (p as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
+        if (name) {
+          frame.set(name, parameterTypeRecord(name));
+        }
+      }
+      pushTypeParameterFrame(frame);
+      try {
+        const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
+        typeObject = GetTypeObject(record);
+      } finally {
+        popTypeParameterFrame();
+      }
+    } else {
+      const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
+      typeObject = GetTypeObject(record);
+    }
   }
   // PLAN-accessor.md stage B. README: "An `accessor` field declares a typed
   // field together with a getter and setter over it. It desugars to a private
@@ -344,4 +371,24 @@ export function MakeAutoAccessorSetter(_homeObject: ObjectValue, _name: Property
   // TODO(decorator): https://github.com/tc39/proposal-decorators/issues/568
   // MakeMethod(setter, homeObject);
   return setter;
+}
+
+
+/**
+ * The nearest enclosing declaration carrying type parameters, or undefined.
+ *
+ * A field is evaluated during class definition, so the class node is reachable
+ * only by walking up - there is no scope in hand at that point the way a method
+ * body has one.
+ */
+function enclosingGenericDeclaration(node: ParseNode): { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } } | undefined {
+  let n: ParseNode | undefined = node;
+  while (n) {
+    const withParams = n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } };
+    if (withParams.TypeParameters?.TypeParameterList?.length) {
+      return withParams;
+    }
+    n = (n as unknown as { parent?: ParseNode }).parent;
+  }
+  return undefined;
 }
