@@ -158,8 +158,28 @@ export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: bo
   if (annotation && annotation.Kind === 'nominal' && annotation.LibraryName === want) {
     return annotation;
   }
-  const yielded = annotation ?? { Kind: 'any' as const };
-  return libraryTypeRecord(want, [yielded, voidType, voidType]);
+  const [Y, R, N] = iterationArguments(annotation ? [annotation] : []);
+  return libraryTypeRecord(want, [Y, R, N]);
+}
+
+/**
+ * The three arguments of an iteration or generator type, defaulted.
+ *
+ * #sec-iteration-types states the shorthand once for both families: a bare
+ * argument is the element type and the rest are ~void~. It lives here, in one
+ * function used by both, because the agreement between them is load-bearing -
+ * it is what makes a `Generator.<Y, R, N>` satisfy `IterableIterator.<Y, R, N>`
+ * - and two copies of a defaulting rule is how that agreement would be lost.
+ */
+export function iterationArguments(args: readonly (TypeRecord | number)[]): [TypeRecord, TypeRecord, TypeRecord] {
+  const at = (i: number): TypeRecord => {
+    const a = args[i];
+    if (typeof a === 'number' || a === undefined) {
+      return i === 0 ? anyType : voidType;
+    }
+    return a;
+  };
+  return [at(0), at(1), at(2)];
 }
 
 /** The Y, R, and N of a generator type, or null where the type is not one. */

@@ -9,7 +9,7 @@ import { ok, evaluated } from '../readme/harness.mts';
  * member-access site, so it has no structural form to compare against an
  * interface. The declared-implements table is what makes a generator an
  * iterable iterator, and the entries in that table are exactly the assertions
- * in this file — which is the point of writing them here, since a
+ * in this file â€” which is the point of writing them here, since a
  * hand-maintained table of claims is only as true as its tests.
  */
 
@@ -29,7 +29,7 @@ test('a hand-written object satisfies Iterator', () => {
 });
 
 test('the shorthand interns', () => {
-  // Not merely assignable — the same interned type. A shorthand producing an
+  // Not merely assignable â€” the same interned type. A shorthand producing an
   // equal-but-distinct record would pass an assignability check and fail this.
   expect(ok('const a: boolean = Iterator.<uint8> === Iterator.<uint8, void, void>;')).toBe(true);
 });
@@ -64,8 +64,8 @@ test('no per-collection iteration types', () => {
 
 test('the iteration types are values, so they work on object-literal initializers', () => {
   // The last blocker, and the control that found it. Contextually typing an
-  // object literal RESOLVES ITS ANNOTATION AS A VALUE â€” the type has to be in
-  // hand before the literal is checked against it â€” so a name with no binding
+  // object literal RESOLVES ITS ANNOTATION AS A VALUE Ã¢â‚¬â€� the type has to be in
+  // hand before the literal is checked against it Ã¢â‚¬â€� so a name with no binding
   // was undefined there while the same annotation on a parameter resolved
   // through a resolver and worked. `Iterator` was the one member of the family
   // that worked, and it differed in nothing except being a real global, which
@@ -74,4 +74,37 @@ test('the iteration types are values, so they work on object-literal initializer
   expect(evaluated('String(typeof Iterable);')).toBe('object');
   expect(evaluated('String(typeof IteratorResult);')).toBe('object');
   expect(evaluated('String(typeof IterableIterator);')).toBe('object');
+});
+
+test('the generator and iteration families default identically', () => {
+  // The agreement is load-bearing rather than tidy: it is what makes a
+  // Generator.<Y, R, N> satisfy IterableIterator.<Y, R, N>. Both now read the
+  // shorthand from one function, and these assertions are what would fail if a
+  // second copy ever appeared and drifted.
+  expect(ok('const a: boolean = Iterator.<uint8> === Iterator.<uint8, void, void>;')).toBe(true);
+  // `Generator` is not a global binding in this engine - it is a library type
+  // name, reachable in an annotation and not as a value - so its shorthand is
+  // asserted through an annotation rather than an expression.
+  expect(ok('function* g(): uint8 { yield 1; } const a: Generator.<uint8, void, void> = g();')).toBe(true);
+  expect(ok('const a: boolean = AsyncIterator.<uint8> === AsyncIterator.<uint8, void, void>;')).toBe(true);
+
+  // And the relation those defaults exist to support, asserted through the
+  // shorthand on both sides rather than the full form.
+  expect(ok('function* g(): uint8 { yield 1; } const i: IterableIterator.<uint8> = g();')).toBe(true);
+});
+
+/**
+ * `Iterator` in type position denotes the INTERFACE, not the class.
+ *
+ * The class is real — it is the global iterator helpers introduced, and it is
+ * where `map`, `filter`, and `take` live — but a type annotation naming
+ * `Iterator.<T>` has to accept a hand-written `{ next() { … } }`, which is what
+ * the design's own example does and what the protocol reading requires. The
+ * class's instances satisfy the interface like any other value that has the
+ * members, so nothing is lost: what a chain gets from the class is its methods
+ * at run time, not a different static type.
+ */
+test('a class instance and a hand-written object both satisfy Iterator', () => {
+  expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
 });

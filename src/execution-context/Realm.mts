@@ -368,7 +368,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // worked in that position, and it differed in nothing else.
     for (const name of [
       'IteratorResult', 'Iterable', 'IterableIterator',
-      'AsyncIterable', 'AsyncIterableIterator',
+      // `AsyncIterator` is bound here and `Iterator` is not, because iterator
+      // helpers made `Iterator` a global already and the async proposal has not
+      // shipped. Omitting it was an oversight caught by asserting that the two
+      // families' shorthands intern alike.
+      'AsyncIterator', 'AsyncIterable', 'AsyncIterableIterator',
     ]) {
       const record = iterationInterfaceRecord(name);
       if (record) {

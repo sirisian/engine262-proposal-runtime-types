@@ -3,14 +3,14 @@
 // These are built-in INTERFACES rather than library classes: the protocols are
 // satisfied structurally, because `for`-`of` asks whether [Symbol.iterator] is
 // callable and never asks what a value declared. A type refusing a hand-written
-// `{ next() { … } }` would describe a language this is not.
+// `{ next() { â€¦ } }` would describe a language this is not.
 //
 // PLAN-iteration-types-engine.md phase 2. `IteratorResult` comes first because
 // it is what `next` returns and nothing else can be written before it.
 
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, voidType, makePrimitive, parameter,
+  anyType, makePrimitive, parameter, iterationArguments,
 } from './records.mts';
 import { wellKnownSymbols, Value } from '#self';
 
@@ -67,7 +67,7 @@ const booleanLiteral = (v: boolean): TypeRecord => ({
 } as unknown as TypeRecord);
 
 /**
- * `IteratorResult.<T, R>` — a union of two object types discriminated by `done`.
+ * `IteratorResult.<T, R>` â€” a union of two object types discriminated by `done`.
  *
  * This is the shape a `match` reads without a narrowing rule of its own: one arm
  * binds `value` at T, the other at R. TypeScript needed a compiler flag to stop
@@ -97,13 +97,10 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
   if (!BUILTIN_INTERFACES.has(name)) {
     return null;
   }
-  const at = (i: number): TypeRecord => {
-    const a = args[i];
-    return typeof a === 'number' || a === undefined ? (i === 0 ? anyType : voidType) : a;
-  };
-  const T = at(0);
-  const R = at(1);
-  const N = at(2);
+  // The shorthand comes from records.mts so that this family and the generator
+  // families default identically - the agreement is what makes a Generator an
+  // IterableIterator, and a second copy here is how it would drift.
+  const [T, R, N] = iterationArguments(args);
 
   switch (name) {
     case 'IteratorResult':
@@ -149,10 +146,10 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — one symptom left.
+// REMAINDER â€” one symptom left.
 //
 // `IteratorResult` resolves bare in an evaluated position and applied in a
-// parameter annotation, and fails only as `const r: IteratorResult.<uint8> = …`,
+// parameter annotation, and fails only as `const r: IteratorResult.<uint8> = â€¦`,
 // reporting "is not defined". Ruled out by test: the arity, a `void` type
 // argument, the missing runtime resolver, and answering the name in
 // TypeNodeToTypeRecord's throw-recovery branch.
@@ -164,8 +161,8 @@ function promiseOf(t: TypeRecord): TypeRecord {
 /**
  * What a built-in nominal type DECLARES it implements.
  *
- * A library type is an opaque nominal here â€” its members live in side tables
- * consulted at the member-access site, never on the record â€” so it has no
+ * A library type is an opaque nominal here Ã¢â‚¬â€� its members live in side tables
+ * consulted at the member-access site, never on the record Ã¢â‚¬â€� so it has no
  * structural form to compare against an interface. The relation is therefore a
  * DECLARATION rather than an inspection, which is what the specification says
  * and what makes it the fast path: a brand check rather than a member walk.
