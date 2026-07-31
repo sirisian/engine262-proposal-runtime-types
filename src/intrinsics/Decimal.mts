@@ -257,6 +257,99 @@ export function decimalCompare(x: DecimalObject, y: DecimalObject): number {
   return xs < ys ? -1 : xs > ys ? 1 : 0;
 }
 
+/**
+ * The EXACT decimal expansion of a binary double, before any rounding.
+ *
+ * Every binary float is a terminating decimal, because 2 divides 10: a double is
+ * m x 2^e, and for a negative e that is m x 5^|e| / 10^|e| - exact, with no
+ * division. `0.1` expands to 55 significant digits this way, which is the figure
+ * the specification quotes when it flags this conversion as the hard one.
+ */
+function exactExpansionOfDouble(value: number): { significand: bigint, exponent: number } | undefined {
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  if (value === 0) {
+    return { significand: 0n, exponent: 0 };
+  }
+  // Read the double's own significand and exponent from its bits, rather than
+  // going through a decimal string - the string is already a rounding, and this
+  // conversion is defined over what the float HOLDS.
+  const buffer = new DataView(new ArrayBuffer(8));
+  buffer.setFloat64(0, value);
+  const hi = buffer.getUint32(0);
+  const lo = buffer.getUint32(4);
+  const negative = (hi & 0x80000000) !== 0;
+  const rawExponent = (hi >>> 20) & 0x7FF;
+  const rawMantissa = (BigInt(hi & 0xFFFFF) << 32n) | BigInt(lo);
+  // A subnormal has no implicit leading 1 and a fixed exponent.
+  const mantissa = rawExponent === 0 ? rawMantissa : rawMantissa | (1n << 52n);
+  const exponent = (rawExponent === 0 ? -1074 : rawExponent - 1075);
+  let significand;
+  let decimalExponent;
+  if (exponent >= 0) {
+    significand = mantissa << BigInt(exponent);
+    decimalExponent = 0;
+  } else {
+    // m / 2^k = m x 5^k / 10^k, which is exact.
+    significand = mantissa * 5n ** BigInt(-exponent);
+    decimalExponent = exponent;
+  }
+  return { significand: negative ? -significand : significand, exponent: decimalExponent };
+}
+
+/**
+ * A `float64` as a decimal of the given width.
+ *
+ * decimal.md settles which cohort member results, and it is the one that
+ * surprises: "`decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS, so a binary
+ * `0.1` stays slightly off - which is why an exact decimal comes from a literal
+ * or a string, never from a round trip through binary", and the comment beside
+ * it reads "carries the float's binary value, ROUNDED TO 34 DIGITS".
+ *
+ * So this is the exact expansion rounded to the width's precision, and NOT the
+ * shortest round-tripping digits. The alternative would make `decimal128(0.1)`
+ * equal `decimal128('0.1')` and thereby hide the whole reason the decimal types
+ * exist: the two are different values, and a conversion that pretended
+ * otherwise would launder a binary approximation into an exact-looking decimal.
+ */
+export function DecimalFromDouble(value: number, width: 32 | 64 | 128): DecimalParts | undefined {
+  const exact = exactExpansionOfDouble(value);
+  if (!exact) {
+    return undefined;
+  }
+  // REDUCE FIRST, then ask whether it fits. The exact expansion of `0.5` is
+  // 2^52 x 5^53 over 10^53 - a 53-digit significand for a value with one
+  // significant digit - so testing the UNREDUCED expansion against the
+  // precision answers "does not fit" for a value that plainly does.
+  const reduced = ReduceDecimal(exact.significand, exact.exponent);
+  if (digitCount(reduced.significand) <= DecimalPrecision(width)) {
+    // The double holds this value EXACTLY, so the conversion is exact and the
+    // reduced member is what to deliver: `0.5` arrives as `0.5`, not as
+    // `0.5000...0` padded to the width.
+    return reduced;
+  }
+  // The value does NOT fit, so every digit kept is one the double actually
+  // holds, and reducing would discard information this conversion exists to
+  // expose - `decimal128(0.1)` is the binary approximation, not one tenth.
+  return roundToPrecision(exact.significand, exact.exponent, DecimalPrecision(width));
+}
+
+/**
+ * A decimal as a `float64` - the nearest double to the decimal's value.
+ *
+ * Exact where the value has an exact binary form and rounded where it does not,
+ * which is the ordinary direction of loss and needs no rule of its own.
+ */
+/** A decimal re-rounded to another width's precision. */
+export function RoundDecimalToWidth(d: DecimalObject, width: 32 | 64 | 128): DecimalParts {
+  return roundToPrecision(d.DecimalSignificand, d.DecimalExponent, DecimalPrecision(width));
+}
+
+export function DoubleFromDecimal(d: DecimalObject): number {
+  return Number(`${d.DecimalSignificand}e${d.DecimalExponent}`);
+}
+
 /** The decimal `significand x 10^exponent`, as an object of the given width. */
 export function CreateDecimalValue(significand: bigint, exponent: number, width: 32 | 64 | 128, realmRec: Realm): DecimalObject {
   const proto = realmRec.Intrinsics['%decimal.prototype%'];

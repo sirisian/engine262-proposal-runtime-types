@@ -8,7 +8,10 @@ import { neverType, orderKey } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
-import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import {
+  CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject,
+} from '../intrinsics/Decimal.mts';
+import { NumberValue } from '../value.mts';
 
 /**
  * proposal-runtime-types #sec-canonicalizetype and #sec-gettypeobject
@@ -185,13 +188,35 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     // stage F owns. The existing "not assignable" TypeError is the right answer
     // until it is defined.
     if (record.Kind === 'primitive' && (record.Name === 'decimal32' || record.Name === 'decimal64' || record.Name === 'decimal128')) {
+      const width = record.Name === 'decimal32' ? 32 : record.Name === 'decimal64' ? 64 : 128;
       if (arg instanceof JSStringValue) {
         const digits = ParseDecimalDigits(arg.stringValue());
         if (!digits) {
           return Throw.SyntaxError('$1 is not a decimal', arg);
         }
-        const width = record.Name === 'decimal32' ? 32 : record.Name === 'decimal64' ? 64 : 128;
         return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
+      }
+      // A NUMBER converts by CARRYING WHAT THE FLOAT HOLDS (PLAN-decimal.md
+      // stage F, settled by decimal.md): the exact binary expansion, rounded to
+      // the width's digits. `decimal128(0.1)` is therefore NOT
+      // `decimal128('0.1')` - the first carries the binary approximation the
+      // double already was, and the second is exactly one tenth.
+      //
+      // Making them equal would be the tempting choice and the wrong one: it
+      // would launder a binary approximation into an exact-looking decimal and
+      // hide the whole reason these types exist.
+      if (arg instanceof NumberValue) {
+        const parts = DecimalFromDouble((arg as NumberValue).numberValue(), width);
+        if (!parts) {
+          return Throw.RangeError('$1 has no decimal value', arg);
+        }
+        return CreateDecimalValue(parts.significand, parts.exponent, width, surroundingAgent.currentRealmRecord);
+      }
+      if (isDecimalObject(arg)) {
+        // A decimal to a decimal of another WIDTH re-rounds to that width's
+        // precision and keeps its cohort member where it fits.
+        const parts = RoundDecimalToWidth(arg, width);
+        return CreateDecimalValue(parts.significand, parts.exponent, width, surroundingAgent.currentRealmRecord);
       }
     }
     return Q(yield* ConvertValue(arg, record));

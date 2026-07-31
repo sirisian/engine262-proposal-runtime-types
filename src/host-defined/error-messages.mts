@@ -515,6 +515,7 @@ export interface Throw {
   | '$1 does not look like a TemporalTimeLike object'
   | "$1 does not match the pattern's length"
   | '$1 has no custom matcher'
+  | '$1 has no decimal value'
   | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a typed class and cannot be proxied'

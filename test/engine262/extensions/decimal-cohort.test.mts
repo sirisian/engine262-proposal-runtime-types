@@ -64,16 +64,53 @@ test('a decimal reads its cohort member from the DIGITS', () => {
   expect(evaluated('decimal64("1.0").toString();')).toBe('1.0');
 });
 
-test('PINNED: a NUMBER argument is refused', () => {
-  // `decimal128(0.1)` would have to choose a cohort member for a binary double
-  // whose exact expansion is 55 digits - the specification flags this as the
-  // hard conversion, "the difficulty is not arithmetic but WHICH COHORT MEMBER
-  // RESULTS". Stage F owns it; refusing is what keeps a wrong answer from being
-  // shipped meanwhile.
-  expect(evaluated('try { decimal128(0.1); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
-  expect(evaluated('try { decimal128(1); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+test('STAGE F: a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
+  // The conversion the specification flagged as the hard one from the start -
+  // "the difficulty is not arithmetic but WHICH COHORT MEMBER RESULTS" - and
+  // decimal.md settles it: "`decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS,
+  // so a binary `0.1` stays slightly off", "rounded to 34 digits".
+  //
+  // So this is the exact binary expansion rounded to the width, NOT the
+  // shortest round-tripping digits. Every binary float IS a terminating
+  // decimal - a double is m x 2^e, and m / 2^k is m x 5^k / 10^k - so the
+  // expansion is exact before the rounding; `0.1` needs 55 digits, which is the
+  // figure the spec quotes.
+  expect(evaluated('decimal128(0.1).toString();')).toBe('0.1000000000000000055511151231257827');
+  // **THE ASSERTION THAT SAYS WHY**: the converted float is NOT one tenth.
+  // Making these equal would launder a binary approximation into an
+  // exact-looking decimal and hide the whole reason these types exist.
+  expect(evaluated('String(decimal128(0.1) == decimal128("0.1"));')).toBe('false');
+  // A value the double holds EXACTLY converts exactly, and arrives REDUCED
+  // rather than padded to the width - `0.5` is `0.5`, not `0.5000...0`.
+  expect(evaluated('decimal128(0.5).toString();')).toBe('0.5');
+  expect(evaluated('decimal128(0.25).toString();')).toBe('0.25');
+  expect(evaluated('decimal128(1).toString();')).toBe('1');
+  expect(evaluated('decimal128(100).toString();')).toBe('100');
+  expect(evaluated('decimal128(-2.5).toString();')).toBe('-2.5');
+  expect(evaluated('decimal128(0).toString();')).toBe('0');
+  expect(evaluated('String(decimal128(0.5) == decimal128("0.5"));')).toBe('true');
+  // A narrower width rounds to its own precision.
+  expect(evaluated('decimal32(0.1).toString();')).toBe('0.1000000');
 });
 
+test('STAGE F: a decimal OUT to a float is the ordinary direction of loss', () => {
+  // The asymmetry is the point. Binary to decimal had to CHOOSE a cohort member
+  // and the choice is visible; decimal to binary has ONE answer and rounds to
+  // it, as every narrowing conversion does.
+  expect(evaluated('String(float64(decimal128("1.5")));')).toBe('1.5');
+  expect(evaluated('String(float32(decimal128("1.5")));')).toBe('1.5');
+  // Both round trips land where they should: a float through a decimal and back
+  // is the same float, and one tenth through a float is the nearest double.
+  expect(evaluated('String(float64(decimal128(0.1)) === 0.1);')).toBe('true');
+  expect(evaluated('String(float64(decimal128("0.1")) === 0.1);')).toBe('true');
+});
+
+test('STAGE F: a decimal converts across WIDTHS', () => {
+  // Re-rounding to the target's precision, keeping the cohort member where it
+  // fits.
+  expect(evaluated('decimal32(decimal128("1.2345678901234")).toString();')).toBe('1.234568');
+  expect(evaluated('decimal128(decimal32("1.25")).toString();')).toBe('1.25');
+});
 test('STAGE C: IEEE 754 clause 5.1 decides WHICH COHORT MEMBER results', () => {
   const D = (x: string) => `decimal128("${x}")`;
   // ADDITION's preferred exponent is min(Q(x), Q(y)) - so `1.5 + 1.50` is

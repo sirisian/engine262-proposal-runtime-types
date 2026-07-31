@@ -15,6 +15,7 @@ import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTyp
 import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
+import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -144,6 +145,22 @@ function isNumberConversionSource(value: Value): boolean {
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types (PLAN-decimal.md stage F): a DECIMAL out to a binary
+  // float or a Number is the ordinary direction of loss - the nearest double to
+  // the decimal's value - and needs no rule of its own, unlike the direction in.
+  //
+  // The asymmetry is the point. Binary to decimal had to CHOOSE a cohort member
+  // and the choice is visible; decimal to binary has one answer and rounds to
+  // it, as every narrowing conversion does.
+  if (surroundingAgent.feature('runtime-types') && isDecimalObject(value)) {
+    if (t.Kind === 'primitive' && (t.Name === 'float64' || t.Name === 'float32' || t.Name === 'float16' || t.Name === 'number')) {
+      const asNumber = Value(DoubleFromDecimal(value));
+      if (t.Name === 'number') {
+        return asNumber;
+      }
+      return Q(yield* ConvertValue(asNumber, t));
+    }
+  }
   // #sec-parameterized-types: the crossing between two parameterizations of one
   // base is ConvertParameterization, which each meta type gates independently —
   // and it must be consulted BEFORE the value-level membership shortcut below,
