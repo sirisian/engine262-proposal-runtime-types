@@ -141,21 +141,31 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — one name left, and the reason changed again.
+// REMAINDER — the boundary, located precisely.
 //
-// `Iterator` and the four protocol interfaces now resolve in every position,
-// including a `const` annotation, once the records carried IndexSignatures and
-// the runtime resolver was wired. `Iterator.<uint8> === Iterator.<uint8, void,
-// void>` is *true*, so the shorthand interns.
+// These types resolve in a PARAMETER annotation and not in a `const` one, and
+// the two paths differ in kind rather than in degree. A parameter annotation is
+// answered by a resolver; a `const` annotation is EVALUATED, because in this
+// design types are values, so the annotation has to name something the
+// expression evaluator can reach.
 //
-// `IteratorResult` still fails, and no longer with "is not a type" — it now
-// reports "is not defined", which is a different thing. That is a VALUE lookup
-// failing, not a type lookup: in this design types are values, so a `const T =`
-// annotation evaluates its annotation as an expression, and `Iterator` survives
-// that because it is a real global while `IteratorResult` is not bound at all.
+// What was ruled out, each by experiment rather than by reasoning:
 //
-// So the remaining work is not another resolver. These types need to be
-// BINDINGS — global Type Objects, the way the built-in numeric type names are —
-// rather than only entries a resolver can answer with. That is the mechanism to
-// find next, and it is likely to make the resolver entries redundant for the
-// names that get bindings.
+//   - A name collision with the global `Iterator` class. There is none:
+//     `Iterator` is the one name here that WORKS in a const annotation, and it
+//     works precisely because iterator helpers made it a real global.
+//   - A missing resolver. Both are now wired - check.mts for the checker and
+//     TypeNodeToTypeRecord for the runtime - and the parameter path went from
+//     failing to working, so the wiring is right and is not the boundary.
+//   - Registration among the library type names. Added, rebuilt, no effect, and
+//     reverted. `Generator` is registered there and is NOT a global, yet it
+//     resolves in a const annotation - so library registration is neither
+//     necessary nor sufficient, and something else special-cases `Generator`.
+//
+// The next step is to find what the expression evaluator does with `Generator`
+// in an annotation position, since that is the one name that resolves there
+// without a binding. Whatever that mechanism is, is the one these types need.
+//
+// Working today: all six resolve as parameter annotations, a hand-written
+// iterator satisfies `Iterator.<uint8>`, and the shorthand interns -
+// `Iterator.<uint8> === Iterator.<uint8, void, void>` is *true*.
