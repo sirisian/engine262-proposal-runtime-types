@@ -126,6 +126,20 @@ export function* GlobalDeclarationInstantiation(script: ParseNode.Script, env: G
   for (const f of functionsToInitialize) {
     // a. Let fn be the sole element of the BoundNames of f.
     const fn = BoundNames(f)[0];
+    // proposal-runtime-types decorators.md: "A DECORATED FUNCTION DECLARATION
+    // DOES NOT HOIST. `@dec function f() {}` behaves as
+    // `var f = @dec function () {};` - the value is not available above its
+    // declaration. Hoisting it would mean either evaluating the decorator
+    // expressions before the bindings they reference exist, or evaluating them
+    // out of document order."
+    //
+    // So the NAME is declared here, var-like and *undefined*, and the VALUE is
+    // installed by the declaration's own evaluation at its written position.
+    if (surroundingAgent.feature('runtime-types')
+        && (f as { Decorators?: readonly unknown[] | null }).Decorators?.length) {
+      Q(yield* env.CreateGlobalVarBinding(fn, Value.false));
+      continue;
+    }
     // b. Let fo be InstantiateFunctionObject of f with argument env and privateEnv.
     const fo = InstantiateFunctionObject(f, env, privateEnv);
     // c. Perform ? env.CreateGlobalFunctionBinding(fn, fo, false).

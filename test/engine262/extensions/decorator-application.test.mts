@@ -310,29 +310,33 @@ test('the function family and bindings', () => {
   expect(evaluated('let t; function grab(c) { t = c; } @grab const y = 7; t.kind + "/" + String(t.name) + "/" + String(Number(t.initial));')).toBe('Const/y/7');
 });
 
-test('a decorated function declaration still hoists — a KNOWN DIVERGENCE', () => {
-  // decorators.md "Order", written in cycle 115: "A DECORATED FUNCTION
-  // DECLARATION DOES NOT HOIST. `@dec function f() {}` behaves as
-  // `var f = @dec function () {};`" — because hoisting it would evaluate its
-  // decorator expressions either before the bindings they reference exist or
-  // out of document order, and TC39's function-decorators proposal reaches the
-  // same answer having rejected four alternatives.
+test('a decorated function declaration DOES NOT HOIST', () => {
+  // decorators.md: "A decorated function declaration does not hoist.
+  // `@dec function f() {}` behaves as `var f = @dec function () {};` - the
+  // value is not available above its declaration. Hoisting it would mean either
+  // evaluating the decorator expressions before the bindings they reference
+  // exist, or evaluating them out of document order, and both break the rule
+  // above."
   //
-  // THE ENGINE STILL HOISTS IT. The decorators fire at the written position, so
-  // the EXPRESSION ORDER the rule protects is already right; what is not yet
-  // enforced is the binding's absence above the declaration. Suppressing it
-  // means skipping InstantiateFunctionObject at FIVE hoisting sites — Block,
-  // GlobalDeclarationInstantiation, FunctionDeclarationInstantiation, the
-  // global object, and modules — and doing some of them would be worse than
-  // doing none, since the behaviour would differ by scope.
-  //
-  // Pinned here so the divergence from a rule this project itself wrote is
-  // visible rather than discovered.
-  expect(evaluated('function noop(c) {} const before = typeof d; @noop function d() { return 1; } before + "/" + typeof d;')).toBe('function/function');
-  // An undecorated declaration hoists and must keep doing so.
-  expect(evaluated('const r = h(); function h() { return "hoisted"; } r;')).toBe('hoisted');
+  // So the NAME is declared at hoist time, var-like and *undefined*, and the
+  // VALUE is installed by the declaration's own evaluation at its written
+  // position. `typeof` above it is "undefined" rather than a ReferenceError,
+  // which is what distinguishes `var` semantics from `let`.
+  expect(evaluated('function d(c) {} let r; try { r = String(h()); } catch (e) { r = e.constructor.name; } '
+    + '@d function h() { return 1; } r;')).toBe('TypeError');
+  expect(evaluated('function d(c) {} let r; try { r = String(typeof h); } catch (e) { r = "threw"; } '
+    + '@d function h() { return 1; } r;')).toBe('undefined');
+  // Below its declaration it is an ordinary function.
+  expect(evaluated('function d(c) {} @d function h() { return 1; } String(h());')).toBe('1');
+  // An UNDECORATED declaration still hoists, which is what says the rule was
+  // narrowed to decorated ones rather than applied to all.
+  expect(evaluated('let r; try { r = String(p()); } catch (e) { r = e.constructor.name; } '
+    + 'function p() { return 1; } r;')).toBe('1');
+  // The decorator still runs, and a REPLACEMENT still replaces - the value
+  // written at the declaration position is the decorated one.
+  expect(evaluated('let k = "NO"; function d(c) { k = c.kind; } @d function h() { return 1; } k;')).toBe('Function');
+  expect(evaluated('function d(c) { return function () { return 99; }; } @d function h() { return 1; } String(h());')).toBe('99');
 });
-
 test('the object family mirrors the class family', () => {
   // Stage E of PLAN-decorators.md, whose premise was: "structurally parallel to
   // B and C, which is the point: if B and C are right this is mechanical, and

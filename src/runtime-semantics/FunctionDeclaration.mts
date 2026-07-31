@@ -7,7 +7,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyDecorators, ApplySubTargetDecorators, HasSubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { PutValue } from '#self';
-import { CreateDataProperty, GetValue, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
+import { CreateDataProperty, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
+import { InstantiateFunctionObject } from './all.mts';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-evaluation */
 // FunctionDeclaration :
@@ -34,7 +35,17 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
     const name = (FunctionDeclaration.BindingIdentifier as { name?: string } | undefined)?.name;
     let fn: Value = Value.undefined;
     if (typeof name === 'string') {
-      fn = Q(yield* GetValue(Q(yield* ResolveBinding(Value(name)))));
+      // A DECORATED declaration is not initialized by hoisting - decorators.md
+      // makes it behave as `var f = @dec function () {};` - so the function is
+      // instantiated HERE, at its written position, and assigned through the
+      // binding hoisting left holding *undefined*.
+      const running = surroundingAgent.runningExecutionContext;
+      fn = InstantiateFunctionObject(
+        FunctionDeclaration as never,
+        running.LexicalEnvironment,
+        running.PrivateEnvironment,
+      ) as Value;
+      Q(yield* PutValue(Q(yield* ResolveBinding(Value(name))), fn));
     }
     Q(yield* ApplySubTargetDecorators(FunctionDeclaration as never, 'Function', typeof name === 'string' ? Value(name) : Value.undefined, fn));
     if (FunctionDeclaration.Decorators?.length) {
