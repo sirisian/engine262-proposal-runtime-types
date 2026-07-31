@@ -72,6 +72,43 @@ function endsInIterationOrDeclaration(list: readonly ParseNode[] | undefined): s
   }
 }
 
+/**
+ * Whether `node` contains a topic that BELONGS TO IT.
+ *
+ * #sec-pipeline-early-errors. A topic inside a nested pipeline's body is that
+ * pipeline's, so the walk stops there; everything else is descended, including
+ * function bodies, since an arrow inside a step still sees the step's topic.
+ */
+function containsOwnTopic(node: unknown): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  const n = node as { type?: string, Body?: unknown };
+  if (n.type === 'TopicReference') {
+    return true;
+  }
+  if (n.type === 'PipelineExpression') {
+    // Its left operand is in the enclosing body; its own body is not.
+    return containsOwnTopic((n as { PipelineExpression?: unknown }).PipelineExpression);
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'parent' || key === 'location') {
+      continue;
+    }
+    const child = (node as Record<string, unknown>)[key];
+    if (Array.isArray(child)) {
+      if (child.some((c) => containsOwnTopic(c))) {
+        return true;
+      }
+    } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+      if (containsOwnTopic(child)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Whether `node` contains a |VariableStatement|, not crossing a function. */
 function containsVarStatement(node: unknown): boolean {
   return containsMatching(node, (t) => t === 'VariableStatement');
@@ -147,6 +184,16 @@ export abstract class ExpressionParser extends FunctionParser {
 
   /** Set while an iteration statement's head is being parsed (#sec-do-expression-early-errors). */
   protected inIterationHead = false;
+
+  /**
+   * How many pipeline bodies enclose the position being parsed.
+   *
+   * Saved and restored around a body rather than set and cleared, so that a
+   * function expression inside one keeps the topic admitted: `xs |> %.map(v =>
+   * v + %.length)` is legal, and a counter cleared at a function boundary would
+   * refuse it.
+   */
+  protected pipelineBodyDepth = 0;
 
   // proposal-runtime-types #sec-do-expressions: a `do` expression's plain form
   // parses a Block, which the statement parser owns.
@@ -467,8 +514,49 @@ export abstract class ExpressionParser extends FunctionParser {
   // ConditionalExpression :
   //   ShortCircuitExpression
   //   ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression
+  /**
+   * proposal-runtime-types #sec-pipeline-operator.
+   *
+   *   PipelineExpression :
+   *     RangeExpression
+   *     PipelineExpression `|>` RangeExpression
+   *
+   * Left-associative, and LOOSER than a range: the specification states the
+   * order in both clauses, because the upstream proposal names
+   * ShortCircuitExpression as its operand and this design has put ranges at
+   * that level. `0..10 |> sum(%)` pipes the range.
+   */
+  parsePipelineExpression(): ParseNode.Expression {
+    let left = this.parseRangeExpression() as ParseNode.Expression;
+    if (!surroundingAgent.feature('runtime-types')) {
+      return left;
+    }
+    while (this.test(Token.PIPE_GT)) {
+      const node = this.startNode<ParseNode.PipelineExpression>(left);
+      this.next();
+      node.PipelineExpression = left;
+      // The body is parsed with the topic admitted; the depth is what
+      // `parsePrimaryExpression` reads to tell a topic from a remainder.
+      this.pipelineBodyDepth += 1;
+      try {
+        node.Body = this.parseRangeExpression() as ParseNode.Expression;
+      } finally {
+        this.pipelineBodyDepth -= 1;
+      }
+      // #sec-pipeline-early-errors: a body that mentions no topic OF ITS OWN
+      // discards what was piped into it. The walk stops at a nested pipeline's
+      // body, so `a |> f(b |> g(%))` is refused and `a |> f(%, b |> g(%))` is
+      // how it is written.
+      if (!containsOwnTopic(node.Body)) {
+        this.addEarlyError(Throw.SyntaxError('a pipeline step must use the topic'), node.Body);
+      }
+      left = this.finishNode(node, 'PipelineExpression') as ParseNode.Expression;
+    }
+    return left;
+  }
+
   parseConditionalExpression(): ParseNode.ConditionalExpressionOrHigher {
-    const ShortCircuitExpression = this.parseRangeExpression();
+    const ShortCircuitExpression = this.parsePipelineExpression() as ParseNode.ShortCircuitExpressionOrHigher;
     if (this.eat(Token.CONDITIONAL)) {
       const node = this.startNode<ParseNode.ConditionalExpression>(ShortCircuitExpression);
       node.ShortCircuitExpression = ShortCircuitExpression;
@@ -1245,6 +1333,17 @@ export abstract class ExpressionParser extends FunctionParser {
       if (matchExpression) {
         return matchExpression as unknown as ParseNode.PrimaryExpression;
       }
+    }
+    // proposal-runtime-types #sec-pipeline-operator: the topic. `%` is the
+    // remainder punctuator and the two are told apart by POSITION - a topic
+    // stands where an operand is expected, which is here, and the remainder
+    // operator between two operands, which is the binary parser. Outside a
+    // pipeline body a `%` here stays the Syntax Error it is today.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.MOD)
+        && this.pipelineBodyDepth > 0) {
+      const node = this.startNode<ParseNode.TopicReference>();
+      this.next();
+      return this.finishNode(node, 'TopicReference') as unknown as ParseNode.PrimaryExpression;
     }
     // proposal-runtime-types #sec-do-expressions. `do` is a RESERVED word, so
     // this form costs the grammar less than `match` did: there is no cover

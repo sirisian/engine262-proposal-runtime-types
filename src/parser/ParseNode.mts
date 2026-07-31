@@ -163,7 +163,8 @@ export namespace ParseNode {
     | TemplateLiteral
     | CoverParenthesizedExpressionAndArrowParameterList
     | ParenthesizedExpression
-    | DoExpression;
+    | DoExpression
+    | TopicReference;
 
   // PrimaryExpression (partial) :
   //   `this`
@@ -981,6 +982,24 @@ export namespace ParseNode {
    * where `yield` belongs to the do-generator and `return` sets its return
    * value rather than returning from the enclosing function.
    */
+  /**
+   * proposal-runtime-types #sec-pipeline-operator.
+   *
+   * `x |> f(%)` evaluates the left operand, binds it to the topic, and
+   * evaluates the right with that binding in scope. Left-associative, and
+   * looser than a range: `0..10 |> sum(%)` pipes the range.
+   */
+  export interface PipelineExpression extends BaseParseNode {
+    readonly type: 'PipelineExpression';
+    readonly PipelineExpression: Expression;
+    readonly Body: Expression;
+  }
+
+  /** The topic, `%`. Valid only inside a pipeline's right operand. */
+  export interface TopicReference extends BaseParseNode {
+    readonly type: 'TopicReference';
+  }
+
   export interface DoExpression extends BaseParseNode {
     readonly type: 'DoExpression';
     readonly Block?: Block;
@@ -1034,7 +1053,8 @@ export namespace ParseNode {
   //   Expression `,` AssignmentExpression
   export type Expression =
     | CommaOperator
-    | AssignmentExpressionOrHigher;
+    | AssignmentExpressionOrHigher
+    | PipelineExpression;
 
   // Expression (partial) :
   //   Expression `,` AssignmentExpression
@@ -3494,6 +3514,8 @@ export namespace ParseNode.RegExp {
 }
 
 export type ParseNode =
+  | ParseNode.PipelineExpression
+  | ParseNode.TopicReference
   | ParseNode.DoExpression
   | ParseNode.PrivateIdentifier
   | ParseNode.IdentifierName

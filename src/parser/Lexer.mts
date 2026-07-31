@@ -781,6 +781,13 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
             this.position += 1;
             return Token.ASSIGN_BIT_OR;
           }
+          // proposal-runtime-types #sec-pipeline-operator: `|>`. Scanned after
+          // `||` and `|=` so neither is disturbed, and gated on the feature so
+          // that `a | > b` and `a |> b` keep their current meanings with it off.
+          if (c1 === '>' && surroundingAgent.feature('runtime-types')) {
+            this.position += 1;
+            return Token.PIPE_GT;
+          }
           return Token.BIT_OR;
 
         case Token.BIT_XOR:

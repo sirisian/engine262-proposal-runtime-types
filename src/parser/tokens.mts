@@ -34,6 +34,8 @@ const MaybeAssignTokens = [
 
   // Binop
   ['BIT_OR', '|'],
+  // proposal-runtime-types #sec-pipeline-operator
+  ['PIPE_GT', '|>'],
   ['BIT_XOR', '^'],
   ['BIT_AND', '&'],
   ['SHL', '<<'],
