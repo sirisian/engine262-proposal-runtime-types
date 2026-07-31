@@ -41,7 +41,9 @@ test('every form of the declaration parses and works', () => {
   expect(evaluated('let n = 0; function f(c) { n += 1; } class A { @f accessor a: uint32 = 5; } String(n);')).toBe('1');
   // The private forms are stage B's remainder (PLAN-accessor.md §2.3), refused
   // rather than crashing: see accessor-semantics.test.mts.
-  expect(outcome('class A { accessor #internal: int32 = 0; }')).toBe('TypeError');
+  // A PRIVATE accessor landed (PLAN-accessor.md §2.3) - see
+  // accessor-semantics.test.mts for what it desugars to.
+  expect(outcome('class A { accessor #internal: int32 = 0; }')).toBe('ACCEPTED');
 });
 
 test('the positions the design refuses stay refused', () => {

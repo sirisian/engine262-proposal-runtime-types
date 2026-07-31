@@ -18,6 +18,7 @@ import {
   ObjectValue,
   type ECMAScriptFunctionObject, type FunctionCallContext, type FunctionObject, PrivateName, type PropertyKeyValue,
 } from '#self';
+import { PrivateElementRecord } from './MethodDefinitionEvaluation.mts';
 
 /** https://tc39.es/ecma262/#sec-classfielddefinition-record-specification-type */
 export interface ClassFieldDefinitionRecord {
@@ -29,6 +30,18 @@ export interface ClassFieldDefinitionRecord {
    * an `any`-typed reference, the erasure other languages apply to it".
    */
   readonly Access?: 'protected' | undefined;
+  /**
+   * proposal-runtime-types (PLAN-accessor.md §2.3): a PRIVATE accessor's
+   * get/set pair, as a PrivateElement.
+   *
+   * `accessor #internal` desugars to a private backing field PLUS A PRIVATE
+   * PAIR - two Private Names for one declaration - and the pair cannot be a
+   * property, so this one function has to yield two things. It returns the
+   * FIELD record, which is what allocates the backing slot, and carries the
+   * pair here for `ClassDefinitionEvaluation` to add to the private-element
+   * container. That keeps one return value and one owner for each half.
+   */
+  readonly PrivateAccessor?: ReturnType<typeof PrivateElementRecord> | undefined;
   /**
    * proposal-runtime-types: the name a laid-out slot is reported under, where
    * that differs from [[Name]]. Only an `accessor` sets it - its [[Name]] is
@@ -121,17 +134,12 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   // only from inside the accessor); C#'s reflection-visible backing field is
   // the one this deliberately does not copy.
   if (surroundingAgent.feature('runtime-types') && (FieldDefinition as { accessor?: boolean }).accessor === true) {
-    // A PRIVATE accessor is stage B's remainder, and it is an open design
-    // question rather than plumbing: PLAN-accessor.md §2.3 asks what
-    // `accessor #internal` desugars to, since "a private field plus a public
-    // pair" becomes a private field plus a PRIVATE pair - two private names for
-    // one declaration. The pair would also have to be a PrivateElement rather
-    // than a property, so this function would have to return two records where
-    // it returns one. Refused explicitly, because passing a Private Name to
-    // DefinePropertyOrThrow asserts inside the host instead.
-    if (name instanceof PrivateName) {
-      return Throw.TypeError('$1 is not supported yet', Value('a private `accessor` field'));
-    }
+    // PLAN-accessor.md §2.3, settled: `accessor #internal` desugars to a private
+    // backing field PLUS A PRIVATE PAIR - two Private Names for one
+    // declaration. The pair is a PrivateElement rather than a property, which
+    // is the whole of what made this harder than the public case; the backing
+    // Private Name is created here either way.
+    const isPrivate = name instanceof PrivateName;
     const backing = new PrivateName(Value('accessor storage'));
     const get = CreateBuiltinFunction(function* accessorGet(_args: Arguments, { thisValue }: FunctionCallContext) {
       if (!(thisValue instanceof ObjectValue)) {
@@ -146,15 +154,31 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       Q(yield* PrivateSet(thisValue, backing, value));
       return Value.undefined;
     } as never, 1, name, []);
-    // The pair goes on the home object - the prototype for an instance
-    // accessor, the constructor for a static one - which is where a `get`/`set`
-    // pair written by hand would go. Not enumerable, as an accessor pair is not.
-    Q(yield* DefinePropertyOrThrow(homeObject, name as PropertyKeyValue, Descriptor({
-      Getter: get,
-      Setter: set,
-      Enumerable: Value.false,
-      Configurable: Value.true,
-    })));
+    // A PUBLIC accessor's pair goes on the home object - the prototype for an
+    // instance accessor, the constructor for a static one - which is where a
+    // `get`/`set` pair written by hand would go. Not enumerable, as an accessor
+    // pair is not.
+    //
+    // A PRIVATE one cannot: a Private Name is not a property key, and passing
+    // one to DefinePropertyOrThrow asserts inside the host. It becomes a
+    // PrivateElement instead, carried on the returned record for the class to
+    // install beside the backing field.
+    let privateAccessor;
+    if (isPrivate) {
+      privateAccessor = PrivateElementRecord({
+        Key: name as PrivateName,
+        Kind: 'accessor',
+        Getter: get,
+        Setter: set,
+      });
+    } else {
+      Q(yield* DefinePropertyOrThrow(homeObject, name as PropertyKeyValue, Descriptor({
+        Getter: get,
+        Setter: set,
+        Enumerable: Value.false,
+        Configurable: Value.true,
+      })));
+    }
     return ClassFieldDefinitionRecord({
       Name: backing,
       // The name the LAYOUT reports for this slot. An accessor's backing is an
@@ -165,7 +189,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       // actually written. This is deliberately NOT C#'s answer: a generated
       // `<a>k__BackingField` leaks a compiler artifact into every reflective
       // enumeration, and every tool then has to filter it back out.
-      LayoutName: name,
+      LayoutName: name as PropertyKeyValue,
       // decorators.md's replacement for `Reflect.ClassAccessor` is a
       // `{ get, set }` pair, and a replacement that cannot reach the ORIGINAL
       // storage has to invent its own - orphaning the layout slot the backing
@@ -174,6 +198,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       // reasoning as TC39's `context.access`, and the reason the slot can stay
       // unconditional: layout must not depend on whether a decorator ran.
       AccessorPair: { Getter: get, Setter: set },
+      PrivateAccessor: privateAccessor,
       Initializer: initializer,
       TypeAnnotation: typeAnnotation,
       TypeObject: typeObject,

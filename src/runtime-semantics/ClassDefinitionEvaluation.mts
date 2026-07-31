@@ -878,9 +878,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     return F;
   } else {
     // 21. Let instancePrivateMethods be a new empty List.
-    const instancePrivateMethods: never[] = [];
+    const instancePrivateMethods: PrivateElementRecord[] = [];
     // 22. Let staticPrivateMethods be a new empty List.
-    const staticPrivateMethods: never[] = [];
+    const staticPrivateMethods: PrivateElementRecord[] = [];
     // 23. Let instanceFields be a new empty List.
     const instanceFields: ClassFieldDefinitionRecord[] = [];
     // 24. Let staticElements be a new empty List.
@@ -1025,6 +1025,18 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           container.push(field);
         }
       } else if (field instanceof ClassFieldDefinitionRecord) { // f. Else if field is a ClassFieldDefinition Record, then
+        // PLAN-accessor.md Â§2.3: a PRIVATE accessor yields TWO things from one
+        // declaration - the backing FIELD, which allocates the slot and is
+        // handled below like any other, and a private GET/SET PAIR, which is a
+        // PrivateElement and belongs in the same container a private getter or
+        // setter written by hand would join. The pair rides on the field record
+        // so the evaluation keeps one return value; installing it is the class's
+        // job, here, beside every other private element.
+        const privatePair = (field as { PrivateAccessor?: PrivateElementRecord }).PrivateAccessor;
+        if (privatePair !== undefined) {
+          const container = IsStatic(e) === false ? instancePrivateMethods : staticPrivateMethods;
+          container.push(privatePair);
+        }
         // i. If IsStatic of e is false, append field to instanceFields.
         if (IsStatic(e) === false) {
           instanceFields.push(field);

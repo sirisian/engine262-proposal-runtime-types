@@ -76,16 +76,7 @@ test('an accessor initializes where a field does, in declaration order', () => {
 });
 
 test('PINNED: what stage B does not do', () => {
-  // 1. A PRIVATE accessor is refused. PLAN-accessor.md §2.3 asks what
-  // `accessor #internal` desugars to - "a private field plus a public pair"
-  // becomes a private field plus a PRIVATE pair, two private names for one
-  // declaration - and the pair would be a PrivateElement rather than a
-  // property, so the evaluation would have to produce two records where it
-  // produces one. Refused explicitly, because the alternative was asserting
-  // inside the host.
-  expect(evaluated('try { eval("class A { accessor #p: int32 = 0; }"); "NO-THROW"; } catch (e) { e.message; }'))
-    .toBe('"a private `accessor` field" is not supported yet');
-  expect(evaluated('try { eval("class A { static accessor #t: uint32 = 0; }"); "NO-THROW"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+  // 1. CLOSED: a PRIVATE accessor works - see the test below.
 
   // 2. CLOSED by stage E: a decorated accessor fires with `ClassAccessor`.
   // accessor-context.test.mts owns the assertions.
@@ -96,4 +87,30 @@ test('PINNED: what stage B does not do', () => {
   // in the memory layout" and, twenty lines later, that "an accessor doesn't"
   // occupy one. The backing is a private field today, so whatever a private
   // field does is what it does, and that is deliberately not pinned here.
+});
+
+
+test('a PRIVATE accessor desugars to a backing field AND a private pair', () => {
+  // PLAN-accessor.md §2.3, settled. "A private field plus a public pair"
+  // becomes a private field plus a PRIVATE pair - two Private Names for one
+  // declaration - and the pair is a PrivateElement rather than a property, so
+  // one evaluation yields two things: it RETURNS the field record, which
+  // allocates the backing slot, and CARRIES the pair for the class to install
+  // beside every other private element.
+  expect(evaluated('class A { accessor #p: int32 = 7; } "ok";')).toBe('ok');
+  expect(evaluated('class A { accessor #p: int32 = 7; get v() { return this.#p; } } String(new A().v);')).toBe('7');
+  expect(evaluated('class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } get v() { return this.#p; } } '
+    + 'const a = new A(); a.w = 9; String(a.v);')).toBe('9');
+  // THE TYPE IS ENFORCED, which is the point of the desugaring being REAL: the
+  // backing is an ordinary typed field on a Private Name, so `PrivateSet` does
+  // the checking and the setter checks nothing itself.
+  expect(evaluated('class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } } '
+    + 'const a = new A(); try { a.w = "s"; "NO-CHECK"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+  // A STATIC private accessor works the same way.
+  expect(evaluated('class A { static accessor #t: uint32 = 3; static get v() { return A.#t; } } String(A.v);')).toBe('3');
+  // And nothing leaks: the backing Private Name is unnameable, so an instance
+  // has no own property for it.
+  expect(evaluated('class A { accessor #p: int32 = 7; } String(Object.getOwnPropertyNames(new A()).length);')).toBe('0');
+  // A PUBLIC accessor is unchanged.
+  expect(evaluated('class A { accessor p: int32 = 5; } String(new A().p);')).toBe('5');
 });
