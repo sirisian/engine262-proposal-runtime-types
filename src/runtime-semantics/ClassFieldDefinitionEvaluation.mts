@@ -172,9 +172,20 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
         Setter: set,
       });
     } else {
+      // PLAN-accessor.md §2.5, settled: `readonly accessor` is LEGAL and means
+      // a GETTER-ONLY accessor. The modifier parsed and did nothing before -
+      // assignment succeeded and the context did not report it - which is worse
+      // than refusing the syntax, since the declaration read as a constraint
+      // and enforced none.
+      //
+      // Installing only the getter is what makes assignment a TypeError, by the
+      // ordinary rule for a getter-only property rather than by a check written
+      // here. The INITIALIZER still reaches the backing, because DefineField
+      // writes the Private Name directly and never goes through the setter.
+      const isReadonly = (FieldDefinition as { readonly?: boolean }).readonly === true;
       Q(yield* DefinePropertyOrThrow(homeObject, name as PropertyKeyValue, Descriptor({
         Getter: get,
-        Setter: set,
+        Setter: isReadonly ? undefined : set,
         Enumerable: Value.false,
         Configurable: Value.true,
       })));

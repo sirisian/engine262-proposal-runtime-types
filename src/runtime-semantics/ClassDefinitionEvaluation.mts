@@ -1644,6 +1644,10 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   X(CreateDataProperty(context, Value('static'), decl.static === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
+  // PLAN-accessor.md Â§2.5: `readonly accessor` is legal and means getter-only,
+  // so the context reports it as a field's does. Without this the modifier was
+  // invisible to a decorator as well as unenforced.
+  X(CreateDataProperty(context, Value('readonly'), decl.readonly === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   // `access`: the pair this accessor generated, so a decorator that REPLACES

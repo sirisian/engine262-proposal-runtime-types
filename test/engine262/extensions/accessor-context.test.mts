@@ -32,16 +32,21 @@ test('a decorated accessor receives ClassAccessor, once', () => {
 
 test('the context carries ClassAccessorReflection\'s shape', () => {
   // decorators.md: `type`, `name`, `static`, `private`, `protected`, `initial`,
-  // `metadata` - and notably NO `readonly`, which ClassFieldReflection has.
+  // `metadata`, and `readonly` - see the `readonly accessor` test below.
   const grab = 'let c; function f(x) { c = x; } ';
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.name);`)).toBe('a');
   expect(evaluated(`${grab} class A { @f static accessor a: uint32 = 5; } String(c.static);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.static);`)).toBe('false');
   expect(evaluated(`${grab} class A { @f protected accessor a: uint32 = 5; } String(c.protected);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.protected);`)).toBe('false');
-  // `readonly` is absent from the reflection, so it is absent from the context -
-  // asserted, because copying the field context would have brought it along.
-  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(Object.prototype.hasOwnProperty.call(c, "readonly"));`)).toBe('false');
+  // `readonly` IS reported (PLAN-accessor.md Â§2.5, settled in cycle 214):
+  // `readonly accessor` is legal and means GETTER-ONLY, so the modifier has to
+  // be visible to a decorator as well as enforced. An earlier draft of this
+  // test asserted its ABSENCE, on the reading that `ClassAccessorReflection`
+  // omits it - but a modifier that parses and does nothing is worse than one
+  // that is refused, since the declaration reads as a constraint and enforces
+  // none.
+  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(Object.prototype.hasOwnProperty.call(c, "readonly"));`)).toBe('true');
   // The name is the DECLARED one, not the backing storage: stage B's backing is
   // an unnameable Private Name, and a context naming it would describe the
   // desugaring rather than the declaration.
