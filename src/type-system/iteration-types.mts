@@ -141,25 +141,25 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — one name, and the cause narrowed to the record's KIND.
+// REMAINDER — IteratorResult in an applied evaluated position.
 //
-// Five of six resolve in every position. `IteratorResult` resolves BARE in an
-// evaluated position and APPLIED in a parameter annotation, and fails only when
-// it is applied in an evaluated one - `const r: IteratorResult.<uint8> = …`
-// reports "is not defined".
+// Five of six resolve everywhere. `IteratorResult` resolves bare in an
+// evaluated position and applied in a parameter annotation; it fails only as
+// `const r: IteratorResult.<uint8> = …`, reporting "is not defined".
 //
-// Ruled out by test: the arity, since the one-argument form fails too; and the
-// `void` type argument, since `Promise.<uint8, void>` resolves.
+// Ruled out by test, each cheap: the arity (the one-argument form fails the
+// same), a `void` type argument (`Promise.<uint8, void>` resolves), and
+// answering the name in TypeNodeToTypeRecord's throw-recovery branch beside the
+// class-in-its-dead-zone case (written, rebuilt, no effect, reverted).
 //
-// What is left is the record. `IteratorResult` is the only member of this
-// family built as a ~union~; every other is an ~object~. Applying type
-// arguments in an evaluated position appears to need a record that can carry
-// them - a union has no [[Arguments]] to attach to - so the applied form finds
-// nothing to apply to and reports the name as undefined.
+// What is known: the evaluated path resolves a name to a VALUE before applying
+// type arguments, so a name with no binding has to be answered before GetValue
+// propagates. `Iterable` and the rest survive because they are registered among
+// the library type names; `IteratorResult` is registered identically and does
+// not, and the one property distinguishing it is that its record is a ~union~
+// where every other is an ~object~.
 //
-// Two directions, neither started. Teach the evaluated application path to
-// handle a union by substituting into its members, which is the general fix and
-// helps every future union-shaped library type. Or give `IteratorResult` a
-// carrier - a nominal type whose structural form is the union - which is
-// narrower and reuses the class/interface split the specification already
-// describes.
+// The next step is to find where a library-registered name is answered on the
+// evaluated path - `Promise.<uint8, void>` takes it and works - and see what it
+// does with a record that has no [[Arguments]] to attach to. That is a question
+// with a definite answer in one function, not a search.
