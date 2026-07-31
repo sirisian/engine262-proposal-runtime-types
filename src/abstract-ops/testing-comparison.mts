@@ -14,6 +14,7 @@ import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
+import { isDecimalObject, decimalEquals, decimalSameValue } from '../intrinsics/Decimal.mts';
 import {
   Assert,
   surroundingAgent,
@@ -194,6 +195,17 @@ export function SameValue(x: Value, y: Value): boolean {
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
     return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
   }
+  // proposal-runtime-types (decimal.md): a decimal's identity is its COHORT
+  // MEMBER. "SameValue distinguishes cohort members, so `Object.is(1.0, 1.00)`
+  // is *false* for two `decimal128` values of different exponents, while
+  // SameValueZero and `==` compare numerical value and find them equal."
+  //
+  // IEEE 754 draws the same distinction with `totalOrder` against
+  // `compareQuietEqual`, so the two predicates here are the standard's two
+  // rather than an invention of this proposal.
+  if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
+    return isDecimalObject(x) && isDecimalObject(y) && decimalSameValue(x, y);
+  }
   // proposal-runtime-types R1: typed numbers have value-type identity.
   const typed = typedNumberIdentity(x, y);
   if (typed !== null) {
@@ -219,6 +231,15 @@ export function SameValueZero(x: Value, y: Value): boolean {
   // lets it serve as a Map or Set key by value.
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
     return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
+  }
+  // proposal-runtime-types (decimal.md): SameValueZero compares a decimal's
+  // NUMERICAL VALUE, so `1.0` and `1.00` are ONE Map key where `Object.is`
+  // tells them apart. This is the split Java's `BigDecimal` famously does NOT
+  // make - its `equals` compares scale while `compareTo` does not, so a HashSet
+  // and a TreeSet disagree about how many elements it holds - and avoiding that
+  // is the reason the two predicates differ here.
+  if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
+    return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
   }
   // proposal-runtime-types R1: typed numbers have value-type identity, and
   // SameValueZero compares NUMERICAL VALUE within a type where SameValue

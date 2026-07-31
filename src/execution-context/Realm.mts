@@ -30,6 +30,7 @@ import { bootstrapFinalizationRegistryPrototype } from '../intrinsics/Finalizati
 import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorPrototype.mts';
 import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
 import { bootstrapRational, bootstrapRationalPrototype } from '../intrinsics/Rational.mts';
+import { bootstrapDecimal, bootstrapDecimalPrototype } from '../intrinsics/Decimal.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
 import { bootstrapFunctionPrototype } from '../intrinsics/FunctionPrototype.mts';
 import { bootstrapGeneratorFunction } from '../intrinsics/GeneratorFunction.mts';
@@ -314,6 +315,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // proposal-runtime-types (rational.md): the rational value type and its global.
     bootstrapRationalPrototype(realmRec);
     bootstrapRational(realmRec);
+    bootstrapDecimalPrototype(realmRec);
+    bootstrapDecimal(realmRec);
     X(global.DefineOwnProperty(Value('rational'), Descriptor({
       Value: realmRec.Intrinsics['%rational%'],
       Writable: Value.true,

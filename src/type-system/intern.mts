@@ -1,4 +1,5 @@
 import type { ObjectValue, Arguments } from '../value.mts';
+import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
@@ -7,6 +8,7 @@ import { neverType, orderKey } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
+import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 
 /**
  * proposal-runtime-types #sec-canonicalizetype and #sec-gettypeobject
@@ -169,6 +171,28 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         }
       }
       return Throw.TypeError('$1 is not a value of this enum', arg);
+    }
+    // proposal-runtime-types (PLAN-decimal.md stage A): calling a decimal Type
+    // Object with a STRING reads a decimal from its digits. That is where a
+    // cohort member comes from - "a decimal type reads its cohort member from
+    // the SOURCE TEXT rather than from the mathematical value, since `1.0` and
+    // `1.00` have the same mathematical value" - so a string is the only
+    // argument that can carry one today.
+    //
+    // A NUMBER is deliberately not accepted: `decimal128(0.1)` would have to
+    // choose a cohort member for a binary double whose exact expansion is 55
+    // digits, which the specification flags as the hard conversion and which
+    // stage F owns. The existing "not assignable" TypeError is the right answer
+    // until it is defined.
+    if (record.Kind === 'primitive' && (record.Name === 'decimal32' || record.Name === 'decimal64' || record.Name === 'decimal128')) {
+      if (arg instanceof JSStringValue) {
+        const digits = ParseDecimalDigits(arg.stringValue());
+        if (!digits) {
+          return Throw.SyntaxError('$1 is not a decimal', arg);
+        }
+        const width = record.Name === 'decimal32' ? 32 : record.Name === 'decimal64' ? 64 : 128;
+        return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
+      }
     }
     return Q(yield* ConvertValue(arg, record));
   };
