@@ -1627,6 +1627,15 @@ export abstract class ExpressionParser extends FunctionParser {
         const refNode = this.startNode<ParseNode.RefExpression>();
         this.next();
         refNode.Expression = this.parseLeftHandSideExpression();
+        // proposal-runtime-types #sec-pipeline-static-semantics: `ref %` is
+        // refused. A reference parameter binds the caller's LOCATION; the topic
+        // holds the VALUE the left operand produced, so `o.a |> f(ref %)` would
+        // bind a temporary and the write would reach nothing observable. It is
+        // refused rather than admitted and useless, because it reads as though
+        // the pipe were transparent to the place it came from.
+        if (refNode.Expression.type === 'TopicReference') {
+          this.addEarlyError(Throw.SyntaxError('the topic is a value, not a reference'), refNode);
+        }
         Arguments.push(this.finishNode(refNode, 'RefExpression'));
       } else if (surroundingAgent.feature('runtime-types')
           && this.conditionalConsequentDepth === 0

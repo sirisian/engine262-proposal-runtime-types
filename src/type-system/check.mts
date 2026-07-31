@@ -6,6 +6,9 @@ import {
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
+
+/** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
+const TOPIC_NAME = '%';
 import { Diverges } from './divergence.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import {
@@ -1134,6 +1137,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const staticType = (node: ParseNode): Known => {
     switch (node.type) {
+      case 'TopicReference':
+        return lookup(TOPIC_NAME) ?? null;
+      case 'PipelineExpression': {
+        // #sec-pipeline-operator: the topic has the left operand's type, and
+        // the pipeline has the body's. The topic is declared in a frame of its
+        // own, so lookup, narrowing, and shadowing by an inner pipeline are the
+        // ordinary rules rather than three new ones.
+        const p = node as ParseNode.PipelineExpression;
+        const topic = staticType(p.PipelineExpression);
+        const bindings = new Map<string, TypeRecord>();
+        if (topic) {
+          bindings.set(TOPIC_NAME, topic);
+        }
+        frames.push({
+          bindings, aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+        });
+        try {
+          return staticType(p.Body);
+        } finally {
+          frames.pop();
+        }
+      }
       case 'DoExpression': {
         const d = node as ParseNode.DoExpression;
         if (!d.star) {
@@ -1689,6 +1714,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * and whether the sense is inverted, or undefined where the test says nothing
    * the checker can use (F75).
    */
+  /**
+   * The binding name a narrowing subject refers to, or null.
+   *
+   * PLAN-pipeline-operator.md phase 2. The topic is bound under the name `%`,
+   * which no program can write, so every row of the narrowing table reaches it
+   * with no new machinery: `shape |> (% is Circle ? %.radius : 0)` narrows
+   * because `%` is a name like any other here. That is the whole reason the
+   * topic is a binding in the checker rather than a parallel frame.
+   */
+  const narrowableName = (e: ParseNode): string | null => {
+    if (e.type === 'IdentifierReference') {
+      return (e as unknown as { name: string }).name;
+    }
+    if (e.type === 'TopicReference') {
+      return TOPIC_NAME;
+    }
+    return null;
+  };
+
   const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false' } | undefined => {
     let e = expr;
     let negated = false;
@@ -1710,7 +1754,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Expression: ParseNode, Type: ParseNode | null,
         Pattern?: { type?: string, Type?: ParseNode } | null,
       };
-      if (ie.Expression.type !== 'IdentifierReference') {
+      if (narrowableName(ie.Expression) === null) {
         return undefined;
       }
       // proposal-runtime-types `sec-is-pattern`: "a |Type| is one |MatchPattern|
