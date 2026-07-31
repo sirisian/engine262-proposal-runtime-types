@@ -4,6 +4,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
+import { builtinImplements } from './iteration-types.mts';
 
 /**
  * proposal-runtime-types #sec-structural-identity and #sec-subtyping-and-assignability
@@ -119,6 +120,16 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   }
   if (s.Kind === 'parameterized' && t.Kind !== 'parameterized') {
     return IsSubtype(s.Base, t, assumptions);
+  }
+  // proposal-runtime-types #sec-iteration-types: a built-in nominal may DECLARE
+  // that it implements an interface. This is refinement rather than structural
+  // comparison - the library types are opaque nominals whose members live in
+  // side tables, so there is no structural form to compare - and it is placed
+  // before the kind guard because the source is ~nominal~ and the target is
+  // ~object~, which that guard would otherwise separate without looking.
+  if (s.Kind === 'nominal' && t.Kind === 'object'
+      && builtinImplements(s.LibraryName, s.Arguments, (declared) => IsSubtype(declared, t, [...assumptions, { First: s, Second: t }]))) {
+    return true;
   }
   if (s.Kind !== t.Kind) {
     return false;

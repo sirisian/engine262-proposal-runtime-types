@@ -163,3 +163,75 @@ function promiseOf(t: TypeRecord): TypeRecord {
 // evaluated path - `Promise.<uint8, void>` takes it and works - and see what it
 // does with a record that has no [[Arguments]] to attach to. That is a question
 // with a definite answer in one function, not a search.
+
+/**
+ * What a built-in nominal type DECLARES it implements.
+ *
+ * A library type is an opaque nominal here - its members live in side tables
+ * consulted at the member-access site, never on the record - so it has no
+ * structural form to compare against an interface, and nothing made a
+ * `Generator` an `IterableIterator` even though both documents say it is one.
+ *
+ * The relation is a DECLARATION rather than an inspection, which is what the
+ * specification says ("Iterator ... declares that it implements
+ * IterableIterator") and what makes it the fast path: a brand check rather than
+ * a member walk, with the walk reserved for hand-written values.
+ *
+ * Each entry is a function of the source's own arguments, since what a `Map.<K,
+ * V>` implements is `Iterable.<[K, V]>` rather than a constant. Each entry is
+ * also a claim that has to stay true by hand, which is why every one of them has
+ * a test: the table IS the assertions.
+ */
+const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]) => TypeRecord[]> = {
+  Generator: (a) => [
+    iterationInterfaceRecord('IterableIterator', a)!,
+    iterationInterfaceRecord('Iterator', a)!,
+    iterationInterfaceRecord('Iterable', [a[0]])!,
+  ],
+  AsyncGenerator: (a) => [
+    iterationInterfaceRecord('AsyncIterableIterator', a)!,
+    iterationInterfaceRecord('AsyncIterator', a)!,
+    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
+  ],
+  Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
+  Map: (a) => [iterationInterfaceRecord('Iterable', [
+    { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,
+  ])!],
+};
+
+/** Whether a built-in nominal declares that it implements `target`. */
+export function builtinImplements(
+  libraryName: string | undefined,
+  args: readonly (TypeRecord | number)[],
+  matches: (declared: TypeRecord) => boolean,
+): boolean {
+  if (!libraryName) {
+    return false;
+  }
+  const entry = BUILTIN_IMPLEMENTS[libraryName];
+  if (!entry) {
+    return false;
+  }
+  return entry(args).some((declared) => declared !== null && matches(declared));
+}
+
+// STATUS — the table is written and the relation does not yet hold.
+//
+// `builtinImplements` is wired into IsSubtype ahead of the kind guard, and
+// `const i: Iterable.<uint8> = g()` for a generator still reports the generator
+// as not assignable. IsAssignable does call IsSubtype, so the route is right;
+// the step is not firing, and the reason is not yet known.
+//
+// What to check first, in order:
+//   1. Whether the target record at that point is really ~object~. If the
+//      interface reaches IsSubtype as something else - a parameterized wrapper,
+//      or the interned Type Object rather than its record - the `t.Kind ===
+//      'object'` guard is simply false and the step is skipped.
+//   2. Whether the source's [[LibraryName]] is 'Generator' at that point, or
+//      whether the generator's type arrives as something other than the library
+//      nominal the annotation resolves to.
+//   3. Whether an earlier branch answers first: the parameterized and
+//      intersection branches both return before this point.
+//
+// A single trace at the top of IsSubtype printing both Kinds and LibraryNames
+// for this case answers all three at once, and is the next thing to do.
