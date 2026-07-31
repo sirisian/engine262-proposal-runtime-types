@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { ok } from '../readme/harness.mts';
+import { ok, evaluated } from '../readme/harness.mts';
 
 /**
  * PLAN-iteration-types-engine.md phases 2 and 4, per #sec-iteration-types.
@@ -9,7 +9,7 @@ import { ok } from '../readme/harness.mts';
  * member-access site, so it has no structural form to compare against an
  * interface. The declared-implements table is what makes a generator an
  * iterable iterator, and the entries in that table are exactly the assertions
- * in this file � which is the point of writing them here, since a
+ * in this file — which is the point of writing them here, since a
  * hand-maintained table of claims is only as true as its tests.
  */
 
@@ -29,7 +29,7 @@ test('a hand-written object satisfies Iterator', () => {
 });
 
 test('the shorthand interns', () => {
-  // Not merely assignable � the same interned type. A shorthand producing an
+  // Not merely assignable — the same interned type. A shorthand producing an
   // equal-but-distinct record would pass an assignability check and fail this.
   expect(ok('const a: boolean = Iterator.<uint8> === Iterator.<uint8, void, void>;')).toBe(true);
 });
@@ -60,4 +60,18 @@ test('no per-collection iteration types', () => {
   // return type; the shorthand carries it here, so the family stays at six.
   expect(ok('const t = ArrayIterator.<uint8>;')).toBe(false);
   expect(ok('const t = MapIterator.<uint8>;')).toBe(false);
+});
+
+test('the iteration types are values, so they work on object-literal initializers', () => {
+  // The last blocker, and the control that found it. Contextually typing an
+  // object literal RESOLVES ITS ANNOTATION AS A VALUE â€” the type has to be in
+  // hand before the literal is checked against it â€” so a name with no binding
+  // was undefined there while the same annotation on a parameter resolved
+  // through a resolver and worked. `Iterator` was the one member of the family
+  // that worked, and it differed in nothing except being a real global, which
+  // iterator helpers made it.
+  expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
+  expect(evaluated('String(typeof Iterable);')).toBe('object');
+  expect(evaluated('String(typeof IteratorResult);')).toBe('object');
+  expect(evaluated('String(typeof IterableIterator);')).toBe('object');
 });

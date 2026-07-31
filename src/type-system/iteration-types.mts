@@ -160,3 +160,49 @@ function promiseOf(t: TypeRecord): TypeRecord {
 // It is the one member of this family whose record is a ~union~ where the rest
 // are ~object~, and the evaluated path attaches type arguments only to a record
 // that can carry them. Everything else here works.
+
+/**
+ * What a built-in nominal type DECLARES it implements.
+ *
+ * A library type is an opaque nominal here â€” its members live in side tables
+ * consulted at the member-access site, never on the record â€” so it has no
+ * structural form to compare against an interface. The relation is therefore a
+ * DECLARATION rather than an inspection, which is what the specification says
+ * and what makes it the fast path: a brand check rather than a member walk.
+ *
+ * Each entry is a function of the source's own arguments, since what a
+ * `Map.<K, V>` implements is `Iterable.<[K, V]>` rather than a constant. Each
+ * is also a claim kept true by hand, which is why every one has a test.
+ */
+const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]) => TypeRecord[]> = {
+  Generator: (a) => [
+    iterationInterfaceRecord('IterableIterator', a)!,
+    iterationInterfaceRecord('Iterator', a)!,
+    iterationInterfaceRecord('Iterable', [a[0]])!,
+  ],
+  AsyncGenerator: (a) => [
+    iterationInterfaceRecord('AsyncIterableIterator', a)!,
+    iterationInterfaceRecord('AsyncIterator', a)!,
+    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
+  ],
+  Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
+  Map: (a) => [iterationInterfaceRecord('Iterable', [
+    { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,
+  ])!],
+};
+
+/** Whether a built-in nominal declares that it implements `target`. */
+export function builtinImplements(
+  libraryName: string | undefined,
+  args: readonly (TypeRecord | number)[],
+  matches: (declared: TypeRecord) => boolean,
+): boolean {
+  if (!libraryName) {
+    return false;
+  }
+  const entry = BUILTIN_IMPLEMENTS[libraryName];
+  if (!entry) {
+    return false;
+  }
+  return entry(args).some((declared) => declared !== null && matches(declared));
+}

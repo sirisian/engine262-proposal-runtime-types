@@ -61,6 +61,7 @@ import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
 import { bootstrapRegExp } from '../intrinsics/RegExp.mts';
@@ -344,6 +345,32 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       'decimal32', 'decimal64', 'decimal128',
     ]) {
       const record = builtinTypeRecord(name);
+      if (record) {
+        X(global.DefineOwnProperty(Value(name), Descriptor({
+          Value: GetTypeObject(record, realmRec),
+          Writable: Value.false,
+          Enumerable: Value.false,
+          Configurable: Value.true,
+        })));
+      }
+    }
+
+    // proposal-runtime-types #sec-iteration-types: the iteration interfaces are
+    // bound for the same reason the numeric type names are - a type is a value,
+    // and an annotation on an object-literal initializer is RESOLVED AS ONE,
+    // because the type has to be in hand before the literal is checked against
+    // it. Without a binding, `const r: IteratorResult.<uint8, void> = { … }`
+    // reports the name undefined while the same annotation on a parameter
+    // resolves through a resolver and works.
+    //
+    // `Iterator` is already a global - iterator helpers made it one - and was
+    // the control that identified this: it is the one name of the family that
+    // worked in that position, and it differed in nothing else.
+    for (const name of [
+      'IteratorResult', 'Iterable', 'IterableIterator',
+      'AsyncIterable', 'AsyncIterableIterator',
+    ]) {
+      const record = iterationInterfaceRecord(name);
       if (record) {
         X(global.DefineOwnProperty(Value(name), Descriptor({
           Value: GetTypeObject(record, realmRec),
