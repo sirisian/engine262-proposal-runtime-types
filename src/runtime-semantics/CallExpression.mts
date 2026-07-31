@@ -26,6 +26,7 @@ import {
   PerformEval,
   SameValue,
 } from '#self';
+import { GetTypeObject } from '../type-system/intern.mts';
 
 /** https://tc39.es/ecma262/#sec-function-calls-runtime-semantics-evaluation */
 // CallExpression :
@@ -245,6 +246,13 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         X(CreateDataProperty(reflection, Value('private'), declaration.private ? Value.true : Value.false));
         X(CreateDataProperty(reflection, Value('protected'), declaration.protected ? Value.true : Value.false));
         X(CreateDataProperty(reflection, Value('abstract'), declaration.abstract ? Value.true : Value.false));
+        // decorators.md gives a member reflection its `type` - the FUNCTION type
+        // for a method, getter or setter. The read path had none while the
+        // DECORATOR CONTEXT did, so two reflections of one declaration
+        // disagreed. Both now read the same recorded type.
+        if (declaration.type) {
+          X(CreateDataProperty(reflection, Value('type'), GetTypeObject(declaration.type, surroundingAgent.currentRealmRecord) as Value));
+        }
         const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base, memberName.stringValue())));
         return reflection;

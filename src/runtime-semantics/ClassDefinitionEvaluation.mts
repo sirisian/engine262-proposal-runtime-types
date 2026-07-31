@@ -1796,6 +1796,16 @@ export interface MemberDeclaration {
    * class body is walked, exactly as the member's own facts are.
    */
   readonly parameters: readonly MemberParameterDeclaration[];
+  /**
+   * The member's declared type, as the DECORATOR CONTEXT reports it - the
+   * FUNCTION type for a method, getter or setter.
+   *
+   * Recorded here because the READ PATH answers from this record and had no
+   * `type` at all, while the context did: two reflections of ONE declaration
+   * disagreeing, which is the failure this plan has met most often. Derived by
+   * the same operation the context uses, so they cannot drift.
+   */
+  readonly type?: TypeRecord | undefined;
 }
 const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
 
@@ -2007,8 +2017,10 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
       hasDefault: p.Initializer !== undefined && p.Initializer !== null,
     });
   });
+  const declaredType = Q(yield* MemberFunctionTypeRecord(node));
   RecordMemberDeclaration(owner, key.stringValue(), {
     parameters,
+    type: declaredType,
     kind,
     static: n.static === true,
     private: n.ClassElementName?.type === 'PrivateIdentifier',
