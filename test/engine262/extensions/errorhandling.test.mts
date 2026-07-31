@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, evaluatedSequence } from '../readme/harness.mts';
+import {
+  evaluated, bool, evaluatedSequence, ok, expectError,
+} from '../readme/harness.mts';
 
 /**
  * Extension coverage — errorhandling.md (typed catch).
@@ -79,4 +81,22 @@ test('typed catch: a clause matches an awaited rejection inside an async functio
     g();
   `;
   expect(evaluatedSequence([resolvePath, 'globalThis.out2;'])).toBe('resolved-7');
+});
+
+test('typed catch: an untyped clause must be last', () => {
+  // #sec-typed-catch states this as a type error and errorhandling.md as a
+  // rule - "a typed clause after it could never run" - and neither the engine
+  // enforced it nor any test asserted it. An untyped clause catches
+  // everything, so a typed clause behind it is dead code that reads as live.
+  expectError('try { throw 1; } catch (e) { 1; } catch (e: TypeError) { 2; }');
+  expectError('try { throw 1; } catch (e) { 1; } catch (e: TypeError) { 2; } catch (e: RangeError) { 3; }');
+
+  // The shapes it must not refuse: an untyped tail, all-typed clauses, and a
+  // lone untyped clause, which is ordinary JavaScript.
+  expect(ok('try { throw 1; } catch (e: TypeError) { 2; } catch (e) { 1; }')).toBe(true);
+  // Thrown as a TypeError so a clause catches it: an all-typed `try` whose
+  // value matches nothing throws at run time, which `ok` cannot tell from a
+  // type error.
+  expect(ok('try { throw new TypeError("x"); } catch (e: TypeError) { 2; } catch (e: RangeError) { 3; }')).toBe(true);
+  expect(ok('try { throw 1; } catch (e) { 1; }')).toBe(true);
 });

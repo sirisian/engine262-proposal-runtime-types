@@ -3166,6 +3166,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return;
       }
+      case 'TryStatement': {
+        // proposal-runtime-types #sec-typed-catch: "It is a type error if a
+        // Catch other than the last of its CatchClauses has no TypeAnnotation."
+        // An untyped clause catches everything, so a typed clause after it can
+        // never run - the program means something other than what it says, and
+        // saying so costs less than the puzzle of a handler that never fires.
+        const clauses = (n as unknown as { CatchClauses?: readonly ParseNode[] | null }).CatchClauses;
+        if (clauses && clauses.length > 1) {
+          for (let i = 0; i < clauses.length - 1; i += 1) {
+            if (!(clauses[i] as { TypeAnnotation?: unknown }).TypeAnnotation) {
+              const completion = Throw.TypeError('an untyped catch clause must be last') as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        // Then walk on. Breaking here skipped the default case, which is what
+        // descends into a node's children - so every declaration and check
+        // inside a `try` stopped being visited, and eight tests in a file this
+        // rule does not touch went red.
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+            walk(child as ParseNode);
+          }
+        }
+        break;
+      }
       case 'SwitchStatement': {
         // proposal-runtime-types (spec sec-enums, sec-narrowing): a switch over an
         // enumerator must label its cases with enumerators of that enum, and a
