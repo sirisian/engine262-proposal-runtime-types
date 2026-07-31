@@ -67,16 +67,21 @@ test('a typed NaN is one key, as an untyped one is', () => {
   expect(evaluated('String(Object.is(float32(NaN), float32(NaN)));')).toBe('true');
 });
 
-test('PINNED: the DECIMAL cohorts have no value level to canonicalize', () => {
-  // The other class with more than one member is the decimal cohort - `1.0` and
-  // `1.00` as `decimal128`, SameValue-distinct and SameValueZero-equal. The type
-  // RESOLVES and annotates, and no value of it can be made, so there is no
-  // cohort here to compare. Pinned so the composites work does not write steps
-  // no value can reach; the same state the numeric library matrix records for
-  // `complex`.
-  const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome('type D = decimal128; 1;')).toBe('ACCEPTED');
-  expect(outcome('let d: decimal128;')).toBe('ACCEPTED');
-  expect(outcome('let d: decimal128 = 1.0;')).toBe('TypeError');
-  expect(outcome('decimal128(1.0);')).toBe('TypeError');
+test('the DECIMAL cohorts now HAVE a value level, and split as specified', () => {
+  // This pin recorded that decimal types annotated but had no values, so there
+  // was no cohort to canonicalize. PLAN-decimal.md stages A and B closed it.
+  //
+  // The split the composites work needed: SameValue distinguishes cohort
+  // members, SameValueZero and a Map key compare numerical value.
+  expect(evaluated('let d: decimal128 = 1.0; d.toString();')).toBe('1.0');
+  expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; String(Object.is(a, b));')).toBe('false');
+  expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; '
+    + 'const m = new Map(); m.set(a, "x"); String(m.get(b));')).toBe('x');
+  // A decimal belongs to the decimal type of its own WIDTH.
+  expect(evaluated('let d: decimal128 = 1.0; String(d is decimal128);')).toBe('true');
+  expect(evaluated('let d: decimal128 = 1.0; String(d is decimal32);')).toBe('false');
+  // STILL PINNED: the composite's own reduction rule is stage D - "where the
+  // type declares no scale, the REDUCED member is stored".
+  expect(evaluated('try { interface D { v: decimal128 } '
+    + 'String(Composite.<D>({ v: 1.0 }).v.toString()); } catch (e) { e.constructor.name; }')).not.toBe('1');
 });

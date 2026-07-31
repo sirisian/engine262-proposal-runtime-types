@@ -87,3 +87,39 @@ test('PINNED: stage A is the representation ALONE', () => {
   expect(evaluated('decimal32("9.999999999999999999999999999999999").toString();'))
     .toBe('9.999999999999999999999999999999999');
 });
+
+test('STAGE B: a literal at a decimal type is read from its SOURCE TEXT', () => {
+  // "In a decimal context the literal `0.1` is the decimal one tenth, where in a
+  // `float64` context the same `0.1` is the nearest binary float."
+  //
+  // The mechanism is the one bigint literals already use (F85): the checker
+  // marks the node, the run time consults the mark. The reason is sharper here
+  // than for bigint - a double is not merely imprecise for `1.00`, it CANNOT
+  // REPRESENT THE ANSWER, since `1.0` and `1.00` are one double and two
+  // decimals.
+  expect(evaluated('let d: decimal128 = 1.0; d.toString();')).toBe('1.0');
+  expect(evaluated('let d: decimal128 = 1.00; d.toString();')).toBe('1.00');
+  expect(evaluated('let p: decimal128 = 19.99; p.toString();')).toBe('19.99');
+  expect(evaluated('let d: decimal64 = 2.50; d.toString();')).toBe('2.50');
+  // The cohort survives the literal path, which is the whole point of taking it.
+  expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; String(Object.is(a, b));')).toBe('false');
+  expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; '
+    + 'const m = new Map(); m.set(a, "x"); String(m.get(b));')).toBe('x');
+  // A FIELD initializer is a typed position too.
+  expect(evaluated('class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
+});
+
+test('STAGE B: a decimal belongs to the type of its own WIDTH', () => {
+  expect(evaluated('let d: decimal128 = 1.0; String(d is decimal128);')).toBe('true');
+  expect(evaluated('let d: decimal128 = 1.0; String(d is decimal32);')).toBe('false');
+  expect(evaluated('let d: decimal32 = 1.0; String(d is decimal32);')).toBe('true');
+});
+
+test('STAGE B: every other literal is UNAFFECTED', () => {
+  // The mark is consulted only where the checker set it, so a float context
+  // still gives the nearest binary float and an untyped literal is a Number.
+  expect(evaluated('let f: float64 = 0.1; String(f);')).toBe('0.1');
+  expect(evaluated('String(0.1 + 0.2);')).toBe('0.30000000000000004');
+  expect(evaluated('let b: bigint = 9007199254740993; String(b);')).toBe('9007199254740993');
+  expect(evaluated('let u: uint8 = 3; String(u);')).toBe('3');
+});

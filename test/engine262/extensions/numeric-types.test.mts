@@ -39,10 +39,17 @@ test('numeric types: the type names are shadowable', () => {
 });
 
 // ── Documented gaps: the value level ──────────────────────────────────────────
-test('numeric types: a literal in a decimal or float128 type does not convert (documents the gap)', () => {
+test('numeric types: a DECIMAL literal converts; float128 still does not', () => {
   // Target (decimal.md): `let a: decimal128 = 1.5` gives a decimal128 value.
   // The value-level conversion/arithmetic is deferred.
-  expectThrown('let a: decimal128 = 1.5;');
+  // A DECIMAL literal converts (PLAN-decimal.md stage B): it is read from its
+  // SOURCE TEXT, so the cohort member is the one written - `1.5` and `1.50` are
+  // two values of one numerical value, which a double cannot tell apart.
+  expect(evaluated('let a: decimal128 = 1.5; a.toString();')).toBe('1.5');
+  expect(evaluated('let a: decimal128 = 1.50; a.toString();')).toBe('1.50');
+  expect(evaluated('let a: decimal128 = 1.5; let b: decimal128 = 1.50; String(Object.is(a, b));')).toBe('false');
+  // `float128` still has no value level, for the same representational reason
+  // decimals had until stage A: it does not fit a double either.
   expectThrown('let a: float128 = 1.5;');
 });
 

@@ -141,6 +141,20 @@ const elidableAnnotations = new WeakSet<object>();
  * directly: `let x: bigint | undefined = 9007199254740993` wants the same
  * reading as the bare annotation.
  */
+/** The width of a decimal type, or *undefined* where the type is not one. */
+function decimalWidthOf(t: TypeRecord): 32 | 64 | 128 | undefined {
+  const base = t.Kind === 'literal' ? t.Base : t;
+  if (base.Kind !== 'primitive') {
+    return undefined;
+  }
+  switch (base.Name) {
+    case 'decimal32': return 32;
+    case 'decimal64': return 64;
+    case 'decimal128': return 128;
+    default: return undefined;
+  }
+}
+
 function bigintTarget(t: TypeRecord): boolean {
   if (t.Kind === 'primitive') {
     return t.Name === 'bigint';
@@ -187,6 +201,22 @@ const bigintLiterals = new WeakSet<object>();
 
 export function IsBigIntContextLiteral(node: object): boolean {
   return bigintLiterals.has(node);
+}
+
+/**
+ * Numeric literals the checker read at a DECIMAL type, with the width to build
+ * them at - consulted by NumericValue, exactly as the bigint mark is.
+ *
+ * PLAN-decimal.md stage B. "In a decimal context the literal `0.1` is the
+ * decimal one tenth, where in a `float64` context the same `0.1` is the nearest
+ * binary float", and the cohort member comes from the SOURCE TEXT: `1.0` is
+ * 10 x 10^-1 where `1.00` is 100 x 10^-2, and by the time the lexer has made a
+ * double the two are indistinguishable.
+ */
+const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
+
+export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
+  return decimalLiterals.get(node);
 }
 
 export function IsCheckElided(annotation: object): boolean {
@@ -553,6 +583,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // evaluation must produce the BigInt. That is the elidable-annotation
     // channel again - the checker knows something at a node, and the run time
     // consults the mark.
+    // A numeric LITERAL at a DECIMAL contextual position is read from its source
+    // text too, and for a sharper reason than bigint's: the double is not
+    // merely imprecise, it CANNOT REPRESENT THE ANSWER AT ALL, since `1.0` and
+    // `1.00` are one double and two decimals.
+    if (node.type === 'NumericLiteral' && contextual) {
+      const width = decimalWidthOf(contextual);
+      if (width !== undefined && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
+        decimalLiterals.set(node, width);
+        return contextual;
+      }
+    }
     if (node.type === 'NumericLiteral' && contextual && bigintTarget(contextual)) {
       const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
       if (exact !== null) {

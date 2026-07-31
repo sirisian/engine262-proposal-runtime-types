@@ -1,6 +1,8 @@
 import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, DecimalContextLiteralWidth } from '../type-system/check.mts';
+import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types: a literal the checker read at `bigint` evaluates to
@@ -13,6 +15,19 @@ import { IsBigIntContextLiteral } from '../type-system/check.mts';
 export function NumericValue(node: ParseNode.NumericLiteral) {
   if (typeof node.value === 'number' && typeof node.SourceText === 'string' && IsBigIntContextLiteral(node)) {
     return Value(BigInt(node.SourceText.replace(/_/g, '')));
+  }
+  // A literal the checker read at a DECIMAL type evaluates to the decimal its
+  // SOURCE TEXT denotes, and the reason is sharper than bigint's: the double is
+  // not merely imprecise here, it cannot represent the answer at all. `1.0` and
+  // `1.00` are ONE double and TWO decimals, so the cohort member exists only in
+  // the text.
+  const source = typeof node.SourceText === 'string' ? node.SourceText : undefined;
+  const width = source !== undefined ? DecimalContextLiteralWidth(node) : undefined;
+  if (width !== undefined && source !== undefined) {
+    const digits = ParseDecimalDigits(source.replace(/_/g, ''));
+    if (digits) {
+      return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
+    }
   }
   return Value(node.value);
 }

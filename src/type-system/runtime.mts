@@ -598,6 +598,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // assignment goes through IsSubtype - while `Composite({x: 1}) is Composite`
   // answered *false*. One relation said yes and the other no about the same
   // pair, which a pattern form made visible.
+  // proposal-runtime-types (PLAN-decimal.md stage B): a decimal value belongs to
+  // the decimal type of its own WIDTH. The value is an object carrying a
+  // significand and an exponent - the structural test is written out here for
+  // the reason the rational one beside it is, so the type system does not depend
+  // on an intrinsic module.
+  if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
+    if (value instanceof ObjectValue && 'DecimalSignificand' in value) {
+      const width = (value as unknown as { DecimalWidth: number }).DecimalWidth;
+      return t.Name === `decimal${width}`;
+    }
+    return false;
+  }
   if (t.Kind === 'primitive' && t.Name === 'Composite') {
     const composite = CompositeTypeRecordOf(value);
     if (!composite) {
