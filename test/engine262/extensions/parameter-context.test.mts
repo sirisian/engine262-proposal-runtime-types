@@ -49,13 +49,10 @@ test('the rest of the sub-target family is unchanged', () => {
     + 'class A { m(): @g uint8 { return uint8(1); } } return f; })();')).toBe('kind,methodContext');
 });
 
-test('PINNED: `metadata` on a parameter, and `signatures` on a method', () => {
+test('PINNED: `metadata` on a parameter', () => {
   // decorators.md gives `metadata` on `ClassMethodParameterReflection` beside
-  // the three that landed.
+  // the three that landed. `signatures` on a method LANDED - see
+  // method-signatures.test.mts.
   expect(evaluated('(() => { let m = "X"; function g(c) { m = String(c.metadata); } '
     + 'class A { m(@g x: uint32) {} } return m; })();')).toBe('undefined');
-  // And `signatures` beside a method's `type`, which the OVERLOAD GROUP would
-  // supply - the context reports the one declaration it was handed.
-  expect(evaluated('(() => { let s = "X"; function g(c) { s = String(c.signatures); } '
-    + 'class A { @g m(): uint8 { return uint8(1); } } return s; })();')).toBe('undefined');
 });

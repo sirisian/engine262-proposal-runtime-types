@@ -55,6 +55,7 @@ import {
   CreateDataPropertyOrThrow, HasProperty, InitializeFieldOrAccessor, InitializePrivateMethods, IsPropertyKey, markBuiltinFunctionAsConstructor, PrivateElementFind, PrivateGet, PrivateSet, Set, Throw,
 } from '#self';
 import { DefaultValueOf } from '../type-system/runtime.mts';
+import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import {
   Assert,
   Call,
@@ -1971,6 +1972,74 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
   return undefined;
 }
 
+/**
+ * decorators.md's `FunctionSignatureReflection`: `{ parameters, return }`, where
+ * a parameter carries `type`, `name`, `index` and `initial` - the same facts the
+ * parameter CONTEXT reports, from the same node, so the two cannot disagree
+ * about one declaration.
+ */
+function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundingAgent.currentRealmRecord): ValueEvaluator {
+  const sig = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  const n = node as {
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+    PropertySetParameterList?: readonly ParseNode[] | null,
+    FormalParameters?: readonly ParseNode[] | null,
+    TypeAnnotation?: { Type?: ParseNode } | null,
+  };
+  const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  const parameters: Value[] = [];
+  for (let i = 0; i < formals.length; i += 1) {
+    const entry = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+    const binding = formals[i] as {
+      BindingIdentifier?: { name?: string } | null,
+      TypeAnnotation?: { Type?: ParseNode } | null,
+      Initializer?: { type?: string, value?: unknown } | null,
+    };
+    X(CreateDataProperty(entry, Value('index'), Value(i)));
+    if (binding.BindingIdentifier?.name !== undefined) {
+      X(CreateDataProperty(entry, Value('name'), Value(binding.BindingIdentifier.name)));
+    }
+    if (binding.TypeAnnotation?.Type) {
+      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(binding.TypeAnnotation.Type as never));
+      if (t.Type === 'normal') {
+        X(CreateDataProperty(entry, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+      }
+    }
+    X(CreateDataProperty(entry, Value('initial'), DeclaredConstantOf(binding.Initializer)));
+    parameters.push(entry);
+  }
+  X(CreateDataProperty(sig, Value('parameters'), X(CreateArrayFromList(parameters))));
+  const ret = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  if (n.TypeAnnotation?.Type) {
+    const t = EnsureCompletion(yield* TypeNodeToTypeRecord(n.TypeAnnotation.Type as never));
+    if (t.Type === 'normal') {
+      X(CreateDataProperty(ret, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+    }
+  }
+  X(CreateDataProperty(sig, Value('return'), ret));
+  return sig;
+}
+
+/** A constant initializer's value, or *undefined* for anything else. */
+function DeclaredConstantOf(init: { type?: string, value?: unknown } | null | undefined): Value {
+  if (!init) {
+    return Value.undefined;
+  }
+  if (init.type === 'NumericLiteral') {
+    return Value(Number(init.value));
+  }
+  if (init.type === 'StringLiteral') {
+    return Value(String(init.value));
+  }
+  if (init.type === 'BooleanLiteral') {
+    return init.value ? Value.true : Value.false;
+  }
+  if (init.type === 'NullLiteral') {
+    return Value.null;
+  }
+  return Value.undefined;
+}
+
 export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -1994,6 +2063,15 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
         X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
       }
     }
+  }
+  // decorators.md: "signatures: [].<FunctionSignatureReflection> - Length 1 when
+  // not overloaded." A CLASS METHOD is never overloaded in this engine (a second
+  // declaration of one name replaces the first, unlike a function declaration,
+  // which does form an overload group), so this is always the one declaration
+  // the context was handed.
+  if (node) {
+    const one = Q(yield* FunctionSignatureReflectionOf(node, realm));
+    X(CreateDataProperty(context, Value('signatures'), X(CreateArrayFromList([one]))));
   }
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));

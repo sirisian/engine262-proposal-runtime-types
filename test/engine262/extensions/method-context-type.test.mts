@@ -26,7 +26,7 @@ test('a method context reports its declared RETURN type', () => {
 test('the rest of the method context is unchanged', () => {
   expect(evaluated('(() => { let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } '
     + 'class A { @g m(): uint8 { return uint8(1); } } return f; })();'))
-    .toBe('kind,name,static,private,abstract,type,classContext,metadata,addInitializer');
+    .toBe('kind,name,static,private,abstract,type,signatures,classContext,metadata,addInitializer');
   // A static method and an operator go through the same builder.
   expect(evaluated('(() => { let k; function g(c) { k = c.kind; } '
     + 'class A { @g static m(): uint8 { return uint8(1); } } return k; })();')).toBe('ClassMethod');
@@ -34,10 +34,11 @@ test('the rest of the method context is unchanged', () => {
     + 'class O { @g operator +(r: O): O { return r; } } return k; })();')).toBe('ClassOperator');
 });
 
-test('PINNED: `signatures` is still absent', () => {
-  // decorators.md gives `signatures` beside `type` for an OVERLOADED method.
-  // The overload group is what would supply it, and the context reports the one
-  // declaration it was handed.
-  expect(evaluated('(() => { let s = "X"; function g(c) { s = String(c.signatures); } '
-    + 'class A { @g m(): uint8 { return uint8(1); } } return s; })();')).toBe('undefined');
+test('`signatures` is present, and length 1', () => {
+  // decorators.md: "Length 1 when not overloaded." A CLASS METHOD is never
+  // overloaded in this engine - a second declaration of one name REPLACES the
+  // first, unlike a function declaration, which does form an overload group -
+  // so this is always the one declaration the context was handed.
+  expect(evaluated('(() => { let s; function g(c) { s = c.signatures.length; } '
+    + 'class A { @g m(): uint8 { return uint8(1); } } return String(s); })();')).toBe('1');
 });
