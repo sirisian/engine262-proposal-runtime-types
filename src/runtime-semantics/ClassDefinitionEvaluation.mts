@@ -149,6 +149,7 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
             (node as { static?: boolean }).static === true,
             currentClassName ?? Value.undefined,
             object as Value,
+            node,
           )), true));
           if (replacement !== undefined) {
             const memberKey = MemberKeyOf(node, method);
@@ -1934,7 +1935,7 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
   return undefined;
 }
 
-export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value): ValueEvaluator {
+export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
@@ -1944,6 +1945,19 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   if (kind === 'ClassMethod' || kind === 'ClassOperator') {
     X(CreateDataProperty(context, Value('abstract'), Value.false));
+  }
+  // decorators.md's `ClassMethodReflection` gives `type` - the method's declared
+  // RETURN type. This builder took no NODE at all, which is why it could not
+  // report it: it was handed a kind, a key and a flag, none of which knows the
+  // declaration.
+  if (node) {
+    const returnType = (node as { TypeAnnotation?: { Type?: ParseNode } | null }).TypeAnnotation?.Type;
+    if (returnType) {
+      const t = EnsureCompletion(yield* TypeNodeToTypeRecord(returnType as never));
+      if (t.Type === 'normal') {
+        X(CreateDataProperty(context, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
+      }
+    }
   }
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
