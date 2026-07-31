@@ -9,8 +9,10 @@
 // it is what `next` returns and nothing else can be written before it.
 
 import type { TypeRecord } from './records.mts';
-import { anyType, voidType, makePrimitive } from './records.mts';
-import { wellKnownSymbols } from '#self';
+import {
+  anyType, voidType, makePrimitive, parameter,
+} from './records.mts';
+import { wellKnownSymbols, Value } from '#self';
 
 const BUILTIN_INTERFACES = new Set([
   'IteratorResult',
@@ -42,12 +44,14 @@ function objectType(properties: { key: string | symbol, type: TypeRecord, option
 }
 
 function fnType(params: TypeRecord[], ret: TypeRecord): TypeRecord {
+  // Built through `parameter` rather than by hand: a ParameterRecord has fields
+  // beyond the obvious four, and a hand-built one compares unequal to a
+  // constructed one even when every visible field matches - which is what made
+  // two identically-spelled `Iterable.<uint8>` records fail to be subtypes.
   return {
     Kind: 'function',
     Signatures: [{
-      Parameters: params.map((t, i) => ({
-        Name: `arg${i}`, Type: t, Optional: true, Rest: false,
-      })),
+      Parameters: params.map((t, i) => parameter(t, { Name: `arg${i}`, Optional: true })),
       Return: ret,
       Untyped: false,
     }],
@@ -55,7 +59,11 @@ function fnType(params: TypeRecord[], ret: TypeRecord): TypeRecord {
 }
 
 const booleanLiteral = (v: boolean): TypeRecord => ({
-  Kind: 'literal', Value: v, Base: makePrimitive('boolean'),
+  // An engine Value, not a JS boolean: literal subtyping compares with
+  // SameValue, and two raw booleans compare unequal to the Value the rest of
+  // the type system carries - which made two identically-spelled records fail
+  // to be subtypes with nothing visibly different about them.
+  Kind: 'literal', Value: v ? Value.true : Value.false, Base: makePrimitive('boolean'),
 } as unknown as TypeRecord);
 
 /**
@@ -141,97 +149,14 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// REMAINDER — IteratorResult in an applied evaluated position.
+// REMAINDER — one symptom left.
 //
-// Five of six resolve everywhere. `IteratorResult` resolves bare in an
-// evaluated position and applied in a parameter annotation; it fails only as
-// `const r: IteratorResult.<uint8> = …`, reporting "is not defined".
+// `IteratorResult` resolves bare in an evaluated position and applied in a
+// parameter annotation, and fails only as `const r: IteratorResult.<uint8> = …`,
+// reporting "is not defined". Ruled out by test: the arity, a `void` type
+// argument, the missing runtime resolver, and answering the name in
+// TypeNodeToTypeRecord's throw-recovery branch.
 //
-// Ruled out by test, each cheap: the arity (the one-argument form fails the
-// same), a `void` type argument (`Promise.<uint8, void>` resolves), and
-// answering the name in TypeNodeToTypeRecord's throw-recovery branch beside the
-// class-in-its-dead-zone case (written, rebuilt, no effect, reverted).
-//
-// What is known: the evaluated path resolves a name to a VALUE before applying
-// type arguments, so a name with no binding has to be answered before GetValue
-// propagates. `Iterable` and the rest survive because they are registered among
-// the library type names; `IteratorResult` is registered identically and does
-// not, and the one property distinguishing it is that its record is a ~union~
-// where every other is an ~object~.
-//
-// The next step is to find where a library-registered name is answered on the
-// evaluated path - `Promise.<uint8, void>` takes it and works - and see what it
-// does with a record that has no [[Arguments]] to attach to. That is a question
-// with a definite answer in one function, not a search.
-
-/**
- * What a built-in nominal type DECLARES it implements.
- *
- * A library type is an opaque nominal here - its members live in side tables
- * consulted at the member-access site, never on the record - so it has no
- * structural form to compare against an interface, and nothing made a
- * `Generator` an `IterableIterator` even though both documents say it is one.
- *
- * The relation is a DECLARATION rather than an inspection, which is what the
- * specification says ("Iterator ... declares that it implements
- * IterableIterator") and what makes it the fast path: a brand check rather than
- * a member walk, with the walk reserved for hand-written values.
- *
- * Each entry is a function of the source's own arguments, since what a `Map.<K,
- * V>` implements is `Iterable.<[K, V]>` rather than a constant. Each entry is
- * also a claim that has to stay true by hand, which is why every one of them has
- * a test: the table IS the assertions.
- */
-const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]) => TypeRecord[]> = {
-  Generator: (a) => [
-    iterationInterfaceRecord('IterableIterator', a)!,
-    iterationInterfaceRecord('Iterator', a)!,
-    iterationInterfaceRecord('Iterable', [a[0]])!,
-  ],
-  AsyncGenerator: (a) => [
-    iterationInterfaceRecord('AsyncIterableIterator', a)!,
-    iterationInterfaceRecord('AsyncIterator', a)!,
-    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
-  ],
-  Set: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
-  Map: (a) => [iterationInterfaceRecord('Iterable', [
-    { Kind: 'tuple', Elements: [a[0], a[1]] } as unknown as TypeRecord,
-  ])!],
-};
-
-/** Whether a built-in nominal declares that it implements `target`. */
-export function builtinImplements(
-  libraryName: string | undefined,
-  args: readonly (TypeRecord | number)[],
-  matches: (declared: TypeRecord) => boolean,
-): boolean {
-  if (!libraryName) {
-    return false;
-  }
-  const entry = BUILTIN_IMPLEMENTS[libraryName];
-  if (!entry) {
-    return false;
-  }
-  return entry(args).some((declared) => declared !== null && matches(declared));
-}
-
-// STATUS — the table is written and the relation does not yet hold.
-//
-// `builtinImplements` is wired into IsSubtype ahead of the kind guard, and
-// `const i: Iterable.<uint8> = g()` for a generator still reports the generator
-// as not assignable. IsAssignable does call IsSubtype, so the route is right;
-// the step is not firing, and the reason is not yet known.
-//
-// What to check first, in order:
-//   1. Whether the target record at that point is really ~object~. If the
-//      interface reaches IsSubtype as something else - a parameterized wrapper,
-//      or the interned Type Object rather than its record - the `t.Kind ===
-//      'object'` guard is simply false and the step is skipped.
-//   2. Whether the source's [[LibraryName]] is 'Generator' at that point, or
-//      whether the generator's type arrives as something other than the library
-//      nominal the annotation resolves to.
-//   3. Whether an earlier branch answers first: the parameterized and
-//      intersection branches both return before this point.
-//
-// A single trace at the top of IsSubtype printing both Kinds and LibraryNames
-// for this case answers all three at once, and is the next thing to do.
+// It is the one member of this family whose record is a ~union~ where the rest
+// are ~object~, and the evaluated path attaches type arguments only to a record
+// that can carry them. Everything else here works.
