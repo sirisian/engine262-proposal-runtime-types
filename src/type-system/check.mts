@@ -6,6 +6,7 @@ import {
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
+import { iterationInterfaceRecord } from './iteration-types.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
@@ -893,10 +894,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `Map.<K, V>`). Without the library fallback a `RegExp.<C, G>` annotation
           // resolves to nothing here and its capture checking never runs.
           return builtinTypeRecord(node.TypeName.IdentifierReference.name, args)
+            ?? iterationInterfaceRecord(node.TypeName.IdentifierReference.name, args)
             ?? libraryTypeRecord(node.TypeName.IdentifierReference.name, args);
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
+        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
