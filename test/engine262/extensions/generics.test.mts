@@ -87,6 +87,9 @@ test('generics: a class type parameter reaches a field annotation', () => {
   // bound the class's parameters. Each is bound to a ~parameter~ record now -
   // the kind table-type-record-kinds specifies and the engine lacked.
   expect(ok('class B<T> { v: T = null; }')).toBe(true);
+  // Uninitialized too: a parameter has no default, which is what leaves the
+  // field alone rather than checking `undefined` against it.
+  expect(ok('class B<T> { v: T; }')).toBe(true);
   expect(ok('class B<T> { accessor v: T = null; }')).toBe(true);
   // The positions that already worked must keep working.
   expect(ok('class B<T> { constructor(v: T) {} }')).toBe(true);
@@ -98,12 +101,10 @@ test('generics: a class type parameter reaches a field annotation', () => {
 /**
  * Two parts of the generics work remain, both narrowed to a cause.
  *
- * An UNINITIALIZED field of a parameter type is refused - `class B<T> { v: T; }`
- * reports "undefined is not assignable to parameter" - where the same field at
- * a concrete type is accepted. The parameter rule in relations.mts says nothing
- * relates to a parameter but itself and its constraint, which is right for a
- * declaration's interior and wrong for the initialization check that runs over
- * it. The concrete path skips that check; the parameter path does not.
+ * A STATIC field of a parameter type is still refused - "undefined is not
+ * assignable to parameter". The instance path was fixed by giving a parameter
+ * no default value, which is what leaves an uninitialized field alone; static
+ * fields are evaluated on a different path that does not consult it.
  *
  * And a generic class's METHOD still fails when CALLED - `new B.<uint8>().m(1)`
  * reports "T is not defined" - because a method signature is resolved lazily,

@@ -389,6 +389,14 @@ function classInstanceType(value: ObjectValue): TypeRecord | null {
  */
 export function DefaultValueOf(t: TypeRecord): Value | undefined {
   switch (t.Kind) {
+    case 'parameter':
+      // A generic parameter has no default, because nothing is known about what
+      // an application will bind. Returning undefined here is what leaves an
+      // uninitialized field of a parameter type alone, the same as a type with
+      // no default - without it the field was checked against the parameter and
+      // "undefined is not assignable to parameter" was reported for a
+      // declaration a concrete type accepts.
+      return undefined;
     case 'any':
       return Value.undefined;
     case 'void':
