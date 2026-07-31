@@ -103,10 +103,10 @@ export function SetCurrentClassName(name: Value | undefined): Value | undefined 
   return previous;
 }
 
-function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable: BooleanValue): PlainEvaluator<PrivateElementRecord | ClassFieldDefinitionRecord | void>
+function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable: BooleanValue, ctor?: ObjectValue): PlainEvaluator<PrivateElementRecord | ClassFieldDefinitionRecord | void>
 // +decorator
-function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue): PlainEvaluator<ClassElementDefinitionRecord | ClassStaticBlockDefinitionRecord | void>
-function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable?: BooleanValue): PlainEvaluator<ClassElementDefinitionRecord | ClassFieldDefinitionRecord | ClassStaticBlockDefinitionRecord | PrivateElementRecord | void> {
+function ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable?: undefined, ctor?: ObjectValue): PlainEvaluator<ClassElementDefinitionRecord | ClassStaticBlockDefinitionRecord | void>
+function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.GeneratorMethod | ParseNode.AsyncMethod | ParseNode.AsyncGeneratorMethod | ParseNode.FieldDefinition | ParseNode.ClassStaticBlock, object: ObjectValue, enumerable?: BooleanValue, ctor?: ObjectValue): PlainEvaluator<ClassElementDefinitionRecord | ClassFieldDefinitionRecord | ClassStaticBlockDefinitionRecord | PrivateElementRecord | void> {
   switch (node.type) {
     case 'MethodDefinition':
     case 'GeneratorMethod':
@@ -231,7 +231,7 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           const memberReplacement = Q(yield* ApplyDecorators(node.Decorators, Q(yield* (isAccessor
             ? (k: Value, n: ParseNode, cn: Value, cc: Value) => ClassAccessorDecoratorContext(k, n, cn, cc, accessorPair)
             : ClassFieldDecoratorContext)(
-            key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value,
+            key ?? Value.undefined, node, currentClassName ?? Value.undefined, object as Value, ctor,
           )), true));
           if (memberReplacement !== undefined) {
             if (isAccessor) {
@@ -966,10 +966,10 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // a. If IsStatic of e is false, then
       if (IsStatic(e) === false) {
         // i. Let field be ClassElementEvaluation of e with arguments proto and false.
-        field = (yield* ClassElementEvaluation(e, proto, Value.false))!;
+        field = (yield* ClassElementEvaluation(e, proto, Value.false, F))!;
       } else { // b. Else,
         // i. Let field be ClassElementEvaluation of e with arguments F and false.
-        field = (yield* ClassElementEvaluation(e, F, Value.false))!;
+        field = (yield* ClassElementEvaluation(e, F, Value.false, F))!;
       }
       // c. If field is an abrupt completion, then
       if (field instanceof AbruptCompletion) {
@@ -1645,7 +1645,7 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   return context;
 }
 
-export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value): ValueEvaluator {
+export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, className: Value, classCtor: Value, ctor?: ObjectValue): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   // Typed to the NODE this is given, not to an invented shape. The cast here
@@ -1684,6 +1684,42 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
   // "classContext: Reflect.Class.<TClass>" - a field's context carries its
   // class's, which is what lets one decorator reach the declaration it belongs
   // to without the class having to pass itself.
+  // decorators.md: "Layout, present when the declaring class has one. A STATIC
+  // field is not part of an instance's layout, so both are undefined for it."
+  //
+  // ACCESSORS, not data properties, and the reason is an ORDERING fact: a field
+  // decorator runs BEFORE the class's `InstanceLayout` is computed, AND SO DO
+  // THE `addInitializer` CALLBACKS IT REGISTERS. A value read at either point
+  // would always be *undefined*; a value read WHEN ASKED is present for every
+  // reader that runs after the class finishes, which is what "present when the
+  // declaring class has one" means.
+  //
+  // The constructor is THREADED IN from the call site. `Get(proto,
+  // 'constructor')` must NOT be used: it walks the prototype chain, and while a
+  // class is being defined that lookup can return `Object` - no layout, and no
+  // error. There is deliberately no fallback to the home object either, so a
+  // missing constructor reports *undefined* rather than silently substituting
+  // something that answers wrongly.
+  if (!decl.static && key instanceof JSStringValue && ctor) {
+    const fieldName = key.stringValue();
+    const owner = ctor as ObjectValue & { InstanceLayout?: { fields: readonly { key: string, offset: number, layout: { byteLength: number } }[] } | null };
+    const reader = (which: 'offset' | 'byteLength') => CreateBuiltinFunction(function* read() {
+      const placement = owner.InstanceLayout?.fields.find((f) => f.key === fieldName);
+      if (!placement) {
+        return Value.undefined;
+      }
+      return which === 'offset' ? Value(placement.offset) : Value(placement.layout.byteLength);
+    } as never, 0, Value(which), [], realm);
+    X(DefinePropertyOrThrow(context, Value('offset'), Descriptor({
+      Getter: reader('offset'), Enumerable: Value.true, Configurable: Value.true,
+    })));
+    X(DefinePropertyOrThrow(context, Value('byteLength'), Descriptor({
+      Getter: reader('byteLength'), Enumerable: Value.true, Configurable: Value.true,
+    })));
+  } else {
+    X(CreateDataProperty(context, Value('offset'), Value.undefined));
+    X(CreateDataProperty(context, Value('byteLength'), Value.undefined));
+  }
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   X(CreateDataProperty(context, Value('classContext'), Q(yield* ClassDecoratorContext(className, classCtor))));
   return context;
