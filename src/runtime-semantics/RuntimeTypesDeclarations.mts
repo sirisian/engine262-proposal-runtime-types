@@ -485,6 +485,41 @@ export function NewMatchCache(): MatchCacheRecord {
   return { Reads: [], Iterations: [] };
 }
 
+/**
+ * The members of a type that may be matched MEMBER BY MEMBER through the cache,
+ * or *undefined* where it may not.
+ *
+ * Three kinds of object type cannot be, each measured:
+ *
+ * - **OPTIONAL members**: `{ g?: uint8 }` matches `{}`, where a member-by-member
+ *   test would require `g` present and answer *false*.
+ * - **INDEX SIGNATURES**: `{ [k: string]: uint8 }` names no members to walk.
+ * - **NOMINAL types**: a class rejects a plain object with the right members, so
+ *   it can never become a structural test. An INTERFACE is structural here - a
+ *   plain object matches one - and so may be routed through its Structure.
+ */
+function StructuralMemberTypes(t: TypeRecord): readonly { key: string, type: TypeRecord }[] | undefined {
+  const shape = t.Kind === 'object'
+    ? t
+    : (t.Kind === 'nominal' && (t as { Declaration?: unknown }).Declaration === undefined
+      ? (t as { Structure?: TypeRecord }).Structure
+      : undefined);
+  if (!shape || shape.Kind !== 'object') {
+    return undefined;
+  }
+  if (shape.IndexSignatures.length > 0) {
+    return undefined;
+  }
+  const members = [];
+  for (const p of shape.Properties) {
+    if (p.optional || typeof p.key !== 'string') {
+      return undefined;
+    }
+    members.push({ key: p.key, type: p.type as TypeRecord });
+  }
+  return members.length > 0 ? members : undefined;
+}
+
 export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache: MatchCacheRecord = NewMatchCache()): PlainEvaluator<boolean> {
   switch (P.type) {
     case 'MatchOrPattern': {
@@ -725,6 +760,43 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
       // `when Circle:` and `when Count.Zero:` read as the tests they are.
       const asType = EnsureCompletion(yield* TypeNodeToTypeRecord(P.Type));
       if (asType.Type === 'normal') {
+        // QUESTION-match-cache-type-path.md: a STRUCTURAL object type is matched
+        // MEMBER BY MEMBER THROUGH THE CACHE rather than by `IsOfType` on the
+        // whole.
+        //
+        // The Match Cache Record is specified to memoize reads "so that a
+        // property is read at most once HOWEVER MANY PATTERNS LOOK, and every
+        // pattern of one `match` sees the same values" - but `IsOfType` is given
+        // no cache at any of its five call sites, while every other
+        // subject-touching operation takes one. Measured, that is not a
+        // performance difference: with a getter returning 1 then 2,
+        // `when { g: 2 }` / `when { g: 1 }` selected NO ARM through `IsOfType`
+        // and `{ g: 1 }` through the pattern path. **The two spellings chose
+        // different arms**, and which one a member takes is invisible in the
+        // source.
+        //
+        // The reads are moved to where the cache already is, rather than the
+        // cache into the type system: `IsOfType` keeps its signature and every
+        // other caller is untouched.
+        const structural = StructuralMemberTypes(asType.Value as TypeRecord);
+        if (structural && subject instanceof ObjectValue) {
+          for (const member of structural) {
+            let read = cache.Reads.find((r) => r.Object === subject && r.Key === member.key);
+            if (!read) {
+              const present = Q(yield* HasProperty(subject, Value(member.key)));
+              const value = present === Value.true ? Q(yield* Get(subject, Value(member.key))) : Value.undefined;
+              read = { Object: subject, Key: member.key, Present: present === Value.true, Value: value };
+              cache.Reads.push(read);
+            }
+            if (!read.Present) {
+              return false;
+            }
+            if (!Q(yield* IsOfType(read.Value, member.type))) {
+              return false;
+            }
+          }
+          return true;
+        }
         return Q(yield* IsOfType(subject, asType.Value as TypeRecord));
       }
       // Not a type: evaluate the name as the member expression it spells and

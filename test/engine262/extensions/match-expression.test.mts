@@ -68,23 +68,63 @@ test('every pattern form works as a clause pattern', () => {
   expect(evaluated('match (5) { when 4 or 5: "either"; default: "no"; }')).toBe('either');
 });
 
-test('PINNED: the cache holds on the PATTERN path and not the TYPE path', () => {
-  // A real consequence of the deferral discipline, and a tension worth stating
-  // rather than papering over.
+test('THE CACHE COVERS THE TYPE PATH TOO', () => {
+  // `sec-match-expression`: the cache memoizes reads "so that a property is
+  // read at most once HOWEVER MANY PATTERNS LOOK, and every pattern of one
+  // `match` sees the same values."
   //
-  // Where a member's sub-pattern is something a |Type| cannot express, the
-  // clause takes the pattern path and the Match Cache Record does its job: one
-  // getter call however many clauses name the key.
+  // It did not hold for a structural TYPE pattern, because `IsOfType` is given
+  // no cache at any of its five call sites in `PatternMatches` while every
+  // other subject-touching operation takes one. A structural object type is now
+  // matched MEMBER BY MEMBER THROUGH THE CACHE, so the reads happen where the
+  // cache already is rather than the cache moving into the type system.
+  expect(evaluated('let n = 0; const o = { get g() { n += 1; return 1; } }; '
+    + 'match (o) { when { g: 2 }: 1; when { g: 1 }: 2; default: 3; }; String(n);')).toBe('1');
   expect(evaluated('let n = 0; const o = { get g() { n += 1; return 1; } }; '
     + 'match (o) { when { g: _ and 2 }: 1; when { g: _ and 1 }: 2; default: 3; }; String(n);')).toBe('1');
-  // Where every member IS type-expressible the clause takes the TYPE path,
-  // which answers identically and does NOT participate in the cache - so the
-  // getter runs once per clause. Two spellings that agree on the ANSWER differ
-  // on how many times a getter runs.
-  expect(evaluated('let n = 0; const o = { get g() { n += 1; return 1; } }; '
-    + 'match (o) { when { g: 2 }: 1; when { g: 1 }: 2; default: 3; }; String(n);')).toBe('2');
 });
 
+test('IT WAS A WRONG ARM, NOT A SLOWER ONE', () => {
+  // The assertion that says why this was worth changing. With a getter whose
+  // value CHANGES, the uncached path read `g` twice - 1, then 2 - and so
+  // matched NO clause, where a single read matches the second. The two
+  // spellings chose DIFFERENT ARMS, and which path a member takes is invisible
+  // in the source.
+  const G = 'let n = 0; const o = { get g() { n += 1; return n; } }; ';
+  expect(evaluated(`${G} match (o) { when { g: 2 }: "two"; when { g: 1 }: "one"; default: "none"; }`)).toBe('one');
+  expect(evaluated(`${G} match (o) { when { g: _ and 2 }: "two"; when { g: _ and 1 }: "one"; default: "none"; }`)).toBe('one');
+});
+
+test('the three kinds that CANNOT be routed still use IsOfType', () => {
+  // Each measured before the change and unchanged by it.
+  //
+  // OPTIONAL members: `{ g?: uint8 }` matches `{}`, where a member-by-member
+  // test would require `g` present and answer false.
+  expect(evaluated('type T = { g?: uint8 }; String(({}) is T);')).toBe('true');
+  // INDEX SIGNATURES name no members to walk.
+  expect(evaluated('type T = { [k: string]: uint8 }; String(({ a: uint8(1) }) is T);')).toBe('true');
+  // NOMINAL types: a class rejects a plain object with the right members, so it
+  // can never become a structural test.
+  expect(evaluated('class C { g: uint8 = 1; } String(new C() is C);')).toBe('true');
+  expect(evaluated('class C { g: uint8 = 1; } String(({ g: uint8(1) }) is C);')).toBe('false');
+  // An INTERFACE is structural here and may be routed.
+  expect(evaluated('interface I { g: uint8 } String(({ g: uint8(1) }) is I);')).toBe('true');
+});
+
+test('the two spellings still agree on every ANSWER', () => {
+  // Eleven pairs were stress-tested when the change was designed; these are the
+  // ones a regression would most likely break.
+  expect(evaluated('String(({ g: 2 }) is { g: 2 });')).toBe('true');
+  expect(evaluated('String(({ g: 3 }) is { g: 2 });')).toBe('false');
+  expect(evaluated('String(({ g: 2, h: 9 }) is { g: 2 });')).toBe('true');
+  expect(evaluated('String(({}) is { g: 2 });')).toBe('false');
+  expect(evaluated('String(({ g: { k: 1 } }) is { g: { k: 1 } });')).toBe('true');
+  expect(evaluated('String((5) is { g: 2 });')).toBe('false');
+  expect(evaluated('String((null) is { g: 2 });')).toBe('false');
+  // An INHERITED member matches, because presence walks the prototype chain as
+  // `IsOfType` does.
+  expect(evaluated('String((Object.create({ g: 2 })) is { g: 2 });')).toBe('true');
+});
 test('a BLOCK arm is a do expression\'s block', () => {
   // proposal-runtime-types #sec-do-expression-modifications. An arm's Block IS
   // a `do` expression's Block: its value is its completion value, which a Block

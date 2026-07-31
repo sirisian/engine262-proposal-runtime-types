@@ -427,6 +427,7 @@ export interface Throw {
   | 'an array may not be resized while a reference into it is live'
   | 'an element of this type cannot be viewed in a buffer'
   | 'an unlabelled break or continue may not appear in a do expression in a loop head'
+  | 'an untyped catch clause must be last'
   | 'argument[0] must be a string'
   | 'argument[0] must be an ArrayBuffer'
   | 'arguments cannot be referenced in a class field initializer'
