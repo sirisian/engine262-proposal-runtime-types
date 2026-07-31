@@ -1870,6 +1870,35 @@ export function MetadataObjectFor(target: Value, inheritsFrom: Value | undefined
 }
 
 /**
+ * decorators.md's `ClassMethodParameterMetadata` and its return sibling.
+ *
+ * A parameter is identified by its METHOD AND POSITION, so it is keyed on the
+ * same store a member uses under a composite name - which is what
+ * prototype-links a parameter's metadata to THE SAME PARAMETER of the same
+ * method on the base class, exactly as a member's links to the same member. A
+ * RETURN has no index and is keyed without one.
+ */
+function* SubTargetMetadataFor(classCtor: Value, ownerName: Value, index: number): PlainEvaluator<ObjectValue> {
+  const method = ownerName instanceof JSStringValue ? ownerName.stringValue() : undefined;
+  if (method === undefined) {
+    // A symbol- or private-named method has no string key to inherit along.
+    return OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  }
+  // KEYED BY THE CONSTRUCTOR for the same reason a member's is: a context is
+  // built with the home object, a PROTOTYPE for an instance member, while the
+  // reflection reaches the class through its constructor.
+  let owner = classCtor;
+  if (classCtor instanceof ObjectValue) {
+    const back = Q(yield* Get(classCtor, Value('constructor')));
+    if (back instanceof ObjectValue) {
+      owner = back;
+    }
+  }
+  const base = owner instanceof ObjectValue ? Q(yield* owner.GetPrototypeOf()) : Value.undefined;
+  return MetadataObjectFor(owner, base, index >= 0 ? `${method}#${index}` : `${method}#return`);
+}
+
+/**
  * The metadata a member's context carries, prototype-linked to the SAME
  * member's metadata on the base class. `classCtor` is the home object a member
  * was defined on - a prototype for an instance member - so the base is found by
@@ -2286,6 +2315,10 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
     }
     X(CreateDataProperty(context, Value('initial'), initial));
   }
+  // decorators.md gives a sub-target `metadata`, prototype-linked to the same
+  // sub-target on the base class - the same rule a member's metadata follows,
+  // under a key that names the METHOD AND POSITION rather than just a member.
+  X(CreateDataProperty(context, Value('metadata'), Q(yield* SubTargetMetadataFor(classCtor, ownerName, index))));
   // "methodContext: Reflect.ClassMethod.<TMethod, TClass>" - a sub-target
   // reaches the declaration it is part of, as a member reaches its class.
   X(CreateDataProperty(context, Value('methodContext'), Q(yield* ClassMemberDecoratorContext(
