@@ -174,3 +174,26 @@ test('generics: a method of a generic class is callable', () => {
  * a shorter walk: a walk up the parent chain finds more than the case it was
  * written for.
  */
+
+/**
+ * PHASE 3 - substitution - narrowed to one missing link.
+ *
+ * `const x: A.<uint16> = new A.<uint8>()` is accepted, and invariance does not
+ * hold for a user generic. Neither is a gap in the comparison: nominal argument
+ * comparison WORKS, which a library generic proves -
+ * `const b: Map.<string, uint16> = aMapOfUint8` is correctly refused by
+ * SameArgumentList.
+ *
+ * What is missing is that a constructed instance does not carry its arguments.
+ * `A.<uint8>` in expression position evaluates to the class CONSTRUCTOR, and
+ * the type arguments are parsed into a TypeArgumentsExpression that
+ * NewExpression reads only for `SoA` and otherwise discards. So the instance's
+ * type is `A`, with no arguments, and comparing it against `A.<uint16>`
+ * compares an empty argument list against a full one - which passes, because
+ * there is nothing to disagree with.
+ *
+ * The work is therefore: resolve the TypeArgumentsExpression's arguments for
+ * any generic class, carry them through construction, and include them in the
+ * instance's type record. The comparison then does the rest for free, and the
+ * assertion that will show it is `new B.<uint8>().m('s')`, accepted today.
+ */
