@@ -3,7 +3,7 @@
 // These are built-in INTERFACES rather than library classes: the protocols are
 // satisfied structurally, because `for`-`of` asks whether [Symbol.iterator] is
 // callable and never asks what a value declared. A type refusing a hand-written
-// `{ next() { … } }` would describe a language this is not.
+// `{ next() { â€¦ } }` would describe a language this is not.
 //
 // PLAN-iteration-types-engine.md phase 2. `IteratorResult` comes first because
 // it is what `next` returns and nothing else can be written before it.
@@ -54,7 +54,7 @@ const booleanLiteral = (v: boolean): TypeRecord => ({
 } as unknown as TypeRecord);
 
 /**
- * `IteratorResult.<T, R>` — a union of two object types discriminated by `done`.
+ * `IteratorResult.<T, R>` â€” a union of two object types discriminated by `done`.
  *
  * This is the shape a `match` reads without a narrowing rule of its own: one arm
  * binds `value` at T, the other at R. TypeScript needed a compiler flag to stop
@@ -136,20 +136,22 @@ function promiseOf(t: TypeRecord): TypeRecord {
   } as unknown as TypeRecord;
 }
 
-// PHASE 2 REMAINDER — two names do not yet resolve, and the reasons differ.
+// PHASE 2 REMAINDER â€” diagnosed, and the first diagnosis was wrong.
 //
-// `Iterator` reports "is not a type". It is a real global constructor since
-// iterator helpers shipped, so the name is bound as a VALUE and something
-// earlier in resolution answers before this module is consulted. That is the
-// class/interface fork arriving in the engine: the specification has `Iterator`
-// as both a nominal class and an interface name, and the engine has to decide
-// which the bare name means in type position. Phase 3 introduces the class and
-// is where that is settled; the interface may need a distinct spelling, or the
-// class record may need to carry the interface's structural form.
+// `Iterator` and `IteratorResult` resolve in a parameter annotation and not in
+// a `const` one. The first guess was that `Iterator` collided with the global
+// constructor iterator helpers introduced. It does not. There are TWO type-name
+// resolvers: the checker's, in check.mts, which this module is wired into, and
+// the runtime's â€” TypeNodeToTypeRecord in runtime.mts â€” which it is not. A
+// parameter annotation is answered statically and works; a `const` annotation
+// is enforced at run time and reaches the second resolver.
 //
-// `IteratorResult` reports "is not defined" in a `const` annotation while the
-// same family resolves fine in a parameter annotation, so the const path
-// reaches a different resolver. Find that path rather than adding a second
-// registration.
+// Wiring that resolver is one line and is NOT sufficient. The runtime consumes
+// a Type Record differently from the checker: EnforceAnnotation walks it
+// against a value, and the records built here are shaped for the checker alone,
+// so the annotation path crashes on them rather than answering. That change was
+// written, produced a crash in EnforceAnnotation, and was reverted rather than
+// committed. What it needs is records the runtime can enforce, and that is the
+// whole of what stands between here and phase 3.
 //
-// Neither blocks the other five, which resolve and check today.
+// The other five resolve and check today.
