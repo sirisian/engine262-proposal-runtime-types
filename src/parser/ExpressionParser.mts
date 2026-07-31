@@ -1327,8 +1327,15 @@ export abstract class ExpressionParser extends FunctionParser {
     // call followed by `{` is already a Syntax Error there" - so a speculative
     // parse suffices to keep `match(x)` a call: it declines unless a `{`
     // follows the parenthesized subject.
-    if (surroundingAgent.feature('runtime-types')
-        && this.test('match') && !this.peek().hadLineTerminatorBefore) {
+    // The grammar's restriction is `match [no LineTerminator here] (` - between
+    // `match` AND ITS PARENTHESIS. Reading it as "no line terminator before
+    // `match`" rejected every `match` that began a line, which is every one
+    // inside a block, and the statement was then parsed as something else and
+    // failed. The restriction belongs to the token AFTER `match`, and
+    // `tryParseMatchExpression` already declines anything that is not
+    // `match (`…`) {`, so the guard here need only avoid speculating on every
+    // identifier named `match`.
+    if (surroundingAgent.feature('runtime-types') && this.test('match')) {
       const matchExpression = this.tryParseMatchExpression();
       if (matchExpression) {
         return matchExpression as unknown as ParseNode.PrimaryExpression;
@@ -2053,7 +2060,10 @@ export abstract class ExpressionParser extends FunctionParser {
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchExpression>();
     this.next();
-    if (!this.test(Token.LPAREN)) {
+    // `match` [no LineTerminator here] `(` - the restriction the grammar states,
+    // applied where it belongs. `match\n(x)` is a CALL to something named
+    // `match`, and must stay one.
+    if (!this.test(Token.LPAREN) || this.peek().hadLineTerminatorBefore) {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;
       return null;
