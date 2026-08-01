@@ -125,3 +125,42 @@ test('a written lane converts to the lane type', () => {
   // one is refused rather than stored.
   expectThrown('const a = int32x4(1, 2, 3, 4); a[0] = "s";');
 });
+
+/**
+ * PLAN-simd-engine.md phase 2, the broadcast: attempted, reverted, and located
+ * more precisely than a stack trace would have shown.
+ *
+ * #sec-vector-lanes says `vector.<T, N>` declares a cast operator from T, so
+ * `let b: float32x4 = s` for a `float32` s should broadcast. The CONVERSION is
+ * written and works - `float32x4(2)` gives `(2, 2, 2, 2)`, and
+ * CheckedConvertValue fills every lane - but the assignment does not reach it.
+ *
+ * TWO PATHS GUARD IT AND THEY MUST AGREE. The checker's IsAssignable refuses
+ * the assignment statically, before any conversion runs. Making IsAssignable
+ * admit a lane type produced something WORSE than the refusal: the assignment
+ * was accepted and the value stayed a `float32`, so `Reflect.typeOf(b) ===
+ * float32x4` was false and a broadcast had silently not happened. That is a
+ * type system admitting a value it did not convert, which is unsound rather
+ * than incomplete, so it was reverted.
+ *
+ * The two halves have to land together: IsAssignable admitting the lane type
+ * AND the enforcement path converting rather than passing the value through.
+ * requireMembership now attempts CheckedConvertValue when membership fails,
+ * which is the second half; the first half needs the checker to tell the
+ * enforcement path that a conversion is owed, rather than just permitting the
+ * assignment. That is the next step.
+ *
+ * The refusal is the current behaviour and is correct-but-incomplete: it
+ * rejects a program the design permits, rather than accepting one it does not.
+ */
+
+test('the broadcast cast fills every lane', () => {
+  // The conversion itself, which works: an explicit call broadcasts.
+  expect(evaluated('String(float32x4(2));')).toBe('(2, 2, 2, 2)');
+  expect(evaluated('String(int32x4(7));')).toBe('(7, 7, 7, 7)');
+
+  // Through an ANNOTATION it does not yet - see the note above. Asserted as it
+  // behaves rather than as it should, so the fix has something to flip and the
+  // gap is visible in the suite rather than only in a plan.
+  expect(ok('let s: float32 = 2; let b: float32x4 = s;')).toBe(false);
+});

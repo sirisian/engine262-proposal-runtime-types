@@ -3,6 +3,7 @@ import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { VectorValue } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
@@ -49,6 +50,14 @@ function carryStringType(value: Value, t: TypeRecord): Value {
 function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
   const ok = Q(yield* IsOfType(value, t));
   if (!ok) {
+    // proposal-runtime-types #sec-vector-lanes: the broadcast. A value of the
+    // lane type is not a MEMBER of the vector type - it converts to one - so
+    // this path has to attempt the conversion rather than refuse. Without it
+    // the annotation enforcement rejected `let b: float32x4 = s` before
+    // CheckedConvertValue was ever reached.
+    if (t.Kind === 'primitive' && t.Name === 'vector' && value.type !== 'Vector') {
+      return Q(yield* CheckedConvertValue(value, t));
+    }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   return value;
@@ -339,6 +348,30 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
  * (a RangeError in the spec) rather than discarding information.
  */
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types #sec-vector-lanes: "`vector.<T, N>` declares a cast
+  // operator from T, so a value of the lane type converts to a vector by
+  // filling every lane with it." The broadcast is one of the user-defined casts
+  // rather than a rule of its own, which is why it is answered here and not in
+  // the subtype relation - a `float32` is not a `float32x4`, it converts to one.
+  //
+  // The refusal the clause states follows from the same rule: a value whose
+  // type is not the lane type does not convert, so a `float32` reaches
+  // `float32x4` and not `float64x2`, and a design wanting the second casts to
+  // `float64` first.
+  if (t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
+    const laneType = t.Arguments[0] as TypeRecord;
+    const laneCount = t.Arguments[1];
+    if (typeof laneCount === 'number' && value.type !== 'Vector') {
+      const fits = Q(yield* IsOfType(value, laneType));
+      if (fits) {
+        const lanes: Value[] = [];
+        for (let i = 0; i < laneCount; i += 1) {
+          lanes.push(value);
+        }
+        return new VectorValue(lanes, t);
+      }
+    }
+  }
   // The crossing between two parameterizations gates and scales here exactly as
   // at the cast: the checked rule differs from ConvertValue only in what a
   // LOSSY numeric conversion does, and a crossing is a conversion, not a loss.
