@@ -263,3 +263,39 @@ test('an iterator composes with using', () => {
     { using d = { [Symbol.dispose]() {} }; const i: Iterable.<uint8> = g(); }
   `)).toBe(true);
 });
+
+test('applying type arguments to a Type Object is not a no-op', () => {
+  // PLAN-higher-kinded-types.md phase 0. `Iterable.<uint8>` in EXPRESSION
+  // position evaluated to bare `Iterable`, so `Iterable === Iterable.<uint8>`
+  // was true and the arguments were silently discarded.
+  //
+  // The evaluation handled exactly one shape - a generic alias - and returned
+  // the unapplied base for everything else. That the one handled shape behaved
+  // correctly is what made the gap hard to see.
+  expect(evaluated('String(Iterable === Iterable.<uint8>);')).toBe('false');
+  expect(evaluated('String(Iterable.<uint8> === Iterable.<uint8>);')).toBe('true');
+  expect(evaluated('String(Iterable.<uint8> === Iterable.<uint16>);')).toBe('false');
+  expect(evaluated('String(IterableIterator.<uint8> === IterableIterator.<uint16>);')).toBe('false');
+
+  // The alias path, which already worked, must keep working.
+  expect(evaluated('type L<T> = [].<T>; String(L === L.<uint8>);')).toBe('false');
+
+  // A CONSTRUCTOR is not a Type Object, and `Map.<K, V>` yields the
+  // constructor - which is what `new Map.<K, V>()` needs. Distinctness for
+  // those is enforced in annotation position, not by comparing constructors.
+  expect(evaluated('String(typeof Map);')).toBe('function');
+  expect(evaluated('String(typeof Iterable);')).toBe('object');
+
+  // `Iterator` is the ODD ONE OUT of its own family, and this is worth pinning
+  // rather than discovering later. Iterator helpers made `Iterator` a real
+  // global constructor, so in value position it is a function like `Map` and
+  // not a Type Object like its five siblings - and `Iterator.<uint8>`
+  // therefore yields the constructor rather than an applied type.
+  //
+  // It resolves correctly in ANNOTATION position, which is where it is used,
+  // so nothing is broken. But a feature that passes a bare constructor as an
+  // argument - which is what a higher-kinded parameter does - will meet this
+  // asymmetry, and `Iterator` is the most likely thing anyone would pass.
+  expect(evaluated('String(typeof Iterator);')).toBe('function');
+  expect(evaluated('String(Iterator === Iterator.<uint8>);')).toBe('true');
+});

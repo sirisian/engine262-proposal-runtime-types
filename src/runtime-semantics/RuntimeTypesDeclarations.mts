@@ -5,6 +5,8 @@ import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { GetValue } from '../abstract-ops/all.mts';
+import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
+import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
@@ -969,6 +971,32 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       }
       const instantiated = Q(yield* InstantiateGenericAlias(record.Declaration as ParseNode.TypeAliasDeclaration, argRecords));
       return GetTypeObject(instantiated);
+    }
+    // proposal-runtime-types: everything that is NOT a generic alias fell
+    // through to the unapplied base, so `Iterable.<uint8>` in expression
+    // position evaluated to bare `Iterable` and `Iterable === Iterable.<uint8>`
+    // was *true*. An alias worked, which is what made the gap hard to see: the
+    // one shape with a handler behaved correctly and every other shape silently
+    // discarded its arguments.
+    const argRecords: TypeRecord[] = [];
+    for (const argNode of node.TypeArguments.TypeArgumentList) {
+      argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+    }
+    // A built-in interface is rebuilt from its name, because its record carries
+    // members rather than arguments and there is nothing to attach them to.
+    const baseName = node.Expression.type === 'IdentifierReference'
+      ? (node.Expression as unknown as { name: string }).name
+      : undefined;
+    if (baseName !== undefined) {
+      const rebuilt = iterationInterfaceRecord(baseName, argRecords);
+      if (rebuilt) {
+        return GetTypeObject(rebuilt);
+      }
+    }
+    // A nominal takes its arguments directly, which is what the annotation path
+    // does for the same types.
+    if (record.Kind === 'nominal') {
+      return GetTypeObject(CanonicalizeType({ ...record, Arguments: argRecords }));
     }
   }
   return ref;
