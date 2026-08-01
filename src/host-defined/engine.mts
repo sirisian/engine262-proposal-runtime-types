@@ -261,10 +261,15 @@ export function HostHasSourceTextAvailable(func: FunctionObject) {
 }
 
 export function HostGetSupportedImportAttributes(): readonly string[] {
+  // proposal-runtime-types `sec-preprocessor-modules`: *"preprocessor"* is a
+  // supported key, or a conforming host rejects the attribute before anything
+  // else in this feature can run. It is added to whatever the host supports
+  // rather than replacing it.
+  const preprocessor = surroundingAgent.feature('runtime-types') ? ['preprocessor'] : [];
   if (surroundingAgent.hostDefinedOptions.supportedImportAttributes) {
-    return surroundingAgent.hostDefinedOptions.supportedImportAttributes;
+    return [...surroundingAgent.hostDefinedOptions.supportedImportAttributes, ...preprocessor];
   }
-  return [];
+  return preprocessor;
 }
 
 /** https://tc39.es/ecma262/#sec-hostgetmodulesourcemodulerecord */

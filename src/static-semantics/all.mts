@@ -45,3 +45,4 @@ export * from './IsComputedPropertyKey.mts';
 export * from './PrivateBoundIdentifiers.mts';
 export * from './ContainsArguments.mts';
 export * from './UTF16EncodeCodePoint.mts';
+export * from './ReplacementDecoratorNames.mts';
