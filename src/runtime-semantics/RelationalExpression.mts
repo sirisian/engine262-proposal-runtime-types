@@ -1,3 +1,4 @@
+import { vectorComparison } from '../type-system/vector-ops.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import {
   ObjectValue,
@@ -105,6 +106,15 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // declaration's parameter the right, in place of the abstract comparison. The
   // untyped path (no such operator) is unaffected. `instanceof` and `in` are not
   // overloadable and keep their semantics.
+  // proposal-runtime-types #sec-vector-comparisons: "A comparison between two
+  // vectors of one shape yields one lane per input lane." The result is a MASK -
+  // a vector whose lane type is `uint.<1>`, the design's boolean_N - with each
+  // lane set where the comparison holds.
+  if (surroundingAgent.feature('runtime-types')
+      && (lval.type === 'Vector' || rval.type === 'Vector')
+      && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')) {
+    return Q(yield* vectorComparison(lval, operator, rval));
+  }
   if (surroundingAgent.feature('runtime-types')
       && lval instanceof ObjectValue
       && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')) {

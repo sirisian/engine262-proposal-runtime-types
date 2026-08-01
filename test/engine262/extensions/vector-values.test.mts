@@ -399,3 +399,161 @@ test('a computed accessor reaches the same value', () => {
  * program would normally write and not by reflection, which is the honest half
  * of the rule rather than a wrong version of it.
  */
+
+/**
+ * PLAN-simd-engine.md phases 4b and 5: lane-wise arithmetic, comparisons, and
+ * the operations that consume a mask.
+ *
+ * Arithmetic is what the rest of the surface is FOR - the design's own dot
+ * product is `(a * b).sum()`, so an engine with swizzle and sum and no `*`
+ * cannot run the example that motivates sum.
+ */
+
+test('an operator over two vectors applies lane-wise', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(5, 6, 7, 8); ';
+  expect(evaluated(`${P}String(a + b);`)).toBe('(6, 8, 10, 12)');
+  expect(evaluated(`${P}String(a * b);`)).toBe('(5, 12, 21, 32)');
+  expect(evaluated(`${P}String(b - a);`)).toBe('(4, 4, 4, 4)');
+  // The design's dot product, verbatim.
+  expect(evaluated(`${P}String((a * b).sum());`)).toBe('70');
+});
+
+test('vectors of different shapes are not operands of one operator', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const c = int32x4(1, 2, 3, 4); ';
+  expectThrown(`${P}a + c;`);
+});
+
+test('a comparison yields one mask lane per input lane', () => {
+  // simd.md's own example: (true, true, false, false), which is the bit vector
+  // (1, 1, 0, 0).
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
+  expect(evaluated(`${P}String(a < b);`)).toBe('(1, 1, 0, 0)');
+  expect(evaluated(`${P}String(a > b);`)).toBe('(0, 0, 1, 1)');
+});
+
+test('a mask reduces to a boolean', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m = a < b; ';
+  expect(evaluated(`${P}String(m.any());`)).toBe('true');
+  expect(evaluated(`${P}String(m.all());`)).toBe('false');
+  expect(evaluated('const m = float32x4(1,1,1,1) < float32x4(2,2,2,2); String(m.all());')).toBe('true');
+  expect(evaluated('const m = float32x4(9,9,9,9) < float32x4(2,2,2,2); String(m.any());')).toBe('false');
+});
+
+test('select chooses lane-wise and evaluates both arguments', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m = a < b; ';
+  expect(evaluated(`${P}String(m.select(a, b));`)).toBe('(1, 2, 2, 1)');
+
+  // BOTH arguments are evaluated, because select is a call and not a
+  // conditional - the trade the operation exists to make, and only observable
+  // through a side effect.
+  expect(evaluated(`${P}let n = 0; const f = () => { n = n + 1; return a; }; m.select(f(), f()); String(n);`)).toBe('2');
+});
+
+test("select's element type is independent of the mask's", () => {
+  // U is not the receiver's lane type: a mask selects between vectors of any
+  // lane type sharing its lane count. A float mask selecting int vectors is the
+  // case that would fail if U were tied to the mask.
+  const P = 'const m = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
+  expect(evaluated(`${P}String(m.select(int32x4(9, 9, 9, 9), int32x4(1, 1, 1, 1)));`)).toBe('(9, 9, 1, 1)');
+});
+
+test('a mask is an ordinary vector', () => {
+  // It indexes, permutes, and carries component accessors like any other, which
+  // follows from the earlier phases rather than needing a rule.
+  const P = 'const m = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
+  expect(evaluated(`${P}String(m.x);`)).toBe('1');
+  expect(evaluated(`${P}String(m[2]);`)).toBe('0');
+  expect(evaluated(`${P}String(m.xyxy);`)).toBe('(1, 1, 1, 1)');
+});
+
+/**
+ * PLAN-simd-engine.md phase 6: wrapping, #sec-vector-wrapping.
+ *
+ * The clause adds no rule - it states a consequence of the ones for aliases and
+ * classes, and is stated because it decides a design question simd.md poses. A
+ * math library's `Vector4` is an alias or a class, and component accessors
+ * decide which.
+ */
+
+test('an alias of a vector type has its accessors and a wrapping class does not', () => {
+  // An alias IS the vector type, so it has everything a vector has.
+  expect(evaluated('type V4 = float32x4; const v: V4 = float32x4(1, 2, 3, 4); String(v.x);')).toBe('1');
+  expect(evaluated('type V4 = float32x4; const v: V4 = float32x4(1, 2, 3, 4); String(v.xy);')).toBe('(1, 2)');
+
+  // A class holding one is a distinct nominal type and does not acquire the
+  // members of its field's type. The field itself is reached by name.
+  const C = 'class W { v: float32x4 = float32x4(1, 2, 3, 4); } const w = new W(); ';
+  expect(evaluated(`${C}String(w.v);`)).toBe('(1, 2, 3, 4)');
+  expect(evaluated(`${C}String(w.v.x);`)).toBe('1');
+  expect(evaluated(`${C}String(w.x);`)).toBe('undefined');
+});
+
+/**
+ * `vector.preferredLanes(T)` is NOT implemented, and the reason is the one
+ * phase 1 recorded: `vector` itself is not a binding. Only the shorthand names
+ * are bound, so the long form is written in an annotation or through an alias
+ * and cannot be called or have a property read from it.
+ *
+ * Binding `vector` would make `vector.<float32, 3>(1, 2, 3)` callable as well,
+ * which is the same question, and both belong with whatever decides how the
+ * unapplied generic name behaves as a value - the design has `vector` as a
+ * type constructor rather than a value, so it is not obvious it should be bound
+ * at all.
+ */
+
+/**
+ * PLAN-simd-engine.md phase 7: the interactions.
+ *
+ * A vector meets the rest of the language wherever a value type does, and these
+ * are the places the plan named. Most needed nothing - the earlier phases gave
+ * a vector everything it needs to be an ordinary value - which is the useful
+ * result rather than a disappointing one.
+ */
+
+test('a vector is an ordinary array element and loop variable', () => {
+  const P = 'const xs: [].<float32x4> = [float32x4(1, 2, 3, 4)]; ';
+  expect(evaluated(`${P}String(xs[0]);`)).toBe('(1, 2, 3, 4)');
+  expect(evaluated(`${P}let s = ""; for (const v of xs) { s = String(v); } s;`)).toBe('(1, 2, 3, 4)');
+  expect(evaluated(`${P}String(xs[0].x);`)).toBe('1');
+});
+
+test('a vector carries its type through the pipeline', () => {
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a |> %.swizzle.<1, 0>());')).toBe('(2, 1)');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a |> %.sum());')).toBe('10');
+});
+
+test('a vector is not iterable', () => {
+  // simd.md gives lanes an index and a permutation and no iterator, so
+  // destructuring and spreading REPORT rather than succeeding. They crashed the
+  // host before, because the refusal boxed through ToObject - which asserts on
+  // a vector - where a typed number in the same position already reported.
+  expectThrown('const [p, q] = float32x4(1, 2, 3, 4);');
+  expectThrown('const xs = [...float32x4(1, 2, 3, 4)];');
+});
+
+/**
+ * PLAN-simd-engine.md phase 6b: simd.md's Instructions table, as a checklist.
+ *
+ * That table lists eleven expressions against their x86 and AArch64 encodings.
+ * It is informative - this engine compiles none of them - but it is the
+ * DESIGN'S OWN ENUMERATION of what a vector is for, so every row should run.
+ * All eleven do.
+ *
+ * Reading it as a checklist rather than as prose is what found lane-wise
+ * arithmetic missing from the plan entirely, and `v.xxxx` missing from phase 4.
+ */
+
+test("every expression in the design's instruction table runs", () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); const w = float32x4(5, 6, 7, 8); ';
+  expect(evaluated(`${P}String(v.lane.<0>());`)).toBe('1');                       // extractps
+  expect(evaluated(`${P}let i = 1; String(v[i]);`)).toBe('2');                    // variable permute
+  expect(evaluated(`${P}String(v.withLane.<0>(9));`)).toBe('(9, 2, 3, 4)');       // insertps
+  expect(evaluated(`${P}String(v.xxxx);`)).toBe('(1, 1, 1, 1)');                  // shufps / vbroadcastss
+  expect(evaluated(`${P}String(v.wzyx);`)).toBe('(4, 3, 2, 1)');                  // shufps
+  expect(evaluated(`${P}String(v.shuffle.<0, 1, 4, 5>(w));`)).toBe('(1, 2, 5, 6)'); // shufps / zip1
+  expect(evaluated(`${P}const p = w.swizzle.<0, 1>(); v.xy = p; String(v);`)).toBe('(5, 6, 3, 4)'); // blendps
+  expect(evaluated(`${P}String(v < w);`)).toBe('(1, 1, 1, 1)');                   // cmpltps
+  expect(evaluated(`${P}const m = v < w; String(m.select(v, w));`)).toBe('(1, 2, 3, 4)'); // blendvps
+  expect(evaluated(`${P}const m = v < w; String(m.all());`)).toBe('true');        // movmskps + cmp
+  expect(evaluated(`${P}const m = v < w; String(m.any());`)).toBe('true');        // movmskps + test
+});

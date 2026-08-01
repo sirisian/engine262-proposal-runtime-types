@@ -10,9 +10,11 @@ import { displayType } from './records.mts';
 import { SameType } from './relations.mts';
 import { CanonicalizeType } from './intern.mts';
 import {
-  RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator,
+  RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator, CheckedConvertValue,
+  type Arguments,
 } from '#self';
 import type { ValueEvaluator } from '../evaluator.mts';
+
 
 /**
  * The lane type and count of a vector's Type Record.
@@ -83,6 +85,43 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
           Arguments: [record.Arguments[0], componentLanes.length],
         } as unknown as TypeRecord),
       );
+    }
+
+    // proposal-runtime-types #sec-vector-masks: the operations that CONSUME a
+    // mask. Declared on a vector whose lane type is `uint.<1>` alone, which is
+    // what the design names boolean_N.
+    if ((name === 'all' || name === 'any') && isBitLaneType(shape.laneType)) {
+      const set = v.lanes.map((lane) => (lane as { numberValue?(): number }).numberValue?.() === 1);
+      const answer = name === 'all' ? set.every((x) => x) : set.some((x) => x);
+      return CreateBuiltinFunction(function* reduceMask(): ValueEvaluator {
+        return answer ? Value.true : Value.false;
+      }, 0, Value(name), []) as Value;
+    }
+    if (name === 'select' && isBitLaneType(shape.laneType)) {
+      // "Lane j of the result is lane j of whenSet where lane j of the receiver
+      // is set, and lane j of whenClear otherwise." U is NOT the receiver's lane
+      // type: a mask selects between vectors of any lane type sharing its count.
+      //
+      // Both arguments are evaluated, because this is a CALL and not a
+      // conditional - which is the trade the operation exists to make.
+      return CreateBuiltinFunction(function* selectLanes([whenSet = Value.undefined, whenClear = Value.undefined]: Arguments): ValueEvaluator {
+        if (whenSet?.type !== 'Vector' || whenClear?.type !== 'Vector') {
+          return Q(Throw.TypeError('$1 is not assignable to $2', whenSet ?? Value.undefined, Value('a vector')));
+        }
+        if (!SameType((whenSet as VectorValue).TypeRecord as TypeRecord, (whenClear as VectorValue).TypeRecord as TypeRecord)) {
+          return Q(Throw.TypeError('$1 is not assignable to $2', whenClear, Value(displayType((whenSet as VectorValue).TypeRecord as TypeRecord))));
+        }
+        const chosenShape = vectorShape(whenSet as VectorValue);
+        if (!chosenShape || chosenShape.laneCount !== shape.laneCount) {
+          return Q(Throw.TypeError('$1 is not assignable to $2', whenSet, Value(displayType(v.TypeRecord as TypeRecord))));
+        }
+        const chosen: Value[] = [];
+        for (let i = 0; i < shape.laneCount; i += 1) {
+          const bit = (v.lanes[i] as { numberValue?(): number }).numberValue?.() === 1;
+          chosen.push((bit ? (whenSet as VectorValue).lanes[i] : (whenClear as VectorValue).lanes[i]) as Value);
+        }
+        return new VectorValue(chosen, (whenSet as VectorValue).TypeRecord);
+      }, 2, Value('select'), []) as Value;
     }
 
     if (name === 'sum') {
@@ -333,4 +372,97 @@ export function componentAccessorIndices(name: string, laneCount: number): numbe
 /** Whether a component accessor may be assigned to: no lane named twice. */
 export function isAssignableAccessor(indices: readonly number[]): boolean {
   return new Set(indices).size === indices.length;
+}
+
+/**
+ * A binary operator over vectors, applied lane-wise.
+ *
+ * proposal-runtime-types #sec-vector-types: a vector's values are "the
+ * sequences of N values of T", so an operator over two vectors of one shape
+ * yields the vector of the operator applied to corresponding lanes. Two vectors
+ * of different shapes are not operands of one operator.
+ *
+ * A vector and a LANE VALUE also pair, since the lane value broadcasts
+ * (#sec-vector-lanes) - `v * 2` is `v * float32x4(2)` - which is what makes the
+ * ordinary arithmetic of a kernel readable.
+ */
+export function* vectorBinaryOperator(
+  lval: Value,
+  opText: string,
+  rval: Value,
+): PlainEvaluator<Value> {
+  const leftShape = lval.type === 'Vector' ? vectorShape(lval as VectorValue) : null;
+  const rightShape = rval.type === 'Vector' ? vectorShape(rval as VectorValue) : null;
+  const shape = leftShape ?? rightShape;
+  if (!shape) {
+    return Q(Throw.TypeError('$1 is not assignable to $2', rval, lval)) as Value;
+  }
+  if (leftShape && rightShape
+      && !SameType((lval as VectorValue).TypeRecord as TypeRecord, (rval as VectorValue).TypeRecord as TypeRecord)) {
+    return Q(Throw.TypeError(
+      '$1 is not assignable to $2',
+      rval,
+      Value(displayType((lval as VectorValue).TypeRecord as TypeRecord)),
+    )) as Value;
+  }
+  const carrier = (leftShape ? lval : rval) as VectorValue;
+  const lanes: Value[] = [];
+  for (let i = 0; i < shape.laneCount; i += 1) {
+    const left = leftShape ? (lval as VectorValue).lanes[i] as Value : lval;
+    const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
+    lanes.push(Q(yield* ApplyStringOrNumericBinaryOperator(left, opText as never, right)) as Value);
+  }
+  return new VectorValue(lanes, carrier.TypeRecord);
+}
+
+/** The mask type for a vector of N lanes: `vector.<uint.<1>, N>`. */
+function maskTypeFor(laneCount: number): TypeRecord {
+  return CanonicalizeType({
+    Kind: 'primitive',
+    Name: 'vector',
+    Arguments: [{ Kind: 'primitive', Name: 'uint', Arguments: [1] }, laneCount],
+  } as unknown as TypeRecord);
+}
+
+/**
+ * A comparison between vectors, per #sec-vector-comparisons.
+ *
+ * "A comparison between two vectors of one shape yields one lane per input
+ * lane", and the result here is the bit-vector form: lane i is 1 where the
+ * comparison holds for lane i and 0 where it does not. The clause's other two
+ * result forms are selected by the expected type through return-type
+ * overloading, which this engine does not yet reach for vectors.
+ */
+export function* vectorComparison(
+  lval: Value,
+  operator: string,
+  rval: Value,
+): PlainEvaluator<Value> {
+  const leftShape = lval.type === 'Vector' ? vectorShape(lval as VectorValue) : null;
+  const rightShape = rval.type === 'Vector' ? vectorShape(rval as VectorValue) : null;
+  const shape = leftShape ?? rightShape;
+  if (!shape) {
+    return Q(Throw.TypeError('$1 is not assignable to $2', rval, lval)) as Value;
+  }
+  if (leftShape && rightShape
+      && !SameType((lval as VectorValue).TypeRecord as TypeRecord, (rval as VectorValue).TypeRecord as TypeRecord)) {
+    return Q(Throw.TypeError(
+      '$1 is not assignable to $2',
+      rval,
+      Value(displayType((lval as VectorValue).TypeRecord as TypeRecord)),
+    )) as Value;
+  }
+  const lanes: Value[] = [];
+  const maskType = maskTypeFor(shape.laneCount);
+  const bitType = (maskType as { Arguments: readonly unknown[] }).Arguments[0] as TypeRecord;
+  for (let i = 0; i < shape.laneCount; i += 1) {
+    const left = leftShape ? (lval as VectorValue).lanes[i] as Value : lval;
+    const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
+    const l = (left as { numberValue?(): number }).numberValue?.() ?? NaN;
+    const r = (right as { numberValue?(): number }).numberValue?.() ?? NaN;
+    let holds = false;
+    if (operator === '<') { holds = l < r; } else if (operator === '>') { holds = l > r; } else if (operator === '<=') { holds = l <= r; } else { holds = l >= r; }
+    lanes.push(Q(yield* CheckedConvertValue(Value(holds ? 1 : 0), bitType)) as Value);
+  }
+  return new VectorValue(lanes, maskType);
 }

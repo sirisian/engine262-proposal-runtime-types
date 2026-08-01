@@ -102,6 +102,19 @@ export function* GetIterator(obj: Value, kind: 'sync' | 'async'): PlainEvaluator
     }
     return iteratorRecord;
   }
+  // proposal-runtime-types #sec-vector-types: a vector is a value type and not
+  // an iterable, so destructuring or spreading one reports rather than
+  // succeeding. It is answered before GetMethod because that boxes through
+  // ToObject, which asserts on a vector - so the refusal crashed the host
+  // instead of being reported, where a typed number in the same position
+  // already reported correctly.
+  //
+  // Whether a vector SHOULD iterate its lanes is not this engine's to decide:
+  // simd.md gives lanes an index and a permutation and no iterator, so the
+  // refusal follows the design rather than anticipating it.
+  if (obj.type === 'Vector') {
+    return Throw.TypeError('$1 is not iterable', obj);
+  }
   let method;
   if (kind === 'async') {
     method = Q(yield* GetMethod(obj, wellKnownSymbols.asyncIterator));

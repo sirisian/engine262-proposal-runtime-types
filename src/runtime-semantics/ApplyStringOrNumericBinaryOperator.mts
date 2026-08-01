@@ -4,6 +4,7 @@ import { ObjectValue,
   BigIntValue,
   SameType,
 } from '../value.mts';
+import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
 import { isTypedNumber, TypedNumberValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode } from '../type-system/runtime.mts';
@@ -48,6 +49,15 @@ export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | 
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
 export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean }) {
   (globalThis as { __a?: string[] }).__a?.push(`apply ${opText}`);
+  // proposal-runtime-types #sec-vector-types: a vector's values are "the
+  // sequences of N values of T", so an operator over two vectors of one shape
+  // applies LANE-WISE. This is what the rest of the SIMD surface is for - the
+  // design's own dot product is `(a * b).sum()`, so an engine with swizzle and
+  // sum and no `*` cannot run the example that motivates sum.
+  if (surroundingAgent.feature('runtime-types')
+      && (lval.type === 'Vector' || rval.type === 'Vector')) {
+    return Q(yield* vectorBinaryOperator(lval, opText, rval));
+  }
   // proposal-runtime-types: class operator dispatch. Consulted only when the
   // left operand is an Object, so the untyped fast path is unaffected.
   if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
