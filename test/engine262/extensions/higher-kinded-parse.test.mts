@@ -111,7 +111,7 @@ test('an ordinary parameter is untouched', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 3, partially landed.
+ * PLAN-higher-kinded-types-engine.md phase 3.
  *
  * The APPLICATION half works: `W.<T>` where `W` is a bound higher-kinded
  * parameter resolves the parameter to the declaration an application bound to
@@ -119,19 +119,47 @@ test('an ordinary parameter is untouched', () => {
  * applied to X means. An alias argument goes through InstantiateGenericAlias
  * and a class or interface through the ordinary argument attach.
  *
- * The VALIDATION half does not fire yet, and the reason is the two-resolver
- * split this work has met repeatedly. It was written into
- * TypeNodeToTypeRecord, and a type ANNOTATION naming a generic class is
- * resolved by the checker instead - the same path the generics work had to
- * teach about user classes. `Box.<uint8>` and `Box.<Map>` are accepted today
- * where the clause requires two distinct refusals.
- *
- * The next step is specific: the checker's parameterized type-name resolution
- * is where a user class's arguments are attached, and the validation belongs
- * beside it rather than duplicated.
+ * The VALIDATION half took two attempts. It was written into
+ * TypeNodeToTypeRecord first, where a `const` annotation reaches it and a type
+ * annotation does not - the two-resolver split this work has met repeatedly.
+ * It lives in one shared helper now, called from both, because a rule enforced
+ * in one resolver and not the other is a rule that holds in some positions.
  */
 
 test('a bound higher-kinded parameter applies', () => {
   expect(ok('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }')).toBe(true);
   expect(ok('class C<W<_>> { v: W; }')).toBe(false);
+});
+
+test('an argument must be a generic declaration of matching arity', () => {
+  const P = 'type Identity<T> = T; class One<T> {} class Box<W<_>> {} class Pair<W<_, _>> {} ';
+  expect(ok(`${P}function f(x: Box.<Identity>) {}`)).toBe(true);
+  expect(ok(`${P}function f(x: Box.<One>) {}`)).toBe(true);
+  expect(ok(`${P}function f(x: Pair.<Map>) {}`)).toBe(true);
+  expect(ok(`${P}function f(x: Box.<uint8>) {}`)).toBe(false);
+  expect(ok(`${P}function f(x: Box.<Map>) {}`)).toBe(false);
+});
+
+test('the two failures carry different messages', () => {
+  // The clause distinguishes them because they are different mistakes, and
+  // "uint8 is not assignable to Box" - the generic diagnostic, which is what
+  // the first attempt produced - is true and useless.
+  const P = 'class Box<W<_>> {} ';
+  const messageOf = (src: string) => {
+    const completion = run(src);
+    let message = '';
+    const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
+    for (const [key, desc] of value.properties ?? []) {
+      if (key.stringValue?.() === 'message') {
+        message = desc.Value.stringValue();
+      }
+    }
+    return message;
+  };
+  expect(messageOf(`${P}function f(x: Box.<uint8>) {}`)).toContain('not a generic declaration');
+  // And a LIBRARY generic reports its arity rather than being mistaken for a
+  // non-declaration: its record carries no declaration node to count, which is
+  // what made `Map` report the wrong one of the two.
+  expect(messageOf(`${P}function f(x: Box.<Map>) {}`)).toContain('takes');
+  expect(messageOf(`${P}function f(x: Box.<Map>) {}`)).toContain('2');
 });

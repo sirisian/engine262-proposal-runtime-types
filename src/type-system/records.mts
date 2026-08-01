@@ -635,13 +635,72 @@ export function parameterTypeRecord(Name: string, Constraint?: TypeRecord, Arity
  * equals the parameter's [[Arity]]", and the two ways that fails are told apart
  * by whether this returns null or a number.
  */
+const LIBRARY_ARITY: Record<string, number> = {
+  Promise: 2, Map: 2, WeakMap: 2, Set: 1, WeakSet: 1,
+  Generator: 3, AsyncGenerator: 3, Iterator: 3, AsyncIterator: 3,
+  IteratorHelper: 3, AsyncIteratorHelper: 3, RegExp: 2,
+};
+
 export function declarationParameterCount(t: TypeRecord | null | undefined): number | null {
   if (!t || t.Kind !== 'nominal') {
     return null;
   }
   const decl = (t as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).Declaration;
   const list = decl?.TypeParameters?.TypeParameterList;
-  return list ? list.length : null;
+  if (list) {
+    return list.length;
+  }
+  // A LIBRARY generic has no declaration node to count, so its parameter count
+  // lives here. Without this, `Box.<Map>` reported that Map "is not a generic
+  // declaration" - true of its record and false of Map, and the wrong one of
+  // the two diagnostics the clause distinguishes.
+  const libraryName = (t as { LibraryName?: string }).LibraryName;
+  return libraryName !== undefined ? LIBRARY_ARITY[libraryName] ?? null : null;
+}
+
+/**
+ * The first argument that does not satisfy the higher-kinded parameter it
+ * binds, described, or null where every argument is acceptable.
+ *
+ * #sec-higher-kinded-parameters names two failures and they are different
+ * mistakes: an argument that is not a generic declaration at all, and one whose
+ * parameter count differs from the arity. This returns which, so the two
+ * resolvers that attach arguments - the checker's and the runtime's - can raise
+ * the same pair of diagnostics from one implementation rather than two.
+ */
+export function badKindedArgument(
+  base: TypeRecord,
+  args: readonly (TypeRecord | number)[],
+): { kind: 'not-generic' | 'wrong-arity', argument: TypeRecord, parameter: string, wanted: number, supplied: number } | null {
+  const params = (base as { Declaration?: {
+    TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name: string }, Arity?: number }[] },
+  } }).Declaration?.TypeParameters?.TypeParameterList;
+  if (!params) {
+    return null;
+  }
+  for (let i = 0; i < params.length && i < args.length; i += 1) {
+    const wanted = params[i].Arity ?? 0;
+    if (wanted === 0) {
+      continue;
+    }
+    const argument = args[i];
+    if (typeof argument === 'number') {
+      continue;
+    }
+    const supplied = declarationParameterCount(argument);
+    const parameter = params[i].BindingIdentifier?.name ?? '?';
+    if (supplied === null) {
+      return {
+        kind: 'not-generic', argument, parameter, wanted, supplied: 0,
+      };
+    }
+    if (supplied !== wanted) {
+      return {
+        kind: 'wrong-arity', argument, parameter, wanted, supplied,
+      };
+    }
+  }
+  return null;
 }
 
 /** Whether a Type Record is a higher-kinded parameter (#sec-higher-kinded-parameters). */

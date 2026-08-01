@@ -7,6 +7,7 @@ import {
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
+import { badKindedArgument } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
@@ -949,6 +950,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // matched: two empty argument lists agree.
           const userClass = classTypeOf(parameterizedName);
           if (userClass && userClass.Kind === 'nominal') {
+            // proposal-runtime-types #sec-higher-kinded-parameters: this is the
+            // resolver a type ANNOTATION reaches, and the runtime's is the one
+            // a `const` reaches. Both attach arguments and both must validate
+            // them, through the one helper - a rule enforced in one and not the
+            // other is a rule that holds in some positions.
+            const bad = badKindedArgument(userClass, args);
+            if (bad) {
+              // The specific diagnostics, not the generic assignability one.
+              // "uint8 is not assignable to Box" is true and useless: the
+              // mistake is that a higher-kinded parameter was given something
+              // that is not a declaration, or one of the wrong arity, and a
+              // reader needs to be told which.
+              const completion = (bad.kind === 'not-generic'
+                ? Throw.TypeError(
+                  '$1 is not a generic declaration; $2 expects one taking $3 type arguments',
+                  Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)),
+                )
+                : Throw.TypeError(
+                  '$1 takes $2 type arguments; $3 expects one taking $4',
+                  Value(displayType(bad.argument)), Value(String(bad.supplied)),
+                  Value(bad.parameter), Value(String(bad.wanted)),
+                )) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+              return null;
+            }
             return CanonicalizeType({ ...userClass, Arguments: args });
           }
           return userClass;

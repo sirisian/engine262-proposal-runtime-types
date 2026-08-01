@@ -17,7 +17,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { restElementType } from './records.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
 import {
-  anyType, builtinTypeRecord, declarationParameterCount, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
+  anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
@@ -1339,36 +1339,23 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // a `generic` view. Bare `T` and `T.<...>` are therefore distinct interned
         // types, and two `T.<A>` are one.
         if (baseRecord.Kind === 'nominal' && argRecords.length > 0) {
-          // proposal-runtime-types #sec-higher-kinded-parameters: validate each
-          // argument against the parameter it binds. A higher-kinded parameter
-          // takes a generic DECLARATION of matching arity, and the two ways
-          // that fails are different mistakes - a non-declaration, and a
-          // declaration of the wrong arity - so they carry different messages.
-          const params = (baseRecord.Declaration as unknown as {
-            TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name: string }, Arity?: number }[] },
-          } | undefined)?.TypeParameters?.TypeParameterList;
-          if (params) {
-            for (let i = 0; i < params.length && i < argRecords.length; i += 1) {
-              const wanted = params[i].Arity ?? 0;
-              if (wanted === 0) {
-                continue;
-              }
-              const supplied = declarationParameterCount(argRecords[i]);
-              const pname = params[i].BindingIdentifier?.name ?? '?';
-              if (supplied === null) {
-                return Throw.TypeError(
-                  '$1 is not a generic declaration; $2 expects one taking $3 type arguments',
-                  Value(displayType(argRecords[i])), Value(pname), Value(String(wanted)),
-                );
-              }
-              if (supplied !== wanted) {
-                return Throw.TypeError(
-                  '$1 takes $2 type arguments; $3 expects one taking $4',
-                  Value(displayType(argRecords[i])), Value(String(supplied)),
-                  Value(pname), Value(String(wanted)),
-                );
-              }
-            }
+          // proposal-runtime-types #sec-higher-kinded-parameters: an argument
+          // bound to a higher-kinded parameter must be a generic declaration of
+          // matching arity. The two failures are told apart by one helper the
+          // checker uses too, so the diagnostics cannot drift between the two
+          // resolvers that attach arguments.
+          const bad = badKindedArgument(baseRecord, argRecords);
+          if (bad) {
+            return bad.kind === 'not-generic'
+              ? Throw.TypeError(
+                '$1 is not a generic declaration; $2 expects one taking $3 type arguments',
+                Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)),
+              )
+              : Throw.TypeError(
+                '$1 takes $2 type arguments; $3 expects one taking $4',
+                Value(displayType(bad.argument)), Value(String(bad.supplied)),
+                Value(bad.parameter), Value(String(bad.wanted)),
+              );
           }
           return { ...baseRecord, Arguments: argRecords };
         }
