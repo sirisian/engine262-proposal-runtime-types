@@ -1232,7 +1232,29 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const argRecords: TypeRecord[] = [];
       if (node.TypeArguments) {
         for (const argNode of node.TypeArguments.TypeArgumentList) {
-          argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+          // proposal-runtime-types #sec-higher-kinded-parameters: an argument
+          // binding a higher-kinded parameter is a DECLARATION, not a type, and
+          // resolving it as a type reports that a bare generic alias "is not a
+          // type" - which is so, and beside the point.
+          //
+          // Which parameter an argument binds is not known here, because the
+          // base is resolved after this loop. So a bare name that denotes a
+          // generic declaration resolves to that declaration unapplied, and the
+          // validation below refuses it where the parameter was not kinded. The
+          // check follows the resolution rather than gating it.
+          const argAsType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
+          if (argAsType.Type === 'throw' && argNode.type === 'TypeReference'
+              && (argNode.TypeName?.MemberNames?.length ?? 0) === 0 && !argNode.TypeArguments) {
+            const declRef = EnsureCompletion(yield* ResolveBinding(Value(argNode.TypeName.IdentifierReference.name)));
+            if (declRef.Type === 'normal') {
+              const declValue = EnsureCompletion(yield* GetValue(declRef.Value as never));
+              if (declValue.Type === 'normal' && isTypeObject(declValue.Value)) {
+                argRecords.push((declValue.Value as { TypeRecord: TypeRecord }).TypeRecord);
+                continue;
+              }
+            }
+          }
+          argRecords.push(Q(argAsType) as TypeRecord);
         }
       }
       // proposal-runtime-types (primitivemetadata.md, the metadata protocol): a

@@ -168,8 +168,8 @@ test('the two failures carry different messages', () => {
  * PLAN-higher-kinded-types-engine.md phase 4 — probed, and three of the four
  * clauses need work that is now located rather than guessed at.
  *
- * 1. A KINDED ARGUMENT IS RESOLVED AS A TYPE, so it works in a parameter
- *    annotation and fails in a `const` one. `function f(x: B.<Identity>) {}` is
+ * 1. FIXED. A kinded argument was resolved as a type, so it worked in a
+ *    parameter annotation and failed in a `const` one. `function f(x: B.<Identity>) {}` is
  *    accepted; `const a: B.<Identity> = null` reports that Identity "is not a
  *    type" — which is true of a bare generic alias and beside the point, since
  *    a kinded position wants a DECLARATION.
@@ -188,8 +188,15 @@ test('the two failures carry different messages', () => {
  *    `where` clauses parse at all for a class is worth establishing first — the
  *    refusal may be about the clause rather than about the kinded parameter.
  *
- * 3. VARIANCE IS UNTESTED because of 1: the cases need two applications binding
- *    different wrappers in a `const` position, which is exactly what fails.
+ * 3. VARIANCE IS NOT ENFORCED, now testable because 1 is fixed. Two
+ *    applications binding DIFFERENT wrappers assign to each other:
+ *    `const b: B.<Boxed> = aBoxOfIdentity` is accepted where the clause says a
+ *    kinded parameter is invariant absent an annotation.
+ *
+ *    The arguments are declaration records and SameArgumentList compares them,
+ *    so either the arguments are not reaching the comparison or two distinct
+ *    alias declarations are comparing equal. That is the next thing to find
+ *    out, and it is one trace at the comparison rather than a search.
  *
  * The fourth clause works: a kinded parameter read as a value resolves, which
  * the generics work's GetValue lookup already provided.
@@ -204,4 +211,19 @@ test('a bare generic declaration is not a type', () => {
   // missing rule: `Identity` unapplied is a declaration, and a type position
   // should refuse it.
   expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
+});
+
+test('a kinded argument resolves in a const annotation', () => {
+  // The positional gap: arguments were resolved as types before the base was
+  // known, so a bare generic declaration - which is what a kinded position
+  // wants - reported that it "is not a type".
+  const P = 'type Identity<T> = T; class B<W<_>> {} ';
+  expect(ok(`${P}const a: B.<Identity> = new B();`)).toBe(true);
+  expect(ok(`${P}function f(x: B.<Identity>) {}`)).toBe(true);
+
+  // And the refusals survive the fallback: it resolves a bare name to its
+  // declaration, and the validation still refuses it where the parameter was
+  // not kinded or the arity does not match.
+  expect(ok(`${P}const a: B.<uint8> = new B();`)).toBe(false);
+  expect(ok(`${P}const a: B.<Map> = new B();`)).toBe(false);
 });
