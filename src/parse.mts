@@ -20,7 +20,10 @@ import type { ParseNode } from './parser/ParseNode.mts';
 import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
-import { Expansion } from './static-semantics/Expansion.mts';
+import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
+import { CreateTokenStream, TokenStreamText, isTokenStream } from './intrinsics/TokenStream.mts';
+import { TokensOf } from './parser/TokensOf.mts';
+import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
   CreateDefaultExportSyntheticModule,
@@ -173,6 +176,26 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // before the `CheckModule` below - and only when the gate is non-empty, so a
   // module using no replacement decorator observes no phase at all.
   if (replacementNames.length > 0) {
+    // Run the decorators the host can resolve, and re-parse if any produced
+    // something. The recursion is the fixpoint: a decoration the expansion
+    // introduced is found by the next pass, and the depth is bounded.
+    const expandedOnce = ExpandSource(
+      sourceText,
+      body,
+      replacementNames,
+      (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
+      (node) => CreateTokenStream(TokensOf(node), realm),
+      (tokens) => (isTokenStream(tokens as Value) ? TokenStreamText((tokens as { TokenRecords: never }).TokenRecords) : undefined),
+    );
+    if (expandedOnce.expanded > 0 && expandedOnce.text !== sourceText) {
+      if ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0 > EXPANSION_LIMIT) {
+        return [Throw.SyntaxError('expansion exceeded the limit') as never];
+      }
+      return ParseModule(expandedOnce.text, realm, {
+        ...hostDefined,
+        expansionDepth: ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0) + 1,
+      } as ModuleRecordHostDefined);
+    }
     const expansion = Expansion(body, replacementNames);
     (body as { ExpansionResult?: unknown }).ExpansionResult = expansion;
     if (expansion.limitExceeded) {

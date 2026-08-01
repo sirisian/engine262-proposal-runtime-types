@@ -115,6 +115,67 @@ export interface ExpansionResult {
  * loop, the ordering, the limit and the gate are here; the call is the piece
  * that waits on the loader.
  */
+/**
+ * Rewrite _sourceText_ by running every replacement decorator in it.
+ *
+ * The returned tokens are spliced by REPLACING THE DECORATED CONSTRUCT'S SOURCE
+ * RANGE, outermost site first and applied back-to-front so earlier offsets stay
+ * valid. `ParseModule` re-parses when the text changed.
+ *
+ * A re-parse is an implementation choice, not a semantic one. `sec-expansion`'s
+ * "nothing is re-lexed" is about the LOOP - the returned stream is walked for
+ * further decorations rather than re-derived - and spans carry origin either
+ * way, so a diagnostic still names the position a program was written at.
+ */
+export function ExpandSource(
+  sourceText: string,
+  root: ParseNode,
+  names: readonly string[],
+  resolve: (name: string) => ((tokens: unknown, ...args: unknown[]) => unknown) | undefined,
+  tokensOf: (node: ParseNode) => unknown,
+  textOf: (tokens: unknown) => string | undefined,
+): { text: string, expanded: number } {
+  const sites = ExpansionSites(root, names);
+  let expanded = 0;
+  const edits: { start: number, end: number, text: string }[] = [];
+  for (const site of sites) {
+    const fn = resolve(site.name);
+    if (fn === undefined) {
+      // A name that resolves to nothing leaves its decoration alone. A host that
+      // does not implement preprocessor modules gets the parse it would have got
+      // anyway, rather than an error about a feature it never opted into.
+      continue;
+    }
+    const target = site.target as { location?: { startIndex?: number, endIndex?: number } };
+    const decorator = site.decorator as { location?: { startIndex?: number, endIndex?: number } };
+    // A Decorator node's location begins AFTER the `@`, so replacing from it
+    // leaves the sigil behind and the next parse sees `@class C {}`. Measured
+    // rather than assumed - the edit looked right and the rewritten text did
+    // not. The `@` is found by scanning back from the node's own start.
+    const nodeStart = decorator.location?.startIndex;
+    const end = target.location?.endIndex;
+    if (nodeStart === undefined || end === undefined) {
+      continue;
+    }
+    const at = sourceText.lastIndexOf('@', nodeStart);
+    const start = at === -1 ? nodeStart : at;
+    const produced = textOf(fn(tokensOf(site.target)));
+    if (produced === undefined) {
+      continue;
+    }
+    // The decoration is replaced ALONG WITH what it decorates: a replacement
+    // decorator returns the construct, and leaving the `@name` behind would
+    // re-expand it forever.
+    edits.push({ start, end, text: produced });
+    expanded += 1;
+  }
+  let text = sourceText;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) {
+    text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
+  }
+  return { text, expanded };
+}
+
 export function Expansion(root: ParseNode, names?: readonly string[]): ExpansionResult {
   const fixed = names ?? ReplacementDecoratorNames(root as ParseNode.Module);
   let depth = 0;
