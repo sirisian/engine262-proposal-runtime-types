@@ -846,10 +846,17 @@ export abstract class StatementParser extends TypeParser {
    * consequent as `ElseIfBlock`, which is the one subkind that is not simply
    * the keyword above it.
    */
-  protected markBlockKind<T>(statement: T, kind: string): T {
+  protected markBlockKind<T>(statement: T, kind: string, parts?: ParseNode.BlockParts): T {
     if (surroundingAgent.feature('runtime-types')
         && (statement as { type?: string })?.type === 'Block') {
       (statement as { BlockKind?: string }).BlockKind = kind;
+      if (parts) {
+        // decorators.md gives `IfBlock` a `condition` and `ForBlock` an
+        // `initializer`, `condition` and `update` - parts of the OWNING
+        // statement, which the block node cannot otherwise reach. Recorded here
+        // because this is the one place both are in hand.
+        (statement as { BlockParts?: ParseNode.BlockParts }).BlockParts = parts;
+      }
     }
     return statement;
   }
@@ -860,7 +867,7 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.LPAREN);
     node.Expression = this.parseExpression();
     this.expect(Token.RPAREN);
-    node.Statement_a = this.markBlockKind(this.parseStatement(), 'IfBlock');
+    node.Statement_a = this.markBlockKind(this.parseStatement(), 'IfBlock', { condition: node.Expression });
     if (this.eat(Token.ELSE)) {
       const alternative = this.parseStatement();
       // `else if (...) { }` is an IfStatement in the alternative position; its
@@ -888,7 +895,7 @@ export abstract class StatementParser extends TypeParser {
     this.inIterationHead = false;
     this.expect(Token.RPAREN);
     this.scope.with({ label: 'loop' }, () => {
-      node.Statement = this.markBlockKind(this.parseStatement(), 'WhileBlock');
+      node.Statement = this.markBlockKind(this.parseStatement(), 'WhileBlock', { condition: node.Expression });
     });
     return this.finishNode(node, 'WhileStatement');
   }

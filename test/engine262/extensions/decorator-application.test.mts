@@ -101,7 +101,7 @@ test('the class family: contexts exist and carry their declaration', () => {
 
   // The widened ClassField carries the declaration, not only the layout.
   const field = 'let c; function f(x) { c = x; } class A { @f static s: uint8; } ';
-  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,initial,offset,byteLength,metadata,classContext,addInitializer');
+  expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,initial,initializer,offset,byteLength,metadata,classContext,addInitializer');
   expect(evaluated(`${field} String(c.static) + "/" + String(c.private) + "/" + String(c.type === uint8);`)).toBe('true/false/true');
   expect(evaluated('let c; function f(x) { c = x; } class B { @f #p: uint8; } String(c.private);')).toBe('true');
 
@@ -399,39 +399,23 @@ test('block decorators fire on entry, every entry', () => {
     + 'for (const k in {}) @f { let g = 1; } for (const v of []) @f { let h = 1; } "all parse";')).toBe('all parse');
 });
 
-test('a block reflection carries its label and nothing more — DEFERRED, not missing', () => {
-  // decorators.md gives every block reflection a `block: Expression`, plus
-  // `condition`, `initializer`, and `update` for the loop forms — and then
-  // says: "That `Expression` is not defined here. MACRO AST IS OUT OF SCOPE.
-  // The Expression is a placeholder."
+test('a block reflection carries its BLOCK as tokens - the deferral is closed', () => {
+  // This test previously asserted that the AST-valued fields were ABSENT, and
+  // quoted decorators.md's reason: "That `Expression` is not defined here. Macro
+  // AST is out of scope. The Expression is a placeholder."
   //
-  // So the AST-valued fields are ABSENT rather than *undefined*, and this test
-  // asserts their absence deliberately. A stage that shipped them as *undefined*
-  // would look like a bug; a reader who meets this test meets the deferral.
-  expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,label');
-  expect(evaluated('let c; function f(x) { c = x; } @f { let a = 1; } c.kind;')).toBe('Block');
-  // THE NINE CONTEXTS ARE NOW DISTINGUISHED (phase five): the parser records
-  // the form that OWNS a block and the evaluator reads it back, so a bare block
-  // keeps `Block` and each statement's body reports its own. What stays
-  // deferred is only the AST-valued fields above.
-  const k = 'let c; function f(x) { c = x; } ';
-  expect(evaluated(`${k} if (true) @f { let a = 1; } c.kind;`)).toBe('IfBlock');
-  expect(evaluated(`${k} if (false) { } else @f { let a = 1; } c.kind;`)).toBe('ElseBlock');
-  expect(evaluated(`${k} if (false) { } else if (true) @f { let a = 1; } c.kind;`)).toBe('ElseIfBlock');
-  expect(evaluated(`${k} let i = 0; while (i < 1) @f { i += 1; } c.kind;`)).toBe('WhileBlock');
-  expect(evaluated(`${k} let n = 0; do @f { n += 1; } while (n < 1); c.kind;`)).toBe('DoWhileBlock');
-  expect(evaluated(`${k} for (let i = 0; i < 1; i += 1) @f { let a = 1; } c.kind;`)).toBe('ForBlock');
-  expect(evaluated(`${k} for (const x of [1]) @f { let a = 1; } c.kind;`)).toBe('ForOfBlock');
-  expect(evaluated(`${k} for (const x in { a: 1 }) @f { let a = 1; } c.kind;`)).toBe('ForInBlock');
-  expect(evaluated('[typeof Reflect.Block, typeof Reflect.IfBlock, typeof Reflect.ElseIfBlock, typeof Reflect.ElseBlock, '
-    + 'typeof Reflect.WhileBlock, typeof Reflect.DoWhileBlock, typeof Reflect.ForBlock, typeof Reflect.ForInBlock, '
-    + 'typeof Reflect.ForOfBlock].join(",");')).toBe('object,object,object,object,object,object,object,object,object');
-  // KNOWN LIMIT: every position currently reports `Block` rather than its own
-  // kind, because the block node DOES now record which statement form contains
-  // it (phase five): the parser marks the body and the evaluator reads it back.
-  expect(evaluated('let c; function f(x) { c = x; } if (true) @f { let a = 1; } c.kind;')).toBe('IfBlock');
+  // decoratorreplacement.md defines `Expression` as a TokenStream, so the
+  // placeholder has a meaning and the fields are present. The test is kept
+  // rather than deleted because it is where a reader looking for the deferral
+  // will arrive.
+  expect(evaluated('let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } @g { let x = 1; } f;'))
+    .toBe('kind,label,block');
+  expect(evaluated('let t = ""; function g(c) { t = c.block.toString(); } @g { let x = 1; } t;'))
+    .toBe('{ let x = 1; }');
+  // The forms that have a condition carry one; the forms that do not, do not.
+  expect(evaluated('let h = ""; function g(c) { h = String("condition" in c); } if (true) @g { 1; } h;')).toBe('true');
+  expect(evaluated('let h = ""; function g(c) { h = String("condition" in c); } @g { 1; } h;')).toBe('false');
 });
-
 test('the enum family: enumerators before their enum', () => {
   // Stage G of PLAN-decorators.md. decorators.md writes `@f enum Count { @f
   // Zero, ... }`, and the ordering rule applies to a third container kind

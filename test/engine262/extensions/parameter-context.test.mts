@@ -38,7 +38,7 @@ test('`initial` is the DECLARED default, on a field\'s terms', () => {
 
 test('the rest of the sub-target family is unchanged', () => {
   expect(evaluated('(() => { let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } '
-    + 'class A { m(@g x: uint32) {} } return f; })();')).toBe('kind,index,name,type,initial,metadata,methodContext');
+    + 'class A { m(@g x: uint32) {} } return f; })();')).toBe('kind,index,name,type,initial,initializer,metadata,methodContext');
   // `index` still identifies WHICH parameter.
   expect(evaluated('(() => { let i; function g(c) { i = c.index; } '
     + 'class A { m(a: uint8, @g x: uint32) {} } return String(i); })();')).toBe('1');

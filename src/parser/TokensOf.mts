@@ -106,21 +106,42 @@ const OPENERS: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
  * finding a boundary in UNPARSED text is a different problem, and it belongs to
  * expansion rather than here.
  */
-export function TokensOf(node: ParseNode, source: SourceRefRecord): readonly TokenRecord[] {
+export function TokensOf(node: ParseNode | null | undefined, url?: string): readonly TokenRecord[] {
   const text = sourceTextOf(node);
   if (text === undefined) {
     return [];
   }
-  return tokenizeText(text, source, node.location?.startIndex ?? 0);
+  // [[Text]] is the node's own text and spans index into IT, so a span always
+  // slices back to its token. `location.startIndex` would place the spans in
+  // the module instead - which reads better in a diagnostic but breaks
+  // `toString`, since the text a span indexes would no longer be the text the
+  // record carries. The module offset belongs on the Source Reference Record
+  // when expansion needs it, not on the spans.
+  const source: SourceRefRecord = {
+    URL: url, Macro: undefined, Generation: 0, Text: text,
+  };
+  return tokenizeText(text, source);
 }
 
-/** The exact source text a node matched. */
-export function sourceTextOf(node: ParseNode): string | undefined {
-  const loc = (node as { location?: { startIndex?: number, endIndex?: number, source?: string } }).location;
-  if (!loc || loc.source === undefined || loc.startIndex === undefined || loc.endIndex === undefined) {
+/**
+ * The exact source text a node matched.
+ *
+ * Every parse node carries `sourceText` - the whole buffer it was parsed from,
+ * which is the retention `Function.prototype.toString` already requires - and
+ * `location` gives the node's extent within it. An earlier draft read a
+ * `location.source` that does not exist, so this returned *undefined* for every
+ * node and `TokensOf` returned an empty List.
+ */
+export function sourceTextOf(node: ParseNode | null | undefined): string | undefined {
+  if (node === null || node === undefined) {
     return undefined;
   }
-  return loc.source.slice(loc.startIndex, loc.endIndex);
+  // `sourceText` is ALREADY the node's own text, not the buffer it was cut
+  // from. Two earlier drafts sliced it by `location`, which are indices into the
+  // MODULE - so the slice ran past the end of a short string and produced `''`,
+  // and every stream came back empty while every field looked present.
+  const n = node as { sourceText?: string };
+  return typeof n.sourceText === 'string' ? n.sourceText : undefined;
 }
 
 /**

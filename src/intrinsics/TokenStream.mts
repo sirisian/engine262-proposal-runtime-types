@@ -67,12 +67,11 @@ export function TokenToObject(token: TokenRecord, realmRec: Realm): ObjectValue 
 export function CreateTokenStream(records: readonly TokenRecord[], realmRec: Realm): TokenStreamObject {
   const array = X(CreateArrayFromList(records.map((t) => TokenToObject(t, realmRec)))) as unknown as TokenStreamObject;
   (array as { TokenRecords: readonly TokenRecord[] }).TokenRecords = records;
-  X(array.DefineOwnProperty(Value('__proto__' as string), Descriptor({
-    Value: realmRec.Intrinsics['%TokenStream.prototype%'],
-    Writable: Value.false,
-    Enumerable: Value.false,
-    Configurable: Value.false,
-  })));
+  // Defining a `__proto__` PROPERTY does not set the prototype - it defines an
+  // own property of that name, and the stream kept inheriting
+  // `Array.prototype.toString`, which answered `[object Object]` for every
+  // token. The prototype is set, not defined.
+  X(array.SetPrototypeOf(realmRec.Intrinsics['%TokenStream.prototype%']));
   return array;
 }
 

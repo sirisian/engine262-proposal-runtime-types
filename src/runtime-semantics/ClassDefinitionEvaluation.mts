@@ -33,8 +33,11 @@ import {
 import { __ts_cast__, OutOfRange, type Mutable } from '../utils/language.mts';
 import type { Location, ParseNode } from '../parser/ParseNode.mts';
 import { DefinePropertyOrThrow } from '../abstract-ops/all.mts';
-import { Evaluate_PropertyName } from './PropertyName.mts';
-import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
+import { DefaultValueOf } from '../type-system/runtime.mts';
+import { CreateArrayFromList } from '../abstract-ops/all.mts';
+import { anyType } from '../type-system/records.mts';
+import { CreateTokenStream } from '../intrinsics/TokenStream.mts';
+import { TokensOf } from '../parser/TokensOf.mts';
 import {
   DefineMethod,
   MethodDefinitionEvaluation,
@@ -45,6 +48,8 @@ import {
   ClassStaticBlockDefinitionRecord,
   ClassFieldDefinitionEvaluation_decorator,
 } from './all.mts';
+import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
+import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
@@ -54,9 +59,6 @@ import {
 
   CreateDataPropertyOrThrow, HasProperty, InitializeFieldOrAccessor, InitializePrivateMethods, IsPropertyKey, markBuiltinFunctionAsConstructor, PrivateElementFind, PrivateGet, PrivateSet, Set, Throw,
 } from '#self';
-import { DefaultValueOf } from '../type-system/runtime.mts';
-import { CreateArrayFromList } from '../abstract-ops/all.mts';
-import { anyType } from '../type-system/records.mts';
 import {
   Assert,
   Call,
@@ -1649,6 +1651,7 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   // invisible to a decorator as well as unenforced.
   X(CreateDataProperty(context, Value('readonly'), decl.readonly === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
+  X(CreateDataProperty(context, Value('initializer'), InitializerTokensOf(decl)));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
   // `access`: the pair this accessor generated, so a decorator that REPLACES
   // the accessor can delegate to the storage the layout already allotted rather
@@ -1691,6 +1694,7 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
     }
   }
   X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
+  X(CreateDataProperty(context, Value('initializer'), InitializerTokensOf(decl)));
   // decorators.md also gives `offset` and `byteLength`, "present when the
   // declaring class has one". NOT ADDED YET, deliberately: the layout reflection
   // reaches a placement through the TYPE RECORD's `Constructor`, and the
@@ -2064,6 +2068,7 @@ function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundi
       }
     }
     X(CreateDataProperty(entry, Value('initial'), DeclaredConstantOf(binding.Initializer)));
+    X(CreateDataProperty(entry, Value('initializer'), InitializerTokensOf(binding)));
     parameters.push(entry);
   }
   X(CreateDataProperty(sig, Value('parameters'), X(CreateArrayFromList(parameters))));
@@ -2408,6 +2413,10 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
       }
     }
     X(CreateDataProperty(context, Value('initial'), initial));
+    // Same pair as a field's: the constant where there is one, the declaration
+    // as tokens either way. A parameter default of `f()` has no `initial` and a
+    // readable `initializer`.
+    X(CreateDataProperty(context, Value('initializer'), InitializerTokensOf(node)));
   }
   // decorators.md gives a sub-target `metadata`, prototype-linked to the same
   // sub-target on the base class - the same rule a member's metadata follows,
@@ -2419,4 +2428,29 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
     ownerKind, ownerName, false, currentClassName ?? Value.undefined, classCtor,
   ))));
   return context;
+}
+
+/**
+ * The DECLARATION that produced `initial`, as a TokenStream.
+ *
+ * `initial` captures CONSTANT values only - a non-constant initializer reports
+ * *undefined*, because evaluating it would run user code at class definition
+ * rather than per call. decorators.md calls that "a limitation" and defers the
+ * `Expression` that would fix it; decoratorreplacement.md gives `Expression` a
+ * meaning, so the two now sit side by side: the VALUE where there is one, and
+ * the EXPRESSION that produced it either way.
+ *
+ * They are not two spellings of one thing. `x: uint8 = f()` has no `initial`
+ * and a perfectly good `initializer`.
+ */
+function InitializerTokensOf(node: unknown): Value {
+  // An absent initializer is NULL here, not undefined - the parser writes the
+  // field either way. Guarding only for undefined let a null through and
+  // `TokensOf` read `sourceText` off it.
+  const init = (node as { Initializer?: ParseNode | null })?.Initializer;
+  if (init === undefined || init === null) {
+    return Value.undefined;
+  }
+  const realm = surroundingAgent.currentRealmRecord;
+  return CreateTokenStream(TokensOf(init), realm);
 }

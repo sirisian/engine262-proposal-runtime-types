@@ -10,6 +10,8 @@ import {
 import { X, NormalCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DisposeResources } from '../abstract-ops/disposal.mts';
+import { CreateTokenStream } from '../intrinsics/TokenStream.mts';
+import { TokensOf } from '../parser/TokensOf.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { Evaluate_StatementList, InstantiateFunctionObject } from './all.mts';
 import { CreateDataProperty, OrdinaryObjectCreate } from '#self';
@@ -55,7 +57,10 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
 //  Block :
 //    `{` `}`
 //    `{` StatementList `}`
-export function* Evaluate_Block({ StatementList, Decorators, BlockKind }: ParseNode.Block & { BlockKind?: string }) {
+export function* Evaluate_Block(node: ParseNode.Block & { BlockKind?: string, BlockParts?: ParseNode.BlockParts }) {
+  const {
+    StatementList, Decorators, BlockKind, BlockParts,
+  } = node;
   // proposal-runtime-types decorators.md "Order": "Block, `let`, and `const`
   // decorators are on the other timeline: they fire when the STATEMENT EXECUTES
   // rather than when a declaration is evaluated. A block decorator on a loop
@@ -83,7 +88,7 @@ export function* Evaluate_Block({ StatementList, Decorators, BlockKind }: ParseN
     // may REPLACE its value - the one thing a block decorator can do that no
     // other block has a use for - and the expression is what holds the value.
     if (blockKind !== 'DoBlock') {
-      Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined))));
+      Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined, node, BlockParts))));
     }
   }
   if (StatementList.length === 0) {
@@ -110,12 +115,44 @@ export function* Evaluate_Block({ StatementList, Decorators, BlockKind }: ParseN
   return blockValue;
 }
 
-/** decorators.md's `BlockReflection`: `label`, and an AST the design defers. */
-export function* BlockDecoratorContext(kind: string, label: Value): ValueEvaluator {
+/**
+ * decorators.md's `BlockReflection` and its eleven siblings.
+ *
+ * `block` is the decorated block as a TokenStream; `condition`, `initializer`
+ * and `update` are parts of the OWNING statement, which the parser recorded on
+ * the block node because it is the one place both were in hand.
+ *
+ * These were `Expression` in the design and undefined in this engine until
+ * decoratorreplacement.md gave `Expression` a meaning. A TokenStream is
+ * deliberately below a syntax tree: the lexical grammar is already normative,
+ * where a tree would have to be invented and versioned.
+ */
+export function* BlockDecoratorContext(
+  kind: string,
+  label: Value,
+  node?: ParseNode,
+  parts?: ParseNode.BlockParts,
+): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('label'), label));
+  const stream = (n: ParseNode | undefined) => (n === undefined
+    ? Value.undefined
+    : CreateTokenStream(TokensOf(n), realm));
+  X(CreateDataProperty(context, Value('block'), stream(node)));
+  // Only the forms that HAVE these carry them, so a `Block` does not answer
+  // *undefined* for a condition it could never have - an absent property and a
+  // property that is always undefined say different things.
+  if (parts?.condition !== undefined) {
+    X(CreateDataProperty(context, Value('condition'), stream(parts.condition as ParseNode)));
+  }
+  if (parts?.initializer !== undefined) {
+    X(CreateDataProperty(context, Value('initializer'), stream(parts.initializer as ParseNode)));
+  }
+  if (parts?.update !== undefined) {
+    X(CreateDataProperty(context, Value('update'), stream(parts.update as ParseNode)));
+  }
   return context;
 }

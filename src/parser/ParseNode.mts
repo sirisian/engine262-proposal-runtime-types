@@ -16,6 +16,17 @@ export interface Location {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace ParseNode {
+  /**
+   * proposal-runtime-types: parts of the statement that OWNS a decorated block -
+   * an `if`'s condition, a `for`'s initializer, condition and update. The block
+   * node cannot reach them, and its reflection needs them.
+   */
+  export interface BlockParts {
+    readonly condition?: BaseParseNode;
+    readonly initializer?: BaseParseNode;
+    readonly update?: BaseParseNode;
+  }
+
   export interface BaseParseNode {
     // NOTE: while we could use `string` here, by limiting `type` to only those types defined in the `ParseNode`
     //       union we can ensure that new subtypes of `BaseParseNode` are correctly added to the union.
