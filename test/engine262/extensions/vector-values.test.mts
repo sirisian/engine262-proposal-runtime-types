@@ -192,27 +192,38 @@ test('the broadcast cast fills every lane', () => {
 });
 
 /**
- * A CYCLE BETWEEN THE CONVERSION AND THE MEMBERSHIP TEST, half fixed.
+ * The broadcast, and the one route that reaches it.
  *
- * `let s: any = 2; let b: float32x4 = s;` overflows the host stack. The cycle
- * is requireMembership -> CheckedConvertValue -> IsOfType -> primitiveMembership
- * -> and round again, because the broadcast branch of the conversion asks
- * whether the value is of the LANE type, and the enforcement path asks the
- * conversion whenever membership fails.
+ * THE CYCLE IS CLOSED. `let s: any = 2; let b: float32x4 = s;` broadcasts to
+ * `(2, 2, 2, 2)` and the result IS a float32x4. The loop was in the branch
+ * itself: it TESTED whether the value was of the lane type, and a plain Number
+ * is not a member of `float32` - it becomes one. So the branch was never taken,
+ * the conversion fell through to the general rule, and that asked to convert to
+ * the vector type again.
  *
- * primitiveMembership now answers `vector` directly - a value that is not a
- * vector is not a MEMBER of a vector type, whatever it may convert to - which
- * is correct on its own terms and was measured to be reached, with the name
- * 'vector' and two arguments. The overflow survives it, so a second entry into
- * the cycle exists: CheckedConvertValue is called from three places in
- * runtime-types.mts and only one of them has been followed.
+ * Converting the lane once and reusing it is also what gives the broadcast its
+ * meaning: every lane holds the SAME value of the lane type rather than N
+ * separately-converted copies.
  *
- * That it takes an `any` to reach shows why nothing caught it earlier - a
- * statically-typed lane value is refused by the checker before any of this
- * runs, and only a value whose type the checker cannot see gets far enough to
- * loop.
+ * THE STATIC HALF REMAINS REVERTED, for the second time and for the same
+ * reason. Teaching IsAssignable that a lane type is assignable to the vector
+ * makes `let b: float32x4 = s` for a typed `float32` s succeed with the value
+ * UNCONVERTED - `Reflect.typeOf(b) === float32x4` is false. A statically typed
+ * value takes a path that does not reach requireMembership at all, so the
+ * checker's permission is the only thing consulted and nothing converts.
  *
- * No test asserts the crash: an assertion that a host RangeError occurs would
- * pin the wrong behaviour, exactly as with the budget's stack overflow. The
- * right assertion is that the broadcast happens, and it belongs with the fix.
+ * That is why the `any` case works and the typed case does not: `any` defers to
+ * the runtime, which converts; a known type is settled statically, which does
+ * not. The fix is for the checker to record that a conversion is OWED at that
+ * binding rather than merely permitting it, and until that exists the refusal
+ * is the honest behaviour - it rejects a program the design permits, where the
+ * alternative accepts one it does not.
  */
+
+test('a lane value broadcasts where the runtime decides the type', () => {
+  expect(evaluated('let s: any = 2; let b: float32x4 = s; String(b);')).toBe('(2, 2, 2, 2)');
+  expect(evaluated('let s: any = 2; let b: float32x4 = s; String(Reflect.typeOf(b) === float32x4);')).toBe('true');
+  // A value that is not a conversion source for the lane type is still refused.
+  expect(ok('let s: any = "x"; let b: float32x4 = s;')).toBe(false);
+});
+

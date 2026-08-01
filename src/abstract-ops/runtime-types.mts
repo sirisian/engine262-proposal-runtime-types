@@ -362,14 +362,20 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     const laneType = t.Arguments[0] as TypeRecord;
     const laneCount = t.Arguments[1];
     if (typeof laneCount === 'number' && value.type !== 'Vector') {
-      const fits = Q(yield* IsOfType(value, laneType));
-      if (fits) {
-        const lanes: Value[] = [];
-        for (let i = 0; i < laneCount; i += 1) {
-          lanes.push(value);
-        }
-        return new VectorValue(lanes, t);
+      // The lane value is CONVERTED, not merely tested. A plain Number is not a
+      // member of `float32` - it becomes one - so testing membership here left
+      // the branch un-taken, the conversion fell through to the general rule,
+      // and that asked to convert to the vector type again: the loop.
+      //
+      // Converting once and reusing the result also gives the broadcast its
+      // meaning, since every lane must hold the same value of the lane type
+      // rather than N separately-converted copies.
+      const lane = Q(yield* CheckedConvertValue(value, laneType));
+      const lanes: Value[] = [];
+      for (let i = 0; i < laneCount; i += 1) {
+        lanes.push(lane);
       }
+      return new VectorValue(lanes, t);
     }
   }
   // The crossing between two parameterizations gates and scales here exactly as
