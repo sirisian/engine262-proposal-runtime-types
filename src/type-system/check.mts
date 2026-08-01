@@ -16,6 +16,7 @@ import { voidType as voidTypeRecord } from './records.mts';
 const TOPIC_NAME = '%';
 import { Diverges } from './divergence.mts';
 import { SameType, IsAssignable } from './relations.mts';
+import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
@@ -345,6 +346,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Only the LANE type converts, which is the refusal the clause states: a
       // `float32` reaches `float32x4` and not `float64x2`.
       const laneTarget = erasedTarget.Arguments[0] as TypeRecord;
+      // A BIT VECTOR takes a whole integer, not a lane value: #sec-vector-lanes
+      // has lane i of a `vector.<uint.<1>, N>` be bit i of an N-bit integer, so
+      // `let a: boolean8 = 0b00000010` is a conversion of the number and not a
+      // broadcast of it. Testing against the lane type would refuse it, since 2
+      // is not a value of `uint.<1>`.
+      if (isBitLaneType(laneTarget)) {
+        const numeric = erasedSource.Kind === 'literal' ? eraseMetadata(erasedSource.Base as TypeRecord) : erasedSource;
+        if (numeric.Kind === 'primitive' && (numeric.Name === 'uint' || numeric.Name === 'int' || numeric.Name === 'number')) {
+          return;
+        }
+        if (erasedSource.Kind === 'literal'
+            && typeof (erasedSource.Value as { numberValue?(): number })?.numberValue === 'function') {
+          return;
+        }
+      }
       if (IsAssignable(erasedSource, laneTarget)) {
         return;
       }
@@ -367,6 +383,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       report(erasedSource, erasedTarget);
+      return;
+    }
+    // The reverse bit-vector conversion, admitted for the same reason as the
+    // forward one: a `vector.<uint.<1>, N>` reads back as the integer whose bit
+    // i is lane i, so it is assignable to an integer type.
+    if (erasedSource.Kind === 'primitive' && erasedSource.Name === 'vector'
+        && erasedSource.Arguments.length === 2
+        && isBitLaneType(erasedSource.Arguments[0] as TypeRecord)
+        && erasedTarget.Kind === 'primitive'
+        && (erasedTarget.Name === 'uint' || erasedTarget.Name === 'int')) {
       return;
     }
     if (!IsAssignable(erasedSource, erasedTarget)) {

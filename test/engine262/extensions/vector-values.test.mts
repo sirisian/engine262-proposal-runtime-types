@@ -75,7 +75,6 @@ test('typeof a vector is object', () => {
  * form `lane.<I>()` is refused before the program runs. That asymmetry is the
  * reason the design gives both, and it is what these assert.
  *
- * The bit-vector conversion is still to come.
  */
 
 test('the constant lane forms take a compile-time index', () => {
@@ -235,3 +234,36 @@ test('a lane value broadcasts where the runtime decides the type', () => {
   expect(ok('let s: any = "x"; let b: float32x4 = s;')).toBe(false);
 });
 
+
+/**
+ * The bit-vector conversion, #sec-vector-lanes: "lane i of a
+ * `vector.<uint.<1>, N>` is bit i of an N-bit integer, counting from the least
+ * significant", and the conversion is that correspondence read in EACH
+ * direction.
+ *
+ * It is answered before the broadcast because it is the more specific rule. A
+ * `uint.<1>` is itself a lane type, so `boolean8 = 2` would otherwise try to
+ * broadcast 2 into every lane - and 2 is not a value of `uint.<1>`, so it would
+ * then be refused rather than read as bits.
+ */
+
+test('an integer converts to a bit vector by its bits', () => {
+  // simd.md's own example, verbatim.
+  expect(evaluated('let a: boolean8 = 0b00000010; String(a[1]);')).toBe('1');
+  expect(evaluated('let a: boolean8 = 0b00000010; String(a[0]);')).toBe('0');
+  expect(evaluated('let a: boolean8 = 0b00000010; String(a);')).toBe('(0, 1, 0, 0, 0, 0, 0, 0)');
+});
+
+test('a bit vector converts back to an integer', () => {
+  // The rest of simd.md's example: set lane 3 and read the value back, which
+  // the design writes as 0b00001010.
+  expect(evaluated('let a: boolean8 = 0b00000010; a[3] = 1; let n: uint8 = a; String(n);')).toBe('10');
+  expect(evaluated('let a: boolean8 = 0; a[0] = 1; a[7] = 1; let n: uint8 = a; String(n);')).toBe('129');
+});
+
+test('the bit conversion does not disturb an ordinary broadcast', () => {
+  // A vector whose lane type is not `uint.<1>` still broadcasts, which is the
+  // assertion that would fail if the bit rule were matched too widely.
+  expect(evaluated('let b: float32x4 = 2; String(b);')).toBe('(2, 2, 2, 2)');
+  expect(evaluated('let b: int32x4 = 7; String(b);')).toBe('(7, 7, 7, 7)');
+});

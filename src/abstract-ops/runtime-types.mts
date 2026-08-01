@@ -4,6 +4,7 @@ import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
+import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
@@ -358,9 +359,48 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // type is not the lane type does not convert, so a `float32` reaches
   // `float32x4` and not `float64x2`, and a design wanting the second casts to
   // `float64` first.
+  // The reverse of the bit-vector conversion: "a value of the vector type
+  // converted to an integer type gives the integer whose bit i is lane i"
+  // (#sec-vector-lanes). Stated in each direction by the clause and needed in
+  // each, since a bit vector is a bitfield a program reads back as a number.
+  if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name !== 'vector') {
+    const shape = vectorShape(value as VectorValue);
+    if (shape && isBitLaneType(shape.laneType)) {
+      let bits = 0;
+      for (let i = 0; i < shape.laneCount; i += 1) {
+        const lane = (value as VectorValue).lanes[i] as { numberValue?(): number };
+        if (lane?.numberValue?.() === 1) {
+          // eslint-disable-next-line no-bitwise
+          bits |= (1 << i);
+        }
+      }
+      return Q(yield* CheckedConvertValue(Value(bits >>> 0), t));
+    }
+  }
   if (t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
     const laneType = t.Arguments[0] as TypeRecord;
     const laneCount = t.Arguments[1];
+    // proposal-runtime-types #sec-vector-lanes: the bit-vector conversion.
+    // "Lane i of a `vector.<uint.<1>, N>` is bit i of an N-bit integer, counting
+    // from the least significant", and the conversion is that correspondence
+    // read in each direction. An integer converted to the vector gives the
+    // vector whose lane i is bit i of the value.
+    //
+    // It is answered before the broadcast because it is the more specific rule:
+    // a `uint.<1>` IS a lane type, so `boolean8 = 2` would otherwise broadcast
+    // 2 into every lane rather than reading its bits - and 2 is not even a
+    // value of `uint.<1>`, so it would then be refused.
+    if (typeof laneCount === 'number' && value.type !== 'Vector' && isBitLaneType(laneType)) {
+      const asNumber = (value as { numberValue?(): number }).numberValue?.();
+      if (typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0) {
+        const lanes: Value[] = [];
+        for (let i = 0; i < laneCount; i += 1) {
+          // eslint-disable-next-line no-bitwise
+          lanes.push(Q(yield* CheckedConvertValue(Value((asNumber >>> i) & 1), laneType)) as Value);
+        }
+        return new VectorValue(lanes, t);
+      }
+    }
     if (typeof laneCount === 'number' && value.type !== 'Vector') {
       // The lane value is CONVERTED, not merely tested. A plain Number is not a
       // member of `float32` - it becomes one - so testing membership here left

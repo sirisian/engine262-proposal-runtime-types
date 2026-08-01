@@ -176,3 +176,18 @@ export function* vectorConstantLane(
   lanes[index] = replacement;
   return new VectorValue(lanes, v.TypeRecord);
 }
+
+/**
+ * Whether a lane type is `uint.<1>`, which makes its vector a BIT VECTOR.
+ *
+ * proposal-runtime-types #sec-vector-lanes: "Where the lane type is `uint.<1>`,
+ * a lane and a bit coincide", and the conversion between such a vector and an
+ * integer is that correspondence read in each direction. This is what the
+ * design names `boolean1` and builds `boolean8` and its siblings from.
+ */
+export function isBitLaneType(laneType: TypeRecord): boolean {
+  return laneType.Kind === 'primitive'
+    && laneType.Name === 'uint'
+    && laneType.Arguments.length === 1
+    && laneType.Arguments[0] === 1;
+}
