@@ -13,6 +13,9 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
+import {
+  ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
+} from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { restElementType } from './records.mts';
 import {
@@ -76,15 +79,45 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
   if (params.length !== argRecords.length) {
     return Throw.TypeError('$1 is not a type', Value(declaration.BindingIdentifier.name));
   }
-  const frame = new Map<string, TypeRecord>();
-  params.forEach((p, i) => {
-    frame.set((p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i]);
-  });
-  typeParameterFrames.push(frame);
+  // proposal-runtime-types #sec-evaluation-budget: instantiating an alias is
+  // type-level evaluation and must be metered. Without this a self-referential
+  // alias - `type R<T> = R.<T>` - recursed until the HOST stack overflowed,
+  // which is not an engine262 completion at all: no program could observe it
+  // and the diagnostic the clause requires never appeared. The clause says
+  // exhaustion is "not an abrupt completion the evaluated code can observe" and
+  // that the evaluation is "abandoned"; a stack overflow is neither.
+  // The budget is opened here when nothing has opened one. check-pass brackets
+  // the CHECKING pass, and a `const` annotation is resolved at run time on a
+  // path that never entered it - so ConsumeEvaluationSteps found no frame and
+  // silently returned, which is why metering alone did not stop the recursion.
+  // BeginTypeEvaluation joins an enclosing frame when there is one, so opening
+  // it here does not reset a budget that is already running.
+  // The budget frame must SPAN the recursive instantiation, not just the check
+  // before it. Opening and closing it around the check alone let each level
+  // open a fresh frame, so every recursion started from zero steps and the
+  // stack overflowed exactly as before. BeginTypeEvaluation joins an enclosing
+  // frame rather than opening a new one, which is what makes the span work.
+  BeginTypeEvaluation();
   try {
-    return Q(yield* TypeNodeToTypeRecord(declaration.Type));
+    ConsumeEvaluationSteps(1);
+    if (IsBudgetExhausted()) {
+      return Throw.TypeError(
+        'the type evaluation budget was exhausted at $1',
+        Value(declaration.BindingIdentifier.name),
+      );
+    }
+    const frame = new Map<string, TypeRecord>();
+    params.forEach((p, i) => {
+      frame.set((p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i]);
+    });
+    typeParameterFrames.push(frame);
+    try {
+      return Q(yield* TypeNodeToTypeRecord(declaration.Type));
+    } finally {
+      typeParameterFrames.pop();
+    }
   } finally {
-    typeParameterFrames.pop();
+    EndTypeEvaluation();
   }
 }
 

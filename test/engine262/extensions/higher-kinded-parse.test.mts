@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 import {
   ok, evaluated, run,
 } from '../readme/harness.mts';
@@ -358,28 +359,59 @@ test('deep but finite nesting completes', () => {
 });
 
 /**
- * THE BUDGET DOES NOT REACH GENERIC ALIAS INSTANTIATION, and this is
- * pre-existing rather than this feature's.
+ * THE BUDGET NOW REACHES GENERIC ALIAS INSTANTIATION, with one caveat.
  *
- * `type R<T> = R.<T>` - a self-referential generic alias - overflows the HOST
- * stack rather than exhausting the evaluation budget:
+ * `type R<T> = R.<T>` used to overflow the HOST stack - a RangeError that is
+ * not an engine262 completion, so no program could observe it and the
+ * diagnostic sec-evaluation-budget requires never appeared. It now reports a
+ * type error naming the alias, which is what the clause asks for.
  *
- *   RangeError: Maximum call stack size exceeded
+ * Two things had to be true and each hid the other. The instantiation had to
+ * CONSUME steps, which it never did. And a budget frame had to be OPEN: the
+ * checking pass brackets one, but a `const` annotation resolves on a runtime
+ * path that never entered it, so ConsumeEvaluationSteps found no frame and
+ * silently returned. Opening a frame around the check alone was still not
+ * enough - each recursion opened a fresh one and started from zero - so the
+ * frame spans the recursive instantiation, which BeginTypeEvaluation supports
+ * by joining an enclosing frame rather than nesting a new one.
  *
- * That is not an engine262 completion at all, so no program can catch it and
- * the diagnostic sec-evaluation-budget requires ("a diagnostic naming the
- * outermost call and the deepest frames") never appears. The clause states that
- * exhaustion is "not an abrupt completion the evaluated code can observe" and
- * that the evaluation is "abandoned"; a host stack overflow is neither.
+ * THE CAVEAT: at the DEFAULT budget the host stack still overflows first. Ten
+ * million steps is far more recursion than a JavaScript stack survives, so the
+ * budget is correct and its floor is above what the host can reach. The
+ * specification fixes that floor - DEFAULT_STEP_LIMIT is
+ * "#sec-evaluation-budget's floor a host meets or exceeds" - so lowering it is
+ * a specification question rather than an engine one, and a host that wants the
+ * diagnostic configures a lower limit, as the test below does.
  *
- * It reproduces without any higher-kinded parameter - InstantiateGenericAlias
- * has no budget, and a comment in that file says as much: "#sec-compile-time-
- * evaluability's budget joins later". So the higher-kinded work did not
- * introduce it and cannot fix it locally; the budget has to reach type-level
- * evaluation generally.
- *
- * Recorded here rather than as a test, because a test asserting a host crash
- * would pin the wrong behaviour: the right assertion is that a type error is
- * reported, and writing it now would fail for the right reason at the wrong
- * time.
+ * That is worth raising against the clause: a floor a host cannot reach without
+ * crashing is not a floor.
  */
+
+test('an unbounded type evaluation exhausts the budget and reports', () => {
+  // The failing direction the plan asks for, at a lowered budget - which is
+  // what a host does when it wants the diagnostic rather than the stack.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
+  const completion = realm.evaluateScriptSkipDebugger('type R<T> = R.<T>; const a: R.<uint8> = 1;');
+
+  expect(completion.Type).toBe('throw');
+  let message = '';
+  const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
+  for (const [key, desc] of value.properties ?? []) {
+    if (key.stringValue?.() === 'message') {
+      message = desc.Value.stringValue();
+    }
+  }
+  // A reportable type error naming the alias, not a host RangeError.
+  expect(message).toContain('budget');
+  expect(message).toContain('R');
+});
+
+test('an ordinary alias is unaffected by the metering', () => {
+  // The other direction, at the same lowered budget: metering must not refuse
+  // code that terminates.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
+  const completion = realm.evaluateScriptSkipDebugger('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";');
+  expect(completion.Type).toBe('normal');
+});
