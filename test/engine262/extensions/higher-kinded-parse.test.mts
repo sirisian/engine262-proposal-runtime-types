@@ -256,35 +256,45 @@ test('applications binding different alias wrappers are distinct', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 5 — attempted and reverted, with
- * the obstacle located.
+ * PLAN-higher-kinded-types-engine.md phase 5 — done, at the third attempt, and
+ * the two failed ones located it.
  *
- * The rule is that a higher-kinded parameter is bound only by explicit
- * application and never inferred, and today an unsupplied one is silently
- * accepted: `function g<W<_>, T>(x: W.<T>) {}` called as `g(1)` passes.
+ * A higher-kinded parameter is bound only by explicit application and never
+ * inferred. Refusing that in InferGenericBindings, where a call's bindings are
+ * decided, refuses BOTH forms: inference cannot tell a supplied kinded
+ * parameter from an unsupplied one, because the frame that would hold the
+ * explicit arguments is what inference is being asked to produce.
  *
- * Refusing it in InferGenericBindings, which is where a call's bindings are
- * decided, refuses BOTH forms. `g.<Identity, uint8>(1)` is rejected too, and
- * that is the form the rule requires rather than forbids.
- *
- * The cause is that an explicit application does not bypass inference: both
- * call paths in EvaluateBody route through InferGenericCallBindings regardless,
- * and the explicit arguments are not visible there - lookupTypeParameter finds
- * nothing, because the frame that would hold them is what inference is being
- * asked to produce. So "was this supplied?" cannot be answered at that point.
- *
- * The next step is therefore upstream of inference: find where a call's
- * EXPLICIT type arguments are read - the TypeArgumentsExpression on the callee
- * - and make them reach the binding decision, so an unsupplied kinded parameter
- * is distinguishable from a supplied one. That is a question about how explicit
- * application reaches a call, not about inference.
+ * The check belongs at the CALL, where the callee node is in hand and whether a
+ * TypeArgumentsExpression rides on it is exactly the question being asked. That
+ * is where the typed JSON.parse and the SoA constructors already intercept, for
+ * the same reason.
  */
 
-test('an unsupplied kinded parameter is accepted today', () => {
-  // Asserting the CURRENT behaviour so the fix has something to flip. The rule
-  // says this should be refused; recording it as accepted is what makes the
-  // gap visible in the file rather than only in a plan.
+test('a kinded parameter must be supplied by explicit application', () => {
   const P = 'type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} ';
-  expect(ok(`${P}g(1);`)).toBe(true);
   expect(ok(`${P}g.<Identity, uint8>(1);`)).toBe(true);
+  expect(ok(`${P}g(1);`)).toBe(false);
+
+  // Inference for ordinary parameters is untouched, which is the assertion
+  // that matters: the refusal is about a kinded parameter and not about
+  // generic calls.
+  expect(ok('function f<T>(x: T): T { return x; } const n: uint8 = 1; f(n);')).toBe(true);
+  expect(ok('function h(x) { return x; } h(5);')).toBe(true);
+});
+
+test('the refusal explains that inference is not attempted', () => {
+  // The message says WHY rather than reporting a missing binding. Recovering W
+  // and T from one argument admits two consistent answers, so choosing is a
+  // search - and sec-evaluation-budget meters computation rather than search.
+  const completion = run('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);');
+  let message = '';
+  const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
+  for (const [key, desc] of value.properties ?? []) {
+    if (key.stringValue?.() === 'message') {
+      message = desc.Value.stringValue();
+    }
+  }
+  expect(message).toContain('explicit application');
+  expect(message).toContain('never inferred');
 });

@@ -1,6 +1,8 @@
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
+import { functionTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { Throw } from '../host-defined/error-messages.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
@@ -43,6 +45,27 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   const ref = Q(yield* Evaluate(memberExpr));
   // 5. Let func be ? GetValue(ref).
   const func = Q(yield* GetValue(ref));
+  // proposal-runtime-types #sec-higher-kinded-parameters: "A higher-kinded
+  // parameter is bound only by explicit application. It is never inferred from
+  // an argument's type."
+  //
+  // The check belongs HERE and not in inference, which is what two earlier
+  // attempts got wrong. Inference cannot tell a supplied kinded parameter from
+  // an unsupplied one, because the frame that would hold the explicit arguments
+  // is what inference is being asked to produce - so a rule enforced there
+  // refuses `g.<Identity, uint8>(1)` as readily as `g(1)`. At the call the
+  // callee node is in hand, and whether a TypeArgumentsExpression rides on it
+  // is exactly the question.
+  if (surroundingAgent.feature('runtime-types') && memberExpr.type !== 'TypeArgumentsExpression') {
+    const params = functionTypeParameters(func as never);
+    const kinded = params?.find((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
+    if (kinded) {
+      return Throw.TypeError(
+        '$1 must be supplied by explicit application and is never inferred',
+        Value(kinded.BindingIdentifier.name),
+      );
+    }
+  }
   // proposal-runtime-types (serialization.md): `JSON.parse.<T>(text)` is the
   // typed parse. Its type argument rides on the callee, which is a
   // TypeArgumentsExpression, so it is intercepted here where both the callee node
