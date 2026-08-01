@@ -1,5 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { R } from "../abstract-ops/all.mjs";
+import { JSStringValue, NumberValue, type Value } from '../value.mts';
+import { R } from '../abstract-ops/all.mts';
 import type { TypeRecord } from './records.mts';
 import { DenotedUnionOf, DiscriminatingChainOf } from './DiscriminatingChain.mts';
 
@@ -28,13 +29,22 @@ export interface Atom {
 /** `~none~`: the type is an open universe and a `match` over it needs a default. */
 export const NO_ATOMS: readonly Atom[] = [];
 
-function literalText(value: unknown): string {
-  const v = value as { stringValue?: () => string, numberValue?: () => number };
-  if (typeof v?.stringValue === 'function') {
-    return v.stringValue();
+/**
+ * A literal Type Record's value as text.
+ *
+ * NARROWED with `instanceof` rather than probed structurally. A structural probe
+ * - `typeof v.numberValue === 'function'` - reads as a duck-type to the
+ * compiler, so `R` does not typecheck against it, and the project's
+ * `mathematical-value` lint rule requires `R` over `.numberValue()`. **The rule
+ * and the compiler disagreed only because the value was loosely typed**; typing
+ * it properly satisfies both, where either substitution alone breaks the other.
+ */
+function literalText(value: Value): string {
+  if (value instanceof JSStringValue) {
+    return value.stringValue();
   }
-  if (typeof v?.numberValue === 'function') {
-    return String(R(v));
+  if (value instanceof NumberValue) {
+    return String(R(value));
   }
   return String(value);
 }
@@ -44,7 +54,7 @@ function literalKey(value: unknown): string {
   // as `[object Object]` and the two members of a two-member union were ONE key
   // - so coverage could not have told them apart, and a `match` covering only
   // the first would have looked exhaustive.
-  const text = literalText(value);
+  const text = literalText(value as Value);
   return typeof value === 'string' ? `"${value}"` : `"${text}"`;
 }
 
@@ -244,7 +254,7 @@ function literalConstantsOf(t: TypeRecord | undefined): readonly string[] | unde
     if (m.Kind !== 'literal') {
       return undefined;
     }
-    out.push(literalText((m as { Value: unknown }).Value));
+    out.push(literalText((m as { Value: Value }).Value));
   }
   return out.length > 1 ? out : undefined;
 }
@@ -255,5 +265,5 @@ function literalFor(t: TypeRecord, constant: string): TypeRecord | undefined {
     return undefined;
   }
   return (t as { Members: readonly TypeRecord[] }).Members
-    .find((m) => m.Kind === 'literal' && literalText((m as { Value: unknown }).Value) === constant);
+    .find((m) => m.Kind === 'literal' && literalText((m as { Value: Value }).Value) === constant);
 }
