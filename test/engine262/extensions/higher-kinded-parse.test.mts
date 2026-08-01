@@ -254,3 +254,37 @@ test('applications binding different alias wrappers are distinct', () => {
   expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
   expect(ok('type Boxed<T> = [].<T>; const a: Boxed.<uint8> = [1];')).toBe(true);
 });
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 5 — attempted and reverted, with
+ * the obstacle located.
+ *
+ * The rule is that a higher-kinded parameter is bound only by explicit
+ * application and never inferred, and today an unsupplied one is silently
+ * accepted: `function g<W<_>, T>(x: W.<T>) {}` called as `g(1)` passes.
+ *
+ * Refusing it in InferGenericBindings, which is where a call's bindings are
+ * decided, refuses BOTH forms. `g.<Identity, uint8>(1)` is rejected too, and
+ * that is the form the rule requires rather than forbids.
+ *
+ * The cause is that an explicit application does not bypass inference: both
+ * call paths in EvaluateBody route through InferGenericCallBindings regardless,
+ * and the explicit arguments are not visible there - lookupTypeParameter finds
+ * nothing, because the frame that would hold them is what inference is being
+ * asked to produce. So "was this supplied?" cannot be answered at that point.
+ *
+ * The next step is therefore upstream of inference: find where a call's
+ * EXPLICIT type arguments are read - the TypeArgumentsExpression on the callee
+ * - and make them reach the binding decision, so an unsupplied kinded parameter
+ * is distinguishable from a supplied one. That is a question about how explicit
+ * application reaches a call, not about inference.
+ */
+
+test('an unsupplied kinded parameter is accepted today', () => {
+  // Asserting the CURRENT behaviour so the fix has something to flip. The rule
+  // says this should be refused; recording it as accepted is what makes the
+  // gap visible in the file rather than only in a plan.
+  const P = 'type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} ';
+  expect(ok(`${P}g(1);`)).toBe(true);
+  expect(ok(`${P}g.<Identity, uint8>(1);`)).toBe(true);
+});

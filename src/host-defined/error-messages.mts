@@ -552,6 +552,7 @@ export interface Throw {
   | '$1 is not a tuple'
   | '$1 is not a tuple element'
   | '$1 takes $2 type arguments and cannot be used unapplied'
+  | '$1 must be supplied by explicit application and is never inferred'
   | '$1 is not a generic declaration; $2 expects one taking $3 type arguments'
   | '$1 takes $2 type arguments; $3 expects one taking $4'
   | '$1 is not a type'
