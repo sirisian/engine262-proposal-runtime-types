@@ -182,24 +182,29 @@ test('the two failures carry different messages', () => {
  *    split, and the first where the two paths differ in ORDER rather than in
  *    which rules they know.
  *
- * 2. A `where` CONSTRAINT ON A KINDED PARAMETER DOES NOT PARSE.
- *    `class B<W<_>> where W.<uint8> : uint8 {}` reports an unexpected token, so
- *    the constraint form the clause specifies has no grammar yet. Whether
- *    `where` clauses parse at all for a class is worth establishing first — the
- *    refusal may be about the clause rather than about the kinded parameter.
+ * 2. ANSWERED, AND IT IS NOT THIS FEATURE'S. `where` does not parse for ANY
+ *    declaration - the token appears nowhere in the parser - so the refusal was
+ *    about the clause and not about the kinded parameter, which is what the
+ *    question was for. sec-generic-where writes a `where` "with the
+ *    WhereClauses of sec-where-clauses where sec-checked-contracts admits
+ *    them", and checked contracts is a specified extension the engine has not
+ *    implemented. A kinded constraint will work when `where` does, and needs
+ *    nothing of its own beyond what phase 3 already resolves.
  *
- * 3. VARIANCE IS NOT ENFORCED, now testable because 1 is fixed. Two
- *    applications binding DIFFERENT wrappers assign to each other:
- *    `const b: B.<Boxed> = aBoxOfIdentity` is accepted where the clause says a
- *    kinded parameter is invariant absent an annotation.
+ * 3. VARIANCE IS NOT ENFORCED, and the cause is now narrowed. It is not the
+ *    comparison and not the arguments' distinctness: `Identity === Boxed` is
+ *    *false*, so the two declarations denote different types, while
+ *    `B.<Identity> === B.<Boxed>` is *true* - the applications intern to ONE
+ *    type.
  *
- *    The arguments are declaration records and SameArgumentList compares them,
- *    so either the arguments are not reaching the comparison or two distinct
- *    alias declarations are comparing equal. That is the next thing to find
- *    out, and it is one trace at the comparison rather than a search.
- *
- * The fourth clause works: a kinded parameter read as a value resolves, which
- * the generics work's GetValue lookup already provided.
+ *    orderKey does include a nominal's arguments in its key, and CLASS
+ *    arguments collide exactly as alias arguments do, so this is neither about
+ *    aliases nor about the key's shape. What is left is that the arguments
+ *    never reach the record. That is the same defect the generics work fixed
+ *    for ordinary arguments in NewExpression and the annotation path, and the
+ *    one HKT phase 0 fixed for Type Objects in expression position - a third
+ *    site with the same shape, which is worth noticing as a pattern rather
+ *    than a coincidence.
  */
 
 test('a kinded argument works in a parameter annotation', () => {
