@@ -560,6 +560,7 @@ export interface Throw {
   | '$1 is not a token stream'
   | '$1 is not a tuple'
   | '$1 is not a tuple element'
+  | '$1 is not a member of this vector'
   | '$1 is not a type'
   | '$1 is not a type node'
   | '$1 is not a valid array length'

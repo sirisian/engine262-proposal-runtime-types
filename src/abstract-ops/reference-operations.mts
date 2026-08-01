@@ -114,6 +114,12 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
       if (lane !== undefined) {
         return lane;
       }
+      // A key a vector does not answer. It cannot fall through to ToObject,
+      // which asserts on a primitive it has no wrapper for, so it is refused
+      // here. The component accessors and the constant lane forms will be
+      // answered above this line as they land, and until then a name that will
+      // become one reports that it is not a member rather than crashing.
+      return Throw.TypeError('$1 is not a member of this vector', V.ReferencedName as Value);
     }
     // a. Let baseObj be ? ToObject(V.[[Base]]).
     const baseObj = Q(ToObject(V.Base));

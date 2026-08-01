@@ -5,7 +5,10 @@ import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import type { TypeRecord } from './records.mts';
-import { RequireType } from '#self';
+import {
+  RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator,
+} from '#self';
+import type { ValueEvaluator } from '../evaluator.mts';
 
 /**
  * The lane type and count of a vector's Type Record.
@@ -52,6 +55,26 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
         return Q(Throw.RangeError('$1 is out of range for this vector', key)) as Value;
       }
       return v.lanes[index] as Value;
+    }
+
+    // #sec-vector-lanes: the horizontal sum. Its order is implementation-defined
+    // - the clause says so, and for a binary floating-point lane type it is
+    // observable, since addition is not associative there - so this folds left,
+    // and a design needing a fixed order folds over `lane.<I>()` itself.
+    if (name === 'sum') {
+      return CreateBuiltinFunction(function* sumLanes(): ValueEvaluator {
+        // `Q` is a macro and may not appear inside a conditional expression, so
+        // the fold is written as a statement rather than a ternary.
+        let total: Value | undefined;
+        for (const lane of v.lanes) {
+          if (total === undefined) {
+            total = lane as Value;
+          } else {
+            total = Q(yield* ApplyStringOrNumericBinaryOperator(total, '+', lane as Value)) as Value;
+          }
+        }
+        return total ?? Value(0);
+      }, 0, Value('sum'), []) as Value;
     }
 
   }

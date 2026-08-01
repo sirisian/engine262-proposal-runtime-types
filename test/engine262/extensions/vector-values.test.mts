@@ -79,6 +79,25 @@ test('typeof a vector is object', () => {
  * conversion are still to come.
  */
 
+test('sum adds the lanes', () => {
+  // #sec-vector-lanes leaves the ORDER implementation-defined, so an integer
+  // lane type is asserted by value and a float one is not: addition is not
+  // associative for a binary floating-point lane type, and the clause says two
+  // implementations may differ on one receiver. Asserting a float sum's bit
+  // pattern would encode this engine's fold as the specification's.
+  expect(evaluated('const a = int32x4(1, 2, 3, 4); String(a.sum());')).toBe('10');
+  expect(evaluated('const a = int32x4(0, 0, 0, 0); String(a.sum());')).toBe('0');
+  expect(ok('const a = float32x4(1.5, 2.5, 3, 4); const s: float32 = a.sum();')).toBe(true);
+});
+
+test('a key a vector does not answer is refused, not crashed', () => {
+  // A vector is a primitive with no wrapper object, so an unanswered key cannot
+  // fall through to ToObject - which asserts rather than boxing. It reports
+  // that the name is not a member, and the component accessors will be answered
+  // ahead of that as they land.
+  expectThrown('const a = float32x4(1, 2, 3, 4); a.nope;');
+});
+
 test('a lane is read by index', () => {
   expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a[0]);')).toBe('1');
   expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a[3]);')).toBe('4');
