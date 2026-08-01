@@ -1,4 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { TypeRecord } from './records.mts';
 
 /**
  * proposal-runtime-types `sec-discriminated-where-chains`, stage A: does a
@@ -254,4 +255,139 @@ export function DiscriminatingChainOf(clause: ParseNode): DiscriminatingChain | 
     return undefined;
   }
   return classifyConditional(predicate) ?? classifyMatch(predicate);
+}
+
+/**
+ * `sec-discriminated-where-chains`, stage B: the union a qualifying chain
+ * DENOTES.
+ *
+ * "one member per branch, and where a branch tests several constants one member
+ * per constant, each the type's base with the discriminant narrowed to the
+ * constant tested and with each shape assertion of the branch, `this is T` or
+ * `this.p is T`, applied at the asserted path."
+ *
+ * **The union is a CHECKING artifact and nothing else.** The specification is
+ * explicit: "the dependent record type remains one ~parameterized~ Type Record,
+ * `Reflect.typeOf` reports it, and assignability compares against it." So this
+ * operation RETURNS a union and stores nothing - nothing it builds may reach the
+ * type's identity, and a caller that memoized it onto the record would be the
+ * way that rule gets broken quietly.
+ */
+export function DenotedUnionOf(
+  chain: DiscriminatingChain,
+  base: TypeRecord,
+  /** Every constant of the discriminant's declared type, in declaration order. */
+  allConstants: readonly string[],
+  literalOf: (constant: string) => TypeRecord | undefined,
+): TypeRecord | undefined {
+  if (base.Kind !== 'object' || allConstants.length === 0) {
+    return undefined;
+  }
+  const members: TypeRecord[] = [];
+  const tested = new Set<string>();
+  for (const branch of chain.branches) {
+    for (const constant of branch.constants) {
+      tested.add(constant);
+    }
+  }
+  for (const branch of chain.branches) {
+    // **A terminal `else` tests no constant of its own** - it covers whatever
+    // the earlier branches did not, so its members are the discriminant's
+    // remaining constants. That is why this operation needs the declared
+    // constant set and not only the chain: the chain alone cannot say what
+    // `else` means.
+    const constants = branch.constants.length > 0
+      ? branch.constants
+      : allConstants.filter((k) => !tested.has(k));
+    for (const constant of constants) {
+      const narrowed = literalOf(constant);
+      if (narrowed === undefined) {
+        return undefined;
+      }
+      members.push(withDiscriminant(base, chain.discriminant, narrowed, branch));
+    }
+  }
+  // TOTALITY, checked here because this is where both the constants tested and
+  // the constants declared are in hand: a chain is total when its members cover
+  // the declared set. A non-total chain denotes nothing.
+  if (members.length !== allConstants.length || members.length < 2) {
+    return undefined;
+  }
+  return { Kind: 'union', Members: members };
+}
+
+/** The base with one member's type replaced, plus the branch's assertions. */
+function withDiscriminant(
+  base: TypeRecord & { Kind: 'object' },
+  discriminant: string,
+  narrowed: TypeRecord,
+  branch: DiscriminatingBranch,
+): TypeRecord {
+  const properties = base.Properties.map((prop) => (prop.key === discriminant
+    ? { ...prop, type: narrowed }
+    : prop));
+  const asserted = shapeAssertionsOf(branch.predicate);
+  for (const [path, type] of asserted) {
+    const existing = properties.findIndex((prop) => prop.key === path);
+    if (existing >= 0) {
+      properties[existing] = { ...properties[existing], type };
+    } else {
+      properties.push({
+        key: path, type, optional: false, readonly: false,
+      });
+    }
+  }
+  return { Kind: 'object', Properties: properties, IndexSignatures: base.IndexSignatures };
+}
+
+/**
+ * The shape assertions a branch predicate makes, as path/type pairs.
+ *
+ * "a branch predicate that is not a shape assertion refines its member as a
+ * `where` of its own and contributes no members" - so anything this does not
+ * recognise contributes NOTHING rather than disqualifying the branch. That is
+ * the difference between stage A's job and this one: stage A refuses a chain it
+ * cannot read, and stage B ignores a predicate it cannot read.
+ */
+function shapeAssertionsOf(predicate: ParseNode): readonly [string, TypeRecord][] {
+  const out: [string, TypeRecord][] = [];
+  const visit = (node: ParseNode | null | undefined): void => {
+    const n = node as {
+      type?: string,
+      RelationalExpression?: ParseNode,
+      Type?: ParseNode,
+      LogicalANDExpression?: ParseNode,
+      BitwiseORExpression?: ParseNode,
+    } | null | undefined;
+    if (!n) {
+      return;
+    }
+    // A conjunction contributes both sides.
+    if (n.type === 'LogicalANDExpression') {
+      visit(n.LogicalANDExpression as ParseNode);
+      visit(n.BitwiseORExpression as ParseNode);
+      return;
+    }
+    if (n.type !== 'IsExpression' || !n.RelationalExpression || !n.Type) {
+      return;
+    }
+    const target = n.RelationalExpression as { type?: string, IdentifierName?: { name?: string }, MemberExpression?: { type?: string } };
+    // `this is T` asserts over the whole value and is applied by the caller's
+    // base; `this.p is T` asserts at `p`.
+    if (target.type === 'MemberExpression' && target.MemberExpression?.type === 'ThisExpression' && target.IdentifierName?.name) {
+      const resolved = resolveAssertedType(n.Type as ParseNode);
+      if (resolved) {
+        out.push([target.IdentifierName.name, resolved]);
+      }
+    }
+  };
+  visit(predicate);
+  return out;
+}
+
+/** A hook the caller supplies; set by `SetAssertedTypeResolver`. */
+let resolveAssertedType: (node: ParseNode) => TypeRecord | undefined = () => undefined;
+
+export function SetAssertedTypeResolver(f: (node: ParseNode) => TypeRecord | undefined): void {
+  resolveAssertedType = f;
 }
