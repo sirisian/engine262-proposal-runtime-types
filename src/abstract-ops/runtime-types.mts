@@ -1676,7 +1676,23 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
   // [[Untyped]]: no parameter annotation and no return annotation anywhere.
   const untyped = resolved.size === 0
     && !((fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation);
-  return { Parameters: params, Function: fn, Untyped: untyped };
+  // #sec-overloading-on-return-type: the signature carries its return type so
+  // the resolver can FILTER on it after ranking. The function's own
+  // TypeAnnotation is its return annotation - the same one `untyped` above
+  // consults to decide whether the signature is a catch-all.
+  const returnAnnotation = (fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  let ReturnType: TypeRecord | undefined;
+  if (returnAnnotation) {
+    for (const [node, rec] of resolved) {
+      if (node === returnAnnotation) {
+        ReturnType = rec;
+        break;
+      }
+    }
+  }
+  return {
+    Parameters: params, Function: fn, Untyped: untyped, ReturnType,
+  };
 }
 
 /**

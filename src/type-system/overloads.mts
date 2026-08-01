@@ -34,6 +34,13 @@ export interface OverloadSignature {
   readonly Parameters: readonly OverloadParameter[];
   readonly Function: Value;
   /**
+   * proposal-runtime-types #sec-overloading-on-return-type: "a signature is
+   * identified by its return type as well as its parameter types". The return
+   * type does NOT participate in ranking - it participates in filtering, after
+   * ranking - so it is carried here and read only by the tie-break below.
+   */
+  readonly ReturnType?: TypeRecord;
+  /**
    * #sec-overload-resolution: a signature with no annotation anywhere is a
    * CATCH-ALL. It ranks last and, being untyped, is viable for any argument
    * list - the clause's own example is that with `function f() {}` beside
@@ -322,8 +329,8 @@ export type OverloadResolution =
  * viable signature is `none` (an argument list no overload accepts); more than one
  * equally-best is `ambiguous`; exactly one best is `resolved`.
  */
-export function resolveOverload(signatures: readonly OverloadSignature[], argValues: readonly Value[]): OverloadResolution {
-  return resolveOverloadByTypes(signatures, argValues.map((v) => RuntimeTypeOf(v)));
+export function resolveOverload(signatures: readonly OverloadSignature[], argValues: readonly Value[], contextualType?: TypeRecord): OverloadResolution {
+  return resolveOverloadByTypes(signatures, argValues.map((v) => RuntimeTypeOf(v)), contextualType);
 }
 
 /**
@@ -334,7 +341,7 @@ export function resolveOverload(signatures: readonly OverloadSignature[], argVal
  * share rather than mirror - a rule this subtle drifts within a cycle or two of
  * being written twice (F58).
  */
-export function resolveOverloadByTypes(signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[]): OverloadResolution {
+export function resolveOverloadByTypes(signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[], contextualType?: TypeRecord): OverloadResolution {
   const viable: { sig: OverloadSignature, tiers: Tier[] }[] = [];
   for (const sig of signatures) {
     const tiers = signatureTiers(sig, argTypes);
@@ -367,6 +374,21 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
     }
   }
   if (tie) {
+    // #sec-overloading-on-return-type: the return type filters what ranking
+    // left tied. "The return type does not participate in ranking; it
+    // participates in filtering" - so this runs HERE, after the ranking above
+    // has finished, and never before it. Filtering first would let a return
+    // type outrank a better parameter match, which the clause forbids.
+    if (contextualType) {
+      const surviving = viable.filter(
+        (candidate) => compareTiers(candidate.tiers, best.tiers) === 0
+          && candidate.sig.ReturnType !== undefined
+          && IsAssignable(candidate.sig.ReturnType, contextualType),
+      );
+      if (surviving.length === 1) {
+        return { Kind: 'resolved', Signature: surviving[0]!.sig };
+      }
+    }
     return { Kind: 'ambiguous' };
   }
   return { Kind: 'resolved', Signature: best.sig };
