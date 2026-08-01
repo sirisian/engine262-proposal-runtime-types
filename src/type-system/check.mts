@@ -710,7 +710,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return memo;
     }
     const decl = node as unknown as { InterfaceMemberList?: readonly ParseNode[] | null };
-    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
     for (const member of decl.InterfaceMemberList ?? []) {
       if (member.type !== 'TypeMember') {
         continue;
@@ -1517,7 +1517,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
-    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may (F59). A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
@@ -1628,7 +1628,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = resolveType(f.TypeAnnotation.Type);
       if (t) {
-        Properties.push({ key, type: t, optional: false });
+        Properties.push({ key, type: t, optional: false, protected: (f as { protected?: boolean }).protected === true });
         // An `accessor` is a FieldDefinition carrying the marker, and it is the
         // one member kind whose OVERRIDE is invariant - recorded here because
         // the Properties list keeps a type per key and no member kind.
@@ -2861,6 +2861,86 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const generatorTypes: Known[] = [];
 
+  /**
+   * The classes whose bodies the walk is inside, innermost last.
+   *
+   * README: "A member marked `protected` is accessible within its declaring
+   * class AND ITS SUBCLASSES, and nowhere else." Answering that needs to know
+   * WHERE an access is, which nothing tracked - a member access knew what it
+   * read and not its own surroundings.
+   */
+  const classContext: string[] = [];
+
+  /** The declared name of a nominal receiver, which is what the context holds. */
+  const ownerNameOf = (t: TypeRecord): string | undefined => {
+    if (t.Kind !== 'nominal') {
+      return undefined;
+    }
+    const decl = (t as { Declaration?: { BindingIdentifier?: { name?: string } | null } }).Declaration;
+    return decl?.BindingIdentifier?.name ?? (t as { LibraryName?: string }).LibraryName;
+  };
+
+  /** Whether `name` extends `base`, walking the declared heritage chain. */
+  const inheritsFrom = (name: string, base: string): boolean => {
+    const seen = new Set<string>();
+    let current: string | undefined = name;
+    while (current !== undefined && !seen.has(current)) {
+      seen.add(current);
+      const node = classNodes.get(current) as { ClassTail?: { ClassHeritage?: { name?: string } | null } | null } | undefined;
+      const parent = node?.ClassTail?.ClassHeritage?.name;
+      if (parent === base) {
+        return true;
+      }
+      current = parent;
+    }
+    return false;
+  };
+
+  /**
+   * The `protected` access rule, checked IN THE WALK rather than in
+   * `staticType`.
+   *
+   * `staticType` runs ON DEMAND - and a bare `b.a;` statement's type is never
+   * demanded, so a rule written there fires only where something happens to ask.
+   * That is the shape the class member walk was fixed for: **a rule checked
+   * where nothing asks is no rule at all.**
+   */
+  const checkProtectedAccess = (node: ParseNode): void => {
+    const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+    if (!m.MemberExpression || !m.IdentifierName) {
+      return;
+    }
+    // `this.x` and `super.x` are inside by construction, and asking for the
+    // receiver's type there would recurse into the class being defined.
+    if (m.MemberExpression.type === 'ThisExpression' || m.MemberExpression.type === 'SuperProperty') {
+      return;
+    }
+    const receiver = staticType(m.MemberExpression);
+    if (!receiver) {
+      // An `any`-typed reference has no static type here, and the design says
+      // it must still reach: "a protected field ... stays reachable through
+      // reflection or an `any`-typed reference, the erasure other languages
+      // apply to it".
+      return;
+    }
+    const shape = structureOf(receiver);
+    if (!shape || shape.Kind !== 'object') {
+      return;
+    }
+    const prop = shape.Properties.find((pr) => pr.key === m.IdentifierName!.name);
+    if (prop?.protected !== true) {
+      return;
+    }
+    const owner = ownerNameOf(receiver);
+    if (owner === undefined) {
+      return;
+    }
+    if (classContext.some((c) => c === owner || inheritsFrom(c, owner))) {
+      return;
+    }
+    errors.push((Throw.TypeError('$1 is protected', Value(String(prop.key))) as ThrowCompletion).Value as ObjectValue);
+  };
+
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
     frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
@@ -3591,6 +3671,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MethodDefinition':
         enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
         return;
+      case 'ClassDeclaration':
+      case 'ClassExpression': {
+        // The class's own name is in context for its whole body, so a method
+        // reading a protected member is INSIDE and a program outside is not.
+        const named = (n as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+        classContext.push(named ?? '');
+        for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+          walk(el);
+        }
+        classContext.pop();
+        return;
+      }
+      case 'MemberExpression':
+        checkProtectedAccess(n);
+        break;
       case 'GeneratorDeclaration':
       case 'GeneratorExpression':
       case 'AsyncFunctionDeclaration':

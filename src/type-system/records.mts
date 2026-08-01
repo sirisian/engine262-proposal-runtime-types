@@ -21,6 +21,15 @@ export interface PropertyTypeRecord {
   readonly optional: boolean;
   readonly readonly: boolean;
   /**
+   * proposal-runtime-types (README): "A member marked `protected` is accessible
+   * within its declaring class AND ITS SUBCLASSES, and nowhere else."
+   *
+   * Carried on the type because the rule is "an access rule CHECKED WHERE THE
+   * STATIC TYPE IS KNOWN" - and deliberately NOT a runtime wall, so nothing
+   * outside the checker consults it.
+   */
+  readonly protected?: boolean;
+  /**
    * proposal-runtime-types: an optional member's DECLARED DEFAULT, `c?: T = v`.
    *
    * A default is a CONSTRUCTION feature - it is written where a value of the

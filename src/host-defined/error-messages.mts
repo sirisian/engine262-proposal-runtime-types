@@ -580,6 +580,7 @@ export interface Throw {
   | '$1 is not the [[ArrayBufferDetachKey]] of the given ArrayBuffer'
   | '$1 is out of range'
   | '$1 is out of range for the type'
+  | '$1 is protected'
   | '$1 is too large'
   | '$1 is too small'
   | '$1 matched no clause of this match'

@@ -59,9 +59,15 @@ test('PROTECTED parses, reports, and does not move the layout', () => {
   // is a FutureReservedWord in strict mode and a class body is always strict,
   // so it needed its own test rather than falling out of the identifier path
   // the way `readonly` and `accessor` do.
-  expect(evaluated('class A { protected a: uint8 = 1; } String(new A().a);')).toBe('1');
-  expect(evaluated('class A { protected readonly a: uint8 = 1; } String(new A().a);')).toBe('1');
-  expect(evaluated('class A { static protected a: uint8 = 1; } String(A.a);')).toBe('1');
+  // Read from INSIDE the class, since the access rule now refuses an outside
+  // read - these assertions are about the member EXISTING and being reachable
+  // where it should be, not about the rule.
+  expect(evaluated('class A { protected a: uint8 = 1; read() { return this.a; } } String(new A().read());')).toBe('1');
+  expect(evaluated('class A { protected readonly a: uint8 = 1; read() { return this.a; } } String(new A().read());')).toBe('1');
+  expect(evaluated('class A { static protected a: uint8 = 1; static read() { return A.a; } } String(A.read());')).toBe('1');
+  // And `protected` is NOT a runtime wall - an `any`-typed reference reads it,
+  // "the erasure other languages apply to it".
+  expect(evaluated('class A { protected a: uint8 = 1; } const x: any = new A(); String(x.a);')).toBe('1');
   // "A protected field participates in the layout exactly as a public one
   // does", so the field after it sits where it would have anyway.
   const withProtected = 'class A { a: uint8; protected b: uint32; c: uint8; } ';
