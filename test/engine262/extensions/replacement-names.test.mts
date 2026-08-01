@@ -62,3 +62,23 @@ test('`preprocessor` is a supported import attribute key', () => {
   void new ManagedRealm();
   expect(names('import { d } from "./m.js" with { preprocessor: "true" };')).toBe('d');
 });
+
+test('the gate is recorded on the parsed module, before the checker runs', () => {
+  // `ParseModule` computes the names where the parsed module first exists and
+  // where `CheckModule` is about to run - which is exactly the seam expansion
+  // occupies. **The ordering is normative**: expand, then check, so the checker
+  // never sees an unexpanded decoration and never rejects syntax a replacement
+  // decorator was about to produce.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  const gate = (source) => {
+    const compiled = realm.compileModule(source);
+    return JSON.stringify(compiled.Value?.ECMAScriptCode?.ReplacementDecoratorNames ?? 'ABSENT');
+  };
+  expect(gate('import { derive } from "./m.js" with { preprocessor: "true" }; const x = 1;')).toBe('["derive"]');
+  // **A module with none observes no phase at all** - same parse, same errors,
+  // same positions. That is the common case, and it is what makes a gate worth
+  // computing rather than always expanding.
+  expect(gate('const x = 1;')).toBe('[]');
+  expect(gate('import { a } from "./m.js"; const x = 1;')).toBe('[]');
+});

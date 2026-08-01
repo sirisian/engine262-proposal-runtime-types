@@ -19,6 +19,7 @@ import { JSStringSet } from './utils/container.mts';
 import type { ParseNode } from './parser/ParseNode.mts';
 import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
+import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
   CreateDefaultExportSyntheticModule,
@@ -148,6 +149,25 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // The parent links are wired before the checker runs, since the checker reads
   // the shape a node sits in (whether a test decides a branch, for instance).
   setNodeParent(body, undefined);
+  // proposal-runtime-types `sec-when-expansion-happens`: ReplacementDecoratorNames
+  // is the GATE on the expansion phase, and it is computed here because this is
+  // where the parsed module first exists and where the checker is about to run.
+  //
+  // **The ordering below is normative, not incidental.** `sec-decorator-
+  // replacement` fixes expand-then-check: the checker must never see an
+  // unexpanded decoration, and an implementation that checked first would reject
+  // syntax a replacement decorator was about to produce. So the phase belongs
+  // between the parse above and the `CheckModule` below - which is also why
+  // load ordering is not separable from it, since a preprocessor module has to
+  // have been evaluated before this point.
+  //
+  // A module whose names are EMPTY observes no phase at all: same parse, same
+  // errors, same positions. That is the common case and it is what makes the
+  // gate worth computing rather than always expanding.
+  const replacementNames = surroundingAgent.feature('runtime-types')
+    ? ReplacementDecoratorNames(body)
+    : [];
+  (body as { ReplacementDecoratorNames?: readonly string[] }).ReplacementDecoratorNames = replacementNames;
   // proposal-runtime-types #sec-type-errors: the same checker gate as the
   // script goal, over module items.
   if (surroundingAgent.feature('runtime-types')) {
