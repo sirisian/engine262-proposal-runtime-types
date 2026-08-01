@@ -65,6 +65,26 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
     // - the clause says so, and for a binary floating-point lane type it is
     // observable, since addition is not associative there - so this folds left,
     // and a design needing a fixed order folds over `lane.<I>()` itself.
+    // proposal-runtime-types #sec-vector-component-accessors: `v.x` is
+    // `v.lane.<0>()` and `v.xzzw` is `v.swizzle.<0, 2, 2, 3>()`. The accessors
+    // are PROPERTIES rather than syntax, which is why they are answered here -
+    // a computed access and Reflect.get reach the same value the dotted one
+    // does, and that is the observable difference the clause turns on.
+    const componentLanes = componentAccessorIndices(name, shape.laneCount);
+    if (componentLanes) {
+      if (componentLanes.length === 1) {
+        return v.lanes[componentLanes[0]!] as Value;
+      }
+      const record = v.TypeRecord as { Arguments: readonly unknown[] };
+      return new VectorValue(
+        componentLanes.map((at) => v.lanes[at] as Value),
+        CanonicalizeType({
+          ...(v.TypeRecord as object),
+          Arguments: [record.Arguments[0], componentLanes.length],
+        } as unknown as TypeRecord),
+      );
+    }
+
     if (name === 'sum') {
       return CreateBuiltinFunction(function* sumLanes(): ValueEvaluator {
         // `Q` is a macro and may not appear inside a conditional expression, so
@@ -92,8 +112,35 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
  */
 export function* vectorSet(v: VectorValue, key: PropertyKeyValue, value: Value): PlainEvaluator<Value | undefined> {
   const shape = vectorShape(v);
-  const name = shape ? laneKeyName(key) : undefined;
-  if (!shape || name === undefined) {
+  if (!shape) {
+    return undefined;
+  }
+  // #sec-vector-component-accessors: "an accessor naming no lane twice is
+  // assignable, one naming a lane twice is not, since an assignment to it would
+  // give one lane two values". The write replaces the named lanes with the
+  // corresponding lanes of the assigned value.
+  if (key instanceof JSStringValue) {
+    const componentLanes = componentAccessorIndices(key.stringValue(), shape.laneCount);
+    if (componentLanes) {
+      if (!isAssignableAccessor(componentLanes)) {
+        return Q(Throw.TypeError('$1 names a lane twice and cannot be assigned to', key)) as Value;
+      }
+      if (componentLanes.length === 1) {
+        const converted = Q(yield* RequireType(value, shape.laneType)) as Value;
+        (v.lanes as Value[])[componentLanes[0]!] = converted;
+        return converted;
+      }
+      if (value.type !== 'Vector' || (value as VectorValue).lanes.length !== componentLanes.length) {
+        return Q(Throw.TypeError('$1 is not assignable to $2', value, key)) as Value;
+      }
+      componentLanes.forEach((at, from) => {
+        (v.lanes as Value[])[at] = (value as VectorValue).lanes[from] as Value;
+      });
+      return value;
+    }
+  }
+  const name = laneKeyName(key);
+  if (name === undefined) {
     return undefined;
   }
   if (!/^(0|[1-9][0-9]*)$/.test(name)) {
@@ -245,4 +292,45 @@ function laneIndexOf(node: ParseNode.Type): number | undefined {
     && Number.isInteger(literal.value as number) && (literal.value as number) >= 0
     ? literal.value as number
     : undefined;
+}
+
+
+const COMPONENT_SETS = ['xyzw', 'rgba'];
+
+/**
+ * The lane indices a component accessor names, or null where the key is not one.
+ *
+ * proposal-runtime-types #sec-vector-component-accessors states five rules and
+ * these are all of them: at most four lanes; a key of one to four characters;
+ * every character drawn from ONE set, so a key mixing them is not an accessor;
+ * and every character's index less than the lane count.
+ *
+ * `xyzw` and `rgba` name the same lanes in that order, so `v.x` and `v.r` are
+ * one lane and `v.wzyx` and `v.abgr` are one permutation.
+ */
+export function componentAccessorIndices(name: string, laneCount: number): number[] | null {
+  if (laneCount > 4 || name.length < 1 || name.length > 4) {
+    return null;
+  }
+  for (const set of COMPONENT_SETS) {
+    const indices: number[] = [];
+    let matched = true;
+    for (const character of name) {
+      const at = set.indexOf(character);
+      if (at < 0 || at >= laneCount) {
+        matched = false;
+        break;
+      }
+      indices.push(at);
+    }
+    if (matched) {
+      return indices;
+    }
+  }
+  return null;
+}
+
+/** Whether a component accessor may be assigned to: no lane named twice. */
+export function isAssignableAccessor(indices: readonly number[]): boolean {
+  return new Set(indices).size === indices.length;
 }

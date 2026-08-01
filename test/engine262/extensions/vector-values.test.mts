@@ -326,3 +326,76 @@ test('shuffle requires a source of the receiver type', () => {
   const P = 'const a = float32x4(1, 2, 3, 4); const c = int32x4(1, 2, 3, 4); ';
   expectThrown(`${P}a.shuffle.<0, 4>(c);`);
 });
+
+/**
+ * PLAN-simd-engine.md phase 4: component accessors,
+ * #sec-vector-component-accessors.
+ *
+ * Five rules decide what an accessor IS - at most four lanes, one to four
+ * characters, every character from ONE set, every character's index below the
+ * lane count - and two decide what it means: the type is the lane type for one
+ * character and an L-lane vector for L, and an accessor naming no lane twice is
+ * assignable while one naming a lane twice is not.
+ *
+ * They desugar to phase 2 and phase 3: `v.x` is `v.lane.<0>()` and `v.xzzw` is
+ * `v.swizzle.<0, 2, 2, 3>()`, which is why this phase follows both.
+ */
+
+test('the two name sets reach the same lanes', () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); ';
+  expect(evaluated(`${P}String(v.x);`)).toBe('1');
+  expect(evaluated(`${P}String(v.r);`)).toBe('1');
+  expect(evaluated(`${P}String(v.wzyx);`)).toBe('(4, 3, 2, 1)');
+  expect(evaluated(`${P}String(v.abgr);`)).toBe('(4, 3, 2, 1)');
+});
+
+test('an accessor of L characters is an L-lane vector', () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); ';
+  expect(evaluated(`${P}String(v.xyzw);`)).toBe('(1, 2, 3, 4)');
+  expect(evaluated(`${P}String(v.xy);`)).toBe('(1, 2)');
+  // A REPEAT reads fine and is the design's own broadcast spelling. Only the
+  // ASSIGNMENT is refused, and having both here is what keeps the rule from
+  // reading as "repeats are banned".
+  expect(evaluated(`${P}String(v.xxxx);`)).toBe('(1, 1, 1, 1)');
+});
+
+test('a key that is not an accessor is not one', () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); ';
+  expectThrown(`${P}v.xr;`);      // mixes the two sets
+  expectThrown(`${P}v.xyzwx;`);   // five characters
+  expectThrown(`${P}v.q;`);       // in neither set
+});
+
+test('an accessor naming a lane twice cannot be assigned to', () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); type F2 = vector.<float32, 2>; '
+    + 'const w: F2 = float32x4(9, 8, 0, 0).swizzle.<0, 1>(); ';
+  expect(evaluated(`${P}v.x = 9; String(v);`)).toBe('(9, 2, 3, 4)');
+  expect(evaluated(`${P}v.xy = w; String(v);`)).toBe('(9, 8, 3, 4)');
+  expectThrown(`${P}v.xx = w;`);
+});
+
+test('a computed accessor reaches the same value', () => {
+  // The first of the observability assertions: accessors are PROPERTIES, so a
+  // computed access reaches them. `Reflect.get`, `in`, and `Object.keys` need
+  // a wrapper object this engine does not build for a vector - see below.
+  const P = 'const v = float32x4(1, 2, 3, 4); ';
+  expect(evaluated(`${P}String(v["xyz"]);`)).toBe('(1, 2, 3)');
+  expect(evaluated(`${P}String(v["x"]);`)).toBe('1');
+});
+
+/**
+ * THE REFLECTION HALF OF "PROPERTIES, NOT SYNTAX" IS NOT DONE.
+ *
+ * The clause states four observable consequences and one holds: `v["xyz"]`
+ * reaches the accessor. `Reflect.get(v, "wzyx")`, `"xyz" in v`, and
+ * `Object.keys(v)` do not - they route through ToObject, which asserts on a
+ * vector rather than boxing it, so the first two report a type error and the
+ * third crashes the host.
+ *
+ * That is one piece of work rather than three: a vector needs a wrapper object
+ * whose prototype carries the accessor names, which is also what
+ * `Object.getOwnPropertyNames(float32x4.prototype)` returning 680 names
+ * requires. Until it exists the accessors are reachable by every spelling a
+ * program would normally write and not by reflection, which is the honest half
+ * of the rule rather than a wrong version of it.
+ */

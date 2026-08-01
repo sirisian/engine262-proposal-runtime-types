@@ -547,6 +547,7 @@ export interface Throw {
   | '$1 is not a list'
   | '$1 is not a member of this type'
   | '$1 is not a member of this vector'
+  | '$1 names a lane twice and cannot be assigned to'
   | '$1 is not a number'
   | '$1 is not a parameter'
   | '$1 is not a partial Temporal object'
