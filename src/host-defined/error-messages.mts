@@ -546,6 +546,7 @@ export interface Throw {
   | '$1 is not a generic type'
   | '$1 is not a list'
   | '$1 is not a member of this type'
+  | '$1 is not a member of this vector'
   | '$1 is not a number'
   | '$1 is not a parameter'
   | '$1 is not a partial Temporal object'
@@ -560,7 +561,6 @@ export interface Throw {
   | '$1 is not a token stream'
   | '$1 is not a tuple'
   | '$1 is not a tuple element'
-  | '$1 is not a member of this vector'
   | '$1 is not a type'
   | '$1 is not a type node'
   | '$1 is not a valid array length'
@@ -603,6 +603,7 @@ export interface Throw {
   | '$1 requires an argument of a sized integer type'
   | '$1 requires new'
   | '$1 returned a tuple where a Boolean was required'
+  | '$1 takes one lane index'
   | '$1 with a negative exponent is not defined for an integer type'
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 that is incompatible with the existing property in the proxy target"
   | "'defineProperty' on proxy: trap returned truthy for adding property $1 to the non-extensible proxy target"
@@ -795,6 +796,7 @@ export interface Throw {
   | 'a $1 annotation is not a $2'
   | 'a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them'
   | 'getter ($1) in a property descriptor $2 must be a function'
+  | 'lane $1 is out of range for a vector of $2 lanes'
   | 'match over enum $1 is missing $2 and has no default'
   | 'match over sealed class $1 is missing $2 and has no default'
   | 'setter ($1) in a property descriptor $2 must be a function'

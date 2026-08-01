@@ -3,6 +3,7 @@ import {
 } from '../value.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import type { TypeRecord } from './records.mts';
 import {
@@ -120,4 +121,58 @@ function laneKeyName(key: PropertyKeyValue | Value): string | undefined {
   return typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0
     ? String(asNumber)
     : undefined;
+}
+
+/**
+ * `v.lane.<I>()` and `v.withLane.<I>(value)`.
+ *
+ * proposal-runtime-types #sec-vector-lanes: the index is a compile-time
+ * constant, and "it is a type error if I is not a non-negative integer less
+ * than N" - which is the half of the asymmetry the computed form does not have,
+ * since an index that is an expression cannot be checked before the access.
+ *
+ * `withLane` returns a NEW vector; the receiver is unchanged, which follows
+ * from a vector being a value type and is what the design gives it for.
+ */
+export function* vectorConstantLane(
+  v: VectorValue,
+  method: 'lane' | 'withLane',
+  typeArgs: readonly ParseNode.Type[],
+  args: readonly Value[],
+): PlainEvaluator<Value> {
+  const shape = vectorShape(v);
+  if (!shape) {
+    return Q(Throw.TypeError('$1 is not a member of this vector', Value(method))) as Value;
+  }
+  if (typeArgs.length !== 1) {
+    return Q(Throw.TypeError('$1 takes one lane index', Value(method))) as Value;
+  }
+  // The index is written as a type argument because it is a value generic in
+  // the design - `lane<I: uint32>()` - so it arrives as a type node and its
+  // literal value is read from it rather than evaluated.
+  // The index arrives as a LiteralType, not a NumericLiteral: it is written in
+  // a TYPE argument position, so the parser reads it as the literal TYPE of
+  // that number rather than as an expression. `negated` carries the sign, which
+  // a lane index may not have.
+  const node = typeArgs[0] as unknown as { type?: string, kind?: string, value?: unknown, negated?: boolean };
+  const index = node?.type === 'LiteralType' && node.kind === 'number' && !node.negated
+    ? node.value as number
+    : undefined;
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+    return Q(Throw.TypeError('$1 takes one lane index', Value(method))) as Value;
+  }
+  if (index >= shape.laneCount) {
+    return Q(Throw.TypeError(
+      'lane $1 is out of range for a vector of $2 lanes',
+      Value(String(index)),
+      Value(String(shape.laneCount)),
+    )) as Value;
+  }
+  if (method === 'lane') {
+    return v.lanes[index] as Value;
+  }
+  const replacement = Q(yield* RequireType(args[0] ?? Value.undefined, shape.laneType)) as Value;
+  const lanes = [...v.lanes];
+  lanes[index] = replacement;
+  return new VectorValue(lanes, v.TypeRecord);
 }

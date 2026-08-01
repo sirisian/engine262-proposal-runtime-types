@@ -2,6 +2,8 @@ import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { functionTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { vectorConstantLane } from '../type-system/vector-ops.mts';
+import { VectorValue } from '../value.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -42,6 +44,38 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // 3. Let arguments be the Arguments of expr.
   const args = expr.Arguments;
   // 4. Let ref be the result of evaluating memberExpr.
+  // proposal-runtime-types #sec-vector-lanes: `v.lane.<I>()` and
+  // `v.withLane.<I>(value)`. The index is a compile-time constant, so it is a
+  // TYPE argument and reaches this interception rather than the argument list -
+  // which is what makes an out-of-range index a type error where `v[i]`'s is a
+  // RangeError. That asymmetry is the reason the design gives both forms.
+  //
+  // Answered BEFORE the callee is evaluated. `a.lane` is not a property a
+  // vector has - evaluating it reaches the member refusal - so the whole form
+  // has to be recognized from the node rather than from a function value.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && ((memberExpr as unknown as { Expression?: { type?: string } }).Expression)?.type === 'MemberExpression') {
+    const inner = (memberExpr as unknown as { Expression: unknown }).Expression as {
+      MemberExpression: ParseNode.Expression,
+      IdentifierName?: { name: string },
+    };
+    const methodName = inner.IdentifierName?.name;
+    if (methodName === 'lane' || methodName === 'withLane') {
+      const receiverRef = Q(yield* Evaluate(inner.MemberExpression));
+      const receiver = Q(yield* GetValue(receiverRef));
+      if (receiver.type === 'Vector') {
+        const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        return Q(yield* vectorConstantLane(
+          receiver as VectorValue,
+          methodName,
+          typeArgs as readonly ParseNode.Type[],
+          argList as readonly Value[],
+        ));
+      }
+    }
+  }
   const ref = Q(yield* Evaluate(memberExpr));
   // 5. Let func be ? GetValue(ref).
   const func = Q(yield* GetValue(ref));

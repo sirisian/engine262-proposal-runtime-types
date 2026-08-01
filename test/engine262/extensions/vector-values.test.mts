@@ -75,9 +75,35 @@ test('typeof a vector is object', () => {
  * form `lane.<I>()` is refused before the program runs. That asymmetry is the
  * reason the design gives both, and it is what these assert.
  *
- * The constant forms - `lane.<I>()`, `withLane.<I>()` - and the bit-vector
- * conversion are still to come.
+ * The bit-vector conversion is still to come.
  */
+
+test('the constant lane forms take a compile-time index', () => {
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.lane.<0>());')).toBe('1');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.lane.<3>());')).toBe('4');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.withLane.<1>(9));')).toBe('(1, 9, 3, 4)');
+});
+
+test('an out-of-range constant index is refused before the program runs', () => {
+  // The other half of the asymmetry: `a[4]` throws a RangeError at run time
+  // because its index is an expression, and `a.lane.<4>()` is refused as a type
+  // error because its index is a constant. Both are asserted, in one place, so
+  // the difference cannot quietly collapse.
+  expectThrown('const a = float32x4(1, 2, 3, 4); a.lane.<4>();');
+  expectThrown('const a = float32x4(1, 2, 3, 4); a.withLane.<4>(9);');
+  expectThrown('const a = float32x4(1, 2, 3, 4); a[4];');
+});
+
+test('withLane leaves the receiver unchanged', () => {
+  // A vector is a value type, so `withLane` returns a NEW one. Asserted on the
+  // RECEIVER rather than only on the result, which is the assertion that would
+  // fail if the lanes were written in place.
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); a.withLane.<1>(9); String(a);')).toBe('(1, 2, 3, 4)');
+});
+
+test('a replaced lane converts to the lane type', () => {
+  expectThrown('const a = int32x4(1, 2, 3, 4); a.withLane.<0>("s");');
+});
 
 test('sum adds the lanes', () => {
   // #sec-vector-lanes leaves the ORDER implementation-defined, so an integer
