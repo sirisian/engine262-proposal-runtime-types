@@ -31,6 +31,7 @@ import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorProt
 import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
 import { bootstrapRational, bootstrapRationalPrototype } from '../intrinsics/Rational.mts';
 import { bootstrapDecimal, bootstrapDecimalPrototype } from '../intrinsics/Decimal.mts';
+import { bootstrapTokenStream, bootstrapTokenStreamPrototype } from '../intrinsics/TokenStream.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
 import { bootstrapFunctionPrototype } from '../intrinsics/FunctionPrototype.mts';
 import { bootstrapGeneratorFunction } from '../intrinsics/GeneratorFunction.mts';
@@ -317,6 +318,14 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     bootstrapRational(realmRec);
     bootstrapDecimalPrototype(realmRec);
     bootstrapDecimal(realmRec);
+    bootstrapTokenStreamPrototype(realmRec);
+    bootstrapTokenStream(realmRec);
+    X(global.DefineOwnProperty(Value('TokenStream'), Descriptor({
+      Value: realmRec.Intrinsics['%TokenStream%'],
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
     X(global.DefineOwnProperty(Value('rational'), Descriptor({
       Value: realmRec.Intrinsics['%rational%'],
       Writable: Value.true,

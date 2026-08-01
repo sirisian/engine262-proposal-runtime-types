@@ -150,6 +150,9 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%rational.prototype%': ObjectValue;
   // proposal-runtime-types (PLAN-decimal.md stage A): the decimal value types.
   '%decimal.prototype%': ObjectValue;
+  // proposal-runtime-types `sec-tokenstream-objects`.
+  '%TokenStream%': ObjectValue;
+  '%TokenStream.prototype%': ObjectValue;
   '%decimal32%': ObjectValue;
   '%decimal64%': ObjectValue;
   '%decimal128%': ObjectValue;

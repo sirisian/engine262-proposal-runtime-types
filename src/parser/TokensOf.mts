@@ -20,6 +20,16 @@ export interface SourceRefRecord {
   readonly Macro: string | undefined;
   /** 0 for written source; n for the nth expansion that produced it. */
   readonly Generation: number;
+  /**
+   * The buffer itself.
+   *
+   * A Source Reference Record NAMES a buffer, so it must be able to produce
+   * one: `toString` recovers the trivia between two tokens by slicing between
+   * their spans, and there is nowhere else the text could come from. This is
+   * what makes a separate source-text field on a reflection unnecessary - the
+   * gap between adjacent spans IS the comments and whitespace.
+   */
+  readonly Text: string;
 }
 
 /** `sec-span-record`: where a token came from. */
