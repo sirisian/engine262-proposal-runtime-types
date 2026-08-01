@@ -267,3 +267,62 @@ test('the bit conversion does not disturb an ordinary broadcast', () => {
   expect(evaluated('let b: float32x4 = 2; String(b);')).toBe('(2, 2, 2, 2)');
   expect(evaluated('let b: int32x4 = 7; String(b);')).toBe('(7, 7, 7, 7)');
 });
+
+/**
+ * PLAN-simd-engine.md phase 3: permutation, #sec-vector-permutation.
+ *
+ * `swizzle` names a lane of the receiver for each lane of its result;
+ * `shuffle` draws from two sources, where an index below N selects the
+ * receiver's lane and an index from N to 2N-1 selects lane I-N of the other.
+ *
+ * The rule a reader will not guess is that the result's lane count is the
+ * NUMBER OF INDICES rather than the receiver's, so a permutation narrows and
+ * widens as readily as it reorders. Both are asserted below, on the TYPE as
+ * well as the value.
+ */
+
+test('swizzle reorders, repeats, narrows, and widens', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); ';
+  expect(evaluated(`${P}String(a.swizzle.<3, 2, 1, 0>());`)).toBe('(4, 3, 2, 1)');
+  expect(evaluated(`${P}String(a.swizzle.<0, 0, 0, 0>());`)).toBe('(1, 1, 1, 1)');
+  expect(evaluated(`${P}String(a.swizzle.<0, 1>());`)).toBe('(1, 2)');
+  expect(evaluated(`${P}String(a.swizzle.<0, 1, 0, 1, 0, 1>());`)).toBe('(1, 2, 1, 2, 1, 2)');
+});
+
+test('a permutation has the lane count of its index list', () => {
+  // The TYPE, not only the values: a narrowing swizzle of a four-lane vector is
+  // a two-lane type, and a four-lane annotation refuses it.
+  const P = 'const a = float32x4(1, 2, 3, 4); type F2 = vector.<float32, 2>; ';
+  expect(evaluated(`${P}String(Reflect.typeOf(a.swizzle.<0, 1>()) === F2);`)).toBe('true');
+  expect(evaluated(`${P}const n: F2 = a.swizzle.<0, 1>(); String(n);`)).toBe('(1, 2)');
+  expect(ok(`${P}const n: float32x4 = a.swizzle.<0, 1>();`)).toBe(false);
+});
+
+test('shuffle draws from two sources', () => {
+  // The numbering is where a reader errs, so the case that distinguishes it is
+  // asserted: 0 and 1 name the receiver, 4 and 5 name the other's first two.
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(5, 6, 7, 8); ';
+  expect(evaluated(`${P}String(a.shuffle.<0, 1, 4, 5>(b));`)).toBe('(1, 2, 5, 6)');
+  expect(evaluated(`${P}String(a.shuffle.<4, 5, 6, 7>(b));`)).toBe('(5, 6, 7, 8)');
+});
+
+test('an out-of-range index is refused before the program runs', () => {
+  // A type error, as with `lane.<I>()`: the indices are compile-time constants.
+  // The bound is N for swizzle and 2N for shuffle, and both are asserted.
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(5, 6, 7, 8); ';
+  expectThrown(`${P}a.swizzle.<4>();`);
+  expectThrown(`${P}a.shuffle.<8>(b);`);
+  // 4 is in range for shuffle and not for swizzle, which is the whole
+  // difference between the two bounds.
+  expect(evaluated(`${P}String(a.shuffle.<4>(b));`)).toBe('(5)');
+});
+
+test('a permutation leaves its sources unchanged', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); ';
+  expect(evaluated(`${P}a.swizzle.<3, 2, 1, 0>(); String(a);`)).toBe('(1, 2, 3, 4)');
+});
+
+test('shuffle requires a source of the receiver type', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const c = int32x4(1, 2, 3, 4); ';
+  expectThrown(`${P}a.shuffle.<0, 4>(c);`);
+});

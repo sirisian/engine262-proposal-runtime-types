@@ -61,7 +61,8 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       IdentifierName?: { name: string },
     };
     const methodName = inner.IdentifierName?.name;
-    if (methodName === 'lane' || methodName === 'withLane') {
+    if (methodName === 'lane' || methodName === 'withLane'
+        || methodName === 'swizzle' || methodName === 'shuffle') {
       const receiverRef = Q(yield* Evaluate(inner.MemberExpression));
       const receiver = Q(yield* GetValue(receiverRef));
       if (receiver.type === 'Vector') {
@@ -69,7 +70,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         const argList = Q(yield* ArgumentListEvaluation(args));
         return Q(yield* vectorConstantLane(
           receiver as VectorValue,
-          methodName,
+          methodName as 'lane' | 'withLane' | 'swizzle' | 'shuffle',
           typeArgs as readonly ParseNode.Type[],
           argList as readonly Value[],
         ));
