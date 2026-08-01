@@ -132,12 +132,20 @@ export function ExpandSource(
   root: ParseNode,
   names: readonly string[],
   resolve: (name: string) => unknown,
-  tokensOf: (node: ParseNode) => unknown,
+  tokensOfRange: (from: number, to: number) => unknown,
   checkEvaluable: (fn: unknown) => string | undefined,
   call: (fn: unknown, tokens: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
 ): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] } {
-  const sites = ExpansionSites(root, names);
+  // `sec-expansion` expands ONE site per pass - "let _d_ be the outermost such
+  // decoration in source order" - and re-scans. Applying every site in one pass
+  // is wrong whenever ranges nest, and they nest in the ordinary case: for
+  // `@a @b class C {}` the outer decoration's range CONTAINS the inner one's, so
+  // two edits overlap and corrupt each other.
+  //
+  // Taking one per pass costs a re-parse per expansion and is what the fixpoint
+  // is for.
+  const sites = ExpansionSites(root, names).slice(0, 1);
   let expanded = 0;
   const edits: { start: number, end: number, text: string }[] = [];
   const failures: { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] = [];
@@ -162,6 +170,7 @@ export function ExpandSource(
     }
     const at = sourceText.lastIndexOf('@', nodeStart);
     const start = at === -1 ? nodeStart : at;
+    const decoratorEnd = decorator.location?.endIndex ?? start;
     // `sec-preprocessor-modules`: a replacement decorator must be compile-time
     // EVALUABLE, and it is checked HERE - before it is called, so a macro that
     // names the clock never runs at all.
@@ -176,7 +185,12 @@ export function ExpandSource(
       failures.push({ kind: 'not-evaluable', name: site.name, detail: violation });
       continue;
     }
-    const returned = call(fn, tokensOf(site.target));
+    // **The macro receives everything the replacement ENCLOSES**, not just the
+    // declaration: `@a @r class C {}` replaces from `@a` to the end of the
+    // class, so `@r` is inside the range being replaced. Handing over only the
+    // class would drop it silently, which contradicts the rule that a
+    // replacement encloses the runtime decorations and may rewrite them.
+    const returned = call(fn, tokensOfRange(decoratorEnd, end));
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own

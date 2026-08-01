@@ -27,7 +27,7 @@ import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsi
 import { Call } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
-import { TokensOf } from './parser/TokensOf.mts';
+import { tokenizeText } from './parser/TokensOf.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
@@ -203,7 +203,12 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       body,
       replacementNames,
       (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
-      (node) => CreateTokenStream(TokensOf(node), realm),
+      (from, to) => {
+        const slice = sourceText.slice(from, to);
+        return CreateTokenStream(tokenizeText(slice, {
+          URL: hostDefined.specifier, Macro: undefined, Generation: 0, Text: slice,
+        }), realm);
+      },
       (fn) => {
         // The macro's own source is on the function object, so evaluability is
         // checkable without loading anything. Parsed as a Script because a
@@ -242,12 +247,20 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       return [completion.Value as ObjectValue];
     }
     if (expandedOnce.expanded > 0 && expandedOnce.text !== sourceText) {
-      if ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0 > EXPANSION_LIMIT) {
-        return [Throw.SyntaxError('expansion exceeded the limit') as never];
+      // `??` binds LOOSER than `>`, so `depth ?? 0 > LIMIT` parses as
+      // `depth ?? (0 > LIMIT)` — which is the depth itself once it is non-zero,
+      // and every second pass tripped the limit. The parenthesis is the fix and
+      // the bug was invisible in a single-pass test.
+      const depth = (hostDefined as { expansionDepth?: number }).expansionDepth ?? 0;
+      if (depth > EXPANSION_LIMIT) {
+        const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+        const limitError = Throw.SyntaxError('expansion exceeded the limit') as ThrowCompletion;
+        Parser.decorateSyntaxErrorWithScriptId(limitError.Value as ObjectValue, scriptId);
+        return [limitError.Value as ObjectValue];
       }
       return ParseModule(expandedOnce.text, realm, {
         ...hostDefined,
-        expansionDepth: ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0) + 1,
+        expansionDepth: depth + 1,
       } as ModuleRecordHostDefined);
     }
     const expansion = Expansion(body, replacementNames);
