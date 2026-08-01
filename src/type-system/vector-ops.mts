@@ -1,5 +1,5 @@
 import {
-  Value, VectorValue, JSStringValue, type PropertyKeyValue,
+  Value, VectorValue, JSStringValue, ObjectValue, type PropertyKeyValue,
 } from '../value.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -11,6 +11,7 @@ import { SameType } from './relations.mts';
 import { CanonicalizeType } from './intern.mts';
 import {
   RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator, CheckedConvertValue,
+  OrdinaryObjectCreate, OrdinaryGetOwnProperty, OrdinaryOwnPropertyKeys, Descriptor,
   type Arguments,
 } from '#self';
 import type { ValueEvaluator } from '../evaluator.mts';
@@ -465,4 +466,110 @@ export function* vectorComparison(
     lanes.push(Q(yield* CheckedConvertValue(Value(holds ? 1 : 0), bitType)) as Value);
   }
   return new VectorValue(lanes, maskType);
+}
+
+/**
+ * The object a vector boxes to, per #sec-vector-component-accessors.
+ *
+ * The clause states four observable consequences of accessors being PROPERTIES
+ * rather than syntax: `'xyz' in v` is true, `v['xyz']` and `Reflect.get` reach
+ * the accessor, `Object.keys(v)` is empty, and the prototype's own property
+ * names include every accessor.
+ *
+ * The names are COMPUTED rather than installed. Two alternatives were ruled out
+ * by measurement: eager per-type prototypes cost 680 names across 12 four-lane
+ * types, 8160 property definitions per realm before any program runs; and one
+ * shared prototype cannot answer `'z' in v` differently for a four-lane and a
+ * two-lane receiver, which the third accessor rule requires. Computing from the
+ * receiver's own lane count has neither problem, and is what String exotic
+ * objects do for their index properties.
+ */
+export function VectorWrapperCreate(v: VectorValue, proto: ObjectValue): ObjectValue {
+  const shape = vectorShape(v);
+  const laneCount = shape?.laneCount ?? 0;
+  const obj = OrdinaryObjectCreate(proto, []) as ObjectValue & { VectorData?: VectorValue };
+  obj.VectorData = v;
+
+  obj.GetOwnProperty = function* GetOwnProperty(key) {
+    const own = OrdinaryGetOwnProperty(this, key);
+    if (own !== Value.undefined) {
+      return own;
+    }
+    const named = accessorValueOf(v, key, laneCount);
+    if (named !== undefined) {
+      // Non-enumerable, which is what keeps Object.keys empty while `in` and
+      // getOwnPropertyNames still see them.
+      return Descriptor({
+        Value: named, Writable: Value.true, Enumerable: Value.false, Configurable: Value.true,
+      });
+    }
+    return Value.undefined;
+  };
+
+  obj.OwnPropertyKeys = function* OwnPropertyKeys() {
+    const keys = OrdinaryOwnPropertyKeys(this) as PropertyKeyValue[];
+    for (const name of enumerateAccessorNames(laneCount)) {
+      keys.push(Value(name) as PropertyKeyValue);
+    }
+    return keys;
+  };
+
+  return obj;
+}
+
+/** The value a component accessor or lane index names on a vector, or undefined. */
+function accessorValueOf(v: VectorValue, key: Value, laneCount: number): Value | undefined {
+  if (!(key instanceof JSStringValue)) {
+    return undefined;
+  }
+  const name = key.stringValue();
+  if (/^(0|[1-9][0-9]*)$/.test(name)) {
+    const at = Number(name);
+    return at < laneCount ? v.lanes[at] as Value : undefined;
+  }
+  const indices = componentAccessorIndices(name, laneCount);
+  if (!indices) {
+    return undefined;
+  }
+  if (indices.length === 1) {
+    return v.lanes[indices[0]!] as Value;
+  }
+  const record = v.TypeRecord as { Arguments: readonly unknown[] };
+  return new VectorValue(
+    indices.map((at) => v.lanes[at] as Value),
+    CanonicalizeType({
+      ...(v.TypeRecord as object),
+      Arguments: [record.Arguments[0], indices.length],
+    } as unknown as TypeRecord),
+  );
+}
+
+/**
+ * Every component accessor name a vector of this lane count has.
+ *
+ * The clause's count: for four lanes it is 680, being two sets of four
+ * characters over lengths one to four. Generated on demand rather than at realm
+ * setup, so a program that never reflects never pays for it.
+ */
+function enumerateAccessorNames(laneCount: number): string[] {
+  if (laneCount > 4 || laneCount < 1) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const set of COMPONENT_SETS) {
+    const characters = set.slice(0, laneCount).split('');
+    let level = characters.map((c) => c);
+    names.push(...level);
+    for (let length = 2; length <= 4; length += 1) {
+      const next: string[] = [];
+      for (const prefix of level) {
+        for (const c of characters) {
+          next.push(prefix + c);
+        }
+      }
+      names.push(...next);
+      level = next;
+    }
+  }
+  return names;
 }

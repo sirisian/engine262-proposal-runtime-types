@@ -13,6 +13,7 @@ import {
   isTypedNumber, ReferenceValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
+import { VectorWrapperCreate } from '../type-system/vector-ops.mts';
 import {
   Q, X,
   type ValueCompletion,
@@ -473,6 +474,17 @@ export function ToObject(argument: Value): ValueCompletion<ObjectValue> {
     const obj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Boolean.prototype%'), ['BooleanData']) as Mutable<BooleanObject>;
     obj.BooleanData = argument;
     return obj;
+  } else if (argument.type === 'Vector') {
+    // proposal-runtime-types #sec-vector-component-accessors: a vector boxes to
+    // an exotic object that COMPUTES its component accessors from the
+    // receiver's lane count. That is what makes the clause's four observable
+    // consequences hold - `'xyz' in v`, `Reflect.get`, an empty `Object.keys`,
+    // and the accessor names among the own property names - and it is why the
+    // accessors are properties rather than syntax.
+    //
+    // Before this, ToObject asserted on a vector, so `Object.keys(v)` crashed
+    // the host and `in` and `Reflect.get` reported a type error.
+    return VectorWrapperCreate(argument as VectorValue, surroundingAgent.intrinsic('%Object.prototype%'));
   } else if (isTypedNumber(argument)) {
     // proposal-runtime-types R6: a typed number boxes to a Number object with
     // its underlying value, so property access reaches %Number.prototype%.

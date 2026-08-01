@@ -384,21 +384,54 @@ test('a computed accessor reaches the same value', () => {
 });
 
 /**
- * THE REFLECTION HALF OF "PROPERTIES, NOT SYNTAX" IS NOT DONE.
+ * The reflection half of "properties, not syntax", and what it found in the
+ * clause.
  *
- * The clause states four observable consequences and one holds: `v["xyz"]`
- * reaches the accessor. `Reflect.get(v, "wzyx")`, `"xyz" in v`, and
- * `Object.keys(v)` do not - they route through ToObject, which asserts on a
- * vector rather than boxing it, so the first two report a type error and the
- * third crashes the host.
+ * A vector boxes to an exotic object that COMPUTES its accessors from the
+ * receiver's lane count, so `Object.keys(v)` is empty and
+ * `Object.getOwnPropertyNames(v)` is the 680 names the clause counts. Both were
+ * a host crash before.
  *
- * That is one piece of work rather than three: a vector needs a wrapper object
- * whose prototype carries the accessor names, which is also what
- * `Object.getOwnPropertyNames(float32x4.prototype)` returning 680 names
- * requires. Until it exists the accessors are reachable by every spelling a
- * program would normally write and not by reflection, which is the honest half
- * of the rule rather than a wrong version of it.
+ * TWO OF THE CLAUSE'S FOUR ASSERTIONS ARE WRONG ABOUT JAVASCRIPT, and a string
+ * shows it: `'0' in 'abc'` and `Reflect.get('abc', '0')` both throw, because
+ * `in` and `Reflect.get` require an actual Object and a string is a primitive.
+ * A vector is a primitive too, so `'xyz' in v` and `Reflect.get(v, 'wzyx')`
+ * cannot hold however the accessors are implemented - the clause is asking for
+ * behaviour the language does not give any primitive.
+ *
+ * The two that CAN hold do: `v['xyz']` reaches the accessor, and reflection
+ * over the boxed object sees the names.
  */
+
+test('a vector boxes to an object carrying its accessors', () => {
+  const P = 'const v = float32x4(1, 2, 3, 4); ';
+  // Empty, because the accessors are non-enumerable - which is what the clause
+  // requires and what would fail if they were own data properties.
+  expect(evaluated(`${P}String(Object.keys(v).length);`)).toBe('0');
+  // The clause's own count, for a four-lane vector: two sets over lengths one
+  // to four is 2 * (4 + 16 + 64 + 256).
+  expect(evaluated(`${P}String(Object.getOwnPropertyNames(v).length);`)).toBe('680');
+  expect(evaluated(`${P}String(Object.getOwnPropertyNames(v).includes("xyzw"));`)).toBe('true');
+  expect(evaluated(`${P}String(Object.getOwnPropertyNames(v).includes("abgr"));`)).toBe('true');
+});
+
+test('a two-lane vector has only the accessors it can have', () => {
+  // The rule a SHARED prototype could not express: `z` is an accessor of a
+  // four-lane vector and not of a two-lane one, and the wrapper computes from
+  // the receiver rather than storing a fixed set.
+  const P = 'const p = float32x4(1, 2, 3, 4).swizzle.<0, 1>(); ';
+  expect(evaluated(`${P}String(Object.getOwnPropertyNames(p).includes("z"));`)).toBe('false');
+  expect(evaluated(`${P}String(Object.getOwnPropertyNames(p).includes("xy"));`)).toBe('true');
+});
+
+test('`in` and Reflect.get refuse a vector as they refuse a string', () => {
+  // Not a gap in the wrapper: both operations require an Object, and a vector
+  // is a primitive. The same expressions on a string throw identically.
+  expectThrown('const v = float32x4(1, 2, 3, 4); "xyz" in v;');
+  expectThrown('"0" in "abc";');
+  expectThrown('const v = float32x4(1, 2, 3, 4); Reflect.get(v, "wzyx");');
+  expectThrown('Reflect.get("abc", "0");');
+});
 
 /**
  * PLAN-simd-engine.md phases 4b and 5: lane-wise arithmetic, comparisons, and
