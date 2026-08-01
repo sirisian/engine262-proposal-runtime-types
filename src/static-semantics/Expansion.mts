@@ -135,10 +135,11 @@ export function ExpandSource(
   tokensOf: (node: ParseNode) => unknown,
   call: (fn: unknown, tokens: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
-): { text: string, expanded: number } {
+): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens', name: string }[] } {
   const sites = ExpansionSites(root, names);
   let expanded = 0;
   const edits: { start: number, end: number, text: string }[] = [];
+  const failures: { kind: 'threw' | 'not-tokens', name: string }[] = [];
   for (const site of sites) {
     const fn = resolve(site.name);
     if (fn === undefined) {
@@ -160,8 +161,21 @@ export function ExpandSource(
     }
     const at = sourceText.lastIndexOf('@', nodeStart);
     const start = at === -1 ? nodeStart : at;
-    const produced = textOf(call(fn, tokensOf(site.target)));
+    const returned = call(fn, tokensOf(site.target));
+    if (returned === undefined) {
+      // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
+      // becomes a Syntax Error at the DECORATION SITE carrying the macro's own
+      // message. A macro rejects its input by throwing, which is what a function
+      // does to reject its arguments and which cannot be ignored.
+      failures.push({ kind: 'threw', name: site.name });
+      continue;
+    }
+    const produced = textOf(returned);
     if (produced === undefined) {
+      // The return was not a List of Token Records. Distinguished from throwing,
+      // because a macro that returned the wrong SHAPE made a different mistake
+      // from one that rejected its input.
+      failures.push({ kind: 'not-tokens', name: site.name });
       continue;
     }
     // The decoration is replaced ALONG WITH what it decorates: a replacement
@@ -174,7 +188,7 @@ export function ExpandSource(
   for (const edit of edits.sort((a, b) => b.start - a.start)) {
     text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
   }
-  return { text, expanded };
+  return { text, expanded, failures };
 }
 
 export function Expansion(root: ParseNode, names?: readonly string[]): ExpansionResult {

@@ -20,6 +20,7 @@ import type { ParseNode } from './parser/ParseNode.mts';
 import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
+import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyErrors.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
 import { Call } from './abstract-ops/all.mts';
@@ -175,6 +176,20 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
     ? ReplacementDecoratorNames(body)
     : [];
   (body as { ReplacementDecoratorNames?: readonly string[] }).ReplacementDecoratorNames = replacementNames;
+  // `sec-replacement-decorators`, Static Semantics: Early Errors. Both are
+  // computed from the module's own text and depend on nothing expansion
+  // produces, so they are raised BEFORE the phase rather than inside it.
+  if (replacementNames.length > 0) {
+    const early = FirstReplacementEarlyError(body);
+    if (early) {
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      const completion = (early.kind === 'shadowed'
+        ? Throw.SyntaxError('$1 is a replacement decorator and cannot be shadowed', Value(early.name))
+        : Throw.SyntaxError('$1 is a replacement decorator and must be written outermost', Value(early.name))) as ThrowCompletion;
+      Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
+      return [completion.Value as ObjectValue];
+    }
+  }
   // `sec-when-expansion-happens`: the phase runs HERE - after the parse above,
   // before the `CheckModule` below - and only when the gate is non-empty, so a
   // module using no replacement decorator observes no phase at all.
@@ -199,6 +214,15 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         return records === undefined ? undefined : TokenStreamText(records);
       },
     );
+    if (expandedOnce.failures.length > 0) {
+      const failure = expandedOnce.failures[0];
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      const completion = (failure.kind === 'threw'
+        ? Throw.SyntaxError('the replacement decorator $1 rejected what it decorates', Value(failure.name))
+        : Throw.SyntaxError('the replacement decorator $1 did not return tokens', Value(failure.name))) as ThrowCompletion;
+      Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
+      return [completion.Value as ObjectValue];
+    }
     if (expandedOnce.expanded > 0 && expandedOnce.text !== sourceText) {
       if ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0 > EXPANSION_LIMIT) {
         return [Throw.SyntaxError('expansion exceeded the limit') as never];

@@ -48,3 +48,4 @@ export * from './UTF16EncodeCodePoint.mts';
 export * from './ReplacementDecoratorNames.mts';
 export * from './PreprocessorEvaluability.mts';
 export * from './Expansion.mts';
+export * from './ReplacementEarlyErrors.mts';
