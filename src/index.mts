@@ -31,6 +31,7 @@ export type { ParseNode } from './parser/ParseNode.mts';
 // proposal-runtime-types: exposed for parser-level tests.
 export { Parser } from './parser/Parser.mts';
 export { Token, TokenNames } from './parser/tokens.mts';
+export { TokensOf, tokenizeText, sourceTextOf, type TokenRecord, type SpanRecord, type SourceRefRecord, type TokenKind } from './parser/TokensOf.mts';
 export { createTest262Intrinsics, boostTest262Harness, importBundledTest262Harness } from './host-defined/test262-intrinsics.mts';
 export { type Mutable, OutOfRange } from './utils/language.mts';
 export { kInternal } from './utils/internal.mts';
