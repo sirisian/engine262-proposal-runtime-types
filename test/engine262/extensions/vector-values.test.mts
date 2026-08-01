@@ -67,34 +67,42 @@ test('typeof a vector is object', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 2 — started, and the lane read is located but not
- * landing. Recorded here so the next attempt starts from the measurements
- * rather than repeating them.
+ * PLAN-simd-engine.md phase 2: lane access.
  *
- * `vectorGet` and `vectorSet` exist in type-system/vector-ops.mts and implement
- * what #sec-vector-lanes states: a canonical numeric key is a lane, an index at
- * or beyond the lane count throws a RangeError rather than being a type error,
- * and a lane write converts to the lane type. They are wired into GetValue's
- * property-reference branch, beside the index-operator case and BEFORE
- * ToObject, since a vector is a primitive and ToObject asserts on one rather
- * than boxing it.
+ * #sec-vector-lanes gives a vector two ways to reach a lane, and they differ in
+ * WHEN the lane is chosen. A computed access takes an expression, so no static
+ * rule bounds it and an out-of-range index throws a RangeError; the constant
+ * form `lane.<I>()` is refused before the program runs. That asymmetry is the
+ * reason the design gives both, and it is what these assert.
  *
- * `const a = float32x4(1, 2, 3, 4); a[0]` still reaches ToObject and throws
- * the host assertion `argument instanceof ObjectValue`.
- *
- * WHAT WAS MEASURED, so the next attempt does not re-measure it:
- *
- *   - At the line above ToObject, `V.Base.type` is 'Vector' and its constructor
- *     is VectorValue. The hook is in the right function and the base is the
- *     right value.
- *   - The vector's Type Record is `{ Kind: 'primitive', Name: 'vector',
- *     Arguments: ['float32', 4] }`, which is exactly what `vectorShape` accepts,
- *     so `vectorGet` should answer rather than fall through.
- *   - Removing the `surroundingAgent.feature` guard from the hook changed
- *     nothing, so the guard was not what failed.
- *
- * Those three together say the crash is on a path that reaches ToObject BEFORE
- * this branch - a different GetValue, or an earlier member-access route that
- * boxes eagerly. Finding which is the next step, and a stack trace taken with
- * the hook in place will name it.
+ * The constant forms - `lane.<I>()`, `withLane.<I>()` - and the bit-vector
+ * conversion are still to come.
  */
+
+test('a lane is read by index', () => {
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a[0]);')).toBe('1');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a[3]);')).toBe('4');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); let i = 2; String(a[i]);')).toBe('3');
+  // A string key names the same lane. Both spellings must work, because a
+  // member access does not canonicalize its key before the reference resolves.
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a["1"]);')).toBe('2');
+});
+
+test('an out-of-range lane read throws at run time', () => {
+  // A RangeError rather than a type error: the index is an expression, so it is
+  // not known before the program runs. This is the half of the asymmetry that
+  // the constant form does not have.
+  expectThrown('const a = float32x4(1, 2, 3, 4); a[4];');
+  expectThrown('const a = float32x4(1, 2, 3, 4); let i = 9; a[i];');
+});
+
+test('a lane is written by index', () => {
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); a[1] = 9; String(a);')).toBe('(1, 9, 3, 4)');
+  expectThrown('const a = float32x4(1, 2, 3, 4); a[4] = 9;');
+});
+
+test('a written lane converts to the lane type', () => {
+  // The write goes through the lane type's conversion, so a value that is not
+  // one is refused rather than stored.
+  expectThrown('const a = int32x4(1, 2, 3, 4); a[0] = "s";');
+});

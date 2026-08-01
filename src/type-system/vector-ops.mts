@@ -35,9 +35,12 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
   if (!shape) {
     return undefined;
   }
-  if (key instanceof JSStringValue) {
-    const name = key.stringValue();
-
+  // The key arrives as a NumberValue for `a[0]` and as a JSStringValue for
+  // `a['0']`, and a lane read must accept both: a member access does not
+  // canonicalize its key to a string before the reference is resolved, so a
+  // check for one shape alone silently declines the ordinary spelling.
+  const name = laneKeyName(key);
+  if (name !== undefined) {
     // A canonical numeric key is a lane index. #sec-vector-lanes: the index is
     // an expression, so no static rule bounds it - reading a lane whose index
     // is not less than N throws a RangeError, where the constant form
@@ -62,10 +65,10 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
  */
 export function* vectorSet(v: VectorValue, key: PropertyKeyValue, value: Value): PlainEvaluator<Value | undefined> {
   const shape = vectorShape(v);
-  if (!shape || !(key instanceof JSStringValue)) {
+  const name = shape ? laneKeyName(key) : undefined;
+  if (!shape || name === undefined) {
     return undefined;
   }
-  const name = key.stringValue();
   if (!/^(0|[1-9][0-9]*)$/.test(name)) {
     return undefined;
   }
@@ -76,4 +79,22 @@ export function* vectorSet(v: VectorValue, key: PropertyKeyValue, value: Value):
   const converted = Q(yield* RequireType(value, shape.laneType)) as Value;
   (v.lanes as Value[])[index] = converted;
   return converted;
+}
+
+/**
+ * The canonical name of a property key that could be a lane index, or undefined.
+ *
+ * A NumberValue key is what `a[0]` produces and a JSStringValue is what `a['0']`
+ * produces; both name the same lane. A member access does not canonicalize its
+ * key to a string before the reference resolves, so accepting only one shape
+ * silently declines the ordinary spelling - which is what it did.
+ */
+function laneKeyName(key: PropertyKeyValue | Value): string | undefined {
+  if (key instanceof JSStringValue) {
+    return key.stringValue();
+  }
+  const asNumber = (key as { numberValue?(): number }).numberValue?.();
+  return typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0
+    ? String(asNumber)
+    : undefined;
 }

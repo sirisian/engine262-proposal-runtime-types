@@ -9,7 +9,7 @@ import {
   ReferenceValue,
 } from '../value.mts';
 import { VectorValue, type PropertyKeyValue } from '../value.mts';
-import { vectorGet } from '../type-system/vector-ops.mts';
+import { vectorGet, vectorSet } from '../type-system/vector-ops.mts';
 import {
   Q,
   type PlainCompletion,
@@ -172,6 +172,17 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
   }
   // 5. If IsPropertyReference(V) is true, then
   if (IsPropertyReference(V) === Value.true) {
+    // proposal-runtime-types #sec-vector-lanes: a lane write, answered before
+    // ToObject for the reason the read is - a vector is a primitive and boxing
+    // it loses the lanes. The clause admits this and records that whether it
+    // should be admitted at all is an open question, since `withLane` expresses
+    // the same intent without mutating a value type.
+    if ((V.Base as Value)?.type === 'Vector') {
+      const written = Q(yield* vectorSet(V.Base as VectorValue, V.ReferencedName as PropertyKeyValue, W));
+      if (written !== undefined) {
+        return undefined;
+      }
+    }
     // a. Let baseObj be ? ToObject(V.[[Base]]).
     const baseObj = Q(ToObject(V.Base as JSStringValue));
     // b. If IsPrivateReference(V) is true, then
