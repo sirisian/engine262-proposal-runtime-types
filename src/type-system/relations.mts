@@ -138,7 +138,10 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // the declaration nothing else is known about it.
   if (s.Kind === 'parameter' || t.Kind === 'parameter') {
     if (s.Kind === 'parameter' && t.Kind === 'parameter') {
-      return s.Name === t.Name;
+      // Name AND arity: `W<_>` and `W<_, _>` are different parameters even
+      // where a declaration reuses the name, since one stands for a
+      // one-argument declaration and the other for a two-argument one.
+      return s.Name === t.Name && (s.Arity ?? 0) === (t.Arity ?? 0);
     }
     if (s.Kind === 'parameter' && s.Constraint) {
       return IsSubtype(s.Constraint, t, [...assumptions, { First: s, Second: t }]);

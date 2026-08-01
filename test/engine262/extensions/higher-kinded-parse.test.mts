@@ -1,12 +1,14 @@
 import { test, expect } from 'vitest';
-import { ok, evaluated } from '../readme/harness.mts';
+import {
+  ok, evaluated, run,
+} from '../readme/harness.mts';
 
 /**
  * PLAN-higher-kinded-types-engine.md phase 1, per #sec-higher-kinded-parameters.
  *
  * A parameter is higher-kinded when its name is followed by a bracketed list of
  * `_`, and the count of holes is its arity. Nothing here gives the arity a
- * meaning yet — that is phase 2 — so these are parse assertions.
+ * meaning yet â€” that is phase 2 â€” so these are parse assertions.
  */
 
 test('a higher-kinded parameter declares, at each arity and position', () => {
@@ -46,7 +48,7 @@ test('a defaulted parameter may not precede a required one', () => {
   expect(ok('type Identity<T> = T; interface I<W<_> = Identity, T> {}')).toBe(false);
   expect(ok('type Identity<T> = T; interface I<T, W<_> = Identity> {}')).toBe(true);
 
-  // It is not a rule about kinded parameters — it holds for every parameter,
+  // It is not a rule about kinded parameters â€” it holds for every parameter,
   // which is where it was missing.
   expect(ok('interface I<T = uint8, U> {}')).toBe(false);
   expect(ok('interface I<U, T = uint8> {}')).toBe(true);
@@ -60,4 +62,50 @@ test('the shared tokens still mean what they did', () => {
   expect(evaluated('const r = match (1) { when _: "any"; }; String(r);')).toBe('any');
   expect(evaluated('String(7 % 4);')).toBe('3');
   expect(evaluated('String(5 |> % + 1);')).toBe('6');
+});
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 2: the arity reaches the record.
+ *
+ * A `~parameter~` Type Record carries the arity its declaration wrote, and the
+ * central rule follows from it â€” a higher-kinded parameter stands for a
+ * declaration, so it is NOT a type and may not be written as one.
+ */
+
+test('an unapplied higher-kinded parameter is not a type', () => {
+  expect(ok('class C<W<_>> { v: W; }')).toBe(false);
+  expect(ok('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }')).toBe(true);
+});
+
+test('the refusal names the arity', () => {
+  // Asserting the MESSAGE, not only the refusal. A reader who writes `W` where
+  // `W.<T>` belongs needs to be told how many arguments it wants, and the
+  // generics work found a refusal that was right for the wrong words because
+  // nothing checked them.
+  const completion = run('class C<W<_, _>> { v: W; }');
+  expect(completion.Type).toBe('throw');
+  let message = '';
+  for (const [key, desc] of (completion.Value as { properties: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> }).properties) {
+    if (key.stringValue?.() === 'message') {
+      message = desc.Value.stringValue();
+    }
+  }
+  expect(message).toContain('2');
+  expect(message).toContain('unapplied');
+});
+
+test('arity distinguishes parameters of the same name', () => {
+  // `W<_>` and `W<_, _>` are different parameters: one stands for a
+  // one-argument declaration and the other for a two-argument one, so a value
+  // of one is not a value of the other.
+  expect(ok('class C<W<_>> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_, _>> { v: W.<uint8>; }')).toBe(true);
+});
+
+test('an ordinary parameter is untouched', () => {
+  // Arity 0 is what every existing generic declares, and the whole generics
+  // suite is the real assertion; these are the shapes closest to the change.
+  expect(ok('class C<T> { v: T; }')).toBe(true);
+  expect(ok('class C<T> { m(v: T): T { return v; } }')).toBe(true);
+  expect(ok('function f<T>(x: T): T { return x; }')).toBe(true);
 });

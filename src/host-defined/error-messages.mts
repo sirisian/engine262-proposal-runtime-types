@@ -551,6 +551,7 @@ export interface Throw {
   | '$1 is not a supported calendar'
   | '$1 is not a tuple'
   | '$1 is not a tuple element'
+  | '$1 takes $2 type arguments and cannot be used unapplied'
   | '$1 is not a type'
   | '$1 is not a type node'
   | '$1 is not a valid array length'

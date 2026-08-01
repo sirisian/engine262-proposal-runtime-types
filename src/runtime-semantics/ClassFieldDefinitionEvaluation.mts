@@ -129,7 +129,11 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       for (const p of params) {
         const name = (p as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
         if (name) {
-          frame.set(name, parameterTypeRecord(name));
+          // proposal-runtime-types #sec-higher-kinded-parameters: the arity the
+          // declaration wrote is carried, so a reference to a kinded parameter
+          // knows it stands for a declaration rather than a type.
+          const arity = (p as unknown as { Arity?: number }).Arity ?? 0;
+          frame.set(name, parameterTypeRecord(name, undefined, arity));
         }
       }
       pushTypeParameterFrame(frame);

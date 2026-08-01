@@ -249,7 +249,15 @@ export type TypeRecord =
    * failed when the method was CALLED - which is why generic classes declared
    * without complaint and did not work.
    */
-  | { readonly Kind: 'parameter', readonly Name: string, readonly Constraint?: TypeRecord }
+  | {
+    readonly Kind: 'parameter', readonly Name: string, readonly Constraint?: TypeRecord,
+    /**
+     * proposal-runtime-types #sec-higher-kinded-parameters: the count of `_`
+     * holes the parameter declared. 0 stands for a type; n > 0 stands for a
+     * generic declaration of n parameters and is NOT itself a type.
+     */
+    readonly Arity?: number,
+  }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
   | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
   // proposal-runtime-types (table-metadata-values): a pattern, carried as its
@@ -613,6 +621,12 @@ export function displayPropertyKey(key: string | SymbolValue): string {
 }
 
 /** A generic parameter standing for what an application will bind. */
-export function parameterTypeRecord(Name: string, Constraint?: TypeRecord): TypeRecord {
-  return Constraint ? { Kind: 'parameter', Name, Constraint } : { Kind: 'parameter', Name };
+export function parameterTypeRecord(Name: string, Constraint?: TypeRecord, Arity: number = 0): TypeRecord {
+  const base = Arity > 0 ? { Kind: 'parameter' as const, Name, Arity } : { Kind: 'parameter' as const, Name };
+  return Constraint ? { ...base, Constraint } : base;
+}
+
+/** Whether a Type Record is a higher-kinded parameter (#sec-higher-kinded-parameters). */
+export function isHigherKinded(t: TypeRecord | null | undefined): boolean {
+  return !!t && t.Kind === 'parameter' && (t.Arity ?? 0) > 0;
 }

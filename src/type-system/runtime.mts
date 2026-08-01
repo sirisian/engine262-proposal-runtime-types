@@ -1151,6 +1151,22 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   switch (node.type) {
     case 'TypeReference': {
+      // proposal-runtime-types #sec-higher-kinded-parameters: "Within the
+      // declaration that introduces it, a higher-kinded parameter may appear
+      // only applied. It is not a type." An unapplied reference to one is
+      // refused HERE rather than allowed to resolve to a record that would then
+      // behave as a type everywhere downstream.
+      if (node.TypeName.MemberNames.length === 0 && !node.TypeArguments) {
+        const kindedName = node.TypeName.IdentifierReference.name;
+        const bound = lookupTypeParameter(kindedName);
+        if (bound && bound.Kind === 'parameter' && (bound.Arity ?? 0) > 0) {
+          return Throw.TypeError(
+            '$1 takes $2 type arguments and cannot be used unapplied',
+            Value(kindedName),
+            Value(String(bound.Arity)),
+          );
+        }
+      }
       if (node.TypeName.MemberNames.length > 0) {
         // A qualified type name accesses a member of a namespace-like type. The
         // reachable case today is an enum member, whose type is the literal
