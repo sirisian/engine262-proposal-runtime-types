@@ -329,6 +329,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
     }
+    // proposal-runtime-types #sec-vector-lanes: the broadcast. "`vector.<T, N>`
+    // declares a cast operator from T", so a value of the lane type is
+    // assignable to the vector and fills every lane.
+    //
+    // This is stated HERE rather than in IsAssignable, and the difference is
+    // the whole reason two earlier attempts were unsound. IsAssignable is
+    // consulted by paths that then pass the value through unchanged, so
+    // admitting the lane type there let a `float32` sit in a `float32x4`
+    // binding unconverted. This site reports or does not report; the value it
+    // governs still reaches requireMembership, which performs the conversion.
+    if (erasedTarget.Kind === 'primitive' && erasedTarget.Name === 'vector'
+        && erasedTarget.Arguments.length === 2
+        && !(erasedSource.Kind === 'primitive' && erasedSource.Name === 'vector')) {
+      // Only the LANE type converts, which is the refusal the clause states: a
+      // `float32` reaches `float32x4` and not `float64x2`.
+      const laneTarget = erasedTarget.Arguments[0] as TypeRecord;
+      if (IsAssignable(erasedSource, laneTarget)) {
+        return;
+      }
+      // A numeric LITERAL reaches the lane type the way it reaches any numeric
+      // value type - `let a: float32x4 = 1` is the design's own example, and it
+      // is the same admission that lets `let a: uint8 = 5` through. The literal
+      // narrowing above returns before this branch, so the check is repeated
+      // here against the lane rather than the vector.
+      if (erasedSource.Kind === 'literal') {
+        const literalToLane = eraseMetadata(erasedSource.Base as TypeRecord);
+        const fitsLane = laneTarget.Kind === 'primitive'
+          && typeof (erasedSource.Value as { numberValue?(): number })?.numberValue === 'function'
+          && fitsNumericType(
+            (erasedSource.Value as { numberValue(): number }).numberValue(),
+            laneTarget.Name,
+            laneTarget.Arguments,
+          );
+        if (IsAssignable(literalToLane, laneTarget) || fitsLane) {
+          return;
+        }
+      }
+      report(erasedSource, erasedTarget);
+      return;
+    }
     if (!IsAssignable(erasedSource, erasedTarget)) {
       report(erasedSource, erasedTarget);
     }

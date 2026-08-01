@@ -185,40 +185,48 @@ test('the broadcast cast fills every lane', () => {
   expect(evaluated('String(float32x4(2));')).toBe('(2, 2, 2, 2)');
   expect(evaluated('String(int32x4(7));')).toBe('(7, 7, 7, 7)');
 
-  // Through an ANNOTATION it does not yet - see the note above. Asserted as it
-  // behaves rather than as it should, so the fix has something to flip and the
-  // gap is visible in the suite rather than only in a plan.
-  expect(ok('let s: float32 = 2; let b: float32x4 = s;')).toBe(false);
+  // And through an ANNOTATION, which is the design's own spelling. Every case
+  // below is from the README verbatim.
+  expect(evaluated('let a: float32x4 = 1; String(a);')).toBe('(1, 1, 1, 1)');
+  expect(evaluated('let s: float32 = 2; let b: float32x4 = s; String(b);')).toBe('(2, 2, 2, 2)');
+
+  // Soundness, asserted separately: the binding holds a VECTOR, not the lane
+  // value the checker admitted. Two earlier attempts passed the assignment and
+  // failed this, which is why it is its own assertion rather than trusted.
+  expect(evaluated('let s: float32 = 2; let b: float32x4 = s; String(Reflect.typeOf(b) === float32x4);')).toBe('true');
+
+  // Only the LANE type converts: a float32 reaches float32x4 and not
+  // float64x2, and the design writes the second as a cast first.
+  expect(ok('let s: float32 = 2; let c: float64x2 = s;')).toBe(false);
+  expect(evaluated('let s: float32 = 2; let d: float64x2 = float64(s); String(d);')).toBe('(2, 2)');
+  expect(ok('let a: float32x4 = "x";')).toBe(false);
 });
 
 /**
- * The broadcast, and the one route that reaches it.
+ * The broadcast, and why it took three attempts to land soundly.
  *
- * THE CYCLE IS CLOSED. `let s: any = 2; let b: float32x4 = s;` broadcasts to
- * `(2, 2, 2, 2)` and the result IS a float32x4. The loop was in the branch
- * itself: it TESTED whether the value was of the lane type, and a plain Number
- * is not a member of `float32` - it becomes one. So the branch was never taken,
- * the conversion fell through to the general rule, and that asked to convert to
- * the vector type again.
+ * #sec-vector-lanes: "`vector.<T, N>` declares a cast operator from T", so a
+ * lane value assigned to a vector fills every lane. Every README case works and
+ * the result is genuinely a vector.
  *
- * Converting the lane once and reusing it is also what gives the broadcast its
- * meaning: every lane holds the SAME value of the lane type rather than N
- * separately-converted copies.
+ * TWO EARLIER ATTEMPTS PUT THE STATIC RULE IN IsAssignable AND WERE UNSOUND.
+ * That predicate is consulted by paths which then pass the value through
+ * unchanged, so admitting the lane type there let a `float32` sit in a
+ * `float32x4` binding unconverted - the assignment succeeded and
+ * `Reflect.typeOf(b) === float32x4` was false. Both were reverted.
  *
- * THE STATIC HALF REMAINS REVERTED, for the second time and for the same
- * reason. Teaching IsAssignable that a lane type is assignable to the vector
- * makes `let b: float32x4 = s` for a typed `float32` s succeed with the value
- * UNCONVERTED - `Reflect.typeOf(b) === float32x4` is false. A statically typed
- * value takes a path that does not reach requireMembership at all, so the
- * checker's permission is the only thing consulted and nothing converts.
+ * The rule belongs at the checker's REPORT site instead. That site decides
+ * whether to complain and nothing else; the value it governs still reaches
+ * requireMembership, which performs the conversion. Same admission, opposite
+ * soundness, and the difference is only which of two similar-looking functions
+ * carries it.
  *
- * That is why the `any` case works and the typed case does not: `any` defers to
- * the runtime, which converts; a known type is settled statically, which does
- * not. The fix is for the checker to record that a conversion is OWED at that
- * binding rather than merely permitting it, and until that exists the refusal
- * is the honest behaviour - it rejects a program the design permits, where the
- * alternative accepts one it does not.
+ * A numeric literal needed its own admission, because the literal narrowing
+ * above the site returns before this branch - `let a: float32x4 = 1` is the
+ * design's own first example and would otherwise have been the one case left
+ * refused.
  */
+
 
 test('a lane value broadcasts where the runtime decides the type', () => {
   expect(evaluated('let s: any = 2; let b: float32x4 = s; String(b);')).toBe('(2, 2, 2, 2)');
