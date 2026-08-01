@@ -300,35 +300,31 @@ test('the refusal explains that inference is not attempted', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 6 — the prerequisite, and what four
- * attempts established about it.
+ * PLAN-higher-kinded-types-engine.md phase 6 — the prerequisite, nearly.
  *
- * The unification needs `Identity`, the wrapper meaning NO wrapper.
- * standardlibrary.md ships it as an ordinary generic alias; the engine has no
- * standard library to declare it in, so it has to come from somewhere else.
+ * `Identity`, the wrapper meaning NO wrapper, resolves as a TYPE in every
+ * position: `Identity.<uint8>` is `uint8` in a parameter annotation and in a
+ * `const` one, a wrong value is refused, and a program's own
+ * `type Identity<T> = T` still wins.
  *
- * WHAT IS SETTLED. Identity is not one of the iteration interfaces and cannot
- * be built like one. Every member of that family DESCRIBES a shape and Identity
- * REDUCES to its argument, which is what an alias does and what the interface
- * builder has no notion of. `identityRecord` is the reducing form, consulted
- * ahead of the interfaces and only when applied, so a bare `Identity` stays a
- * declaration a higher-kinded parameter can bind.
+ * It is not yet usable as a KINDED ARGUMENT, and the reason is the binding
+ * rather than the meaning - see the test below.
  *
- * It also defers to a program's own `type Identity<T> = T`, which the tests
- * below rely on and which the interface attempts broke. That deference is the
- * right default for an ALIAS a program could legitimately redeclare - unlike
- * `Iterable`, a protocol, which today wins over a program's declaration of the
- * same name.
+ * It took six attempts and the reason is worth keeping. Identity is not one of
+ * the iteration interfaces: every member of that family DESCRIBES a shape and
+ * Identity REDUCES to its argument, which is what an alias does and what the
+ * interface builder cannot express. Three attempts to build it as an interface
+ * failed in three different ways for that one reason.
  *
- * WHAT REMAINS. The built-in is not reachable in a type annotation: only a
- * user-declared Identity resolves. The name has to enter the checker's
- * type-name resolution the way the iteration interfaces do, and those reach it
- * through a global binding installed at realm setup - which is where the next
- * attempt starts, and which is a question about NAME RESOLUTION rather than
- * about what Identity means. What Identity means is answered.
+ * The reducing form then needed all three of the places a type name is
+ * answered - the checker's resolver, the runtime's, and a global binding, since
+ * a `const` annotation is EVALUATED and needs the name to be a value. Wiring
+ * one at a time produced a different failure each time, and the last two are
+ * the two-resolver split this feature has now met five times.
  *
- * The unification itself has not begun and should not until this resolves,
- * since `Iterator<T, R, N, W<_> = Identity>` names Identity in its own default.
+ * Deferring to a user declaration is a decision rather than an accident:
+ * Identity is an alias a program could legitimately redeclare, unlike
+ * `Iterable`, which is a protocol and wins over a program's declaration.
  */
 
 test('a program may declare its own Identity', () => {
@@ -337,4 +333,26 @@ test('a program may declare its own Identity', () => {
   // this and broke four tests.
   expect(ok('type Identity<T> = T; const a: Identity.<uint8> = 1;')).toBe(true);
   expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+});
+
+test('Identity resolves in every position', () => {
+  // `Identity.<T>` is `T`. The three places a type name is answered each had to
+  // learn it: the checker's resolver, the runtime's, and a global binding for
+  // the evaluated positions.
+  expect(ok('const a: Identity.<uint8> = 1;')).toBe(true);
+  expect(ok('const a: Identity.<uint8> = "s";')).toBe(false);
+  expect(ok('function f(x: Identity.<uint8>) {}')).toBe(true);
+
+  // NOT YET as a kinded argument, and the reason is the binding rather than the
+  // meaning. A `const` annotation needs the name to be a VALUE, so the global
+  // holds a placeholder - `any` - and a kinded position then refuses it as not
+  // being a declaration, which it correctly is not. A user-declared Identity
+  // works, because its binding IS the declaration.
+  //
+  // The binding has to hold the unapplied declaration rather than a stand-in,
+  // which is what the iteration interfaces do not need because none of them is
+  // ever passed as an argument. That is the last piece before the unification,
+  // since `Iterator<T, R, N, W<_> = Identity>` passes exactly this.
+  expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+  expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(false);
 });

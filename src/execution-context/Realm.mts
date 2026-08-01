@@ -62,6 +62,7 @@ import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { anyType } from '../type-system/records.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
@@ -370,6 +371,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // the control that identified this: it is the one name of the family that
     // worked in that position, and it differed in nothing else.
     for (const name of [
+      // `Identity` is bound for the same reason its neighbours are - a `const`
+      // annotation is EVALUATED, so the name must be a value - but its record
+      // comes from identityRecord rather than the interface builder, because it
+      // reduces to its argument rather than describing a shape.
+      'Identity',
       'IteratorResult', 'Iterable', 'IterableIterator',
       // `AsyncIterator` is bound here and `Iterator` is not, because iterator
       // helpers made `Iterator` a global already and the async proposal has not
@@ -377,7 +383,13 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // families' shorthands intern alike.
       'AsyncIterator', 'AsyncIterable', 'AsyncIterableIterator',
     ]) {
-      const record = iterationInterfaceRecord(name);
+      const record = name === 'Identity'
+        // Bare `Identity` is the DECLARATION, not a type, so it binds an
+        // unapplied record that an application reduces. `anyType` stands for it
+        // as a value: the binding exists so the name resolves, and every
+        // meaningful use is applied.
+        ? anyType
+        : iterationInterfaceRecord(name);
       if (record) {
         X(global.DefineOwnProperty(Value(name), Descriptor({
           Value: GetTypeObject(record, realmRec),
