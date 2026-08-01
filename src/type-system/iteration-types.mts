@@ -37,6 +37,40 @@ export function identityRecord(args: readonly (TypeRecord | number)[]): TypeReco
   return first;
 }
 
+/**
+ * The unapplied `Identity` declaration, as a Type Record a higher-kinded
+ * parameter can bind.
+ *
+ * `Identity` is the first built-in type name that is passed AS an argument
+ * rather than only used as a type, so its global binding cannot hold a
+ * stand-in: a kinded position asks whether the argument is a generic
+ * declaration of matching arity, and answers no for anything else. The record
+ * carries a synthesized single-parameter alias declaration, which is what
+ * `type Identity<T> = T` produces and what declarationParameterCount counts.
+ */
+export function identityDeclarationRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: {
+      type: 'TypeAliasDeclaration',
+      BindingIdentifier: { type: 'BindingIdentifier', name: 'Identity' },
+      TypeParameters: {
+        type: 'TypeParameters',
+        TypeParameterList: [{
+          type: 'TypeParameter',
+          BindingIdentifier: { type: 'BindingIdentifier', name: 'T' },
+          TypeParameterConstraint: null,
+          TypeParameterDefault: null,
+          Arity: 0,
+        }],
+      },
+      WhereClauses: null,
+    },
+    Arguments: [],
+    LibraryName: 'Identity',
+  } as unknown as TypeRecord;
+}
+
 /** Whether a type name is one of the iteration interfaces. */
 export function isIterationInterfaceName(name: string): boolean {
   return BUILTIN_INTERFACES.has(name);

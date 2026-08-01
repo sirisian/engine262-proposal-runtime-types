@@ -350,9 +350,21 @@ test('Identity resolves in every position', () => {
   // works, because its binding IS the declaration.
   //
   // The binding has to hold the unapplied declaration rather than a stand-in,
-  // which is what the iteration interfaces do not need because none of them is
-  // ever passed as an argument. That is the last piece before the unification,
-  // since `Iterator<T, R, N, W<_> = Identity>` passes exactly this.
+  // which the iteration interfaces never need because none of them is passed AS
+  // an argument. Identity is the first built-in type name that is.
+  //
+  // SYNTHESIZING an alias declaration node for the binding was tried and
+  // crashes: the annotation-enforcement path walks a declaration expecting the
+  // fields a parsed node carries, and a hand-built object satisfies the shape a
+  // type check reads and not the shape the runtime walks. That is the same
+  // lesson a ParameterRecord taught during the iteration work - a record built
+  // by hand is not the record the constructor produces - and it means the
+  // binding wants a declaration the PARSER produced.
+  //
+  // The likely route is therefore a prelude: parse `type Identity<T> = T` at
+  // realm setup and bind what that yields, rather than assembling a node. That
+  // is a mechanism the engine may not have, and establishing whether it does is
+  // the next step.
   expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
   expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(false);
 });
