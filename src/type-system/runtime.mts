@@ -1002,6 +1002,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
 }
 
 export function primitiveMembership(value: Value, name: string, args: readonly (TypeRecord | number)[]): boolean {
+  // proposal-runtime-types #sec-vector-types: a vector's membership is decided
+  // by the Type Record it carries and nothing else, which RuntimeTypeOf and
+  // IsOfType already do before reaching here. A value that is not a vector is
+  // not a MEMBER of a vector type - it may CONVERT to one by the broadcast of
+  // #sec-vector-lanes, which is a different question and is
+  // CheckedConvertValue's.
+  //
+  // Answering it here is what breaks a cycle: without this case the name fell
+  // to a default that asked CheckedConvertValue, whose broadcast branch asks
+  // IsOfType, which came back here. The stack overflowed rather than reporting.
+  if (name === 'vector') {
+    return false;
+  }
   switch (name) {
     case 'uint':
     case 'int':
