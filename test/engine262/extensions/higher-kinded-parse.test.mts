@@ -191,21 +191,19 @@ test('the two failures carry different messages', () => {
  *    implemented. A kinded constraint will work when `where` does, and needs
  *    nothing of its own beyond what phase 3 already resolves.
  *
- * 3. VARIANCE HOLDS FOR A CLASS ARGUMENT AND NOT YET FOR AN ALIAS.
+ * 3. VARIANCE HOLDS. Applications binding different wrappers are distinct, for
+ *    a class argument and for an alias argument alike.
  *
- *    The cause was at CONSTRUCTION, not in the comparison. The checker's
- *    NewExpression branch resolved each type argument with resolveType, which
- *    answers null for a bare generic name because a bare generic name is not a
- *    type - correctly. The null was then filtered out, the length check failed,
- *    and `new B.<Boxed>()` fell through to the bare `B`, which is assignable to
- *    every application. No two applications were ever distinct at construction,
- *    which is why this read as a variance failure and was not one.
+ *    The cause was at CONSTRUCTION rather than in the comparison: resolveType
+ *    answers null for a bare generic name - correctly, since one is not a type
+ *    - the null was filtered out, the arity check failed, and `new B.<Boxed>()`
+ *    fell through to the bare `B`, which is assignable to every application.
  *
- *    A class argument now resolves through classTypeOf and distinguishes:
- *    `const a: B.<One> = new B.<Two>()` is refused. An ALIAS argument still
- *    does not, because lookupAlias does not reach a GENERIC alias - the same
- *    distinction that made a bare `Identity` unusable as a type. That is the
- *    remaining piece, and it is one lookup rather than a rule.
+ *    A generic ALIAS needed a second fix. It resolves its body with its
+ *    parameters unbound, so `type Identity<T> = T` yielded nothing and the name
+ *    was registered nowhere - right for a type position and wrong wherever the
+ *    name denotes the DECLARATION. It is recorded under its own name now, and a
+ *    type position still refuses it.
  */
 
 test('a kinded argument works in a parameter annotation', () => {
@@ -224,18 +222,35 @@ test('a kinded argument resolves in a const annotation', () => {
   // known, so a bare generic declaration - which is what a kinded position
   // wants - reported that it "is not a type".
   const P = 'type Identity<T> = T; class B<W<_>> {} ';
-  expect(ok(`${P}const a: B.<Identity> = new B();`)).toBe(true);
+  // The construction must supply the argument too. A bare `new B()` is a `B`
+  // and correctly does not satisfy `B.<Identity>` - the same rule an ordinary
+  // generic follows, and it only became visible once applications stopped
+  // collapsing to their base.
+  expect(ok(`${P}const a: B.<Identity> = new B.<Identity>();`)).toBe(true);
+  expect(ok(`${P}const a: B.<Identity> = new B();`)).toBe(false);
   expect(ok(`${P}function f(x: B.<Identity>) {}`)).toBe(true);
 
   // And the refusals survive the fallback: it resolves a bare name to its
   // declaration, and the validation still refuses it where the parameter was
   // not kinded or the arity does not match.
-  expect(ok(`${P}const a: B.<uint8> = new B();`)).toBe(false);
-  expect(ok(`${P}const a: B.<Map> = new B();`)).toBe(false);
+  expect(ok(`${P}const a: B.<uint8> = new B.<uint8>();`)).toBe(false);
+  expect(ok(`${P}const a: B.<Map> = new B.<Map>();`)).toBe(false);
 });
 
 test('applications binding different class wrappers are distinct', () => {
   const P = 'class One<T> {} class Two<T> {} class B<W<_>> {} ';
   expect(ok(`${P}const a: B.<One> = new B.<One>();`)).toBe(true);
   expect(ok(`${P}const a: B.<One> = new B.<Two>();`)).toBe(false);
+});
+
+test('applications binding different alias wrappers are distinct', () => {
+  const P = 'type Identity<T> = T; type Boxed<T> = [].<T>; class B<W<_>> {} ';
+  expect(ok(`${P}const a: B.<Identity> = new B.<Identity>();`)).toBe(true);
+  expect(ok(`${P}const a: B.<Identity> = new B.<Boxed>();`)).toBe(false);
+
+  // And a bare generic alias is still not a type, which is what makes the
+  // registration above a change to where the NAME resolves rather than to what
+  // an alias means.
+  expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
+  expect(ok('type Boxed<T> = [].<T>; const a: Boxed.<uint8> = [1];')).toBe(true);
 });

@@ -3235,6 +3235,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const resolved = resolveType(n.Type);
         if (resolved) {
           frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, resolved);
+        } else if ((n as unknown as { TypeParameters?: unknown }).TypeParameters) {
+          // proposal-runtime-types: a GENERIC alias resolves its body with its
+          // parameters unbound, so `type Identity<T> = T` yields nothing and the
+          // name was registered nowhere. That is right for a type position -
+          // a bare generic alias is not a type - and wrong everywhere the name
+          // denotes the DECLARATION, which is what a higher-kinded argument
+          // binds. The declaration is recorded under its own name so those
+          // positions can reach it, and a type position still refuses it,
+          // because a nominal whose declaration is an alias is not a type.
+          frames[frames.length - 1].aliases.set(
+            n.BindingIdentifier.name,
+            { Kind: 'nominal', Declaration: n, Arguments: [] } as unknown as TypeRecord,
+          );
         }
         return;
       }
