@@ -298,3 +298,38 @@ test('the refusal explains that inference is not attempted', () => {
   expect(message).toContain('explicit application');
   expect(message).toContain('never inferred');
 });
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 6 — started, and its prerequisite is
+ * harder than the plan assumed.
+ *
+ * The unification needs `Identity`, the wrapper meaning NO wrapper.
+ * standardlibrary.md ships it as an ordinary generic alias, and the engine has
+ * no standard library to declare it in - so it has to be built in, and a
+ * built-in `Identity` is not the same thing as `type Identity<T> = T`.
+ *
+ * Three attempts, each failing differently, which is what makes the shape
+ * clear:
+ *
+ *   - As a built-in interface, `Identity` resolved in a parameter annotation
+ *     and not in a `const` one, needing the global binding its five siblings
+ *     have.
+ *   - With the binding, `Identity.<uint8>` reduced to `any` rather than to
+ *     `uint8`, because the shorthand defaults a missing first argument to `any`
+ *     and the interface builder returns a record rather than its argument.
+ *   - Keeping bare `Identity` unreduced made it a nominal, so
+ *     `Identity.<uint8>` was a nominal named Identity rather than being uint8 -
+ *     and `B.<Identity>` then refused it as "not a generic declaration".
+ *
+ * The last is the real difficulty and it is not incidental. Every other member
+ * of this family DESCRIBES a shape, and Identity REDUCES to its argument: it is
+ * an alias, and the built-in interface mechanism has no notion of reducing. It
+ * needs the generic-alias path - InstantiateGenericAlias - rather than the
+ * interface builder, which is a different mechanism from the one it was put in.
+ *
+ * All four attempts also shadowed the `type Identity<T> = T` these tests
+ * declare, which is how the regression surfaced: a built-in name silently wins
+ * over a program's own declaration of it. That is worth deciding rather than
+ * discovering - standardlibrary.md's Identity is an ALIAS a program could
+ * legitimately redeclare.
+ */
