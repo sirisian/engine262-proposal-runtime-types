@@ -163,3 +163,45 @@ test('the two failures carry different messages', () => {
   expect(messageOf(`${P}function f(x: Box.<Map>) {}`)).toContain('takes');
   expect(messageOf(`${P}function f(x: Box.<Map>) {}`)).toContain('2');
 });
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 4 — probed, and three of the four
+ * clauses need work that is now located rather than guessed at.
+ *
+ * 1. A KINDED ARGUMENT IS RESOLVED AS A TYPE, so it works in a parameter
+ *    annotation and fails in a `const` one. `function f(x: B.<Identity>) {}` is
+ *    accepted; `const a: B.<Identity> = null` reports that Identity "is not a
+ *    type" — which is true of a bare generic alias and beside the point, since
+ *    a kinded position wants a DECLARATION.
+ *
+ *    The cause is ordering rather than a missing rule: TypeNodeToTypeRecord
+ *    resolves every type argument before it knows the base, so it cannot ask
+ *    whether the parameter at that position is kinded. Resolving the base
+ *    first, or deferring a bare name until the parameter is known, is the
+ *    change. This is the fourth time this feature has met the two-resolver
+ *    split, and the first where the two paths differ in ORDER rather than in
+ *    which rules they know.
+ *
+ * 2. A `where` CONSTRAINT ON A KINDED PARAMETER DOES NOT PARSE.
+ *    `class B<W<_>> where W.<uint8> : uint8 {}` reports an unexpected token, so
+ *    the constraint form the clause specifies has no grammar yet. Whether
+ *    `where` clauses parse at all for a class is worth establishing first — the
+ *    refusal may be about the clause rather than about the kinded parameter.
+ *
+ * 3. VARIANCE IS UNTESTED because of 1: the cases need two applications binding
+ *    different wrappers in a `const` position, which is exactly what fails.
+ *
+ * The fourth clause works: a kinded parameter read as a value resolves, which
+ * the generics work's GetValue lookup already provided.
+ */
+
+test('a kinded argument works in a parameter annotation', () => {
+  expect(ok('type Identity<T> = T; class B<W<_>> {} function f(x: B.<Identity>) {}')).toBe(true);
+});
+
+test('a bare generic declaration is not a type', () => {
+  // Correct, and the reason 1 above is a positional problem rather than a
+  // missing rule: `Identity` unapplied is a declaration, and a type position
+  // should refuse it.
+  expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
+});
