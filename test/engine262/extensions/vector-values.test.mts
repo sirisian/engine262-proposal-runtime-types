@@ -522,17 +522,68 @@ test('an alias of a vector type has its accessors and a wrapping class does not'
 });
 
 /**
- * `vector.preferredLanes(T)` is NOT implemented, and the reason is the one
- * phase 1 recorded: `vector` itself is not a binding. Only the shorthand names
- * are bound, so the long form is written in an annotation or through an alias
- * and cannot be called or have a property read from it.
+ * `vector.preferredLanes(T)` is NOT implemented, and the reason is a CONVENTION
+ * rather than a gap - which is a correction to what an earlier note here said.
  *
- * Binding `vector` would make `vector.<float32, 3>(1, 2, 3)` callable as well,
- * which is the same question, and both belong with whatever decides how the
- * unapplied generic name behaves as a value - the design has `vector` as a
- * type constructor rather than a value, so it is not obvious it should be bound
- * at all.
+ * `vector` is not a binding, so there is no base to read the property from. The
+ * earlier note called that an anomaly, on the grounds that a type is a value in
+ * this design. Measured, it is the rule: `typeof uint` and `typeof int` are
+ * `undefined` too, because builtinTypeRecord answers null for a bare
+ * parameterized primitive and a record only for an applied one. `vector`
+ * behaves exactly as its four siblings do, and binding it alone would make it
+ * the odd one out.
+ *
+ * So reaching the operation means either binding all five - a design change
+ * nothing asks for - or giving preferredLanes a home that does not need
+ * `vector` to be a value. The second is a decision sec-vector-widths has not
+ * made, and it is the real blocker.
  */
+
+test('a bare parameterized primitive is not a value', () => {
+  // The convention the note above describes, asserted so that a later change
+  // to it is deliberate rather than accidental.
+  expect(evaluated('String(typeof uint);')).toBe('undefined');
+  expect(evaluated('String(typeof int);')).toBe('undefined');
+  expect(evaluated('String(typeof vector);')).toBe('undefined');
+  // While an APPLIED one is.
+  expect(evaluated('String(typeof uint8);')).toBe('object');
+  expect(evaluated('String(typeof float32x4);')).toBe('object');
+});
+
+/**
+ * THE COMPARISON RESULT FORMS ARE IMPLEMENTED BACKWARDS, and this is a defect
+ * rather than a deferred extension.
+ *
+ * sec-vector-comparisons says the result form is chosen by the expected type
+ * among three, and that "left with no expected type the expression is ambiguous
+ * among them and is a type error, so the result's type is written".
+ *
+ * The engine does the opposite of both halves: a bare `a < b` is ACCEPTED and
+ * yields the bit vector, where the clause makes it a type error; and
+ * `const m: boolean32x4 = a < b` is REFUSED, where the clause requires the wide
+ * mask.
+ *
+ * The clause names the mechanism - sec-overloading-on-return-type - and the
+ * engine does not have it. `overloads.mts` resolves on ARGUMENT types, and a
+ * function overloaded only on its return type does not parse. So this is not a
+ * small wiring job; it needs return-type overloading first.
+ *
+ * The tests below assert the engine as it behaves, not as the clause requires,
+ * and say so. Asserting the clause would leave two permanently red tests that
+ * say nothing about whether anyone is working on it; asserting the behaviour
+ * with the divergence named leaves a record that flips when the mechanism
+ * lands.
+ */
+
+test('a comparison yields the bit-vector form (diverges from the clause)', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
+  // The clause makes this a type error, since no expected type selects among
+  // the three forms. The engine accepts it and picks the compact mask.
+  expect(evaluated(`${P}String(a < b);`)).toBe('(1, 1, 0, 0)');
+  // And the clause requires this to yield the WIDE mask. The engine refuses it,
+  // because the bit vector is not assignable to boolean32x4.
+  expect(ok(`${P}const m: boolean32x4 = a < b;`)).toBe(false);
+});
 
 /**
  * PLAN-simd-engine.md phase 7: the interactions.
