@@ -1,4 +1,7 @@
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { R } from "../abstract-ops/all.mjs";
 import type { TypeRecord } from './records.mts';
+import { DenotedUnionOf, DiscriminatingChainOf } from './DiscriminatingChain.mts';
 
 /**
  * proposal-runtime-types `sec-match-exhaustiveness`: **the atoms of a Type
@@ -25,8 +28,24 @@ export interface Atom {
 /** `~none~`: the type is an open universe and a `match` over it needs a default. */
 export const NO_ATOMS: readonly Atom[] = [];
 
+function literalText(value: unknown): string {
+  const v = value as { stringValue?: () => string, numberValue?: () => number };
+  if (typeof v?.stringValue === 'function') {
+    return v.stringValue();
+  }
+  if (typeof v?.numberValue === 'function') {
+    return String(R(v));
+  }
+  return String(value);
+}
+
 function literalKey(value: unknown): string {
-  return typeof value === 'string' ? `"${value}"` : String(value);
+  // The SAME unwrapping the constants need. Without it every branch atom keyed
+  // as `[object Object]` and the two members of a two-member union were ONE key
+  // - so coverage could not have told them apart, and a `match` covering only
+  // the first would have looked exhaustive.
+  const text = literalText(value);
+  return typeof value === 'string' ? `"${value}"` : `"${text}"`;
 }
 
 /**
@@ -158,4 +177,83 @@ function describe(t: TypeRecord): string {
     return `{${props.map((p) => `${String(p.key)}:${p.type.Kind === 'literal' ? literalKey((p.type as { Value: unknown }).Value) : p.type.Kind}`).join(',')}}`;
   }
   return t.Kind;
+}
+
+/**
+ * The atoms of a type that may be a dependent record type, resolving its chain.
+ *
+ * This is the caller `Atoms` was written for. A dependent record type reaches
+ * the checker as a `nominal` record carrying its `Declaration` and its
+ * `Structure`, so everything the denotation needs is on the record: the
+ * `WhereClauses` from the declaration, the base object type from the structure,
+ * and the discriminant's declared constants from the base's member type.
+ */
+export function AtomsOfType(t: TypeRecord | undefined): readonly Atom[] {
+  const direct = Atoms(t);
+  if (direct.length > 0 || !t || t.Kind !== 'nominal') {
+    return direct;
+  }
+  const rec = t as {
+    Declaration?: { WhereClauses?: readonly ParseNode[] },
+    Structure?: TypeRecord,
+  };
+  const clauses = rec.Declaration?.WhereClauses ?? [];
+  const base = rec.Structure;
+  if (clauses.length === 0 || !base || base.Kind !== 'object') {
+    return NO_ATOMS;
+  }
+  for (const clause of clauses) {
+    const chain = DiscriminatingChainOf(clause);
+    if (!chain) {
+      continue;
+    }
+    // The discriminant's declared constants come from its own member type: a
+    // union of literals, which is the only shape the chain qualifies over.
+    const member = base.Properties.find((prop) => prop.key === chain.discriminant);
+    const constants = literalConstantsOf(member?.type);
+    if (constants === undefined) {
+      continue;
+    }
+    const denoted = DenotedUnionOf(chain, base, constants, (k) => literalFor(member!.type, k));
+    if (denoted) {
+      return Atoms(denoted);
+    }
+  }
+  return NO_ATOMS;
+}
+
+/**
+ * A type-record literal's value as the string stage A produced from the PARSE
+ * TREE.
+ *
+ * **The two sides spell a constant differently**: stage A reads a
+ * `StringLiteral` node and gets `US`, while a `literal` Type Record carries an
+ * engine `Value`, whose `String(...)` is `[object Object]`. They never matched,
+ * and every denotation came back empty — the constants were compared, found
+ * unequal, and the chain reported as non-total rather than as mis-read.
+ */
+
+/** The constants of a union of literals, or *undefined* where it is not one. */
+function literalConstantsOf(t: TypeRecord | undefined): readonly string[] | undefined {
+  if (!t || t.Kind !== 'union') {
+    return undefined;
+  }
+  const members = (t as { Members: readonly TypeRecord[] }).Members;
+  const out: string[] = [];
+  for (const m of members) {
+    if (m.Kind !== 'literal') {
+      return undefined;
+    }
+    out.push(literalText((m as { Value: unknown }).Value));
+  }
+  return out.length > 1 ? out : undefined;
+}
+
+/** The literal member of a union whose value is `constant`. */
+function literalFor(t: TypeRecord, constant: string): TypeRecord | undefined {
+  if (t.Kind !== 'union') {
+    return undefined;
+  }
+  return (t as { Members: readonly TypeRecord[] }).Members
+    .find((m) => m.Kind === 'literal' && literalText((m as { Value: unknown }).Value) === constant);
 }

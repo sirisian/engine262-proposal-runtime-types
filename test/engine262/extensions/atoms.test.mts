@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest';
-import { Agent, Atoms, ManagedRealm, setSurroundingAgent } from '#self';
+import {
+  Agent, Atoms, AtomsOfType, ManagedRealm, setSurroundingAgent,
+} from '#self';
 
 /**
  * PLAN-discriminated-where-chains stage C: `Atoms(t)`, from
@@ -65,4 +67,31 @@ test('an INTERSECTION distributes its unions', () => {
 
 test('a union of fewer than two members has no atoms', () => {
   expect(atoms(U(O('US')))).toBe('none');
+});
+
+test('a DEPENDENT RECORD TYPE takes the atoms of the union its chain denotes', () => {
+  // The whole plan in one assertion: `sec-match-exhaustiveness` says "for a
+  // dependent record type whose predicate is a discriminating `where` chain, the
+  // atoms of the union that chain denotes", and this is that path end to end —
+  // record to declaration to chain to denoted union to atoms.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  const of = (source: string): string => {
+    const t = (realm.evaluateScriptSkipDebugger(source) as { Value?: { TypeRecord?: unknown, Record?: unknown } }).Value;
+    const found = AtomsOfType((t?.TypeRecord ?? t?.Record) as never);
+    return found.length > 0 ? found.map((a) => a.key).join(' | ') : 'none';
+  };
+  expect(of("type A = { s: string, c: 'US'|'CA' } where if (this.c == 'US') { this is { p: string } } else { this is { p: string } }; (type A);"))
+    .toBe('{s:primitive,c:"US"} | {s:primitive,c:"CA"}');
+  expect(of("type B = { s: string, c: 'US'|'CA' } where match (this.c) { when 'US': this is { p: string }; when 'CA': this is { p: string }; }; (type B);"))
+    .toBe('{s:primitive,c:"US"} | {s:primitive,c:"CA"}');
+  // A terminal `else` covers the constants the earlier branches did not.
+  expect(of("type C = { c: 'A'|'B'|'D' } where if (this.c == 'A') { this is { p: string } } else { this is { p: string } }; (type C);"))
+    .toBe('{c:"A"} | {c:"B"} | {c:"D"}');
+  // **Distinct keys matter.** Both branch atoms once keyed as `[object Object]`
+  // — a type-record literal carries an engine Value, not a raw string — so a
+  // two-member union was ONE key and coverage could not have told them apart.
+  // A `match` covering only the first would have looked exhaustive.
+  expect(of("type D = { c: 'A'|'B' } where if (this.c == 'A') { this is { p: string } }; (type D);")).toBe('none');
+  expect(of("type E = { c: 'A'|'B' } where (this.c != null); (type E);")).toBe('none');
 });
