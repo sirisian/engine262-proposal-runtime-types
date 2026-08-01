@@ -62,8 +62,7 @@ import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
-import { anyType } from '../type-system/records.mts';
-import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
+import { iterationInterfaceRecord, getParsedIdentityDeclaration } from '../type-system/iteration-types.mts';
 import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
 import { bootstrapRegExp } from '../intrinsics/RegExp.mts';
@@ -383,12 +382,13 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // families' shorthands intern alike.
       'AsyncIterator', 'AsyncIterable', 'AsyncIterableIterator',
     ]) {
+      // `Identity` binds the PARSED declaration the prelude captured. It is the
+      // one built-in type name passed AS an argument rather than only used as a
+      // type, and a kinded position asks whether its argument is a generic
+      // declaration - which a stand-in is not. Before a prelude has run it
+      // falls through, so realm setup order does not matter.
       const record = name === 'Identity'
-        // Bare `Identity` is the DECLARATION, not a type, so it binds an
-        // unapplied record that an application reduces. `anyType` stands for it
-        // as a value: the binding exists so the name resolves, and every
-        // meaningful use is applied.
-        ? anyType
+        ? getParsedIdentityDeclaration() ?? iterationInterfaceRecord(name)
         : iterationInterfaceRecord(name);
       if (record) {
         X(global.DefineOwnProperty(Value(name), Descriptor({

@@ -299,3 +299,50 @@ test('applying type arguments to a Type Object is not a no-op', () => {
   expect(evaluated('String(typeof Iterator);')).toBe('function');
   expect(evaluated('String(Iterator === Iterator.<uint8>);')).toBe('true');
 });
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 6: the unification.
+ *
+ * `Iterator` and `AsyncIterator` are one declaration differing in the wrapper
+ * their results carry — `Iterator<T, R, N, W<_> = Identity>` synchronous,
+ * the same with `Promise` asynchronous.
+ *
+ * The gate for this phase was that every test above passes UNCHANGED, and it
+ * does. A unification requiring its own tests to be rewritten has changed the
+ * types rather than deduplicated them.
+ *
+ * `Iterable` and `AsyncIterable` remain two, and so do their IterableIterator
+ * pair, because they differ in the member KEY - [Symbol.iterator] against
+ * [Symbol.asyncIterator] - and a kind abstracts over the type a member has and
+ * never over the key it is stored under. Six declarations become five, which is
+ * what the assessment measured and less than a first look suggests.
+ */
+
+test('one declaration serves both iteration protocols', () => {
+  expect(ok('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
+  expect(ok('async function* ag(): uint8 { yield 1; } const i: AsyncIterator.<uint8> = ag();')).toBe(true);
+
+  // The distinction survives the merge, which is the assertion that keeps the
+  // unification from being a widening: a synchronous generator is not an
+  // asynchronous iterator.
+  expect(ok('function* g(): uint8 { yield 1; } const i: AsyncIterator.<uint8> = g();')).toBe(false);
+});
+
+test('the consumers are unaffected by the unification', () => {
+  // These are what would break first if the wrapper parameter disturbed the
+  // shape rather than parameterizing it.
+  expect(ok('function* g(): uint8 { yield 1; } for (const a: uint8 of g()) {}')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const a: [].<uint8> = [...g()];')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const a: [].<uint8> = g().take(1).toArray();')).toBe(true);
+  expect(evaluated('function* g(): uint8 { yield 1; yield 2; } String([...g()]);')).toBe('1,2');
+});
+
+test('Iterable and AsyncIterable remain two interfaces', () => {
+  // Asserted rather than assumed. A kind reaches the type a member has and not
+  // the KEY it is stored under, so these cannot merge — and a test that quietly
+  // unified them would mean the symbol had been erased.
+  expect(ok('function* g(): uint8 { yield 1; } const i: Iterable.<uint8> = g();')).toBe(true);
+  expect(ok('async function* ag(): uint8 { yield 1; } const i: AsyncIterable.<uint8> = ag();')).toBe(true);
+  expect(ok('function* g(): uint8 { yield 1; } const i: AsyncIterable.<uint8> = g();')).toBe(false);
+});

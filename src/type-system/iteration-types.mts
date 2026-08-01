@@ -48,6 +48,25 @@ export function identityRecord(args: readonly (TypeRecord | number)[]): TypeReco
  * carries a synthesized single-parameter alias declaration, which is what
  * `type Identity<T> = T` produces and what declarationParameterCount counts.
  */
+let parsedIdentityDeclaration: TypeRecord | null = null;
+
+/**
+ * Record the `Identity` declaration a prelude parsed, so the global binding can
+ * hold a PARSED node rather than an assembled one.
+ *
+ * A declaration built by hand satisfies the shape a type check reads without
+ * satisfying the shape the runtime walks, and crashes at the first enforced
+ * annotation. The parser produces the node every consumer expects.
+ */
+export function setParsedIdentityDeclaration(record: TypeRecord): void {
+  parsedIdentityDeclaration = record;
+}
+
+/** The parsed `Identity` declaration, or null before a prelude has run. */
+export function getParsedIdentityDeclaration(): TypeRecord | null {
+  return parsedIdentityDeclaration;
+}
+
 export function identityDeclarationRecord(): TypeRecord {
   return {
     Kind: 'nominal',
@@ -157,11 +176,23 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
     case 'IteratorResult':
       return iteratorResult(T, R);
     case 'Iterator':
+    case 'AsyncIterator': {
+      // proposal-runtime-types (higherkindedtypes.md): ONE declaration for both
+      // protocols, differing only in the wrapper its results carry.
+      // `Iterator<T, R, N, W<_> = Identity>` is the synchronous form and
+      // `Iterator<T, R, N, Promise>` the asynchronous one.
+      //
+      // The wrapper goes LAST because the ordinary well-formedness rule puts it
+      // there - a defaulted parameter may not precede a required one - so
+      // `Iterator.<uint8>` reads exactly as it did before this unification, and
+      // no annotation naming an iteration type had to move.
+      const wrap = (result: TypeRecord) => (name === 'AsyncIterator' ? promiseOf(result) : result);
       return objectType([
-        { key: 'next', type: fnType([N], iteratorResult(T, R)) },
-        { key: 'return', type: fnType([R], iteratorResult(T, R)), optional: true },
-        { key: 'throw', type: fnType([anyType], iteratorResult(T, R)), optional: true },
+        { key: 'next', type: fnType([N], wrap(iteratorResult(T, R))) },
+        { key: 'return', type: fnType([R], wrap(iteratorResult(T, R))), optional: true },
+        { key: 'throw', type: fnType([anyType], wrap(iteratorResult(T, R))), optional: true },
       ]);
+    }
     case 'Iterable':
       return objectType([
         { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T])!) },
@@ -171,12 +202,7 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
         ...(iterationInterfaceRecord('Iterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
         ...(iterationInterfaceRecord('Iterable', [T]) as unknown as { Properties: never[] }).Properties,
       ] as never);
-    case 'AsyncIterator':
-      return objectType([
-        { key: 'next', type: fnType([N], promiseOf(iteratorResult(T, R))) },
-        { key: 'return', type: fnType([R], promiseOf(iteratorResult(T, R))), optional: true },
-        { key: 'throw', type: fnType([anyType], promiseOf(iteratorResult(T, R))), optional: true },
-      ]);
+
     case 'AsyncIterable':
       return objectType([
         { key: Symbol.for('asyncIterator'), type: fnType([], iterationInterfaceRecord('AsyncIterator', [T])!) },

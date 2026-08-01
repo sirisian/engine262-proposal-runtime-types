@@ -6,7 +6,9 @@ import {
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
-import { iterationInterfaceRecord, identityRecord } from './iteration-types.mts';
+import {
+  iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
+} from './iteration-types.mts';
 import { badKindedArgument } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
@@ -3248,6 +3250,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (resolved) {
           frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, resolved);
         } else if ((n as unknown as { TypeParameters?: unknown }).TypeParameters) {
+          // proposal-runtime-types: capture the prelude's `Identity` so the
+          // global binding can hold a PARSED declaration. Every consumer of a
+          // declaration node reads fields the parser sets, and an assembled
+          // node crashes at the first enforced annotation.
+          if (n.BindingIdentifier.name === 'Identity' && !getParsedIdentityDeclaration()) {
+            setParsedIdentityDeclaration(
+              { Kind: 'nominal', Declaration: n, Arguments: [] } as unknown as TypeRecord,
+            );
+          }
           // proposal-runtime-types: a GENERIC alias resolves its body with its
           // parameters unbound, so `type Identity<T> = T` yields nothing and the
           // name was registered nowhere. That is right for a type position -

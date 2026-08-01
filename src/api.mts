@@ -240,6 +240,26 @@ export class ManagedRealm extends Realm {
     this.HostDefined = HostDefined;
     this.topContext = newContext;
 
+    // proposal-runtime-types (standardlibrary.md): `type Identity<T> = T`, the
+    // wrapper that means NO wrapper, which the higher-kinded iteration types
+    // name as their default.
+    //
+    // It is PARSED rather than assembled. A higher-kinded parameter binds a
+    // generic DECLARATION, so the binding has to hold one - and a declaration
+    // node built by hand satisfies the shape a type check reads without
+    // satisfying the shape the runtime walks, which crashes at the first
+    // enforced annotation. Parsing it produces the node every consumer expects,
+    // and the declaration a program would have written is exactly what is
+    // wanted here.
+    if (surroundingAgent.feature('runtime-types')) {
+      // Evaluated in a scope of its own rather than at the top level: a
+      // top-level `type Identity<T> = T` creates a global lexical binding, and
+      // a program declaring its own Identity then collides with it. The alias
+      // is a library type a program may legitimately redeclare, so the prelude
+      // must leave the NAME free while making the declaration reachable.
+      this.evaluateScriptSkipDebugger('{ type Identity<T> = T; }');
+    }
+
     surroundingAgent.hostDefinedOptions.onRealmCreated?.(this);
   }
 

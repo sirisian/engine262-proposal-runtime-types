@@ -15,7 +15,9 @@ import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { restElementType } from './records.mts';
-import { iterationInterfaceRecord, identityRecord } from './iteration-types.mts';
+import {
+  iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration,
+} from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
@@ -1399,10 +1401,20 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // parameter can bind. This is the runtime resolver; the checker has the
       // same branch, and a rule in one and not the other holds in some
       // positions only, which is how this feature has failed four times.
-      if (name === 'Identity' && argRecords.length > 0) {
-        const reduced = identityRecord(argRecords);
-        if (reduced) {
-          return reduced;
+      if (name === 'Identity') {
+        if (argRecords.length > 0) {
+          const reduced = identityRecord(argRecords);
+          if (reduced) {
+            return reduced;
+          }
+        } else {
+          // Unapplied: the parsed declaration, which a higher-kinded parameter
+          // binds. Null before a prelude has run, in which case the ordinary
+          // resolution continues.
+          const declared = getParsedIdentityDeclaration();
+          if (declared) {
+            return declared;
+          }
         }
       }
       const iteration = iterationInterfaceRecord(name, argRecords);

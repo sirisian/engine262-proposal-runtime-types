@@ -343,28 +343,9 @@ test('Identity resolves in every position', () => {
   expect(ok('const a: Identity.<uint8> = "s";')).toBe(false);
   expect(ok('function f(x: Identity.<uint8>) {}')).toBe(true);
 
-  // NOT YET as a kinded argument, and the reason is the binding rather than the
-  // meaning. A `const` annotation needs the name to be a VALUE, so the global
-  // holds a placeholder - `any` - and a kinded position then refuses it as not
-  // being a declaration, which it correctly is not. A user-declared Identity
-  // works, because its binding IS the declaration.
-  //
-  // The binding has to hold the unapplied declaration rather than a stand-in,
-  // which the iteration interfaces never need because none of them is passed AS
-  // an argument. Identity is the first built-in type name that is.
-  //
-  // SYNTHESIZING an alias declaration node for the binding was tried and
-  // crashes: the annotation-enforcement path walks a declaration expecting the
-  // fields a parsed node carries, and a hand-built object satisfies the shape a
-  // type check reads and not the shape the runtime walks. That is the same
-  // lesson a ParameterRecord taught during the iteration work - a record built
-  // by hand is not the record the constructor produces - and it means the
-  // binding wants a declaration the PARSER produced.
-  //
-  // The likely route is therefore a prelude: parse `type Identity<T> = T` at
-  // realm setup and bind what that yields, rather than assembling a node. That
-  // is a mechanism the engine may not have, and establishing whether it does is
-  // the next step.
+  // And as a KINDED ARGUMENT, which is what the unification needs: a
+  // higher-kinded parameter binds a generic DECLARATION, so the global binding
+  // holds the declaration a prelude parsed rather than a stand-in.
+  expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
   expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
-  expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(false);
 });
