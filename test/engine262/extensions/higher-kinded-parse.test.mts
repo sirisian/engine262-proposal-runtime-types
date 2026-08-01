@@ -349,3 +349,37 @@ test('Identity resolves in every position', () => {
   expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
   expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
 });
+
+test('deep but finite nesting completes', () => {
+  // The budget's other direction, which the plan asks for explicitly: a budget
+  // that fires on reasonable code is a bug, so realistic nesting must complete.
+  expect(ok('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]];')).toBe(true);
+  expect(ok('type Bx<T> = [].<T>; class B<W<_>> {} const b: B.<Bx> = new B.<Bx>();')).toBe(true);
+});
+
+/**
+ * THE BUDGET DOES NOT REACH GENERIC ALIAS INSTANTIATION, and this is
+ * pre-existing rather than this feature's.
+ *
+ * `type R<T> = R.<T>` - a self-referential generic alias - overflows the HOST
+ * stack rather than exhausting the evaluation budget:
+ *
+ *   RangeError: Maximum call stack size exceeded
+ *
+ * That is not an engine262 completion at all, so no program can catch it and
+ * the diagnostic sec-evaluation-budget requires ("a diagnostic naming the
+ * outermost call and the deepest frames") never appears. The clause states that
+ * exhaustion is "not an abrupt completion the evaluated code can observe" and
+ * that the evaluation is "abandoned"; a host stack overflow is neither.
+ *
+ * It reproduces without any higher-kinded parameter - InstantiateGenericAlias
+ * has no budget, and a comment in that file says as much: "#sec-compile-time-
+ * evaluability's budget joins later". So the higher-kinded work did not
+ * introduce it and cannot fix it locally; the budget has to reach type-level
+ * evaluation generally.
+ *
+ * Recorded here rather than as a test, because a test asserting a host crash
+ * would pin the wrong behaviour: the right assertion is that a type error is
+ * reported, and writing it now would fail for the right reason at the wrong
+ * time.
+ */
