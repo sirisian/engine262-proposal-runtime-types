@@ -12,6 +12,7 @@ import {
   unwrapToNumber,
   isTypedNumber, ReferenceValue,
 } from '../value.mts';
+import { VectorValue } from '../value.mts';
 import {
   Q, X,
   type ValueCompletion,
@@ -209,6 +210,14 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     // observable identity; a conversion applies to the referent.
     const referent = Q(yield* GetValue(argument.Location));
     return Q(yield* ToNumber(referent));
+  }
+  if (argument instanceof VectorValue) {
+    // proposal-runtime-types #sec-vector-types: a vector is N lanes, and no
+    // rule says which one a number conversion would take. The conversion a
+    // vector HAS is the bit-vector one of #sec-vector-lanes, which is a
+    // conversion to an integer TYPE rather than to a Number, so it is not
+    // reached from here.
+    return Throw.TypeError('$1 is not assignable to $2', argument, Value('number'));
   }
   throw OutOfRange.exhaustive(argument);
 }
@@ -439,6 +448,14 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
     // observable identity; a conversion applies to the referent.
     const referent = Q(yield* GetValue(argument.Location));
     return Q(yield* ToString(referent));
+  }
+  if (argument instanceof VectorValue) {
+    // The lanes, comma-separated, in the manner an array of them prints.
+    const parts = [];
+    for (const lane of argument.lanes) {
+      parts.push((Q(yield* ToString(lane)) as JSStringValue).stringValue());
+    }
+    return Value(`(${parts.join(', ')})`);
   }
   throw OutOfRange.exhaustive(argument);
 }

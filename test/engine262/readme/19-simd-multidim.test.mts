@@ -83,7 +83,14 @@ test('SIMD: the named lane types are registered and are the long form', () => {
   // type as the vector it abbreviates.
   expect(evaluated('type A = float32x4; type B = vector.<float32, 4>; (A === B) ? "same" : "diff";')).toBe('same');
   expect(evaluated('type A = uint32x4; String(A.byteLength);')).toBe('16');
-  // Still to come: the broadcast cast from the lane type, the operators over
-  // matching vector types, and lane access.
-  expectThrown('let a: float32x4 = float32x4(1, 2, 3, 4);');
+  // A vector value exists now, so a shorthand annotation accepts one built at
+  // that type and refuses one built at another. The placeholder that pinned the
+  // unimplemented state is flipped rather than deleted, since the assertion it
+  // was standing in for is the one that matters.
+  expect(evaluated('let a: float32x4 = float32x4(1, 2, 3, 4); String(a);')).toBe('(1, 2, 3, 4)');
+  expect(evaluated('let a: vector.<float32, 4> = float32x4(1, 2, 3, 4); String(a);')).toBe('(1, 2, 3, 4)');
+  expectThrown('let a: int32x4 = float32x4(1, 2, 3, 4);');
+  expectThrown('let a: vector.<float32, 2> = float32x4(1, 2, 3, 4);');
+  // Still to come: lane access, permutation, component accessors, masks, and
+  // the lane-wise operators.
 });

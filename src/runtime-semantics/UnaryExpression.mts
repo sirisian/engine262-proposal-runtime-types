@@ -3,6 +3,7 @@ import { Q } from '../completion.mts';
 import {
   Value, ReferenceRecord, UndefinedValue, BigIntValue, BooleanValue, JSStringValue, NullValue, NumberValue, ObjectValue, SymbolValue,
   TypedNumberValue,
+  VectorValue,
   isTypedNumber,
   ReferenceValue,
 } from '../value.mts';
@@ -158,6 +159,13 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     // proposal-runtime-types (references extension): a reference value never
     // reaches typeof; every read that could carry one dereferences first.
     throw OutOfRange.nonExhaustive(val);
+  }
+  if (val instanceof VectorValue) {
+    // proposal-runtime-types #sec-vector-types: a vector is a value type, and
+    // `typeof` on one is 'object' for the same reason it is for the other
+    // aggregate value types - it is not a primitive of the base language, and
+    // its own type is read with Reflect.typeOf rather than with typeof.
+    return Value('object');
   }
   throw OutOfRange.exhaustive(val);
 }

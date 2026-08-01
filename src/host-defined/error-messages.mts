@@ -11,6 +11,7 @@ import {
   Construct, CreateArrayFromList, EscapeRegExpPattern, isArrayBufferObject, isArrayExoticObject, isDateObject, isErrorObject, isFunctionObject, isModuleNamespaceObject, isPromiseObject, isRegExpObject, isTypedArrayObject, JSStringValue, NullValue, NumberValue, ObjectValue, PrivateName, surroundingAgent, SymbolValue, ThrowCompletion, UndefinedValue, Value, X,
   type Intrinsics, type ErrorObject,
   TypedNumberValue,
+  VectorValue,
   ReferenceValue,
 } from '#self';
 
@@ -89,6 +90,12 @@ export function format(arg: Formattable): string {
     }
     // proposal-runtime-types R6: a typed number displays its value with a typed
     // marker in error messages, matching the inspector.
+    // proposal-runtime-types #sec-vector-types: a vector in a diagnostic prints
+    // as its lanes. Without this the formatter fell through to its exhaustive
+    // throw, so a REFUSAL involving a vector - which is a message the design
+    // needs often - crashed the host instead of reporting.
+    case arg instanceof VectorValue:
+      return `(${(arg as VectorValue).lanes.map((lane: unknown) => format(lane as never)).join(', ')})`;
     case arg instanceof TypedNumberValue:
       return `${(arg as TypedNumberValue).numberValue()} (typed)`; // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     case arg instanceof BigIntValue:
@@ -415,6 +422,7 @@ export interface Throw {
   | 'a rational exponent must be an integer'
   | 'a rational numerator must be an integer'
   | 'a ref for-of loop requires an array or an SoA whose elements can be referenced'
+  | 'a token stream is produced by the engine, not constructed'
   | 'a typed own property cannot be added to an instance of a non-dynamic typed class'
   | 'a using declaration requires an object with a Symbol.dispose method'
   | 'a var declaration may not appear in a do expression in a parameter'
@@ -549,9 +557,9 @@ export interface Throw {
   | '$1 is not a signature'
   | '$1 is not a string'
   | '$1 is not a supported calendar'
+  | '$1 is not a token stream'
   | '$1 is not a tuple'
   | '$1 is not a tuple element'
-  | 'the type evaluation budget was exhausted at $1'
   | '$1 is not a type'
   | '$1 is not a type node'
   | '$1 is not a valid array length'
@@ -737,6 +745,7 @@ export interface Throw {
   | 'the argument bound by ref to $1 does not satisfy its type annotation'
   | 'the call to $1 is ambiguous between overloads'
   | 'the type evaluation budget was exhausted ($1) while checking this source text'
+  | 'the type evaluation budget was exhausted at $1'
   | 'the value bound by ref to $1 does not satisfy its type annotation'
   | 'this type has no layout, so it has no $1'
   | 'this value $1 is not an object'
@@ -763,6 +772,7 @@ export interface Throw {
   | '$1 is not assignable to $2'
   | '$1 is not claimed by any meta type, in $2'
   | '$1 is not in the range of $2'
+  | '$1 lanes were supplied where $2 are wanted'
   | '$1 takes $2 type arguments and cannot be used unapplied'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'

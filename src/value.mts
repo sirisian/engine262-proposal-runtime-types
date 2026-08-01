@@ -69,6 +69,9 @@ export type Value =
   | NumberValue
   // proposal-runtime-types
   | TypedNumberValue
+  // proposal-runtime-types #sec-vector-types: a vector is a value type, a
+  // sibling of TypedNumberValue carrying N lanes rather than one.
+  | VectorValue
   | ReferenceValue
   | BigIntValue
   | ObjectValue;
@@ -128,6 +131,9 @@ export type PrimitiveValue =
   // sibling of NumberValue; a reference value is a non-object leaf that decays
   // to its referent wherever a primitive is consumed.
   | TypedNumberValue
+  // proposal-runtime-types #sec-vector-types: a vector is a value type, a
+  // sibling of TypedNumberValue carrying N lanes rather than one.
+  | VectorValue
   | ReferenceValue
   | BigIntValue;
 
@@ -552,6 +558,33 @@ export class NumberValue extends PrimitiveValue {
  * carried Type Record, a plain Number is not a member of any numeric value type,
  * and every numeric-reading site unwraps a typed number explicitly.
  */
+/**
+ * proposal-runtime-types #sec-vector-types: a vector value.
+ *
+ * "For a value type T that is an integer, binary floating-point, or vector
+ * type, and a positive integer N, `vector.<T, N>` is a value type whose values
+ * are the sequences of N values of T." So a vector carries its lanes and the
+ * Type Record that says what they are - the same shape TypedNumberValue takes
+ * for one lane, which is the model this follows.
+ */
+export class VectorValue extends PrimitiveValue {
+  declare readonly type: 'Vector'; // defined on prototype by the static block
+
+  readonly lanes: readonly Value[];
+
+  readonly TypeRecord: unknown;
+
+  constructor(lanes: readonly Value[], typeRecord: unknown) {
+    super();
+    this.lanes = lanes;
+    this.TypeRecord = typeRecord;
+  }
+
+  static {
+    Object.defineProperty(this.prototype, 'type', { value: 'Vector' });
+  }
+}
+
 export class TypedNumberValue extends PrimitiveValue {
   declare readonly type: 'TypedNumber'; // defined on prototype by static block
 

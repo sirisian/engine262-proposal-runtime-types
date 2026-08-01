@@ -1,4 +1,5 @@
 import type { ObjectValue, Arguments } from '../value.mts';
+import { VectorValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
@@ -8,6 +9,7 @@ import { neverType, orderKey } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
+import { RequireType } from '#self';
 import {
   CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject,
 } from '../intrinsics/Decimal.mts';
@@ -166,6 +168,32 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     // composite type.
     if (record.Kind === 'primitive' && record.Name === 'Composite' && record.Arguments.length > 0) {
       return Q(yield* CompositeFromShape(record.Arguments[0] as TypeRecord, arg));
+    }
+    // proposal-runtime-types #sec-vector-types: calling a vector Type Object
+    // builds a vector, and it is the ONE call form here that reads more than
+    // one argument - a vector's values are "the sequences of N values of T", so
+    // the lanes arrive as N arguments. One argument is the broadcast cast of
+    // #sec-vector-lanes and fills every lane; N arguments give the lanes in
+    // order; any other count is refused.
+    if (record.Kind === 'primitive' && record.Name === 'vector' && record.Arguments.length === 2) {
+      const laneType = record.Arguments[0] as TypeRecord;
+      const laneCount = record.Arguments[1];
+      if (typeof laneCount === 'number') {
+        const supplied = argumentsList.length;
+        if (supplied !== laneCount && supplied !== 1) {
+          return Throw.TypeError(
+            '$1 lanes were supplied where $2 are wanted',
+            Value(String(supplied)),
+            Value(String(laneCount)),
+          );
+        }
+        const lanes: Value[] = [];
+        for (let i = 0; i < laneCount; i += 1) {
+          const source = supplied === 1 ? arg : (argumentsList[i] ?? Value.undefined);
+          lanes.push(Q(yield* RequireType(source, laneType)) as Value);
+        }
+        return new VectorValue(lanes, record);
+      }
     }
     if (record.Kind === 'nominal' && record.EnumMembers !== undefined) {
       for (const member of record.EnumMembers) {

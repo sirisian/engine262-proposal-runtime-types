@@ -355,6 +355,17 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       'uint8', 'uint16', 'uint32', 'uint64', 'uint128',
       'float16', 'float32', 'float64', 'float128',
       'decimal32', 'decimal64', 'decimal128',
+      // proposal-runtime-types #sec-vector-types: the SIMD shorthands, so
+      // `float32x4(1, 2, 3, 4)` names something to call. They are GENERATED
+      // rather than listed because builtinTypeRecord decides which exist by
+      // regex - a name exists exactly where the lanes fill a register - and a
+      // hand-written list here would drift from that rule the first time a
+      // width was added.
+      ...['int', 'uint', 'float'].flatMap((base) => [8, 16, 32, 64].flatMap(
+        (width) => [2, 4, 8, 16, 32].map((lanes) => `${base}${width}x${lanes}`),
+      )),
+      'boolean8', 'boolean16', 'boolean32', 'boolean64',
+      ...[8, 16, 32, 64].flatMap((width) => [2, 4, 8, 16].map((lanes) => `boolean${width}x${lanes}`)),
     ]) {
       const record = builtinTypeRecord(name);
       if (record) {

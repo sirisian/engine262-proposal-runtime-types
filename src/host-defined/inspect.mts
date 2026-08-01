@@ -1,6 +1,7 @@
 import {
   JSStringValue, ObjectValue, Value, wellKnownSymbols, BooleanValue, NumberValue, BigIntValue, SymbolValue, UndefinedValue, TypedNumberValue,
 } from '../value.mts';
+import { VectorValue } from '../value.mts';
 import { Completion, X } from '../completion.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { DateObject } from '../intrinsics/Date.mts';
@@ -87,6 +88,8 @@ const INSPECTORS = {
   // proposal-runtime-types R6: a typed number prints its value with a typed
   // marker so it is distinguishable from a plain Number in debug output.
   TypedNumber: (v: TypedNumberValue) => `${v.numberValue()} (typed)`, // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+  // proposal-runtime-types #sec-vector-types: the lanes, parenthesized, which is how the design writes a vector literal.
+  Vector: (v: VectorValue, _ctx: InspectContext, i: (v: Value) => string) => `(${v.lanes.map((lane) => i(lane)).join(', ')})`,
   Reference: () => '[reference]',
   BigInt: (v: BigIntValue) => `${R(v)}n`,
   String: (v: JSStringValue) => {

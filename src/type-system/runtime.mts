@@ -5,6 +5,7 @@ import {
   TypedNumberValue, TypedStringValue, ReferenceValue,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
+import { VectorValue } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
@@ -26,6 +27,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
+import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
@@ -265,6 +267,15 @@ function elementLiteralTypeOf(value: Value): TypeRecord {
  * value types exist as distinct values, a Number's type is `number`.
  */
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  // proposal-runtime-types #sec-vector-types: a vector carries the Type Record
+  // it was built at, so its runtime type is read rather than inferred - the
+  // same as a TypedNumberValue, and for the same reason: the lane type and
+  // count are not recoverable from the lanes alone, since `float32x4(1,2,3,4)`
+  // and `int32x4(1,2,3,4)` hold equal lane values. It is answered first because
+  // a vector is a primitive here, and the branches below narrow past it.
+  if (value.type === 'Vector') {
+    return (value as VectorValue).TypeRecord as TypeRecord;
+  }
   // proposal-runtime-types #sec-decorator-application: a reflection object
   // REPORTS the context it reflects, which is what lets `@f`, `@f(0)` and
   // `@f('a')` "select among them the way any call does" - the ordinary overload
@@ -638,6 +649,14 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // significand and an exponent - the structural test is written out here for
   // the reason the rational one beside it is, so the type system does not depend
   // on an intrinsic module.
+  // proposal-runtime-types #sec-vector-types: a vector is a value of `vector.<T,
+  // N>` when it was built at that type. The lanes are already of T - the
+  // construction converted each - so the check is the type's identity, not a
+  // walk. SameType rather than reference equality, since a record reaching here
+  // may be an equal one built elsewhere.
+  if (value.type === 'Vector') {
+    return SameType((value as VectorValue).TypeRecord as TypeRecord, t);
+  }
   if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
     if (value instanceof ObjectValue && 'DecimalSignificand' in value) {
       const width = (value as unknown as { DecimalWidth: number }).DecimalWidth;
