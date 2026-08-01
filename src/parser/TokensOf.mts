@@ -56,6 +56,15 @@ export interface TokenRecord {
   readonly Span: SpanRecord;
   /** For a `group`, the tokens it delimits; *undefined* otherwise. */
   readonly Tokens: readonly TokenRecord[] | undefined;
+  /**
+   * Whether a LineTerminator preceded this token in its source.
+   *
+   * **Newlines are semantically significant in JavaScript through ASI**, so a
+   * printer that emits a space where the source had a newline can change what a
+   * program means. A separator is enough to keep two tokens from merging; it is
+   * not enough to keep a statement from joining the one above it.
+   */
+  readonly LineTerminatorBefore: boolean;
 }
 
 /**
@@ -151,7 +160,7 @@ export function sourceTextOf(node: ParseNode | null | undefined): string | undef
  */
 export function tokenizeText(text: string, source: SourceRefRecord, offset = 0): readonly TokenRecord[] {
   const parser = new Parser({ source: text, specifier: 'tokens-of' });
-  const flat: { data: { type: Token, startIndex: number, endIndex: number }, text: string }[] = [];
+  const flat: { data: { type: Token, startIndex: number, endIndex: number, hadLineTerminatorBefore?: boolean }, text: string }[] = [];
   for (;;) {
     const t = parser.peek();
     if (t.type === Token.EOS) {
@@ -177,6 +186,7 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
       }
       if (OPENERS[raw] !== undefined) {
         const openStart = data.startIndex + offset;
+      const openHadNewline = (data as { hadLineTerminatorBefore?: boolean }).hadLineTerminatorBefore === true;
         index += 1;
         const inner = build(OPENERS[raw]);
         const closeEnd = index > 0 ? flat[index - 1].data.endIndex + offset : span.End;
@@ -185,6 +195,7 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
           Value: raw,
           Span: { Source: source, Start: openStart, End: closeEnd },
           Tokens: inner,
+          LineTerminatorBefore: openHadNewline,
         });
         continue;
       }
@@ -194,6 +205,7 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
         Value: raw,
         Span: span,
         Tokens: undefined,
+        LineTerminatorBefore: (data as { hadLineTerminatorBefore?: boolean }).hadLineTerminatorBefore === true,
       });
     }
     return out;

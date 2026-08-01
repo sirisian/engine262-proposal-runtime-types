@@ -21,7 +21,10 @@ import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
-import { CreateTokenStream, TokenStreamText, isTokenStream } from './intrinsics/TokenStream.mts';
+import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
+import { Call } from './abstract-ops/all.mts';
+import { EnsureCompletion } from './completion.mts';
+import { skipDebugger } from './evaluator.mts';
 import { TokensOf } from './parser/TokensOf.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
@@ -185,7 +188,16 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       replacementNames,
       (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
       (node) => CreateTokenStream(TokensOf(node), realm),
-      (tokens) => (isTokenStream(tokens as Value) ? TokenStreamText((tokens as { TokenRecords: never }).TokenRecords) : undefined),
+      (fn, tokens) => {
+        // `skipDebugger` drives the evaluator synchronously: expansion happens
+        // before anything is running, so there is no context to suspend into.
+        const result = EnsureCompletion(skipDebugger(Call(fn as ObjectValue, Value.undefined, [tokens as Value])));
+        return result.Type === 'normal' ? result.Value : undefined;
+      },
+      (tokens) => {
+        const records = tokens === undefined ? undefined : TokenRecordsFrom(tokens as Value);
+        return records === undefined ? undefined : TokenStreamText(records);
+      },
     );
     if (expandedOnce.expanded > 0 && expandedOnce.text !== sourceText) {
       if ((hostDefined as { expansionDepth?: number }).expansionDepth ?? 0 > EXPANSION_LIMIT) {

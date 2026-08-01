@@ -131,8 +131,9 @@ export function ExpandSource(
   sourceText: string,
   root: ParseNode,
   names: readonly string[],
-  resolve: (name: string) => ((tokens: unknown, ...args: unknown[]) => unknown) | undefined,
+  resolve: (name: string) => unknown,
   tokensOf: (node: ParseNode) => unknown,
+  call: (fn: unknown, tokens: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
 ): { text: string, expanded: number } {
   const sites = ExpansionSites(root, names);
@@ -159,7 +160,7 @@ export function ExpandSource(
     }
     const at = sourceText.lastIndexOf('@', nodeStart);
     const start = at === -1 ? nodeStart : at;
-    const produced = textOf(fn(tokensOf(site.target)));
+    const produced = textOf(call(fn, tokensOf(site.target)));
     if (produced === undefined) {
       continue;
     }

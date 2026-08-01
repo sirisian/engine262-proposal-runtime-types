@@ -131,7 +131,7 @@ export interface HostHooks {
    * leaves the decoration alone rather than failing - a host that does not
    * implement preprocessor modules gets the parse it would have got anyway.
    */
-  HostResolveReplacementDecorator?(name: string, specifier: string | undefined): ((tokens: unknown, ...args: unknown[]) => unknown) | undefined;
+  HostResolveReplacementDecorator?(name: string, specifier: string | undefined): ObjectValue | undefined;
   /** https://tc39.es/ecma262/#sec-hosthassourcetextavailable */
   HostHasSourceTextAvailable?(func: FunctionObject): boolean;
   /** https://tc39.es/proposal-shadowrealm/#sec-hostinitializeshadowrealm */

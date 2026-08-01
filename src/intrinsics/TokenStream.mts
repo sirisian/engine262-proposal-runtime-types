@@ -1,9 +1,10 @@
 import {
-  Value, ObjectValue, JSStringValue,
+  Value, ObjectValue, JSStringValue, NumberValue,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import type { TokenRecord, SpanRecord } from '../parser/TokensOf.mts';
+import { R } from "../abstract-ops/all.mjs";
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
@@ -11,6 +12,7 @@ import {
   CreateBuiltinFunction,
   CreateDataPropertyOrThrow,
   CreateArrayFromList,
+  Get,
   Descriptor,
   F, X,
   type OrdinaryObject,
@@ -51,7 +53,12 @@ function SpanToObject(span: SpanRecord, realmRec: Realm): ObjectValue {
 
 /** A Token Record as an object. A `group`'s contents are a TokenStream in turn. */
 export function TokenToObject(token: TokenRecord, realmRec: Realm): ObjectValue {
-  const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
+  // The object REMEMBERS its record. That is what lets a token a macro passed
+  // through unchanged be recognised on the way back and reused rather than
+  // rebuilt - which is how a region the macro did not touch keeps its span, and
+  // therefore its formatting and its comments.
+  const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%'], ['TokenRecord']);
+  (obj as unknown as { TokenRecord: TokenRecord }).TokenRecord = token;
   X(CreateDataPropertyOrThrow(obj, Value('kind'), Value(token.Kind)));
   X(CreateDataPropertyOrThrow(obj, Value('value'), Value(token.Value)));
   X(CreateDataPropertyOrThrow(obj, Value('span'), SpanToObject(token.Span, realmRec)));
@@ -89,29 +96,130 @@ export function TokenStreamText(records: readonly TokenRecord[]): string {
   if (records.length === 0) {
     return '';
   }
-  let out = '';
+  const pieces: string[] = [];
   let runStart: TokenRecord | undefined;
   let runEnd: TokenRecord | undefined;
-  const flush = () => {
+  const flushRun = () => {
     if (runStart && runEnd) {
-      out += runStart.Span.Source.Text.slice(runStart.Span.Start, runEnd.Span.End);
+      pieces.push(runStart.Span.Source.Text.slice(runStart.Span.Start, runEnd.Span.End));
     }
     runStart = undefined;
     runEnd = undefined;
   };
+  // A GROUP's [[Value]] is its OPENING DELIMITER, not its text, so comparing the
+  // span's slice to [[Value]] never matches one - and the group fell to the
+  // print branch, which emitted `{` and dropped everything it delimited. A
+  // group is sliceable when its span begins with its delimiter.
+  const isSliceable = (t: TokenRecord) => {
+    const sliced = t.Span.Source.Text.slice(t.Span.Start, t.Span.End);
+    return t.Kind === 'group' ? sliced.startsWith(t.Value) && sliced.length > t.Value.length : sliced === t.Value;
+  };
+
   for (const t of records) {
-    // Tokens of one buffer are contiguous, so a run can be sliced whole. A
-    // token from a different buffer - one a macro produced - begins a new run,
-    // since there is no trivia between two buffers to recover.
-    if (runEnd && runEnd.Span.Source !== t.Span.Source) {
-      flush();
+    // **A RUN of tokens still carrying spans into one buffer is SLICED**, which
+    // is what keeps a region the macro did not touch exactly as written -
+    // formatting and comments included, since comments are not tokens and
+    // anything re-emitted token by token would lose them.
+    const continues = runEnd !== undefined
+      && runEnd.Span.Source === t.Span.Source
+      && isSliceable(t)
+      && t.Span.Start >= runEnd.Span.End;
+    if (continues) {
+      runEnd = t;
+      continue;
     }
-    if (!runStart) {
+    flushRun();
+    if (isSliceable(t)) {
       runStart = t;
+      runEnd = t;
+      continue;
     }
-    runEnd = t;
+    // A token the macro CREATED has no buffer to slice, so it is PRINTED. A
+    // separator is required rather than cosmetic: `a` then `b` re-lexes to one
+    // token without it, and so do `+`/`+` and `return`/`x`.
+    //
+    // A NEWLINE where the record says one preceded it, because newlines are
+    // semantically significant through ASI - a space there would join a
+    // statement to the one above it.
+    pieces.push(t.LineTerminatorBefore ? '\n' : ' ');
+    if (t.Kind === 'group' && t.Tokens !== undefined) {
+      // A created group prints its delimiters around its contents, which are
+      // printed in turn. The closing delimiter is the record's, not a token, so
+      // it cannot be lost.
+      const close = t.Value === '{' ? '}' : t.Value === '[' ? ']' : ')';
+      pieces.push(t.Value, TokenStreamText(t.Tokens), close);
+    } else {
+      pieces.push(t.Value);
+    }
   }
-  flush();
+  flushRun();
+  // The leading separator before a created token at the very start is not
+  // wanted; every other one sits between two pieces.
+  return pieces.join('').replace(/^[ \n]+/, '');
+}
+
+/**
+ * Read Token Records back out of whatever a macro returned.
+ *
+ * **A macro's return is usually NOT a TokenStream**: `tokens.map(...)` gives a
+ * plain Array, because that is what `Array.prototype.map` does. Requiring a
+ * macro to rebuild a stream would require it to know a representation it never
+ * constructed, so a returned value is read STRUCTURALLY.
+ *
+ * **A token the macro passed through UNCHANGED is reused, not rebuilt.** The
+ * object carries the record it came from, so a region the macro did not touch
+ * keeps its span - and therefore its formatting and its comments, which are not
+ * tokens and would be lost by anything re-emitted token by token. This is
+ * `sec-applyreplacementdecorator`'s rule, not an optimisation: "a token the
+ * decorator COPIED from what it was given keeps the Span it arrived with".
+ */
+export function TokenRecordsFrom(value: Value): readonly TokenRecord[] | undefined {
+  if (isTokenStream(value)) {
+    return value.TokenRecords;
+  }
+  if (!(value instanceof ObjectValue)) {
+    return undefined;
+  }
+  const lengthValue = X(Get(value, Value('length')));
+  if (!(lengthValue instanceof NumberValue)) {
+    return undefined;
+  }
+  const out: TokenRecord[] = [];
+  const length = Number(R(lengthValue));
+  for (let i = 0; i < length; i += 1) {
+    const element = X(Get(value, Value(String(i))));
+    if (!(element instanceof ObjectValue)) {
+      return undefined;
+    }
+    const carried = (element as unknown as { TokenRecord?: TokenRecord }).TokenRecord;
+    if (carried !== undefined) {
+      out.push(carried);
+      continue;
+    }
+    const kind = X(Get(element, Value('kind')));
+    const text = X(Get(element, Value('value')));
+    if (!(kind instanceof JSStringValue) || !(text instanceof JSStringValue)) {
+      return undefined;
+    }
+    const nested = X(Get(element, Value('tokens')));
+    // A CREATED token is self-relative: the macro handed back a plain object, so
+    // the original buffer is not among them. Keeping the original offsets while
+    // the buffer is the token's own text means slicing past the end and getting
+    // nothing - the shape that failed silently twice in this project.
+    out.push({
+      Kind: kind.stringValue() as TokenRecord['Kind'],
+      Value: text.stringValue(),
+      Span: {
+        Source: {
+          URL: undefined, Macro: undefined, Generation: 0, Text: text.stringValue(),
+        },
+        Start: 0,
+        End: text.stringValue().length,
+      },
+      Tokens: nested instanceof ObjectValue ? TokenRecordsFrom(nested) : undefined,
+      LineTerminatorBefore: false,
+    });
+  }
   return out;
 }
 
@@ -157,6 +265,7 @@ function* TokenStream_gensym(args: Arguments): ValueEvaluator {
       End: text.length,
     },
     Tokens: undefined,
+    LineTerminatorBefore: false,
   };
   return TokenToObject(record, realmRec);
 }
