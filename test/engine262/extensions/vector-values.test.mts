@@ -551,38 +551,50 @@ test('a bare parameterized primitive is not a value', () => {
 });
 
 /**
- * THE COMPARISON RESULT FORMS ARE IMPLEMENTED BACKWARDS, and this is a defect
- * rather than a deferred extension.
+ * The comparison result forms: one of the clause's three now lands, and the
+ * remaining divergence is narrowed to a single case.
  *
- * sec-vector-comparisons says the result form is chosen by the expected type
- * among three, and that "left with no expected type the expression is ambiguous
- * among them and is a type error, so the result's type is written".
+ * sec-vector-comparisons gives a comparison three result forms chosen by the
+ * expected type: the WIDE MASK, a vector of the boolean type of the compared
+ * element's width; the COMPACT MASK, a bit vector of one bit per lane; and the
+ * compared vector type itself with matching lanes all-ones.
  *
- * The engine does the opposite of both halves: a bare `a < b` is ACCEPTED and
- * yields the bit vector, where the clause makes it a type error; and
- * `const m: boolean32x4 = a < b` is REFUSED, where the clause requires the wide
- * mask.
+ * The wide mask now works where a binding annotation supplies the expected
+ * type, because the CONVERSION from the compact form to it is a rule about two
+ * vector types and needs nothing from the selection machinery. `const m:
+ * boolean32x4 = a < b` yields four 32-bit lanes, all-set where the comparison
+ * held.
  *
- * The clause names the mechanism - sec-overloading-on-return-type - and the
- * engine does not have it. `overloads.mts` resolves on ARGUMENT types, and a
- * function overloaded only on its return type does not parse. So this is not a
- * small wiring job; it needs return-type overloading first.
+ * WHAT REMAINS is the clause's ambiguity rule: "left with no expected type the
+ * expression is ambiguous among them and is a type error". A bare `a < b` is
+ * accepted here and yields the compact mask. Making it an error needs the
+ * selection to be a real overload resolution rather than a conversion, which
+ * needs sec-overloading-on-return-type - and `overloads.mts` resolves on
+ * ARGUMENT types, so a function overloaded only on its return type does not
+ * even parse.
  *
- * The tests below assert the engine as it behaves, not as the clause requires,
- * and say so. Asserting the clause would leave two permanently red tests that
- * say nothing about whether anyone is working on it; asserting the behaviour
- * with the divergence named leaves a record that flips when the mechanism
- * lands.
+ * So the divergence is one case rather than two, and the test says which.
  */
 
-test('a comparison yields the bit-vector form (diverges from the clause)', () => {
+test('an annotated comparison yields the wide mask', () => {
+  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); '
+    + 'const m: boolean32x4 = a < b; ';
+  expect(evaluated(`${P}String(Reflect.typeOf(m) === boolean32x4);`)).toBe('true');
+  // All-set where the comparison held, all-clear where it did not - asserted at
+  // both ends of a lane, since a partial fill would pass a first-bit check.
+  expect(evaluated(`${P}String(m[0][0]);`)).toBe('1');
+  expect(evaluated(`${P}String(m[0][31]);`)).toBe('1');
+  expect(evaluated(`${P}String(m[2][0]);`)).toBe('0');
+  expect(evaluated(`${P}String(m[2][31]);`)).toBe('0');
+});
+
+test('an unannotated comparison is accepted (diverges from the clause)', () => {
+  // The clause makes this a type error, since nothing selects among the three
+  // forms. The engine accepts it and yields the compact mask. Asserted as it
+  // behaves with the divergence named above, so the test flips when
+  // return-type overloading lands rather than sitting red until then.
   const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
-  // The clause makes this a type error, since no expected type selects among
-  // the three forms. The engine accepts it and picks the compact mask.
   expect(evaluated(`${P}String(a < b);`)).toBe('(1, 1, 0, 0)');
-  // And the clause requires this to yield the WIDE mask. The engine refuses it,
-  // because the bit vector is not assignable to boolean32x4.
-  expect(ok(`${P}const m: boolean32x4 = a < b;`)).toBe(false);
 });
 
 /**

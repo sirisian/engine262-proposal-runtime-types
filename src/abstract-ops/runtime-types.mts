@@ -359,6 +359,40 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // type is not the lane type does not convert, so a `float32` reaches
   // `float32x4` and not `float64x2`, and a design wanting the second casts to
   // `float64` first.
+  // proposal-runtime-types #sec-vector-comparisons: the WIDE MASK. The clause
+  // gives a comparison three result forms chosen by the expected type, and
+  // names the wide mask as "a vector of the boolean type of the same width as
+  // the compared element, so a `float32x4` comparison yields a `boolean32x4` of
+  // lanes all-set or all-clear".
+  //
+  // A compact mask converts to it: each lane becomes a bit vector of the target
+  // width, all-set where the bit was 1. This is the CONVERSION half of the
+  // clause's rule - the selection half needs return-type overloading, which
+  // this engine does not have - so an annotated binding reaches the wide mask
+  // while an unannotated expression still yields the compact one.
+  if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
+    const fromShape = vectorShape(value as VectorValue);
+    const toLane = t.Arguments[0] as TypeRecord;
+    const toCount = t.Arguments[1];
+    if (fromShape && isBitLaneType(fromShape.laneType) && typeof toCount === 'number'
+        && toCount === fromShape.laneCount && !isBitLaneType(toLane)
+        && toLane.Kind === 'primitive' && toLane.Name === 'vector') {
+      const innerCount = (toLane as { Arguments: readonly unknown[] }).Arguments[1];
+      const innerLane = (toLane as { Arguments: readonly unknown[] }).Arguments[0] as TypeRecord;
+      if (typeof innerCount === 'number' && isBitLaneType(innerLane)) {
+        const wide: Value[] = [];
+        for (let i = 0; i < fromShape.laneCount; i += 1) {
+          const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1;
+          const bits: Value[] = [];
+          for (let b = 0; b < innerCount; b += 1) {
+            bits.push(Q(yield* CheckedConvertValue(Value(set ? 1 : 0), innerLane)) as Value);
+          }
+          wide.push(new VectorValue(bits, toLane));
+        }
+        return new VectorValue(wide, t);
+      }
+    }
+  }
   // The reverse of the bit-vector conversion: "a value of the vector type
   // converted to an integer type gives the integer whose bit i is lane i"
   // (#sec-vector-lanes). Stated in each direction by the clause and needed in
