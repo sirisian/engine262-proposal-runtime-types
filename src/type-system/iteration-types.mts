@@ -20,6 +20,23 @@ const BUILTIN_INTERFACES = new Set([
   'AsyncIterator', 'AsyncIterable', 'AsyncIterableIterator',
 ]);
 
+/**
+ * `Identity`, the wrapper that means NO wrapper (standardlibrary.md).
+ *
+ * It is separate from BUILTIN_INTERFACES because it is not an interface: every
+ * member of that family DESCRIBES a shape and Identity REDUCES to its argument,
+ * which is what an alias does. Applied, it is its argument; unapplied, it must
+ * stay a declaration, since a higher-kinded parameter binds declarations and a
+ * reduced `any` would be refused as not being one.
+ */
+export function identityRecord(args: readonly (TypeRecord | number)[]): TypeRecord | null {
+  const first = args[0];
+  if (first === undefined || typeof first === 'number') {
+    return null;
+  }
+  return first;
+}
+
 /** Whether a type name is one of the iteration interfaces. */
 export function isIterationInterfaceName(name: string): boolean {
   return BUILTIN_INTERFACES.has(name);

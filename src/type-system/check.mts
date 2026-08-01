@@ -6,7 +6,7 @@ import {
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
-import { iterationInterfaceRecord } from './iteration-types.mts';
+import { iterationInterfaceRecord, identityRecord } from './iteration-types.mts';
 import { badKindedArgument } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
@@ -937,6 +937,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `Map.<K, V>`). Without the library fallback a `RegExp.<C, G>` annotation
           // resolves to nothing here and its capture checking never runs.
           const parameterizedName = node.TypeName.IdentifierReference.name;
+          // proposal-runtime-types: `Identity.<T>` REDUCES to T rather than
+          // describing a shape, which is what makes it an alias and not one of
+          // the iteration interfaces. It is consulted before them for that
+          // reason - it answers with its argument, not with a record named
+          // Identity - and only when applied, so a bare `Identity` stays a
+          // declaration a higher-kinded parameter can bind.
+          if (parameterizedName === 'Identity' && !lookupAlias(parameterizedName)) {
+            const reduced = identityRecord(args);
+            if (reduced) {
+              return reduced;
+            }
+          }
           const builtinOrLibrary = builtinTypeRecord(parameterizedName, args)
             ?? iterationInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);

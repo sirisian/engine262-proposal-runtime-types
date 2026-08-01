@@ -300,36 +300,41 @@ test('the refusal explains that inference is not attempted', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 6 — started, and its prerequisite is
- * harder than the plan assumed.
+ * PLAN-higher-kinded-types-engine.md phase 6 — the prerequisite, and what four
+ * attempts established about it.
  *
  * The unification needs `Identity`, the wrapper meaning NO wrapper.
- * standardlibrary.md ships it as an ordinary generic alias, and the engine has
- * no standard library to declare it in - so it has to be built in, and a
- * built-in `Identity` is not the same thing as `type Identity<T> = T`.
+ * standardlibrary.md ships it as an ordinary generic alias; the engine has no
+ * standard library to declare it in, so it has to come from somewhere else.
  *
- * Three attempts, each failing differently, which is what makes the shape
- * clear:
+ * WHAT IS SETTLED. Identity is not one of the iteration interfaces and cannot
+ * be built like one. Every member of that family DESCRIBES a shape and Identity
+ * REDUCES to its argument, which is what an alias does and what the interface
+ * builder has no notion of. `identityRecord` is the reducing form, consulted
+ * ahead of the interfaces and only when applied, so a bare `Identity` stays a
+ * declaration a higher-kinded parameter can bind.
  *
- *   - As a built-in interface, `Identity` resolved in a parameter annotation
- *     and not in a `const` one, needing the global binding its five siblings
- *     have.
- *   - With the binding, `Identity.<uint8>` reduced to `any` rather than to
- *     `uint8`, because the shorthand defaults a missing first argument to `any`
- *     and the interface builder returns a record rather than its argument.
- *   - Keeping bare `Identity` unreduced made it a nominal, so
- *     `Identity.<uint8>` was a nominal named Identity rather than being uint8 -
- *     and `B.<Identity>` then refused it as "not a generic declaration".
+ * It also defers to a program's own `type Identity<T> = T`, which the tests
+ * below rely on and which the interface attempts broke. That deference is the
+ * right default for an ALIAS a program could legitimately redeclare - unlike
+ * `Iterable`, a protocol, which today wins over a program's declaration of the
+ * same name.
  *
- * The last is the real difficulty and it is not incidental. Every other member
- * of this family DESCRIBES a shape, and Identity REDUCES to its argument: it is
- * an alias, and the built-in interface mechanism has no notion of reducing. It
- * needs the generic-alias path - InstantiateGenericAlias - rather than the
- * interface builder, which is a different mechanism from the one it was put in.
+ * WHAT REMAINS. The built-in is not reachable in a type annotation: only a
+ * user-declared Identity resolves. The name has to enter the checker's
+ * type-name resolution the way the iteration interfaces do, and those reach it
+ * through a global binding installed at realm setup - which is where the next
+ * attempt starts, and which is a question about NAME RESOLUTION rather than
+ * about what Identity means. What Identity means is answered.
  *
- * All four attempts also shadowed the `type Identity<T> = T` these tests
- * declare, which is how the regression surfaced: a built-in name silently wins
- * over a program's own declaration of it. That is worth deciding rather than
- * discovering - standardlibrary.md's Identity is an ALIAS a program could
- * legitimately redeclare.
+ * The unification itself has not begun and should not until this resolves,
+ * since `Iterator<T, R, N, W<_> = Identity>` names Identity in its own default.
  */
+
+test('a program may declare its own Identity', () => {
+  // The reducing form defers to a user declaration, which is what makes
+  // Identity an alias rather than a protocol. The interface attempts shadowed
+  // this and broke four tests.
+  expect(ok('type Identity<T> = T; const a: Identity.<uint8> = 1;')).toBe(true);
+  expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+});
