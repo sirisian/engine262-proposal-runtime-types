@@ -9,6 +9,8 @@ import {
   NullValue,
   type Arguments,
 } from '../value.mts';
+import { VectorValue } from '../value.mts';
+import { vectorGet } from '../type-system/vector-ops.mts';
 import { InstanceofOperator } from '../runtime-semantics/all.mts';
 import {
   EnsureCompletion,
@@ -90,6 +92,16 @@ export function* Get(O: ObjectValue, P: PropertyKeyValue): ValueEvaluator {
 /** https://tc39.es/ecma262/#sec-getv */
 export function* GetV(V: Value, P: PropertyKeyValue): ValueEvaluator {
   Assert(IsPropertyKey(P));
+  // proposal-runtime-types #sec-vector-lanes: a lane read. A vector is a
+  // PRIMITIVE, so a member access on one is routed through here and boxed; the
+  // lane is answered before the boxing, so a lane read does not depend on a
+  // wrapper object carrying the lanes.
+  if (surroundingAgent.feature('runtime-types') && V.type === 'Vector') {
+    const lane = Q(yield* vectorGet(V as VectorValue, P));
+    if (lane !== undefined) {
+      return lane;
+    }
+  }
   const O = Q(ToObject(V));
   return Q(yield* O.Get(P, V));
 }

@@ -8,6 +8,8 @@ import {
   ObjectValue,
   ReferenceValue,
 } from '../value.mts';
+import { VectorValue, type PropertyKeyValue } from '../value.mts';
+import { vectorGet } from '../type-system/vector-ops.mts';
 import {
   Q,
   type PlainCompletion,
@@ -100,6 +102,18 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
       // returns a borrow (`return ref this.data[i]`) reads through to the
       // referent, so the access yields the element's current value.
       return Q(yield* DecayReferenceValue(operatorResult));
+    }
+    // proposal-runtime-types #sec-vector-lanes: a lane read. This is answered
+    // beside the index-operator case above and before ToObject, because a
+    // vector is a PRIMITIVE and boxing it loses the lanes - ToObject asserts on
+    // one rather than wrapping it.
+    // No feature guard: a VectorValue only exists when the feature built one,
+    // so the base's own type is the whole condition.
+    if ((V.Base as Value)?.type === 'Vector') {
+      const lane = Q(yield* vectorGet(V.Base as VectorValue, V.ReferencedName as PropertyKeyValue));
+      if (lane !== undefined) {
+        return lane;
+      }
     }
     // a. Let baseObj be ? ToObject(V.[[Base]]).
     const baseObj = Q(ToObject(V.Base));

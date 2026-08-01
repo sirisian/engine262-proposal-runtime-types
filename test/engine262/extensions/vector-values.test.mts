@@ -65,3 +65,36 @@ test('typeof a vector is object', () => {
   // new value kind is answered by every typeof in the language.
   expect(evaluated('String(typeof float32x4(1, 2, 3, 4));')).toBe('object');
 });
+
+/**
+ * PLAN-simd-engine.md phase 2 — started, and the lane read is located but not
+ * landing. Recorded here so the next attempt starts from the measurements
+ * rather than repeating them.
+ *
+ * `vectorGet` and `vectorSet` exist in type-system/vector-ops.mts and implement
+ * what #sec-vector-lanes states: a canonical numeric key is a lane, an index at
+ * or beyond the lane count throws a RangeError rather than being a type error,
+ * and a lane write converts to the lane type. They are wired into GetValue's
+ * property-reference branch, beside the index-operator case and BEFORE
+ * ToObject, since a vector is a primitive and ToObject asserts on one rather
+ * than boxing it.
+ *
+ * `const a = float32x4(1, 2, 3, 4); a[0]` still reaches ToObject and throws
+ * the host assertion `argument instanceof ObjectValue`.
+ *
+ * WHAT WAS MEASURED, so the next attempt does not re-measure it:
+ *
+ *   - At the line above ToObject, `V.Base.type` is 'Vector' and its constructor
+ *     is VectorValue. The hook is in the right function and the base is the
+ *     right value.
+ *   - The vector's Type Record is `{ Kind: 'primitive', Name: 'vector',
+ *     Arguments: ['float32', 4] }`, which is exactly what `vectorShape` accepts,
+ *     so `vectorGet` should answer rather than fall through.
+ *   - Removing the `surroundingAgent.feature` guard from the hook changed
+ *     nothing, so the guard was not what failed.
+ *
+ * Those three together say the crash is on a path that reaches ToObject BEFORE
+ * this branch - a different GetValue, or an earlier member-access route that
+ * boxes eagerly. Finding which is the next step, and a stack trace taken with
+ * the hook in place will name it.
+ */
