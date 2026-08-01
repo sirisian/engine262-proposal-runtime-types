@@ -133,13 +133,14 @@ export function ExpandSource(
   names: readonly string[],
   resolve: (name: string) => unknown,
   tokensOf: (node: ParseNode) => unknown,
+  checkEvaluable: (fn: unknown) => string | undefined,
   call: (fn: unknown, tokens: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
-): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens', name: string }[] } {
+): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] } {
   const sites = ExpansionSites(root, names);
   let expanded = 0;
   const edits: { start: number, end: number, text: string }[] = [];
-  const failures: { kind: 'threw' | 'not-tokens', name: string }[] = [];
+  const failures: { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] = [];
   for (const site of sites) {
     const fn = resolve(site.name);
     if (fn === undefined) {
@@ -161,6 +162,20 @@ export function ExpandSource(
     }
     const at = sourceText.lastIndexOf('@', nodeStart);
     const start = at === -1 ? nodeStart : at;
+    // `sec-preprocessor-modules`: a replacement decorator must be compile-time
+    // EVALUABLE, and it is checked HERE - before it is called, so a macro that
+    // names the clock never runs at all.
+    //
+    // **This needed no loader change.** The check was thought to wait on load
+    // ordering, on the reasoning that the module has to be loaded before it can
+    // be inspected. It does not: a function object RETAINS ITS OWN SOURCE - the
+    // retention `Function.prototype.toString` already requires - so the source
+    // to check arrives with the function.
+    const violation = checkEvaluable(fn);
+    if (violation !== undefined) {
+      failures.push({ kind: 'not-evaluable', name: site.name, detail: violation });
+      continue;
+    }
     const returned = call(fn, tokensOf(site.target));
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro

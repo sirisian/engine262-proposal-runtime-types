@@ -76,3 +76,25 @@ test('every one of these is reachable BEFORE anything runs', () => {
   expect(outcome(`${PRE}{ const m = 1; }`)).not.toBe('ACCEPTED');
   expect(outcome(`${PRE}function r(c) {} @r @m class C {}`)).not.toBe('ACCEPTED');
 });
+
+
+test('a macro that is not COMPILE-TIME EVALUABLE never runs', () => {
+  // `sec-preprocessor-modules` requires a replacement decorator to be evaluable,
+  // and it is checked BEFORE the call - so a macro that names the clock does not
+  // get to run once and be caught afterwards.
+  //
+  // **This was thought to wait on load ordering** and did not: a function object
+  // RETAINS ITS OWN SOURCE, the retention `Function.prototype.toString` already
+  // requires, so the source to check arrives with the function. The blocker was
+  // an assumption about where the source lives.
+  const body = `import { m } from "./x.js" with { preprocessor: "true" };${NL}@m class C { x = 1; }`;
+  expect(outcome(body, '(function (t) { return t; })')).toBe('ACCEPTED');
+  expect(outcome(body, '(function (t) { return Date.now() ? t : t; })')).toContain('not compile-time evaluable');
+  expect(outcome(body, '(function (t) { return Math.random() ? t : t; })')).toContain('not compile-time evaluable');
+  expect(outcome(body, '(function (t) { return fetch ? t : t; })')).toContain('not compile-time evaluable');
+  // The message NAMES what was named and why, since "not evaluable" alone would
+  // send an author looking through a whole function.
+  expect(outcome(body, '(function (t) { return Date.now() ? t : t; })')).toContain('the wall clock');
+  // LOCAL mutation stays legal - a macro must still be able to compute.
+  expect(outcome(body, '(function (t) { const s = new Set(); return s.has(1) ? t : t; })')).toBe('ACCEPTED');
+});

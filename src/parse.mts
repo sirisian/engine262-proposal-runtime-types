@@ -21,6 +21,7 @@ import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyErrors.mts';
+import { FirstEvaluabilityViolation } from './static-semantics/PreprocessorEvaluability.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
 import { Call } from './abstract-ops/all.mts';
@@ -203,6 +204,21 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       replacementNames,
       (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
       (node) => CreateTokenStream(TokensOf(node), realm),
+      (fn) => {
+        // The macro's own source is on the function object, so evaluability is
+        // checkable without loading anything. Parsed as a Script because a
+        // function expression is not a Module.
+        const source = (fn as { SourceText?: string })?.SourceText;
+        if (typeof source !== 'string') {
+          return undefined;
+        }
+        const parsed = wrappedParse<ParseNode.Script>({ source: `(${source})`, specifier: 'preprocessor' }, (pp) => pp.parseScript());
+        if (Array.isArray(parsed)) {
+          return undefined;
+        }
+        const violation = FirstEvaluabilityViolation(parsed);
+        return violation ? `${violation.name} (${violation.why})` : undefined;
+      },
       (fn, tokens) => {
         // `skipDebugger` drives the evaluator synchronously: expansion happens
         // before anything is running, so there is no context to suspend into.
@@ -219,7 +235,9 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
       const completion = (failure.kind === 'threw'
         ? Throw.SyntaxError('the replacement decorator $1 rejected what it decorates', Value(failure.name))
-        : Throw.SyntaxError('the replacement decorator $1 did not return tokens', Value(failure.name))) as ThrowCompletion;
+        : failure.kind === 'not-evaluable'
+          ? Throw.SyntaxError('the replacement decorator $1 is not compile-time evaluable: it names $2', Value(failure.name), Value(failure.detail ?? ''))
+          : Throw.SyntaxError('the replacement decorator $1 did not return tokens', Value(failure.name))) as ThrowCompletion;
       Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
       return [completion.Value as ObjectValue];
     }
