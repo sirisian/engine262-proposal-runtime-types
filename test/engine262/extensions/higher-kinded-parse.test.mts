@@ -191,20 +191,21 @@ test('the two failures carry different messages', () => {
  *    implemented. A kinded constraint will work when `where` does, and needs
  *    nothing of its own beyond what phase 3 already resolves.
  *
- * 3. VARIANCE IS NOT ENFORCED, and the cause is now narrowed. It is not the
- *    comparison and not the arguments' distinctness: `Identity === Boxed` is
- *    *false*, so the two declarations denote different types, while
- *    `B.<Identity> === B.<Boxed>` is *true* - the applications intern to ONE
- *    type.
+ * 3. VARIANCE HOLDS FOR A CLASS ARGUMENT AND NOT YET FOR AN ALIAS.
  *
- *    orderKey does include a nominal's arguments in its key, and CLASS
- *    arguments collide exactly as alias arguments do, so this is neither about
- *    aliases nor about the key's shape. What is left is that the arguments
- *    never reach the record. That is the same defect the generics work fixed
- *    for ordinary arguments in NewExpression and the annotation path, and the
- *    one HKT phase 0 fixed for Type Objects in expression position - a third
- *    site with the same shape, which is worth noticing as a pattern rather
- *    than a coincidence.
+ *    The cause was at CONSTRUCTION, not in the comparison. The checker's
+ *    NewExpression branch resolved each type argument with resolveType, which
+ *    answers null for a bare generic name because a bare generic name is not a
+ *    type - correctly. The null was then filtered out, the length check failed,
+ *    and `new B.<Boxed>()` fell through to the bare `B`, which is assignable to
+ *    every application. No two applications were ever distinct at construction,
+ *    which is why this read as a variance failure and was not one.
+ *
+ *    A class argument now resolves through classTypeOf and distinguishes:
+ *    `const a: B.<One> = new B.<Two>()` is refused. An ALIAS argument still
+ *    does not, because lookupAlias does not reach a GENERIC alias - the same
+ *    distinction that made a bare `Identity` unusable as a type. That is the
+ *    remaining piece, and it is one lookup rather than a rule.
  */
 
 test('a kinded argument works in a parameter annotation', () => {
@@ -231,4 +232,10 @@ test('a kinded argument resolves in a const annotation', () => {
   // not kinded or the arity does not match.
   expect(ok(`${P}const a: B.<uint8> = new B();`)).toBe(false);
   expect(ok(`${P}const a: B.<Map> = new B();`)).toBe(false);
+});
+
+test('applications binding different class wrappers are distinct', () => {
+  const P = 'class One<T> {} class Two<T> {} class B<W<_>> {} ';
+  expect(ok(`${P}const a: B.<One> = new B.<One>();`)).toBe(true);
+  expect(ok(`${P}const a: B.<One> = new B.<Two>();`)).toBe(false);
 });

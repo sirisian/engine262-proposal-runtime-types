@@ -1480,7 +1480,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const base = classTypeOf((spec.Expression as unknown as { name: string }).name);
             if (base && base.Kind === 'nominal') {
               const args = spec.TypeArguments.TypeArgumentList
-                .map((a) => resolveType(a as unknown as ParseNode.Type))
+                .map((a) => resolveType(a as unknown as ParseNode.Type)
+                  // proposal-runtime-types #sec-higher-kinded-parameters: an
+                  // argument binding a kinded parameter is a DECLARATION, and
+                  // resolveType answers null for a bare generic name because it
+                  // is not a type. The filter below then dropped it, the length
+                  // check failed, and `new B.<Boxed>()` fell through to the
+                  // bare `B` - which is assignable to every application, so no
+                  // two applications were ever distinct at construction.
+                  ?? (a.type === 'TypeReference'
+                    ? classTypeOf((a as unknown as { TypeName: { IdentifierReference: { name: string } } })
+                      .TypeName.IdentifierReference.name)
+                      ?? lookupAlias((a as unknown as { TypeName: { IdentifierReference: { name: string } } })
+                        .TypeName.IdentifierReference.name)
+                    : null))
                 .filter((a): a is TypeRecord => !!a);
               if (args.length === spec.TypeArguments.TypeArgumentList.length) {
                 return CanonicalizeType({ ...base, Arguments: args });
