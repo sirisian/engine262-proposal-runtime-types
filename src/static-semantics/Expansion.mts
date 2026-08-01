@@ -1,0 +1,139 @@
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { ReplacementDecoratorNames } from './ReplacementDecoratorNames.mts';
+
+/**
+ * proposal-runtime-types `sec-expansion` and `sec-when-expansion-happens`.
+ *
+ * Expansion is the phase in which replacement decorators run. It occurs after a
+ * module's source text has been scanned and BEFORE the module is checked -
+ * `ParseModule` calls `CheckModule` a dozen lines after parsing, so the seam
+ * this occupies and the checker are the same few lines.
+ *
+ * **That ordering is normative rather than incidental.** The checker must never
+ * see an unexpanded decoration: an implementation that checked first would
+ * reject syntax a replacement decorator was about to produce, which forbids
+ * exactly the macros worth writing.
+ */
+
+/** The implementation's expansion limit. Specified, not left to each engine. */
+export const EXPANSION_LIMIT = 128;
+
+export interface ExpansionSite {
+  /** The decoration naming a replacement decorator. */
+  readonly decorator: ParseNode;
+  /** The declaration it decorates. */
+  readonly target: ParseNode;
+  /** The name it spells. */
+  readonly name: string;
+  /** How far from the decorated declaration it sits; 0 is closest. */
+  readonly distance: number;
+}
+
+/** The identifier a decoration spells, where it spells a bare one. */
+function decoratedName(decorator: ParseNode): string | undefined {
+  const d = decorator as {
+    MemberExpression?: { type?: string, name?: string },
+  };
+  const m = d.MemberExpression;
+  return m?.type === 'IdentifierReference' ? m.name : undefined;
+}
+
+/**
+ * Every decoration in _root_ that names a replacement decorator, OUTERMOST
+ * first.
+ *
+ * The order is `sec-expansion`'s: an outer decoration receives the ones it
+ * encloses UNEXPANDED and may rewrite or remove them. Innermost-first would make
+ * an outer decorator unable to delete an inner one, because the inner one would
+ * already have run - which is the capability conditional compilation depends on.
+ */
+export function ExpansionSites(root: ParseNode, names: readonly string[]): readonly ExpansionSite[] {
+  if (names.length === 0) {
+    return [];
+  }
+  const wanted = new Set(names);
+  const sites: ExpansionSite[] = [];
+  const seen = new Set<object>();
+
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== 'object' || seen.has(node as object)) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    seen.add(node as object);
+    const n = node as ParseNode & { Decorators?: readonly ParseNode[] | null };
+    const decorators = n.Decorators;
+    if (Array.isArray(decorators)) {
+      // A stack is written outermost-first in source, and `sec-replacement-
+      // decorators` requires replacement decorators to sit OUTERMOST, so source
+      // order is already expansion order within one target.
+      decorators.forEach((d, i) => {
+        const name = decoratedName(d);
+        if (name !== undefined && wanted.has(name)) {
+          sites.push({
+            decorator: d, target: n, name, distance: decorators.length - 1 - i,
+          });
+        }
+      });
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'location' || key === 'sourceText' || key === 'strict' || key === 'parent') {
+        continue;
+      }
+      visit((n as unknown as Record<string, unknown>)[key]);
+    }
+  };
+  visit(root);
+  return sites;
+}
+
+export interface ExpansionResult {
+  /** How many decorations were expanded. Zero means the phase did nothing. */
+  readonly expanded: number;
+  /** The sites found, in the order they would run. */
+  readonly sites: readonly ExpansionSite[];
+  /** Set when the limit was exceeded, naming the decoration and the depth. */
+  readonly limitExceeded?: { readonly name: string, readonly depth: number };
+}
+
+/**
+ * `sec-expansion`: run the fixpoint.
+ *
+ * **The name set is fixed before the loop and nothing in the loop changes it**,
+ * so a decoration an expansion introduces cannot name a replacement decorator no
+ * import brought in. Re-resolving imports mid-expansion would be the
+ * alternative, and it is unavailable: a preprocessor module can name nothing
+ * asynchronous, so an expansion has nothing to fetch with.
+ *
+ * WHAT THIS DOES NOT YET DO: call the decorator. Calling one requires the
+ * preprocessor module to have been loaded and evaluated before this point, which
+ * is the load-ordering change `sec-preprocessor-modules` describes and which
+ * `ParseModule` cannot do today - it runs BEFORE `LoadRequestedModules`. The
+ * loop, the ordering, the limit and the gate are here; the call is the piece
+ * that waits on the loader.
+ */
+export function Expansion(root: ParseNode, names?: readonly string[]): ExpansionResult {
+  const fixed = names ?? ReplacementDecoratorNames(root as ParseNode.Module);
+  let depth = 0;
+  let expanded = 0;
+  let sites = ExpansionSites(root, fixed);
+  const first = sites;
+  while (sites.length > 0) {
+    if (depth > EXPANSION_LIMIT) {
+      return { expanded, sites: first, limitExceeded: { name: sites[0].name, depth } };
+    }
+    // One pass per depth. Each site would be replaced by the tokens its
+    // decorator returns, and the returned stream walked for further decorations
+    // - which is why nothing is re-lexed: what comes back is already tokens.
+    expanded += sites.length;
+    depth += 1;
+    // Without the call there is nothing new to find, so the loop terminates on
+    // the first pass. The shape is the specified one; the body is a stub, and
+    // the tests say so rather than implying otherwise.
+    sites = [];
+  }
+  return { expanded, sites: first };
+}

@@ -5,7 +5,7 @@ import {
   SourceTextModuleRecord, SyntheticModuleRecord, type LoadedModuleRequestRecord, type ModuleRecordHostDefined,
 } from './modules.mts';
 import { JSStringValue, ObjectValue, Value } from './value.mts';
-import { Q, type PlainCompletion } from './completion.mts';
+import { Q, type PlainCompletion, type ThrowCompletion } from './completion.mts';
 import {
   ModuleRequests,
   ImportEntries,
@@ -20,6 +20,7 @@ import type { ParseNode } from './parser/ParseNode.mts';
 import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
+import { Expansion } from './static-semantics/Expansion.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
   CreateDefaultExportSyntheticModule,
@@ -168,6 +169,22 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
     ? ReplacementDecoratorNames(body)
     : [];
   (body as { ReplacementDecoratorNames?: readonly string[] }).ReplacementDecoratorNames = replacementNames;
+  // `sec-when-expansion-happens`: the phase runs HERE - after the parse above,
+  // before the `CheckModule` below - and only when the gate is non-empty, so a
+  // module using no replacement decorator observes no phase at all.
+  if (replacementNames.length > 0) {
+    const expansion = Expansion(body, replacementNames);
+    (body as { ExpansionResult?: unknown }).ExpansionResult = expansion;
+    if (expansion.limitExceeded) {
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      const error = Throw.SyntaxError(
+        'expansion of $1 exceeded the limit',
+        Value(expansion.limitExceeded.name),
+      ) as ThrowCompletion;
+      Parser.decorateSyntaxErrorWithScriptId(error.Value as ObjectValue, scriptId);
+      return [error.Value as ObjectValue];
+    }
+  }
   // proposal-runtime-types #sec-type-errors: the same checker gate as the
   // script goal, over module items.
   if (surroundingAgent.feature('runtime-types')) {
