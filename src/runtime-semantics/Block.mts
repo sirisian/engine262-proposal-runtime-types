@@ -57,9 +57,13 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
 //  Block :
 //    `{` `}`
 //    `{` StatementList `}`
-export function* Evaluate_Block(node: ParseNode.Block & { BlockKind?: string, BlockParts?: ParseNode.BlockParts }) {
+export function* Evaluate_Block(node: ParseNode.Block & {
+  BlockKind?: string,
+  BlockParts?: ParseNode.BlockParts,
+  BlockLabel?: string,
+}) {
   const {
-    StatementList, Decorators, BlockKind, BlockParts,
+    StatementList, Decorators, BlockKind, BlockParts, BlockLabel,
   } = node;
   // proposal-runtime-types decorators.md "Order": "Block, `let`, and `const`
   // decorators are on the other timeline: they fire when the STATEMENT EXECUTES
@@ -88,7 +92,8 @@ export function* Evaluate_Block(node: ParseNode.Block & { BlockKind?: string, Bl
     // may REPLACE its value - the one thing a block decorator can do that no
     // other block has a use for - and the expression is what holds the value.
     if (blockKind !== 'DoBlock') {
-      Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, Value.undefined, node, BlockParts))));
+      const label = BlockLabel === undefined ? Value.undefined : Value(BlockLabel);
+      Q(yield* ApplyDecorators(Decorators, Q(yield* BlockDecoratorContext(blockKind, label, node, BlockParts))));
     }
   }
   if (StatementList.length === 0) {

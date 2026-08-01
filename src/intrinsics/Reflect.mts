@@ -1134,6 +1134,26 @@ export function doGeneratorBlockContextRecord(): TypeRecord {
   };
 }
 
+// proposal-runtime-types: decorators.md's `MatchArmBlockReflection`, the twelfth
+// block context. It was the one member of the family with no context object
+// while the other eleven had one - the `match` expression is implemented, so
+// this was a missing reflection rather than a missing feature.
+//
+// It carries more than its siblings: `subject`, `pattern` and `guard` beside
+// `block`. A PATTERN is the interesting one, because it is the only member of
+// any reflection that has no runtime form at all - a pattern is not a value, so
+// tokens are the only way a decorator could ever see one.
+const matchArmBlockContextDeclaration = { type: 'ReflectionContext', name: 'MatchArmBlock' } as unknown as ParseNode;
+
+export function matchArmBlockContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: matchArmBlockContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.MatchArmBlock',
+  };
+}
+
 const enumContextDeclaration = { type: 'ReflectionContext', name: 'Enum' } as unknown as ParseNode;
 
 export function enumContextRecord(): TypeRecord {
@@ -1418,6 +1438,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('DoGeneratorBlock'), Descriptor({
     Value: GetTypeObject(doGeneratorBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('MatchArmBlock'), Descriptor({
+    Value: GetTypeObject(matchArmBlockContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

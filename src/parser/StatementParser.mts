@@ -846,6 +846,33 @@ export abstract class StatementParser extends TypeParser {
    * consequent as `ElseIfBlock`, which is the one subkind that is not simply
    * the keyword above it.
    */
+  /**
+   * Records the label a decorated block was written under.
+   *
+   * The label may name the block directly - `lbl: { … }` - or the STATEMENT
+   * that owns it: `outer: while (c) { … }` labels the loop, and the block is
+   * its body. decorators.md gives `WhileBlock` and its siblings a `label`, and
+   * the label those forms have is the owning statement's, so it propagates one
+   * level into the body. Anything deeper is a different block with a label of
+   * its own.
+   */
+  protected markBlockLabel(statement: unknown, label: string): void {
+    if (!surroundingAgent.feature('runtime-types')) {
+      return;
+    }
+    const owned = statement as {
+      type?: string,
+      Statement?: unknown,
+      Statement_a?: unknown,
+    };
+    const target = owned?.type === 'Block'
+      ? owned
+      : [owned?.Statement, owned?.Statement_a].find((n) => (n as { type?: string })?.type === 'Block');
+    if (target && (target as { BlockLabel?: string }).BlockLabel === undefined) {
+      (target as { BlockLabel?: string }).BlockLabel = label;
+    }
+  }
+
   protected markBlockKind<T>(statement: T, kind: string, parts?: ParseNode.BlockParts): T {
     if (surroundingAgent.feature('runtime-types')
         && (statement as { type?: string })?.type === 'Block') {
@@ -1512,6 +1539,15 @@ export abstract class StatementParser extends TypeParser {
       });
 
       node.LabelledItem = this.parseStatement();
+      // proposal-runtime-types: decorators.md gives every block reflection a
+      // `label`, and it has answered *undefined* since the contexts were built
+      // because nothing read it. The label is LEXICAL - it is known here and
+      // does not depend on evaluation - so it is recorded the way `BlockKind`
+      // and `BlockParts` are, on the block the decoration sits on.
+      //
+      // `a: b: @g { }` records `b`: the field is singular in the design, and
+      // the nearest label is the one immediately attached to the block.
+      this.markBlockLabel(node.LabelledItem, node.LabelIdentifier.name);
 
       this.scope.labels.pop();
 
