@@ -3178,6 +3178,13 @@ export namespace ParseNode {
   export interface TypeParameter extends BaseParseNode {
     readonly type: 'TypeParameter';
     readonly BindingIdentifier: BindingIdentifier;
+    /**
+     * proposal-runtime-types #sec-higher-kinded-parameters: the count of `_`
+     * holes after the name. 0 is an ordinary parameter standing for a type; n
+     * > 0 is a higher-kinded parameter standing for a generic declaration of n
+     * parameters, which is not itself a type.
+     */
+    readonly Arity?: number;
     readonly TypeParameterConstraint: Type | null;
     readonly TypeParameterDefault: Type | null;
   }

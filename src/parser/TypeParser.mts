@@ -355,12 +355,49 @@ export abstract class TypeParser extends ExpressionParser {
       }
       const param = this.startNode<ParseNode.TypeParameter>();
       param.BindingIdentifier = this.parseBindingIdentifier();
+      // proposal-runtime-types #sec-higher-kinded-parameters: a parameter is
+      // higher-kinded when its name is followed by a bracketed list of `_`,
+      // and the count of holes is its arity. `_` is the pattern wildcard,
+      // reused positionally the way `%` is the remainder operator and the
+      // pipeline topic: a type parameter list is a position where a pattern
+      // cannot appear, so the token is unambiguous and already means a hole.
+      let Arity = 0;
+      if (this.test(Token.LT)) {
+        this.next();
+        do {
+          if (!this.test(Token.IDENTIFIER) || this.peek().value !== '_') {
+            // Only `_` is a hole. Naming what was found matters: `<W<T>>` and
+            // `<W<~>>` are both plausible spellings a reader might try, and
+            // "unexpected token" would leave them guessing which part is wrong.
+            return this.unexpected();
+          }
+          this.next();
+          Arity += 1;
+        } while (this.eat(Token.COMMA));
+        this.expect(Token.GT);
+        if (Arity === 0) {
+          // `<W<>>` - a parameter of arity zero is spelled without brackets.
+          return this.unexpected();
+        }
+      }
+      param.Arity = Arity;
       if (this.eat(Token.COLON) || this.eat(Token.EXTENDS)) {
         param.TypeParameterConstraint = this.parseType();
       } else {
         param.TypeParameterConstraint = null;
       }
       param.TypeParameterDefault = this.eat(Token.ASSIGN) ? this.parseType() : null;
+      // proposal-runtime-types: a parameter carrying a default may not precede
+      // one that does not, since an application supplying fewer arguments than
+      // parameters fills from the END. The rule was stated in the specification
+      // and enforced nowhere, which the higher-kinded work found by relying on
+      // it: `Iterator<T, R, N, W<_> = Identity>` places its wrapper last
+      // BECAUSE of this rule, and an unenforced rule is not a reason for
+      // anything.
+      const previous = TypeParameterList[TypeParameterList.length - 1];
+      if (previous && previous.TypeParameterDefault && !param.TypeParameterDefault) {
+        return this.unexpected();
+      }
       TypeParameterList.push(this.finishNode(param, 'TypeParameter'));
     } while (this.eat(Token.COMMA));
     if (TypeParameterList.length === 0) {

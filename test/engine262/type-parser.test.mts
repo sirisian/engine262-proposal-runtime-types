@@ -181,14 +181,19 @@ test('computed types are call-shaped', () => {
 });
 
 test('type parameters with constraint and default', () => {
-  const p = makeParser('<T: Comparable = uint8, U extends A.B>');
+  // Reordered so the defaulted parameter comes last. A parameter carrying a
+  // default may not precede one that does not - an application supplying fewer
+  // arguments fills from the end - and the rule is enforced now where it was
+  // only stated before. The ordering was incidental to this test, which is
+  // about parsing a constraint and a default together.
+  const p = makeParser('<U extends A.B, T: Comparable = uint8>');
   const params = p.parseTypeParameters();
   expect(TokenNames[p.peek().type]).toBe('EOS');
   expect(params).toMatchObject({
     type: 'TypeParameters',
     TypeParameterList: [
-      { type: 'TypeParameter', TypeParameterConstraint: { type: 'TypeReference' }, TypeParameterDefault: { type: 'TypeReference' } },
       { type: 'TypeParameter', TypeParameterConstraint: { type: 'TypeReference' }, TypeParameterDefault: null },
+      { type: 'TypeParameter', TypeParameterConstraint: { type: 'TypeReference' }, TypeParameterDefault: { type: 'TypeReference' } },
     ],
   });
 });
