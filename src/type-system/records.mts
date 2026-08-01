@@ -626,6 +626,24 @@ export function parameterTypeRecord(Name: string, Constraint?: TypeRecord, Arity
   return Constraint ? { ...base, Constraint } : base;
 }
 
+/**
+ * The parameter count of a generic declaration a Type Record denotes, or null
+ * where it denotes no declaration.
+ *
+ * #sec-higher-kinded-parameters: an argument bound to a higher-kinded parameter
+ * must be "a generic class, interface, or type alias whose parameter count
+ * equals the parameter's [[Arity]]", and the two ways that fails are told apart
+ * by whether this returns null or a number.
+ */
+export function declarationParameterCount(t: TypeRecord | null | undefined): number | null {
+  if (!t || t.Kind !== 'nominal') {
+    return null;
+  }
+  const decl = (t as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).Declaration;
+  const list = decl?.TypeParameters?.TypeParameterList;
+  return list ? list.length : null;
+}
+
 /** Whether a Type Record is a higher-kinded parameter (#sec-higher-kinded-parameters). */
 export function isHigherKinded(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'parameter' && (t.Arity ?? 0) > 0;

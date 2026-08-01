@@ -17,7 +17,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { restElementType } from './records.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
 import {
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
+  anyType, builtinTypeRecord, declarationParameterCount, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
@@ -1156,6 +1156,30 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // only applied. It is not a type." An unapplied reference to one is
       // refused HERE rather than allowed to resolve to a record that would then
       // behave as a type everywhere downstream.
+      // proposal-runtime-types #sec-higher-kinded-parameters: `W.<T>` where `W`
+      // is a bound higher-kinded parameter. The parameter resolves to the
+      // DECLARATION an application bound to it, and that is then applied - so
+      // `W.<X>` means the same as writing the bound declaration applied to X.
+      if (node.TypeName.MemberNames.length === 0 && node.TypeArguments) {
+        const appliedName = node.TypeName.IdentifierReference.name;
+        const boundDecl = lookupTypeParameter(appliedName);
+        if (boundDecl && boundDecl.Kind !== 'parameter') {
+          const argRecords: TypeRecord[] = [];
+          for (const argNode of node.TypeArguments.TypeArgumentList) {
+            argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+          }
+          if (boundDecl.Kind === 'nominal' && boundDecl.Declaration?.type === 'TypeAliasDeclaration'
+              && (boundDecl.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
+            return Q(yield* InstantiateGenericAlias(
+              boundDecl.Declaration as ParseNode.TypeAliasDeclaration,
+              argRecords,
+            ));
+          }
+          if (boundDecl.Kind === 'nominal') {
+            return { ...boundDecl, Arguments: argRecords };
+          }
+        }
+      }
       if (node.TypeName.MemberNames.length === 0 && !node.TypeArguments) {
         const kindedName = node.TypeName.IdentifierReference.name;
         const bound = lookupTypeParameter(kindedName);
@@ -1315,6 +1339,37 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // a `generic` view. Bare `T` and `T.<...>` are therefore distinct interned
         // types, and two `T.<A>` are one.
         if (baseRecord.Kind === 'nominal' && argRecords.length > 0) {
+          // proposal-runtime-types #sec-higher-kinded-parameters: validate each
+          // argument against the parameter it binds. A higher-kinded parameter
+          // takes a generic DECLARATION of matching arity, and the two ways
+          // that fails are different mistakes - a non-declaration, and a
+          // declaration of the wrong arity - so they carry different messages.
+          const params = (baseRecord.Declaration as unknown as {
+            TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name: string }, Arity?: number }[] },
+          } | undefined)?.TypeParameters?.TypeParameterList;
+          if (params) {
+            for (let i = 0; i < params.length && i < argRecords.length; i += 1) {
+              const wanted = params[i].Arity ?? 0;
+              if (wanted === 0) {
+                continue;
+              }
+              const supplied = declarationParameterCount(argRecords[i]);
+              const pname = params[i].BindingIdentifier?.name ?? '?';
+              if (supplied === null) {
+                return Throw.TypeError(
+                  '$1 is not a generic declaration; $2 expects one taking $3 type arguments',
+                  Value(displayType(argRecords[i])), Value(pname), Value(String(wanted)),
+                );
+              }
+              if (supplied !== wanted) {
+                return Throw.TypeError(
+                  '$1 takes $2 type arguments; $3 expects one taking $4',
+                  Value(displayType(argRecords[i])), Value(String(supplied)),
+                  Value(pname), Value(String(wanted)),
+                );
+              }
+            }
+          }
           return { ...baseRecord, Arguments: argRecords };
         }
         return baseRecord;

@@ -109,3 +109,29 @@ test('an ordinary parameter is untouched', () => {
   expect(ok('class C<T> { m(v: T): T { return v; } }')).toBe(true);
   expect(ok('function f<T>(x: T): T { return x; }')).toBe(true);
 });
+
+/**
+ * PLAN-higher-kinded-types-engine.md phase 3, partially landed.
+ *
+ * The APPLICATION half works: `W.<T>` where `W` is a bound higher-kinded
+ * parameter resolves the parameter to the declaration an application bound to
+ * it and applies that, so `W.<X>` means what writing the bound declaration
+ * applied to X means. An alias argument goes through InstantiateGenericAlias
+ * and a class or interface through the ordinary argument attach.
+ *
+ * The VALIDATION half does not fire yet, and the reason is the two-resolver
+ * split this work has met repeatedly. It was written into
+ * TypeNodeToTypeRecord, and a type ANNOTATION naming a generic class is
+ * resolved by the checker instead - the same path the generics work had to
+ * teach about user classes. `Box.<uint8>` and `Box.<Map>` are accepted today
+ * where the clause requires two distinct refusals.
+ *
+ * The next step is specific: the checker's parameterized type-name resolution
+ * is where a user class's arguments are attached, and the validation belongs
+ * beside it rather than duplicated.
+ */
+
+test('a bound higher-kinded parameter applies', () => {
+  expect(ok('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_>> { v: W; }')).toBe(false);
+});
