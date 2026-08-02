@@ -591,6 +591,14 @@ function requireUnmoved(backing: SoAElementBacking) {
   if (backing.Storage.Capacity !== backing.PinnedCapacity) {
     return Throw.TypeError('this reference is into an SoA that has since grown');
   }
+  // proposal-runtime-types #sec-reference-liveness: a reference names an
+  // element, and an element that has been removed is not there to read or
+  // write. A shrink moves nothing, so the capacity test above cannot see it -
+  // the bytes are still in the allocation, which is precisely why the index
+  // has to be tested against the current length rather than trusted.
+  if (backing.Index >= backing.Storage.Length) {
+    return Throw.TypeError('this reference is into an SoA element that has since been removed');
+  }
   return requireViewLive(backing.Storage);
 }
 

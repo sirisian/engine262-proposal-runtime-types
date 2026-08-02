@@ -13,6 +13,8 @@ import { Q, X, NormalCompletion } from '../completion.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { ReferenceValue } from '../value.mts';
+import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from '../abstract-ops/runtime-types.mts';
 import {
   InstantiateFunctionObject,
@@ -134,16 +136,31 @@ export function* FunctionDeclarationInstantiation(func: ECMAScriptFunctionObject
   let parameterBindings: JSStringSet;
   if (argumentsObjectNeeded === true) {
     let ao;
+    // proposal-runtime-types (references extension): the arguments object is
+    // an ordinary object, a store a reference cannot survive, so the view of
+    // the argument list it is built from carries each ref argument's decayed
+    // value. The raw list still reaches the parameter bindings below, which
+    // is where a `ref` parameter takes its location.
+    let argumentsForObject = argumentsList;
+    for (let i = 0; i < argumentsList.length; i += 1) {
+      const arg = argumentsList[i]!;
+      if (arg instanceof ReferenceValue) {
+        if (argumentsForObject === argumentsList) {
+          argumentsForObject = [...argumentsList] as Value[];
+        }
+        (argumentsForObject as Value[])[i] = Q(yield* DecayReferenceValue(arg));
+      }
+    }
     // a. If strict is true or if simpleParameterList is false, then
     if (strict || simpleParameterList === false) {
       // i. Let ao be CreateUnmappedArgumentsObject(argumentsList).
-      ao = CreateUnmappedArgumentsObject(argumentsList);
+      ao = CreateUnmappedArgumentsObject(argumentsForObject);
     } else {
       // i. NOTE: mapped argument object is only provided for non-strict functions
       //    that don't have a rest parameter, any parameter default value initializers,
       //    or any destructured parameters.
       // ii. Let ao be CreateMappedArgumentsObject(func, formals, argumentsList, env).
-      ao = CreateMappedArgumentsObject(func, formals, argumentsList, env);
+      ao = CreateMappedArgumentsObject(func, formals, argumentsForObject, env);
     }
     // c. If strict is true, then
     if (strict) {

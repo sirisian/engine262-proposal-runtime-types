@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectError, runFlagOff,
+  evaluated, ok, expectThrown, expectError, expectThrownKind, runFlagOff,
 } from '../readme/harness.mts';
 
 /**
@@ -237,6 +237,112 @@ test('a ref binding may not appear in a for statement initializer', () => {
 test('a var head never claims ref', () => {
   // ref bindings are lexical; `var ref p` keeps its base meaning and fails
   expectError('let a = [1]; for (var ref p of a) { } "ran";');
+});
+
+// -- #sec-reference-values: the decay channels (Phase 2) -----------------------
+test('a returned reference decays at the call boundary wherever it is consumed', () => {
+  const first = 'function first(a) { return ref a[0]; } ';
+  // typeof sees the referent, never the reference
+  expect(evaluated(`${first}let a = [7]; String(typeof first(a));`)).toBe('number');
+  // the base of a member access consumes a value, so the access lands on the
+  // decayed referent - for an object element that is the object itself
+  expect(evaluated(`${first}let a = [{ x: 1 }]; String(first(a).x);`)).toBe('1');
+  expect(evaluated(`${first}let a = [{ x: 1 }]; first(a).x = 5; String(a[0].x);`)).toBe('5');
+  expect(evaluated(`${first}let a = [{ x: 1 }]; first(a)["x"] = 6; String(a[0].x);`)).toBe('6');
+  expect(evaluated(`${first}let a = [{ x: 1 }]; String(first(a)?.x);`)).toBe('1');
+  // a call whose callee is a returned reference calls the referent
+  expect(evaluated('function g() { let v = () => 7; return ref v; } String(g()());')).toBe('7');
+});
+
+test('a rest parameter gathers each ref argument as its decayed value', () => {
+  expect(evaluated('function f(...r) { return typeof r[0]; } let x = 1; String(f(ref x));')).toBe('number');
+  expect(evaluated('function f(...r) { return String(r[0] === 1); } let x = 1; f(ref x);')).toBe('true');
+  expect(evaluated('function f(a, ...r) { return String(r[0] === 2 && r[1] === 3); } let x = 2, y = 3; f(0, ref x, ref y);')).toBe('true');
+});
+
+test('a parameter that is not declared ref consumes the argument as a value', () => {
+  expect(evaluated('function f(a) { return typeof a; } let x = 1; String(f(ref x));')).toBe('number');
+  // a destructuring pattern parameter takes the referent apart, not the reference
+  expect(evaluated('function f({ v }) { return v; } let o = { v: 3 }; String(f(ref o));')).toBe('3');
+});
+
+test('the arguments object holds decayed values and never aliases the caller', () => {
+  // strict: unmapped entries are the decayed values
+  expect(evaluated('"use strict"; function f(ref a) { return typeof arguments[0]; } let x = 1; f(ref x);')).toBe('number');
+  expect(evaluated('"use strict"; function f(ref a) { return String(arguments[0] === 1); } let x = 1; f(ref x);')).toBe('true');
+  // sloppy: a ref parameter makes the list non-simple, so arguments is
+  // unmapped and a store to it cannot reach the caller's variable
+  expect(evaluated('let x = 1; function f(ref a) { arguments[0] = 7; } f(ref x); String(x);')).toBe('1');
+  expect(evaluated('function f(ref a) { return String(arguments[0] === 1); } let x = 1; f(ref x);')).toBe('true');
+  // a ref argument to a plain function decays into mapped extras as well
+  expect(evaluated('function g(a) { return typeof arguments[1]; } let x = 1; String(g(0, ref x));')).toBe('number');
+});
+
+test('a ref parameter is non-simple, as a default or a pattern is', () => {
+  expectError('function f(ref a) { "use strict"; } "ran";');
+  // sloppy duplicate parameter names require a simple list
+  expectError('function f(ref a, a) { } "ran";');
+});
+
+test('a built-in function boundary decays, which covers the reflective calls', () => {
+  expect(evaluated('let x = 41; String(Math.max(ref x, 1));')).toBe('41');
+  // %Function.prototype.call% decays on entry, so the list it forwards
+  // carries values and a ref parameter downstream refuses them
+  expectThrown('function f(ref a) { } let x = 1; f.call(null, ref x);');
+  // bind stores [[BoundArguments]] as values; a later write to x is unseen
+  expect(evaluated('function f(a) { return String(a === 5); } let x = 5; let b = f.bind(null, ref x); x = 9; b();')).toBe('true');
+});
+
+// -- #sec-reference-liveness: the two-tier model (Phase 3) ---------------------
+const soa = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
+
+test('the loop rule refuses a length change at the operation', () => {
+  // every container a ref loop can iterate, refused where it happens
+  expectThrownKind('let a = [1, 2]; for (let ref p of a) { a.push(9); }', 'TypeError');
+  expectThrownKind('let a = [1, 2]; for (let ref p of a) { a.shift(); }', 'TypeError');
+  expectThrownKind('let a = [1, 2]; for (let ref p of a) { a.length = 1; }', 'TypeError');
+  expectThrownKind('const a: [].<uint32> = [1, 2]; for (let ref p of a) { a.push(3); }', 'TypeError');
+  expectThrownKind(`${soa} for (const ref p of s) { s.push({ a: 9, b: 9 }); }`, 'TypeError');
+  expectThrownKind(`${soa} s.push({ a: 2, b: 2 }); for (const ref p of s) { s.pop(); }`, 'TypeError');
+  // and releases the moment the loop is over, however it ended
+  expect(evaluated('let a = [1, 2]; for (let ref p of a) { } a.push(3); String(a.length);')).toBe('3');
+  expect(evaluated('let a = [1, 2]; for (let ref p of a) { break; } a.push(3); String(a.length);')).toBe('3');
+});
+
+test('a standalone reference survives growth that does not relocate', () => {
+  // S1: the push fit in the existing allocation, so nothing moved
+  expect(evaluated(`${soa} const ref e = s[0]; s.push({ a: 2, b: 2.5 }); String(e.a);`)).toBe('1');
+  // and a capacity reserved up front is exactly how a program avoids the move
+  expect(evaluated('class P { a: uint8; } const s = SoA.withCapacity.<P>(8); s.push({ a: 1 }); const ref e = s[0]; s.push({ a: 2 }); String(e.a);')).toBe('1');
+});
+
+test('relocation invalidates a standalone reference, caught at the next use', () => {
+  // S2: growth past the allocation moves every column; the read is refused
+  expectThrownKind(`${soa} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2.5 }); e.a;`, 'TypeError');
+  // S4: a write through the stale reference is refused too
+  expectThrownKind(`${soa} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2.5 }); e.a = 7;`, 'TypeError');
+  // the capacity operations participate, which is the case no length rule sees
+  expectThrownKind(`${soa} const ref e = s[0]; s.reserve(64); e.a;`, 'TypeError');
+  expectThrownKind('class P { a: uint8; } const s = SoA.withCapacity.<P>(2); s.push({ a: 1 }); const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2 }); e.a;', 'TypeError');
+  // a reserve inside a loop is not a length change, so the loop rule does not
+  // fire - the relocation rule refuses the loop's own reference at its next use
+  expectThrownKind(`${soa} s.push({ a: 2, b: 2 }); for (const ref p of s) { s.reserve(64); p.a; }`, 'TypeError');
+});
+
+test('a reference to an element that has been removed is invalidated', () => {
+  // a shrink moves nothing, so only the index test can see this
+  expectThrownKind(`${soa} s.push({ a: 42, b: 2 }); const ref e = s[1]; s.pop(); e.a;`, 'TypeError');
+  expectThrownKind(`${soa} s.push({ a: 42, b: 2 }); const ref e = s[1]; s.pop(); e.a = 99;`, 'TypeError');
+  // an element still within the length is untouched by the shrink
+  expect(evaluated(`${soa} s.push({ a: 42, b: 2 }); const ref e = s[0]; s.pop(); String(e.a);`)).toBe('1');
+});
+
+test('a reference to an ordinary property is a slot alias and never relocates', () => {
+  // outside a loop, a plain array carries no restriction: slots do not move
+  expect(evaluated('let a = [1]; let ref b = a[0]; a.push(9); b = 5; String(a[0]) + "," + String(a.length);')).toBe('5,2');
+  // and the reference keeps denoting a[0], whose value a shift has changed -
+  // the same thing the expression a[0] has always meant
+  expect(evaluated('let a = [1, 2]; let ref b = a[0]; a.shift(); String(b);')).toBe('2');
 });
 
 // -- feature gating ------------------------------------------------------------

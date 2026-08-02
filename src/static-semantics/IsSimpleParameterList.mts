@@ -12,7 +12,12 @@ export function IsSimpleParameterList(node: ParseNode | readonly ParseNode[]) {
   }
   switch (node.type) {
     case 'SingleNameBinding':
-      return node.Initializer === null;
+      // proposal-runtime-types (references extension): a `ref` parameter makes
+      // the list non-simple, as a default or a pattern does. The consequence
+      // that matters is the arguments object: non-simple means unmapped, and
+      // unmapped entries hold each argument's DECAYED value, so `arguments`
+      // never aliases the caller's location and strict and sloppy code agree.
+      return node.Initializer === null && node.Ref !== true;
     case 'BindingElement':
       return false;
     case 'BindingRestElement':

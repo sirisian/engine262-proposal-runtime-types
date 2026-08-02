@@ -9,7 +9,7 @@ import {
   type Arguments,
   BooleanValue, type PropertyKeyValue, NullValue, JSStringValue,
   type NativeSteps,
-  NumberValue,
+  NumberValue, ReferenceValue,
 } from '../value.mts';
 import {
   EnsureCompletion,
@@ -31,6 +31,7 @@ import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
+import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
 import {
@@ -739,7 +740,8 @@ function BuiltinFunctionConstruct(this: BuiltinFunctionObject, argumentsList: Ar
 
 const { apply } = Reflect;
 /** https://tc39.es/ecma262/#sec-builtincallorconstruct */
-function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value | 'uninitialized', argumentsList: Arguments, newTarget: FunctionObject | UndefinedValue): ValueEvaluator {
+function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value | 'uninitialized', argumentsListInput: Arguments, newTarget: FunctionObject | UndefinedValue): ValueEvaluator {
+  let argumentsList = argumentsListInput;
   const calleeContext = new ExecutionContext();
   calleeContext.Function = F;
   const calleeRealm = F.Realm;
@@ -755,6 +757,26 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
     thisValue,
     NewTarget: newTarget,
   };
+  // proposal-runtime-types (references extension): a built-in function has no
+  // `ref` parameters, so every one of its parameters consumes a value and a
+  // ref argument decays at this boundary. This is also what makes the
+  // reflective call paths decay channels: `f.call(null, ref x)` decays HERE,
+  // on entry to %Function.prototype.call%, so the list it forwards to its
+  // target carries values, and `bind` stores values in [[BoundArguments]]
+  // rather than references.
+  let decayed: Value[] | null = null;
+  for (let i = 0; i < argumentsList.length; i += 1) {
+    const arg = argumentsList[i]!;
+    if (arg instanceof ReferenceValue) {
+      if (decayed === null) {
+        decayed = [...argumentsList] as Value[];
+      }
+      decayed[i] = Q(yield* DecayReferenceValue(arg));
+    }
+  }
+  if (decayed !== null) {
+    argumentsList = decayed as Arguments;
+  }
   if (F.Async) {
     const promiseCapability = X(NewPromiseCapability(surroundingAgent.intrinsic('%Promise%')));
     const resultClosure = function* asyncFunctionPrologue() {

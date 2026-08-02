@@ -116,9 +116,13 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // the referent's current value at an ordinary call boundary, so a caller
   // that consumes the call as a value observes the referent and never the
   // reference. (Consuming a returned reference as a location is a matter for
-  // the assignment-target forms.)
-  if (result instanceof ReferenceValue) {
-    return Q(yield* GetValue(result.Location));
+  // the assignment-target forms.) The result of Call arrives wrapped in a
+  // normal completion from the evaluator, so the check unwraps before it
+  // looks; testing the completion object itself made this a dead branch, and
+  // a returned reference then reached member bases and typeof raw.
+  const callValue = result instanceof Completion ? result.Value : result;
+  if (callValue instanceof ReferenceValue && !(result instanceof AbruptCompletion)) {
+    return Q(yield* GetValue(callValue.Location));
   }
   // 10. Return result.
   return result;

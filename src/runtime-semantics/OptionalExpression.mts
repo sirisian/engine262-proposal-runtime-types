@@ -1,4 +1,5 @@
 import { ReferenceRecord, Value } from '../value.mts';
+import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { Evaluate, type ExpressionEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
 import { IsInTailPosition, StringValue } from '../static-semantics/all.mts';
@@ -21,7 +22,10 @@ export function* Evaluate_OptionalExpression(node: ParseNode.OptionalExpression)
   // 1. Let baseReference be the result of evaluating MemberExpression.
   const baseReference = Q(yield* Evaluate(MemberExpression));
   // 2. Let baseValue be ? GetValue(baseReference).
-  const baseValue = Q(yield* GetValue(baseReference));
+  // proposal-runtime-types (references extension): the base of an optional
+  // chain consumes a value, so a reference value decays here as it does at a
+  // plain member access.
+  const baseValue = Q(yield* DecayReferenceValue(Q(yield* GetValue(baseReference))));
   // 3. If baseValue is undefined or null, then
   if (baseValue === Value.undefined || baseValue === Value.null) {
     // a. Return undefined.

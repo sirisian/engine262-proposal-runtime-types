@@ -163,7 +163,10 @@ export abstract class FunctionParser extends IdentifierParser {
 
     if (hasStrictDirective) {
       parameters.forEach((p) => {
-        if (p.type !== 'SingleNameBinding' || p.Initializer) {
+        // proposal-runtime-types (references extension): a `ref` parameter
+        // makes the list non-simple (see IsSimpleParameterList), so it joins
+        // defaults and patterns in refusing the directive.
+        if (p.type !== 'SingleNameBinding' || p.Initializer || p.Ref === true) {
           this.addEarlyError(Throw.SyntaxError('Non-simple parameter cannot be used with "use strict" directive'), p);
         }
       });

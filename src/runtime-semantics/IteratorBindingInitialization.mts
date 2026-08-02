@@ -1,4 +1,5 @@
 import { Value, ReferenceValue } from '../value.mts';
+import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import {
   EnsureCompletion,
   NormalCompletion,
@@ -261,7 +262,10 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
         return yield* InitializeReferencedBinding(lhs, array);
       }
       // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
-      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), next));
+      // proposal-runtime-types (references extension): a rest parameter is an
+      // array, a store a reference cannot survive, so a ref argument gathered
+      // by a rest decays to its referent's value as it is collected.
+      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(next))));
       // g. Set n to n + 1.
       n += 1;
     }
@@ -284,7 +288,9 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
         return yield* BindingInitialization(BindingPattern!, array, environment);
       }
       // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
-      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(next)));
+      // proposal-runtime-types (references extension): as above, the gathered
+      // element decays.
+      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(Q(next)))));
       // g. Set n to n + 1.
       n += 1;
     }
@@ -298,7 +304,10 @@ function* IteratorBindingInitialization_BindingPattern({ BindingPattern, Initial
     // a. Let next be ? IteratorStepValue(iteratorRecord).
     const next = Q(yield* IteratorStepValue(iteratorRecord));
     if (next !== 'done') {
-      v = next;
+      // proposal-runtime-types (references extension): a parameter that is a
+      // destructuring pattern consumes its argument as a value, so a ref
+      // argument decays to the referent before the pattern takes it apart.
+      v = Q(yield* DecayReferenceValue(next));
     }
   }
   // 3. If Initializer is present and v is undefined, then
