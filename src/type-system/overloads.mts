@@ -385,7 +385,7 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
           && candidate.sig.ReturnType !== undefined
           && IsAssignable(candidate.sig.ReturnType, contextualType),
       );
-      if (surviving.length === 1) {
+        if (surviving.length === 1) {
         return { Kind: 'resolved', Signature: surviving[0]!.sig };
       }
     }

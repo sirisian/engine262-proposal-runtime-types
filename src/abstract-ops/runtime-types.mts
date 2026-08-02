@@ -1684,12 +1684,10 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
   const returnAnnotation = (fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   let ReturnType: TypeRecord | undefined;
   if (returnAnnotation) {
-    for (const [node, rec] of resolved) {
-      if (node === returnAnnotation) {
-        ReturnType = rec;
-        break;
-      }
-    }
+    // Resolved directly rather than looked up in `resolved`, which is keyed on
+    // the FORMALS alone - the return annotation is never in it, so the lookup
+    // this replaced could not have found anything.
+    ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
   }
   return {
     Parameters: params, Function: fn, Untyped: untyped, ReturnType,

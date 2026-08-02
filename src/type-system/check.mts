@@ -611,6 +611,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     if (node.type === 'CallExpression') {
+      // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
+      // type of a call is the type its position requires". This operation has
+      // it and sees the call; the walk that RESOLVES overloads has the call and
+      // not the type. Recording it on the node bridges them without threading a
+      // target through every recursion of the walk - the walk reads it back
+      // where it resolves, and a call in no contextual position simply has none.
+      if (contextual) {
+        (node as unknown as { ContextualType?: Known }).ContextualType = contextual;
+      }
       const resolved = checkNumericCall(node, contextual);
       if (resolved) {
         return resolved;
@@ -3606,12 +3615,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const resolution = resolveOverloadByTypes(
                 candidates as never,
                 argTypes as TypeRecord[],
-                // No contextual type is available here: this resolution runs
-                // inside the checker's tree WALK, which visits a call without
-                // knowing the type its position requires. Supplying one means
-                // threading a target type through the walk, which is phase 2's
-                // real work and larger than passing an argument.
-                undefined,
+                // The contextual type staticTypeIn recorded on this node, where
+                // its position gave one. The return type does not participate
+                // in ranking - it filters what ranking left tied - so this is
+                // read only by that tie-break.
+                (n as unknown as { ContextualType?: TypeRecord }).ContextualType,
               );
               if (resolution.Kind === 'none') {
                 // "It is a type error if ResolveOverload returns ~none~."

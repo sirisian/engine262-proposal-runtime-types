@@ -12,6 +12,32 @@ import { ok, evaluated } from '../readme/harness.mts';
  * The signature record carries its return type now, and the resolver filters
  * the TIED candidates by it when given a contextual type.
  *
+ * PHASE 2, CONTINUED: THE FILTER RESOLVES AND A SECOND RESOLUTION OVERRIDES IT.
+ *
+ * The contextual type now reaches both resolvers and the filter WORKS - traced,
+ * the first resolution sees `ctx: string` against returns `uint,string` and
+ * comes back with exactly one survivor. The call is still reported ambiguous,
+ * because a SECOND resolution runs afterwards whose candidates have no return
+ * types, and its verdict is the one reported.
+ *
+ * Three fixes landed on the way and each was a real defect:
+ *
+ *   - The checker dropped `Return` when mapping its signatures into resolver
+ *     candidates. Its signatures carry one; the mapping did not copy it.
+ *   - staticTypeIn has the contextual type and sees the call; the walk that
+ *     resolves has the call and not the type. The type is recorded on the node
+ *     by the first and read by the second, which avoids threading a target
+ *     through every recursion.
+ *   - OverloadSignatureOf looked its return type up in a map keyed on the
+ *     FORMALS, where a return annotation never appears. It resolves the
+ *     annotation directly now.
+ *
+ * What remains is finding which second resolution reports the final verdict.
+ * It is not CallDecorator - that reads the same cached array - and the
+ * checker's own candidates do carry Return. One more trace at the reporting
+ * site names it; the work is not threading or plumbing but a single call site.
+ *
+ * (Superseded, kept for the record:)
  * PHASE 2 FOUND THE AMBIGUITY IS THE CHECKER'S, NOT THE RUNTIME'S. The error
  * comes from check.mts, statically, before any call runs - so the runtime
  * contextual-type stack that phase 2 built reaches a resolution that never
