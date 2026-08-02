@@ -1681,7 +1681,11 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
   // the resolver can FILTER on it after ranking. The function's own
   // TypeAnnotation is its return annotation - the same one `untyped` above
   // consults to decide whether the signature is a catch-all.
-  const returnAnnotation = (fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  // Through returnAnnotationOf, which reaches it via ECMAScriptCode.parent. The
+  // annotation is on the function's PARSE NODE and not on the function object -
+  // reading `fn.TypeAnnotation` finds nothing, which is why the first attempt
+  // at this produced signatures with no return type at all.
+  const returnAnnotation = returnAnnotationOf(fn as AnnotatedFunction);
   let ReturnType: TypeRecord | undefined;
   if (returnAnnotation) {
     // Resolved directly rather than looked up in `resolved`, which is keyed on
@@ -1725,7 +1729,7 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
       return Throw.TypeError('no overload of $1 matches these arguments', name);
     }
     if (resolution.Kind === 'ambiguous') {
-      return Throw.TypeError('the call to $1 is ambiguous between overloads', name);
+          return Throw.TypeError('the call to $1 is ambiguous between overloads', name);
     }
     return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, args as Value[])));
   };

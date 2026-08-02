@@ -12,48 +12,29 @@ import { ok, evaluated } from '../readme/harness.mts';
  * The signature record carries its return type now, and the resolver filters
  * the TIED candidates by it when given a contextual type.
  *
- * PHASE 2, CONTINUED: THE FILTER RESOLVES AND A SECOND RESOLUTION OVERRIDES IT.
+ * PHASE 2 IS DONE. `const a: string = f()` selects the string signature and
+ * `const b: uint32 = f()` selects the other, which is the clause's own example.
+ * A bare `f()` remains a type error, which is the clause's ambiguity rule.
  *
- * The contextual type now reaches both resolvers and the filter WORKS - traced,
- * the first resolution sees `ctx: string` against returns `uint,string` and
- * comes back with exactly one survivor. The call is still reported ambiguous,
- * because a SECOND resolution runs afterwards whose candidates have no return
- * types, and its verdict is the one reported.
+ * Four defects were fixed reaching it, and the last one is the reason the
+ * others were not enough on their own:
  *
- * Three fixes landed on the way and each was a real defect:
- *
- *   - The checker dropped `Return` when mapping its signatures into resolver
+ *   - The checker DROPPED `Return` when mapping its signatures into resolver
  *     candidates. Its signatures carry one; the mapping did not copy it.
- *   - staticTypeIn has the contextual type and sees the call; the walk that
- *     resolves has the call and not the type. The type is recorded on the node
- *     by the first and read by the second, which avoids threading a target
- *     through every recursion.
+ *   - The contextual type had no route from staticTypeIn, which knows it, to
+ *     the walk that resolves, which does not. It is recorded on the call node
+ *     by the first and read by the second.
  *   - OverloadSignatureOf looked its return type up in a map keyed on the
- *     FORMALS, where a return annotation never appears. It resolves the
- *     annotation directly now.
+ *     FORMALS, where a return annotation never appears.
+ *   - And then it read `fn.TypeAnnotation`, which is empty: the annotation is
+ *     on the function's PARSE NODE, not on the function object. The codebase
+ *     already had returnAnnotationOf, which reaches it through
+ *     ECMAScriptCode.parent, and using it was the whole fix.
  *
- * What remains is finding which second resolution reports the final verdict.
- * It is not CallDecorator - that reads the same cached array - and the
- * checker's own candidates do carry Return. One more trace at the reporting
- * site names it; the work is not threading or plumbing but a single call site.
- *
- * (Superseded, kept for the record:)
- * PHASE 2 FOUND THE AMBIGUITY IS THE CHECKER'S, NOT THE RUNTIME'S. The error
- * comes from check.mts, statically, before any call runs - so the runtime
- * contextual-type stack that phase 2 built reaches a resolution that never
- * happens for this program. Two things came of looking:
- *
- *   - The checker DROPPED the return type when building its candidates. Its
- *     signatures carry a `Return` and the mapping did not copy it, so the
- *     resolver could not have filtered whatever it was given. Fixed.
- *   - The resolution runs inside the checker's tree WALK, which visits a call
- *     without knowing the type its position requires. Supplying a contextual
- *     type means threading a target through the walk, which is a larger change
- *     than passing an argument and is what phase 2 actually needs.
- *
- * So the runtime half is built and unreachable for this case, and the checker
- * half is one field further along and blocked on the walk. The assertions below
- * are unchanged and still flip when that lands.
+ * The last is worth keeping because two earlier attempts at the same field both
+ * failed on where the annotation lives rather than on any rule - and the
+ * accessor for it existed the whole time, twenty lines above the code that
+ * needed it.
  */
 
 test('overloading on parameters resolves', () => {
@@ -77,15 +58,30 @@ test('a call with no contextual type is ambiguous', () => {
   expect(ok(`${P}f();`)).toBe(false);
 });
 
-test('a call in a binding position is still ambiguous (phase 2 flips this)', () => {
-  // The clause requires `const a: string = f()` to select the second signature.
-  // The filter is implemented and receives no contextual type, because the
-  // dispatch calls resolveOverload with two arguments. Asserted as it behaves
-  // with the divergence named, so phase 2 has a failing expectation to flip
-  // rather than a comment to find.
-  const P = 'function f(): uint32 { return 10; } function f(): string { return "10"; } ';
-  expect(ok(`${P}const a: string = f();`)).toBe(false);
-  expect(ok(`${P}const b: uint32 = f();`)).toBe(false);
+test('a call in a binding position selects by its contextual type', () => {
+  // #sec-overloading-on-return-type's own example. The bodies return different
+  // VALUES rather than different spellings of one, so the assertion says which
+  // signature ran rather than only that something did.
+  const P = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
+  expect(evaluated(`${P}const a: string = f(); String(a);`)).toBe('two');
+  expect(evaluated(`${P}const b: uint32 = f(); String(b);`)).toBe('1');
+});
+
+test('the filter runs after ranking, not before', () => {
+  // The clause: "the return type does not participate in ranking; it
+  // participates in filtering". A signature beaten on RANK must stay beaten
+  // however well its return type matches - so the uint8 row wins on rank and
+  // the contextual type cannot promote the any row over it.
+  const P = 'function h(a: uint8): uint32 { return 1; } function h(a: any): string { return "two"; } ';
+  expect(evaluated(`${P}const s: uint32 = h(1); String(s);`)).toBe('1');
+  // And the same call in a STRING context still runs the uint8 row - the value
+  // is 1, not "two". Ranking already chose, so there is no tie for the filter
+  // to break and the contextual type cannot promote the worse-ranked signature.
+  // This is the assertion that fails if the filter is ever moved before
+  // ranking, and it is the reason it is written as a value rather than as an
+  // acceptance: the assignment succeeds either way, and only the value says
+  // which body ran.
+  expect(evaluated(`${P}const t: string = h(1); String(t);`)).toBe('1');
 });
 
 test('an untyped catch-all still ranks last', () => {
