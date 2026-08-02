@@ -181,8 +181,9 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     // proposal-runtime-types #sec-vector-lanes: a lane write, answered before
     // ToObject for the reason the read is - a vector is a primitive and boxing
     // it loses the lanes. The clause admits this and records that whether it
-    // should be admitted at all is an open question, since `withLane` expresses
-    // the same intent without mutating a value type.
+    // should be admitted at all is settled there: `withLane` was thought to make
+    // it redundant and does not, since withLane's index is a compile-time
+    // constant and this one's is not.
     if ((V.Base as Value)?.type === 'Vector') {
       const written = Q(yield* vectorSet(V.Base as VectorValue, V.ReferencedName as PropertyKeyValue, W));
       if (written !== undefined) {

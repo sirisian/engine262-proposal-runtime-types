@@ -653,3 +653,31 @@ test("every expression in the design's instruction table runs", () => {
   expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const m: Mask = v < w; String(m.all());`)).toBe('true'); // movmskps + cmp
   expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const m: Mask = v < w; String(m.any());`)).toBe('true'); // movmskps + test
 });
+
+/**
+ * The lane-write question is closed, and a test pins what closed it.
+ *
+ * simd.md asked whether `v[i] = value` should be an error, since `withLane`
+ * expresses the same intent without mutating a value type. It does not: the two
+ * do not overlap, because `withLane`'s index is a COMPILE-TIME CONSTANT and
+ * this one's is not. Refusing the assignment would leave a lane whose index is
+ * computed with no way to be written.
+ *
+ * sec-vector-lanes records the decision and names what would reopen it: an
+ * operation taking a computed index and returning a new vector would restore
+ * the redundancy, and nothing proposes one.
+ */
+
+test('withLane cannot take a computed index, which is why the write stays', () => {
+  // The measurement the decision rests on. If this ever succeeds, the question
+  // reopens and this test is where that becomes visible.
+  expect(ok('const v = float32x4(1, 2, 3, 4); let i = 1; v.withLane.<i>(9);')).toBe(false);
+  expect(evaluated('const v = float32x4(1, 2, 3, 4); let i = 1; v[i] = 9; String(v);')).toBe('(1, 9, 3, 4)');
+});
+
+test('an array permits writing through a value-type element', () => {
+  // The design's own consistency argument, verified: refusing the vector case
+  // would be inconsistent with arrays. It is the weaker of the two reasons and
+  // is asserted because simd.md rests on it alone.
+  expect(evaluated('class P { x: uint8 = 0; } const a: [].<P> = [new P()]; a[0].x = 5; String(a[0].x);')).toBe('5');
+});

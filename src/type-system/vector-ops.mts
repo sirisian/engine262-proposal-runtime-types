@@ -147,9 +147,11 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
 }
 
 /**
- * A lane write. #sec-vector-lanes admits it and records that whether it should
- * be admitted at all is an open question of the design, since `withLane`
- * expresses the same intent without mutating a value type.
+ * A lane write. #sec-vector-lanes admits it, and the question of whether it
+ * should be admitted at all is now closed there: `withLane` was thought to make
+ * it redundant, and does not, because withLane's index is a COMPILE-TIME
+ * CONSTANT. Refusing the assignment would leave a lane whose index is computed
+ * with no way to be written.
  */
 export function* vectorSet(v: VectorValue, key: PropertyKeyValue, value: Value): PlainEvaluator<Value | undefined> {
   const shape = vectorShape(v);
