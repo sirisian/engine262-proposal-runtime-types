@@ -473,6 +473,7 @@ export interface Throw {
   | 'smallestUnit cannot be hour or minute'
   | 'the buffer does not hold this SoA view'
   | 'the call is ambiguous between two declared signatures'
+  | 'the comparison is ambiguous among its result forms; write the result type'
   | 'the default of a meta type must be a value of its constraint shape'
   | 'the first placement argument must be an ArrayBuffer'
   | 'the placement extent exceeds the buffer'

@@ -459,21 +459,21 @@ test('vectors of different shapes are not operands of one operator', () => {
 test('a comparison yields one mask lane per input lane', () => {
   // simd.md's own example: (true, true, false, false), which is the bit vector
   // (1, 1, 0, 0).
-  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
-  expect(evaluated(`${P}String(a < b);`)).toBe('(1, 1, 0, 0)');
-  expect(evaluated(`${P}String(a > b);`)).toBe('(0, 0, 1, 1)');
+  const P = 'type Mask = vector.<uint.<1>, 4>; const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
+  expect(evaluated(`${P}const r: Mask = a < b; String(r);`)).toBe('(1, 1, 0, 0)');
+  expect(evaluated(`${P}const r: Mask = a > b; String(r);`)).toBe('(0, 0, 1, 1)');
 });
 
 test('a mask reduces to a boolean', () => {
-  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m = a < b; ';
+  const P = 'type Mask = vector.<uint.<1>, 4>; const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m: Mask = a < b; ';
   expect(evaluated(`${P}String(m.any());`)).toBe('true');
   expect(evaluated(`${P}String(m.all());`)).toBe('false');
-  expect(evaluated('const m = float32x4(1,1,1,1) < float32x4(2,2,2,2); String(m.all());')).toBe('true');
-  expect(evaluated('const m = float32x4(9,9,9,9) < float32x4(2,2,2,2); String(m.any());')).toBe('false');
+  expect(evaluated('type Mask = vector.<uint.<1>, 4>; const m: Mask = float32x4(1,1,1,1) < float32x4(2,2,2,2); String(m.all());')).toBe('true');
+  expect(evaluated('type Mask = vector.<uint.<1>, 4>; const m: Mask = float32x4(9,9,9,9) < float32x4(2,2,2,2); String(m.any());')).toBe('false');
 });
 
 test('select chooses lane-wise and evaluates both arguments', () => {
-  const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m = a < b; ';
+  const P = 'type Mask = vector.<uint.<1>, 4>; const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); const m: Mask = a < b; ';
   expect(evaluated(`${P}String(m.select(a, b));`)).toBe('(1, 2, 2, 1)');
 
   // BOTH arguments are evaluated, because select is a call and not a
@@ -486,14 +486,14 @@ test("select's element type is independent of the mask's", () => {
   // U is not the receiver's lane type: a mask selects between vectors of any
   // lane type sharing its lane count. A float mask selecting int vectors is the
   // case that would fail if U were tied to the mask.
-  const P = 'const m = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
+  const P = 'type Mask = vector.<uint.<1>, 4>; const m: Mask = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
   expect(evaluated(`${P}String(m.select(int32x4(9, 9, 9, 9), int32x4(1, 1, 1, 1)));`)).toBe('(9, 9, 1, 1)');
 });
 
 test('a mask is an ordinary vector', () => {
   // It indexes, permutes, and carries component accessors like any other, which
   // follows from the earlier phases rather than needing a rule.
-  const P = 'const m = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
+  const P = 'type Mask = vector.<uint.<1>, 4>; const m: Mask = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
   expect(evaluated(`${P}String(m.x);`)).toBe('1');
   expect(evaluated(`${P}String(m[2]);`)).toBe('0');
   expect(evaluated(`${P}String(m.xyxy);`)).toBe('(1, 1, 1, 1)');
@@ -588,13 +588,13 @@ test('an annotated comparison yields the wide mask', () => {
   expect(evaluated(`${P}String(m[2][31]);`)).toBe('0');
 });
 
-test('an unannotated comparison is accepted (diverges from the clause)', () => {
+test('an unannotated comparison is a type error', () => {
   // The clause makes this a type error, since nothing selects among the three
   // forms. The engine accepts it and yields the compact mask. Asserted as it
   // behaves with the divergence named above, so the test flips when
   // return-type overloading lands rather than sitting red until then.
   const P = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
-  expect(evaluated(`${P}String(a < b);`)).toBe('(1, 1, 0, 0)');
+  expect(ok(`${P}a < b;`)).toBe(false);
 });
 
 /**
@@ -648,8 +648,8 @@ test("every expression in the design's instruction table runs", () => {
   expect(evaluated(`${P}String(v.wzyx);`)).toBe('(4, 3, 2, 1)');                  // shufps
   expect(evaluated(`${P}String(v.shuffle.<0, 1, 4, 5>(w));`)).toBe('(1, 2, 5, 6)'); // shufps / zip1
   expect(evaluated(`${P}const p = w.swizzle.<0, 1>(); v.xy = p; String(v);`)).toBe('(5, 6, 3, 4)'); // blendps
-  expect(evaluated(`${P}String(v < w);`)).toBe('(1, 1, 1, 1)');                   // cmpltps
-  expect(evaluated(`${P}const m = v < w; String(m.select(v, w));`)).toBe('(1, 2, 3, 4)'); // blendvps
-  expect(evaluated(`${P}const m = v < w; String(m.all());`)).toBe('true');        // movmskps + cmp
-  expect(evaluated(`${P}const m = v < w; String(m.any());`)).toBe('true');        // movmskps + test
+  expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const r: Mask = v < w; String(r);`)).toBe('(1, 1, 1, 1)'); // cmpltps
+  expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const m: Mask = v < w; String(m.select(v, w));`)).toBe('(1, 2, 3, 4)'); // blendvps
+  expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const m: Mask = v < w; String(m.all());`)).toBe('true'); // movmskps + cmp
+  expect(evaluated(`${P}type Mask = vector.<uint.<1>, 4>; const m: Mask = v < w; String(m.any());`)).toBe('true'); // movmskps + test
 });

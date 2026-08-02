@@ -8,6 +8,7 @@ import { Throw } from '../host-defined/error-messages.mts';
 import type { TypeRecord } from './records.mts';
 import { displayType } from './records.mts';
 import { SameType } from './relations.mts';
+import { currentContextualType } from './runtime.mts';
 import { CanonicalizeType } from './intern.mts';
 import {
   RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator, CheckedConvertValue,
@@ -451,6 +452,20 @@ export function* vectorComparison(
       '$1 is not assignable to $2',
       rval,
       Value(displayType((lval as VectorValue).TypeRecord as TypeRecord)),
+    )) as Value;
+  }
+  // proposal-runtime-types #sec-vector-comparisons: the result form is chosen
+  // by the expected type, and "left with no expected type the expression is
+  // ambiguous among them and is a type error, so the result's type is written".
+  //
+  // The three forms are the compact mask, the wide mask, and the compared
+  // vector type itself. The comparison computes the COMPACT one and the
+  // conversion reaches the other two, so the selection here is only whether a
+  // contextual type exists - not which of three to build.
+  const expected = currentContextualType();
+  if (!expected) {
+    return Q(Throw.TypeError(
+      'the comparison is ambiguous among its result forms; write the result type',
     )) as Value;
   }
   const lanes: Value[] = [];
