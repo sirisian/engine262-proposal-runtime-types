@@ -175,15 +175,25 @@ test('a generic function body is untouched', () => {
 });
 
 /**
- * A CONCISE ARROW BODY IS A THIRD SITE AND IS NOT DONE.
+ * A concise arrow body is a return position too, and it needed the CHECKER
+ * rather than the runtime.
  *
- * `const r = (): string => f();` still reports the inner call's ambiguity,
- * while `(): string => { return f(); }` selects. So the expression-bodied arrow
- * evaluates its body somewhere other than the two sites this commit brackets -
- * a narrower gap than the one just closed, and the same shape again.
+ * `(): string => f()` requires a string of its expression exactly as `return
+ * f()` does. The statement form reaches the runtime push through its `return`;
+ * a concise body has no return statement to reach it, and the checker refused
+ * the DECLARATION before any call ran - which is why the runtime push added for
+ * the return position did nothing here.
+ *
+ * That made this the fourth site and the second mechanism: bindings, arguments,
+ * and statement returns are pushed at run time, and a concise body records its
+ * contextual type on the expression where the checker already knows the
+ * declared return.
  */
 
-test('a concise arrow body does not yet supply a contextual type', () => {
+test('a concise arrow body supplies a contextual type', () => {
   const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
-  expect(ok(`${F}const r = (): string => f(); r();`)).toBe(false);
+  expect(evaluated(`${F}const r = (): string => f(); String(r());`)).toBe('two');
+  expect(evaluated(`${F}const r = (): uint32 => f(); String(r());`)).toBe('1');
+  // And the block form, which the previous commit landed, still selects.
+  expect(evaluated(`${F}const r = (): string => { return f(); }; String(r());`)).toBe('two');
 });

@@ -3150,6 +3150,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       index += 1;
     }
     if (body) {
+      // proposal-runtime-types #sec-overloading-on-return-type: a CONCISE arrow
+      // body is a return position - `(): string => f()` requires a string of
+      // the expression exactly as `return f()` does - so the declared return
+      // type is recorded on that expression before it is walked.
+      //
+      // The statement form needs nothing here because its `return` reaches the
+      // runtime push; a concise body has no return statement to reach it, and
+      // the checker refuses the declaration before any call runs.
+      const conciseReturn = returnTypes[returnTypes.length - 1];
+      if (conciseReturn) {
+        const expr = (body as { ExpressionBody?: { AssignmentExpression?: ParseNode } }).ExpressionBody?.AssignmentExpression
+          ?? (body as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+        if (expr) {
+          (expr as unknown as { ContextualType?: Known }).ContextualType = conciseReturn;
+        }
+      }
       walk(body);
     }
     const proven = returnsProven.pop();
