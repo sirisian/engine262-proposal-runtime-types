@@ -2015,11 +2015,30 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
   const types: (TypeRecord | null)[] = [];
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-    if (ann) {
-      types.push(Q(yield* TypeNodeToTypeRecord(ann.Type)));
-    } else {
+    if (!ann) {
       types.push(null);
+      continue;
     }
+    // Resolved WITHOUT propagating a failure. A generic function's parameter
+    // annotation names a type parameter that is not bound until the call binds
+    // it, so resolving `T` here reports "T is not defined" - and that error
+    // must not escape, because this operation is offering a contextual type and
+    // not checking anything. A first attempt let it propagate and turned every
+    // generic call into an error.
+    const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(ann.Type));
+    if (attempted.Type !== 'normal') {
+      types.push(null);
+      continue;
+    }
+    const record = attempted.Value as TypeRecord;
+    // Only a CONCRETE parameter type supplies a contextual type. A type
+    // PARAMETER is what a generic call is about to infer, and offering it as
+    // context changes what the inference sees - a first attempt at this pushed
+    // every parameter type and broke ten generic-inference tests. A parameter
+    // whose type is still open contributes nothing, which is the same answer
+    // the circularity rule gives for an overloaded callee: no context rather
+    // than a guessed one.
+    types.push(record.Kind === 'parameter' ? null : record);
   }
   return types;
 }

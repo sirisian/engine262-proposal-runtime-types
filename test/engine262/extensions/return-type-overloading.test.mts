@@ -122,18 +122,29 @@ test('an untyped catch-all still ranks last', () => {
  * redesign.
  */
 
-test('an argument position does not yet supply a contextual type', () => {
-  // Asserted as it behaves, with the divergence named above. The clause
-  // requires the first to select; it currently reports the inner call's
-  // ambiguity.
+test('an argument position supplies a contextual type', () => {
+  // #sec-overloading-on-return-type: "`g(f())` selects the first where `g`
+  // takes a `uint32`, because the parameter supplies the contextual type."
   const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
-  expect(ok(`${F}function g(x: uint32) { return x; } g(f());`)).toBe(false);
+  expect(evaluated(`${F}function g(x: uint32) { return x; } String(g(f()));`)).toBe('1');
+  expect(evaluated(`${F}function g(x: string) { return x; } String(g(f()));`)).toBe('two');
 
-  // This one is correct and must STAY correct: an overloaded callee gives its
-  // argument no contextual type, so the inner call is ambiguous and the whole
-  // expression is refused. A change that made the case above work could easily
-  // make this one work too, which the clause forbids.
+  // "`h(f())` is an error where `h` is itself overloaded ... The circularity is
+  // real and is resolved by rejecting the call rather than by guessing." This
+  // was right by accident before the argument position worked; now it is right
+  // because soleSignatureParameterTypes answers null for an overloaded callee,
+  // and the assertion is what keeps the fix for the case above from breaking it.
   expect(ok(`${F}function h(x: uint8) { return 1; } function h(x: string) { return 2; } h(f());`)).toBe(false);
+});
+
+test('a generic call is untouched by the argument context', () => {
+  // The regression the first two attempts caused, asserted so a third cannot
+  // reintroduce it. A generic parameter's annotation names a type that is not
+  // bound until the call binds it, so resolving it here fails - and that
+  // failure must not escape, since this is offering a contextual type rather
+  // than checking anything.
+  expect(evaluated('function id<T>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
+  expect(evaluated('function id<T>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
 });
 
 /**

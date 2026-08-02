@@ -19,6 +19,8 @@ import {
   GetValue,
   R,
 } from '#self';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
 export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression) {
@@ -50,7 +52,23 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     && Array.isArray(args) && hasNamedArguments(args as ParseNode.Arguments);
   let argList;
   if (!argsIsNamed) {
-    argList = Q(yield* ArgumentListEvaluation(args));
+    // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
+    // type of a call is the type its position requires", and an argument
+    // position requires the callee's parameter type - "`g(f())` selects the
+    // first where `g` takes a `uint32`, because the parameter supplies the
+    // contextual type".
+    //
+    // soleSignatureParameterTypes answers null in the two cases where there is
+    // no context to give: an overloaded callee, which is the circularity the
+    // clause resolves by rejecting rather than guessing, and a parameter whose
+    // type is still a type PARAMETER, which a generic call is about to infer.
+    const soleParameterTypes = Q(yield* soleSignatureParameterTypes(func));
+    pushContextualType(soleParameterTypes?.[0] ?? null);
+    try {
+      argList = Q(yield* ArgumentListEvaluation(args));
+    } finally {
+      popContextualType();
+    }
     // proposal-runtime-types #sec-overload-resolution: the checking side
     // resolved this call to a numeric value family from its CONTEXT
     // (TakeStaticCallResolution records only calls whose every argument is a
