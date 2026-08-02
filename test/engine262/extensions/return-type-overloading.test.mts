@@ -135,3 +135,31 @@ test('an argument position does not yet supply a contextual type', () => {
   // make this one work too, which the clause forbids.
   expect(ok(`${F}function h(x: uint8) { return 1; } function h(x: string) { return 2; } h(f());`)).toBe(false);
 });
+
+/**
+ * THE RETURN POSITION IS ALSO A CONTEXTUAL POSITION AND IS NOT DONE.
+ *
+ * Phase 2 of the plan named "a call in a `return` position against the
+ * enclosing function's return annotation" among its tests and it was never
+ * asserted - found by auditing the plan against the engine rather than by a
+ * failure, which is why it is worth recording rather than quietly adding.
+ *
+ * The clause's rule covers it: "the contextual type of a call is the type its
+ * position requires", and a `return` in an annotated function is such a
+ * position. It is the same shape as the binding case that works, and blocked on
+ * the same thing as the argument case: something must push the contextual type
+ * around the evaluation, and pushing it broadly breaks generic inference.
+ */
+
+test('a return position does not yet supply a contextual type', () => {
+  const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
+  // The DECLARATION checks - the checker sees the annotation and accepts.
+  expect(ok(`${F}function r(): string { return f(); }`)).toBe(true);
+  // CALLING it does not: the runtime dispatch has no contextual type at the
+  // `return`, so the inner call reports its own ambiguity. Asserting the call
+  // rather than the declaration is what distinguishes the two, and the first
+  // draft of this test asserted the wrong one.
+  expect(ok(`${F}function r(): string { return f(); } r();`)).toBe(false);
+  // While the binding position, which phase 2 did land, selects.
+  expect(evaluated(`${F}const a: string = f(); String(a);`)).toBe('two');
+});
