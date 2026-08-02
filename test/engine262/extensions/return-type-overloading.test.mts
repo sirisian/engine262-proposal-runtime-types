@@ -148,35 +148,42 @@ test('a generic call is untouched by the argument context', () => {
 });
 
 /**
- * THE RETURN POSITION IS ALSO A CONTEXTUAL POSITION AND IS NOT DONE.
- *
- * Phase 2 of the plan named "a call in a `return` position against the
- * enclosing function's return annotation" among its tests and it was never
- * asserted - found by auditing the plan against the engine rather than by a
- * failure, which is why it is worth recording rather than quietly adding.
- *
- * The clause's rule covers it: "the contextual type of a call is the type its
+ * The return position, which the clause's general rule covers without listing
+ * among its worked examples: "the contextual type of a call is the type its
  * position requires", and a `return` in an annotated function is such a
- * position. It is the same SHAPE as the binding case that works, and a
- * DIFFERENT SITE from the argument position - phase 3 fixed that one and left
- * this exactly as it was, which the assertions below confirmed rather than
- * assumed.
+ * position - EnforceReturnType enforces exactly that requirement.
  *
- * The site is EnforceReturnType(fn, value), which takes the value AFTER
- * evaluation. That is what the binding boundary looked like before phase 2: a
- * contextual type applied to a RESULT cannot select an overload, because the
- * overload has already run. The change is to push around the evaluation.
+ * The annotation is pushed around the BODY rather than applied to its result.
+ * Applied to a result it cannot select an overload, because the overload has
+ * already run - which is what the binding boundary looked like before phase 2.
  */
 
-test('a return position does not yet supply a contextual type', () => {
+test('a return position supplies a contextual type', () => {
   const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
-  // The DECLARATION checks - the checker sees the annotation and accepts.
-  expect(ok(`${F}function r(): string { return f(); }`)).toBe(true);
-  // CALLING it does not: the runtime dispatch has no contextual type at the
-  // `return`, so the inner call reports its own ambiguity. Asserting the call
-  // rather than the declaration is what distinguishes the two, and the first
-  // draft of this test asserted the wrong one.
-  expect(ok(`${F}function r(): string { return f(); } r();`)).toBe(false);
-  // While the binding position, which phase 2 did land, selects.
-  expect(evaluated(`${F}const a: string = f(); String(a);`)).toBe('two');
+  expect(evaluated(`${F}function r(): string { return f(); } String(r());`)).toBe('two');
+  expect(evaluated(`${F}function r(): uint32 { return f(); } String(r());`)).toBe('1');
+  // A block-bodied arrow is the same path and selects too.
+  expect(evaluated(`${F}const r = (): string => { return f(); }; String(r());`)).toBe('two');
+});
+
+test('a generic function body is untouched', () => {
+  // The regression guard: a generic function's return annotation names a type
+  // parameter that is not bound yet, so it contributes no contextual type
+  // rather than failing.
+  expect(evaluated('function id<T>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
+  expect(evaluated('function id<T>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
+});
+
+/**
+ * A CONCISE ARROW BODY IS A THIRD SITE AND IS NOT DONE.
+ *
+ * `const r = (): string => f();` still reports the inner call's ambiguity,
+ * while `(): string => { return f(); }` selects. So the expression-bodied arrow
+ * evaluates its body somewhere other than the two sites this commit brackets -
+ * a narrower gap than the one just closed, and the same shape again.
+ */
+
+test('a concise arrow body does not yet supply a contextual type', () => {
+  const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
+  expect(ok(`${F}const r = (): string => f(); r();`)).toBe(false);
 });

@@ -2042,3 +2042,26 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
   }
   return types;
 }
+
+/**
+ * The Type Record of a function's return annotation, or null where it has none
+ * or the annotation cannot be resolved yet.
+ *
+ * proposal-runtime-types #sec-overloading-on-return-type: a `return` position
+ * requires the enclosing function's return type, so this is what a body's
+ * contextual type is. It answers null rather than failing for the reason the
+ * argument position does - offering a contextual type is not checking one, and
+ * a generic function's annotation names a parameter that is not bound yet.
+ */
+export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null> {
+  const annotation = returnAnnotationOf(fn as AnnotatedFunction);
+  if (!annotation) {
+    return null;
+  }
+  const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+  if (attempted.Type !== 'normal') {
+    return null;
+  }
+  const record = attempted.Value as TypeRecord;
+  return record.Kind === 'parameter' ? null : record;
+}

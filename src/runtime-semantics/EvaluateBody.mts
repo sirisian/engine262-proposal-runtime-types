@@ -17,6 +17,9 @@ import {
   NamedEvaluation,
 } from './all.mts';
 import { surroundingAgent } from '#self';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { returnTypeRecordOf } from '../abstract-ops/runtime-types.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
   AsyncFunctionStart,
@@ -56,7 +59,21 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
     }
     try {
       Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
-      const result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
+      // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
+      // type of a call is the type its position requires". A `return` in an
+      // annotated function is such a position - EnforceReturnType below
+      // enforces exactly that requirement - so the annotation is pushed around
+      // the BODY rather than applied to its result. Applied to a result it
+      // cannot select an overload, because the overload has already run, which
+      // is what the binding boundary looked like before it was fixed.
+      const declaredReturn = EnsureCompletion(yield* returnTypeRecordOf(functionObject));
+      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null);
+      let result;
+      try {
+        result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
+      } finally {
+        popContextualType();
+      }
       if (result.Type === 'return') {
         return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
       }
@@ -95,7 +112,21 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
     }
     try {
       Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
-      const result = EnsureCompletion(yield* Evaluate(ExpressionBody));
+      // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
+      // type of a call is the type its position requires". A `return` in an
+      // annotated function is such a position - EnforceReturnType below
+      // enforces exactly that requirement - so the annotation is pushed around
+      // the BODY rather than applied to its result. Applied to a result it
+      // cannot select an overload, because the overload has already run, which
+      // is what the binding boundary looked like before it was fixed.
+      const declaredReturn = EnsureCompletion(yield* returnTypeRecordOf(functionObject));
+      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null);
+      let result;
+      try {
+        result = EnsureCompletion(yield* Evaluate(ExpressionBody));
+      } finally {
+        popContextualType();
+      }
       if (result.Type === 'return') {
         return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
       }
