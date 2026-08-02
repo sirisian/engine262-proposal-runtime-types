@@ -15,7 +15,7 @@ import { voidType as voidTypeRecord } from './records.mts';
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
 import { Diverges } from './divergence.mts';
-import { SameType, IsAssignable } from './relations.mts';
+import { IsSubtype, SameType, IsAssignable } from './relations.mts';
 import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -25,6 +25,7 @@ import { resolveOverloadByTypes } from './overloads.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
+import { Atoms, AtomsOfType } from './Atoms.mts';
 import { R, Throw } from '#self';
 
 /**
@@ -868,6 +869,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const node = classNodes.get(name);
     return node ? instanceTypeOf(node) : null;
   };
+  /**
+   * proposal-runtime-types: an ENUM name used as a TYPE.
+   *
+   * The bare-|TypeReference| resolver consulted seven sources and no enum one,
+   * so `function f(e: E)` gave the binding NO static type - which is why the
+   * exhaustiveness check reaches enums by a NAME lookup on the binding rather
+   * than by the subject's type, and why a `match` over an enum-typed value that
+   * is not a plain identifier was never checked at all.
+   *
+   * MEMOIZED by declaration node, because `instanceTypeOf` is: a class has one
+   * record per declaration, and an enum resolved freshly on each mention would
+   * give the checker two records for one enum where the runtime has one.
+   */
+  const enumNodes = new Map<string, ParseNode>();
+  const enumTypeMemo = new Map<ParseNode, Known>();
+  const enumTypeOf = (name: string): Known => {
+    const node = enumNodes.get(name);
+    if (!node) {
+      return null;
+    }
+    const memo = enumTypeMemo.get(node);
+    if (memo !== undefined) {
+      return memo;
+    }
+    const decl = node as unknown as { EnumMemberList?: readonly unknown[] };
+    const built: Known = {
+      Kind: 'nominal',
+      Declaration: node,
+      Arguments: [],
+      EnumMembers: (decl.EnumMemberList ?? []).map(() => undefined),
+    } as unknown as Known;
+    enumTypeMemo.set(node, built);
+    return built;
+  };
   /** Construct signatures by class node, for checking `new C(...)` (F59). */
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
 
@@ -1069,7 +1104,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return userClass;
         }
         const name = node.TypeName.IdentifierReference.name;
-        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
+        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
@@ -1622,6 +1657,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * not reachable through a member expression from outside, and the store to
    * one is checked at run time by its own path.
    */
+  /**
+   * `sec-match-exhaustiveness`: does an unguarded clause pattern cover an atom?
+   *
+   * "An unguarded clause covers an atom _a_ when its pattern's PatternType _pt_
+   * satisfies IsSubtype(the type of _a_, _pt_)."
+   *
+   * **(measured)** `when { c: 'US' }` parses as a |MatchTypePattern| whose
+   * `Type` is an object type - the pattern IS a type - so the specification's
+   * primary rule handles it directly. A first draft read it as a structural
+   * OBJECT PATTERN and walked named members against the atom's properties;
+   * that node shape does not exist here, so it matched nothing and an
+   * exhaustive `match` was reported as missing every branch.
+   *
+   * The clause's additional sentence about structural patterns covers the
+   * positions where a pattern is NOT a type; subtyping is the general rule and
+   * is what a discriminated chain needs.
+   */
+  const structuralPatternCovers = (pattern: ParseNode, atom: TypeRecord): boolean => {
+    const p = pattern as unknown as { type?: string, Type?: ParseNode.Type };
+    if (p.type !== 'MatchTypePattern' || !p.Type) {
+      return false;
+    }
+    const patternType = resolveType(p.Type);
+    return patternType ? IsSubtype(atom, patternType, []) : false;
+  };
+
   const instanceTypeOf = (n: ParseNode): Known => {
     const memo = classTypeMemo.get(n);
     if (memo !== undefined) {
@@ -3323,7 +3384,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypeAliasDeclaration': {
         const resolved = resolveType(n.Type);
         if (resolved) {
-          frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, resolved);
+          // proposal-runtime-types `sec-dependent-record-types`: an alias
+          // carrying `where` clauses keeps its NOMINAL identity, wrapping the
+          // structure, because the predicate lives on the DECLARATION and a
+          // bare structure cannot reach it.
+          //
+          // Without this a dependent-record-typed binding resolved to a plain
+          // `object` and `sec-match-exhaustiveness`'s "the atoms of the union
+          // that chain denotes" had no chain to read - the same shape as an
+          // enum annotation resolving to nothing, one declaration form over.
+          // It is the record the RUNTIME already builds for such a type:
+          // `{ Kind: nominal, Declaration, Arguments, Structure }`.
+          const whereClauses = (n as unknown as { WhereClauses?: readonly unknown[] }).WhereClauses;
+          const aliasType = whereClauses && whereClauses.length > 0
+            ? ({
+              Kind: 'nominal', Declaration: n, Arguments: [], Structure: resolved,
+            } as unknown as TypeRecord)
+            : resolved;
+          frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, aliasType);
         } else if ((n as unknown as { TypeParameters?: unknown }).TypeParameters) {
           // proposal-runtime-types: capture the prelude's `Identity` so the
           // global binding can hold a PARSED declaration. Every consumer of a
@@ -3354,6 +3432,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // so a switch over one of its enumerators can be checked for exhaustiveness.
         const names = n.EnumMemberList.map((m) => m.IdentifierName.name);
         frames[frames.length - 1].enums.set(n.BindingIdentifier.name, { names });
+        // The NODE as well as the names, so the enum can be resolved as a type.
+        enumNodes.set(n.BindingIdentifier.name, n);
         return;
       }
       case 'MatchExpression': {
@@ -3384,10 +3464,61 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(clause.Body as ParseNode);
           frames.pop();
         });
-        const subject = me.Expression;
-        const subjectName = subject.type === 'IdentifierReference' ? (subject as { name: string }).name : null;
-        const matchEnumName = subjectName ? lookupEnumBinding(subjectName) : null;
-        const matchInfo = matchEnumName ? lookupEnum(matchEnumName) : null;
+        // proposal-runtime-types `sec-match-exhaustiveness`: the atoms of the
+        // SUBJECT'S TYPE, through the one operation that knows all of them,
+        // rather than a name lookup on the binding.
+        //
+        // The name lookup required the subject to be an |IdentifierReference|.
+        // It was written that way because a bare enum ANNOTATION resolved to
+        // nothing - `function f(e: E)` gave `e` no static type - which is fixed
+        // where enums are resolved as types.
+        //
+        // **(measured)** removing that restriction does NOT by itself check
+        // `match (g())` over an enum-returning call: the subject's type comes
+        // from `staticType`, and a call's RETURN annotation does not resolve to
+        // the enum record either. Same class of gap, one resolution site
+        // further on, and not fixed here - recorded so the capability is not
+        // claimed before it exists.
+        const enumAtoms = Atoms(subjectType ?? undefined);
+        // proposal-runtime-types `sec-discriminated-where-chains`: a dependent
+        // record type's atoms are the atoms of the union its chain denotes.
+        // **The coverage rule differs from the enum path's**: an atom here is an
+        // OBJECT type, and `sec-match-exhaustiveness` says such an atom is
+        // "additionally covered by a structural pattern each of whose named
+        // members is declared required by the atom" - which is what makes
+        // `when { c: 'US' }` cover a branch.
+        const chainAtoms = AtomsOfType(subjectType ?? undefined);
+        if (chainAtoms.length > 0 && enumAtoms.length === 0) {
+          const coveredAtoms = new Set<string>();
+          let chainDefault = false;
+          for (const clause of me.Clauses) {
+            if (clause.Pattern === null) {
+              chainDefault = true;
+              continue;
+            }
+            if (clause.Guard) {
+              continue;
+            }
+            for (const atom of chainAtoms) {
+              if (structuralPatternCovers(clause.Pattern, atom.type)) {
+                coveredAtoms.add(atom.key);
+              }
+            }
+          }
+          if (!chainDefault) {
+            const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
+            if (missing.length > 0) {
+              const completion = Throw.TypeError(
+                'match over $1 is missing $2 and has no default',
+                Value(displayType(subjectType!)),
+                Value(missing.map((a) => a.key).join(', ')),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
+        const matchInfo = matchEnumName ? { names: enumAtoms.map((a) => a.key) } : null;
         if (matchInfo) {
           const covered = new Set<string>();
           let hasDefault = false;
@@ -3437,11 +3568,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A SEALED-CLASS subject is a closed set too, and `sec-match-exhaustiveness`
         // names it beside enums - so it is checked here rather than in a second
         // pass that could disagree about coverage.
+        // Through the same operation the enum path uses. A sealed class's
+        // subclasses live in a map the checker owns, so `Atoms` takes them as a
+        // hook - the way it takes a dependent record type's denotation - rather
+        // than reaching for checker state it cannot see.
         const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
-        const subclasses = sealedDecl && sealedDecl.Kind === 'nominal' && sealedDecl.Declaration
-          ? sealedSubclasses.get(sealedDecl.Declaration)
-          : undefined;
-        if (subclasses && subclasses.length > 0) {
+        const sealedAtoms = Atoms(subjectType ?? undefined, undefined, (t) => {
+          const d = (t as { Declaration?: ParseNode }).Declaration;
+          const subs = d ? sealedSubclasses.get(d) : undefined;
+          return subs?.map((c) => ({
+            name: (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?',
+            declaration: c,
+          }));
+        });
+        const subclasses = sealedAtoms
+          .map((a) => a.declaration)
+          .filter((d): d is ParseNode => d !== undefined && d !== sealedDecl?.Declaration);
+        if (subclasses.length > 0) {
           const coveredClasses = new Set<ParseNode>();
           let sealedDefault = false;
           for (const clause of me.Clauses) {

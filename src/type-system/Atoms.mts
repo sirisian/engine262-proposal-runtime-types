@@ -20,10 +20,21 @@ import { DenotedUnionOf, DiscriminatingChainOf } from './DiscriminatingChain.mts
  */
 
 export interface Atom {
-  /** How the atom is identified when comparing coverage. */
+  /** How the atom is identified when comparing coverage, and named in a diagnostic. */
   readonly key: string;
   /** The atom's own type, which a clause's pattern must be a supertype of. */
   readonly type: TypeRecord;
+  /**
+   * The declaration the atom stands for, where it has one - an enum's
+   * declaration, or a sealed class's subclass.
+   *
+   * Coverage over these is compared by DECLARATION IDENTITY rather than by key,
+   * because two classes may share a name across modules. The key remains what a
+   * diagnostic prints.
+   */
+  readonly declaration?: ParseNode;
+  /** The type the atom belongs to, named in a diagnostic - an enum's name. */
+  readonly owner?: string;
 }
 
 /** `~none~`: the type is an open universe and a `match` over it needs a default. */
@@ -76,6 +87,8 @@ export function Atoms(
   t: TypeRecord | undefined,
   /** The denoted union of a dependent record type, where the caller found one. */
   denotedUnionOf?: (t: TypeRecord) => TypeRecord | undefined,
+  /** A sealed class's direct subclasses, which the checker owns. */
+  sealedSubclassesOf?: (t: TypeRecord) => readonly { name: string, declaration: ParseNode }[] | undefined,
 ): readonly Atom[] {
   if (!t) {
     return NO_ATOMS;
@@ -100,11 +113,36 @@ export function Atoms(
       return NO_ATOMS;
     }
     case 'nominal': {
-      const decl = t as { EnumMembers?: readonly unknown[], LibraryName?: string };
-      if (Array.isArray(decl.EnumMembers)) {
-        return decl.EnumMembers.map((_, i) => ({
-          key: `${decl.LibraryName ?? 'enum'}.${i}`,
-          type: t,
+      const rec = t as {
+        EnumMembers?: readonly unknown[],
+        Declaration?: {
+          type?: string,
+          BindingIdentifier?: { name?: string },
+          EnumMemberList?: readonly { IdentifierName?: { name?: string } }[],
+        },
+      };
+      // **An enum's atoms are its enumerators, BY NAME.** An earlier draft keyed
+      // them positionally off `LibraryName`, which is *undefined* for an enum -
+      // so the keys were `enum.0`, `enum.1`, which count correctly and print
+      // uselessly. The names are on the declaration, which the record carries.
+      if (Array.isArray(rec.EnumMembers) && rec.Declaration?.type === 'EnumDeclaration') {
+        const owner = rec.Declaration.BindingIdentifier?.name;
+        const names = (rec.Declaration.EnumMemberList ?? [])
+          .map((m) => m.IdentifierName?.name)
+          .filter((n): n is string => typeof n === 'string');
+        if (names.length > 0) {
+          return names.map((name) => ({
+            key: name, type: t, declaration: rec.Declaration as ParseNode, owner,
+          }));
+        }
+      }
+      // A SEALED class's atoms are its direct subclasses, which live in a map the
+      // checker owns - so the caller supplies them, the way it supplies a
+      // dependent record type's denotation.
+      const subclasses = sealedSubclassesOf?.(t);
+      if (subclasses && subclasses.length > 0) {
+        return subclasses.map((sub) => ({
+          key: sub.name, type: t, declaration: sub.declaration,
         }));
       }
       return NO_ATOMS;
@@ -134,7 +172,7 @@ export function Atoms(
       }
       const out: Atom[] = [];
       for (const member of members) {
-        const inner = Atoms(member, denotedUnionOf);
+        const inner = Atoms(member, denotedUnionOf, sealedSubclassesOf);
         if (inner.length === 0) {
           return NO_ATOMS;
         }
@@ -147,7 +185,7 @@ export function Atoms(
       // denotes. The caller supplies the denotation, because building it needs
       // the declaration and this operation sees only the record.
       const denoted = denotedUnionOf?.(t);
-      return denoted ? Atoms(denoted, denotedUnionOf) : NO_ATOMS;
+      return denoted ? Atoms(denoted, denotedUnionOf, sealedSubclassesOf) : NO_ATOMS;
     }
     case 'intersection': {
       const members = (t as { Members: readonly TypeRecord[] }).Members;
@@ -171,7 +209,7 @@ export function Atoms(
         // none, so a distributable intersection had no atoms at all.
         return parts.length === 1 ? parts[0]! : ({ Kind: 'intersection', Members: parts } as TypeRecord);
       });
-      return Atoms({ Kind: 'union', Members: distributed } as TypeRecord, denotedUnionOf);
+      return Atoms({ Kind: 'union', Members: distributed } as TypeRecord, denotedUnionOf, sealedSubclassesOf);
     }
     default:
       // "and ~none~ otherwise", which includes a Type Object subject: "the types
