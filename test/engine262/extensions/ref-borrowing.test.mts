@@ -418,6 +418,47 @@ test('borrowing a member does not require borrowing the object', () => {
   expect(evaluated('function g({ a }) { return a; } let o = { a: 1 }; String(g(ref o));')).toBe('1');
 });
 
+// -- #sec-soa-references: one borrow representation (Phase 6) ------------------
+const soaP = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
+
+test('a borrow of an SoA element is a reference like any other', () => {
+  // the ref ARGUMENT form, which previously refused an SoA element outright
+  expect(evaluated(`${soaP} function f(ref p) { p.a = 9; } f(ref s[0]); String(s[0].a);`)).toBe('9');
+  expect(evaluated(`${soaP} function f(ref p) { return p.a; } String(f(ref s[0]));`)).toBe('1');
+  // and the binding form, which is now the same borrow rather than a handle
+  expect(evaluated(`${soaP} const ref e = s[0]; e.a = 7; String(s[0].a);`)).toBe('7');
+  // a whole-element store writes every column at the index
+  expect(evaluated(`${soaP} function f(ref p) { p = { a: 4, b: 4.5 }; } f(ref s[0]); String(s[0].a);`)).toBe('4');
+});
+
+test('the callback idiom composes over an SoA', () => {
+  // references.md's zip, over the container the value-type story exists for
+  expect(evaluated(
+    'class P { x: uint8; } const s1 = new SoA.<P>(); s1.push({ x: 1 });'
+    + ' const s2 = new SoA.<P>(); s2.push({ x: 10 });'
+    + ' function zip(a, b, cb) { for (let i = 0; i < a.length; i++) cb(ref a[i], ref b[i]); }'
+    + ' zip(s1, s2, (ref p, ref q) => { p.x = p.x + q.x; }); String(s1[0].x);',
+  )).toBe('11');
+});
+
+test('an SoA borrow decays to a gathered copy at a value boundary', () => {
+  // a non-ref parameter consumes a VALUE, so the callee gets a detached copy
+  expect(evaluated(`${soaP} function h(v) { v.a = 42; } h(ref s[0]); String(s[0].a);`)).toBe('1');
+  // while a parameter ANNOTATED as a reference type receives the borrow, which
+  // is what makes one function work over either storage layout
+  expect(evaluated(
+    'class P { x: float32; } function move(p: ref P) { p.x = Number(p.x) + 1; }'
+    + ' const s = new SoA.<P, 1>(); const seed = new P(); seed.x = 10; s[0] = seed;'
+    + ' move(ref s[0]); String(Number(s[0].x));',
+  )).toBe('11');
+});
+
+test('the liveness rules apply to an SoA borrow however it was taken', () => {
+  expectThrownKind(`${soaP} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2 }); e.a;`, 'TypeError');
+  expectThrownKind(`${soaP} s.push({ a: 5, b: 5 }); const ref e = s[1]; s.pop(); e.a;`, 'TypeError');
+  expectThrownKind(`${soaP} for (const ref p of s) { s.push({ a: 9, b: 9 }); }`, 'TypeError');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax

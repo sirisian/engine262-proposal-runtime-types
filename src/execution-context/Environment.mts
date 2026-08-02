@@ -17,6 +17,7 @@ import {
 } from '../completion.mts';
 import { JSStringMap } from '../utils/container.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
+import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -92,6 +93,14 @@ interface DeclarativeEnvironmentBinding {
  * Record for a variable, or an Object for a property or an array element.
  */
 function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
+  // proposal-runtime-types #sec-soa-references: an SoA element has no property
+  // slot to read - `s[i]` GATHERS a copy - so a borrow of one dereferences to
+  // the element view it carries. Reading the base's property here instead would
+  // hand back a detached copy and silently drop every write through the
+  // binding, which is the one thing the borrow exists to prevent.
+  if (location.SoAElement !== undefined) {
+    return location.SoAElement;
+  }
   if (location.Base instanceof ObjectValue) {
     return Q(yield* location.Base.Get(location.ReferencedName as PropertyKeyValue, location.Base));
   }
@@ -104,6 +113,12 @@ function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
  * storage location a ref binding aliases.
  */
 function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEvaluator {
+  // A whole-element store through the borrow writes every column at the index.
+  if (location.SoAElement !== undefined) {
+    const backing = SoAElementBackingOf(location.SoAElement as unknown as object)!;
+    Q(yield* SoAScatter(backing.Storage, backing.Index, V));
+    return undefined;
+  }
   if (location.Base instanceof ObjectValue) {
     const succeeded = Q(yield* location.Base.Set(location.ReferencedName as PropertyKeyValue, V, location.Base));
     if (succeeded === Value.false && location.Strict === Value.true) {

@@ -223,8 +223,17 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   }
   // proposal-runtime-types (references extension): a reference value reaching a
   // parameter that is not declared `ref` decays to the referent's value.
-  if (v instanceof ReferenceValue) {
-    v = Q(yield* GetValue(v.Location));
+  //
+  // A parameter ANNOTATED with a reference type, `function move(p: ref
+  // Particle)`, is not such a parameter: its declared type says it takes a
+  // borrow, so the borrow is what it receives. This is the form soa.md relies
+  // on for storage independence - "a system written against one storage works
+  // against the other" - where the same `ref Particle` parameter is passed a
+  // borrow of an `SoA` element by one caller and of a `[].<T>` element by
+  // another, and neither call site says which layout produced it.
+  const annotatedRef = node.TypeAnnotation?.Type?.type === 'ReferenceType';
+  if (v instanceof ReferenceValue && !annotatedRef) {
+    v = Q(yield* DecayReferenceValue(v));
   }
   // 6. If environment is undefined, return ? PutValue(lhs, v).
   if (environment === Value.undefined) {

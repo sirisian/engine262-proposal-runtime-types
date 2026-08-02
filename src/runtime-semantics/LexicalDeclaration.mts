@@ -16,7 +16,7 @@ import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
-import { RequireBorrowableReference, SoAElementViewFor } from './RefExpression.mts';
+import { RequireBorrowableReference, SoAElementLocationFor } from './RefExpression.mts';
 import {
   surroundingAgent,
   GetValue,
@@ -50,15 +50,12 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
   if (node.Ref === true) {
     const bindingId = StringValue(BindingIdentifier!);
     const lhs = X(ResolveBinding(bindingId, undefined, strict));
-    const location = Q(yield* RequireBorrowableReference(Initializer as ParseNode.LeftHandSideExpression));
+    const location = Q(yield* SoAElementLocationFor(Q(yield* RequireBorrowableReference(Initializer as ParseNode.LeftHandSideExpression))));
     // proposal-runtime-types soa.md: a `const ref p = s[i]` borrows the column
-    // set and the index, not the gathered copy. This is the form the design
-    // writes, so it is the one that matters most.
-    const soaView = Q(yield* SoAElementViewFor(location));
-    if (soaView !== undefined) {
-      Q(yield* InitializeReferencedBinding(lhs, soaView));
-      return NormalCompletion(undefined);
-    }
+    // set and the index, not the gathered copy. The borrow is a LOCATION like
+    // any other (#sec-soa-references), so it goes through the ref binding below
+    // rather than binding a handle as an ordinary value - which is what makes
+    // `f(ref s[i])` and `const ref p = s[i]` the same borrow.
     if (TypeAnnotation) {
       const referent = Q(yield* GetValue(location));
       const ok = Q(yield* IsOfTypeNode(referent, TypeAnnotation.Type));

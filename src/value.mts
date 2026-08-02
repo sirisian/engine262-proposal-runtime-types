@@ -1201,6 +1201,17 @@ export class ReferenceRecord {
   readonly IndexOperator?: Value;
   readonly IndexSetOperator?: Value;
 
+  // proposal-runtime-types #sec-soa-references: set when this reference denotes
+  // an element of an `SoA` - a COLUMN SET AND AN INDEX rather than a property
+  // slot, since the element's fields live in separate column allocations and
+  // there is no single address to point at. The value is the element view built
+  // where the borrow was taken; it carries the capacity pinned at that moment,
+  // which is what lets a later use detect that the storage has moved
+  // (#sec-reference-liveness). Marking the Reference Record is what lets ONE
+  // borrow representation serve every form: a `ref` argument, a `ref` return,
+  // and a `ref` binding all carry this and all reach the same reads and writes.
+  readonly SoAElement?: ObjectValue;
+
   constructor({
     Base,
     ReferencedName,
@@ -1208,13 +1219,15 @@ export class ReferenceRecord {
     ThisValue,
     IndexOperator,
     IndexSetOperator,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator'>) {
+    SoAElement,
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator' | 'SoAElement'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
     this.ThisValue = ThisValue;
     this.IndexOperator = IndexOperator;
     this.IndexSetOperator = IndexSetOperator;
+    this.SoAElement = SoAElement;
   }
 
   // NON-SPEC

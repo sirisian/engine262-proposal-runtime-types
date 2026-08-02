@@ -3,7 +3,7 @@ import { Q, X } from '../completion.mts';
 import { OutOfRange } from '../utils/language.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
+import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
 import {
   EvaluatePropertyAccessWithExpressionKey,
   EvaluatePropertyAccessWithIdentifierKey,
@@ -21,7 +21,7 @@ function* Evaluate_MemberExpression_Expression({ strict, MemberExpression, Expre
   // proposal-runtime-types (references extension): the base of a property
   // access is a position that consumes a value, so a reference value that
   // reaches it decays to its referent before the access is built.
-  const baseValue = Q(yield* DecayReferenceValue(Q(yield* GetValue(baseReference))));
+  const baseValue = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(baseReference))));
   // 3. If the code matched by this |MemberExpression| is strict mode code, let strict be true; else let strict be false.
   // 4. Return ? EvaluatePropertyAccessWithExpressionKey(baseValue, |Expression|, strict).
   return Q(yield* EvaluatePropertyAccessWithExpressionKey(baseValue, Expression!, strict));
@@ -36,7 +36,7 @@ function* Evaluate_MemberExpression_IdentifierName({ strict, MemberExpression, I
   // 2. Let baseValue be ? GetValue(baseReference).
   // proposal-runtime-types (references extension): see the expression-key
   // form above; the base of the access decays.
-  const baseValue = Q(yield* DecayReferenceValue(Q(yield* GetValue(baseReference))));
+  const baseValue = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(baseReference))));
   // 3. If the code matched by this |MemberExpression| is strict mode code, let strict be true; else let strict be false.
   // 4. Return ! EvaluatePropertyAccessWithIdentifierKey(baseValue, |IdentifierName|, strict).
   return X(EvaluatePropertyAccessWithIdentifierKey(baseValue, IdentifierName!, strict));

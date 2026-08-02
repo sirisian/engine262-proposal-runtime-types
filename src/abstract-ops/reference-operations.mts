@@ -1,3 +1,4 @@
+import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { lookupTypeParameter } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
@@ -90,6 +91,14 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     }
     return Throw.ReferenceError('$1 is not defined', V.ReferencedName);
   }
+  // proposal-runtime-types #sec-soa-references: dereferencing a borrow of an
+  // SoA element yields the element VIEW, a live handle whose field reads and
+  // writes go to the columns at this index. This is a DEREFERENCE and not a
+  // decay: it preserves the aliasing, which is what makes `p.x = 1` through a
+  // `ref` write into the container.
+  if (V.SoAElement !== undefined) {
+    return V.SoAElement;
+  }
   // 3. If IsPropertyReference(V) is true, then
   if (IsPropertyReference(V) === Value.true) {
     __ts_cast__<PropertyReference>(V);
@@ -145,6 +154,14 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
 
 /** https://tc39.es/ecma262/#sec-putvalue */
 export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator {
+  // proposal-runtime-types #sec-soa-references: a whole-element store through a
+  // borrow of an SoA element writes every column at that index, which is what
+  // `p = value` means for an element whose fields are spread across columns.
+  if (V instanceof ReferenceRecord && V.SoAElement !== undefined) {
+    const backing = SoAElementBackingOf(V.SoAElement as unknown as object)!;
+    Q(yield* SoAScatter(backing.Storage, backing.Index, W));
+    return undefined;
+  }
   // 1. If V is not a Reference Record, throw a ReferenceError exception.
   if (!(V instanceof ReferenceRecord)) {
     return Throw.ReferenceError('Invalid assignment target');
@@ -290,6 +307,32 @@ export function MakePrivateReference(baseValue: Value, privateIdentifier: JSStri
  * non-reference value passes through unchanged.
  */
 export function* DecayReferenceValue(value: Value): ValueEvaluator {
+  if (value instanceof ReferenceValue) {
+    // An SoA element decays to the GATHERED value, the copy `s[i]` produces,
+    // and not to the live view a dereference yields. Decay is where a borrow
+    // stops being a borrow, so what it produces must be a value with no tie to
+    // the container; handing back the view would let aliasing survive a
+    // boundary that consumes a value.
+    const soaElement = value.Location.SoAElement;
+    if (soaElement !== undefined) {
+      const backing = SoAElementBackingOf(soaElement as unknown as object)!;
+      return Q(yield* SoAGather(backing.Storage, backing.Index));
+    }
+    return Q(yield* GetValue(value.Location));
+  }
+  return value;
+}
+
+/**
+ * proposal-runtime-types #sec-soa-references: dereference a reference value for
+ * an ACCESS rather than for a value. The two coincide for an ordinary borrow,
+ * whose referent is just the value at its location, and diverge for a borrow of
+ * an SoA element: an access must reach the live element, so that the base of
+ * `p.x = 1` is the view and the write lands in the column, while a decay must
+ * produce a detached copy. Positions that go on to read or write THROUGH the
+ * result use this; positions that consume a value use DecayReferenceValue.
+ */
+export function* DereferenceReferenceValue(value: Value): ValueEvaluator {
   if (value instanceof ReferenceValue) {
     return Q(yield* GetValue(value.Location));
   }

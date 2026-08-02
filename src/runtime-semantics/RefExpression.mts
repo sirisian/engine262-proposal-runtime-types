@@ -89,11 +89,7 @@ export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpressi
  */
 export function* Evaluate_RefExpression({ Expression }: ParseNode.RefExpression): ValueEvaluator {
   const location = Q(yield* RequireBorrowableReference(Expression));
-  const soaView = Q(yield* SoAElementViewFor(location));
-  if (soaView !== undefined) {
-    return soaView;
-  }
-  return new ReferenceValue(location);
+  return new ReferenceValue(Q(yield* SoAElementLocationFor(location)));
 }
 
 /**
@@ -106,22 +102,37 @@ export function* Evaluate_RefExpression({ Expression }: ParseNode.RefExpression)
  * different paths to the same borrow: routing only the expression left the
  * binding - the form soa.md actually writes - silently borrowing a copy.
  */
-export function* SoAElementViewFor(location: unknown): PlainEvaluator<Value | undefined> {
+export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluator<ReferenceRecord> {
   if (!surroundingAgent.feature('runtime-types')
-      || !(location instanceof ReferenceRecord)
       || !(location.Base instanceof ObjectValue)
       || !(location.ReferencedName instanceof JSStringValue)) {
-    return undefined;
+    return location;
   }
   const storage = SoAStorageOf(location.Base as unknown as object);
   if (storage === undefined) {
-    return undefined;
+    return location;
   }
   const index = Number(location.ReferencedName.stringValue());
   if (String(index) !== location.ReferencedName.stringValue()) {
-    return undefined;
+    return location;
   }
-  return Q(yield* SoAElementReference(storage, index));
+  // The element view is built ONCE, where the borrow is taken, and the marked
+  // location carries it. Rebuilding it on each use would re-pin the capacity
+  // and so forget that the storage had moved, which is the very invalidation
+  // #sec-reference-liveness turns on.
+  const view = Q(yield* SoAElementReference(storage, index));
+  if (!(view instanceof ObjectValue)) {
+    return location;
+  }
+  return new ReferenceRecord({
+    Base: location.Base,
+    ReferencedName: location.ReferencedName,
+    Strict: location.Strict,
+    ThisValue: undefined,
+    IndexOperator: undefined,
+    IndexSetOperator: undefined,
+    SoAElement: view,
+  });
 }
 
 /**
