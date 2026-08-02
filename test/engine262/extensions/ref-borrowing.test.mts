@@ -459,6 +459,34 @@ test('the liveness rules apply to an SoA borrow however it was taken', () => {
   expectThrownKind(`${soaP} for (const ref p of s) { s.push({ a: 9, b: 9 }); }`, 'TypeError');
 });
 
+// -- B3: a typed array satisfies its own type, so a boundary checks not copies --
+test('a typed array passes a typed boundary without being copied', () => {
+  // a typed array reports a TYPED length, and membership used to reject it for
+  // that alone - so every typed boundary rebuilt the array instead of passing
+  // it through, and a parameter silently received a copy
+  expect(evaluated('const a: [].<uint32> = [7]; String(a is [].<uint32>);')).toBe('true');
+  expect(evaluated('const a: [].<uint32> = []; String(a is [].<uint32>);')).toBe('true');
+  expect(evaluated('function h(x: [].<uint32>) { return x === a; } const a: [].<uint32> = [7]; String(h(a));')).toBe('true');
+  expect(evaluated('function h(x: [].<uint32>) { x[0] = 42; } const a: [].<uint32> = [7]; h(a); String(a[0]);')).toBe('42');
+  expect(evaluated('function h(x: [2].<uint32>) { return x === a; } const a: [2].<uint32> = [1, 2]; String(h(a));')).toBe('true');
+});
+
+test('a borrow through a typed array parameter writes to the caller\'s array', () => {
+  // the reference-facing symptom of the same defect: the callee borrowed an
+  // element of a COPY, so the write reached nothing the caller could see
+  expect(evaluated('function h(x: [].<uint32>) { let ref e = x[0]; e = 9; } const a: [].<uint32> = [7]; h(a); String(a[0]);')).toBe('9');
+  expect(evaluated('function fr(x: [].<uint32>) { return ref x[0]; } const a: [].<uint32> = [7]; fr(a)++; String(a[0]);')).toBe('8');
+});
+
+test('a plain array still propagates into a new typed array', () => {
+  // the case the conversion exists for is unchanged: elements are converted
+  // into a NEW array, and the caller's plain array is untouched
+  expect(evaluated('function h(x: [].<uint8>) { return x[0] is uint8; } let p = [1, 2]; String(h(p));')).toBe('true');
+  expect(evaluated('function h(x: [].<uint8>) { x[0] = 5; } let p = [1]; h(p); String(p[0] is uint8);')).toBe('false');
+  // and the empty-array stamp still carries the element type (F71)
+  expect(evaluated('const a: [].<uint8> = []; a.push(65); String(a[0] is uint8);')).toBe('true');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax

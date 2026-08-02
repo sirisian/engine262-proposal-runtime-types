@@ -2,7 +2,7 @@ import { OutOfRange } from '../utils/language.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
-  TypedNumberValue, TypedStringValue, ReferenceValue,
+  TypedNumberValue, TypedStringValue, ReferenceValue, isTypedNumber, unwrapToNumber,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
@@ -815,10 +815,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         return false;
       }
       const lenValue = Q(yield* Get(value, Value('length')));
-      if (!(lenValue instanceof NumberValue)) {
+      // proposal-runtime-types: a TYPED array reports a typed `length` - a
+      // `uint32` rather than a plain Number - so testing for NumberValue alone
+      // rejected every typed array against its own array type. `[].<uint32>`
+      // answered *false* for `a is [].<uint32>`, and, because every typed
+      // boundary consults this membership before deciding whether to convert,
+      // an array that already satisfied its type was rebuilt instead of passed
+      // through: a typed array parameter COPIED its argument, so writes through
+      // it never reached the caller. Reading the length through the one named
+      // unwrap admits both spellings of the same number.
+      if (!(lenValue instanceof NumberValue) && !isTypedNumber(lenValue)) {
         return false;
       }
-      const len = R(lenValue);
+      const len = R(unwrapToNumber(lenValue as NumberValue | TypedNumberValue));
       if (t.Kind === 'array') {
         if (t.Extent !== 'dynamic' && t.Extent !== len) {
           return false;
