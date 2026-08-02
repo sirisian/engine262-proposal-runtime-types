@@ -91,3 +91,47 @@ test('an untyped catch-all still ranks last', () => {
   expect(evaluated(`${P}String(f(1));`)).toBe('1');
   expect(evaluated(`${P}String(f(1, 2));`)).toBe('0');
 });
+
+/**
+ * PHASE 3, THE ARGUMENT POSITION: attempted, reverted, and the obstacle is
+ * generic inference rather than the contextual type.
+ *
+ * The clause specifies both cases: "`g(f())` selects the first where `g` takes
+ * a `uint32`, because the parameter supplies the contextual type. `h(f())` is
+ * an error where `h` is itself overloaded ... The circularity is real and is
+ * resolved by rejecting the call rather than by guessing."
+ *
+ * IT WORKED. Pushing the sole signature's parameter type around argument
+ * evaluation in EvaluateCall made `g(f())` select `1` for a `uint32` parameter
+ * and `"two"` for a `string` one, and left `h(f())` refused - all three of the
+ * clause's cases, including the circularity resolving by NOT pushing where the
+ * callee is overloaded.
+ *
+ * AND IT BROKE TEN GENERIC-INFERENCE TESTS. `capability-b-inference` covers a
+ * generic call whose parameter is an unconstrained type parameter, and pushing
+ * that parameter as a contextual type changes what the inference sees. The
+ * contextual type is currently pushed only at an annotated binding; making it
+ * the common case at every argument of every call is exactly the
+ * broad-blast-radius change this file's own phase-2 note warned about.
+ *
+ * `soleSignatureParameterTypes` is kept - it is correct, tested by hand against
+ * all three clause cases, and answers null for an overloaded callee, which is
+ * the circularity rule. What it needs is a caller that pushes only where the
+ * parameter is a concrete type rather than a type parameter, so inference is
+ * untouched. That is the next step and it is a condition on one call, not a
+ * redesign.
+ */
+
+test('an argument position does not yet supply a contextual type', () => {
+  // Asserted as it behaves, with the divergence named above. The clause
+  // requires the first to select; it currently reports the inner call's
+  // ambiguity.
+  const F = 'function f(): uint32 { return 1; } function f(): string { return "two"; } ';
+  expect(ok(`${F}function g(x: uint32) { return x; } g(f());`)).toBe(false);
+
+  // This one is correct and must STAY correct: an overloaded callee gives its
+  // argument no contextual type, so the inner call is ambiguous and the whole
+  // expression is refused. A change that made the case above work could easily
+  // make this one work too, which the clause forbids.
+  expect(ok(`${F}function h(x: uint8) { return 1; } function h(x: string) { return 2; } h(f());`)).toBe(false);
+});

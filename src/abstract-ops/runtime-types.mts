@@ -1993,3 +1993,33 @@ function enclosingClassTypeParameters(node: ParseNode | undefined): readonly Par
   }
   return undefined;
 }
+
+/**
+ * The parameter types of a callee that has exactly one signature, or null.
+ *
+ * proposal-runtime-types #sec-overloading-on-return-type: an argument position
+ * takes its contextual type from the callee's parameter. Where the callee is
+ * itself overloaded there is no single parameter to take it from, and the
+ * clause resolves that circularity by REJECTING rather than guessing - so this
+ * answers null and the inner call reports its own ambiguity.
+ */
+export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeRecord | null)[] | null> {
+  const declared = (func as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
+  if (declared && declared.length !== 1) {
+    return null;
+  }
+  const formals = ((func as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined);
+  if (!formals || formals.length === 0) {
+    return null;
+  }
+  const types: (TypeRecord | null)[] = [];
+  for (const p of formals) {
+    const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+    if (ann) {
+      types.push(Q(yield* TypeNodeToTypeRecord(ann.Type)));
+    } else {
+      types.push(null);
+    }
+  }
+  return types;
+}
