@@ -663,6 +663,28 @@ export function* EvaluateWhereClauses(value: Value, whereClauses: readonly Parse
 }
 
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
+  // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
+  // of a `ref T` when the storage it borrows currently holds a T. The check
+  // reads through to the referent rather than testing the reference itself,
+  // which is the same rule a `ref` parameter's annotation applies - a borrow is
+  // checked against what it aliases and never converts it.
+  //
+  // Without this a reference type had no membership rule at all, so a function
+  // declared `: ref uint32` failed its OWN return check the moment it returned
+  // a borrow, which made an annotated `ref` return unusable and left a
+  // location-consuming call (#sec-location-consuming-contexts) with no
+  // well-typed callee to consume.
+  if (t.Kind === 'reference') {
+    if (value instanceof ReferenceValue) {
+      const referent = Q(yield* GetValue(value.Location));
+      return Q(yield* IsOfType(referent, t.Target));
+    }
+    // A value that reached here already decayed, and the absence of observable
+    // identity means a program cannot ask whether something IS a reference,
+    // only what it refers to - so a decayed value is tested against the
+    // borrowed type, which is what this case did before a borrow could arrive.
+    return Q(yield* IsOfType(value, t.Target));
+  }
   // proposal-runtime-types `sec-composite-types`: the top composite type "is the
   // type of every composite", and a composite type over a shape is satisfied by
   // a composite whose own type is a subtype of it. Membership is answered
@@ -851,8 +873,6 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       const slots = t.Elements.map((e) => ({ Rest: e.Rest, Optional: e.Initial !== 'none' }));
       return SequenceAssignment(slots, len, (i, k) => admitted[i][k]) !== 'unmatched';
     }
-    case 'reference':
-      return Q(yield* IsOfType(value, t.Target));
     case 'nominal': {
       if (t.EnumMembers) {
         return t.EnumMembers.some((m) => SameValue(value, m));

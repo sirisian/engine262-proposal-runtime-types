@@ -488,6 +488,12 @@ export namespace ParseNode {
     readonly type: 'CallExpression';
     readonly CallExpression: CallExpressionOrHigher | MemberExpressionOrHigher;
     readonly Arguments: Arguments;
+    // proposal-runtime-types #sec-location-consuming-contexts: set when this
+    // call occupies a position that consumes a LOCATION rather than a value -
+    // the operand of `++`/`--`, or the operand of a `ref` argument. A call so
+    // marked does not decay its returned reference at the call boundary, which
+    // is what lets `first(a)++` write through to the element.
+    LocationConsuming?: boolean;
     // NON-SPEC
     readonly arrowInfo?: ArrowInfo;
   }

@@ -1,9 +1,10 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
-import { BigIntValue, NumberValue, ObjectValue, TypedNumberValue, Value, isTypedNumber } from '../value.mts';
+import { BigIntValue, NumberValue, ObjectValue, ReferenceValue, TypedNumberValue, Value, isTypedNumber } from '../value.mts';
 import { typedBinary } from '../type-system/arithmetic.mts';
 import { Q, X } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { Throw } from '../host-defined/error-messages.mts';
 import { surroundingAgent,
   Assert,
   Call,
@@ -32,6 +33,28 @@ function findUnaryClassOperator(operand: Value, opText: string): Value | null {
   }
   return LookupClassOperator(operand, `unary ${opText}`);
 }
+/**
+ * proposal-runtime-types #sec-location-consuming-contexts: the operand of
+ * `++`/`--` consumes a LOCATION, so a call that returned a borrow keeps it
+ * across the boundary and the update reads, adds, and writes through that
+ * location - the design's `first(a)++`, which writes into the element.
+ *
+ * A call the parser admitted here that did not in fact return a borrow has no
+ * location to update. Where the callee's return type is known the type system
+ * refuses the form before the source runs; where it is not, that check is
+ * deferred to here, and this is what it throws.
+ */
+function* EvaluateUpdateTarget(expr: ParseNode.LeftHandSideExpression | ParseNode.UnaryExpressionOrHigher) {
+  const target = Q(yield* Evaluate(expr));
+  if (target instanceof ReferenceValue) {
+    return target.Location;
+  }
+  if (expr.type === 'CallExpression' && (expr as ParseNode.CallExpression).LocationConsuming === true) {
+    return Throw.TypeError('this call did not return a ref, so there is no location to update');
+  }
+  return target;
+}
+
 // UpdateExpression :
 //   LeftHandSideExpression `++`
 //   LeftHandSideExpression `--`
@@ -43,7 +66,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     // https://tc39.es/ecma262/#sec-postfix-increment-operator-runtime-semantics-evaluation
     case operator === '++' && !!LeftHandSideExpression: {
       // 1. Let lhs be the result of evaluating LeftHandSideExpression.
-      const lhs = Q(yield* Evaluate(LeftHandSideExpression));
+      const lhs = Q(yield* EvaluateUpdateTarget(LeftHandSideExpression));
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
@@ -82,7 +105,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     // https://tc39.es/ecma262/#sec-postfix-decrement-operator-runtime-semantics-evaluation
     case operator === '--' && !!LeftHandSideExpression: {
       // 1. Let lhs be the result of evaluating LeftHandSideExpression.
-      const lhs = Q(yield* Evaluate(LeftHandSideExpression));
+      const lhs = Q(yield* EvaluateUpdateTarget(LeftHandSideExpression));
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
@@ -121,7 +144,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     // https://tc39.es/ecma262/#sec-prefix-increment-operator-runtime-semantics-evaluation
     case operator === '++' && !!UnaryExpression: {
       // 1. Let expr be the result of evaluating UnaryExpression.
-      const expr = Q(yield* Evaluate(UnaryExpression));
+      const expr = Q(yield* EvaluateUpdateTarget(UnaryExpression));
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through prefix ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));
@@ -158,7 +181,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     // https://tc39.es/ecma262/#sec-prefix-decrement-operator-runtime-semantics-evaluation
     case operator === '--' && !!UnaryExpression: {
       // 1. Let expr be the result of evaluating UnaryExpression.
-      const expr = Q(yield* Evaluate(UnaryExpression));
+      const expr = Q(yield* EvaluateUpdateTarget(UnaryExpression));
       // proposal-runtime-types R3: read the raw value; a typed number keeps its
       // type through prefix -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));

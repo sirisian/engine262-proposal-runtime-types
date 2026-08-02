@@ -959,13 +959,17 @@ export abstract class ExpressionParser extends FunctionParser {
       node.operator = this.next().value as ParseNode.UpdateExpression['operator']; // NOTE: unsound cast
       node.LeftHandSideExpression = null;
       node.UnaryExpression = this.parseUnaryExpression();
-      this.validateAssignmentTarget(node.UnaryExpression);
+      if (!this.markLocationConsuming(node.UnaryExpression)) {
+        this.validateAssignmentTarget(node.UnaryExpression);
+      }
       return this.finishNode(node, 'UpdateExpression');
     }
     const argument = this.parseLeftHandSideExpression();
     if (!this.peek().hadLineTerminatorBefore) {
       if (this.test(Token.INC) || this.test(Token.DEC)) {
-        this.validateAssignmentTarget(argument);
+        if (!this.markLocationConsuming(argument)) {
+          this.validateAssignmentTarget(argument);
+        }
         const node = this.startNode<ParseNode.UpdateExpression>(argument);
         node.operator = this.next().value as ParseNode.UpdateExpression['operator']; // NOTE: unsound cast
         node.LeftHandSideExpression = argument;
@@ -974,6 +978,28 @@ export abstract class ExpressionParser extends FunctionParser {
       }
     }
     return argument;
+  }
+
+  /**
+   * proposal-runtime-types #sec-location-consuming-contexts: a call that
+   * returns a borrow may occupy a position that consumes a location, where the
+   * design's `first(a)++` writes through to the element. The base language
+   * refuses a call as an assignment target outright; this admits one in those
+   * positions and marks it, so the call boundary keeps the reference instead of
+   * decaying it.
+   *
+   * Whether the call actually returns a reference is a matter of its type. A
+   * checker that knows the callee's return type refuses one that is not a `ref`
+   * type before the source runs; where the type is not known statically the
+   * check is the runtime one, a TypeError at the operation, per the deferral
+   * rule of the type errors clause.
+   */
+  markLocationConsuming(node: ParseNode): boolean {
+    if (!surroundingAgent.feature('runtime-types') || node.type !== 'CallExpression') {
+      return false;
+    }
+    (node as Mutable<ParseNode.CallExpression>).LocationConsuming = true;
+    return true;
   }
 
   // LeftHandSideExpression
@@ -1649,6 +1675,10 @@ export abstract class ExpressionParser extends FunctionParser {
         if (refNode.Expression.type === 'TopicReference') {
           this.addEarlyError(Throw.SyntaxError('the topic is a value, not a reference'), refNode);
         }
+        // proposal-runtime-types #sec-location-consuming-contexts: `g(ref
+        // first(a))` re-borrows the location a call returned, so the call keeps
+        // its reference rather than decaying it at the boundary.
+        this.markLocationConsuming(refNode.Expression);
         Arguments.push(this.finishNode(refNode, 'RefExpression'));
       } else if (surroundingAgent.feature('runtime-types')
           && this.conditionalConsequentDepth === 0

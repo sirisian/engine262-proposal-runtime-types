@@ -30,7 +30,18 @@ import {
  */
 export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpression): ReferenceEvaluator {
   const ref = Q(yield* Evaluate(expr));
+  // proposal-runtime-types #sec-location-consuming-contexts: `g(ref first(a))`
+  // re-borrows the location a call returned. The call kept its reference across
+  // the boundary because the parser marked it, so what arrives here is the
+  // borrow itself rather than a Reference Record, and the location it holds is
+  // the one to pass on.
+  if (ref instanceof ReferenceValue) {
+    return ref.Location;
+  }
   if (!(ref instanceof ReferenceRecord)) {
+    if (expr.type === 'CallExpression' && (expr as ParseNode.CallExpression).LocationConsuming === true) {
+      return Throw.TypeError('this call did not return a ref, so there is no location to borrow');
+    }
     return Throw.TypeError('cannot take a ref of a value; a ref needs a variable, a property, or an array element');
   }
   if (IsUnresolvableReference(ref) === Value.true) {

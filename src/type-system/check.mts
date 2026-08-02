@@ -3907,6 +3907,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
         return;
       }
+      case 'UpdateExpression': {
+        // proposal-runtime-types #sec-location-consuming-contexts: `++`/`--`
+        // over a call consumes a LOCATION, so the callee must return one. The
+        // parser admits the form and marks the call; the type is what decides
+        // whether it means anything, and a callee whose return type is known
+        // and is not a `ref` type is refused before the source runs. Where the
+        // return type is not known the check is the runtime one, per the
+        // deferral rule of #sec-type-errors - imprecise rather than wrong.
+        const u = n as unknown as { LeftHandSideExpression?: ParseNode | null, UnaryExpression?: ParseNode | null };
+        const operand = u.LeftHandSideExpression ?? u.UnaryExpression;
+        if (operand && operand.type === 'CallExpression'
+            && (operand as { LocationConsuming?: boolean }).LocationConsuming === true) {
+          const produced = staticType(operand);
+          if (produced && produced.Kind !== 'reference') {
+            const completion = Throw.TypeError(
+              'a call in a ++ or -- operand must return a ref, and $1 does not',
+              Value(displayType(produced)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+        walk(operand);
+        return;
+      }
       case 'AssignmentExpression': {
         const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
         if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {

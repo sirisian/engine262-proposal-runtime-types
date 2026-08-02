@@ -122,6 +122,14 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // a returned reference then reached member bases and typeof raw.
   const callValue = result instanceof Completion ? result.Value : result;
   if (callValue instanceof ReferenceValue && !(result instanceof AbruptCompletion)) {
+    // proposal-runtime-types #sec-location-consuming-contexts: a call marked by
+    // the parser occupies a position that consumes a LOCATION - the operand of
+    // `++`/`--`, or of a `ref` argument - so the reference survives the
+    // boundary and the consuming form writes through it. Everywhere else the
+    // reference decays here, which is what gives it no observable identity.
+    if (callExpression?.type === 'CallExpression' && callExpression.LocationConsuming === true) {
+      return callValue;
+    }
     return Q(yield* GetValue(callValue.Location));
   }
   // 10. Return result.

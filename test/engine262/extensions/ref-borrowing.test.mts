@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectError, expectThrownKind, runFlagOff,
+  evaluated, ok, expectThrown, expectError, expectThrownKind, expectStaticTypeError, runFlagOff,
 } from '../readme/harness.mts';
 
 /**
@@ -343,6 +343,54 @@ test('a reference to an ordinary property is a slot alias and never relocates', 
   // and the reference keeps denoting a[0], whose value a shift has changed -
   // the same thing the expression a[0] has always meant
   expect(evaluated('let a = [1, 2]; let ref b = a[0]; a.shift(); String(b);')).toBe('2');
+});
+
+// -- #sec-location-consuming-contexts (Phase 4) --------------------------------
+const first = 'function first(a) { return ref a[0]; } ';
+
+test('a returned reference is consumed as a location by ++ and --', () => {
+  // references.md: `first(a)++` post-increments the element in place
+  expect(evaluated(`${first}let a = [7]; first(a)++; String(a[0]);`)).toBe('8');
+  // postfix yields the OLD value, as it does for any target
+  expect(evaluated(`${first}let a = [7]; String(first(a)++) + "/" + String(a[0]);`)).toBe('7/8');
+  expect(evaluated(`${first}let a = [7]; String(--first(a)) + "/" + String(a[0]);`)).toBe('6/6');
+  expect(evaluated(`${first}let a = [7]; first(a)--; String(a[0]);`)).toBe('6');
+  // and it reaches an object property or a typed element the same way
+  expect(evaluated('function fx(o) { return ref o.x; } let o = { x: 1 }; fx(o)++; String(o.x);')).toBe('2');
+  expect(evaluated('function f(t) { return ref t[0]; } const a: [].<uint32> = [5]; f(a)++; String(a[0]);')).toBe('6');
+});
+
+test('a ref argument re-borrows the location a call returned', () => {
+  expect(evaluated(`${first}function g(ref p) { p = p + 100; } let a = [7]; g(ref first(a)); String(a[0]);`)).toBe('107');
+});
+
+test('everywhere else a returned reference still decays', () => {
+  expect(evaluated(`${first}let a = [7]; String(typeof first(a));`)).toBe('number');
+  expect(evaluated(`${first}let a = [7]; let v = first(a); v = 99; String(a[0]);`)).toBe('7');
+});
+
+test('a call that returns no reference has no location to consume', () => {
+  // deferred to run time, since these callees have no known return type
+  expectThrownKind('function plain(a) { return a[0]; } let a = [7]; plain(a)++;', 'TypeError');
+  expectThrownKind('function plain(a) { return a[0]; } function g(ref p) { } let a = [7]; g(ref plain(a));', 'TypeError');
+  // and refused before running where the return type says so
+  expectStaticTypeError('function plain(a): uint32 { return a[0]; } const a: [].<uint32> = [7]; plain(a)++;');
+  // a declared ref return is accepted, and writes through
+  expect(evaluated('function fr(a): ref uint32 { return ref a[0]; } const a: [].<uint32> = [7]; fr(a)++; String(a[0]);')).toBe('8');
+});
+
+test('a ref return may name a local, whose environment outlives the call', () => {
+  // D5: the collector owns the lifetime, as it does for a closure
+  expect(evaluated('function localRef() { let v = 3; return ref v; } String(localRef());')).toBe('3');
+  expect(ok('function localRef() { let v = 3; return ref v; } localRef()++;')).toBe(true);
+});
+
+test('a reference value satisfies a ref type through its referent', () => {
+  // a function declared `: ref uint32` returning a borrow passes its own
+  // return check; the membership test reads through to what is borrowed
+  expect(evaluated('function fr(a): ref uint32 { return ref a[0]; } const a: [].<uint32> = [7]; String(fr(a));')).toBe('7');
+  // and a borrow of storage holding the wrong type does not satisfy it
+  expectThrownKind('function fr(a): ref uint32 { return ref a[0]; } let b = ["x"]; fr(b);', 'TypeError');
 });
 
 // -- feature gating ------------------------------------------------------------
