@@ -157,9 +157,15 @@ test('a generic call is untouched by the argument context', () => {
  *
  * The clause's rule covers it: "the contextual type of a call is the type its
  * position requires", and a `return` in an annotated function is such a
- * position. It is the same shape as the binding case that works, and blocked on
- * the same thing as the argument case: something must push the contextual type
- * around the evaluation, and pushing it broadly breaks generic inference.
+ * position. It is the same SHAPE as the binding case that works, and a
+ * DIFFERENT SITE from the argument position - phase 3 fixed that one and left
+ * this exactly as it was, which the assertions below confirmed rather than
+ * assumed.
+ *
+ * The site is EnforceReturnType(fn, value), which takes the value AFTER
+ * evaluation. That is what the binding boundary looked like before phase 2: a
+ * contextual type applied to a RESULT cannot select an overload, because the
+ * overload has already run. The change is to push around the evaluation.
  */
 
 test('a return position does not yet supply a contextual type', () => {
