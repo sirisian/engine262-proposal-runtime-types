@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, runFlagOff,
+  evaluated, ok, expectThrown, expectError, runFlagOff,
 } from '../readme/harness.mts';
 
 /**
@@ -172,6 +172,71 @@ test('a bare ref call and a ref assignment are not borrow forms', () => {
   expect(evaluated('function f(a) { return a; } let ref = 7; String(f(ref));')).toBe('7');
   expect(evaluated('function f(a, b) { return b; } let ref = 1; String(f(ref, 9));')).toBe('9');
   expect(evaluated('let ref = 1; ref = 5; String(ref);')).toBe('5');
+});
+
+// -- #sec-reference-syntax: arrow ref parameters (the zip callback idiom) ------
+test('a plain arrow takes ref parameters, so the zip callback idiom works', () => {
+  // references.md "Reference callback parameters": the container passes
+  // `ref a[i], ref b[i]` and the arrow mutates both arrays in place.
+  expect(evaluated(
+    'function zip(a, b, cb) { for (let i = 0; i < a.length; i++) cb(ref a[i], ref b[i]); }'
+    + ' let t = [1, 2], v = [10, 20];'
+    + ' zip(t, v, (ref x, ref y) => { x = x + y; });'
+    + ' String(t[0]) + "," + String(t[1]);',
+  )).toBe('11,22');
+});
+
+test('an annotated arrow ref parameter checks the referent without converting', () => {
+  expect(evaluated('const f = (ref a: int32) => { a++; }; let x: int32 = (7 := int32); f(ref x); String(x);')).toBe('8');
+  // a plain number is `number`, not `int32`; the borrow checks, it does not convert
+  expectThrown('const f = (ref a: int32) => { a++; }; let x = 5; f(ref x);');
+});
+
+test('an async arrow takes ref parameters through the call cover', () => {
+  expect(evaluated('let x = 0; const f = async (ref a) => { a++; }; f(ref x); String(x);')).toBe('1');
+});
+
+test('a parenthesized `(ref a)` without an arrow is not an expression', () => {
+  // the cover is arrow-only once a ref parameter is claimed
+  expectError('let ref = 1, a = 2; let y = (ref a); "ran";');
+  // while `(ref)` and `(ref, x)` keep the identifier
+  expect(evaluated('let ref = 3; let y = (ref); let z = (ref, 9); String(y) + "," + String(z);')).toBe('3,9');
+});
+
+// -- #sec-reference-syntax: forms the grammar refuses --------------------------
+test('a ref parameter may not have a default value', () => {
+  // a default runs when NO argument was passed, and a callee-built value has
+  // no caller-side location to borrow, so the combination can never bind
+  expectError('function f(ref a = 1) { } "ran";');
+  expectError('const f = (ref a = 1) => { }; "ran";');
+});
+
+test('a ref parameter must be a single name, not a pattern', () => {
+  // destructuring a borrow is the pattern's own `{ (ref a) }` member form,
+  // which is a deferred extension; `ref` before a whole pattern is refused
+  expectError('function f(ref { a }) { } "ran";');
+  expectError('function f(ref [a]) { } "ran";');
+});
+
+test('a ref binding takes a type annotation, not a typed initializer', () => {
+  // `:=` infers a type from a VALUE; a ref initializer is a LOCATION
+  expectError('let a = [5]; let ref b := a[0]; "ran";');
+});
+
+test('a ref binding requires a for-of loop, not for-in or for await', () => {
+  expectError('let o = { a: 1 }; for (const ref p in o) { } "ran";');
+  expectError('async function g() { for await (const ref p of [1]) { } } "ran";');
+});
+
+test('a ref binding may not appear in a for statement initializer', () => {
+  // the per-iteration environment copies head bindings by value, which would
+  // silently decay the alias; refused until those semantics are specified
+  expectError('let a = [5]; for (let ref b = a[0]; false;) { } "ran";');
+});
+
+test('a var head never claims ref', () => {
+  // ref bindings are lexical; `var ref p` keeps its base meaning and fails
+  expectError('let a = [1]; for (var ref p of a) { } "ran";');
 });
 
 // -- feature gating ------------------------------------------------------------

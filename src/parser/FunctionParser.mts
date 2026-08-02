@@ -210,6 +210,25 @@ export abstract class FunctionParser extends IdentifierParser {
         // binding inside the cover; it only needs its declaration.
         this.scope.declare(node, 'parameter');
         return node;
+      // proposal-runtime-types #sec-reference-syntax: `async (ref a) => {}`
+      // reaches the arrow through the call cover, so the head was parsed as
+      // Arguments and the ref parameter arrives as a RefExpression argument.
+      // Refinement turns it into the ref SingleNameBinding the direct
+      // parenthesized cover builds; an operand that is not a plain name has no
+      // parameter reading and is refused.
+      case 'RefExpression': {
+        if (node.Expression.type !== 'IdentifierReference') {
+          this.addEarlyError(Throw.SyntaxError('A ref parameter must be a single name'), node);
+          return node;
+        }
+        const BindingIdentifier = this.repurpose(node.Expression, 'BindingIdentifier');
+        const SingleNameBinding = this.startNode<ParseNode.SingleNameBinding>(node);
+        SingleNameBinding.BindingIdentifier = BindingIdentifier;
+        SingleNameBinding.Initializer = null;
+        SingleNameBinding.Ref = true;
+        this.scope.declare(node.Expression, 'parameter');
+        return this.finishNode(SingleNameBinding, 'SingleNameBinding');
+      }
       case 'Elision':
         return node;
       case 'ArrayLiteral': {
@@ -391,15 +410,30 @@ export abstract class FunctionParser extends IdentifierParser {
   }
 
   parseFormalParameterInner(): ParseNode.FormalParameter {
-    if (surroundingAgent.feature('runtime-types') && this.test('ref')) {
+    // proposal-runtime-types #sec-reference-syntax: a ref parameter is a
+    // SingleNameBinding - the borrow binds ONE name to ONE location, so a
+    // BindingPattern after `ref` is not claimed and keeps its base meaning (a
+    // parameter named ref followed by an unexpected token). Destructuring a
+    // borrow is the pattern's own `{ (ref a) }` member form, which is a
+    // deferred extension. The claim is same-line, as at every other site.
+    if (surroundingAgent.feature('runtime-types') && this.test('ref')
+        && !this.peekAhead().hadLineTerminatorBefore) {
       switch (this.peekAhead().type) {
         case Token.IDENTIFIER:
         case Token.YIELD:
-        case Token.AWAIT:
-        case Token.LBRACE:
-        case Token.LBRACK:
+        case Token.AWAIT: {
           this.next();
-          return this.parseBindingElement({ ref: true });
+          const node = this.parseBindingElement({ ref: true });
+          // A ref parameter may not carry a default. A default runs when the
+          // caller supplies NO argument, and a value built by the callee has
+          // no caller-side location to borrow, so the combination can never
+          // bind; it is refused at parse rather than at the first defaulted
+          // call.
+          if (node.Initializer) {
+            this.addEarlyError(Throw.SyntaxError('A ref parameter may not have a default value'), node.Initializer);
+          }
+          return node;
+        }
         default:
           break;
       }

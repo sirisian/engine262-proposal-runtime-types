@@ -448,6 +448,14 @@ export abstract class StatementParser extends TypeParser {
       if (b.Ref === true && !b.Initializer && !b.TypedInitializer) {
         this.addEarlyError(Throw.SyntaxError('Missing initializer in ref declaration'), b);
       }
+      // proposal-runtime-types #sec-reference-syntax: a ref binding takes a
+      // TypeAnnotation, not a TypedInitializer. `:=` infers a binding's type
+      // from a VALUE, and a ref binding's initializer is a LOCATION - the two
+      // forms contradict, so `let ref b := e` is refused at parse rather than
+      // left to fail at evaluation.
+      if (b.Ref === true && b.TypedInitializer) {
+        this.addEarlyError(Throw.SyntaxError('A ref binding takes a type annotation, not a typed initializer'), b);
+      }
     });
 
     return this.finishNode(node, 'LexicalDeclaration');
@@ -471,7 +479,9 @@ export abstract class StatementParser extends TypeParser {
       let ref = false;
       if (surroundingAgent.feature('runtime-types')
           && this.test('ref')
-          && this.peekAhead().type === Token.IDENTIFIER
+          && (this.peekAhead().type === Token.IDENTIFIER
+            || this.peekAhead().type === Token.YIELD
+            || this.peekAhead().type === Token.AWAIT)
           && !this.testAhead('of')
           && !this.peekAhead().hadLineTerminatorBefore) {
         this.next();
@@ -727,7 +737,9 @@ export abstract class StatementParser extends TypeParser {
         // `ref`) is the ordinary identifier, restored by checkpoint.
         if (surroundingAgent.feature('runtime-types')
             && this.test('ref')
-            && this.peekAhead().type === Token.IDENTIFIER
+            && (this.peekAhead().type === Token.IDENTIFIER
+              || this.peekAhead().type === Token.YIELD
+              || this.peekAhead().type === Token.AWAIT)
             && !this.peekAhead().hadLineTerminatorBefore) {
           const node = this.startNode<ParseNode.RefRebindingStatement>();
           const checkpoint = this.getLexerCheckpoint();
@@ -1023,6 +1035,17 @@ export abstract class StatementParser extends TypeParser {
               }
             });
           }
+          // proposal-runtime-types #sec-reference-syntax: a ref binding may not
+          // appear in a for statement's initializer. The per-iteration
+          // environment copies a head binding BY VALUE into each iteration,
+          // which would silently decay the alias to a copy; the form is refused
+          // until the per-iteration semantics of a location binding are
+          // specified.
+          list.forEach((b) => {
+            if (b.Ref === true) {
+              this.addEarlyError(Throw.SyntaxError('A ref binding may not appear in a for statement initializer'), b);
+            }
+          });
           inner.BindingList = list;
           node.LexicalDeclaration = this.finishNode(inner, 'LexicalDeclaration');
           this.expect(Token.SEMICOLON);
@@ -1053,6 +1076,12 @@ export abstract class StatementParser extends TypeParser {
             }
           });
         if (!isAwait && this.eat(Token.IN)) {
+          // proposal-runtime-types #sec-reference-syntax: a ref binding is a
+          // borrow of an ELEMENT SLOT, which a for-of over an array supplies
+          // and a for-in, which walks property KEYS as strings, does not.
+          if (inner.ForBinding.Ref === true) {
+            this.addEarlyError(Throw.SyntaxError('A ref binding requires a for-of loop'), inner.ForBinding);
+          }
           node.Expression = this.parseExpression();
           // The head ends here; the body is parsed after it.
           this.inIterationHead = false;
@@ -1060,6 +1089,13 @@ export abstract class StatementParser extends TypeParser {
           node.Statement = this.parseStatement();
         this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
     return this.finishNode(node, 'ForInStatement');
+        }
+        // proposal-runtime-types #sec-reference-syntax: reference iteration is
+        // synchronous and index-based; a for await goes through the async
+        // iterator protocol, which yields VALUES and has no element slot a
+        // borrow could alias.
+        if (isAwait && inner.ForBinding.Ref === true) {
+          this.addEarlyError(Throw.SyntaxError('A ref binding is not allowed in a for await loop'), inner.ForBinding);
         }
         this.expect('of');
         node.AssignmentExpression = this.parseAssignmentExpression();
@@ -1186,18 +1222,11 @@ export abstract class StatementParser extends TypeParser {
   //   BindingPattern
   parseForBinding(): ParseNode.ForBinding {
     const node = this.startNode<ParseNode.ForBinding>();
-    // proposal-runtime-types (references extension): `for (const ref p of a)`
-    // binds p as an alias to each array element in turn. Contextual: never
-    // claimed when `of` follows, so `for (const ref of a)` still binds an
-    // identifier named ref.
-    if (surroundingAgent.feature('runtime-types')
-        && this.test('ref')
-        && this.peekAhead().type === Token.IDENTIFIER
-        && !this.testAhead('of')
-        && !this.peekAhead().hadLineTerminatorBefore) {
-      this.next();
-      node.Ref = true;
-    }
+    // proposal-runtime-types #sec-reference-syntax: no ref claim here. This
+    // path parses only `var` heads (including `for await (var ...)`), and a
+    // ref binding is lexical - `for (const ref p of a)` reaches its claim
+    // through parseBindingList. A `var ref p` therefore keeps its base
+    // meaning, a binding named ref followed by an unexpected token.
     switch (this.peek().type) {
       case Token.LBRACE:
       case Token.LBRACK:

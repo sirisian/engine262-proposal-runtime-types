@@ -2667,7 +2667,37 @@ export abstract class ExpressionParser extends FunctionParser {
         break;
       }
       let annotatedParameter: ParseNode.SingleNameBinding | null = null;
+      // proposal-runtime-types #sec-reference-syntax: `(ref a) => {}` - a ref
+      // parameter inside the parenthesized cover, which is how the design's
+      // `zip(a, b, (ref x, ref y) => { ... })` callbacks are written. The
+      // claim is the one every ref site uses, a name on the same line; it
+      // makes the cover arrow-only, which is additive because `(ref a` has no
+      // expression reading. `(ref)` and `(ref, x)` keep the identifier.
       if (surroundingAgent.feature('runtime-types')
+          && this.test('ref')
+          && (this.peekAhead().type === Token.IDENTIFIER
+            || this.peekAhead().type === Token.YIELD
+            || this.peekAhead().type === Token.AWAIT)
+          && !this.peekAhead().hadLineTerminatorBefore) {
+        this.next();
+        const refParameter = this.startNode<ParseNode.SingleNameBinding>();
+        refParameter.BindingIdentifier = this.parseBindingIdentifier();
+        if (this.eat(Token.CONDITIONAL)) {
+          refParameter.Optional = true;
+        }
+        if (this.test(Token.COLON)) {
+          refParameter.TypeAnnotation = this.parseTypeAnnotation();
+        }
+        // A ref parameter may not carry a default, as in a declared list.
+        if (this.test(Token.ASSIGN)) {
+          this.addEarlyError(Throw.SyntaxError('A ref parameter may not have a default value'), this.peek());
+          this.next();
+          this.parseAssignmentExpression();
+        }
+        refParameter.Initializer = null;
+        refParameter.Ref = true;
+        annotatedParameter = this.finishNode(refParameter, 'SingleNameBinding');
+      } else if (surroundingAgent.feature('runtime-types')
           && this.test(Token.IDENTIFIER)
           && (this.testAhead(Token.COLON) || this.testAhead(Token.CONDITIONAL))) {
         annotatedParameter = this.tryParseAnnotatedArrowParameter();
