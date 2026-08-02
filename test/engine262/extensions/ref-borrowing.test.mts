@@ -393,6 +393,31 @@ test('a reference value satisfies a ref type through its referent', () => {
   expectThrownKind('function fr(a): ref uint32 { return ref a[0]; } let b = ["x"]; fr(b);', 'TypeError');
 });
 
+// -- D6: what a destructuring ref member will mean (Phase 5) -------------------
+// The `{ (ref a) }` member form waits on the parenthesized typed own-property
+// pattern, which the specification does not yet state. What it will MEAN is
+// settled, and the part of that meaning reachable today is pinned here: a
+// borrow of a property's location on an object the callee already has.
+test('a property of a by-value object parameter is borrowable', () => {
+  // this is `{ (ref a) }` written out longhand, and it writes through
+  expect(evaluated('function g(o) { let ref a = o.a; a++; } let o = { a: 1 }; g(o); String(o.a);')).toBe('2');
+  // through a nesting, as a nested pattern would reach
+  expect(evaluated('function g(o) { let ref x = o.inner.x; x = 42; } let o = { inner: { x: 1 } }; g(o); String(o.inner.x);')).toBe('42');
+});
+
+test('borrowing a member does not require borrowing the object', () => {
+  // `g(o)` and `g(ref o)` reach the same property location
+  expect(evaluated('function g(o) { let ref a = o.a; a++; } let o = { a: 1 }; g(o); String(o.a);')).toBe('2');
+  expect(evaluated('function g(ref o) { let ref a = o.a; a++; } let o = { a: 1 }; g(ref o); String(o.a);')).toBe('2');
+  // what `ref o` adds is unrelated: it lends the caller's BINDING, so the
+  // callee can rewrite which object the caller's variable names
+  expect(evaluated('function g(o) { o = { a: 99 }; } let o = { a: 1 }; g(o); String(o.a);')).toBe('1');
+  expect(evaluated('function g(ref o) { o = { a: 99 }; } let o = { a: 1 }; g(ref o); String(o.a);')).toBe('99');
+  // and a pattern parameter decays a ref argument, so `ref` could not reach a
+  // pattern even if it were written
+  expect(evaluated('function g({ a }) { return a; } let o = { a: 1 }; String(g(ref o));')).toBe('1');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax
