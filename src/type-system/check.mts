@@ -3593,8 +3593,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Parameters: s.Parameters,
                 Function: Value.undefined as unknown as Value,
                 Untyped: (s as unknown as { Untyped?: boolean }).Untyped === true,
+                // #sec-overloading-on-return-type: "a signature is identified by
+                // its return type as well as its parameter types". The signature
+                // already carries a Return and this dropped it, so the resolver
+                // could not filter on what it was given.
+                ReturnType: (s as unknown as { Return?: TypeRecord }).Return,
               }));
-              const resolution = resolveOverloadByTypes(candidates as never, argTypes as TypeRecord[]);
+              // The contextual type of the call, where its position gives one.
+              // The return type does not participate in ranking - it filters
+              // what ranking left tied - so this is passed as a third argument
+              // and read only there.
+              const resolution = resolveOverloadByTypes(
+                candidates as never,
+                argTypes as TypeRecord[],
+                // No contextual type is available here: this resolution runs
+                // inside the checker's tree WALK, which visits a call without
+                // knowing the type its position requires. Supplying one means
+                // threading a target type through the walk, which is phase 2's
+                // real work and larger than passing an argument.
+                undefined,
+              );
               if (resolution.Kind === 'none') {
                 // "It is a type error if ResolveOverload returns ~none~."
                 const completion = Throw.TypeError('no declared signature accepts an argument of type $1', Value(displayType(argTypes[0] as TypeRecord))) as ThrowCompletion;

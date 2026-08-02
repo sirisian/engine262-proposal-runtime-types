@@ -13,6 +13,7 @@ import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
+import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
@@ -1717,7 +1718,11 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     length = 0;
   }
   const behaviour = function* overloadDispatch(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
-    const resolution = resolveOverload(signatures, args);
+    // #sec-overloading-on-return-type: the contextual type filters what ranking
+    // left tied. It is read here rather than passed down from the binding,
+    // because a binding boundary sees the RESULT - by then the overload has
+    // been chosen and the wrong one may already have run.
+    const resolution = resolveOverload(signatures, args, currentContextualType());
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
     }

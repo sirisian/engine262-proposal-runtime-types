@@ -27,6 +27,8 @@ import {
   OrdinaryObjectCreate,
   CreateDataProperty,
 } from '#self';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalBinding :
@@ -98,8 +100,29 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       // a. Let value be NamedEvaluation of Initializer with argument bindingId.
       value = Q(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
     } else { // 4. Else,
-      // a. Let rhs be the result of evaluating Initializer.
-      const rhs = Q(yield* Evaluate(Initializer));
+      // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
+      // type of a call is the type its position requires". An annotated binding
+      // is such a position, and the type has to be in scope WHILE the
+      // initializer runs - the conversion that follows sees only the result, by
+      // which point an overload has been chosen and possibly the wrong one has
+      // run. Popped in a finally, so an abrupt initializer does not leave the
+      // stack standing for the next evaluation.
+      let contextual: TypeRecord | null = null;
+      if (TypeAnnotation) {
+        // A malformed annotation is the binding boundary's error to report, not
+        // this one's, so a failure here simply leaves the call uncontextualized.
+        const resolvedContext = yield* TypeNodeToTypeRecord(TypeAnnotation.Type);
+        contextual = (resolvedContext as { Value?: TypeRecord })?.Value
+          ?? (resolvedContext as TypeRecord | null) ?? null;
+      }
+      pushContextualType(contextual);
+      let rhs;
+      try {
+        // a. Let rhs be the result of evaluating Initializer.
+        rhs = Q(yield* Evaluate(Initializer));
+      } finally {
+        popContextualType();
+      }
       // b. Let value be ? GetValue(rhs).
       value = Q(yield* GetValue(rhs));
     }

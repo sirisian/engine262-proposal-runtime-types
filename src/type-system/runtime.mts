@@ -47,6 +47,35 @@ import {
 const typeParameterFrames: Map<string, TypeRecord>[] = [];
 
 /**
+ * proposal-runtime-types #sec-overloading-on-return-type: the contextual type
+ * of a call is "the type its position requires", and the resolver needs it
+ * WHILE the call is evaluated rather than after - by the time a binding
+ * boundary converts the result, the overload has already been chosen.
+ *
+ * A stack rather than a single value, because an initializer may contain
+ * another call: `const a: string = f(g())` gives `f` the string context and
+ * `g` whatever `f`'s parameter says, and the inner one must not see the outer's.
+ * Modelled on typeParameterFrames above, which solves the same shape of
+ * problem for generic parameters.
+ */
+const contextualTypes: (TypeRecord | null)[] = [];
+
+/** Bracket an evaluation whose position requires _t_, or nothing where it does not. */
+export function pushContextualType(t: TypeRecord | null): void {
+  contextualTypes.push(t);
+}
+
+export function popContextualType(): void {
+  contextualTypes.pop();
+}
+
+/** The type the innermost bracketed position requires, or undefined. */
+export function currentContextualType(): TypeRecord | undefined {
+  const top = contextualTypes[contextualTypes.length - 1];
+  return top ?? undefined;
+}
+
+/**
  * proposal-runtime-types: make a set of type-parameter bindings
  * active while some evaluation runs (a generic function call evaluates its
  * parameter types, body, and return type over its inferred bindings). Mirrors the

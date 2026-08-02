@@ -10,9 +10,24 @@ import { ok, evaluated } from '../readme/harness.mts';
  * type and more than one signature remains viable, the call is ambiguous.
  *
  * The signature record carries its return type now, and the resolver filters
- * the TIED candidates by it when given a contextual type. Nothing supplies one
- * yet, so the behaviour below is unchanged - phase 2 threads it in from the
- * binding boundary, and these assertions are what it will flip.
+ * the TIED candidates by it when given a contextual type.
+ *
+ * PHASE 2 FOUND THE AMBIGUITY IS THE CHECKER'S, NOT THE RUNTIME'S. The error
+ * comes from check.mts, statically, before any call runs - so the runtime
+ * contextual-type stack that phase 2 built reaches a resolution that never
+ * happens for this program. Two things came of looking:
+ *
+ *   - The checker DROPPED the return type when building its candidates. Its
+ *     signatures carry a `Return` and the mapping did not copy it, so the
+ *     resolver could not have filtered whatever it was given. Fixed.
+ *   - The resolution runs inside the checker's tree WALK, which visits a call
+ *     without knowing the type its position requires. Supplying a contextual
+ *     type means threading a target through the walk, which is a larger change
+ *     than passing an argument and is what phase 2 actually needs.
+ *
+ * So the runtime half is built and unreachable for this case, and the checker
+ * half is one field further along and blocked on the walk. The assertions below
+ * are unchanged and still flip when that lands.
  */
 
 test('overloading on parameters resolves', () => {
