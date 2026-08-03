@@ -322,6 +322,8 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
  * every borrow into the array (#sec-reference-liveness) - the half of the
  * liveness rules that exists because a reserve changes capacity while leaving
  * length alone, which no length comparison could detect.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
 function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number, TypedGeneration?: number };
@@ -338,6 +340,12 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
   return Value.undefined;
 }
 
+/**
+ * proposal-runtime-types (README "Capacity"): the allocation backing a typed
+ * array, counted in elements, which is at least its length.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
+ */
 function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
   if (O.TypedElement === undefined) {
