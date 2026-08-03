@@ -1074,6 +1074,19 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
+        // proposal-runtime-types #sec-reference-liveness: a store past the
+        // current capacity grows the backing allocation, and growth relocates
+        // it. The generation is bumped so that a borrow taken before the growth
+        // is invalidated at its next use, which is what a packed backing store
+        // requires and what a program must not be able to depend on the absence
+        // of.
+        const typed = Receiver as { TypedCapacity?: number, TypedGeneration?: number };
+        const index = Number((P as JSStringValue).stringValue());
+        const capacity = typed.TypedCapacity ?? 0;
+        if (index >= capacity) {
+          typed.TypedCapacity = Math.max(index + 1, capacity * 2, 4);
+          typed.TypedGeneration = (typed.TypedGeneration ?? 0) + 1;
+        }
       }
       const viewBacking = ArrayViewBackingOf(Receiver as unknown as object);
       if (viewBacking !== undefined && P instanceof JSStringValue) {
@@ -1212,6 +1225,13 @@ export class ReferenceRecord {
   // and a `ref` binding all carry this and all reach the same reads and writes.
   readonly SoAElement?: ObjectValue;
 
+  // proposal-runtime-types #sec-reference-liveness: set when this reference
+  // borrows an element of a growable `[].<T>`, which has a backing allocation
+  // that GROWTH RELOCATES. The generation the borrow was taken at is compared
+  // at every use; a growth past the capacity bumps it and so invalidates every
+  // borrow taken before it, exactly as growth of an `SoA` does.
+  readonly ArrayBorrow?: { readonly Source: ObjectValue, readonly TakenAt: number };
+
   constructor({
     Base,
     ReferencedName,
@@ -1220,7 +1240,8 @@ export class ReferenceRecord {
     IndexOperator,
     IndexSetOperator,
     SoAElement,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator' | 'SoAElement'>) {
+    ArrayBorrow,
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator' | 'SoAElement' | 'ArrayBorrow'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
@@ -1228,6 +1249,7 @@ export class ReferenceRecord {
     this.IndexOperator = IndexOperator;
     this.IndexSetOperator = IndexSetOperator;
     this.SoAElement = SoAElement;
+    this.ArrayBorrow = ArrayBorrow;
   }
 
   // NON-SPEC

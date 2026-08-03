@@ -37,10 +37,12 @@ import {
   OrdinaryObjectCreate,
   ToBoolean,
   ToIntegerOrInfinity,
+  ToLength,
   ToObject,
   ToString,
   Throw,
   F,
+  R,
   type FunctionObject,
   Realm,
 } from '#self';
@@ -311,6 +313,39 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
     Q(yield* Set(O, Value('length'), F(newLen), Value.true));
     return element;
   }
+}
+
+/**
+ * proposal-runtime-types (README "Capacity"): `reserve(n)` grows the backing
+ * allocation to hold at least n elements without changing the length, and
+ * `capacity()` reports it. Growth RELOCATES the allocation, so it invalidates
+ * every borrow into the array (#sec-reference-liveness) - the half of the
+ * liveness rules that exists because a reserve changes capacity while leaving
+ * length alone, which no length comparison could detect.
+ */
+function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number, TypedGeneration?: number };
+  if (O.TypedElement === undefined) {
+    return Throw.TypeError('reserve is available on an array with an element type');
+  }
+  const wanted = R(Q(yield* ToLength(n)));
+  const capacity = O.TypedCapacity ?? 0;
+  if (wanted <= capacity) {
+    return Value.undefined;
+  }
+  O.TypedCapacity = wanted;
+  O.TypedGeneration = (O.TypedGeneration ?? 0) + 1;
+  return Value.undefined;
+}
+
+function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
+  if (O.TypedElement === undefined) {
+    return Throw.TypeError('capacity is available on an array with an element type');
+  }
+  const lenValue = Q(yield* Get(O, Value('length')));
+  const len = R(Q(yield* ToLength(lenValue)));
+  return F(Math.max(O.TypedCapacity ?? 0, len));
 }
 
 /** https://tc39.es/ecma262/#sec-array.prototype.push */
@@ -720,6 +755,8 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
     ['map', ArrayProto_map, 1],
     ['pop', ArrayProto_pop, 0],
     ['push', ArrayProto_push, 1],
+    ['reserve', ArrayProto_reserve, 1],
+    ['capacity', ArrayProto_capacity, 0],
     ['shift', ArrayProto_shift, 0],
     ['slice', ArrayProto_slice, 2],
     ['sort', ArrayProto_sort, 1],

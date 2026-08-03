@@ -18,6 +18,7 @@ import {
 import { JSStringMap } from '../utils/container.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
+import { RequireArrayBorrowLive } from '../abstract-ops/reference-operations.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -98,6 +99,10 @@ function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
   // the element view it carries. Reading the base's property here instead would
   // hand back a detached copy and silently drop every write through the
   // binding, which is the one thing the borrow exists to prevent.
+  const stale = RequireArrayBorrowLive(location);
+  if (stale !== undefined) {
+    return stale;
+  }
   if (location.SoAElement !== undefined) {
     return location.SoAElement;
   }
@@ -113,6 +118,10 @@ function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
  * storage location a ref binding aliases.
  */
 function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEvaluator {
+  const staleWrite = RequireArrayBorrowLive(location);
+  if (staleWrite !== undefined) {
+    return staleWrite;
+  }
   // A whole-element store through the borrow writes every column at the index.
   if (location.SoAElement !== undefined) {
     const backing = SoAElementBackingOf(location.SoAElement as unknown as object)!;

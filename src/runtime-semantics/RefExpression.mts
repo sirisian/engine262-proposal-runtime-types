@@ -110,6 +110,25 @@ export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluato
   }
   const storage = SoAStorageOf(location.Base as unknown as object);
   if (storage === undefined) {
+    // proposal-runtime-types #sec-reference-liveness: a borrow of an element of
+    // a growable `[].<T>` records the generation of its backing allocation, so
+    // that a growth which relocates the allocation invalidates it.
+    const typed = location.Base as unknown as { TypedElement?: unknown, TypedGeneration?: number };
+    if (typed.TypedElement !== undefined) {
+      const index = Number(location.ReferencedName.stringValue());
+      if (String(index) === location.ReferencedName.stringValue()) {
+        return new ReferenceRecord({
+          Base: location.Base,
+          ReferencedName: location.ReferencedName,
+          Strict: location.Strict,
+          ThisValue: undefined,
+          IndexOperator: undefined,
+          IndexSetOperator: undefined,
+          SoAElement: undefined,
+          ArrayBorrow: { Source: location.Base, TakenAt: typed.TypedGeneration ?? 0 },
+        });
+      }
+    }
     return location;
   }
   const index = Number(location.ReferencedName.stringValue());

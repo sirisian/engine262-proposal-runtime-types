@@ -96,6 +96,10 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   // writes go to the columns at this index. This is a DEREFERENCE and not a
   // decay: it preserves the aliasing, which is what makes `p.x = 1` through a
   // `ref` write into the container.
+  const arrayBorrowFailure = RequireArrayBorrowLive(V);
+  if (arrayBorrowFailure !== undefined) {
+    return arrayBorrowFailure;
+  }
   if (V.SoAElement !== undefined) {
     return V.SoAElement;
   }
@@ -157,6 +161,12 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
   // proposal-runtime-types #sec-soa-references: a whole-element store through a
   // borrow of an SoA element writes every column at that index, which is what
   // `p = value` means for an element whose fields are spread across columns.
+  if (V instanceof ReferenceRecord) {
+    const stale = RequireArrayBorrowLive(V);
+    if (stale !== undefined) {
+      return stale;
+    }
+  }
   if (V instanceof ReferenceRecord && V.SoAElement !== undefined) {
     const backing = SoAElementBackingOf(V.SoAElement as unknown as object)!;
     Q(yield* SoAScatter(backing.Storage, backing.Index, W));
@@ -306,6 +316,26 @@ export function MakePrivateReference(baseValue: Value, privateIdentifier: JSStri
  * consumes a value, which is what gives a reference no observable identity. A
  * non-reference value passes through unchanged.
  */
+/**
+ * proposal-runtime-types #sec-reference-liveness: a borrow of an element of a
+ * growable `[].<T>` is invalidated when the backing allocation is relocated by
+ * growth. The generation recorded when the borrow was taken is compared here,
+ * at the USE, which is where the relocation rule applies for storage that can
+ * move - a length comparison would not see a `reserve`, and a relocation test
+ * sees exactly the event that invalidates.
+ */
+export function RequireArrayBorrowLive(V: ReferenceRecord) {
+  const borrow = V.ArrayBorrow;
+  if (borrow === undefined) {
+    return undefined;
+  }
+  const current = (borrow.Source as unknown as { TypedGeneration?: number }).TypedGeneration ?? 0;
+  if (current !== borrow.TakenAt) {
+    return Throw.TypeError('this reference is into an array that has since grown');
+  }
+  return undefined;
+}
+
 export function* DecayReferenceValue(value: Value): ValueEvaluator {
   if (value instanceof ReferenceValue) {
     // An SoA element decays to the GATHERED value, the copy `s[i]` produces,

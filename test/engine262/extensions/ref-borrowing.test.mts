@@ -516,6 +516,30 @@ test('a ref member borrows the property location on the destructured object', ()
   expectThrown('let o = { a: 1 }; function g({ (ref a: int32) }) { } g(o);');
 });
 
+// -- #sec-reference-liveness: relocation for a growable [].<T> (B4) -----------
+test('a growable typed array has a capacity that reserve can grow', () => {
+  expect(evaluated('const a: [].<uint32> = [1, 2]; String(a.capacity() >= 2);')).toBe('true');
+  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); String(a.capacity() >= 64);')).toBe('true');
+  // the operations belong to a typed array, which is what has an allocation
+  expectThrownKind('let a = [1]; a.reserve(4);', 'TypeError');
+});
+
+test('growth relocates the allocation and so invalidates a live borrow', () => {
+  // the case no length comparison could see: reserve changes capacity alone
+  expectThrownKind('const a: [].<uint32> = [1]; let ref b = a[0]; a.reserve(64); b;', 'TypeError');
+  // and growth past the capacity relocates for the same reason
+  expectThrownKind('const a: [].<uint32> = [1]; let ref b = a[0]; for (let i = 0; i < 20; i++) a.push(i); b;', 'TypeError');
+  // reserving room up front is how a program keeps its borrows valid
+  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); let ref b = a[0]; a.push(2); String(b);')).toBe('1');
+  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
+  // a reserve that asks for less than the capacity moves nothing
+  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); let ref b = a[0]; a.reserve(2); String(b);')).toBe('1');
+});
+
+test('an ordinary array keeps slot semantics, since nothing relocates', () => {
+  expect(evaluated('let a = [1]; let ref b = a[0]; a.push(9); b = 5; String(a[0]);')).toBe('5');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax
