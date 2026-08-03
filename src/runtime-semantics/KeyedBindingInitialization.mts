@@ -1,8 +1,13 @@
-import { Value } from '../value.mts';
+import { Value, ObjectValue, ReferenceRecord } from '../value.mts';
+import { EnforceAnnotation, IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
+import { CreateRefBinding, RefBindingHolder } from '../execution-context/Environment.mts';
+import { Throw } from '../host-defined/error-messages.mts';
+import { NormalCompletion } from '../completion.mts';
 import { Evaluate } from '../evaluator.mts';
 import { StringValue, IsAnonymousFunctionDefinition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { SoAElementLocationFor } from './RefExpression.mts';
 import {
   NamedEvaluation,
   BindingInitialization,
@@ -50,6 +55,51 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
         // ii. Set v to ? GetValue(defaultValue).
         v = Q(yield* GetValue(defaultValue));
       }
+    }
+    // proposal-runtime-types #sec-typed-destructuring: a `ref` member borrows
+    // the LOCATION of the property on the object being destructured, rather
+    // than taking its value. The borrow is of the object's own storage, which
+    // is why `g(o)` suffices and `g(ref o)` is not required - lending the
+    // caller's variable would be a different thing entirely, and a pattern
+    // parameter decays a reference argument before the pattern is applied.
+    if (node.Ref === true) {
+      if (!(value instanceof ObjectValue)) {
+        return Throw.TypeError('cannot take a ref of a property of a primitive');
+      }
+      const location = new ReferenceRecord({
+        Base: value,
+        ReferencedName: propertyName,
+        Strict: Value.true,
+        ThisValue: undefined,
+        IndexOperator: undefined,
+        IndexSetOperator: undefined,
+        SoAElement: undefined,
+      });
+      if (node.TypeAnnotation) {
+        const referent = Q(yield* GetValue(location));
+        const ok = Q(yield* IsOfTypeNode(referent, node.TypeAnnotation.Type));
+        if (!ok) {
+          return Throw.TypeError('the value bound by ref to $1 does not satisfy its type annotation', bindingId);
+        }
+      }
+      // The holder is found the way a `ref` lexical binding finds it, so a
+      // pattern at the top level of a script reaches the same binding the
+      // declaration created rather than being refused for the shape of its
+      // environment.
+      const holder = lhs.Base !== 'unresolvable' && typeof (lhs.Base as { HasBinding?: unknown }).HasBinding === 'function'
+        ? RefBindingHolder(lhs.Base as EnvironmentRecord, bindingId)
+        : undefined;
+      if (holder === undefined) {
+        return Throw.TypeError('$1 cannot be bound by ref here', bindingId);
+      }
+      const mutable = holder.bindings.get(bindingId)?.mutable !== false;
+      CreateRefBinding(holder, bindingId, Q(yield* SoAElementLocationFor(location)), mutable);
+      return NormalCompletion(undefined);
+    }
+    // proposal-runtime-types #sec-typed-destructuring: a member's annotation is
+    // enforced at the binding boundary, as an annotated binding's is.
+    if (node.TypeAnnotation) {
+      v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
     }
     // 5. If environment is undefined, return ? PutValue(lhs, v).
     if (environment === Value.undefined) {

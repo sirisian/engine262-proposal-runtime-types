@@ -568,6 +568,15 @@ export abstract class StatementParser extends TypeParser {
   //   SingleNameBinding
   //   PropertyName : BindingElement
   parseBindingProperty(): ParseNode.BindingPropertyLike {
+    // proposal-runtime-types #sec-typed-destructuring: a member of an object
+    // pattern carries its type inside PARENTHESES, `{ (a: uint8) }`. The
+    // parentheses are what make the form statable at all: `{ a: uint8 }`
+    // already means "bind property `a` to a new name `uint8`", so the
+    // annotation cannot follow the colon, and the parenthesized member leaves
+    // the rename colon free - `{ (a: uint8): b }` annotates AND renames.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.LPAREN)) {
+      return this.parseTypedBindingProperty();
+    }
     const node = this.startNode<ParseNode.BindingProperty | ParseNode.SingleNameBinding>();
     const name = this.parsePropertyName();
     if (this.eat(Token.COLON)) {
@@ -592,6 +601,74 @@ export abstract class StatementParser extends TypeParser {
       }
     }
     node.Initializer = this.parseInitializerOpt();
+    return this.finishNode(node, 'SingleNameBinding');
+  }
+
+  /**
+   * proposal-runtime-types #sec-typed-destructuring:
+   * BindingProperty : `(` `ref`? BindingIdentifier `?`? TypeAnnotation? `)` (`:` BindingElement)? Initializer?
+   *
+   * The parenthesized member. Without a rename it binds the named property to
+   * a binding of the same name at the stated type; with one, the parentheses
+   * name the PROPERTY and the binding follows the colon. A `ref` member
+   * borrows that property's location on the object being destructured
+   * (#sec-reference-syntax), which is why it takes an ordinary argument: the
+   * location belongs to the object, not to the caller's variable.
+   */
+  parseTypedBindingProperty(): ParseNode.BindingPropertyLike {
+    const node = this.startNode<ParseNode.BindingProperty | ParseNode.SingleNameBinding>();
+    this.expect(Token.LPAREN);
+    let ref = false;
+    if (this.test('ref')
+        && !this.peekAhead().hadLineTerminatorBefore
+        && (this.peekAhead().type === Token.IDENTIFIER
+          || this.peekAhead().type === Token.YIELD
+          || this.peekAhead().type === Token.AWAIT)) {
+      this.next();
+      ref = true;
+    }
+    const inner = this.parseBindingIdentifier();
+    let optional = false;
+    if (this.eat(Token.CONDITIONAL)) {
+      optional = true;
+    }
+    const annotation = this.test(Token.COLON) ? this.parseTypeAnnotation() : undefined;
+    this.expect(Token.RPAREN);
+    if (this.eat(Token.COLON)) {
+      // `{ (a: uint8): b }` - the parenthesized name is the property, and the
+      // binding that receives it follows, carrying the stated type.
+      node.PropertyName = this.repurpose(inner, 'IdentifierName');
+      const element = this.parseBindingElement() as Mutable<ParseNode.BindingElement | ParseNode.SingleNameBinding>;
+      if (element.type === 'SingleNameBinding') {
+        if (annotation) {
+          element.TypeAnnotation = annotation;
+        }
+        if (optional) {
+          element.Optional = true;
+        }
+        if (ref) {
+          element.Ref = true;
+        }
+      } else if (ref || annotation) {
+        this.addEarlyError(Throw.SyntaxError('A typed destructuring member must bind a single name'), element);
+      }
+      node.BindingElement = element as ParseNode.BindingElement;
+      return this.finishNode(node, 'BindingProperty');
+    }
+    node.BindingIdentifier = inner;
+    if (annotation) {
+      node.TypeAnnotation = annotation;
+    }
+    if (optional) {
+      node.Optional = true;
+    }
+    if (ref) {
+      node.Ref = true;
+    }
+    node.Initializer = this.parseInitializerOpt();
+    if (ref && node.Initializer) {
+      this.addEarlyError(Throw.SyntaxError('A ref member may not have a default value'), node.Initializer);
+    }
     return this.finishNode(node, 'SingleNameBinding');
   }
 

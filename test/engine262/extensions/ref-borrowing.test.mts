@@ -487,6 +487,35 @@ test('a plain array still propagates into a new typed array', () => {
   expect(evaluated('const a: [].<uint8> = []; a.push(65); String(a[0] is uint8);')).toBe('true');
 });
 
+// -- #sec-typed-destructuring: the parenthesized member (B1) -------------------
+test('an object pattern member may carry a type in parentheses', () => {
+  // `{ a: uint8 }` already means rename-to-uint8, so the annotation goes in
+  // parentheses and the rename colon stays free
+  expect(evaluated('let { (a: uint8) } = { a: 2 }; String(a);')).toBe('2');
+  expect(evaluated('let { (a: uint8) } = { a: 2 }; String(a is uint8);')).toBe('true');
+  expect(evaluated('let { (a: uint8): b } = { a: 2 }; String(b);')).toBe('2');
+  expect(evaluated('let { (a: uint8) = 1 } = { }; String(a);')).toBe('1');
+  expect(evaluated('let { (a: uint8): b = 1 } = { }; String(b);')).toBe('1');
+  expect(evaluated('function f({ (a: uint8) }) { return a; } String(f({ a: 5 }));')).toBe('5');
+  // the member's type is enforced at the binding boundary
+  expectThrown('let { (a: uint8) } = { a: 300 };');
+  // and the plain forms are untouched
+  expect(evaluated('let { a: b } = { a: 3 }; String(b);')).toBe('3');
+  expect(evaluated('let { x, y } = { x: 1, y: 2 }; String(x + y);')).toBe('3');
+});
+
+test('a ref member borrows the property location on the destructured object', () => {
+  // references.md's own example: `g(o)`, not `g(ref o)`
+  expect(evaluated('const o = { a: (0 := int32) }; function g({ (ref a: int32) }) { a++; } g(o); g(o); String(o.a);')).toBe('2');
+  expect(evaluated('let o = { a: 1 }; function g({ (ref a) }) { a++; } g(o); String(o.a);')).toBe('2');
+  // and the binding form borrows the same location
+  expect(evaluated('let o = { a: 1 }; let { (ref a) } = o; a = 42; String(o.a);')).toBe('42');
+  // a ref member has no default, for the reason a ref parameter has none
+  expectError('function g({ (ref a) = 1 }) { } "ran";');
+  // an annotation on a ref member checks the referent without converting it
+  expectThrown('let o = { a: 1 }; function g({ (ref a: int32) }) { } g(o);');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax
