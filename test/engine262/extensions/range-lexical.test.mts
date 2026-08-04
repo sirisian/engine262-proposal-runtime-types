@@ -124,12 +124,13 @@ test('with the feature off the new tokens are not tokens', () => {
 });
 
 /**
- * The parser's half of the same vector document. Every row is transcribed from
- * STAGE-A-lexical-tests.md; each needs the parser to know the four new tokens
- * and to take end-presence from the token rather than from the `rangeEndFollows`
- * follow-set heuristic. Unskip in E2.
+ * The parser's half of the same vector document, transcribed from
+ * STAGE-A-lexical-tests.md. Each token fixes both bounds and whether an end
+ * follows, which is what let the follow-set heuristic go: a bare `..` is now
+ * unambiguously the from form, so `a..b` needs no rejection code -- the range
+ * finishes and the dangling operand is the ordinary unexpected-token error.
  */
-describe.skip('the family, its removed forms, and its edges (E2)', () => {
+describe('the family, its removed forms, and its edges', () => {
   test('the four two-endpoint forms', () => {
     expect(evaluated('(1..<6).end;')).toBe('6');
     expect(evaluated('(1..=6).end;')).toBe('6');
@@ -162,15 +163,35 @@ describe.skip('the family, its removed forms, and its edges (E2)', () => {
   });
 
   test('whitespace is significant at the family edges', () => {
-    // Each spaced form parses and then fails the check, because a range is not
-    // `Ordered`. None of them is the range the unspaced form spells.
+    // Each spaced form is a Syntax Error, and the reason is PRECEDENCE rather
+    // than anything about the range value: a range binds looser than the
+    // relational operators, so a range can never be a relational operand. None
+    // of these is the range the unspaced form spells, and none of them is a
+    // program at all.
     expectError('const a = 1, b = 2; String(a.. < b);');
     expectError('const a = 1, b = 2; String(a < ..);');
     expectError('const a = 1, b = 2; String(a <.. < b);');
     expectError('const a = 1, b = 2; a <.. = b;');
   });
 
+  test('a PARENTHESIZED range is a relational operand, and compares as an object', () => {
+    // Parentheses put the range back under the relational operators, and there
+    // the base language's abstract relational comparison applies to an ordinary
+    // object: `ToPrimitive` yields no number, so the comparison is false rather
+    // than an error.
+    //
+    // Both ranges.md and #sec-range-literals currently say the spaced forms are
+    // TypeErrors "because a range is not `Ordered`". Neither half holds here:
+    // the unspaced forms never reach a comparison (above), and the parenthesized
+    // one compares silently. Recorded as feedback; making this a rejection is
+    // type-system work rather than grammar work.
+    expect(evaluated('const a = 1, b = 2; String((a..) < b);')).toBe('false');
+    expect(evaluated('String((0..<3) < 5);')).toBe('false');
+  });
+
   test('neighbouring operators still win their tokens against the family', () => {
+    // `<<` is taken before `<..` is considered, so this is `a << (..<b)`; the
+    // shift then rejects a range operand on precedence, as above.
     expectError('const a = 1, b = 2; String(a<<..<b);');
   });
 

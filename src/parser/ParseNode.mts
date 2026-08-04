@@ -929,11 +929,19 @@ export namespace ParseNode {
     | ShortCircuitExpressionOrHigher
     | RangeExpression;
 
+  // proposal-runtime-types (ranges.md "Types"): a bound per endpoint, null
+  // exactly where that endpoint is null. This mirrors the shape-independent
+  // endpoint view `RangeBounds` exposes -- start, end, startBound, endBound,
+  // each absent where the shape has neither -- so nothing downstream has to
+  // re-derive a range's shape from slot absence plus a boolean.
+  export type RangeBound = 'closed' | 'open';
+
   export interface RangeExpression extends BaseParseNode {
     readonly type: 'RangeExpression';
     readonly RangeStart: ShortCircuitExpressionOrHigher | null;
     readonly RangeEnd: ShortCircuitExpressionOrHigher | null;
-    readonly Inclusive: boolean;
+    readonly RangeStartBound: RangeBound | null;
+    readonly RangeEndBound: RangeBound | null;
   }
 
   // ConditionalExpression :

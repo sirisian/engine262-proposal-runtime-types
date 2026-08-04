@@ -591,24 +591,49 @@ export abstract class ExpressionParser extends FunctionParser {
     return ShortCircuitExpression;
   }
 
-  // proposal-runtime-types (ranges.md):
+  // proposal-runtime-types (ranges.md "Syntax", #sec-range-literals):
   // RangeExpression :
-  //   ShortCircuitExpression? `..` ShortCircuitExpression?
+  //   ShortCircuitExpression? `..<` ShortCircuitExpression
   //   ShortCircuitExpression? `..=` ShortCircuitExpression
+  //   ShortCircuitExpression `<..<` ShortCircuitExpression
+  //   ShortCircuitExpression `<..=` ShortCircuitExpression
+  //   ShortCircuitExpression `..`
+  //   ShortCircuitExpression `<..`
+  //   `..`
+  //
+  // Nine forms over six tokens. A range that has an end always marks whether it
+  // includes it, and marks its start only where the start is exclusive, so each
+  // token fixes BOTH bounds and whether an end follows. That is what retires the
+  // follow-set heuristic this parser used to need: end-presence was ambiguous
+  // only while a bare `..` could mean either the from form or a two-endpoint
+  // form, and there is no longer a bare two-endpoint form. `a..b` therefore
+  // needs no rejection code -- `a..` finishes as a from-range and the dangling
+  // `b` is the ordinary unexpected-token error.
+  //
   // A range binds tighter than assignment and looser than `||`/`??`, and it is
-  // non-associative, so `a..b..c` is a Syntax Error. The end is optional after
-  // `..` (the from and full forms) and required after `..=`.
+  // non-associative, so `a..<b..<c` is a Syntax Error.
+  static readonly #rangeTokens = [
+    Token.DOT_DOT, Token.DOT_DOT_LT, Token.DOT_DOT_EQ,
+    Token.LT_DOT_DOT, Token.LT_DOT_DOT_LT, Token.LT_DOT_DOT_EQ,
+  ] as const;
+
+  testRangeOperator(): boolean {
+    return ExpressionParser.#rangeTokens.some((t) => this.test(t));
+  }
+
   parseRangeExpression(): ParseNode.RangeExpressionOrHigher {
     if (!this.feature('runtime-types')) {
       return this.parseShortCircuitExpression();
     }
-    // The leading-omitted forms `..b`, `..=b`, and `..` begin with the operator.
-    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+    // The start-omitted forms `..<b`, `..=b`, and `..` begin with the operator.
+    // A leading `<..` is not among them: an omitted start has no inclusivity to
+    // state, so there is nothing for the `<` to mark.
+    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_LT) || this.test(Token.DOT_DOT_EQ)) {
       const node = this.startNode<ParseNode.RangeExpression>();
       return this.finishRangeExpression(node, null);
     }
     const left = this.parseShortCircuitExpression();
-    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+    if (this.testRangeOperator()) {
       const node = this.startNode<ParseNode.RangeExpression>(left);
       return this.finishRangeExpression(node, left);
     }
@@ -616,40 +641,46 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   finishRangeExpression(node: ParseNode.Unfinished<ParseNode.RangeExpression>, start: ParseNode.ShortCircuitExpressionOrHigher | null): ParseNode.RangeExpression {
-    const inclusive = this.test(Token.DOT_DOT_EQ);
-    this.next(); // consume `..` or `..=`
-    node.RangeStart = start;
-    node.Inclusive = inclusive;
-    if (inclusive) {
-      // `..=` always has an end.
-      node.RangeEnd = this.parseShortCircuitExpression();
-    } else if (this.rangeEndFollows()) {
-      node.RangeEnd = this.parseShortCircuitExpression();
-    } else {
-      node.RangeEnd = null;
+    // The token is the whole of what the bounds and the end-presence are.
+    let startBound: ParseNode.RangeBound | null;
+    let endBound: ParseNode.RangeBound | null;
+    switch (this.peek().type) {
+      case Token.DOT_DOT: // `a..` and `..`
+        startBound = start === null ? null : 'closed';
+        endBound = null;
+        break;
+      case Token.DOT_DOT_LT: // `a..<b` and `..<b`
+        startBound = start === null ? null : 'closed';
+        endBound = 'open';
+        break;
+      case Token.DOT_DOT_EQ: // `a..=b` and `..=b`
+        startBound = start === null ? null : 'closed';
+        endBound = 'closed';
+        break;
+      case Token.LT_DOT_DOT: // `a<..`
+        startBound = 'open';
+        endBound = null;
+        break;
+      case Token.LT_DOT_DOT_LT: // `a<..<b`
+        startBound = 'open';
+        endBound = 'open';
+        break;
+      default: // Token.LT_DOT_DOT_EQ, `a<..=b`
+        startBound = 'open';
+        endBound = 'closed';
+        break;
     }
+    this.next(); // consume the range operator
+    node.RangeStart = start;
+    node.RangeStartBound = startBound;
+    node.RangeEndBound = endBound;
+    // An end is present exactly where the token marked one.
+    node.RangeEnd = endBound === null ? null : this.parseShortCircuitExpression();
     // Non-associative: a second range operator is a Syntax Error.
-    if (this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_EQ)) {
+    if (this.testRangeOperator()) {
       this.unexpected();
     }
     return this.finishNode(node, 'RangeExpression');
-  }
-
-  // A range end is present unless the operator is immediately followed by a token
-  // that cannot begin an expression, which is how the from and full forms end.
-  rangeEndFollows(): boolean {
-    switch (this.peek().type) {
-      case Token.RPAREN:
-      case Token.RBRACK:
-      case Token.RBRACE:
-      case Token.SEMICOLON:
-      case Token.COMMA:
-      case Token.COLON:
-      case Token.EOS:
-        return false;
-      default:
-        return true;
-    }
   }
 
   // ShortCircuitExpression :
