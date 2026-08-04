@@ -468,6 +468,22 @@ export abstract class ExpressionParser extends FunctionParser {
       default:
         break;
     }
+    // proposal-runtime-types #sec-location-consuming-contexts: a call that
+    // returns a borrow may be assigned to, and this is the one place that has
+    // to admit it. Every position an assignment target can appear routes here
+    // - a simple or compound assignment, an array or object pattern and their
+    // nested and rest targets, and a for-in or for-of head - so relaxing the
+    // rule once covers all of them uniformly, which is what the base language
+    // achieves by phrasing each of those Early Errors in terms of one static
+    // semantic, AssignmentTargetType.
+    //
+    // Whether the call actually returns a borrow is a matter of its type: a
+    // callee whose return type is known and is not a `ref` type is refused
+    // before the source runs, and where it is not known the check is the
+    // runtime one at the store.
+    if (this.markLocationConsuming(node)) {
+      return;
+    }
     this.addEarlyError(Throw.SyntaxError('Invalid assignment target'), node);
   }
 

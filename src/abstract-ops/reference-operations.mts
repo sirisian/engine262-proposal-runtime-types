@@ -156,8 +156,29 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   }
 }
 
+/**
+ * proposal-runtime-types #sec-location-consuming-contexts: the location an
+ * assignment target denotes. A call in a location-consuming position keeps the
+ * borrow it returned, so evaluating such a target yields a Reference Value;
+ * every position that goes on to store through a target passes it through here
+ * first, and everything else is returned unchanged.
+ *
+ * The unwrap belongs at the TARGET rather than inside GetValue, because a
+ * `return ref e` evaluates through GetValue too - dereferencing there would
+ * take the referent's value and the borrow would never leave the callee.
+ */
+export function LocationOfAssignmentTarget(target: ReferenceRecord | Value): ReferenceRecord | Value {
+  return target instanceof ReferenceValue ? target.Location : target;
+}
+
 /** https://tc39.es/ecma262/#sec-putvalue */
 export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator {
+  // proposal-runtime-types #sec-location-consuming-contexts: an assignment
+  // whose target is a call stores THROUGH the location the call returned; the
+  // borrow arrives here in place of a Reference Record.
+  if (V instanceof ReferenceValue) {
+    return Q(yield* PutValue(V.Location, W));
+  }
   // proposal-runtime-types #sec-soa-references: a whole-element store through a
   // borrow of an SoA element writes every column at that index, which is what
   // `p = value` means for an element whose fields are spread across columns.

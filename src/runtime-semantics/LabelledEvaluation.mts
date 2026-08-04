@@ -42,6 +42,7 @@ import {
   GetIterator,
   GetValue,
   PutValue,
+  LocationOfAssignmentTarget,
   GetV,
   ResolveBinding,
   InitializeReferencedBinding,
@@ -627,7 +628,7 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
         if (lhsRef instanceof AbruptCompletion) {
           status = lhsRef;
         } else {
-          lhsRef = ValueOfNormalCompletion(lhsRef);
+          lhsRef = LocationOfAssignmentTarget(ValueOfNormalCompletion(lhsRef) as Value);
           if (lhsRef === undefined) lhsRef = Value.undefined;
           status = EnsureCompletion(yield* PutValue(lhsRef, nextValue));
         }

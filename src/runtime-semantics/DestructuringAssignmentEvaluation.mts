@@ -36,6 +36,7 @@ import {
   IteratorStep,
   OrdinaryObjectCreate,
   PutValue,
+  LocationOfAssignmentTarget,
   ResolveBinding,
   RequireObjectCoercible,
   ToString,
@@ -66,7 +67,7 @@ function* DestructuringAssignmentEvaluation_ObjectAssignmentPattern({ Assignment
 // AssignmentRestProperty : `...` DestructuringAssignmentTarget
 function* RestDestructuringAssignmentEvaluation({ DestructuringAssignmentTarget }: ParseNode.AssignmentRestProperty, value: Value, excludedNames: readonly PropertyKeyValue[]): StatementEvaluator {
   // 1. Let lref be the result of evaluating DestructuringAssignmentTarget.
-  const lref = Q(yield* Evaluate(DestructuringAssignmentTarget));
+  const lref = LocationOfAssignmentTarget(Q(yield* Evaluate(DestructuringAssignmentTarget)));
   Q(lref);
   // 3. Let restObj be OrdinaryObjectCreate(%Object.prototype%).
   const restObj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
@@ -127,7 +128,7 @@ function* KeyedDestructuringAssignmentEvaluation({
   if (DestructuringAssignmentTarget.type !== 'ObjectLiteral'
       && DestructuringAssignmentTarget.type !== 'ArrayLiteral') {
     // a. Let lref be the result of evaluating DestructuringAssignmentTarget.
-    lref = Q(yield* Evaluate(DestructuringAssignmentTarget));
+    lref = LocationOfAssignmentTarget(Q(yield* Evaluate(DestructuringAssignmentTarget)));
   }
   // 2. Let v be ? GetV(value, propertyName).
   const v = Q(yield* GetV(value, propertyName));
@@ -213,7 +214,7 @@ function* IteratorDestructuringAssignmentEvaluation(node: ParseNode.AssignmentEl
       // 1. If DestructuringAssignmentTarget is neither an ObjectLiteral nor an ArrayLiteral, then
       if (DestructuringAssignmentTarget.type !== 'ObjectLiteral'
           && DestructuringAssignmentTarget.type !== 'ArrayLiteral') {
-        lref = Q(yield* Evaluate(DestructuringAssignmentTarget));
+        lref = LocationOfAssignmentTarget(Q(yield* Evaluate(DestructuringAssignmentTarget)));
       }
       let value: Value = Value.undefined;
       // 2. If iteratorRecord.[[Done]] is false, then
