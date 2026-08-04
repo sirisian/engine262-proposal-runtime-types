@@ -18,6 +18,7 @@ import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
+import { IsSharableValueType } from './layout.mts';
 import { restElementType } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration,
@@ -683,6 +684,14 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     // identity means a program cannot ask whether something IS a reference,
     // only what it refers to - so a decayed value is tested against the
     // borrowed type, which is what this case did before a borrow could arrive.
+    return Q(yield* IsOfType(value, t.Target));
+  }
+  // proposal-runtime-types #sec-threading-shared-modifier: "A value of type T is
+  // assignable to storage of type `shared T` ... and a read of that storage yields
+  // a value of T. The modifier is therefore not observable in the value." So
+  // membership is membership in the target, in BOTH directions: it is how a value
+  // is published into shared storage, and how one read out of it is still a T.
+  if (t.Kind === 'shared') {
     return Q(yield* IsOfType(value, t.Target));
   }
   // proposal-runtime-types `sec-composite-types`: the top composite type "is the
@@ -1675,6 +1684,35 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // reflection over the reference kind are already provided.
       const Target = Q(yield* TypeNodeToTypeRecord(node.Type));
       return { Kind: 'reference', Target };
+    }
+    case 'SharedType': {
+      // proposal-runtime-types #sec-threading-shared-modifier: `shared T` is the
+      // Type Record { Kind: 'shared', Target: <T's record> }.
+      //
+      // The admission rule is the value types: it is a type error if the operand
+      // is not one. `shared` decides WHERE storage lives, and the only storage
+      // whose placement is in question is the storage that would otherwise sit in
+      // a register, a stack slot, or a thread-local nursery. An object is already
+      // shared - there is one heap, so a thread that reaches a reference reaches
+      // the object - which is why `shared Map` is refused rather than accepted as
+      // a no-op: accepting it would suggest a CONCURRENT map, when what the
+      // design offers is the ordinary one under a Lock.
+      //
+      // Nested `shared` is an error (the core states it at #sec-array-and-tuple-
+      // types), and so is `shared ref T`: a reference denotes a location, not a
+      // value, and a location is already reachable from wherever the thread that
+      // holds it can reach.
+      const Target = Q(yield* TypeNodeToTypeRecord(node.Type));
+      if (Target.Kind === 'shared') {
+        return Throw.TypeError('$1 is not a valid type', Value('shared of a shared type'));
+      }
+      if (Target.Kind === 'reference') {
+        return Throw.TypeError('$1 is not a valid type', Value('shared of a reference type'));
+      }
+      if (!IsSharableValueType(Target)) {
+        return Throw.TypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}, which is not a value type`));
+      }
+      return { Kind: 'shared', Target };
     }
     case 'KeyOfType': {
       // proposal-runtime-types #sec-keyof: keyof denotes GetTypeObject of the

@@ -437,3 +437,30 @@ export function SoAColumnsOf(element: TypeRecord): SoAColumn[] | null {
   }
   return columns;
 }
+
+/**
+ * proposal-runtime-types #sec-threading-shared-modifier: whether a type admits the
+ * `shared` modifier. The admitted set is the value types - the sized numerics,
+ * `boolean`, the vectors, an enum, a value type class, a fixed-length array of one,
+ * and `SoA.<T>` - which is very nearly "has a layout", the one difference being that
+ * a GROWABLE `SoA.<T>` has no layout as a type (its instances have a byteLength and
+ * the type does not) yet is still storage a program shares, and shares by column.
+ *
+ * A type with no layout is refused, and that refusal is the interesting one: a
+ * `string`, an `any`, a `bigint`, an object, or a `[].<T>` is refused not because
+ * sharing it is impossible but because it is ALREADY shared. There is one heap, so
+ * the modifier would claim of an object type nothing that is not already true of
+ * every object type.
+ */
+export function IsSharableValueType(t: TypeRecord): boolean {
+  if (t.Kind === 'nominal' && t.LibraryName === 'SoA') {
+    // Growable or fixed: a column set is shared storage either way. A `SoA.<T>`
+    // whose element has no layout is still refused, by the columns check below.
+    const element = t.Arguments[0];
+    if (element === undefined || typeof element === 'number') {
+      return false;
+    }
+    return SoAColumnsOf(element) !== null;
+  }
+  return LayoutOf(t) !== null;
+}

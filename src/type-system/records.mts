@@ -296,6 +296,11 @@ export type TypeRecord =
   | { readonly Kind: 'tuple', readonly Elements: readonly TupleElementRecord[] }
   | { readonly Kind: 'array', readonly Element: TypeRecord, readonly Extent: number | 'dynamic' }
   | { readonly Kind: 'reference', readonly Target: TypeRecord }
+  // proposal-runtime-types #sec-threading-shared-modifier: `shared T` is a value
+  // type whose storage is shared between the threads of one heap. A VALUE of it
+  // is a value of Target - the modifier decides placement and what the checker
+  // may assume of the slot between two reads, not the representation.
+  | { readonly Kind: 'shared', readonly Target: TypeRecord }
   | { readonly Kind: 'object', readonly Properties: readonly PropertyTypeRecord[], readonly IndexSignatures: readonly IndexSignatureRecord[] }
   | { readonly Kind: 'function', readonly Signatures: readonly SignatureRecord[] };
 
@@ -541,6 +546,7 @@ export function orderKey(t: TypeRecord): string {
     case 'tuple': return `tuple:${t.Elements.map((e) => `${e.Rest ? '...' : ''}${orderKey(e.Type)}`).join(',')}`;
     case 'array': return `array:${orderKey(t.Element)}:${t.Extent}`;
     case 'reference': return `reference:${orderKey(t.Target)}`;
+    case 'shared': return `shared:${orderKey(t.Target)}`;
     case 'object': return `object:${t.Properties.map((p) => `${p.readonly ? 'readonly ' : ''}${p.key}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
     // PLAN-rest-parameters.md phase 0: a parameter's Rest and Optional flags are
     // part of a signature's identity, so they belong in the canonical order key.
@@ -562,6 +568,7 @@ export function displayType(t: TypeRecord): string {
     case 'intersection': return t.Members.map(displayType).join(' & ');
     case 'array': return `[${t.Extent === 'dynamic' ? '' : t.Extent}].<${displayType(t.Element)}>`;
     case 'tuple': return `[${t.Elements.map((e) => displayType(e.Type)).join(', ')}]`;
+    case 'shared': return `shared ${displayType(t.Target)}`;
     // #sec-parameterized-types: printed as written, base and metadata, so the
     // checking pass's diagnostic ("$1 is not assignable to $2") names the two
     // parameterizations rather than the word "parameterized".

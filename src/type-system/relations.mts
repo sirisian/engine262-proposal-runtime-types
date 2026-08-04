@@ -179,6 +179,11 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       return t.Kind === 'array' && s.Extent === t.Extent && SameTypeWithAssumptions(s.Element, t.Element, next);
     case 'reference':
       return t.Kind === 'reference' && SameTypeWithAssumptions(s.Target, t.Target, next);
+    // #sec-threading-shared-modifier: invariant in Target, as ~reference~ is,
+    // and for the same reason - the storage is read AND written, so a mismatch
+    // in either direction is unsound.
+    case 'shared':
+      return t.Kind === 'shared' && SameTypeWithAssumptions(s.Target, t.Target, next);
     case 'object': {
       const to = t as Extract<TypeRecord, { Kind: 'object' }>;
       return t.Kind === 'object' && s.Properties.length === to.Properties.length
@@ -366,6 +371,25 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (s.Kind === 'intersection') {
     return s.Members.some((m) => IsSubtype(m, t, next));
   }
+  // proposal-runtime-types #sec-threading-shared-modifier: the modifier is not
+  // observable in the VALUE. "A value of type T is assignable to storage of type
+  // `shared T`, which is how a value is published, and a read of that storage
+  // yields a value of T." So at a value boundary the modifier is transparent, and
+  // unwraps on whichever side carries it.
+  //
+  // It unwraps only when the OTHER side is unmarked. Between two shared types the
+  // switch below applies, which is invariance in the target, and that is what
+  // keeps the distinction load-bearing where it has to be: a WRITABLE member is
+  // invariant (IsObjectSubtype), so `{ x: shared uint32 }` is not viewable as
+  // `{ x: uint32 }`, and the narrowing regime of a slot (#sec-shared-stability)
+  // cannot be laundered by aliasing it through an object type that drops the
+  // marker.
+  if (s.Kind === 'shared' && t.Kind !== 'shared') {
+    return IsSubtype(s.Target, t, next);
+  }
+  if (t.Kind === 'shared' && s.Kind !== 'shared') {
+    return IsSubtype(s, t.Target, next);
+  }
   if (s.Kind !== t.Kind) {
     return false;
   }
@@ -418,6 +442,8 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     case 'reference':
       return SameTypeWithAssumptions(s.Target, (t as Extract<TypeRecord, { Kind: 'reference' }>).Target, next);
+    case 'shared':
+      return SameTypeWithAssumptions(s.Target, (t as Extract<TypeRecord, { Kind: 'shared' }>).Target, next);
     case 'object':
       return IsObjectSubtype(s, t as Extract<TypeRecord, { Kind: 'object' }>, next);
     case 'function':

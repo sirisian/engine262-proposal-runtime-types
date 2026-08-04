@@ -58,6 +58,9 @@ export function CanonicalizeType(t: TypeRecord): TypeRecord {
   if (t.Kind === 'reference') {
     return { Kind: 'reference', Target: CanonicalizeType(t.Target) };
   }
+  if (t.Kind === 'shared') {
+    return { Kind: 'shared', Target: CanonicalizeType(t.Target) };
+  }
   if (t.Kind === 'literal') {
     return { Kind: 'literal', Value: t.Value, Base: CanonicalizeType(t.Base) };
   }

@@ -350,6 +350,23 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
  * (a RangeError in the spec) rather than discarding information.
  */
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types #sec-threading-shared-modifier: "The modifier is
+  // therefore not observable in the value; it is observable in where the value is
+  // kept and in what may be assumed about it between two reads." So a boundary
+  // enforcing `shared T` enforces T: publishing a value into shared storage is
+  // the same check and the SAME CONVERSION as storing it in unmarked storage of
+  // that type, and a value read back out is a value of T.
+  //
+  // The unwrap belongs here rather than in RequireType because this is the
+  // operation every enforcement path reaches, and because the conversion is the
+  // part that matters: without it a `shared uint32` annotation fell through to
+  // the final membership step with a plain Number in hand, and a plain Number is
+  // not a MEMBER of uint32 - it converts to one. So `let a: shared uint32 = 5`
+  // was rejected while `let a: uint32 = 5` was accepted, which no rule of the
+  // clause asks for.
+  if (t.Kind === 'shared') {
+    return Q(yield* CheckedConvertValue(value, t.Target));
+  }
   // proposal-runtime-types #sec-vector-lanes: "`vector.<T, N>` declares a cast
   // operator from T, so a value of the lane type converts to a vector by
   // filling every lane with it." The broadcast is one of the user-defined casts

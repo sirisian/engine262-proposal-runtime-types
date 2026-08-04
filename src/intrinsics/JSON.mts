@@ -441,6 +441,7 @@ function describeType(t: TypeRecord): string {
     case 'union':
       return t.Members.map(describeType).join(' or ');
     case 'reference':
+    case 'shared':
       return describeType(t.Target);
     case 'parameterized':
       return describeType(t.Base);
@@ -485,6 +486,9 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
     case 'any':
       return value;
     case 'reference':
+    // #sec-threading-shared-modifier: the modifier is not observable in the value,
+    // so a typed parse against `shared T` coerces against T.
+    case 'shared':
       return Q(yield* CoerceJSON(value, t.Target, path));
     case 'primitive': {
       // proposal-runtime-types `sec-composite-json`: the typed parse

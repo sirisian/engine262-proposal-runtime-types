@@ -265,6 +265,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
   switch (kind) {
     case 'primitive':
     case 'reference':
+    case 'shared':
       // A named leaf or a ref borrow: its `type`/`target` Type Object carries the
       // record directly. (Generic decomposition is not reconstructed here; the
       // interned leaf is authoritative.)
@@ -510,6 +511,13 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       break;
     case 'reference':
       set('kind', Value('reference'));
+      set('target', typeObj(t.Target));
+      break;
+    // #sec-threading-shared-modifier: reflects as its own kind with a target,
+    // the same shape ~reference~ takes, so a consumer walks one level to the
+    // value type underneath.
+    case 'shared':
+      set('kind', Value('shared'));
       set('target', typeObj(t.Target));
       break;
     case 'object': {
