@@ -61,7 +61,7 @@ test('a `throw` arm throws rather than yielding a value', () => {
 });
 
 test('every pattern form works as a clause pattern', () => {
-  expect(evaluated('match (5) { when 1..3: "low"; when 4..6: "mid"; default: "high"; }')).toBe('mid');
+  expect(evaluated('match (5) { when 1..<3: "low"; when 4..<6: "mid"; default: "high"; }')).toBe('mid');
   expect(evaluated('match ({ x: 1 }) { when { x: _ }: "has x"; default: "no"; }')).toBe('has x');
   expect(evaluated('match ("aaa") { when /^a+$/: "as"; default: "no"; }')).toBe('as');
   expect(evaluated('match (uint8(1)) { when uint8: "typed"; default: "no"; }')).toBe('typed');

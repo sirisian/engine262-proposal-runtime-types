@@ -12,7 +12,9 @@ import { GetValue, surroundingAgent, Throw } from '#self';
  * core; the design's ordering-based generalization to the other ordered types is
  * part of the extension's deferred remainder.
  */
-export function* Evaluate_RangeExpression({ RangeStart, RangeEnd, RangeEndBound }: ParseNode.RangeExpression): ValueEvaluator {
+export function* Evaluate_RangeExpression({
+  RangeStart, RangeEnd, RangeStartBound, RangeEndBound,
+}: ParseNode.RangeExpression): ValueEvaluator {
   let start: NumberValue | undefined;
   if (RangeStart !== null) {
     const value = Q(yield* GetValue(Q(yield* Evaluate(RangeStart))));
@@ -29,10 +31,7 @@ export function* Evaluate_RangeExpression({ RangeStart, RangeEnd, RangeEndBound 
     }
     end = value;
   }
-  // The parser now carries a bound per endpoint. The value model still carries
-  // one `inclusive` flag for the end, so the start's bound is dropped here and
-  // an open-start range behaves as a closed-start one until the value model
-  // takes the pair (see the engine plan's E3, which is where `isEmpty`,
-  // `length`, `contains`, and iteration each become bound-aware).
-  return CreateRangeObject(start, end, RangeEndBound === 'closed', surroundingAgent.currentRealmRecord);
+  // The parser's bound pair passes straight through: the node and the value model
+  // carry the same shape-independent endpoint view.
+  return CreateRangeObject(start, end, RangeStartBound ?? undefined, RangeEndBound ?? undefined, surroundingAgent.currentRealmRecord);
 }

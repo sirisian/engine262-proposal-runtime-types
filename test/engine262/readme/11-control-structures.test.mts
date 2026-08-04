@@ -80,9 +80,9 @@ test('switch: sealed-class switch with type-object case labels is not implemente
 test('switch: a bare-range case is reserved without the ranges extension', () => {
   // The core reserves the bare-range case syntax for the ranges extension. With
   // the feature off it is not ordinary syntax and does not parse.
-  expectErrorFlagOff('let a = 0.5; switch (a) { case 0..0.99: break; } "ok";');
+  expectErrorFlagOff('let a = 0.5; switch (a) { case 0..<0.99: break; } "ok";');
   // With the extension a range case label is an ordinary range expression and
   // parses; matching a range case by containment is deferred, so a range label
   // compares by identity here and an integer discriminant falls through.
-  expect(evaluated('let a = 5; switch (a) { case 0..10: "in"; break; default: "out"; } "ran";')).toBe('ran');
+  expect(evaluated('let a = 5; switch (a) { case 0..<10: "in"; break; default: "out"; } "ran";')).toBe('ran');
 });

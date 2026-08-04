@@ -94,10 +94,10 @@ test('RANGE patterns match by containment', () => {
   // "Exactly as a range `case` label does", and "at most two comparisons" - the
   // form that makes a FLOAT subject matchable at all, since a float has no
   // cases to enumerate.
-  expect(evaluated('String(5 is 1..10);')).toBe('true');
-  expect(evaluated('String(50 is 1..10);')).toBe('false');
-  expect(evaluated('String(1.5 is 1..2);')).toBe('true');
-  expect(evaluated('String(5 is 1..3 or 4..6);')).toBe('true');
+  expect(evaluated('String(5 is 1..<10);')).toBe('true');
+  expect(evaluated('String(50 is 1..<10);')).toBe('false');
+  expect(evaluated('String(1.5 is 1..<2);')).toBe('true');
+  expect(evaluated('String(5 is 1..<3 or 4..<6);')).toBe('true');
 });
 
 test('REGEXP patterns match the ENTIRE subject', () => {

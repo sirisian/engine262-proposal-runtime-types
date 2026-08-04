@@ -33,7 +33,7 @@ test('a LOOP rebinds per iteration', () => {
   // test runs once per iteration - it asserted inside the host on the second.
   // The immutability the clause wants is against USER ASSIGNMENT, which is the
   // checker's to enforce along with the scope.
-  expect(evaluated('let n = 0; const log = []; while ((n += 1) is let c and 1..5) { log.push(String(c)); } log.join(",");')).toBe('1,2,3,4');
+  expect(evaluated('let n = 0; const log = []; while ((n += 1) is let c and 1..<5) { log.push(String(c)); } log.join(",");')).toBe('1,2,3,4');
   expect(evaluated('const log = []; for (const q of [1, 2, 3]) { if (q is let c) { log.push(String(c)); } } log.join(",");')).toBe('1,2,3');
   // A MISS binds nothing and the governed position does not run.
   expect(evaluated('let out = "ok"; if (5 is let x: string) { out = "matched"; } out;')).toBe('ok');

@@ -20,7 +20,7 @@ test('an EXTRACTOR matches through its custom matcher', () => {
   // "`null` is no match."
   expect(evaluated(`${SOME} String(-1 is Some(_));`)).toBe('false');
   // Sub-patterns compose as anywhere else.
-  expect(evaluated(`${SOME} String(5 is Some(1..10));`)).toBe('true');
+  expect(evaluated(`${SOME} String(5 is Some(1..<10));`)).toBe('true');
   expect(evaluated(`${SOME} String(5 is Some(_ and not 6));`)).toBe('true');
 });
 

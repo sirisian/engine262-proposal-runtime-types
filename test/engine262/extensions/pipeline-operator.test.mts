@@ -62,7 +62,7 @@ test('the topic is meaningless outside a pipeline body', () => {
 test('precedence: looser than a range, tighter than a conditional', () => {
   // The order the specification states in both clauses, because ranges occupy
   // the level the upstream proposal named for the pipeline's operands.
-  expect(evaluated('String(0..10 |> %.start);')).toBe('0');
+  expect(evaluated('String(0..<10 |> %.start);')).toBe('0');
   expect(evaluated('function f(x) { return x; } String(true ? 1 |> f(%) : 2);')).toBe('1');
   expect(evaluated('function f(x) { return x; } String(null ?? 3 |> f(%));')).toBe('3');
 });

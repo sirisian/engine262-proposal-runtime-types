@@ -15,34 +15,51 @@ import {
 } from '#self';
 
 /**
- * proposal-runtime-types (ranges.md): the Range value and its iteration.
+ * proposal-runtime-types (ranges.md "Types", #sec-ranges): the Range value and
+ * its iteration.
  *
- * A range names an interval as a value. The two literal forms `a..b` and `a..=b`
- * produce a half-open and an inclusive range; the open-ended forms omit an
- * endpoint. This implements the value and its core operations: the endpoints,
- * containment, length and emptiness, iteration over an integer range with an
- * implicit step of one, and an explicit step. The interval kind lives in the
- * value here (the internal slot [[RangeInclusive]]); the design's placement of it
- * in the type, the `uint8.<1..=6>` bounds desugaring, slicing, and the random and
- * Temporal integrations are the extension's deferred remainder.
+ * A range names an interval as a value, and carries A BOUND PER ENDPOINT rather
+ * than one flag: [[RangeStartBound]] and [[RangeEndBound]] are each 'closed',
+ * 'open', or ~undefined~ exactly where that endpoint is absent. That mirrors the
+ * shape-independent endpoint view `RangeBounds` exposes -- start, end,
+ * startBound, endBound -- so nothing here re-derives a range's shape from slot
+ * absence plus a boolean, and the four intervals of a two-endpoint range are the
+ * four pairs with nothing else expressible.
+ *
+ * One object models all four shapes. `Range`, `RangeFrom`, `RangeTo`, and
+ * `RangeFull` are the TYPE system's classification of them, and an absent slot
+ * is how this dynamic model already says which one it has.
+ *
+ * `interval` is DERIVED from the two bounds and never stored, per ranges.md: a
+ * stored copy would be a second source of truth. Its exposed values are the
+ * strings 'closed', 'closedOpen', 'openClosed', and 'open' until the design's
+ * enum intrinsics exist.
+ *
+ * Deferred: the bounds' placement in the type (`Range.<T, S, E>`), the
+ * `RangeBounds` operations `contains(range)`, `intersect`, and `scale` with the
+ * interval arithmetic, slicing, and the random and Temporal integrations.
  */
+
+export type RangeBound = 'closed' | 'open';
 
 export interface RangeObject extends OrdinaryObject {
   RangeStart: NumberValue | undefined;
   RangeEnd: NumberValue | undefined;
-  RangeInclusive: boolean;
+  RangeStartBound: RangeBound | undefined;
+  RangeEndBound: RangeBound | undefined;
 }
 
 export function isRangeObject(value: Value): value is RangeObject {
-  return value instanceof ObjectValue && 'RangeInclusive' in value;
+  return value instanceof ObjectValue && 'RangeStartBound' in value;
 }
 
-export function CreateRangeObject(start: NumberValue | undefined, end: NumberValue | undefined, inclusive: boolean, realmRec: Realm): RangeObject {
+export function CreateRangeObject(start: NumberValue | undefined, end: NumberValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
   const proto = realmRec.Intrinsics['%Range.prototype%'];
-  const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeInclusive']) as Mutable<RangeObject>;
+  const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound']) as Mutable<RangeObject>;
   obj.RangeStart = start;
   obj.RangeEnd = end;
-  obj.RangeInclusive = inclusive;
+  obj.RangeStartBound = startBound;
+  obj.RangeEndBound = endBound;
   return obj;
 }
 
@@ -50,29 +67,46 @@ interface RangeIteratorObject extends OrdinaryObject {
   IteratedStart: number;
   IteratedEnd: number | undefined;
   IteratedStep: number;
-  IteratedInclusive: boolean;
+  IteratedEndBound: RangeBound | undefined;
   IteratedIndex: number;
 }
 
-function CreateRangeIterator(start: number, end: number | undefined, step: number, inclusive: boolean, realmRec: Realm): RangeIteratorObject {
+/**
+ * The index the iteration begins at. An open start excludes its own endpoint, so
+ * the first value it yields is one step in: `(0<..<4)` yields 1, 2, 3, and
+ * `(0<..).step(0.25)` yields 0.25 first.
+ *
+ * FEEDBACK: neither ranges.md "Iteration" nor #sec-ranges states this. Both fix
+ * the nth value as start + n * step and were written while a closed start was
+ * the only start a literal could spell, so an open start's first index is
+ * unspecified. n >= 1 for an open start and n >= 0 otherwise is what this
+ * implements and what the documents should say.
+ */
+function firstIndex(startBound: RangeBound | undefined): number {
+  return startBound === 'open' ? 1 : 0;
+}
+
+function CreateRangeIterator(start: number, end: number | undefined, step: number, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeIteratorObject {
   const proto = realmRec.Intrinsics['%RangeIteratorPrototype%'];
   const it = OrdinaryObjectCreate(proto, [
-    'IteratedStart', 'IteratedEnd', 'IteratedStep', 'IteratedInclusive', 'IteratedIndex',
+    'IteratedStart', 'IteratedEnd', 'IteratedStep', 'IteratedEndBound', 'IteratedIndex',
   ]) as Mutable<RangeIteratorObject>;
   it.IteratedStart = start;
   it.IteratedEnd = end;
   it.IteratedStep = step;
-  it.IteratedInclusive = inclusive;
-  it.IteratedIndex = 0;
+  it.IteratedEndBound = endBound;
+  it.IteratedIndex = firstIndex(startBound);
   return it;
 }
 
 // A value is past the end of a range when, iterating in the direction of the
-// step, it has reached or passed the endpoint. A range with no end never ends.
-function reachedEnd(value: number, end: number | undefined, step: number, inclusive: boolean): boolean {
+// step, it has reached or passed the endpoint. A range with no end never ends,
+// and a closed end admits the endpoint itself.
+function reachedEnd(value: number, end: number | undefined, step: number, endBound: RangeBound | undefined): boolean {
   if (end === undefined) {
     return false;
   }
+  const inclusive = endBound === 'closed';
   if (step >= 0) {
     return inclusive ? value > end : value >= end;
   }
@@ -88,7 +122,7 @@ function* RangeIteratorPrototype_next(_args: Arguments, { thisValue }: FunctionC
   // The nth value is start + n * step, computed from the index rather than by
   // repeated addition, so a fractional step does not accumulate error.
   const value = it.IteratedStart + it.IteratedIndex * it.IteratedStep;
-  if (reachedEnd(value, it.IteratedEnd, it.IteratedStep, it.IteratedInclusive)) {
+  if (reachedEnd(value, it.IteratedEnd, it.IteratedStep, it.IteratedEndBound)) {
     return CreateIteratorResultObject(Value.undefined, Value.true);
   }
   it.IteratedIndex += 1;
@@ -130,7 +164,18 @@ function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallC
   if (!Number.isInteger(start) || !Number.isInteger(end)) {
     return Throw.TypeError('a range with a non-integer endpoint has no length');
   }
-  const span = end - start + (self.RangeInclusive ? 1 : 0);
+  // The count of members, one adjustment per open endpoint: [a,b] holds
+  // b - a + 1, [a,b) and (a,b] hold b - a, and (a,b) holds b - a - 1.
+  //
+  // FEEDBACK: #sec-ranges gives no length rule for the open forms, having been
+  // written when only the closed and half-open ones had literals.
+  let span = end - start + 1;
+  if (self.RangeStartBound === 'open') {
+    span -= 1;
+  }
+  if (self.RangeEndBound === 'open') {
+    span -= 1;
+  }
   return F(span > 0 ? span : 0);
 }
 
@@ -145,8 +190,60 @@ function* RangeProto_isEmptyGetter(_args: Arguments, { thisValue }: FunctionCall
   }
   const start = R(self.RangeStart);
   const end = R(self.RangeEnd);
-  const empty = self.RangeInclusive ? start > end : start >= end;
+  // Descending is empty, as before. At EQUAL endpoints the bounds decide: `5..=5`
+  // holds exactly one value, while `5..<5`, `5<..=5`, and `5<..<5` hold none,
+  // because an open endpoint excludes the only value the interval could contain.
+  const bothClosed = self.RangeStartBound !== 'open' && self.RangeEndBound !== 'open';
+  const empty = bothClosed ? start > end : start >= end;
   return empty ? Value.true : Value.false;
+}
+
+// A range is full when it constrains nothing, which is exactly the shape with
+// neither endpoint.
+function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  return self.RangeStart === undefined && self.RangeEnd === undefined ? Value.true : Value.false;
+}
+
+function boundValue(bound: RangeBound | undefined): Value {
+  return bound === undefined ? Value.undefined : Value(bound);
+}
+
+function* RangeProto_startBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  return boundValue(self.RangeStartBound);
+}
+
+function* RangeProto_endBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  return boundValue(self.RangeEndBound);
+}
+
+// Derived from the two bounds, never stored. Only a two-endpoint range has one of
+// the four interval names; a shape missing an endpoint has no pair to name.
+function* RangeProto_intervalGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  if (self.RangeStartBound === undefined || self.RangeEndBound === undefined) {
+    return Value.undefined;
+  }
+  const closedStart = self.RangeStartBound === 'closed';
+  const closedEnd = self.RangeEndBound === 'closed';
+  if (closedStart) {
+    return Value(closedEnd ? 'closed' : 'closedOpen');
+  }
+  return Value(closedEnd ? 'openClosed' : 'open');
 }
 
 function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -158,12 +255,17 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
     return Value.false;
   }
   const x = R(value);
-  if (self.RangeStart !== undefined && x < R(self.RangeStart)) {
-    return Value.false;
+  // One comparison per endpoint, each by its own bound.
+  if (self.RangeStart !== undefined) {
+    const start = R(self.RangeStart);
+    const withinStart = self.RangeStartBound === 'open' ? x > start : x >= start;
+    if (!withinStart) {
+      return Value.false;
+    }
   }
   if (self.RangeEnd !== undefined) {
     const end = R(self.RangeEnd);
-    const withinEnd = self.RangeInclusive ? x <= end : x < end;
+    const withinEnd = self.RangeEndBound === 'closed' ? x <= end : x < end;
     if (!withinEnd) {
       return Value.false;
     }
@@ -182,7 +284,7 @@ function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObjec
   if (!Number.isInteger(start) || (end !== undefined && !Number.isInteger(end))) {
     return null;
   }
-  return CreateRangeIterator(start, end, 1, self.RangeInclusive, realmRec);
+  return CreateRangeIterator(start, end, 1, self.RangeStartBound, self.RangeEndBound, realmRec);
 }
 
 function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -214,7 +316,7 @@ function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: Func
   }
   const start = R(self.RangeStart);
   const end = self.RangeEnd === undefined ? undefined : R(self.RangeEnd);
-  return CreateRangeIterator(start, end, step, self.RangeInclusive, surroundingAgent.currentRealmRecord);
+  return CreateRangeIterator(start, end, step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
 }
 
 export function bootstrapRangeIteratorPrototype(realmRec: Realm): void {
@@ -228,8 +330,12 @@ export function bootstrapRangePrototype(realmRec: Realm): void {
   const proto = bootstrapPrototype(realmRec, [
     ['start', [RangeProto_startGetter]],
     ['end', [RangeProto_endGetter]],
+    ['startBound', [RangeProto_startBoundGetter]],
+    ['endBound', [RangeProto_endBoundGetter]],
+    ['interval', [RangeProto_intervalGetter]],
     ['length', [RangeProto_lengthGetter]],
     ['isEmpty', [RangeProto_isEmptyGetter]],
+    ['isFull', [RangeProto_isFullGetter]],
     ['contains', RangeProto_contains, 1],
     ['step', RangeProto_step, 1],
     [wellKnownSymbols.iterator, RangeProto_iterator, 0],
