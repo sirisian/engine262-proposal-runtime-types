@@ -540,6 +540,74 @@ test('an ordinary array keeps slot semantics, since nothing relocates', () => {
   expect(evaluated('let a = [1]; let ref b = a[0]; a.push(9); b = 5; String(a[0]);')).toBe('5');
 });
 
+// -- #sec-location-consuming-contexts: a call as an assignment target ---------
+const FA = 'function first(a) { return ref a[0]; } ';
+
+test('a call that returns a borrow may be assigned to', () => {
+  expect(evaluated(`${FA}let a = [1]; first(a) = 5; String(a[0]);`)).toBe('5');
+  // the assignment's value is the value stored, as for any target
+  expect(evaluated(`${FA}let a = [1]; let r = (first(a) = 5); String(r);`)).toBe('5');
+  expect(evaluated(`${FA}let a = [1], b = [2]; first(a) = first(b) = 5; String(a[0]) + "/" + String(b[0]);`)).toBe('5/5');
+});
+
+test('every compound and logical form stores through the location', () => {
+  expect(evaluated(`${FA}let a = [1]; first(a) += 5; String(a[0]);`)).toBe('6');
+  expect(evaluated(`${FA}let a = [3]; first(a) *= 2; String(a[0]);`)).toBe('6');
+  expect(evaluated(`${FA}let a = [5]; first(a) |= 2; String(a[0]);`)).toBe('7');
+  expect(evaluated(`${FA}let a = [0]; first(a) ||= 9; String(a[0]);`)).toBe('9');
+  // a logical form that short-circuits performs no store
+  expect(evaluated(`${FA}let a = [1]; first(a) ??= 9; String(a[0]);`)).toBe('1');
+  // and the target is evaluated exactly once
+  expect(evaluated(`${FA}let a = [1]; let n = 0; function counted(x) { n += 1; return ref x[0]; } counted(a) += 1; String(n);`)).toBe('1');
+});
+
+test('a call is a target in every destructuring position and both loop heads', () => {
+  expect(evaluated(`${FA}let a = [1]; [first(a)] = [5]; String(a[0]);`)).toBe('5');
+  expect(evaluated(`${FA}let a = [1]; [first(a) = 9] = []; String(a[0]);`)).toBe('9');
+  expect(evaluated(`${FA}let a = [1]; ({ x: first(a) } = { x: 5 }); String(a[0]);`)).toBe('5');
+  expect(evaluated(`${FA}let a = [1]; [[first(a)]] = [[5]]; String(a[0]);`)).toBe('5');
+  expect(evaluated(`${FA}let a = [0]; for (first(a) of [1, 2, 3]) ; String(a[0]);`)).toBe('3');
+  expect(evaluated(`${FA}let a = [0]; for (first(a) in { b: 1 }) ; String(a[0]);`)).toBe('b');
+});
+
+test('any callee shape that returns a borrow may be assigned through', () => {
+  expect(evaluated('const o = { first(a) { return ref a[0]; } }; let a = [1]; o.first(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('class C { first(a) { return ref a[0]; } } let a = [1]; new C().first(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('class C { static first(a) { return ref a[0]; } } let a = [1]; C.first(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('class C { #first(a) { return ref a[0]; } go(a) { this.#first(a) = 5; } } let a = [1]; new C().go(a); String(a[0]);')).toBe('5');
+  expect(evaluated('class B { first(a) { return ref a[0]; } } class C extends B { go(a) { super.first(a) = 5; } } let a = [1]; new C().go(a); String(a[0]);')).toBe('5');
+  expect(evaluated('function outer() { return function (a) { return ref a[0]; }; } let a = [1]; outer()(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('let x = 1; (function () { return ref x; })() = 5; String(x);')).toBe('5');
+  // a property borrow, a typed element, and a whole SoA element
+  expect(evaluated('function fx(o) { return ref o.x; } let o = { x: 1 }; fx(o) = 5; String(o.x);')).toBe('5');
+  expect(evaluated('function ft(t) { return ref t[0]; } const a: [].<uint32> = [1]; ft(a) = 9; String(a[0]);')).toBe('9');
+  expect(evaluated('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+    + ' function elem(c) { return ref c[0]; } elem(s) = { a: 4, b: 4.5 }; String(s[0].a);')).toBe('4');
+});
+
+test('a target that cannot denote a location is refused', () => {
+  // the base language's own refusals stand: these are not calls that return a
+  // borrow, they are positions with no assignment target at all
+  expectError('const o = { f(a) { return ref a[0]; } }; let a = [1]; o.f?.(a) = 5;');
+  expectError('function first(a) { return ref a[0]; } let a = [1]; first`x` = 5;');
+  expectError('class C {} new C() = 5;');
+  // a call that returns a value has no location to store into
+  expectThrownKind('function plain(a) { return a[0]; } let a = [1]; plain(a) = 5;', 'TypeError');
+  expectThrownKind('async function af(a) { return 1; } let a = [1]; af(a) = 5;', 'TypeError');
+  // refused before running where the callee's return type settles it
+  expectStaticTypeError('function plain(a): uint32 { return a[0]; } const a: [].<uint32> = [7]; plain(a) = 5;');
+  expect(evaluated('function fr(a): ref uint32 { return ref a[0]; } const a: [].<uint32> = [7]; fr(a) = 5; String(a[0]);')).toBe('5');
+});
+
+test('assigning through a call obeys the liveness and store rules', () => {
+  // the store is checked against the referent's type
+  expectThrown('function ft(t) { return ref t[0]; } const a: [].<uint8> = [1]; ft(a) = 300;');
+  // and an invalidated borrow refuses the store
+  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+    + ' const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2 }); e.a = 1;', 'TypeError');
+  expectThrownKind('const a: [].<uint32> = [1]; let ref b = a[0]; a.reserve(64); b = 5;', 'TypeError');
+});
+
 // -- feature gating ------------------------------------------------------------
 test('the borrowing forms are inert with the feature off', () => {
   // with the flag off, `ref` is only ever an identifier; `f(ref a)` is a syntax

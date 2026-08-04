@@ -3933,6 +3933,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'AssignmentExpression': {
         const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
+        // proposal-runtime-types #sec-location-consuming-contexts: an
+        // assignment whose target is a call stores through the location the
+        // call returned, so the callee must return one. This is the `++`/`--`
+        // rule below applied to the target: known and not a `ref` type is
+        // refused before the source runs, unknown defers to the store.
+        if (a.LeftHandSideExpression.type === 'CallExpression'
+            && (a.LeftHandSideExpression as { LocationConsuming?: boolean }).LocationConsuming === true) {
+          const produced = staticType(a.LeftHandSideExpression);
+          if (produced && produced.Kind !== 'reference') {
+            const completion = Throw.TypeError(
+              'a call assigned to must return a ref, and $1 does not',
+              Value(displayType(produced)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
           // Checked against the DECLARED type, not the narrowed one: a binding
           // of `uint8 | string` may be assigned a string inside a branch that

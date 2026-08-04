@@ -628,9 +628,12 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
         if (lhsRef instanceof AbruptCompletion) {
           status = lhsRef;
         } else {
-          lhsRef = LocationOfAssignmentTarget(ValueOfNormalCompletion(lhsRef) as Value);
-          if (lhsRef === undefined) lhsRef = Value.undefined;
-          status = EnsureCompletion(yield* PutValue(lhsRef, nextValue));
+          const resolved = LocationOfAssignmentTarget(lhs as unknown as ParseNode, ValueOfNormalCompletion(lhsRef) as Value);
+          if (resolved instanceof AbruptCompletion) {
+            status = resolved;
+          } else {
+            status = EnsureCompletion(yield* PutValue(resolved as ReferenceRecord | Value, nextValue));
+          }
         }
       }
     } else {

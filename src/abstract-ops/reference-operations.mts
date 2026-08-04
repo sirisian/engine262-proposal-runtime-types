@@ -1,3 +1,4 @@
+import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { lookupTypeParameter } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -167,8 +168,20 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
  * `return ref e` evaluates through GetValue too - dereferencing there would
  * take the referent's value and the borrow would never leave the callee.
  */
-export function LocationOfAssignmentTarget(target: ReferenceRecord | Value): ReferenceRecord | Value {
-  return target instanceof ReferenceValue ? target.Location : target;
+export function LocationOfAssignmentTarget(node: ParseNode, target: ReferenceRecord | Value) {
+  if (target instanceof ReferenceValue) {
+    return target.Location;
+  }
+  // A call the parser admitted as a target that did not in fact return a borrow
+  // has no location to store into. Where the callee's return type is known the
+  // type system refuses the form before the source runs; where it is not, that
+  // check is deferred to here, and this is what it throws - a TypeError, as for
+  // the other location-consuming contexts, rather than the ReferenceError the
+  // base language raises for a target that is not a reference at all.
+  if (node.type === 'CallExpression' && (node as ParseNode.CallExpression).LocationConsuming === true) {
+    return Throw.TypeError('this call did not return a ref, so there is no location to assign to');
+  }
+  return target;
 }
 
 /** https://tc39.es/ecma262/#sec-putvalue */
