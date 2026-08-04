@@ -77,10 +77,17 @@ export const RawTokens = [
   // proposal-runtime-types #sec-type-punctuators
   ['COLON_EQ', ':='],
   ['ELLIPSIS', '...'],
-  // proposal-runtime-types (ranges.md): the range operators. Placed outside the
-  // Member and PropertyOrCall ranges above, since a range is not a member form.
+  // proposal-runtime-types (ranges.md, #sec-range-literals): the range family is
+  // six tokens, each taken whole by longest match. Placed outside the Member and
+  // PropertyOrCall ranges above, since a range is not a member form. Every range
+  // that has an end marks whether it includes it (`..<` or `..=`); a start is
+  // marked only where it is exclusive (`<..`). There is no bare `a..b`.
   ['DOT_DOT', '..'],
+  ['DOT_DOT_LT', '..<'],
   ['DOT_DOT_EQ', '..='],
+  ['LT_DOT_DOT', '<..'],
+  ['LT_DOT_DOT_LT', '<..<'],
+  ['LT_DOT_DOT_EQ', '<..='],
   ['CONDITIONAL', '?'],
   // BEGIN AutoSemicolon
   ['SEMICOLON', ';'],

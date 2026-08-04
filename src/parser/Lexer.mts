@@ -608,7 +608,17 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
 
         case Token.CONDITIONAL:
           // ? ?. ?? ??=
-          if (c1 === '.' && !isDecimalDigit(this.source[this.position + 1])) {
+          // proposal-runtime-types (ranges.md, #sec-range-literals): `?.` is
+          // already not the optional chaining punctuator before a decimal digit,
+          // which is what keeps `a?.5:b` a conditional. Under the feature it is
+          // likewise not the punctuator before a `.`, so `cond?..<b:c` is a
+          // conditional whose consequent is a range. The extension changes no
+          // existing program: `?.` followed by `.` is a Syntax Error under every
+          // production that consumes the punctuator, which is why it is safe to
+          // give that input a meaning it did not have.
+          if (c1 === '.'
+              && !isDecimalDigit(this.source[this.position + 1])
+              && !(this.source[this.position + 1] === '.' && surroundingAgent.feature('runtime-types'))) {
             this.position += 1;
             return Token.OPTIONAL;
           }
@@ -623,7 +633,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           return Token.CONDITIONAL;
 
         case Token.LT:
-          // < <= << <<=
+          // < <= << <<= and, under the feature, <.. <..< <..=
           if (c1 === '=') {
             this.position += 1;
             return Token.LTE;
@@ -635,6 +645,26 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
               return Token.ASSIGN_SHL;
             }
             return Token.SHL;
+          }
+          // proposal-runtime-types (ranges.md, #sec-range-literals): the exclusive
+          // start of a range. Reached only when the second character is `.` AND the
+          // third is `.` too, so `a < .5` still lexes `<` then a numeric literal,
+          // and `<=`/`<<`/`<<=` above are decided before this is consulted. The
+          // fourth character then separates `<..<` and `<..=` from `<..`, which is
+          // why each is ONE token: `a <.. < b` does not assemble the open range,
+          // it compares against the open-start from-range `a<..`.
+          if (c1 === '.' && this.source[this.position + 1] === '.'
+              && surroundingAgent.feature('runtime-types')) {
+            this.position += 2;
+            if (this.source[this.position] === '<') {
+              this.position += 1;
+              return Token.LT_DOT_DOT_LT;
+            }
+            if (this.source[this.position] === '=') {
+              this.position += 1;
+              return Token.LT_DOT_DOT_EQ;
+            }
+            return Token.LT_DOT_DOT;
           }
           return Token.LT;
 
@@ -809,15 +839,22 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
               this.position += 2;
               return Token.ELLIPSIS;
             }
-            // proposal-runtime-types (ranges.md): `..` and `..=` are the range
-            // operators. A `.` followed by another `.` is never a decimal point
-            // (handled in scanNumber), so `1..6` reaches here as `..` between two
-            // numeric literals. Gated on the feature so the base grammar, where
-            // `1..6` is two numeric literals, is unchanged.
+            // proposal-runtime-types (ranges.md, #sec-range-literals): `..`, `..<`,
+            // and `..=` are three of the family's six tokens. A `.` followed by
+            // another `.` is never a decimal point (handled in scanNumber), so
+            // `1..<6` reaches here as `..<` between two numeric literals. The
+            // third character decides among them; `.<` below is decided by the
+            // SECOND character, so a type argument list and a range end can never
+            // compete. Gated on the feature so the base grammar, where `1..<6` is
+            // a Syntax Error of its own making, is unchanged.
             if (surroundingAgent.feature('runtime-types')) {
               if (this.source[this.position + 1] === '=') {
                 this.position += 2;
                 return Token.DOT_DOT_EQ;
+              }
+              if (this.source[this.position + 1] === '<') {
+                this.position += 2;
+                return Token.DOT_DOT_LT;
               }
               this.position += 1;
               return Token.DOT_DOT;
