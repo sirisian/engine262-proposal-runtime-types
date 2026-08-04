@@ -12,6 +12,8 @@ import { isTypeObject } from '../type-system/intern.mts';
 import { __ts_cast__, OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent, EnvironmentRecord } from '#self';
+import { isRangeObject } from '../intrinsics/Range.mts';
+import { rangeNegate } from '../type-system/range-ops.mts';
 import {
   Assert,
   Call,
@@ -202,6 +204,12 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(rawValue)) {
     const negated = decimalNegate(rawValue);
     return CreateDecimalValue(negated.parts.significand, negated.parts.exponent, negated.width, surroundingAgent.currentRealmRecord);
+  }
+  // proposal-runtime-types (ranges.md "Types"): negating a range reflects it, so
+  // the endpoints exchange places and carry their bounds with them - the image of
+  // [a, b) under negation is (-b, -a] - and a from-range becomes a to-range.
+  if (surroundingAgent.feature('runtime-types') && isRangeObject(rawValue)) {
+    return rangeNegate(rawValue, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types (operatoroverloading.md): a class unary operator.
   const unaryOp = findUnaryClassOperator(rawValue, '-');

@@ -5,6 +5,8 @@ import { ObjectValue,
   SameType,
 } from '../value.mts';
 import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
+import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range-ops.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { isTypedNumber, TypedNumberValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode } from '../type-system/runtime.mts';
@@ -57,6 +59,19 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   if (surroundingAgent.feature('runtime-types')
       && (lval.type === 'Vector' || rval.type === 'Vector')) {
     return Q(yield* vectorBinaryOperator(lval, opText, rval));
+  }
+  // proposal-runtime-types (ranges.md "Types"): interval arithmetic. The bounds
+  // of a computed value are the arithmetic of the bounds it was computed from,
+  // so an operator over two ranges produces the range of the results. Placed
+  // before class operator dispatch because a Range is an ordinary object and
+  // would otherwise fall through to it.
+  // Both operands must be ranges: interval arithmetic is a statement about two
+  // point sets, and a range beside a non-range keeps the base language's
+  // behaviour, so `"x" + r` still concatenates rather than becoming an error.
+  if (surroundingAgent.feature('runtime-types')
+      && isRangeBinaryOperator(opText)
+      && isRangeObject(lval) && isRangeObject(rval)) {
+    return Q(yield* rangeBinaryOperator(lval, opText, rval));
   }
   // proposal-runtime-types: class operator dispatch. Consulted only when the
   // left operand is an Object, so the untyped fast path is unaffected.

@@ -7,6 +7,9 @@ import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
+  rangeContainsRange, rangeIntersect, rangeScale, scaleFactor,
+} from '../type-system/range-ops.mts';
+import {
   OrdinaryObjectCreate,
   CreateIteratorResultObject,
   F, R,
@@ -251,6 +254,12 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
+  // `contains` overloads on a value and on a range. Against a range it is the
+  // subset test, so an empty range is contained in every range and the full
+  // range contains them all.
+  if (isRangeObject(value)) {
+    return rangeContainsRange(self, value) ? Value.true : Value.false;
+  }
   if (!(value instanceof NumberValue)) {
     return Value.false;
   }
@@ -271,6 +280,29 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
     }
   }
   return Value.true;
+}
+
+function* RangeProto_intersect([other = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  if (!isRangeObject(other)) {
+    return Throw.TypeError('$1 is not a range', other);
+  }
+  return rangeIntersect(self, other, surroundingAgent.currentRealmRecord);
+}
+
+function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  const f = scaleFactor(factor);
+  if (f === null || Number.isNaN(f)) {
+    return Throw.TypeError('a range scale factor must be a number');
+  }
+  return rangeScale(self, f, surroundingAgent.currentRealmRecord);
 }
 
 // Over an integer range the step is one and implicit. A range with a non-integer
@@ -337,6 +369,8 @@ export function bootstrapRangePrototype(realmRec: Realm): void {
     ['isEmpty', [RangeProto_isEmptyGetter]],
     ['isFull', [RangeProto_isFullGetter]],
     ['contains', RangeProto_contains, 1],
+    ['intersect', RangeProto_intersect, 1],
+    ['scale', RangeProto_scale, 1],
     ['step', RangeProto_step, 1],
     [wellKnownSymbols.iterator, RangeProto_iterator, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Range');

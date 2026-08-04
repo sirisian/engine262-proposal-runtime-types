@@ -16,6 +16,13 @@ import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
  * operations; the four-way `interval` name is derived from the two bounds rather
  * than stored, and `Range` is a usable type name.
  *
+ * The `RangeBounds` operations -- containment of a range in a range,
+ * intersection, and scaling -- and the interval arithmetic of `+`, `-`, unary
+ * `-`, `*`, and `/` over two ranges are here too, being facts about point sets
+ * rather than about any particular shape: each returns whatever shape its
+ * operands imply, which is why intersecting a from-range with a to-range gives a
+ * two-endpoint range and negating a from-range gives a to-range.
+ *
  * Deferred with the rest of the extension, each needing a facility another part
  * supplies: the bounds in the type (`Range.<T, S, E>` over `Bound.Closed`
  * and `Bound.Open`) and the literal forms' specialization, the
@@ -173,6 +180,117 @@ test('isEmpty is true exactly when the range holds nothing', () => {
   expect(evaluated('String((5..<5).isEmpty);')).toBe('true');
   expect(evaluated('String((0..<5).isEmpty);')).toBe('false');
   expect(evaluated('String((0..=0).isEmpty);')).toBe('false');
+});
+
+// -- the RangeBounds operations ----------------------------------------------
+
+test('contains overloads on a range, and is the subset test', () => {
+  expect(evaluated('String((0..<10).contains(2..<5));')).toBe('true');
+  expect(evaluated('String((0..<10).contains(2..<20));')).toBe('false');
+  // An empty range has no point to fall outside, so every range contains it.
+  expect(evaluated('String((0..<10).contains(7..<7));')).toBe('true');
+  // The full range contains them all.
+  expect(evaluated('String((..).contains(0..<10));')).toBe('true');
+  // Equal endpoints: an open outer excludes the point a closed inner needs.
+  expect(evaluated('String((0..<10).contains(0..=10));')).toBe('false');
+  expect(evaluated('String((0..=10).contains(0..<10));')).toBe('true');
+});
+
+test('intersect is the point-set intersection, with the full range as identity', () => {
+  expect(evaluated('const r = (0..<10).intersect(5..<20); r.start + "," + r.end;')).toBe('5,10');
+  // Identity, and a shape that follows from the operands rather than either one.
+  expect(evaluated('const r = (0..<5).intersect(..); r.start + "," + r.end;')).toBe('0,5');
+  expect(evaluated('const r = (5..).intersect(..<9); r.start + "," + r.end + "," + r.interval;')).toBe('5,9,closedOpen');
+});
+
+test('intersect gives an equal endpoint to the exclusive bound', () => {
+  // `0..<10` and `0..=10` agree everywhere below 10 and disagree only at it.
+  expect(evaluated('(0..<10).intersect(0..=10).interval;')).toBe('closedOpen');
+  expect(evaluated('(0<..<10).intersect(0..<10).interval;')).toBe('open');
+});
+
+test('a disjoint intersection is empty without a representation of its own', () => {
+  // The crossed pair -- greater low with lesser high -- is descending, and
+  // therefore empty by the rule the value model already has.
+  expect(evaluated('String((0..<5).intersect(10..<20).isEmpty);')).toBe('true');
+});
+
+test('scale multiplies both endpoints, and a negative factor reflects', () => {
+  expect(evaluated('const r = (0..<10).scale(2); r.start + "," + r.end + "," + r.interval;')).toBe('0,20,closedOpen');
+  // The image of [a, b) under negation is (-b, -a]: the endpoints exchange
+  // places AND carry their bounds with them.
+  expect(evaluated('const r = (0..<10).scale(-1); r.start + "," + r.end + "," + r.interval;')).toBe('-10,0,openClosed');
+  // Which swaps the one-ended shapes: a from-range scales to a to-range.
+  expect(evaluated('const r = (5..).scale(-1); String(r.start) + "," + r.end + "," + r.endBound;')).toBe('undefined,-5,closed');
+});
+
+test('scaling by zero is the single point zero, not an empty range', () => {
+  // Multiplying both endpoints of `0..<10` would give the empty `0..<0`, where
+  // the image of a nonempty range under multiplication by zero is {0}.
+  expect(evaluated('const r = (0..<10).scale(0); r.start + "," + r.end + "," + r.interval;')).toBe('0,0,closed');
+  // An already-empty range stays empty.
+  expect(evaluated('String((5..<5).scale(0).isEmpty);')).toBe('true');
+});
+
+// -- interval arithmetic ------------------------------------------------------
+
+test('addition adds the corresponding endpoints', () => {
+  expect(evaluated('const r = (1..=3) + (10..=20); r.start + "," + r.end + "," + r.interval;')).toBe('11,23,closed');
+  // A result bound is exclusive where EITHER contributing bound is: the right
+  // operand approaches 5 without reaching it, so the sum approaches 8.
+  expect(evaluated('const r = (3..) + (5<..); r.start + "," + r.startBound;')).toBe('8,open');
+});
+
+test('subtraction crosses the endpoints', () => {
+  // The result's low is the left's low minus the right's HIGH.
+  expect(evaluated('const r = (1..=3) - (10..=20); r.start + "," + r.end;')).toBe('-19,-7');
+});
+
+test('negation reflects, as scaling by minus one does', () => {
+  expect(evaluated('const r = -(1..<3); r.start + "," + r.end + "," + r.interval;')).toBe('-3,-1,openClosed');
+});
+
+test('multiplication takes the least and greatest of the four endpoint products', () => {
+  expect(evaluated('const r = (2..=3) * (4..=5); r.start + "," + r.end;')).toBe('8,15');
+  // A negative operand puts the extremes on the crossed products.
+  expect(evaluated('const r = (-2..=3) * (4..=5); r.start + "," + r.end;')).toBe('-10,15');
+});
+
+test('a product bound is exclusive only where EVERY attaining product is', () => {
+  // `(0..=1) * (0..<2)`: the least product is zero, attained by `0 * 0` from two
+  // inclusive endpoints, so zero is REACHED and the low bound is closed even
+  // though `0 * 2` touches an exclusive one.
+  expect(evaluated('(0..=1) * (0..<2) |> %.startBound;')).toBe('closed');
+  // The greatest is two, attained only by `1 * 2`, and 2 is never reached, so
+  // the high bound is open.
+  //
+  // FEEDBACK: ranges.md states this example's result as `0..=2`. That is wrong:
+  // the supremum needs the right operand to REACH 2, which it never does, so the
+  // result is `0..<2`. The rule the sentence states is right; the interval it
+  // writes out contradicts it.
+  expect(evaluated('(0..=1) * (0..<2) |> %.endBound;')).toBe('open');
+  expect(evaluated('const r = (0..=1) * (0..<2); r.start + "," + r.end;')).toBe('0,2');
+});
+
+test('an unbounded side propagates, and what can be said still is', () => {
+  // Two non-negative lows still give a low.
+  expect(evaluated('const r = (2..) * (3..); r.start + "," + String(r.end);')).toBe('6,undefined');
+});
+
+test('division is defined only where the divisor is bounded away from zero', () => {
+  expect(evaluated('const r = (1..=2) / (2..=4); r.start + "," + r.end;')).toBe('0.25,1');
+  // A divisor whose range contains zero says nothing.
+  expect(evaluated('String(((1..=2) / (0..=4)).isFull);')).toBe('true');
+  // And one that merely EXCLUDES zero at an open endpoint is not enough: its
+  // values approach zero, so the quotient is unbounded.
+  expect(evaluated('String(((1..=2) / (0<..=1)).isFull);')).toBe('true');
+});
+
+test('interval arithmetic needs two ranges, and leaves the base behaviour alone', () => {
+  // A range beside a non-range is not interval arithmetic, so the base
+  // language's own semantics apply and string concatenation still works.
+  expect(evaluated('typeof ("x" + (0..<5));')).toBe('string');
+  expect(evaluated('typeof ((0..<5) + 1);')).toBe('string');
 });
 
 // -- precedence and associativity ---------------------------------------------
