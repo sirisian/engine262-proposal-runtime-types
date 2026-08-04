@@ -21,8 +21,19 @@ test('enums bind objects with sequential member values', () => {
 
 test('enum membership is SameValue against the members', () => {
   expect(evaluated('enum E { A, B = 10 } (0 is E) && (10 is E) && !(3 is E) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('enum E { A } try { let x: E = 5; "no"; } catch (err) { "caught"; }')).toBe('caught');
+  // MIGRATED TO STATIC FORM. This asserted a RUNTIME throw, caught by the try -
+  // which is what a value outside the enum produced while the checker's enum
+  // record carried no member VALUES to compare against. It carries them now, so
+  // a non-member is an Early Error the try cannot swallow, and the runtime
+  // backstop is asserted beside it through the `any` path where the checker
+  // still cannot decide.
+  expect(run('enum E { A } let x: E = 5;')).toMatchObject({ Type: 'throw' });
+  expect(evaluated('enum E { A } function anyv() { return 5; } try { let x: E = anyv(); "no"; } catch (err) { "caught"; }')).toBe('caught');
+  // A member of the enum is accepted, which is the other half of the same rule:
+  // membership is SameValue against the members, statically as at run time.
   expect(evaluated('enum E { A, B } let x: E = 1; x === 1 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A = 5, B } let x: E = 6; x === 6 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum S { A = "a" } let x: S = "a"; x === "a" ? "ok" : "no";')).toBe('ok');
 });
 
 test('interfaces check structurally', () => {

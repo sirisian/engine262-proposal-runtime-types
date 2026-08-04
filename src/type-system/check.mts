@@ -893,12 +893,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (memo !== undefined) {
       return memo;
     }
-    const decl = node as unknown as { EnumMemberList?: readonly unknown[] };
+    const decl = node as unknown as {
+      EnumMemberList?: readonly { Initializer?: ParseNode }[],
+      TypeAnnotation?: { Type: ParseNode.Type },
+    };
+    // proposal-runtime-types #sec-enums: the members' VALUES, computed the way
+    // enum evaluation computes them - an initializer's value, or the previous
+    // numeric value plus one, starting at 0.
+    //
+    // These were previously all `undefined`, one per member, which counted the
+    // members correctly and identified none of them. Since membership against
+    // an enum is SameValue over this list, nothing was ever a member as far as
+    // the checker was concerned, and so EVERY initializer of an enum-typed
+    // binding was refused - `let x: E = 0` no less than `let x: E = 5` - while
+    // the runtime, whose record carries real values, answered `0 is E`
+    // correctly. An initializer the checker cannot read statically stays
+    // undefined and simply matches nothing, which is imprecise rather than
+    // wrong.
+    const memberValues: (Value | undefined)[] = [];
+    let nextAuto = 0;
+    for (const member of decl.EnumMemberList ?? []) {
+      let v: Value | undefined;
+      if (member.Initializer) {
+        const initializerType = staticType(member.Initializer as ParseNode);
+        v = initializerType && initializerType.Kind === 'literal' ? initializerType.Value : undefined;
+      } else {
+        v = Value(nextAuto);
+      }
+      if (v instanceof NumberValue) {
+        nextAuto = Number(v.numberValue()) + 1; // eslint-disable-line @engine262/mathematical-value -- a member's ordinal, not a mathematical value in the spec sense
+      } else {
+        nextAuto += 1;
+      }
+      memberValues.push(v);
+    }
     const built: Known = {
       Kind: 'nominal',
       Declaration: node,
       Arguments: [],
-      EnumMembers: (decl.EnumMemberList ?? []).map(() => undefined),
+      EnumMembers: memberValues,
+      // An enum is a subtype of its underlying type (#sec-enums), which the
+      // relation in IsSubtype can only apply if the record carries it.
+      Underlying: decl.TypeAnnotation
+        ? resolveType(decl.TypeAnnotation.Type) ?? undefined
+        : builtinTypeRecord('number') ?? undefined,
     } as unknown as Known;
     enumTypeMemo.set(node, built);
     return built;
