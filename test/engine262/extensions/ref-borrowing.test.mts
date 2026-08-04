@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectError, expectThrownKind, expectStaticTypeError, runFlagOff,
+  evaluated, ok, expectThrown, expectError, expectThrownKind, expectStaticTypeError, expectThrownFlagOff, runFlagOff,
 } from '../readme/harness.mts';
 
 /**
@@ -553,8 +553,12 @@ test('a call that returns a borrow may be assigned to', () => {
 test('every compound and logical form stores through the location', () => {
   expect(evaluated(`${FA}let a = [1]; first(a) += 5; String(a[0]);`)).toBe('6');
   expect(evaluated(`${FA}let a = [3]; first(a) *= 2; String(a[0]);`)).toBe('6');
+  expect(evaluated(`${FA}let a = [10]; first(a) -= 2; first(a) /= 2; first(a) %= 3; first(a) **= 2; String(a[0]);`)).toBe('1');
   expect(evaluated(`${FA}let a = [5]; first(a) |= 2; String(a[0]);`)).toBe('7');
+  expect(evaluated(`${FA}let a = [12]; first(a) &= 10; first(a) ^= 3; first(a) <<= 2; first(a) >>= 1; first(a) >>>= 1; String(a[0]);`)).toBe('11');
   expect(evaluated(`${FA}let a = [0]; first(a) ||= 9; String(a[0]);`)).toBe('9');
+  expect(evaluated(`${FA}let a = [1]; first(a) &&= 7; String(a[0]);`)).toBe('7');
+  expect(evaluated(`${FA}let a = [0]; first(a) &&= 7; String(a[0]);`)).toBe('0');
   // a logical form that short-circuits performs no store
   expect(evaluated(`${FA}let a = [1]; first(a) ??= 9; String(a[0]);`)).toBe('1');
   // and the target is evaluated exactly once
@@ -576,7 +580,12 @@ test('any callee shape that returns a borrow may be assigned through', () => {
   expect(evaluated('class C { static first(a) { return ref a[0]; } } let a = [1]; C.first(a) = 5; String(a[0]);')).toBe('5');
   expect(evaluated('class C { #first(a) { return ref a[0]; } go(a) { this.#first(a) = 5; } } let a = [1]; new C().go(a); String(a[0]);')).toBe('5');
   expect(evaluated('class B { first(a) { return ref a[0]; } } class C extends B { go(a) { super.first(a) = 5; } } let a = [1]; new C().go(a); String(a[0]);')).toBe('5');
+  expect(evaluated('const fe = function (a) { return ref a[0]; }; let a = [1]; fe(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('const fb = (a) => { return ref a[0]; }; let a = [1]; fb(a) = 5; String(a[0]);')).toBe('5');
   expect(evaluated('function outer() { return function (a) { return ref a[0]; }; } let a = [1]; outer()(a) = 5; String(a[0]);')).toBe('5');
+  expect(evaluated('function getObj() { return { first(a) { return ref a[0]; } }; } let a = [1]; getObj().first(a) = 5; String(a[0]);')).toBe('5');
+  // a borrow of the callee's own local: the environment outlives the call (D5)
+  expect(ok('function localRef() { let v = 3; return ref v; } localRef() = 9;')).toBe(true);
   expect(evaluated('let x = 1; (function () { return ref x; })() = 5; String(x);')).toBe('5');
   // a property borrow, a typed element, and a whole SoA element
   expect(evaluated('function fx(o) { return ref o.x; } let o = { x: 1 }; fx(o) = 5; String(o.x);')).toBe('5');
@@ -591,6 +600,15 @@ test('a target that cannot denote a location is refused', () => {
   expectError('const o = { f(a) { return ref a[0]; } }; let a = [1]; o.f?.(a) = 5;');
   expectError('function first(a) { return ref a[0]; } let a = [1]; first`x` = 5;');
   expectError('class C {} new C() = 5;');
+  // `ref` has no expression form in a concise arrow body, so this returns a
+  // VALUE and there is nothing to assign through
+  expectError('const fc = (a) => ref a[0]; let a = [1]; fc(a) = 5;');
+  // a generator call yields a Generator object, which the checker settles
+  expectError('function* gen(a) { return 1; } let a = [1]; gen(a) = 5;');
+  // a non-ref call is refused inside a pattern as it is on its own
+  expectThrownKind('function plain(a) { return a[0]; } let a = [1]; [plain(a)] = [5];', 'TypeError');
+  // and the whole form is inert with the feature off
+  expectThrownFlagOff('function f() { return 1; } f() = 1;');
   // a call that returns a value has no location to store into
   expectThrownKind('function plain(a) { return a[0]; } let a = [1]; plain(a) = 5;', 'TypeError');
   expectThrownKind('async function af(a) { return 1; } let a = [1]; af(a) = 5;', 'TypeError');
@@ -606,6 +624,20 @@ test('assigning through a call obeys the liveness and store rules', () => {
   expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
     + ' const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2 }); e.a = 1;', 'TypeError');
   expectThrownKind('const a: [].<uint32> = [1]; let ref b = a[0]; a.reserve(64); b = 5;', 'TypeError');
+  // a borrow of an element that has been removed refuses the store
+  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+    + ' s.push({ a: 5, b: 5 }); const ref e = s[1]; s.pop(); e.a = 3;', 'TypeError');
+  // and the loop rule still fires when the body resizes the container
+  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+    + ' function elem(c) { return ref c[0]; }'
+    + ' for (const ref p of s) { elem(s) = { a: 2, b: 2 }; s.push({ a: 9, b: 9 }); }', 'TypeError');
+});
+
+test('a rest target receives an array, which the location must accept', () => {
+  // the rest element builds an Array and stores it through the location
+  expect(evaluated(`${FA}let a = [1]; [...first(a)] = [1, 2]; String(a[0]);`)).toBe('1,2');
+  // so a location whose type forbids an Array refuses it
+  expectThrownKind('function ft(t) { return ref t[0]; } const a: [].<uint32> = [1]; [...ft(a)] = [1, 2];', 'TypeError');
 });
 
 // -- feature gating ------------------------------------------------------------
