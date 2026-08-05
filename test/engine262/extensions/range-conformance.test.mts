@@ -151,46 +151,84 @@ test('sec-range-literals: a parenthesized range is rejected as a relational oper
 // sec-ranges - the value and its shapes
 // =============================================================================
 
-test('sec-ranges: DIVERGENCE - the four shapes and RangeBounds are not bound', () => {
-  // "There are four shapes: `Range.<T, S, E>` carrying both endpoints,
-  //  `RangeFrom.<T, S>` and `RangeTo.<T, E>` carrying one, and `RangeFull.<T>`
-  //  carrying neither. Each implements `RangeBounds.<T>`, which is the
-  //  interface a consumer of an arbitrary range is written against."
-  //
-  // DIVERGENCE (plan item D4): none of the five names the clause introduces is
-  // reachable from a program. One RangeObject models all four shapes
-  // dynamically, which is the right dynamic model, but the clause names types a
-  // program can annotate with and none of them resolves.
-  expect(evaluated('String(typeof RangeFrom) + "," + String(typeof RangeTo) + "," + String(typeof RangeFull);'))
-    .toBe('undefined,undefined,undefined');
-  expect(evaluated('String(typeof RangeBounds);')).toBe('undefined');
-  // `Range` alone does resolve, as a bare type name.
+test('sec-ranges: the four shapes and `RangeBounds` are named', () => {
+  // "There are four shapes: `Range.<T, S, E>` ... `RangeFrom.<T, S>` and
+  //  `RangeTo.<T, E>` ... and `RangeFull.<T>` ... Each implements
+  //  `RangeBounds.<T>`, which is the interface a consumer of an arbitrary range
+  //  is written against."
+  expect(evaluated('let a: Range; let b: RangeFrom; let c: RangeTo; let d: RangeFull; let e: RangeBounds; "ok";')).toBe('ok');
   expect(evaluated('let r: Range = 0..<10; typeof r;')).toBe('object');
 });
 
-test('sec-ranges: DIVERGENCE - `Bound` is not bound and the parameterization does not exist', () => {
-  // "_S_ and _E_ are values of `Bound`, either `Bound.Closed` or `Bound.Open`,
+test('sec-ranges: _S_ and _E_ are values of `Bound`', () => {
+  // "_S_ and _E_ are values of `Bound`, either `Range.Bound.Closed` or `Range.Bound.Open`,
   //  one for each endpoint the shape has."
-  //
-  // DIVERGENCE (D4/F1): `Bound` raises a ReferenceError, so neither the enum nor
-  // `Range.<T, S, E>` can be written.
-  expectThrown('String(Bound.Closed);');
-  expectThrown('let r: Range.<uint8, Bound.Closed, Bound.Open> = 0..<10; "ok";');
+  expect(evaluated('String((0..<10).startBound === Range.Bound.Closed);')).toBe('true');
+  expect(evaluated('String((0..<10).endBound === Range.Bound.Open);')).toBe('true');
+  expect(evaluated('String((0<..=10).startBound === Range.Bound.Open);')).toBe('true');
+  // "one for each endpoint the shape has" - absent where the shape has none.
+  expect(evaluated('String((..<10).startBound);')).toBe('undefined');
 });
 
-test('sec-ranges: DIVERGENCE - `interval` exposes a string, not an `Interval`', () => {
+test('sec-ranges: the four pairs are the four intervals and nothing further is expressible', () => {
+  // "_S_ and _E_ are values of `Bound` ... so the four intervals of a
+  //  two-endpoint range, the closed, the two half-open, and the open, are the
+  //  four pairs and nothing further is expressible."
+  const of = (r, s, e) => `String((${r}) is Range.<uint8, Range.Bound.${s}, Range.Bound.${e}>);`;
+  expect(evaluated(of('0..<10', 'Closed', 'Open'))).toBe('true');
+  expect(evaluated(of('0..=10', 'Closed', 'Closed'))).toBe('true');
+  expect(evaluated(of('0<..<10', 'Open', 'Open'))).toBe('true');
+  expect(evaluated(of('0<..=10', 'Open', 'Closed'))).toBe('true');
+  // And a range of one interval is not of a type naming another.
+  expect(evaluated(of('0..<10', 'Open', 'Open'))).toBe('false');
+  expect(evaluated(of('0..<10', 'Closed', 'Closed'))).toBe('false');
+});
+
+test('sec-ranges: each of the four shapes is its own type, and each implements RangeBounds', () => {
+  // Decided by the value rather than by a prototype chain, since the four
+  // shapes share one dynamic representation and an absent endpoint is how it
+  // says which shape it has.
+  expect(evaluated('String((0..<10) is Range) + "," + String((5..) is Range);')).toBe('true,false');
+  expect(evaluated('String((5..) is RangeFrom) + "," + String((..<5) is RangeTo) + "," + String((..) is RangeFull);')).toBe('true,true,true');
+  // "Each implements `RangeBounds.<T>`, which is the interface a consumer of an
+  //  arbitrary range is written against."
+  expect(evaluated('String((0..<10) is RangeBounds) + "," + String((5..) is RangeBounds) + "," + String((..) is RangeBounds);')).toBe('true,true,true');
+  expect(evaluated('String(5 is RangeBounds);')).toBe('false');
+  // A bound named on a one-ended shape constrains that shape's own endpoint.
+  expect(evaluated('String((5..) is RangeFrom.<uint8, Range.Bound.Closed>) + "," + String((5<..) is RangeFrom.<uint8, Range.Bound.Closed>);')).toBe('true,false');
+});
+
+test('sec-ranges: an annotation naming an interval admits only that interval', () => {
+  expect(evaluated('let r: Range.<uint8, Range.Bound.Closed, Range.Bound.Open> = 0..<10; "ok";')).toBe('ok');
+  expectThrown('let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; "ok";');
+  // The shape is checked with the bounds.
+  expect(evaluated('let r: RangeFrom = 5..; "ok";')).toBe('ok');
+  expectThrown('let r: RangeFrom = 0..<10; "ok";');
+  expect(evaluated('let r: RangeBounds = 0..<10; "ok";')).toBe('ok');
+});
+
+test('sec-ranges: DIVERGENCE - the rejection is at run time, not at check time', () => {
+  // `staticType` has no case for a range literal, so its bounds do not flow
+  // into a static type: a dead branch carrying a wrong-interval annotation is
+  // not reported, and the diagnostic names the value as "[object Object]"
+  // rather than as the range it is.
+  //
+  // DIVERGENCE (plan item F1, the inference half of R2b). The runtime half is
+  // closed by the rows above.
+  expect(evaluated('if (false) { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } "ran";')).toBe('ran');
+});
+
+test('sec-ranges: the four-way name of a pair is an `Interval`', () => {
   // "The four-way name of a pair is an `Interval`, which a range exposes and a
   //  diagnostic prefers over the parameterization."
-  //
-  // DIVERGENCE (D5): the four names are right and derived from the two bounds,
-  // which is what the clause requires of their VALUE; but they are strings, so
-  // a `switch` over `interval` gets no exhaustiveness and no narrowing, which is
-  // the reason the four-way name exists. `Interval` itself is not bound.
-  expect(evaluated('String(typeof (0..<10).interval);')).toBe('string');
-  expectThrown('String(Interval.ClosedOpen);');
-  // The values themselves are the four the clause names, derived not stored.
-  expect(evaluated('(0..=10).interval + "," + (0..<10).interval + "," + (0<..=10).interval + "," + (0<..<10).interval;'))
-    .toBe('closed,closedOpen,openClosed,open');
+  expect(evaluated('String((0..=10).interval === Range.Interval.Closed);')).toBe('true');
+  expect(evaluated('String((0..<10).interval === Range.Interval.ClosedOpen);')).toBe('true');
+  expect(evaluated('String((0<..=10).interval === Range.Interval.OpenClosed);')).toBe('true');
+  expect(evaluated('String((0<..<10).interval === Range.Interval.Open);')).toBe('true');
+  // A member of the enum, which is what lets a `switch` over it be exhaustive -
+  // the reason the four-way name exists rather than the two bounds alone.
+  expect(evaluated('const f=(r)=>{switch(r.interval){case Range.Interval.Closed: return "cc"; case Range.Interval.ClosedOpen: return "co"; case Range.Interval.OpenClosed: return "oc"; case Range.Interval.Open: return "oo";} return "?";}; f(0..=1)+","+f(0..<1)+","+f(0<..=1)+","+f(0<..<1);'))
+    .toBe('cc,co,oc,oo');
   // A shape with one endpoint has no pair to name.
   expect(evaluated('String((5..).interval);')).toBe('undefined');
 });
@@ -237,8 +275,8 @@ test('sec-ranges: intersect is commutative and associative with the full range a
 });
 
 test('sec-ranges: where two ranges share an endpoint the exclusive bound is the one the result carries', () => {
-  expect(evaluated('(0..<10).intersect(0..=10).interval;')).toBe('closedOpen');
-  expect(evaluated('(0<..<10).intersect(0..<10).interval;')).toBe('open');
+  expect(evaluated('String((0..<10).intersect(0..=10).interval === Range.Interval.ClosedOpen);')).toBe('true');
+  expect(evaluated('String((0<..<10).intersect(0..<10).interval === Range.Interval.Open);')).toBe('true');
 });
 
 test('sec-ranges: a disjoint intersection is descending and therefore empty', () => {
@@ -246,7 +284,7 @@ test('sec-ranges: a disjoint intersection is descending and therefore empty', ()
 });
 
 test('sec-ranges: the shape of an intersection follows from its operands', () => {
-  expect(evaluated('const r = (5..).intersect(..<9); r.start + "," + r.end + "," + r.interval;')).toBe('5,9,closedOpen');
+  expect(evaluated('const r = (5..).intersect(..<9); r.start + "," + r.end + "," + String(r.interval === Range.Interval.ClosedOpen);')).toBe('5,9,true');
   expect(evaluated('const r = (0..<5).intersect(..); r.start + "," + r.end;')).toBe('0,5');
 });
 
@@ -262,13 +300,13 @@ test('sec-ranges: DIVERGENCE - `scale` is present on every range, not only where
 });
 
 test('sec-ranges: a negative factor exchanges the endpoints and their bounds', () => {
-  expect(evaluated('const r = (0..<10).scale(-1); r.start + "," + r.end + "," + r.interval;')).toBe('-10,0,openClosed');
+  expect(evaluated('const r = (0..<10).scale(-1); r.start + "," + r.end + "," + String(r.interval === Range.Interval.OpenClosed);')).toBe('-10,0,true');
   // And exchanges RangeFrom with RangeTo.
   expect(evaluated('const r = (5..).scale(-1); String(r.start) + "," + r.end;')).toBe('undefined,-5');
 });
 
 test('sec-ranges: a zero factor yields the closed range at zero, and leaves an empty range empty', () => {
-  expect(evaluated('const r = (0..<10).scale(0); r.start + "," + r.end + "," + r.interval;')).toBe('0,0,closed');
+  expect(evaluated('const r = (0..<10).scale(0); r.start + "," + r.end + "," + String(r.interval === Range.Interval.Closed);')).toBe('0,0,true');
   expect(evaluated('String((5..<5).scale(0).isEmpty);')).toBe('true');
 });
 

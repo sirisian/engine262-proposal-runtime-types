@@ -64,6 +64,7 @@ import { bootstrapAtomics } from '../intrinsics/Atomics.mts';
 import { bootstrapSynchronization } from '../intrinsics/Synchronization.mts';
 import { bootstrapThread } from '../intrinsics/Thread.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
+import { bindRangeEnumGlobals } from '../intrinsics/RangeEnums.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -362,6 +363,9 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       Enumerable: Value.false,
       Configurable: Value.true,
     })));
+    // proposal-runtime-types (#sec-ranges): `Bound` and `Interval`, bound both
+    // globally and on `Range`, which is how ranges.md writes them.
+    bindRangeEnumGlobals(realmRec);
     for (const name of [
       'any', 'never', 'boolean1',
       // proposal-runtime-types: the primitive type names bind as global

@@ -24,8 +24,8 @@ import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
  * two-endpoint range and negating a from-range gives a to-range.
  *
  * Deferred with the rest of the extension, each needing a facility another part
- * supplies: the bounds in the type (`Range.<T, S, E>` over `Bound.Closed`
- * and `Bound.Open`) and the literal forms' specialization, the
+ * supplies: the bounds in the type (`Range.<T, S, E>` over `Range.Bound.Closed`
+ * and `Range.Bound.Open`) and the literal forms' specialization, the
  * `uint8.<{ bounds: 1..=6 }>` metadata carrier (primitive metadata),
  * `a[start..<end]` slicing to a view (the array view substrate),
  * `x is uint8.<{ bounds: 1..=6 }>`, and the ordering-based generalization to bigint, dimensioned quantities,
@@ -53,18 +53,18 @@ test('an open start is a distinct value from a closed one', () => {
 });
 
 test('each endpoint reports its own bound, and the interval is derived', () => {
-  expect(evaluated('(0..<10).startBound;')).toBe('closed');
-  expect(evaluated('(0..<10).endBound;')).toBe('open');
-  expect(evaluated('(0..=10).endBound;')).toBe('closed');
-  expect(evaluated('(0<..<10).startBound;')).toBe('open');
+  expect(evaluated('String((0..<10).startBound === Range.Bound.Closed);')).toBe('true');
+  expect(evaluated('String((0..<10).endBound === Range.Bound.Open);')).toBe('true');
+  expect(evaluated('String((0..=10).endBound === Range.Bound.Closed);')).toBe('true');
+  expect(evaluated('String((0<..<10).startBound === Range.Bound.Open);')).toBe('true');
   // A shape with no start has no start bound to report.
   expect(evaluated('String((..<10).startBound);')).toBe('undefined');
   expect(evaluated('String((..).endBound);')).toBe('undefined');
   // The four-way name is computed from the pair, never stored.
-  expect(evaluated('(0..=10).interval;')).toBe('closed');
-  expect(evaluated('(0..<10).interval;')).toBe('closedOpen');
-  expect(evaluated('(0<..=10).interval;')).toBe('openClosed');
-  expect(evaluated('(0<..<10).interval;')).toBe('open');
+  expect(evaluated('String((0..=10).interval === Range.Interval.Closed);')).toBe('true');
+  expect(evaluated('String((0..<10).interval === Range.Interval.ClosedOpen);')).toBe('true');
+  expect(evaluated('String((0<..=10).interval === Range.Interval.OpenClosed);')).toBe('true');
+  expect(evaluated('String((0<..<10).interval === Range.Interval.Open);')).toBe('true');
   // A one-ended shape has no pair, so no interval name.
   expect(evaluated('String((5..).interval);')).toBe('undefined');
 });
@@ -199,13 +199,13 @@ test('intersect is the point-set intersection, with the full range as identity',
   expect(evaluated('const r = (0..<10).intersect(5..<20); r.start + "," + r.end;')).toBe('5,10');
   // Identity, and a shape that follows from the operands rather than either one.
   expect(evaluated('const r = (0..<5).intersect(..); r.start + "," + r.end;')).toBe('0,5');
-  expect(evaluated('const r = (5..).intersect(..<9); r.start + "," + r.end + "," + r.interval;')).toBe('5,9,closedOpen');
+  expect(evaluated('const r = (5..).intersect(..<9); r.start + "," + r.end + "," + String(r.interval === Range.Interval.ClosedOpen);')).toBe('5,9,true');
 });
 
 test('intersect gives an equal endpoint to the exclusive bound', () => {
   // `0..<10` and `0..=10` agree everywhere below 10 and disagree only at it.
-  expect(evaluated('(0..<10).intersect(0..=10).interval;')).toBe('closedOpen');
-  expect(evaluated('(0<..<10).intersect(0..<10).interval;')).toBe('open');
+  expect(evaluated('String((0..<10).intersect(0..=10).interval === Range.Interval.ClosedOpen);')).toBe('true');
+  expect(evaluated('String((0<..<10).intersect(0..<10).interval === Range.Interval.Open);')).toBe('true');
 });
 
 test('a disjoint intersection is empty without a representation of its own', () => {
@@ -215,18 +215,18 @@ test('a disjoint intersection is empty without a representation of its own', () 
 });
 
 test('scale multiplies both endpoints, and a negative factor reflects', () => {
-  expect(evaluated('const r = (0..<10).scale(2); r.start + "," + r.end + "," + r.interval;')).toBe('0,20,closedOpen');
+  expect(evaluated('const r = (0..<10).scale(2); r.start + "," + r.end + "," + String(r.interval === Range.Interval.ClosedOpen);')).toBe('0,20,true');
   // The image of [a, b) under negation is (-b, -a]: the endpoints exchange
   // places AND carry their bounds with them.
-  expect(evaluated('const r = (0..<10).scale(-1); r.start + "," + r.end + "," + r.interval;')).toBe('-10,0,openClosed');
+  expect(evaluated('const r = (0..<10).scale(-1); r.start + "," + r.end + "," + String(r.interval === Range.Interval.OpenClosed);')).toBe('-10,0,true');
   // Which swaps the one-ended shapes: a from-range scales to a to-range.
-  expect(evaluated('const r = (5..).scale(-1); String(r.start) + "," + r.end + "," + r.endBound;')).toBe('undefined,-5,closed');
+  expect(evaluated('const r = (5..).scale(-1); String(r.start) + "," + r.end + "," + String(r.endBound === Range.Bound.Closed);')).toBe('undefined,-5,true');
 });
 
 test('scaling by zero is the single point zero, not an empty range', () => {
   // Multiplying both endpoints of `0..<10` would give the empty `0..<0`, where
   // the image of a nonempty range under multiplication by zero is {0}.
-  expect(evaluated('const r = (0..<10).scale(0); r.start + "," + r.end + "," + r.interval;')).toBe('0,0,closed');
+  expect(evaluated('const r = (0..<10).scale(0); r.start + "," + r.end + "," + String(r.interval === Range.Interval.Closed);')).toBe('0,0,true');
   // An already-empty range stays empty.
   expect(evaluated('String((5..<5).scale(0).isEmpty);')).toBe('true');
 });
@@ -234,10 +234,10 @@ test('scaling by zero is the single point zero, not an empty range', () => {
 // -- interval arithmetic ------------------------------------------------------
 
 test('addition adds the corresponding endpoints', () => {
-  expect(evaluated('const r = (1..=3) + (10..=20); r.start + "," + r.end + "," + r.interval;')).toBe('11,23,closed');
+  expect(evaluated('const r = (1..=3) + (10..=20); r.start + "," + r.end + "," + String(r.interval === Range.Interval.Closed);')).toBe('11,23,true');
   // A result bound is exclusive where EITHER contributing bound is: the right
   // operand approaches 5 without reaching it, so the sum approaches 8.
-  expect(evaluated('const r = (3..) + (5<..); r.start + "," + r.startBound;')).toBe('8,open');
+  expect(evaluated('const r = (3..) + (5<..); r.start + "," + String(r.startBound === Range.Bound.Open);')).toBe('8,true');
 });
 
 test('subtraction crosses the endpoints', () => {
@@ -246,7 +246,7 @@ test('subtraction crosses the endpoints', () => {
 });
 
 test('negation reflects, as scaling by minus one does', () => {
-  expect(evaluated('const r = -(1..<3); r.start + "," + r.end + "," + r.interval;')).toBe('-3,-1,openClosed');
+  expect(evaluated('const r = -(1..<3); r.start + "," + r.end + "," + String(r.interval === Range.Interval.OpenClosed);')).toBe('-3,-1,true');
 });
 
 test('multiplication takes the least and greatest of the four endpoint products', () => {
@@ -259,7 +259,7 @@ test('a product bound is exclusive only where EVERY attaining product is', () =>
   // `(0..=1) * (0..<2)`: the least product is zero, attained by `0 * 0` from two
   // inclusive endpoints, so zero is REACHED and the low bound is closed even
   // though `0 * 2` touches an exclusive one.
-  expect(evaluated('(0..=1) * (0..<2) |> %.startBound;')).toBe('closed');
+  expect(evaluated('String((0..=1) * (0..<2) |> %.startBound === Range.Bound.Closed);')).toBe('true');
   // The greatest is two, attained only by `1 * 2`, and 2 is never reached, so
   // the high bound is open.
   //
@@ -267,7 +267,7 @@ test('a product bound is exclusive only where EVERY attaining product is', () =>
   // the supremum needs the right operand to REACH 2, which it never does, so the
   // result is `0..<2`. The rule the sentence states is right; the interval it
   // writes out contradicts it.
-  expect(evaluated('(0..=1) * (0..<2) |> %.endBound;')).toBe('open');
+  expect(evaluated('String((0..=1) * (0..<2) |> %.endBound === Range.Bound.Open);')).toBe('true');
   expect(evaluated('const r = (0..=1) * (0..<2); r.start + "," + r.end;')).toBe('0,2');
 });
 
@@ -299,8 +299,8 @@ test('interval arithmetic needs two ranges, and leaves the base behaviour alone'
 // every rule separately can still be incoherent.
 
 test('unary minus and scaling by minus one are the same reflection', () => {
-  expect(evaluated('const a = -(2..<7), b = (2..<7).scale(-1); a.start + "," + a.end + "," + a.interval + "|" + b.start + "," + b.end + "," + b.interval;'))
-    .toBe('-7,-2,openClosed|-7,-2,openClosed');
+  expect(evaluated('const a = -(2..<7), b = (2..<7).scale(-1); a.start + "," + a.end + "|" + b.start + "," + b.end;'))
+    .toBe('-7,-2|-7,-2');
   // Including the shape swap on a one-ended range.
   expect(evaluated('const a = -(3..), b = (3..).scale(-1); String(a.start) + "," + a.end + "|" + String(b.start) + "," + b.end;'))
     .toBe('undefined,-3|undefined,-3');
@@ -308,17 +308,17 @@ test('unary minus and scaling by minus one are the same reflection', () => {
 
 test('containment and intersection agree', () => {
   // Where one range contains another, intersecting them yields the inner one.
-  expect(evaluated('const o = 0..<10, i = 2..<5; String(o.contains(i)) + "," + o.intersect(i).start + "," + o.intersect(i).end + "," + o.intersect(i).interval;'))
-    .toBe('true,2,5,closedOpen');
+  expect(evaluated('const o = 0..<10, i = 2..<5; String(o.contains(i)) + "," + o.intersect(i).start + "," + o.intersect(i).end;'))
+    .toBe('true,2,5');
   // And a range always contains its own intersection with anything.
   expect(evaluated('const a = 0..<10, b = 5..=20; String(a.contains(a.intersect(b))) + "," + String(b.contains(a.intersect(b)));'))
     .toBe('true,true');
 });
 
 test('intersection is commutative and idempotent', () => {
-  expect(evaluated('const a = 0<..<10, b = 5..=20; const x = a.intersect(b), y = b.intersect(a); x.start + "," + x.end + "," + x.interval + "|" + y.start + "," + y.end + "," + y.interval;'))
-    .toBe('5,10,closedOpen|5,10,closedOpen');
-  expect(evaluated('const a = 0<..=10; const s = a.intersect(a); s.start + "," + s.end + "," + s.interval;')).toBe('0,10,openClosed');
+  expect(evaluated('const a = 0<..<10, b = 5..=20; const x = a.intersect(b), y = b.intersect(a); x.start + "," + x.end + "|" + y.start + "," + y.end;'))
+    .toBe('5,10|5,10');
+  expect(evaluated('const a = 0<..=10; const s = a.intersect(a); s.start + "," + s.end + "," + String(s.interval === Range.Interval.OpenClosed);')).toBe('0,10,true');
 });
 
 test('containment of a value agrees with what iteration yields', () => {

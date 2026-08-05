@@ -6,6 +6,7 @@ import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
+import { boundValue, intervalValue } from './RangeEnums.mts';
 import {
   rangeContainsRange, rangeIntersect, rangeScale, scaleFactor,
 } from '../type-system/range-ops.mts';
@@ -211,8 +212,10 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
   return self.RangeStart === undefined && self.RangeEnd === undefined ? Value.true : Value.false;
 }
 
-function boundValue(bound: RangeBound | undefined): Value {
-  return bound === undefined ? Value.undefined : Value(bound);
+// #sec-ranges: a bound is a value of `Bound`, absent where the shape has no such
+// endpoint.
+function boundMember(bound: RangeBound | undefined): Value {
+  return bound === undefined ? Value.undefined : boundValue(bound === 'open' ? 'Open' : 'Closed');
 }
 
 function* RangeProto_startBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -220,7 +223,7 @@ function* RangeProto_startBoundGetter(_args: Arguments, { thisValue }: FunctionC
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  return boundValue(self.RangeStartBound);
+  return boundMember(self.RangeStartBound);
 }
 
 function* RangeProto_endBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -228,7 +231,7 @@ function* RangeProto_endBoundGetter(_args: Arguments, { thisValue }: FunctionCal
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  return boundValue(self.RangeEndBound);
+  return boundMember(self.RangeEndBound);
 }
 
 // Derived from the two bounds, never stored. Only a two-endpoint range has one of
@@ -241,12 +244,15 @@ function* RangeProto_intervalGetter(_args: Arguments, { thisValue }: FunctionCal
   if (self.RangeStartBound === undefined || self.RangeEndBound === undefined) {
     return Value.undefined;
   }
+  // #sec-ranges: "The four-way name of a pair is an `Interval`". A member of the
+  // enum, not a string: the name exists to be switched over exhaustively, and a
+  // string carries neither exhaustiveness nor narrowing.
   const closedStart = self.RangeStartBound === 'closed';
   const closedEnd = self.RangeEndBound === 'closed';
   if (closedStart) {
-    return Value(closedEnd ? 'closed' : 'closedOpen');
+    return intervalValue(closedEnd ? 'Closed' : 'ClosedOpen');
   }
-  return Value(closedEnd ? 'openClosed' : 'open');
+  return intervalValue(closedEnd ? 'OpenClosed' : 'Open');
 }
 
 function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {

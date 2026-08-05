@@ -1,4 +1,5 @@
 import { OutOfRange } from '../utils/language.mts';
+import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
@@ -995,6 +996,17 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       if (t.LibraryName) {
         if (!(value instanceof ObjectValue)) {
           return false;
+        }
+        // proposal-runtime-types (#sec-ranges): a range's BOUNDS are part of its
+        // type - "the four intervals of a two-endpoint range ... are the four
+        // pairs and nothing further is expressible" - so a parameterization that
+        // names them must distinguish them. The prototype chain below cannot:
+        // every range has one prototype, so without this every range satisfied
+        // every `Range.<...>`, and two spellings that name different intervals
+        // were the same type.
+        if (isRangeShapeName(t.LibraryName)) {
+          return rangeShapeMatches(value, t.LibraryName)
+            && rangeMatchesBoundArguments(value, t.LibraryName, t.Arguments);
         }
         const ref = Q(yield* ResolveBinding(Value(t.LibraryName)));
         const ctor = Q(yield* GetValue(ref));

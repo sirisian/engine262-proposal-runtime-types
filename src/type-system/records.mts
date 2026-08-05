@@ -407,8 +407,11 @@ const libraryTypeNames = new Set([
   'FinalizationRegistry', 'Map', 'Proxy', 'RangeError', 'ReferenceError',
   'RegExp', 'Set', 'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError',
   'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
-  // proposal-runtime-types (ranges.md): the Range value type is a usable type name.
-  'Range',
+  // proposal-runtime-types (ranges.md, #sec-ranges): the range value types and
+  // the two enums the clause names. "There are four shapes ... Each implements
+  // `RangeBounds.<T>`, which is the interface a consumer of an arbitrary range
+  // is written against", and "_S_ and _E_ are values of `Bound`".
+  'Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds',
   // proposal-runtime-types (rational.md): the rational value type is a usable type name.
   'rational',
   // proposal-runtime-types #sec-generator-types: the generic whose instances are
@@ -430,6 +433,21 @@ const libraryTypeNames = new Set([
 ]);
 
 /**
+ * The record for `Bound` or `Interval`. Held as a setter rather than an import
+ * so that records.mts, which every type-system file reaches, does not depend on
+ * an intrinsic that depends back on it.
+ */
+let rangeEnumRecordImpl: ((name: 'Bound' | 'Interval') => TypeRecord) | null = null;
+
+export function setRangeEnumRecordImpl(f: (name: 'Bound' | 'Interval') => TypeRecord): void {
+  rangeEnumRecordImpl = f;
+}
+
+function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
+  return rangeEnumRecordImpl ? rangeEnumRecordImpl(name) : null;
+}
+
+/**
  * Build the library generic type of the given name applied to the given
  * arguments, or null when the name is not a library type. Identity is by name and
  * arguments, so two writings of `Promise.<uint32>` are one interned type.
@@ -449,6 +467,14 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
   //
   // Only SoA carries a declared default among the library types; a generic with
   // a DECLARATION applies its defaults where the declaration is read.
+  // proposal-runtime-types (#sec-ranges): `Bound` and `Interval` are ENUMS, not
+  // nominal library types tested by a prototype chain. Their records carry their
+  // members, so membership is SameValue against the list and `Bound.Open is
+  // Bound` holds - which a bare library nominal cannot answer, since an enum
+  // member is a number and has no prototype to test.
+  if (name === 'Bound' || name === 'Interval') {
+    return rangeEnumRecord(name);
+  }
   const filled = name === 'SoA' && args.length === 1 ? [...args, 0] : args;
   return {
     Kind: 'nominal',
