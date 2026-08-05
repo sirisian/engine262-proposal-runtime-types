@@ -11,6 +11,7 @@ import {
   ObjectValue,
   Q,
   Throw,
+  ThrowCompletion,
   Value,
   X,
   isFunctionObject,
@@ -28,6 +29,9 @@ import type { TypeRecord } from '../type-system/records.mts';
 import type { OverloadSignature } from '../type-system/overloads.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
+import {
+  AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
+} from '../intrinsics/AbortController.mts';
 
 /**
  * proposal-runtime-types #sec-classifythreadarguments: decide whether the first
@@ -60,7 +64,7 @@ export function* ClassifyThreadArguments(func: FunctionObject, args: Arguments):
     return { options: first, callArgs: rest };
   }
   const signal = Q(yield* Get(first, Value('signal')));
-  if (signal instanceof ObjectValue && IsAbortSignal(signal)) {
+  if (isAbortSignal(signal)) {
     return { options: first, callArgs: rest };
   }
   return none;
@@ -127,11 +131,6 @@ function* FirstParameterTypes(func: FunctionObject): PlainEvaluator<TypeRecord[]
   return types;
 }
 
-/** Whether `value` is an AbortSignal, by brand rather than by shape. */
-function IsAbortSignal(value: ObjectValue): boolean {
-  return 'AbortSignalAborted' in value;
-}
-
 /**
  * proposal-runtime-types #sec-createthread: create an agent of the surrounding
  * agent's cluster, call `func` on it, and return a promise for the result.
@@ -140,10 +139,10 @@ function IsAbortSignal(value: ObjectValue): boolean {
  * thread's reactions and the handle settles there - which is the general rule of
  * #sec-threading-scheduling and not a carve-out for this one promise.
  */
-export function CreateThread(func: FunctionObject, args: Arguments, signal: ObjectValue | undefined): Value {
+export function CreateThread(func: FunctionObject, args: Arguments, signal: AbortSignalObject | undefined): Value {
   const capability = X(NewPromiseCapability(surroundingAgent.currentRealmRecord.Intrinsics['%Promise%']));
   if (signal !== undefined && IsAborted(signal)) {
-    X(Call(capability.Reject, Value.undefined, [AbortReason(signal)]));
+    X(Call(capability.Reject, Value.undefined, [AbortReasonOf(signal)]));
     return capability.Promise;
   }
 
@@ -164,12 +163,41 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Obje
   // the adoption of a thenable result, its trailing microtasks - happens there.
   const realm = surroundingAgent.currentRealmRecord;
   const spawner = surroundingAgent;
+  // proposal-runtime-types #sec-thread-cancellation: a thread observes an abort
+  // at a CANCELLATION CHECKPOINT, and one of them is "when it takes a job from
+  // its microtask queue". Registering the check on the agent rather than on this
+  // one job is what makes the rule hold for the thread's whole life: the body,
+  // the resumption of any await inside it, and every trailing microtask are all
+  // jobs of this queue, so all of them are checkpoints without needing to be
+  // named separately.
+  //
+  // The checkpoint THROWS the signal's reason, which is an ordinary abrupt
+  // completion - finally blocks run, using declarations dispose - rather than
+  // tearing the thread down where it stands.
+  if (signal !== undefined) {
+    thread.threadAbortSignal = signal;
+  }
   enqueueOn(thread, realm, function* threadBody(): PlainEvaluator {
     const result = EnsureCompletion(yield* Call(func, Value.undefined, args));
     SettleFromThread(spawner, realm, capability, result);
     cluster.removeThread(thread);
     return Value.undefined;
   });
+
+  // A thread aborted while it still has queued work abandons that work and
+  // rejects, which is the same completion the checkpoint would have produced had
+  // the queue been reached. The waker is what the clause means by an abort
+  // reaching a thread that is not currently running.
+  if (signal !== undefined) {
+    OnAbort(signal, () => {
+      if (!cluster.agents.includes(thread)) {
+        return;
+      }
+      thread.jobQueue.clearForAbort?.();
+      SettleFromThread(spawner, realm, capability, ThrowCompletion(AbortReasonOf(signal)));
+      cluster.removeThread(thread);
+    });
+  }
 
   return capability.Promise;
 }
@@ -206,14 +234,6 @@ function enqueueOn(agent: Agent, realm: ReturnType<() => Agent['currentRealmReco
   }
 }
 
-function IsAborted(signal: ObjectValue): boolean {
-  return (signal as unknown as { AbortSignalAborted?: boolean }).AbortSignalAborted === true;
-}
-
-function AbortReason(signal: ObjectValue): Value {
-  return (signal as unknown as { AbortSignalReason?: Value }).AbortSignalReason ?? Value.undefined;
-}
-
 /** proposal-runtime-types #sec-function.prototype.callthread */
 export function* FunctionProto_callThread(args: Arguments, { thisValue }: { thisValue: Value }): ValueEvaluator {
   const func = thisValue;
@@ -221,12 +241,12 @@ export function* FunctionProto_callThread(args: Arguments, { thisValue }: { this
     return Throw.TypeError('NotAFunction', func);
   }
   const { options, callArgs } = Q(yield* ClassifyThreadArguments(func, args));
-  let signal: ObjectValue | undefined;
+  let signal: AbortSignalObject | undefined;
   if (options !== undefined) {
     const s = Q(yield* Get(options, Value('signal')));
     if (s !== Value.undefined) {
-      if (!(s instanceof ObjectValue) || !IsAbortSignal(s)) {
-        return Throw.TypeError('NotAFunction', s);
+      if (!isAbortSignal(s)) {
+        return Throw.TypeError('$1 is not assignable to $2', s, Value('AbortSignal'));
       }
       signal = s;
     }

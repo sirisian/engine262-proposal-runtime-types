@@ -15,11 +15,16 @@ import {
  * a race - nothing interleaves below a job boundary here, so a torn value-type
  * copy never happens and is not tested.
  *
+ * AbortSignal is WHATWG rather than 262, so #sec-thread-cancellation refers to it
+ * instead of defining it. src/intrinsics/AbortController.mts supplies the minimum
+ * a host needs for these rules to run: aborted state, a reason, and wakers. It is
+ * not the DOM object - no EventTarget, no addEventListener, no throwIfAborted.
+ *
  * Known divergences from the specification, to be closed later:
- * - Cancellation checkpoints are not yet implemented; no AbortSignal exists to
- *   pass to callThread in this build, which also means the BRAND half of
- *   #sec-classifythreadarguments (step 6) cannot fire and is untested here. The
- *   typed half, step 4, is implemented and covered below.
+ * - The wait checkpoints (Atomics.wait, Lock, Condition) do not exist yet, those
+ *   primitives being unimplemented. The checkpoints that do exist - thread start
+ *   and job dequeue - are covered below, and job dequeue subsumes await
+ *   resumption here, since a resumption is a job of the thread's own queue.
  */
 
 interface Harness {
@@ -240,6 +245,77 @@ test('D8 options: any signature of an overloaded callee suffices', () => {
   `);
   h.cluster.runUntilIdle();
   expect(h.evaluate('log.join(",")')).toBe('got-object');
+});
+
+// -- D2: cancellation -----------------------------------------------------------
+test('D2 cancellation: an already-aborted signal rejects without spawning a thread', () => {
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    c.abort('too late');
+    function body() { log.push('body ran'); }
+    body.callThread({ signal: c.signal }).catch(e => { log.push('rejected: ' + e); });
+  `);
+  // No thread was created at all - the cluster is just the main agent.
+  expect(h.cluster.agents.length).toBe(1);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('rejected: too late');
+});
+
+test('D2 cancellation: aborting before the thread runs abandons its work and rejects', () => {
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    function body() { log.push('body ran'); }
+    body.callThread({ signal: c.signal }).catch(e => { log.push('rejected: ' + e); });
+    c.abort('stop');
+  `);
+  h.cluster.runUntilIdle();
+  // Taking a job from the queue is a checkpoint, so the body never runs.
+  expect(h.evaluate('log.join(",")')).toBe('rejected: stop');
+});
+
+test('D2 cancellation: a signal that is never aborted changes nothing', () => {
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    function body() { log.push('body ran'); return 1; }
+    body.callThread({ signal: c.signal }).then(v => { log.push('resolved ' + v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('body ran,resolved 1');
+});
+
+test('D2 cancellation: aborted state is readable from another thread', () => {
+  // "A computation with no suspension point is cancelled cooperatively, by reading
+  // the signal's aborted state, which crosses threads because the signal is an
+  // object of the shared heap." The thread reads the same object main aborted.
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    function body() { log.push('sees aborted=' + c.signal.aborted); return 1; }
+    body.callThread().then(v => { log.push('resolved ' + v); });
+    c.abort('x');
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('sees aborted=true,resolved 1');
+});
+
+test('D8/D2: an object whose `signal` is not an AbortSignal is an argument, not a bag', () => {
+  // Step 6 of #sec-classifythreadarguments tests the BRAND, so an object carrying
+  // something else under `signal` is not a bag at all. It is forwarded.
+  const h = makeCluster(`
+    function body(o) { return 'arg:' + typeof o; }
+    body.callThread({ signal: {} }).then(v => { log.push(v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('arg:object');
+});
+
+test('D2 cancellation: an inherited non-AbortSignal `signal` is a TypeError', () => {
+  // The one path that reaches callThread's validation step. Classification counts
+  // OWN keys, so an object with none is an explicit empty bag; extraction then
+  // uses Get, which walks the prototype chain and finds the inherited value. An
+  // inherited REAL signal is used; an inherited non-signal throws here rather
+  // than being silently ignored.
+  const h = makeCluster('globalThis.body = function () { return 1; };');
+  expect(() => h.evaluate('body.callThread(Object.create({ signal: 5 }))')).toThrow();
 });
 
 // -- Determinism ----------------------------------------------------------------

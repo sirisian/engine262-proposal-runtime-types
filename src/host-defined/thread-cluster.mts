@@ -74,7 +74,17 @@ export class ThreadCluster {
     const startAt = last === undefined ? 0 : (ready.indexOf(last) + 1) % ready.length;
     const agent = ready[startAt === -1 ? 0 : startAt];
     this.#order.push(agent);
-    runJobOn(agent, agent.jobQueue.shift()!);
+    const job = agent.jobQueue.shift()!;
+    // proposal-runtime-types #sec-thread-cancellation: taking a job from the queue
+    // IS a cancellation checkpoint. An aborted thread runs nothing further, and
+    // because the body, every await resumption inside it, and every trailing
+    // microtask are all jobs of this queue, checking here covers all of them
+    // without naming them separately.
+    if (agent.threadAbortSignal?.AbortSignalAborted === true) {
+      agent.jobQueue.clearForAbort?.();
+      return true;
+    }
+    runJobOn(agent, job);
     return true;
   }
 

@@ -53,6 +53,12 @@ export interface JobQueue extends Markable {
   onNewJob: Set<(job: Job) => void>;
 
   shift(): Job | undefined;
+  /**
+   * proposal-runtime-types #sec-thread-cancellation: drop everything queued on an
+   * aborted thread. Optional: a queue that cannot do it simply keeps the jobs,
+   * and the per-job checkpoint refuses to run them.
+   */
+  clearForAbort?(): void;
   shiftFinalizationRegistryCleanupJob?(): Job | undefined;
   shiftPromiseJob?(): Job | undefined;
   shiftTimeoutJob?(): Job | undefined;
@@ -87,6 +93,11 @@ export class BasicJobQueue extends Set<Job> implements JobQueue, Markable {
     const [job] = this;
     this.delete(job);
     return job;
+  }
+
+  /** proposal-runtime-types #sec-thread-cancellation: an aborted thread runs nothing further. */
+  clearForAbort(): void {
+    this.clear();
   }
 
   get length(): number {

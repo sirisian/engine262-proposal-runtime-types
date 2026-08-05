@@ -59,6 +59,7 @@ import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
 import { bootstrapComposite } from '../intrinsics/Composite.mts';
+import { bootstrapAbortController } from '../intrinsics/AbortController.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
@@ -217,6 +218,11 @@ export function CreateIntrinsics(realmRec: Realm) {
   // proposal-runtime-types (composites.md): a global, feature-gated.
   if (surroundingAgent.feature('runtime-types')) {
     bootstrapComposite(realmRec);
+    // proposal-runtime-types #sec-thread-cancellation: AbortSignal is WHATWG and
+    // not 262, so the clause refers to it rather than defining it. A host running
+    // the threading extension has to supply one; this is the minimum that lets the
+    // cancellation rules run, and a real host's object replaces it unchanged.
+    bootstrapAbortController(realmRec);
   }
   bootstrapTypePrototype(realmRec);
   // proposal-runtime-types: an enum's Type Object gets %Enum.prototype%, which
@@ -518,6 +524,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'SoA',
     // proposal-runtime-types (composites.md): the interned frozen object.
     'Composite',
+    // proposal-runtime-types #sec-thread-cancellation: host-supplied, feature-gated.
+    'AbortController',
 
     // Other Properties of the Global Object
     // 'Atomics',

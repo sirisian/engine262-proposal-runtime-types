@@ -153,6 +153,13 @@ export class Agent {
    */
   readonly onNoEvaluator = new Set<() => void>();
 
+  /**
+   * proposal-runtime-types #sec-thread-cancellation: the AbortSignal this thread
+   * was spawned with, if any. Read at a cancellation checkpoint, which for a
+   * spawned thread is every job it takes from its own queue.
+   */
+  threadAbortSignal?: { AbortSignalAborted: boolean, AbortSignalReason: Value } | undefined;
+
   // NON-SPEC
   /** Evaluate an evaluator. It will skip the debugger if the agent is already debugger-paused. */
   evaluate<T extends Value>(evaluator: ValueEvaluator<T>, onFinished: (completion: NormalCompletion<T> | ThrowCompletion) => void, evaluationOptions?: ResumeEvaluateOptions | false): void {
