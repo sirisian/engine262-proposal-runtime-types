@@ -2484,6 +2484,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       enclosingRequestKey = request.key;
     }
     try {
+      // A3.2: #sec-metadata-narrowing, consumed. The checking pass resolved this
+      // comparison by calling `narrow`, which this walk cannot; where it did,
+      // the branch types are its answer. Recorded through `declareNarrowed` so
+      // an assignment invalidates a metadata narrowing exactly as it
+      // invalidates a type-level one.
+      const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
+      if (resolved) {
+        const newFrame = () => ({
+          bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+        });
+        frames.push(newFrame());
+        declareNarrowed(request!.name, resolved.whenTrue);
+        walk(whenTrueNode);
+        frames.pop();
+        frames.push(newFrame());
+        declareNarrowed(request!.name, resolved.whenFalse);
+        walk(whenFalseNode);
+        frames.pop();
+        return;
+      }
       if (!fact) {
         walk(whenTrueNode);
         walk(whenFalseNode);
@@ -4409,7 +4429,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
-  narrowingRequests.set(root, narrowingRequestsHere);
+  // A3.1: the SECOND walk re-derives the same requests, and its resolutions
+  // already exist keyed by node - so it must not replace the list the sweep was
+  // built from, which is also what keeps a third walk from ever looking needed.
+  if (!narrowingResolutions.has(root)) {
+    narrowingRequests.set(root, narrowingRequestsHere);
+  }
   unclaimedKeyChecks.set(root, unclaimed);
   return errors;
 }

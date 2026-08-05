@@ -10,6 +10,10 @@ import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import {
+<<<<<<< Updated upstream
+=======
+  CheckScript,
+>>>>>>> Stashed changes
   TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
@@ -149,6 +153,24 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     resolutions.set(request.key, { whenTrue, whenFalse });
   }
   SetNarrowingResolutions(root, resolutions);
+<<<<<<< Updated upstream
+=======
+  // A3.3: the SECOND walk. The first ran without any narrowing, so it both
+  // over-reports (an un-narrowed binding failing an assignment narrowing would
+  // admit) and under-reports (a diagnostic that needs the narrowed type). This
+  // walk has strictly more information, so its errors are the answer - and it
+  // reports by THROWING, because that is how this pass speaks, where the first
+  // walk's errors joined the early error list.
+  //
+  // Only when something was recorded (A3.4): a program that never compares a
+  // bounded value must pay none of this, and must keep reporting at parse time.
+  if (requests.length > 0) {
+    const errors = CheckScript(root as ParseNode.Script);
+    if (errors.length > 0) {
+      return Throw(errors[0]!);
+    }
+  }
+>>>>>>> Stashed changes
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
@@ -230,6 +252,16 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
       continue;
     }
     const narrowed = attempt.Value;
+<<<<<<< Updated upstream
+=======
+    // KNOWN DEFECT (A3.5): the hook's return is merged by its own enumerable
+    // keys, which picks up an ObjectValue's internal fields - a narrowed type
+    // comes out as `{ bounds: ..., properties: {...} }`. The narrowing itself
+    // works, and the type does change; what is wrong is the SHAPE of the
+    // merged portion. The fix is to snapshot the hook's return through the
+    // metadata value language, as `SnapshotMetadataValue` does for a default,
+    // rather than reading its keys directly.
+>>>>>>> Stashed changes
     if (narrowed && typeof narrowed === 'object') {
       const n = narrowed as unknown as Record<string, unknown>;
       for (const key of Object.keys(n)) {

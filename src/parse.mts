@@ -1,5 +1,5 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
-import { CheckModule, CheckScript } from './type-system/check.mts';
+import { CheckModule, CheckScript, TakeNarrowingRequests } from './type-system/check.mts';
 import { RegExpParser, type RegExpParserContext } from './parser/RegExpParser.mts';
 import {
   SourceTextModuleRecord, SyntheticModuleRecord, type LoadedModuleRequestRecord, type ModuleRecordHostDefined,
@@ -120,7 +120,13 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
   // objects, which is the specification's deliberate divergence.
   if (surroundingAgent.feature('runtime-types')) {
     const typeErrors = CheckScript(body);
-    if (typeErrors.length > 0) {
+    // A3.3: where the walk RECORDED a narrowing request it ran without the
+    // narrowing, so it both over-reports and under-reports and must not speak.
+    // The checking pass re-walks with the resolutions and reports instead -
+    // later, and by throwing rather than as an early error. A program that
+    // recorded nothing is untouched and still reports here (A3.4).
+    const suppressed = typeErrors.length > 0 && TakeNarrowingRequests(body).length > 0;
+    if (typeErrors.length > 0 && !suppressed) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
       typeErrors.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));
       return typeErrors;
