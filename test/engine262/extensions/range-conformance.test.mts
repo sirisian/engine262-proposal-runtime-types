@@ -519,9 +519,16 @@ meta NumberBounds {
 `;
 
 test('table-metadata-values: a range of any of the four shapes is a metadata value', () => {
+  // The meta type must be DECLARED: "a metadata object whose own key no meta
+  // type claims is a type error at the parameterization that writes it". This
+  // row asserted the nine shapes without one and passed only because the
+  // checker could not resolve a range-bearing annotation and so never
+  // adjudicated the key - the hole A0 closed.
   for (const b of ['0..<10', '1..=6', '0<..<10', '0<..=10', '0..', '0<..', '..<10', '..=10', '..']) {
-    expect(evaluated(`type T = float64.<{ bounds: ${b} }>; "ok";`)).toBe('ok');
+    expect(evaluated(`${NB} type T = float64.<{ bounds: ${b} }>; "ok";`)).toBe('ok');
   }
+  // And without one, the unclaimed key is the error the clause requires.
+  expectThrown('type T = float64.<{ bounds: 0..<10 }>; "ok";');
 });
 
 test('table-metadata-values: equivalence is shape, bound at each endpoint, and SameValue endpoints', () => {

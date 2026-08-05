@@ -1183,6 +1183,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // The statically resolvable subset of types: built-ins and aliases declared
   // in the program. An unresolvable type is unknown, and unknown is ~any~.
   const resolveType = (node: ParseNode.Type): Known => {
+    // table-metadata-values: a RANGE in type position. This resolver "mirrors
+    // TypeNodeToTypeRecord so the checker and the runtime agree on what the
+    // annotation means", and the range row reached the runtime resolver and not
+    // this one - so `float64.<{ bounds: 0..<100 }>` resolved to NOTHING here,
+    // and with it every parameterization whose metadata carries a range. Two
+    // resolvers disagreeing is invisible until something asks the checker what
+    // such an annotation means, which is why it went unnoticed.
+    if ((node as ParseNode).type === 'RangeType') {
+      const r = node as unknown as ParseNode.RangeType;
+      const endpoint = (lit: ParseNode.LiteralType | null): Value | undefined => {
+        if (lit === null) {
+          return undefined;
+        }
+        const raw = lit.negated && typeof lit.value === 'number' ? -lit.value : lit.value;
+        return Value(raw as never);
+      };
+      return {
+        Kind: 'range',
+        Start: endpoint(r.RangeTypeStart),
+        End: endpoint(r.RangeTypeEnd),
+        StartBound: r.RangeTypeStartBound ?? undefined,
+        EndBound: r.RangeTypeEndBound ?? undefined,
+      } as unknown as TypeRecord;
+    }
     switch (node.type) {
       case 'TypeReference': {
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {

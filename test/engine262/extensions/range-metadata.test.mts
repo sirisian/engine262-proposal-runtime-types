@@ -53,19 +53,19 @@ meta NumberBounds {
 // -- the value language -------------------------------------------------------
 
 test('every range shape is a metadata value', () => {
-  expect(evaluated('type T = float64.<{ bounds: 0..<10 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: 1..=6 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: 0<..<10 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: 0<..=10 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: 0.. }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: 0<.. }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: ..<10 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: ..=10 }>; "ok";')).toBe('ok');
-  expect(evaluated('type T = float64.<{ bounds: .. }>; "ok";')).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 0..<10 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 1..=6 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 0<..<10 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 0<..=10 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 0.. }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: 0<.. }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: ..<10 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: ..=10 }>; "ok";`)).toBe('ok');
+  expect(evaluated(`${NumberBounds} type T = float64.<{ bounds: .. }>; "ok";`)).toBe('ok');
 });
 
 test('an endpoint may be negative, and a range stands alone as a type', () => {
-  expect(evaluated('type Latitude = float64.<{ bounds: -90..=90 }>; "ok";')).toBe('ok');
+  expect(evaluated(`${NumberBounds} type Latitude = float64.<{ bounds: -90..=90 }>; "ok";`)).toBe('ok');
   expect(evaluated('type T = 0..<10; "ok";')).toBe('ok');
 });
 
