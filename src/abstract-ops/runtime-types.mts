@@ -1427,15 +1427,70 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
       converted = q;
     }
   }
+  // A portion the TARGET does not constrain is carried through the source meta
+  // type's `rescale` with the conversion's factor, and DROPPED where the meta
+  // type defines none.
+  //
+  // The conversion site needs its own rule and had none. The merge rule beside
+  // it contributes a default for an unmentioned meta type because "carrying the
+  // receiver's other portions through instead would silently keep a bound the
+  // operation may have invalidated" - but that reasons about an operation that
+  // computes a NEW quantity. A conversion RE-EXPRESSES the same one: 5 km is
+  // 5000 m, and a bound of `0..=10` kilometres is `0..=10000` metres, so the
+  // constraint is not invalidated but translated. `rescale` is the hook written
+  // to translate it.
+  //
+  // Absence means "cannot say", not "unchanged": carrying a bound through
+  // unscaled would keep `0..=10` on a value that is now 5000, which `validate`
+  // then rejects for a constraint the program never wrote. A meta type whose
+  // constraint IS factor-invariant, like a non-zero flag, says so by defining
+  // `rescale` as the identity.
+  let targetMetadata: Value = to.Metadata;
+  if (factor !== 1) {
+    const carriedOver: Record<string, unknown> = Object.create(null);
+    const source = to.Metadata as unknown as Record<string, unknown>;
+    for (const key of Object.keys(source)) {
+      carriedOver[key] = source[key];
+    }
+    let carriedAny = false;
+    for (const metaType of GoverningMetaTypes(from.Metadata).types) {
+      if (MetaTypeGoverns(to.Metadata, metaType)) {
+        continue; // the target constrains it; the target's portion wins
+      }
+      if (LookupMetaHook(metaType, 'rescale') === undefined) {
+        continue; // declined to say, so the portion is dropped
+      }
+      const rescaled = Q(yield* ApplyMetaHook(metaType, 'rescale', [
+        MetadataPortion(from.Metadata, metaType), Value(factor),
+      ]));
+      const snap = EnsureCompletion(yield* SnapshotMetadataValue(rescaled as Value));
+      if (snap.Type !== 'normal') {
+        continue;
+      }
+      const portion = snap.Value as unknown as Record<string, unknown>;
+      if (portion && typeof portion === 'object') {
+        for (const key of Object.keys(portion)) {
+          carriedOver[key] = portion[key];
+          carriedAny = true;
+        }
+      }
+    }
+    if (carriedAny) {
+      targetMetadata = Object.freeze(carriedOver) as unknown as Value;
+    }
+  }
+  const carriedType = targetMetadata === to.Metadata
+    ? to
+    : { Kind: 'parameterized', Base: to.Base, Metadata: targetMetadata } as unknown as typeof to;
   // The result is a value of the target parameterization and CARRIES it, so a
   // chained crossing still has a `from` to gate on and `is` sees the
   // parameterization; membership treats the carried record as its base (the
   // branding rule), so the value is a value of the base everywhere the base is
   // asked for.
   if (converted instanceof NumberValue) {
-    converted = new TypedNumberValue(R(converted) as number, to);
+    converted = new TypedNumberValue(R(converted) as number, carriedType);
   } else if (isTypedNumber(converted)) {
-    converted = new TypedNumberValue(converted.value, to);
+    converted = new TypedNumberValue(converted.value, carriedType);
   }
   return converted;
 }
