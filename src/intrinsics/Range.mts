@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, NumberValue, isTypedNumber, wellKnownSymbols,
+  Value, ObjectValue, NumberValue, BigIntValue, isTypedNumber, wellKnownSymbols,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
@@ -47,8 +47,8 @@ import {
 export type RangeBound = 'closed' | 'open';
 
 export interface RangeObject extends OrdinaryObject {
-  RangeStart: NumberValue | undefined;
-  RangeEnd: NumberValue | undefined;
+  RangeStart: NumberValue | BigIntValue | undefined;
+  RangeEnd: NumberValue | BigIntValue | undefined;
   RangeStartBound: RangeBound | undefined;
   RangeEndBound: RangeBound | undefined;
 }
@@ -57,7 +57,7 @@ export function isRangeObject(value: Value): value is RangeObject {
   return value instanceof ObjectValue && 'RangeStartBound' in value;
 }
 
-export function CreateRangeObject(start: NumberValue | undefined, end: NumberValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
+export function CreateRangeObject(start: NumberValue | BigIntValue | undefined, end: NumberValue | BigIntValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
   const proto = realmRec.Intrinsics['%Range.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound']) as Mutable<RangeObject>;
   obj.RangeStart = start;
@@ -173,6 +173,9 @@ function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallC
   //
   // FEEDBACK: #sec-ranges gives no length rule for the open forms, having been
   // written when only the closed and half-open ones had literals.
+  if (typeof start !== 'number' || typeof end !== 'number') {
+    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
+  }
   let span = end - start + 1;
   if (self.RangeStartBound === 'open') {
     span -= 1;
@@ -214,6 +217,24 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
 
 // #sec-ranges: a bound is a value of `Bound`, absent where the shape has no such
 // endpoint.
+/**
+ * #sec-ranges: a range is over an ORDERED element type, and the ordering
+ * operations - `contains`, `isEmpty`, `intersect` - are polymorphic over Number
+ * and bigint because `R` yields each one's mathematical value and JS compares
+ * across them. LENGTH and ITERATION are not: they are integer arithmetic, and an
+ * implicit step of one is `1` or `1n` depending on the element type. Until that
+ * is threaded through, they answer only for a Number range.
+ */
+function numericEndpoint(v: NumberValue | BigIntValue | undefined): number | undefined {
+  if (v === undefined) {
+    return undefined;
+  }
+  if (!(v instanceof NumberValue)) {
+    return undefined;
+  }
+  return R(v);
+}
+
 function boundMember(bound: RangeBound | undefined): Value {
   return bound === undefined ? Value.undefined : boundValue(bound === 'open' ? 'Open' : 'Closed');
 }
@@ -271,8 +292,12 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   // `contains` -- which is how a range `case` label sees an enum-like
   // discriminant, and how a typed value reaches a range pattern -- answered
   // false for a value plainly inside the range.
-  const numeric = value instanceof NumberValue ? R(value)
-    : (isTypedNumber(value) ? Number(value.numberValue()) : undefined);
+  // #sec-matchrange admits "a value of a type ORDERED WITH the element type", so
+  // a typed number counts - and so does a bigint, over a bigint range. `R`
+  // yields each one's mathematical value and JS compares across them.
+  const numeric: number | bigint | undefined = value instanceof NumberValue ? R(value)
+    : (value instanceof BigIntValue ? R(value)
+      : (isTypedNumber(value) ? Number(value.numberValue()) : undefined));
   if (numeric === undefined) {
     return Value.false;
   }
@@ -329,7 +354,11 @@ function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObjec
   if (!Number.isInteger(start) || (end !== undefined && !Number.isInteger(end))) {
     return null;
   }
-  return CreateRangeIterator(start, end, 1, self.RangeStartBound, self.RangeEndBound, realmRec);
+  const nStart = numericEndpoint(self.RangeStart);
+  if (nStart === undefined) {
+    return null;
+  }
+  return CreateRangeIterator(nStart, numericEndpoint(self.RangeEnd), 1, self.RangeStartBound, self.RangeEndBound, realmRec);
 }
 
 function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -367,6 +396,9 @@ function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContex
   // The last member is the end itself where the end's bound includes it, and one
   // below where it does not; iteration then runs down to the start, whose own
   // bound decides whether the start is reached.
+  if (typeof end !== 'number' || (start !== undefined && typeof start !== 'number')) {
+    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
+  }
   const first = self.RangeEndBound === 'closed' ? end : end - 1;
   const stopBound: RangeBound | undefined = self.RangeStartBound === 'open' ? 'open' : 'closed';
   return CreateRangeIterator(first, start, -1, undefined, stopBound, surroundingAgent.currentRealmRecord);
@@ -387,9 +419,11 @@ function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: Func
   if (step === 0 || Number.isNaN(step)) {
     return Throw.TypeError('a range step must be a nonzero number');
   }
-  const start = R(self.RangeStart);
-  const end = self.RangeEnd === undefined ? undefined : R(self.RangeEnd);
-  return CreateRangeIterator(start, end, step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
+  const sStart = numericEndpoint(self.RangeStart);
+  if (sStart === undefined) {
+    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
+  }
+  return CreateRangeIterator(sStart, numericEndpoint(self.RangeEnd), step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
 }
 
 export function bootstrapRangeIteratorPrototype(realmRec: Realm): void {

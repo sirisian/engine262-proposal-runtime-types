@@ -406,13 +406,30 @@ test('sec-ranges: a non-integer interval is a TypeError to iterate without an ex
   expectThrown('[...(0.5..<2.5)];');
 });
 
-test('sec-ranges: DIVERGENCE - the element type is Number only, not any ordered type', () => {
-  // "A range is a value type class over an ORDERED element type."
+test('sec-ranges: the element type is any ORDERED type, not Number alone', () => {
+  // "A range is a value type class over an ORDERED element type." bigint is
+  // ordered, and its endpoints reach the value model through the same `R` that
+  // Number's do, so the ORDERING operations are polymorphic over both.
+  expect(evaluated('const r = 0n..<10n; String(r.start) + "," + String(r.end);')).toBe('0,10');
+  expect(evaluated('String((0n..<10n).contains(5n)) + "," + String((0n..<10n).contains(10n)) + "," + String((0n..=10n).contains(10n));')).toBe('true,false,true');
+  expect(evaluated('String((5n..<5n).isEmpty) + "," + String((5n..=5n).isEmpty);')).toBe('true,false');
+  expect(evaluated('String((0n<..=10n).startBound === Range.Bound.Open);')).toBe('true');
+  // Both endpoints must be the SAME kind: a range mixing them has no element
+  // type, and comparing across them is the error a range exists to prevent.
+  expectThrown('const r = 0..<10n; r;');
+});
+
+test('sec-ranges: DIVERGENCE - length and iteration are Number-only', () => {
+  // The ordering operations generalize; these do not. `length` and iteration
+  // are integer ARITHMETIC, and an implicit step of one is `1` or `1n` by the
+  // element type - so they answer for a Number range and refuse a bigint one.
   //
-  // DIVERGENCE (F2): endpoints must be Numbers. bigint is rejected, and with it
-  // `Temporal.Instant` and dimensioned quantities, which is what makes the D6
-  // `scale` divergence vacuous for now.
-  expectThrown('const r = 0n..<10n; r;');
+  // DIVERGENCE (plan item F2, the remainder of R6). Refusing is the sound half:
+  // the alternative was answering with Number arithmetic over bigint endpoints.
+  expectThrown('[...(0n..<3n)];');
+  expectThrown('(0n..<10n).length;');
+  // Number ranges are untouched.
+  expect(evaluated('[...0..<4].join(",") + "|" + String((0..<10).length);')).toBe('0,1,2,3|10');
 });
 
 test('sec-ranges: `reverse` iterates the same members in the opposite order', () => {
