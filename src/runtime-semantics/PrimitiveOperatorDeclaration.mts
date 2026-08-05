@@ -89,10 +89,19 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
     let parameterType: TypeRecord | null = null;
     let deferred;
-    (globalThis as { __d?: string[] }).__d?.push(`params=${blockParameterNames.length} first=${first ? Object.keys(first).join("|") : "none"} ret=${e.TypeAnnotation ? "yes" : "no"}`);
-    if (blockParameterNames.length > 0) {
+    // #sec-primitive-operator-blocks: an operator may carry TYPE PARAMETERS OF
+    // ITS OWN - `operator +.<B2>(rhs: float64.<B2>)` - which is how the
+    // ARGUMENT's metadata gets a name. The block's parameters name the
+    // RECEIVER's; without the operator's, nothing about the argument can reach
+    // the return type, which is what `rescale` needs to say what a converted
+    // operand's bounds mean in the result's units.
+    const operatorParameterNames = ((e.TypeParameters?.TypeParameterList ?? []) as readonly {
+      BindingIdentifier?: { name?: string },
+    }[]).map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
+    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0) {
       deferred = {
         parameterNames: blockParameterNames,
+        operatorParameterNames,
         parameterConstraints: blockParameterConstraints,
         parameterTypeNode: first?.TypeAnnotation?.Type,
         returnTypeNode: e.TypeAnnotation?.Type,

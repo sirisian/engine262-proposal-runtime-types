@@ -813,6 +813,8 @@ function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEnt
  */
 export interface DeferredOperatorTypes {
   readonly parameterNames: readonly string[];
+  /** The OPERATOR's own type parameters, which name the argument's metadata. */
+  readonly operatorParameterNames?: readonly string[];
   readonly parameterConstraints?: readonly unknown[];
   readonly parameterTypeNode: unknown;
   readonly returnTypeNode: unknown;

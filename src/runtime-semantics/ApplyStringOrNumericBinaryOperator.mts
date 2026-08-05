@@ -156,6 +156,20 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
           // leaves that resolution without the binding - which is where
           // "D is not defined" came from, raised inside the body of the very
           // operator that declared D.
+          // #sec-primitive-operator-blocks: bind the OPERATOR's own type
+          // parameters to the ARGUMENT's metadata, beside the block's binding of
+          // the receiver's. One `set` each, into the same frame, which stays
+          // pushed for the whole invocation - so `float64.<{ bounds: ... B2 ... }>`
+          // in the return type can speak about the operand the caller passed.
+          //
+          // Only the first is bound: an operator takes one argument, so a second
+          // name would have nothing to name.
+          const operatorNames = entry.deferred.operatorParameterNames ?? [];
+          if (operatorNames.length > 0 && isTypedNumber(rval)
+              && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
+            const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+            frame.set(operatorNames[0]!, metadataAsObjectRecord(argCarried.Metadata));
+          }
           pushTypeParameterFrame(frame);
           framePushed = true;
           if (entry.deferred.parameterTypeNode) {
