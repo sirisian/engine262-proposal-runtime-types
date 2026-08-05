@@ -15,13 +15,29 @@ import { evaluated, ok, expectThrownKind } from '../readme/harness.mts';
  *
  * IMPLEMENTED: the reference target shape, `Atomics.<op>(ref binding, ...)`.
  *
- * NOT YET IMPLEMENTED, and so not tested:
- * - The typed own data property shape, `Atomics.add(obj, 'count', v)`, which
- *   needs the declared type of a typed property at runtime.
+ * IMPLEMENTED: the reference and typed-own-data-property target shapes, and
+ * waitAsync and notify over a WaiterList.
+ *
+ * NOT IMPLEMENTED, and so not tested:
  * - The TypedArray shape, which needs the TypedArray Atomics of the pinned
  *   edition; this engine has none.
- * - wait, waitAsync, and notify, which need a WaiterList and agent suspension.
- *   Those also carry the last cancellation checkpoints of #sec-thread-cancellation.
+ * - Blocking `Atomics.wait`. An agent of the simulated cluster does not block: a
+ *   job runs to completion before the driver runs anything else, so a blocking
+ *   wait would stop the cluster rather than one thread of it. It therefore
+ *   throws here in every case, which is a divergence of the SIMULATION and not
+ *   of the clause. waitAsync is the form this engine can honour, and the form a
+ *   thread that may not block has to use anyway.
+ *
+ * FOUND WHILE WRITING THIS, not yet fixed: an async thread function is removed
+ * from the cluster at its FIRST await rather than when its result settles.
+ * CreateThread settles the handle with whatever Call returns, and for an async
+ * function that is a pending promise, so the thread is torn down while suspended.
+ * #sec-createthread says a thenable result is adopted and the thread ends when
+ * the completion settles. The consequence for this clause is that an abort
+ * cannot be observed waking a wait parked inside an ASYNC thread function - the
+ * thread is already gone - so that test is absent below though the machinery for
+ * it (OnAbort on a parked waiter, threadPendingWaits deferring the teardown) is
+ * in place and exercised by the synchronous paths.
  *
  * KNOWN ENGINE GAP, not a divergence of this clause: a write THROUGH A REFERENCE
  * does not enforce the referent's declared type. `let a: uint8 = 0; let ref b =
@@ -100,6 +116,36 @@ test('D9 compareExchange: -0 matches 0, the forgiving direction for a sentinel',
   // sentinel and a claim loop would intermittently refuse a slot that is
   // arithmetically zero.
   expect(evaluated('let f: float64 = -0; Atomics.compareExchange(ref f, 0, 7.0); String(f);')).toBe('7');
+});
+
+// -- The typed own data property shape -----------------------------------------
+test('Atomics: a typed own data property is a target', () => {
+  // `Atomics.add(obj, 'count', v)`: the key takes argument position 1, so the
+  // operand follows at 2.
+  expect(evaluated('class C { count: uint32 = 0; } var c = new C(); Atomics.add(c, "count", 5); String(c.count);')).toBe('5');
+  expect(evaluated('class C { n: uint32 = 1; } var c = new C(); Atomics.compareExchange(c, "n", 1, 9); String(c.n);')).toBe('9');
+});
+
+test('Atomics: an untyped property is refused', () => {
+  // "an `any`-typed slot has no width for an operation to be atomic over".
+  expectThrownKind('var o = { x: 1 }; Atomics.add(o, "x", 1);', 'TypeError');
+  expectThrownKind('var o = {}; Atomics.add(o, "nope", 1);', 'TypeError');
+});
+
+// -- Waiting --------------------------------------------------------------------
+test('Atomics: waitAsync resolves not-equal when the value already differs', () => {
+  expect(evaluated('let a: shared int32 = 5; String(typeof Atomics.waitAsync(ref a, 0).then);')).toBe('function');
+});
+
+test('Atomics: waitAsync and notify are integer-only', () => {
+  expectThrownKind('let f: float64 = 0; Atomics.waitAsync(ref f, 0);', 'TypeError');
+  expectThrownKind('let f: float64 = 0; Atomics.notify(ref f, 1);', 'TypeError');
+});
+
+test('Atomics: blocking wait throws in this engine', () => {
+  // The simulation divergence recorded in the file header, not a rule of the
+  // clause: an agent here does not block.
+  expectThrownKind('let a: shared int32 = 0; Atomics.wait(ref a, 0);', 'TypeError');
 });
 
 test('D9 compareExchange: the expected value is converted before comparing', () => {

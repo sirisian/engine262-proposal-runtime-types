@@ -160,6 +160,23 @@ export class Agent {
    */
   threadAbortSignal?: { AbortSignalAborted: boolean, AbortSignalReason: Value } | undefined;
 
+  /**
+   * proposal-runtime-types #sec-thread-cancellation: set once the abort has been
+   * DELIVERED into the thread's running code - by a parked wait completing
+   * abruptly with the reason, say. From then on the thread is unwinding rather
+   * than idle, and its remaining jobs are the `finally` blocks and `catch`
+   * clauses of that unwinding, so nothing may abandon them.
+   */
+  threadAbortDelivered?: boolean;
+
+  /**
+   * How many waits this thread is currently parked on
+   * (#sec-atomics-typed-wait). A thread parked on one is not idle: an abort is
+   * delivered THROUGH the wait, which completes abruptly with the reason and
+   * unwinds ordinarily, so the thread must not be abandoned instead.
+   */
+  threadPendingWaits?: number;
+
   // NON-SPEC
   /** Evaluate an evaluator. It will skip the debugger if the agent is already debugger-paused. */
   evaluate<T extends Value>(evaluator: ValueEvaluator<T>, onFinished: (completion: NormalCompletion<T> | ThrowCompletion) => void, evaluationOptions?: ResumeEvaluateOptions | false): void {

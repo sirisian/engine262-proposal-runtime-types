@@ -80,7 +80,7 @@ export class ThreadCluster {
     // because the body, every await resumption inside it, and every trailing
     // microtask are all jobs of this queue, checking here covers all of them
     // without naming them separately.
-    if (agent.threadAbortSignal?.AbortSignalAborted === true) {
+    if (agent.threadAbortSignal?.AbortSignalAborted === true && agent.threadAbortDelivered !== true) {
       agent.jobQueue.clearForAbort?.();
       return true;
     }

@@ -189,7 +189,12 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
   // reaching a thread that is not currently running.
   if (signal !== undefined) {
     OnAbort(signal, () => {
-      if (!cluster.agents.includes(thread)) {
+      if (!cluster.agents.includes(thread)
+        || thread.threadAbortDelivered === true
+        || (thread.threadPendingWaits ?? 0) > 0) {
+        // Delivered through something the thread was waiting on, which throws the
+        // reason from that operation and unwinds ordinarily. The thread settles
+        // its own handle when the unwinding reaches the top of its function.
         return;
       }
       thread.jobQueue.clearForAbort?.();

@@ -2,6 +2,10 @@ import {
   Assert,
   Get,
   GetValue,
+  ObjectValue,
+  Set,
+  ToPropertyKey,
+  type PropertyKeyValue,
   OrdinaryObjectCreate,
   PutValue,
   Q,
@@ -11,6 +15,13 @@ import {
   Value,
   X,
   NumberValue,
+  NewPromiseCapability,
+  Call,
+  HostEnqueuePromiseJob,
+  ToNumber,
+  surroundingAgent,
+  type Agent,
+  type PromiseCapabilityRecord,
   type Arguments,
   type ValueEvaluator,
   type PlainEvaluator,
@@ -21,6 +32,7 @@ import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
+import { OnAbort } from './AbortController.mts';
 
 /**
  * proposal-runtime-types #sec-threading-atomics.
@@ -42,10 +54,17 @@ import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signa
  * exclude.
  */
 
-interface AtomicTarget {
-  readonly Reference: ReferenceValue;
-  readonly Type: TypeRecord;
-}
+/**
+ * #sec-validateatomictarget resolves every admitted shape to one description of a
+ * place in memory. Here that description is the place ITSELF - a reference, or an
+ * object and a key - rather than a block and a byte index, because this engine
+ * reaches typed storage through those and not through addresses. The distinction
+ * costs nothing for the surface these tests check, and is recorded as a
+ * divergence in the test file.
+ */
+type AtomicTarget =
+  | { readonly Shape: 'reference', readonly Reference: ReferenceValue, readonly Type: TypeRecord }
+  | { readonly Shape: 'property', readonly Object: ObjectValue, readonly Key: PropertyKeyValue, readonly Type: TypeRecord };
 
 /**
  * #sec-validateatomictarget, for the reference shape. The TypedArray shape needs
@@ -59,23 +78,42 @@ interface AtomicTarget {
  */
 function* ValidateAtomicTarget(args: Arguments, operation: 'integer-only' | 'any-value-type'): PlainEvaluator<AtomicTarget> {
   const first = args[0];
-  if (!(first instanceof ReferenceValue)) {
-    return Throw.TypeError('$1 is not assignable to $2', first ?? Value.undefined, Value('a reference to typed storage'));
+  let target: AtomicTarget;
+  if (first instanceof ReferenceValue) {
+    // The borrow was already validated where the `ref` argument was EVALUATED
+    // (RequireBorrowableReference in RefExpression), which is how every `ref`
+    // argument reaches every callee, so it is not re-applied here.
+    const current = Q(yield* GetValue(first.Location));
+    target = { Shape: 'reference', Reference: first, Type: RuntimeTypeOf(current) };
+  } else if (first instanceof ObjectValue) {
+    // The object-property shape: `Atomics.add(obj, 'count', v)`. The property
+    // must be a TYPED own data property - an `any`-typed slot has no width for an
+    // operation to be atomic over, and an accessor is not storage.
+    const key = Q(yield* ToPropertyKey(args[1] ?? Value.undefined));
+    const desc = Q(yield* first.GetOwnProperty(key));
+    if (desc === Value.undefined || desc.Value === undefined) {
+      return Throw.TypeError('$1 is not assignable to $2', args[1] ?? Value.undefined, Value('a typed own data property'));
+    }
+    target = { Shape: 'property', Object: first, Key: key, Type: RuntimeTypeOf(desc.Value) };
+  } else {
+    return Throw.TypeError('$1 is not assignable to $2', first ?? Value.undefined, Value('a reference to typed storage or an object with a typed property'));
   }
-  // The borrow was already validated where the `ref` argument was EVALUATED
-  // (RequireBorrowableReference in RefExpression), which is how every `ref`
-  // argument reaches every callee. A reference that arrives here has passed it,
-  // so re-applying it would be a second check of a settled question - see the
-  // note added to #sec-validateatomictarget.
-  const current = Q(yield* GetValue(first.Location));
-  const type = RuntimeTypeOf(current);
-  if (!IsAdmittedValueType(type)) {
-    return Throw.TypeError('$1 is not assignable to $2', current, Value('a value type Atomics operates on'));
+  if (!IsAdmittedValueType(target.Type)) {
+    return Throw.TypeError('$1 is not assignable to $2', Value(displayType(target.Type)), Value('a value type Atomics operates on'));
   }
-  if (operation === 'integer-only' && !IsIntegerTyped(type)) {
-    return Throw.TypeError('$1 is not assignable to $2', Value(displayType(type)), Value('an integer type'));
+  if (operation === 'integer-only' && !IsIntegerTyped(target.Type)) {
+    return Throw.TypeError('$1 is not assignable to $2', Value(displayType(target.Type)), Value('an integer type'));
   }
-  return { Reference: first, Type: type };
+  return target;
+}
+
+/**
+ * The operand of an operation that takes one. It follows the target: the
+ * reference shape puts it at position 1, the property shape at position 2, the
+ * key having taken position 1.
+ */
+function operandOf(target: AtomicTarget, args: Arguments): Value {
+  return (target.Shape === 'reference' ? args[1] : args[2]) ?? Value.undefined;
 }
 
 function IsAdmittedValueType(t: TypeRecord): boolean {
@@ -94,17 +132,24 @@ function IsIntegerTyped(t: TypeRecord): boolean {
 
 /** Read the target. One ReadSharedMemory event of #sec-threading-memory-model. */
 function* AtomicRead(target: AtomicTarget): ValueEvaluator {
-  return Q(yield* GetValue(target.Reference.Location));
+  if (target.Shape === 'reference') {
+    return Q(yield* GetValue(target.Reference.Location));
+  }
+  return Q(yield* Get(target.Object, target.Key));
 }
 
 /**
  * Write the target. The value passes the typed-storage boundary, so a store of a
  * value not of the target's type throws as an ordinary assignment would and the
- * same conversion applies - which is why this goes through PutValue rather than
- * writing a slot directly.
+ * same conversion applies - which is why this goes through PutValue and Set
+ * rather than writing a slot directly.
  */
 function* AtomicWrite(target: AtomicTarget, value: Value): PlainEvaluator<void> {
-  Q(yield* PutValue(target.Reference.Location, value));
+  if (target.Shape === 'reference') {
+    Q(yield* PutValue(target.Reference.Location, value));
+    return;
+  }
+  Q(yield* Set(target.Object, target.Key, value, Value.true));
 }
 
 function* Atomics_load(args: Arguments): ValueEvaluator {
@@ -114,7 +159,7 @@ function* Atomics_load(args: Arguments): ValueEvaluator {
 
 function* Atomics_store(args: Arguments): ValueEvaluator {
   const target = Q(yield* ValidateAtomicTarget(args, 'any-value-type'));
-  const value = args[1] ?? Value.undefined;
+  const value = operandOf(target, args);
   Q(yield* AtomicWrite(target, value));
   return value;
 }
@@ -122,7 +167,7 @@ function* Atomics_store(args: Arguments): ValueEvaluator {
 function* Atomics_exchange(args: Arguments): ValueEvaluator {
   const target = Q(yield* ValidateAtomicTarget(args, 'any-value-type'));
   const old = Q(yield* AtomicRead(target));
-  Q(yield* AtomicWrite(target, args[1] ?? Value.undefined));
+  Q(yield* AtomicWrite(target, operandOf(target, args)));
   return old;
 }
 
@@ -138,8 +183,8 @@ function* Atomics_exchange(args: Arguments): ValueEvaluator {
  */
 function* Atomics_compareExchange(args: Arguments): ValueEvaluator {
   const target = Q(yield* ValidateAtomicTarget(args, 'any-value-type'));
-  const expected = args[1] ?? Value.undefined;
-  const replacement = args[2] ?? Value.undefined;
+  const expected = operandOf(target, args);
+  const replacement = (target.Shape === 'reference' ? args[2] : args[3]) ?? Value.undefined;
   const old = Q(yield* AtomicRead(target));
   // The expected value is converted to the target's type BEFORE it is compared.
   // Without this, `Atomics.compareExchange(ref a, 1, 5)` on a `uint32` compares a
@@ -157,7 +202,7 @@ function* Atomics_compareExchange(args: Arguments): ValueEvaluator {
 function arithmetic(name: string, apply: (a: number, b: number) => number, restriction: 'integer-only' | 'any-value-type') {
   return function* op(args: Arguments): ValueEvaluator {
     const target = Q(yield* ValidateAtomicTarget(args, restriction));
-    const operand = args[1] ?? Value.undefined;
+    const operand = operandOf(target, args);
     if (!(operand instanceof NumberValue) && !isTypedNumber(operand)) {
       return Throw.TypeError('$1 is not assignable to $2', operand, Value(displayType(target.Type)));
     }
@@ -197,10 +242,14 @@ export function bootstrapAtomics(realmRec: Realm) {
     ['and', arithmetic('and', (a, b) => a & b, 'integer-only') as never, 2],
     ['or', arithmetic('or', (a, b) => a | b, 'integer-only') as never, 2],
     ['xor', arithmetic('xor', (a, b) => a ^ b, 'integer-only') as never, 2],
+    // #sec-atomics-typed-wait: integer-only, "a futex compares bit patterns".
+    ['wait', Atomics_wait as never, 2],
+    ['waitAsync', Atomics_waitAsync as never, 2],
+    ['notify', Atomics_notify as never, 2],
   ]);
   // Every one of these takes its target by reference at position 0
   // (#sec-atomics-reference-arguments), so that position must not decay.
-  for (const name of ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor']) {
+  for (const name of ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'wait', 'waitAsync', 'notify']) {
     const fn = X(Get(atomics, Value(name)));
     (fn as unknown as { RefParameterIndices: readonly number[] }).RefParameterIndices = [0];
   }
@@ -209,3 +258,137 @@ export function bootstrapAtomics(realmRec: Realm) {
 }
 
 export { ValidateAtomicTarget };
+
+/**
+ * #sec-atomics-typed-wait. The WaiterList of the pinned edition is keyed by a
+ * block and a byte index; here it is keyed by the place itself, for the reason
+ * given above the AtomicTarget type.
+ */
+interface Waiter {
+  readonly agent: Agent;
+  readonly capability: PromiseCapabilityRecord;
+  readonly realm: Realm;
+  notified: boolean;
+  cancelAbort?: () => void;
+}
+
+const waiterLists = new WeakMap<object, Map<string, Waiter[]>>();
+
+function waiterListFor(target: AtomicTarget): Waiter[] {
+  // Keyed by the STORAGE, not by the reference that reached it. Every `ref a`
+  // expression makes a new Reference Record, so keying on the record would give
+  // the waiter and the notifier different lists for one binding - which is the
+  // spec's point in keying its WaiterList by a block and a byte index rather than
+  // by whatever expression produced the access.
+  let owner: object;
+  let key: string;
+  if (target.Shape === 'reference') {
+    const record = target.Reference.Location;
+    owner = record.Base as object;
+    key = String((record.ReferencedName as unknown as { stringValue?(): string }).stringValue?.() ?? record.ReferencedName);
+  } else {
+    owner = target.Object;
+    key = String((target.Key as unknown as { stringValue?(): string }).stringValue?.() ?? target.Key);
+  }
+  let byKey = waiterLists.get(owner);
+  if (byKey === undefined) {
+    byKey = new Map();
+    waiterLists.set(owner, byKey);
+  }
+  let list = byKey.get(key);
+  if (list === undefined) {
+    list = [];
+    byKey.set(key, list);
+  }
+  return list;
+}
+
+/**
+ * `Atomics.wait` throws where the surrounding agent's [[CanBlock]] is false, as
+ * it does today.
+ *
+ * It throws HERE in every case, because an agent of the simulated cluster does
+ * not block: a job runs to completion before the driver runs anything else, so a
+ * blocking wait would stop the cluster rather than one thread of it. That is a
+ * divergence of the SIMULATION and not of the clause, recorded in the test file.
+ * `waitAsync` is the form this engine can honour, and it is the form a program on
+ * a thread that may not block has to use anyway.
+ */
+function* Atomics_wait(args: Arguments): ValueEvaluator {
+  Q(yield* ValidateAtomicTarget(args, 'integer-only'));
+  return Throw.TypeError('$1 is not assignable to $2', Value('Atomics.wait'), Value('an agent that can block; use waitAsync'));
+}
+
+/**
+ * `Atomics.waitAsync` parks until a notify, returning a promise. Its reactions
+ * run on the agent that created them, as every reaction does
+ * (#sec-threading-scheduling), which here is the agent that called it.
+ *
+ * A wait is a cancellation checkpoint (#sec-thread-cancellation): a signal
+ * aborted while the wait is parked WAKES it, and the wait then completes with the
+ * signal's abort reason. This is the checkpoint E2b could not implement for want
+ * of anything to park on.
+ */
+function* Atomics_waitAsync(args: Arguments): ValueEvaluator {
+  const target = Q(yield* ValidateAtomicTarget(args, 'integer-only'));
+  const expected = operandOf(target, args);
+  const capability = X(NewPromiseCapability(surroundingAgent.currentRealmRecord.Intrinsics['%Promise%']));
+  const current = Q(yield* AtomicRead(target));
+  const expectedTyped = Q(yield* ConvertValue(expected, target.Type));
+  if (!SameValueZero(current, expectedTyped)) {
+    // The value already differs, so there is nothing to wait for.
+    X(Call(capability.Resolve, Value.undefined, [Value('not-equal')]));
+    return capability.Promise;
+  }
+  const waiter: Waiter = {
+    agent: surroundingAgent,
+    capability,
+    realm: surroundingAgent.currentRealmRecord,
+    notified: false,
+  };
+  const signal = surroundingAgent.threadAbortSignal;
+  if (signal !== undefined) {
+    waiter.cancelAbort = OnAbort(signal as never, () => {
+      if (waiter.notified) {
+        return;
+      }
+      waiter.notified = true;
+      // The abort is delivered THROUGH this wait, so the thread is now unwinding
+      // and its remaining jobs are that unwinding. Nothing may abandon them.
+      waiter.agent.threadAbortDelivered = true;
+      settleWaiter(waiter, capability.Reject, signal.AbortSignalReason);
+    });
+  }
+  surroundingAgent.threadPendingWaits = (surroundingAgent.threadPendingWaits ?? 0) + 1;
+  waiterListFor(target).push(waiter);
+  return capability.Promise;
+}
+
+/** Settle a waiter on ITS OWN agent's queue, which is where its reactions live. */
+function settleWaiter(waiter: Waiter, settle: Value, value: Value): void {
+  waiter.agent.threadPendingWaits = Math.max(0, (waiter.agent.threadPendingWaits ?? 1) - 1);
+  HostEnqueuePromiseJob(function* settleJob(): PlainEvaluator {
+    X(Call(settle, Value.undefined, [value]));
+    return Value.undefined;
+  }, waiter.realm, waiter.agent);
+}
+
+/** `Atomics.notify` wakes up to `count` waiters and answers how many it woke. */
+function* Atomics_notify(args: Arguments): ValueEvaluator {
+  const target = Q(yield* ValidateAtomicTarget(args, 'integer-only'));
+  const countValue = operandOf(target, args);
+  const count = countValue === Value.undefined ? Infinity : Number(Q(yield* ToNumber(countValue)).numberValue());
+  const list = waiterListFor(target);
+  let woken = 0;
+  while (list.length > 0 && woken < count) {
+    const waiter = list.shift()!;
+    if (waiter.notified) {
+      continue;
+    }
+    waiter.notified = true;
+    waiter.cancelAbort?.();
+    settleWaiter(waiter, waiter.capability.Resolve, Value('ok'));
+    woken += 1;
+  }
+  return Value(woken);
+}
