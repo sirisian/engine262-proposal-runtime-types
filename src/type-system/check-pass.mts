@@ -2,7 +2,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { TypeRecord } from './records.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -10,10 +10,7 @@ import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import {
-<<<<<<< Updated upstream
-=======
   CheckScript,
->>>>>>> Stashed changes
   TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
@@ -153,8 +150,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     resolutions.set(request.key, { whenTrue, whenFalse });
   }
   SetNarrowingResolutions(root, resolutions);
-<<<<<<< Updated upstream
-=======
   // A3.3: the SECOND walk. The first ran without any narrowing, so it both
   // over-reports (an un-narrowed binding failing an assignment narrowing would
   // admit) and under-reports (a diagnostic that needs the narrowed type). This
@@ -170,7 +165,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return Throw(errors[0]!);
     }
   }
->>>>>>> Stashed changes
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
@@ -251,19 +245,18 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
     if (attempt.Type !== 'normal') {
       continue;
     }
-    const narrowed = attempt.Value;
-<<<<<<< Updated upstream
-=======
-    // KNOWN DEFECT (A3.5): the hook's return is merged by its own enumerable
-    // keys, which picks up an ObjectValue's internal fields - a narrowed type
-    // comes out as `{ bounds: ..., properties: {...} }`. The narrowing itself
-    // works, and the type does change; what is wrong is the SHAPE of the
-    // merged portion. The fix is to snapshot the hook's return through the
-    // metadata value language, as `SnapshotMetadataValue` does for a default,
-    // rather than reading its keys directly.
->>>>>>> Stashed changes
-    if (narrowed && typeof narrowed === 'object') {
-      const n = narrowed as unknown as Record<string, unknown>;
+    // The hook returns a metadata object in the ENGINE's value space, so its own
+    // enumerable keys are an ObjectValue's internals - reading them directly
+    // produced `{ bounds: ..., properties: {...} }`. Snapshotting it through the
+    // metadata value language is what a meta type's `default` gets, for the same
+    // reason: a portion is CARRIED structurally, not read off an object whose
+    // fields happen to be enumerable.
+    const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(attempt.Value as Value));
+    if (snapshot.Type !== 'normal') {
+      continue;
+    }
+    const n = snapshot.Value as unknown as Record<string, unknown>;
+    if (n && typeof n === 'object') {
       for (const key of Object.keys(n)) {
         merged[key] = n[key];
       }
