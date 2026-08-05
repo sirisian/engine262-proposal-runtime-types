@@ -106,6 +106,29 @@ export function TakeNarrowingRequests(root: object): readonly NarrowingRequest[]
 }
 
 /**
+ * The narrowed type each request resolved to, keyed by the request's node.
+ *
+ * Written by the checking pass, which can call `narrow`, and read by the walk,
+ * which cannot. Two entries per request: the type the TRUE branch narrows to and
+ * the type the FALSE branch does, since #sec-metadata-narrowing narrows the
+ * false branch "by the negation of _op_" rather than leaving it alone.
+ */
+export interface NarrowingResolution {
+  readonly whenTrue: TypeRecord;
+  readonly whenFalse: TypeRecord;
+}
+
+const narrowingResolutions = new WeakMap<object, Map<object, NarrowingResolution>>();
+
+export function SetNarrowingResolutions(root: object, table: Map<object, NarrowingResolution>): void {
+  narrowingResolutions.set(root, table);
+}
+
+export function GetNarrowingResolution(root: object, key: object): NarrowingResolution | undefined {
+  return narrowingResolutions.get(root)?.get(key);
+}
+
+/**
  * #sec-primitive-metadata: "a metadata object whose own key no meta type
  * claims is a type error at the parameterization that writes it". The keys
  * are COLLECTED during the walk and adjudicated by the checking pass, because

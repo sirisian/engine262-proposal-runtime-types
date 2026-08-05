@@ -1,14 +1,18 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { TypeRecord } from './records.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
-import { TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, type DeferredMetadataCheck } from './check.mts';
+import {
+  TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
+  type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
+} from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { Throw } from '#self';
 
@@ -112,6 +116,39 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
     }
   }
+  // #sec-metadata-narrowing: resolve each recorded comparison by calling
+  // `narrow`, which this pass can do and the walk cannot. OUTERMOST FIRST along
+  // the parent links, so an inner request narrows from its parent's result -
+  // the clause's example is `if (v >= 0)` giving `bounds: 0..` and "a further
+  // `if (v <= 343)` intersect that bound to `0..=343`", which reading each
+  // request against the declared type would not produce.
+  const resolutions = new Map<object, NarrowingResolution>();
+  const requests = TakeNarrowingRequests(root);
+  const byKey = new Map<object, NarrowingRequest>();
+  for (const r of requests) {
+    byKey.set(r.key, r);
+  }
+  const depthOf = (r: NarrowingRequest): number => {
+    let d = 0;
+    let p = r.parent;
+    while (p) {
+      d += 1;
+      p = byKey.get(p)?.parent ?? null;
+    }
+    return d;
+  };
+  const ordered = [...requests].sort((x, y) => depthOf(x) - depthOf(y));
+  for (const request of ordered) {
+    // An inner guard sits inside the outer's consequent, so it narrows from the
+    // parent's TRUE-branch result where it has a parent.
+    const parent = request.parent ? resolutions.get(request.parent) : undefined;
+    const from = parent ? parent.whenTrue : (request.subject as TypeRecord);
+    const whenTrue = Q(yield* NarrowedMetadata(from, request.operator, request.constant));
+    const negated = NEGATED_COMPARISON[request.operator] ?? request.operator;
+    const whenFalse = Q(yield* NarrowedMetadata(from, negated, request.constant));
+    resolutions.set(request.key, { whenTrue, whenFalse });
+  }
+  SetNarrowingResolutions(root, resolutions);
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
@@ -145,6 +182,66 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
  * absent hook reads as a refusal, since a meta type that states no relation
  * between two of its parameterizations admits no crossing between them.
  */
+/**
+ * #sec-metadata-narrowing: "The false branch narrows by the negation of _op_,
+ * pairing `>=` with `<`, `>` with `<=`, and `==` with `!=`, in both
+ * directions." Six entries, because the pairing is symmetric.
+ */
+const NEGATED_COMPARISON: Record<string, string> = {
+  '>=': '<', '<': '>=', '>': '<=', '<=': '>', '==': '!=', '!=': '==',
+};
+
+/**
+ * #sec-metadata-narrowing: NarrowMetadata(_m_, _op_, _c_) - "the metadata whose
+ * portion for each meta type _M_ defining `narrow` is the result of `narrow` of
+ * _M_ ... and whose portion for each other meta type is UNCHANGED".
+ *
+ * Participation is by hook DEFINITION, not by portion, which is where this
+ * differs from the subtype judgment below. A meta type defining no `narrow`
+ * "learns nothing from a comparison and keeps the constraint it had".
+ */
+function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Value): PlainEvaluator<TypeRecord> {
+  if (subject.Kind !== 'parameterized') {
+    return subject;
+  }
+  const merged: Record<string, unknown> = Object.create(null);
+  const source = subject.Metadata as unknown as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    merged[key] = source[key];
+  }
+  for (const metaType of GoverningMetaTypes(subject.Metadata).types) {
+    if (LookupMetaHook(metaType, 'narrow') === undefined) {
+      continue;
+    }
+    const portion = MetadataPortion(subject.Metadata, metaType);
+    // Q3: a `narrow` hook that THROWS leaves the binding un-narrowed rather than
+    // failing the program. `subtype` answers a JUDGMENT, so one that cannot be
+    // made must refuse; `narrow` produces KNOWLEDGE, and the clause already
+    // sanctions the outcome of learning nothing - a meta type defining no
+    // `narrow` "keeps the constraint it had, which costs a check at the next
+    // boundary and nothing else". A hook that throws is that situation arrived
+    // at differently.
+    //
+    // This is not hypothetical: the pass runs BEFORE evaluation, so a hook
+    // touching anything the script initializes throws a TDZ ReferenceError, and
+    // propagating it would fail every program whose meta type does so.
+    const attempt = EnsureCompletion(yield* ApplyMetaHook(metaType, 'narrow', [portion, Value(operator), constant]));
+    if (attempt.Type !== 'normal') {
+      continue;
+    }
+    const narrowed = attempt.Value;
+    if (narrowed && typeof narrowed === 'object') {
+      const n = narrowed as unknown as Record<string, unknown>;
+      for (const key of Object.keys(n)) {
+        merged[key] = n[key];
+      }
+    }
+  }
+  return {
+    Kind: 'parameterized', Base: subject.Base, Metadata: Object.freeze(merged) as unknown as Value,
+  } as unknown as TypeRecord;
+}
+
 function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<boolean> {
   const s = pair.source.Metadata;
   const t = pair.target.Metadata;
