@@ -16,10 +16,10 @@ import {
  * copy never happens and is not tested.
  *
  * Known divergences from the specification, to be closed later:
- * - ClassifyThreadArguments does not yet consult the callee's declared first
- *   parameter, so the brand decides alone (#sec-classifythreadarguments step 4).
  * - Cancellation checkpoints are not yet implemented; no AbortSignal exists to
- *   pass to callThread in this build.
+ *   pass to callThread in this build, which also means the BRAND half of
+ *   #sec-classifythreadarguments (step 6) cannot fire and is untested here. The
+ *   typed half, step 4, is implemented and covered below.
  */
 
 interface Harness {
@@ -195,6 +195,51 @@ test('D8 options: an empty object is taken as an explicit bag', () => {
   `);
   h.cluster.runUntilIdle();
   expect(h.evaluate('log.join(",")')).toBe('args 0');
+});
+
+test('D8 options: a declared first parameter that admits the object wins over the bag rule', () => {
+  // #sec-classifythreadarguments step 4, and the distinctive step of the whole
+  // rule: the ambiguity untyped JavaScript cannot resolve, a signature resolves.
+  const h = makeCluster(`
+    function body(o: { value: uint8 }) { return o.value; }
+    body.callThread({ value: 3 }).then(v => { log.push('got ' + v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('got 3');
+});
+
+test('D8 options: the signature overrides even the empty-object bag', () => {
+  // Step 4 precedes step 5, so a callee that asks for an object gets the empty
+  // object as its argument rather than losing it to an explicit empty bag.
+  const h = makeCluster(`
+    function body(o: object) { return 'received-object'; }
+    body.callThread({}).then(v => { log.push(v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('received-object');
+});
+
+test('D8 options: a declared first parameter that refuses the object leaves it a bag', () => {
+  const h = makeCluster(`
+    function body(n: uint8 = 0) { return n; }
+    body.callThread({}).then(v => { log.push('n=' + v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('n=0');
+});
+
+test('D8 options: any signature of an overloaded callee suffices', () => {
+  // "a signature whose first parameter admits first" - one is enough. An
+  // overloaded callee that can receive the object in at least one of its shapes
+  // is a callee the program meant to hand it to; picking among the shapes is
+  // overload resolution's job at the call, not this operation's.
+  const h = makeCluster(`
+    function body(n: uint8): string { return 'num'; }
+    function body(x: any): string { return x === undefined ? 'no-arg' : 'got-object'; }
+    body.callThread({}).then(v => { log.push(v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('got-object');
 });
 
 // -- Determinism ----------------------------------------------------------------

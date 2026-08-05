@@ -23,6 +23,11 @@ import {
   type ValueCompletion,
   type ValueEvaluator,
 } from '#self';
+import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import type { OverloadSignature } from '../type-system/overloads.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
 
 /**
  * proposal-runtime-types #sec-classifythreadarguments: decide whether the first
@@ -45,7 +50,7 @@ export function* ClassifyThreadArguments(func: FunctionObject, args: Arguments):
   if (!(first instanceof ObjectValue)) {
     return none;
   }
-  if (FirstParameterAdmits(func, first)) {
+  if (Q(yield* FirstParameterAdmits(func, first))) {
     return none;
   }
   const rest = args.slice(1) as Arguments;
@@ -62,17 +67,64 @@ export function* ClassifyThreadArguments(func: FunctionObject, args: Arguments):
 }
 
 /**
- * Whether the callee's declared first parameter admits `value`. The declared type
- * wins over the brand when it exists; an unannotated function has nothing to say
- * and the brand decides.
+ * proposal-runtime-types #sec-classifythreadarguments step 4: "If the declared
+ * type of func has a signature whose first parameter admits first, return the
+ * pair (~empty~, args)."
+ *
+ * This is the step no untyped resolution can perform, and the reason the bag rule
+ * is stated the way it is. The brand test below is a heuristic - a good one, since
+ * an object carrying a real AbortSignal under `signal` is an options bag in every
+ * program not built to look like one - but a heuristic is all it can be without a
+ * signature. Where there IS a signature, it is not a heuristic at all: a function
+ * that declares its first parameter as admitting the object is asking for the
+ * object, whatever the object carries, and no guess is needed or wanted.
+ *
+ * ANY signature suffices, not only a sole one. An overloaded callee is a callee
+ * that can receive the object in at least one of its shapes, and forwarding it is
+ * what the program meant. Overload resolution then picks among the shapes at the
+ * call, which is its job and not this operation's.
+ *
+ * A parameter whose type cannot be resolved yet - a generic's unbound `T` - is
+ * treated as not admitting rather than as admitting. Both answers are defensible;
+ * this one keeps the bag reachable on a generic function, and a program that wants
+ * the other reading annotates concretely.
  */
-function FirstParameterAdmits(_func: FunctionObject, _value: ObjectValue): boolean {
-  // Placeholder for the typed half of #sec-classifythreadarguments. Reading the
-  // declared parameter type here needs the callee's signature record, which is
-  // carried on typed function objects only; until that lookup is wired, an
-  // annotated first parameter is not consulted and the brand decides alone. This
-  // is a KNOWN DIVERGENCE from the specification, recorded in the test file.
+function* FirstParameterAdmits(func: FunctionObject, value: ObjectValue): PlainEvaluator<boolean> {
+  for (const type of Q(yield* FirstParameterTypes(func))) {
+    const admits = EnsureCompletion(yield* IsOfType(value, type));
+    if (admits.Type === 'normal' && admits.Value === true) {
+      return true;
+    }
+  }
   return false;
+}
+
+/** The resolvable declared types of the callee's first parameter, over every signature it has. */
+function* FirstParameterTypes(func: FunctionObject): PlainEvaluator<TypeRecord[]> {
+  const types: TypeRecord[] = [];
+  const declared = (func as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
+  if (declared !== undefined) {
+    for (const signature of declared) {
+      const first = signature.Parameters[0];
+      if (first !== undefined && first.Type.Kind !== 'parameter') {
+        types.push(first.Type);
+      }
+    }
+    return types;
+  }
+  const formals = (func as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined;
+  const first = formals?.[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
+  if (first?.TypeAnnotation) {
+    // Resolved without propagating a failure, as soleSignatureParameterTypes does
+    // and for the same reason: an unbound type parameter reports "T is not
+    // defined", and that error must not escape an operation that is classifying
+    // an argument rather than checking one.
+    const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(first.TypeAnnotation.Type));
+    if (attempted.Type === 'normal' && (attempted.Value as TypeRecord).Kind !== 'parameter') {
+      types.push(attempted.Value as TypeRecord);
+    }
+  }
+  return types;
 }
 
 /** Whether `value` is an AbortSignal, by brand rather than by shape. */
