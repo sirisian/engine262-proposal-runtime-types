@@ -480,6 +480,131 @@ test('random.md: the no-argument form is unchanged', () => {
 });
 
 // =============================================================================
+// sec-metadata-narrowing
+// =============================================================================
+
+// A meta type that narrows, written as primitivemetadata.md writes it: each
+// comparison is a one-sided range and narrowing is intersection.
+const NARROWS = `type NBn = { bounds?: RangeBounds };
+meta NBn { default = {};
+  subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
+  validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }
+  narrow(cur, op, val) {
+    const b = cur.bounds === undefined ? .. : cur.bounds;
+    if (op === ">=") return { bounds: b.intersect(val..) };
+    if (op === ">") return { bounds: b.intersect(val<..) };
+    if (op === "<=") return { bounds: b.intersect(..=val) };
+    if (op === "<") return { bounds: b.intersect(..<val) };
+    return cur;
+  } }`;
+
+test('sec-metadata-narrowing: a comparison narrows the metadata inside the branch', () => {
+  // "This is what lets `if (v >= 0)` give `v` the type
+  //  `float32.<{ ..., bounds: 0.. }>` inside the branch ... so that a `return v`
+  //  into a type requiring both bounds passes `subtype` and needs no check at
+  //  all." The unguarded call is the control: it is the same call, and it fails.
+  const g = 'function g(w: float64.<{ bounds: 0.. }>) { return 1; }';
+  expect(evaluated(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { return g(v); } return 0; } "ok";`)).toBe('ok');
+  expectThrown(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: ..<100 }>) { return g(v); } "ok";`);
+});
+
+test('sec-metadata-narrowing: a further comparison intersects the bound it already has', () => {
+  // The clause's own second step: `if (v >= 0)` then "a further `if (v <= 343)`
+  // intersect that bound to `0..=343`". Resolving each comparison against the
+  // DECLARED type would give the inner branch `..=343` and fail this.
+  const g = 'function g(w: float64.<{ bounds: 0..=343 }>) { return 1; }';
+  expect(evaluated(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: .. }>) { if (v >= 0) { if (v <= 343) { return g(v); } } return 0; } "ok";`)).toBe('ok');
+  // The outer guard alone is not enough, which is what makes the nesting matter.
+  expectThrown(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: .. }>) { if (v >= 0) { return g(v); } return 0; } "ok";`);
+});
+
+test('sec-metadata-narrowing: the false branch narrows by the negation', () => {
+  // "The false branch narrows by the negation of _op_, pairing `>=` with `<`."
+  const g = 'function g(w: float64.<{ bounds: ..<0 }>) { return 1; }';
+  // An explicit `else`: the false BRANCH is what the clause narrows. The code
+  // after an `if` that returns is a continuation, not the false branch, and
+  // narrowing it is control-flow analysis this does not claim to do.
+  expect(evaluated(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: .. }>) { if (v >= 0) { return 0; } else { return g(v); } } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: narrowing is monotone, so a looser comparison changes nothing', () => {
+  // Intersection is monotone, so `if (v < 1000)` over a value already bounded
+  // by `0..<100` neither widens it nor loses it. This is the property the
+  // intersection design exists to guarantee.
+  const g = 'function g(w: float64.<{ bounds: 0..<100 }>) { return 1; }';
+  expect(evaluated(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: 0..<100 }>) { if (v < 1000) { return g(v); } return 0; } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: a meta type defining no `narrow` keeps the constraint it had', () => {
+  // "a meta type that defines no `narrow` learns nothing from a comparison and
+  //  keeps the constraint it had, which costs a check at the next boundary and
+  //  nothing else". Participation is by hook DEFINITION, not by portion.
+  const quiet = `type NBq = { bounds?: RangeBounds };
+    meta NBq { default = {};
+      subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
+      validate(v, c) { return true; } }`;
+  const g = 'function g(w: float64.<{ bounds: 0.. }>) { return 1; }';
+  expectThrown(`${quiet} ${g}
+    function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { return g(v); } return 0; } "ok";`);
+});
+
+test('sec-metadata-narrowing: a `narrow` hook that throws leaves the binding un-narrowed', () => {
+  // Q3. `subtype` answers a JUDGMENT, so one that cannot be made must refuse;
+  // `narrow` produces KNOWLEDGE, and the clause already sanctions learning
+  // nothing. Not hypothetical: this pass runs BEFORE evaluation, so a hook
+  // touching anything the script initializes throws a TDZ ReferenceError.
+  const boom = `type NBb = { bounds?: RangeBounds };
+    meta NBb { default = {};
+      subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
+      validate(v, c) { return true; }
+      narrow(cur, op, val) { throw new Error("boom"); } }`;
+  // The program is not failed by the throw; it is refused for the ordinary
+  // reason, that an un-narrowed `..<100` is not assignable to `0..`.
+  expectThrown(`${boom} function g(w: float64.<{ bounds: 0.. }>) { return 1; }
+    function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { return g(v); } return 0; } "ok";`);
+  // And a program that needs no narrowing still runs.
+  expect(evaluated(`${boom}
+    function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { return 1; } return 0; } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: an assignment invalidates a narrowing', () => {
+  // Recorded through `declareNarrowed`, so a metadata narrowing is invalidated
+  // exactly as a type-level one is.
+  const g = 'function g(w: float64.<{ bounds: 0.. }>) { return 1; }';
+  expectThrown(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { v = -1; return g(v); } return 0; } "ok";`);
+});
+
+test('sec-narrowing: an empty narrowed bound is NOT reported as dead code', () => {
+  // Q4. The dead-branch rule is defined operationally - "These are the branches
+  // for which NarrowTo or NarrowFrom returns ~empty~" - over the two TYPE-level
+  // operations. Metadata narrowing goes through NarrowMetadata, which is
+  // neither, so an empty bound is outside the rule as written and not reporting
+  // it is CONFORMING.
+  //
+  // Extending the rule would need a way to ask a meta type whether a portion is
+  // inhabited, and none of the protocol's hooks answers that: `validate` is the
+  // closest and needs a VALUE, which is what a dead branch has none of. If that
+  // hook is ever proposed, this row is what has to change.
+  expect(evaluated(`${NARROWS}
+    function f(v: float64.<{ bounds: 0..<10 }>) { if (v >= 100) { return 1; } return 0; } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: a program that narrows nothing is untouched', () => {
+  // The second walk runs only where a comparison was recorded, so a program
+  // with no parameterized comparison keeps reporting at parse time and pays
+  // none of it. The cost control, asserted rather than assumed.
+  expect(evaluated('function f(z: float64) { if (z >= 0) { return 1; } return 0; } "ok";')).toBe('ok');
+  expectThrown('const x: uint8 = 300; "ok";');
+});
+
+// =============================================================================
 // sec-matchrange
 // =============================================================================
 
