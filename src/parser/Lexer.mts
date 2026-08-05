@@ -1003,8 +1003,8 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
       return Token.BIGINT;
     }
     // proposal-runtime-types (ranges.md): a `.` is not the decimal point of a
-    // numeric literal when the next character is also a `.`, so `1..6` lexes as
-    // `1`, `..`, `6` rather than `1.` then `.6`. Gated on the feature.
+    // numeric literal when the next character is also a `.`, so `1..<6` lexes as
+    // `1`, `..<`, `6` rather than `1.` then `.<6`. Gated on the feature.
     if (base === 10 && this.source[this.position] === '.'
         && !(surroundingAgent.feature('runtime-types') && this.source[this.position + 1] === '.')) {
       this.position += 1;

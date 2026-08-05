@@ -540,7 +540,7 @@ export abstract class ExpressionParser extends FunctionParser {
    * Left-associative, and LOOSER than a range: the specification states the
    * order in both clauses, because the upstream proposal names
    * ShortCircuitExpression as its operand and this design has put ranges at
-   * that level. `0..10 |> sum(%)` pipes the range.
+   * that level. `0..<10 |> sum(%)` pipes the range.
    */
   parsePipelineExpression(): ParseNode.Expression {
     let left = this.parseRangeExpression() as ParseNode.Expression;
@@ -2037,7 +2037,7 @@ export abstract class ExpressionParser extends FunctionParser {
       // A RANGE literal is a pattern matching by CONTAINMENT, "exactly as a
       // range `case` label does". Parsed at the RANGE level rather than the
       // unary one: a range is `lower .. upper`, so a unary parse takes the
-      // lower bound and leaves the `..` behind - which made `5 is 1..10` a
+      // lower bound and leaves the `..` behind - which made `5 is 1..<10` a
       // parse error rather than a containment test.
       const literal = this.parseRangeExpression();
       if ((literal as { type?: string }).type === 'RangeExpression') {

@@ -1012,7 +1012,7 @@ export namespace ParseNode {
    *
    * `x |> f(%)` evaluates the left operand, binds it to the topic, and
    * evaluates the right with that binding in scope. Left-associative, and
-   * looser than a range: `0..10 |> sum(%)` pipes the range.
+   * looser than a range: `0..<10 |> sum(%)` pipes the range.
    */
   export interface PipelineExpression extends BaseParseNode {
     readonly type: 'PipelineExpression';

@@ -415,7 +415,7 @@ export function TypedRandom(t: TypeRecord, realm: Realm): Value | undefined {
     // the draw as produced), so the value is exactly representable at the
     // width, unchanged by the checked conversion's rounding (wrapToType), and
     // strictly below 1, where rounding a raw double draw could reach 1.0.
-    // `Math.random.<float32>()` is `Math.random.<float32>(0..1)`.
+    // `Math.random.<float32>()` is `Math.random.<float32>(0..<1)`.
     const sigBits = name === 'float64' ? 0 : (name === 'float32' ? 24 : 11);
     const value = sigBits === 0 ? d : Math.floor(d * (2 ** sigBits)) / (2 ** sigBits);
     return new TypedNumberValue(value, t);
