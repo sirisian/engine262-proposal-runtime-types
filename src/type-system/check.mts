@@ -1,6 +1,7 @@
 import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { GoverningMetaTypes, LookupMetaHook } from '../abstract-ops/runtime-types.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
@@ -60,6 +61,49 @@ const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataChec
 
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
+}
+
+/**
+ * proposal-runtime-types #sec-metadata-narrowing: "A comparison against a
+ * compile-time constant narrows the metadata of a parameterized value ... the
+ * metadata whose portion for each meta type _M_ defining `narrow` is the result
+ * of `narrow` of _M_ applied to MetadataPortion(_m_, _M_), the String naming
+ * _op_, and _c_, and whose portion for each other meta type is unchanged."
+ *
+ * `narrow` is USER CODE and this pass is synchronous, so the comparison is
+ * RECORDED here and resolved by the checking pass, which can call a hook. That
+ * is the same boundary a DeferredMetadataCheck crosses, for the same reason.
+ *
+ * It is not the same USE, though, and the difference is why this needs a table
+ * of its own: a deferred check yields a verdict consumed after the walk, while
+ * a narrowing yields a TYPE the walk itself must then check against. The
+ * resolution therefore feeds a second walk rather than a report.
+ *
+ * [[Parent]] is what makes nesting work in one resolution sweep. The clause
+ * requires composition - `if (v >= 0)` giving `bounds: 0..` and "a further
+ * `if (v <= 343)` intersect that bound to `0..=343`" - and a request resolved
+ * against the DECLARED type would give the inner branch `..=343`. The nesting is
+ * known here, so it is recorded rather than searched for later.
+ */
+export interface NarrowingRequest {
+  /** The test node, which keys the resolution table. */
+  readonly key: object;
+  /** The binding the comparison speaks about. */
+  readonly name: string;
+  /** The comparison, as the String the hook is passed. */
+  readonly operator: string;
+  /** The compile-time constant compared against. */
+  readonly constant: Value;
+  /** The binding's parameterized type as this walk knows it. */
+  readonly subject: TypeRecord & { readonly Kind: 'parameterized' };
+  /** The enclosing request's key, or null at the outermost. */
+  readonly parent: object | null;
+}
+
+const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
+
+export function TakeNarrowingRequests(root: object): readonly NarrowingRequest[] {
+  return narrowingRequests.get(root) ?? [];
 }
 
 /**
@@ -2301,18 +2345,102 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * #sec-metadata-narrowing: a RELATIONAL comparison of a binding against a
+   * compile-time constant, where the binding's type is a parameterization some
+   * governing meta type defines `narrow` for.
+   *
+   * Returns the request to record, or undefined where the shape is not one the
+   * clause narrows on. Three gates, each of which the clause states: the
+   * subject must be a parameterized value, the other operand must be a
+   * compile-time constant ("A comparison against a compile-time constant
+   * narrows"), and participation is by HOOK DEFINITION rather than by portion -
+   * "each meta type _M_ defining `narrow`" is asked and "each other meta type is
+   * unchanged", which is the opposite of how `subtype` participates.
+   */
+  /** The enclosing request's key, maintained as the walk descends (Q1). */
+  let enclosingRequestKey: object | null = null;
+  const narrowingRequestsHere: NarrowingRequest[] = [];
+
+  const narrowingRequestOf = (test: ParseNode): Omit<NarrowingRequest, 'parent'> | undefined => {
+    if (test.type !== 'RelationalExpression') {
+      return undefined;
+    }
+    const rel = test as ParseNode.RelationalExpression;
+    if (rel.operator === 'instanceof' || rel.operator === 'in' || !rel.RelationalExpression) {
+      return undefined;
+    }
+    const left = rel.RelationalExpression as ParseNode;
+    const right = rel.ShiftExpression as ParseNode;
+    // `x >= 0` and `0 <= x` are the same fact about `x`; the operator is
+    // mirrored where the binding is on the right, so the hook always receives
+    // the comparison as the BINDING makes it.
+    const mirrored: Record<string, string> = {
+      '<': '>', '>': '<', '<=': '>=', '>=': '<=',
+    };
+    let subjectNode = left;
+    let constantNode = right;
+    let operator: string = rel.operator;
+    if (left.type !== 'IdentifierReference' && right.type === 'IdentifierReference') {
+      subjectNode = right;
+      constantNode = left;
+      operator = mirrored[rel.operator]!;
+    }
+    if (subjectNode.type !== 'IdentifierReference') {
+      return undefined;
+    }
+    const constantType = staticType(constantNode);
+    if (!constantType || constantType.Kind !== 'literal') {
+      return undefined;
+    }
+    const name = (subjectNode as unknown as { name: string }).name;
+    const subject = lookup(name);
+    if (!subject || subject.Kind !== 'parameterized') {
+      return undefined;
+    }
+    const governing = GoverningMetaTypes(subject.Metadata).types;
+    if (!governing.some((metaType: object) => LookupMetaHook(metaType, 'narrow') !== undefined)) {
+      return undefined;
+    }
+    return {
+      key: test, name, operator, constant: constantType.Value, subject,
+    };
+  };
+
+  /**
    * Walk a test and the two branches it guards, with the binding the test
    * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
    * operator, which differ only in what they guard (F76).
    */
   const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     const fact = narrowingFactOf(test);
+    // #sec-metadata-narrowing: record the comparison for the checking pass,
+    // which can call `narrow` where this pass cannot. The enclosing request is
+    // the parent, so the resolution sweep can compose an inner narrowing onto
+    // its outer one in a single pass.
+    const request = narrowingRequestOf(test);
+    if (request) {
+      narrowingRequestsHere.push({ ...request, parent: enclosingRequestKey });
+    }
     walk(test);
     if (!fact) {
       walk(whenTrueNode);
       walk(whenFalseNode);
       return;
     }
+    const outerRequestKey = enclosingRequestKey;
+    if (request) {
+      enclosingRequestKey = request.key;
+    }
+    try {
+      walkGuardedBranches(fact, whenTrueNode, whenFalseNode);
+    } finally {
+      enclosingRequestKey = outerRequestKey;
+    }
+  };
+
+  /** The narrowed walk of the two branches, split out so the parent link above
+   * covers both without duplicating the restore. */
+  const walkGuardedBranches = (fact: NonNullable<ReturnType<typeof narrowingFactOf>>, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
     const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
     const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
@@ -4224,6 +4352,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
+  narrowingRequests.set(root, narrowingRequestsHere);
   unclaimedKeyChecks.set(root, unclaimed);
   return errors;
 }
