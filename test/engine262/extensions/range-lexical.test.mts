@@ -174,19 +174,15 @@ describe('the family, its removed forms, and its edges', () => {
     expectError('const a = 1, b = 2; a <.. = b;');
   });
 
-  test('a PARENTHESIZED range is a relational operand, and compares as an object', () => {
-    // Parentheses put the range back under the relational operators, and there
-    // the base language's abstract relational comparison applies to an ordinary
-    // object: `ToPrimitive` yields no number, so the comparison is false rather
-    // than an error.
-    //
-    // Both ranges.md and #sec-range-literals currently say the spaced forms are
-    // TypeErrors "because a range is not `Ordered`". Neither half holds here:
-    // the unspaced forms never reach a comparison (above), and the parenthesized
-    // one compares silently. Recorded as feedback; making this a rejection is
-    // type-system work rather than grammar work.
-    expect(evaluated('const a = 1, b = 2; String((a..) < b);')).toBe('false');
-    expect(evaluated('String((0..<3) < 5);')).toBe('false');
+  test('a PARENTHESIZED range is rejected as a relational operand', () => {
+    // Parentheses put the range back under the relational operators, where the
+    // base language would apply an ordinary object comparison and answer false.
+    // It is rejected instead: a range does not implement `Ordered`, so the
+    // comparison is meaningless, and answering it silently is worse than an
+    // error because it is invisible.
+    const kind = (src) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
+    expect(evaluated(kind('const a = 1, b = 2; (a..) < b;'))).toBe('TypeError');
+    expect(evaluated(kind('(0..<3) < 5;'))).toBe('TypeError');
   });
 
   test('neighbouring operators still win their tokens against the family', () => {

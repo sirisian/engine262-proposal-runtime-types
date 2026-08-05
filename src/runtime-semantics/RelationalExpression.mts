@@ -1,4 +1,5 @@
 import { vectorComparison } from '../type-system/vector-ops.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import {
   ObjectValue,
@@ -154,6 +155,21 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
     if (decided instanceof AbruptCompletion) {
       return decided;
     }
+  }
+  // proposal-runtime-types (ranges.md, #sec-range-literals): a RANGE is rejected
+  // as a relational operand. "A range does not implement `Ordered`, so the
+  // comparison is meaningless, and the base language would otherwise answer it
+  // with `false` - which is worse than an error because it is invisible."
+  //
+  // The unspaced spellings are already Syntax Errors, because a range binds
+  // looser than the relational operators, so this rule reaches only the
+  // parenthesized forms: `(a..) < b`, `(0..<3) < 5`. It is a runtime rejection
+  // until ranges carry types the checker can reject by, at which point the same
+  // rule moves to check time and this branch becomes the backstop.
+  if (surroundingAgent.feature('runtime-types')
+      && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
+      && (isRangeObject(lval) || isRangeObject(rval))) {
+    return Throw.TypeError('a range is not an ordered value and cannot be compared');
   }
   switch (operator) {
     case '<': {

@@ -128,19 +128,23 @@ test('sec-range-literals: no spaced reading is a program at all', () => {
   expectError('const a = 1, b = 2; String(a <.. < b);');
 });
 
-test('sec-range-literals: DIVERGENCE - a parenthesized range is not rejected as a relational operand', () => {
+test('sec-range-literals: a parenthesized range is rejected as a relational operand', () => {
   // "Parentheses put a range back under them, and there a range is REJECTED as
   //  a relational operand: a range does not implement `Ordered`, so
   //  `(0..<3) < 5` is a *TypeError* rather than the *false* an ordinary
   //  object's comparison would yield."
-  //
-  // DIVERGENCE (plan item Q1, stage R3): the clause was changed to require the
-  // rejection and the engine still answers *false*. This is the first row here
-  // that a DECISION opened rather than an oversight, which is the intended
-  // shape: the specification moves, the suite records the gap, and the stage
-  // closes it.
-  expect(evaluated('const a = 1, b = 2; String((a..) < b);')).toBe('false');
-  expect(evaluated('String((0..<3) < 5);')).toBe('false');
+  const kind = (src) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
+  expect(evaluated(kind('const a = 1, b = 2; (a..) < b;'))).toBe('TypeError');
+  expect(evaluated(kind('(0..<3) < 5;'))).toBe('TypeError');
+  // Either operand, and all four relational operators.
+  expect(evaluated(kind('5 > (0..<3);'))).toBe('TypeError');
+  expect(evaluated(kind('(0..<3) <= 5;'))).toBe('TypeError');
+  expect(evaluated(kind('(0..<3) >= 5;'))).toBe('TypeError');
+  // Catchable rather than an early error: the unspaced spellings are the ones
+  // the grammar refuses.
+  expect(evaluated('try { (0..<3) < 5; "no-throw" } catch (e) { "caught" }')).toBe('caught');
+  // Equality is untouched, since a range compares by identity like any value.
+  expect(evaluated('const r = 0..<3; String(r === r);')).toBe('true');
 });
 
 // =============================================================================
