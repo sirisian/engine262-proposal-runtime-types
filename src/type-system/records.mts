@@ -412,6 +412,11 @@ const libraryTypeNames = new Set([
   // `RangeBounds.<T>`, which is the interface a consumer of an arbitrary range
   // is written against", and "_S_ and _E_ are values of `Bound`".
   'Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds',
+  // ranges.md's aliases, "so no annotation is forced through the
+  // three-argument spelling". Each is `Range` with its two bounds fixed, and
+  // they share the `Interval` enum's names so the language has one vocabulary
+  // for the four intervals rather than two.
+  'ClosedRange', 'ClosedOpenRange', 'OpenClosedRange', 'OpenRange',
   // proposal-runtime-types (rational.md): the rational value type is a usable type name.
   'rational',
   // proposal-runtime-types #sec-generator-types: the generic whose instances are
@@ -442,6 +447,23 @@ let rangeEnumRecordImpl: ((name: 'Bound' | 'Interval') => TypeRecord) | null = n
 export function setRangeEnumRecordImpl(f: (name: 'Bound' | 'Interval') => TypeRecord): void {
   rangeEnumRecordImpl = f;
 }
+
+// ranges.md: the four aliases, each `Range` with both bounds fixed. `Bound.Closed`
+// is 0 and `Bound.Open` is 1, the ordinals the enum members carry.
+/** The alias a bound pair names, for the printer policy below. */
+const RANGE_ALIAS_BY_BOUNDS: Record<string, string | undefined> = {
+  '0,0': 'ClosedRange',
+  '0,1': 'ClosedOpenRange',
+  '1,0': 'OpenClosedRange',
+  '1,1': 'OpenRange',
+};
+
+const RANGE_ALIAS_BOUNDS: Record<string, readonly [number, number] | undefined> = {
+  ClosedRange: [0, 0],
+  ClosedOpenRange: [0, 1],
+  OpenClosedRange: [1, 0],
+  OpenRange: [1, 1],
+};
 
 function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
   return rangeEnumRecordImpl ? rangeEnumRecordImpl(name) : null;
@@ -474,6 +496,18 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
   // member is a number and has no prototype to test.
   if (name === 'Bound' || name === 'Interval') {
     return rangeEnumRecord(name);
+  }
+  // An alias IS its expansion, so `ClosedRange.<uint8>` and
+  // `Range.<uint8, Bound.Closed, Bound.Closed>` are one interned type rather
+  // than two that happen to admit the same values.
+  const aliasBounds = RANGE_ALIAS_BOUNDS[name];
+  if (aliasBounds !== undefined) {
+    return {
+      Kind: 'nominal',
+      Declaration: libraryDeclarationSentinel,
+      Arguments: [...args, ...aliasBounds],
+      LibraryName: 'Range',
+    };
   }
   const filled = name === 'SoA' && args.length === 1 ? [...args, 0] : args;
   return {
@@ -616,6 +650,20 @@ export function displayType(t: TypeRecord): string {
       // "nominal is not assignable to nominal", which names neither party and
       // is useless to whoever has to fix the program (F57).
       const declared = (t.Declaration as { BindingIdentifier?: { name?: string } | null, TypeName?: { IdentifierReference?: { name?: string } } | null } | undefined);
+      // ranges.md's printer policy: "A diagnostic should prefer them:
+      // `ClosedRange.<uint8>` ... reads where `Range.<uint8, Bound.Closed,
+      // Bound.Closed>` does not". The bounds reach a record as their ordinals,
+      // so without this a rejected assignment named the type
+      // `Range.<uint.<8>, 0, 0>`, which is the parameterization AND the
+      // ordinals, the two least readable halves at once.
+      if (t.LibraryName === 'Range' && t.Arguments.length === 3
+          && typeof t.Arguments[1] === 'number' && typeof t.Arguments[2] === 'number') {
+        const alias = RANGE_ALIAS_BY_BOUNDS[`${t.Arguments[1]},${t.Arguments[2]}`];
+        if (alias) {
+          const element = t.Arguments[0];
+          return `${alias}.<${typeof element === 'number' ? String(element) : displayType(element)}>`;
+        }
+      }
       const name = t.LibraryName ?? declared?.BindingIdentifier?.name ?? declared?.TypeName?.IdentifierReference?.name;
       const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')}>` : '';
       return name ? `${name}${args}` : `nominal${args}`;

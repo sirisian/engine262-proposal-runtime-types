@@ -207,14 +207,46 @@ test('sec-ranges: an annotation naming an interval admits only that interval', (
   expect(evaluated('let r: RangeBounds = 0..<10; "ok";')).toBe('ok');
 });
 
-test('sec-ranges: DIVERGENCE - the rejection is at run time, not at check time', () => {
-  // `staticType` has no case for a range literal, so its bounds do not flow
-  // into a static type: a dead branch carrying a wrong-interval annotation is
-  // not reported, and the diagnostic names the value as "[object Object]"
-  // rather than as the range it is.
+test('ranges.md: the four aliases name the four intervals', () => {
+  // "the aliases, so no annotation is forced through the three-argument
+  //  spelling", each sharing the `Interval` enum's names so the language has one
+  //  vocabulary for the four intervals rather than two.
+  expect(evaluated('String((0..=10) is ClosedRange.<uint8>);')).toBe('true');
+  expect(evaluated('String((0..<10) is ClosedOpenRange.<uint8>);')).toBe('true');
+  expect(evaluated('String((0<..=10) is OpenClosedRange.<uint8>);')).toBe('true');
+  expect(evaluated('String((0<..<10) is OpenRange.<uint8>);')).toBe('true');
+  // An alias IS its expansion, so it admits only its own interval.
+  expect(evaluated('String((0..<10) is ClosedRange.<uint8>);')).toBe('false');
+  expect(evaluated('let r: ClosedOpenRange.<uint8> = 0..<10; "ok";')).toBe('ok');
+  expectThrown('let r: ClosedRange.<uint8> = 0..<10; "ok";');
+});
+
+test('ranges.md: a range and its type print as they were written', () => {
+  // "A diagnostic should prefer them: `ClosedRange.<uint8>` ... reads where
+  //  `Range.<uint8, Bound.Closed, Bound.Closed>` does not." And a range VALUE
+  //  named "[object Object]" told a reader nothing about the one thing wrong.
+  const message = (src) => {
+    const c = run(src) as { Value?: { HostDefinedMessageString?: string } };
+    return c.Value?.HostDefinedMessageString ?? '';
+  };
+  expect(message('let r: RangeFrom = 0..<10;')).toContain('0..<10');
+  expect(message('let r: RangeTo = 0<..=10;')).toContain('0<..=10');
+  // The alias is preferred over the raw parameterization; the element prints in
+  // the engine's own spelling for a width, which is not this clause's business.
+  expect(message('let r: ClosedRange.<uint8> = 0..<10;')).toContain('ClosedRange.<uint');
+});
+
+test('sec-ranges: DIVERGENCE - a range literal has no static type, so the rejection is at run time', () => {
+  // `staticType` has no case for a range literal. Adding one is not merely
+  // missing work: an endpoint literal's base is `number`, so a naive static type
+  // makes `let r: ClosedOpenRange.<uint8> = 0..<10` fail as
+  // "ClosedOpenRange.<number> is not assignable to ClosedOpenRange.<uint8>" -
+  // a FALSE rejection. The element must follow literal propagation into the
+  // annotation's element type first, which is the rule this needs and does not
+  // yet have.
   //
-  // DIVERGENCE (plan item F1, the inference half of R2b). The runtime half is
-  // closed by the rows above.
+  // DIVERGENCE (plan item F1, the inference half of R2b). Every rejection above
+  // is correct; it just happens when the declaration runs.
   expect(evaluated('if (false) { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } "ran";')).toBe('ran');
 });
 

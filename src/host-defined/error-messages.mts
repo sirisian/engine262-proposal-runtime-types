@@ -1,6 +1,7 @@
 import { isArray, OutOfRange } from '../utils/language.mts';
 import { R } from '../abstract-ops/all.mjs';
 import { isBooleanObject } from '../intrinsics/Boolean.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { isNumberObject } from '../intrinsics/Number.mts';
 import { isBigIntObject } from '../intrinsics/BigInt.mts';
 import { isStringObject } from '../intrinsics/String.mts';
@@ -160,6 +161,17 @@ export function format(arg: Formattable): string {
       }
       if (isArrayBufferObject(arg)) {
         return '[object ArrayBuffer]';
+      }
+      // proposal-runtime-types (ranges.md): a range prints as it was WRITTEN.
+      // Every diagnostic that names a range value named it "[object Object]",
+      // which tells a reader nothing about the one thing that went wrong - the
+      // endpoints and their bounds are the whole content of the value.
+      if (isRangeObject(arg)) {
+        const start = arg.RangeStart === undefined ? '' : format(arg.RangeStart);
+        const end = arg.RangeEnd === undefined ? '' : format(arg.RangeEnd);
+        const open = arg.RangeStartBound === 'open' ? '<..' : '..';
+        const close = arg.RangeEndBound === undefined ? '' : (arg.RangeEndBound === 'open' ? '<' : '=');
+        return `${start}${open}${close}${end}`;
       }
       return '[object Object]';
     }
