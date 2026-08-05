@@ -28,17 +28,6 @@ import { evaluated, ok, expectThrownKind } from '../readme/harness.mts';
  *   of the clause. waitAsync is the form this engine can honour, and the form a
  *   thread that may not block has to use anyway.
  *
- * FOUND WHILE WRITING THIS, not yet fixed: an async thread function is removed
- * from the cluster at its FIRST await rather than when its result settles.
- * CreateThread settles the handle with whatever Call returns, and for an async
- * function that is a pending promise, so the thread is torn down while suspended.
- * #sec-createthread says a thenable result is adopted and the thread ends when
- * the completion settles. The consequence for this clause is that an abort
- * cannot be observed waking a wait parked inside an ASYNC thread function - the
- * thread is already gone - so that test is absent below though the machinery for
- * it (OnAbort on a parked waiter, threadPendingWaits deferring the teardown) is
- * in place and exercised by the synchronous paths.
- *
  * KNOWN ENGINE GAP, not a divergence of this clause: a write THROUGH A REFERENCE
  * does not enforce the referent's declared type. `let a: uint8 = 0; let ref b =
  * a; b = 300;` leaves 300 in a uint8, with no Atomics involved, so the store

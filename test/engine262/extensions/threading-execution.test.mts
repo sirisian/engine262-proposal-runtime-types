@@ -21,10 +21,10 @@ import {
  * not the DOM object - no EventTarget, no addEventListener, no throwIfAborted.
  *
  * Known divergences from the specification, to be closed later:
- * - The wait checkpoints (Atomics.wait, Lock, Condition) do not exist yet, those
- *   primitives being unimplemented. The checkpoints that do exist - thread start
- *   and job dequeue - are covered below, and job dequeue subsumes await
- *   resumption here, since a resumption is a job of the thread's own queue.
+ * - The Lock and Condition wait checkpoints do not exist yet, those primitives
+ *   being unimplemented. Every other checkpoint is covered below: thread start,
+ *   job dequeue (which subsumes await resumption, a resumption being a job of
+ *   the thread's own queue), and the Atomics wait.
  */
 
 interface Harness {
@@ -181,6 +181,72 @@ test('D6 lifetime: the thread is removed from the cluster when it ends', () => {
   expect(h.cluster.agents.length).toBe(2);
   h.cluster.runUntilIdle();
   expect(h.cluster.agents.length).toBe(1);
+});
+
+// -- D6: an async thread function -----------------------------------------------
+test('D6 lifetime: an async thread function runs past its first await', () => {
+  // #sec-createthread adopts a thenable result. Without the adoption the handle
+  // settles with the PROMISE the async function returned the moment it suspended,
+  // and the thread is removed while still holding work - so the body past the
+  // await never runs and the handle resolves with a promise rather than a result.
+  const h = makeCluster(`
+    async function body() { log.push('before await'); await null; log.push('after await'); return 42; }
+    body.callThread().then(v => { log.push('handle ' + v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('before await,after await,handle 42');
+});
+
+test('D6 lifetime: an async thread function that throws after an await rejects the handle', () => {
+  const h = makeCluster(`
+    async function body() { await null; throw new TypeError('boom'); }
+    body.callThread().catch(e => { log.push('rejected ' + e.message); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('rejected boom');
+});
+
+test('D6 lifetime: a plain thenable result is adopted too', () => {
+  // Not only async functions: the clause says a thenable, and a hand-rolled one
+  // is a thenable.
+  const h = makeCluster(`
+    function body() { return { then(resolve) { resolve('adopted'); } }; }
+    body.callThread().then(v => { log.push('got ' + v); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(",")')).toBe('got adopted');
+});
+
+test('D6 lifetime: the thread is still removed once an adopted result settles', () => {
+  const h = makeCluster(`
+    async function body() { await null; return 1; }
+    body.callThread();
+  `);
+  expect(h.cluster.agents.length).toBe(2);
+  h.cluster.runUntilIdle();
+  expect(h.cluster.agents.length).toBe(1);
+});
+
+test('D2 cancellation: an abort wakes a wait parked inside an async thread', () => {
+  // The last checkpoint of #sec-thread-cancellation, and the one that needed both
+  // the adoption above (so the thread is still alive to be woken) and the
+  // ordering that lets a delivered abort unwind rather than abandoning the
+  // thread. The reason is thrown FROM the wait, so the catch runs.
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    let a: shared int32 = 0;
+    async function park() {
+      log.push('parking');
+      try { await Atomics.waitAsync(ref a, 0); log.push('woke normally'); }
+      catch (e) { log.push('woken by abort: ' + e); }
+    }
+    park.callThread({ signal: c.signal });
+  `);
+  // Let the thread reach the park, then abort.
+  h.cluster.runOneJob();
+  h.evaluate('c.abort("cancelled");');
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(" | ")')).toBe('parking | woken by abort: cancelled');
 });
 
 // -- D8: the options bag --------------------------------------------------------

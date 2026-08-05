@@ -7,11 +7,16 @@ import {
   Get,
   HostEnqueuePromiseJob,
   IsCallable,
+  skipDebugger,
   NewPromiseCapability,
   ObjectValue,
   Q,
   Throw,
   ThrowCompletion,
+  NormalCompletion,
+  PromiseResolve,
+  PerformPromiseThen,
+  CreateBuiltinFunction,
   Value,
   X,
   isFunctionObject,
@@ -179,8 +184,38 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
   }
   enqueueOn(thread, realm, function* threadBody(): PlainEvaluator {
     const result = EnsureCompletion(yield* Call(func, Value.undefined, args));
-    SettleFromThread(spawner, realm, capability, result);
-    cluster.removeThread(thread);
+    const finish = (completion: ValueCompletion) => {
+      SettleFromThread(spawner, realm, capability, completion);
+      cluster.removeThread(thread);
+    };
+    // #sec-createthread: "If result is a normal completion and result.[[Value]]
+    // is an Object with a callable "then" property ... set result to the
+    // completion with which that thenable settles."
+    //
+    // An ASYNC thread function returns a pending promise the moment it reaches
+    // its first await, so settling the handle with that value and removing the
+    // thread would end the thread while it is suspended - the body's remaining
+    // work never runs, and its handle resolves with a promise rather than with
+    // the result. Adopting the thenable is what makes the thread live as long as
+    // its function does, which is the lifetime the clause states.
+    if (!(result instanceof AbruptCompletion) && IsThenable(result.Value)) {
+      const inner = Q(yield* PromiseResolve(realm.Intrinsics['%Promise%'] as ObjectValue, result.Value));
+      const onSettled = (settle: (completion: ValueCompletion) => void) => CreateBuiltinFunction(function* reaction(reactionArgs: Arguments): ValueEvaluator {
+        settle(reactionArgs[0] ?? Value.undefined);
+        return Value.undefined;
+      } as never, 1, Value(''), [], realm);
+      // The reactions are created HERE, on the thread, so they are the thread's
+      // reactions and run on it (#sec-threading-scheduling). That is what keeps
+      // the thread alive and running its own continuation until the adoption
+      // completes, rather than handing its tail to the spawner.
+      PerformPromiseThen(
+        inner,
+        onSettled((value) => finish(NormalCompletion(value as Value))),
+        onSettled((reason) => finish(ThrowCompletion(reason as Value))),
+      );
+      return;
+    }
+    finish(result);
   });
 
   // A thread aborted while it still has queued work abandons that work and
@@ -255,4 +290,17 @@ export function* FunctionProto_callThread(args: Arguments, { thisValue }: { this
     }
   }
   return CreateThread(func, callArgs, signal);
+}
+
+/**
+ * Whether a value is a thenable, which is what #sec-createthread adopts: "an
+ * Object with a callable "then" property". Read without running user code beyond
+ * the property access itself, as PromiseResolve does immediately afterwards.
+ */
+function IsThenable(value: Value): boolean {
+  if (!(value instanceof ObjectValue)) {
+    return false;
+  }
+  const then = EnsureCompletion(skipDebugger(Get(value, Value('then'))));
+  return then.Type === 'normal' && IsCallable(then.Value);
 }
