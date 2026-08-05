@@ -28,13 +28,24 @@ import { evaluated, ok, expectThrownKind } from '../readme/harness.mts';
  *   of the clause. waitAsync is the form this engine can honour, and the form a
  *   thread that may not block has to use anyway.
  *
- * KNOWN ENGINE GAP, not a divergence of this clause: a write THROUGH A REFERENCE
- * does not enforce the referent's declared type. `let a: uint8 = 0; let ref b =
- * a; b = 300;` leaves 300 in a uint8, with no Atomics involved, so the store
- * operations below inherit it and cannot be more correct than the reference
- * machinery beneath them. #sec-atomics-typed-operations says a stored value
- * passes the typed-storage boundary; when the reference write path enforces it,
- * these operations will too, and the two tests marked below become meaningful.
+ * KNOWN ENGINE GAP, not a divergence of this clause: a LEXICAL BINDING has no
+ * run-time typed-storage boundary. A class field, a parameter, and an array
+ * element each refuse a wrongly-typed value at run time; a `let a: uint8` does
+ * not - `let a: uint8 = 0; var v = ["x"][0]; a = v;` leaves a string in a uint8,
+ * with no reference and no Atomics anywhere. Only the static checker guards a
+ * binding, and only where it can fold the value, so the literal `a = 300` is
+ * refused and the unfoldable `a = v` is not. A write through a `ref` inherits
+ * its referent's storage, so `ref` to a field or an element enforces and `ref`
+ * to a binding does not, which is where this was first noticed.
+ *
+ * The store operations below inherit it and cannot be more correct than the
+ * storage beneath them; #sec-atomics-typed-operations says a stored value passes
+ * the typed-storage boundary, and the two tests marked below become meaningful
+ * once a binding has one. It also bears on the specification's own argument:
+ * #sec-shared-stability says a cross-thread race on unmarked storage costs a
+ * stale narrowing and never a wrongly-typed value BECAUSE every write passes
+ * that boundary, and for a lexical binding here the boundary is absent - of a
+ * binding, not of the clause.
  */
 
 // -- The reference target shape -------------------------------------------------

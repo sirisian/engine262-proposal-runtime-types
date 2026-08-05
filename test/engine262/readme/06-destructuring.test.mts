@@ -78,10 +78,10 @@ test('Typed return for destructuring: converting the returned literal is deferre
   expectThrown('let t: [uint8, uint32] = [1, 2]; t;');
 });
 
-test('Object destructuring: the parenthesized pattern syntax is not parsed (documents the gap)', () => {
-  // Target (README): `let { (a: uint8): b = 1 } = { a: 2 };` binds b = 2. The
-  // parenthesized `(a: type)` pattern form is the object-typing syntax and is not
-  // part of the pattern grammar the core implements; it does not parse.
-  expectThrown('let { (a: uint8): b = 1 } = { a: 2 }; b;');
-  expectThrown('let { (a: uint8), (b: uint8) } = { a: 2, b: 3 }; a;');
+test('Object destructuring: the parenthesized pattern syntax binds', () => {
+  // WAS a gap pin: the parenthesized `(a: type)` form did not parse. It does now,
+  // and both README targets hold - `let { (a: uint8): b = 1 } = { a: 2 };` binds
+  // b = 2, and the shorthand list binds each name.
+  expect(evaluated('let { (a: uint8): b = 1 } = { a: 2 }; String(b);')).toBe('2');
+  expect(evaluated('let { (a: uint8), (b: uint8) } = { a: 2, b: 3 }; String(a) + "," + String(b);')).toBe('2,3');
 });

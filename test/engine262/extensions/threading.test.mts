@@ -4,17 +4,17 @@ import {
 } from '../readme/harness.mts';
 
 /**
- * Extension coverage — threading.md.
+ * Extension coverage - threading.md.
  *
  * Implemented as of E1 (see PLAN-threading.md): the `shared` MODIFIER at the type
- * level — `shared T` parses to a ~shared~ Type Record, interns, is invariant in
+ * level - `shared T` parses to a ~shared~ Type Record, interns, is invariant in
  * its target, reflects, and enforces its admission rule (value types only; not a
  * nested `shared`, not a `ref`). Each test names the decision it covers.
  *
  * NOT yet implemented, and so not tested here: threads themselves (D1's creation-
  * side promise reactions, D6's lifetime, D8's options bag), `Atomics` over typed
  * values, Lock/Condition/ThreadLocal, and Thread.parallelFor/parallelReduce. The
- * D5 narrowing regimes are half-covered — the `shared` half is a type-level fact
+ * D5 narrowing regimes are half-covered - the `shared` half is a type-level fact
  * this build can assert; the unmarked half needs a second thread to be observable
  * at all, so it arrives with E2.
  */
@@ -76,7 +76,7 @@ test('D5 shared: `shared ref T` is refused', () => {
 });
 
 // -- The value is a value of the target ----------------------------------------
-test('D5 shared: publication in, value out — membership is membership in the target', () => {
+test('D5 shared: publication in, value out - membership is membership in the target', () => {
   // "A value of type T is assignable to storage of type `shared T` ... and a read
   // of that storage yields a value of T." So the modifier is not observable in
   // the value, in either direction.

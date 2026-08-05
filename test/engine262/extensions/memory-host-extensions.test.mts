@@ -110,8 +110,11 @@ test('threading: shared class does not parse (documents the gap)', () => {
   expectThrown('shared class A { x: uint8; } typeof A;');
 });
 
-test('threading: Thread is not defined (documents the gap)', () => {
-  expect(evaluated('typeof Thread;')).toBe('undefined');
+test('threading: Thread carries the two range operations', () => {
+  // WAS a gap pin. #sec-threading-parallel-iteration is implemented, so the
+  // namespace exists and both operations are on it.
+  expect(evaluated('typeof Thread;')).toBe('object');
+  expect(evaluated('typeof Thread.parallelFor + "/" + typeof Thread.parallelReduce;')).toBe('function/function');
 });
 
 // ── decorators: the @ syntax under the feature ────────────────────────────────
