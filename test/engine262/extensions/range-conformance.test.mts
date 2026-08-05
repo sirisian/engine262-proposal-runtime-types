@@ -128,7 +128,17 @@ test('sec-range-literals: no spaced reading is a program at all', () => {
   expectError('const a = 1, b = 2; String(a <.. < b);');
 });
 
-test('sec-range-literals: parentheses put a range back under the relational operators, yielding false', () => {
+test('sec-range-literals: DIVERGENCE - a parenthesized range is not rejected as a relational operand', () => {
+  // "Parentheses put a range back under them, and there a range is REJECTED as
+  //  a relational operand: a range does not implement `Ordered`, so
+  //  `(0..<3) < 5` is a *TypeError* rather than the *false* an ordinary
+  //  object's comparison would yield."
+  //
+  // DIVERGENCE (plan item Q1, stage R3): the clause was changed to require the
+  // rejection and the engine still answers *false*. This is the first row here
+  // that a DECISION opened rather than an oversight, which is the intended
+  // shape: the specification moves, the suite records the gap, and the stage
+  // closes it.
   expect(evaluated('const a = 1, b = 2; String((a..) < b);')).toBe('false');
   expect(evaluated('String((0..<3) < 5);')).toBe('false');
 });
