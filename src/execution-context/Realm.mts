@@ -62,6 +62,7 @@ import { bootstrapComposite } from '../intrinsics/Composite.mts';
 import { bootstrapAbortController } from '../intrinsics/AbortController.mts';
 import { bootstrapAtomics } from '../intrinsics/Atomics.mts';
 import { bootstrapSynchronization } from '../intrinsics/Synchronization.mts';
+import { bootstrapThread } from '../intrinsics/Thread.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
@@ -231,6 +232,8 @@ export function CreateIntrinsics(realmRec: Realm) {
     // proposal-runtime-types #sec-threading-synchronization: Lock, Condition,
     // and ThreadLocal.
     bootstrapSynchronization(realmRec);
+    // proposal-runtime-types #sec-threading-parallel-iteration.
+    bootstrapThread(realmRec);
   }
   bootstrapTypePrototype(realmRec);
   // proposal-runtime-types: an enum's Type Object gets %Enum.prototype%, which
@@ -541,6 +544,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'Lock',
     'Condition',
     'ThreadLocal',
+    'Thread',
     'JSON',
     'Math',
     'Reflect',

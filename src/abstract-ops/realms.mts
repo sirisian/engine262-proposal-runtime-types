@@ -30,6 +30,7 @@ interface Intrinsics_Table6 {
   '%Lock%': ObjectValue;
   '%Condition%': ObjectValue;
   '%ThreadLocal%': ObjectValue;
+  '%Thread%': ObjectValue;
   '%Lock.prototype%': ObjectValue;
   '%Condition.prototype%': ObjectValue;
   '%ThreadLocal.prototype%': ObjectValue;
