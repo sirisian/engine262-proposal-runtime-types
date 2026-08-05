@@ -27,6 +27,12 @@ interface Intrinsics_Table6 {
   '%AsyncIteratorPrototype%': ObjectValue;
   '%Atomics%': ObjectValue;
   '%AbortController%': ObjectValue;
+  '%Lock%': ObjectValue;
+  '%Condition%': ObjectValue;
+  '%ThreadLocal%': ObjectValue;
+  '%Lock.prototype%': ObjectValue;
+  '%Condition.prototype%': ObjectValue;
+  '%ThreadLocal.prototype%': ObjectValue;
   '%BigInt%': FunctionObject;
   '%BigInt64Array%': FunctionObject;
   '%BigUint64Array%': FunctionObject;
