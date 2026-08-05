@@ -307,6 +307,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return;
     }
+    // proposal-runtime-types (#sec-ranges): assignability between range types.
+    // The shapes are not related by name alone - every shape implements
+    // `RangeBounds`, which is "the interface a consumer of an arbitrary range is
+    // written against" - and the bounds reach a record as ordinals or as literal
+    // records depending on how they were written, so both spellings compare.
+    if (source && target && source.Kind === 'nominal' && target.Kind === 'nominal'
+        && isRangeFamilyName(source.LibraryName) && isRangeFamilyName(target.LibraryName)) {
+      // Every range satisfies `RangeBounds`, and a bare shape name with no
+      // arguments constrains only the shape.
+      if (target.LibraryName !== 'RangeBounds') {
+        if (source.LibraryName !== target.LibraryName) {
+          report(source, target);
+          return;
+        }
+        for (let i = 1; i < target.Arguments.length; i += 1) {
+          const want = boundOrdinalOf(target.Arguments[i]);
+          const got = boundOrdinalOf(source.Arguments[i]);
+          if (want !== null && got !== null && want !== got) {
+            report(source, target);
+            return;
+          }
+        }
+      }
+      // The element follows the ordinary rules, so a literal endpoint that fits
+      // the annotated element type is admitted as it is anywhere else.
+      const se = source.Arguments[0];
+      const te = target.Arguments[0];
+      if (typeof se !== 'number' && typeof te !== 'number' && se && te && !IsAssignable(se, te)
+          && !literalFitsNumericType(se, te) && !SameType(se, te)) {
+        report(source, target);
+      }
+      return;
+    }
     const erasedSource = eraseMetadata(source);
     const erasedTarget = eraseMetadata(target);
     // #sec-contextual-types: a numeric literal within a numeric value type's
@@ -607,6 +640,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * A bound argument's ordinal - `Bound.Closed` is 0 and `Bound.Open` is 1 -
+   * whether it reached the record as the ordinal itself or as a literal record
+   * carrying it, or null where the argument names no bound at all.
+   */
+  const boundOrdinalOf = (arg: TypeRecord | number | undefined): number | null => {
+    if (typeof arg === 'number') {
+      return arg;
+    }
+    const t = arg as { Kind?: string, Value?: { numberValue?(): number } } | undefined;
+    if (t?.Kind === 'literal' && typeof t.Value?.numberValue === 'function') {
+      return t.Value.numberValue();
+    }
+    return null;
+  };
+
+  /** The names #sec-ranges gives a range value; each carries its element first. */
+  const isRangeFamilyName = (name: string | undefined): boolean => name === 'Range'
+    || name === 'RangeFrom' || name === 'RangeTo' || name === 'RangeFull' || name === 'RangeBounds';
+
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (!node) {
       return null;
@@ -638,6 +691,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // literal rule, a nested literal takes its own contextual type apart in
     // turn, and a numeric literal at a `bigint` element reads its source text
     // exactly as it does at a binding (F85).
+    // proposal-runtime-types (#sec-ranges): a RANGE literal takes its contextual
+    // type apart the way an array literal does. Its shape and bounds are its
+    // own - the markers in the source fix them - but its ELEMENT type comes
+    // from the position, which is literal propagation: `0..<10` at a
+    // `ClosedOpenRange.<uint8>` is a range of `uint8`, not of `number`.
+    //
+    // Taking the element from the literal instead is what made an earlier
+    // attempt at this reject correct programs: the endpoints' base is `number`,
+    // so `let r: ClosedOpenRange.<uint8> = 0..<10` failed as
+    // "ClosedOpenRange.<number> is not assignable to ClosedOpenRange.<uint8>".
+    if (node.type === 'RangeExpression') {
+      const r = node as ParseNode.RangeExpression;
+      const contextualElement = contextual && contextual.Kind === 'nominal'
+        && isRangeFamilyName(contextual.LibraryName)
+        && typeof contextual.Arguments[0] !== 'number'
+        ? (contextual.Arguments[0] as TypeRecord | undefined) ?? null
+        : null;
+      // The endpoints are checked against that element, so an out-of-range one
+      // is caught here exactly as an array element is.
+      const fromEndpoint = (n: ParseNode | null): TypeRecord | null => {
+        const t = staticTypeIn(n as ParseNode | null, contextualElement);
+        return t && t.Kind === 'literal' ? t.Base : t;
+      };
+      const start = fromEndpoint(r.RangeStart as ParseNode | null);
+      const end = fromEndpoint(r.RangeEnd as ParseNode | null);
+      const element = contextualElement ?? start ?? end;
+      const ordinal = (bound: 'closed' | 'open' | null) => (bound === 'open' ? 1 : 0);
+      if (!r.RangeStart && !r.RangeEnd) {
+        return libraryTypeRecord('RangeFull', element ? [element] : []);
+      }
+      if (!element) {
+        return null;
+      }
+      if (r.RangeStart && r.RangeEnd) {
+        return libraryTypeRecord('Range', [element, ordinal(r.RangeStartBound), ordinal(r.RangeEndBound)]);
+      }
+      if (r.RangeStart) {
+        return libraryTypeRecord('RangeFrom', [element, ordinal(r.RangeStartBound)]);
+      }
+      return libraryTypeRecord('RangeTo', [element, ordinal(r.RangeEndBound)]);
+    }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'array') {
       checkArrayLiteralAgainst(node as ParseNode.ArrayLiteral, contextual);
       return contextual;
