@@ -36,6 +36,28 @@ test('primitive values', async () => {
   }
 });
 
+test('runtime-types primitive values', async () => {
+  // proposal-runtime-types: a typed number is its own value class, not a
+  // NumberValue subclass, so it matched no case in getInspector and reached the
+  // object branch - where reading `internalSlotsList` off a primitive threw
+  // "can't access property 'includes', value.internalSlotsList is undefined"
+  // and took the whole inspector session down. Inspecting one is the repro.
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const inspector = new TestInspector();
+  const realm = new ManagedRealm();
+  inspector.attachAgent(agent, [realm]);
+
+  for (const value of [
+    "uint32.parse('4')",
+    '5 := uint8',
+    '(1 := int32) + (2 := int32)',
+    "'x' := string",
+  ]) {
+    await snapshotObject(inspector, value);
+  }
+});
+
 test('functions', async () => {
   const agent = new Agent();
   setSurroundingAgent(agent);

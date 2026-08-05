@@ -4,7 +4,7 @@ exports[`array > [,,,] 1`] = `
 {
   "className": "Array",
   "description": "Array(3)",
-  "objectId": "default:60",
+  "objectId": "default:62",
   "preview": {
     "description": "Array(3)",
     "overflow": false,
@@ -40,7 +40,7 @@ exports[`array > [,,,] non-indexed owned properties 1`] = `
 ]
 `;
 
-exports[`array > [,,,] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`array > [,,,] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, reserve, capacity, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`array > [,,,] properties 1`] = `
 {
@@ -103,7 +103,7 @@ exports[`array > [] non-indexed owned properties 1`] = `
 ]
 `;
 
-exports[`array > [] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`array > [] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, reserve, capacity, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`array > [] properties 1`] = `
 {
@@ -130,7 +130,7 @@ exports[`array > [1] 1`] = `
 {
   "className": "Array",
   "description": "Array(1)",
-  "objectId": "default:58",
+  "objectId": "default:60",
   "preview": {
     "description": "Array(1)",
     "overflow": false,
@@ -172,7 +172,7 @@ exports[`array > [1] non-indexed owned properties 1`] = `
 ]
 `;
 
-exports[`array > [1] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`array > [1] non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, reserve, capacity, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`array > [1] properties 1`] = `
 {
@@ -211,7 +211,7 @@ exports[`array > Array(10) 1`] = `
 {
   "className": "Array",
   "description": "Array(10)",
-  "objectId": "default:59",
+  "objectId": "default:61",
   "preview": {
     "description": "Array(10)",
     "overflow": false,
@@ -247,7 +247,7 @@ exports[`array > Array(10) non-indexed owned properties 1`] = `
 ]
 `;
 
-exports[`array > Array(10) non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`array > Array(10) non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, reserve, capacity, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`array > Array(10) properties 1`] = `
 {
@@ -274,7 +274,7 @@ exports[`array > var a = [1,,2]; a.x = 1; a 1`] = `
 {
   "className": "Array",
   "description": "Array(3)",
-  "objectId": "default:61",
+  "objectId": "default:63",
   "preview": {
     "description": "Array(3)",
     "overflow": false,
@@ -338,7 +338,7 @@ exports[`array > var a = [1,,2]; a.x = 1; a non-indexed owned properties 1`] = `
 ]
 `;
 
-exports[`array > var a = [1,,2]; a.x = 1; a non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`array > var a = [1,,2]; a.x = 1; a non-indexed properties (prototype) 1`] = `"length, concat, copyWithin, entries, fill, filter, flat, flatMap, at, keys, map, pop, push, reserve, capacity, shift, slice, sort, toSorted, splice, toSpliced, toString, unshift, values, with, toReversed, every, find, findIndex, findLast, findLastIndex, forEach, includes, indexOf, join, lastIndexOf, reduce, reduceRight, reverse, some, toLocaleString, Symbol(Symbol.iterator), Symbol(Symbol.unscopables), constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`array > var a = [1,,2]; a.x = 1; a properties 1`] = `
 {
@@ -7984,6 +7984,37 @@ exports[`regex > var a = /cat/; a.lastIndex = 1; a properties 1`] = `
       "writable": true,
     },
   ],
+}
+`;
+
+exports[`runtime-types primitive values > 'x' := string 1`] = `
+{
+  "type": "string",
+  "value": "x",
+}
+`;
+
+exports[`runtime-types primitive values > (1 := int32) + (2 := int32) 1`] = `
+{
+  "description": "3 (int32)",
+  "type": "number",
+  "value": 3,
+}
+`;
+
+exports[`runtime-types primitive values > 5 := uint8 1`] = `
+{
+  "description": "5 (uint8)",
+  "type": "number",
+  "value": 5,
+}
+`;
+
+exports[`runtime-types primitive values > uint32.parse('4') 1`] = `
+{
+  "description": "4 (uint32)",
+  "type": "number",
+  "value": 4,
 }
 `;
 

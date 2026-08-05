@@ -1,7 +1,7 @@
 import type { Protocol } from 'devtools-protocol';
 import type { InspectorContext } from '../context.mts';
 import {
-  Null, Undefined, Boolean, Number, String, Symbol,
+  Null, Undefined, Boolean, Number, String, Symbol, TypedNumber, UnknownPrimitive, Vector,
 } from './primitives.mts';
 import { Function } from './function.mts';
 import {
@@ -50,7 +50,7 @@ import {
   isWeakSetObject,
   JSStringValue,
   NumberValue,
-  ObjectValue, SymbolValue, Value,
+  ObjectValue, SymbolValue, TypedNumberValue, Value, VectorValue,
 } from '#self';
 
 export interface Inspector<T extends Value> {
@@ -77,6 +77,17 @@ export function getInspector(value: Value): Inspector<Value> {
     case value instanceof NumberValue:
     case value instanceof BigIntValue:
       return Number;
+    // proposal-runtime-types: the extension's own primitive value classes. A
+    // typed number is NOT a NumberValue subclass and a vector is not a
+    // primitive the base language knows, so without these they matched no case
+    // above and fell through to the object branch below - where reading an
+    // internal slot list off a primitive threw and took the inspector with it.
+    // A typed string needs no case: it is a transparent JSStringValue subclass
+    // and is caught above.
+    case value instanceof TypedNumberValue:
+      return TypedNumber;
+    case value instanceof VectorValue:
+      return Vector;
     case isProxyExoticObject(value):
       return Proxy;
     case IsCallable(value):
@@ -126,9 +137,13 @@ export function getInspector(value: Value): Inspector<Value> {
       return TemporalPlainYearMonth;
     case isTemporalZonedDateTimeObject(value):
       return TemporalZonedDateTime;
-    case (value as ObjectValue).internalSlotsList.includes('InspectorEntry'):
+    case value instanceof ObjectValue && value.internalSlotsList.includes('InspectorEntry'):
       return InternalInspectorEntry;
     default:
-      return DefaultObject;
+      // Reaching here with a primitive means a value class the cases above do
+      // not name. Describing it as a plain object would misreport it, but the
+      // inspector's job is to survive an unknown value rather than to fail the
+      // session, so it falls back to the string form its description gives.
+      return value instanceof ObjectValue ? DefaultObject : UnknownPrimitive;
   }
 }
