@@ -1,7 +1,6 @@
 import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { GoverningMetaTypes, LookupMetaHook } from '../abstract-ops/runtime-types.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
@@ -2421,10 +2420,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!subject || subject.Kind !== 'parameterized') {
       return undefined;
     }
-    const governing = GoverningMetaTypes(subject.Metadata).types;
-    if (!governing.some((metaType: object) => LookupMetaHook(metaType, 'narrow') !== undefined)) {
-      return undefined;
-    }
+    // NOT gated on a meta type defining `narrow`, though it looks like it
+    // should be. Meta hooks register when a MetaDeclaration EVALUATES, and this
+    // pass runs before evaluation - so during the walk NO hook is registered and
+    // the gate could never pass, for a meta type declared in the same script
+    // above its own use, which is legal and is the ordinary case.
+    //
+    // Recording unconditionally costs nothing: the clause makes the portion of
+    // "each other meta type" UNCHANGED, so a request whose meta types define no
+    // `narrow` resolves to the type it started with. Deciding participation is
+    // the resolution's job, where the hooks exist, rather than the walk's.
     return {
       key: test, name, operator, constant: constantType.Value, subject,
     };
@@ -2446,19 +2451,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       narrowingRequestsHere.push({ ...request, parent: enclosingRequestKey });
     }
     walk(test);
-    if (!fact) {
-      walk(whenTrueNode);
-      walk(whenFalseNode);
-      return;
-    }
-    const outerRequestKey = enclosingRequestKey;
+    // The enclosing key covers BOTH paths. A relational comparison yields no
+    // type-level fact, so the guard below returns early - and that is exactly
+    // the shape a narrowing request has, so skipping the push here left every
+    // nested request without its parent, which is the one thing the parent link
+    // exists for.
+    const outerKey = enclosingRequestKey;
     if (request) {
       enclosingRequestKey = request.key;
     }
     try {
+      if (!fact) {
+        walk(whenTrueNode);
+        walk(whenFalseNode);
+        return;
+      }
       walkGuardedBranches(fact, whenTrueNode, whenFalseNode);
     } finally {
-      enclosingRequestKey = outerRequestKey;
+      enclosingRequestKey = outerKey;
     }
   };
 
