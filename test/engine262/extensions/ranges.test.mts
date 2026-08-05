@@ -293,6 +293,58 @@ test('interval arithmetic needs two ranges, and leaves the base behaviour alone'
   expect(evaluated('typeof ((0..<5) + 1);')).toBe('string');
 });
 
+// -- agreement between the operations -----------------------------------------
+//
+// Each operation was pinned against its own rule as it landed. These check the
+// operations against EACH OTHER, which is where an implementation that satisfied
+// every rule separately can still be incoherent.
+
+test('unary minus and scaling by minus one are the same reflection', () => {
+  expect(evaluated('const a = -(2..<7), b = (2..<7).scale(-1); a.start + "," + a.end + "," + a.interval + "|" + b.start + "," + b.end + "," + b.interval;'))
+    .toBe('-7,-2,openClosed|-7,-2,openClosed');
+  // Including the shape swap on a one-ended range.
+  expect(evaluated('const a = -(3..), b = (3..).scale(-1); String(a.start) + "," + a.end + "|" + String(b.start) + "," + b.end;'))
+    .toBe('undefined,-3|undefined,-3');
+});
+
+test('containment and intersection agree', () => {
+  // Where one range contains another, intersecting them yields the inner one.
+  expect(evaluated('const o = 0..<10, i = 2..<5; String(o.contains(i)) + "," + o.intersect(i).start + "," + o.intersect(i).end + "," + o.intersect(i).interval;'))
+    .toBe('true,2,5,closedOpen');
+  // And a range always contains its own intersection with anything.
+  expect(evaluated('const a = 0..<10, b = 5..=20; String(a.contains(a.intersect(b))) + "," + String(b.contains(a.intersect(b)));'))
+    .toBe('true,true');
+});
+
+test('intersection is commutative and idempotent', () => {
+  expect(evaluated('const a = 0<..<10, b = 5..=20; const x = a.intersect(b), y = b.intersect(a); x.start + "," + x.end + "," + x.interval + "|" + y.start + "," + y.end + "," + y.interval;'))
+    .toBe('5,10,closedOpen|5,10,closedOpen');
+  expect(evaluated('const a = 0<..=10; const s = a.intersect(a); s.start + "," + s.end + "," + s.interval;')).toBe('0,10,openClosed');
+});
+
+test('containment of a value agrees with what iteration yields', () => {
+  // Every member an integer range iterates is contained in it, and the endpoints
+  // just outside are not. This is the check that would catch an off-by-one in
+  // either the iterator's first index or the containment bounds.
+  expect(evaluated('let ok = true; for (const i of 0<..<5) { if (!(0<..<5).contains(i)) ok = false; } String(ok) + "," + String((0<..<5).contains(0)) + "," + String((0<..<5).contains(5));'))
+    .toBe('true,false,false');
+  expect(evaluated('let n = 0; for (const i of 0<..=5) { n += 1; } String(n) + "," + String((0<..=5).length);')).toBe('5,5');
+});
+
+test('length has no answer where the range is unbounded or non-integer', () => {
+  expectThrown('(5..).length;');
+  expectThrown('(..<5).length;');
+  expectThrown('(..).length;');
+  expectThrown('(0.5..<2.5).length;');
+});
+
+test('containment reaches the open-ended shapes', () => {
+  expect(evaluated('String((5..).contains(6..<9)) + "," + String((5..).contains(4..<9));')).toBe('true,false');
+  expect(evaluated('String((..<10).contains(0..<9)) + "," + String((..<10).contains(0..=10));')).toBe('true,false');
+  // A from-range never contains a range that reaches past its own start.
+  expect(evaluated('String((5<..).contains(5..<9));')).toBe('false');
+});
+
 // -- precedence and associativity ---------------------------------------------
 test('member access binds tighter than the range', () => {
   // (0..<10).length reaches the member through parentheses
