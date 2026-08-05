@@ -181,7 +181,6 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
     const result = EnsureCompletion(yield* Call(func, Value.undefined, args));
     SettleFromThread(spawner, realm, capability, result);
     cluster.removeThread(thread);
-    return Value.undefined;
   });
 
   // A thread aborted while it still has queued work abandons that work and
@@ -217,10 +216,9 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
 function SettleFromThread(spawner: Agent, spawnerRealm: Agent['currentRealmRecord'], capability: PromiseCapabilityRecord, result: ValueCompletion): void {
   const isAbrupt = result instanceof AbruptCompletion;
   const settle = isAbrupt ? capability.Reject : capability.Resolve;
-  const value = result.Value;
+  const value = EnsureCompletion(result).Value;
   HostEnqueuePromiseJob(function* settleJob(): PlainEvaluator {
     X(Call(settle, Value.undefined, [value]));
-    return Value.undefined;
   }, spawnerRealm, spawner);
 }
 
@@ -238,7 +236,7 @@ function enqueueOn(agent: Agent, realm: ReturnType<() => Agent['currentRealmReco
 export function* FunctionProto_callThread(args: Arguments, { thisValue }: { thisValue: Value }): ValueEvaluator {
   const func = thisValue;
   if (!IsCallable(func) || !isFunctionObject(func)) {
-    return Throw.TypeError('NotAFunction', func);
+    return Throw.TypeError('$1 is not a function', func);
   }
   const { options, callArgs } = Q(yield* ClassifyThreadArguments(func, args));
   let signal: AbortSignalObject | undefined;

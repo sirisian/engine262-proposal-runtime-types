@@ -71,7 +71,15 @@ export function OnAbort(signal: AbortSignalObject, waker: () => void): () => voi
 }
 
 function CreateAbortSignal(realmRec: Realm): AbortSignalObject {
-  const signal = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%'], []) as AbortSignalObject;
+  // The slot names are given to OrdinaryObjectCreate so the object carries them
+  // at run time; the operation's static type is OrdinaryObject either way, so
+  // the assertion that they are present goes through `unknown` - the same hop
+  // the compiler asks for, rather than widening the interface to optional slots
+  // that every consumer would then have to re-check.
+  const signal = OrdinaryObjectCreate(
+    realmRec.Intrinsics['%Object.prototype%'],
+    ['AbortSignalAborted', 'AbortSignalReason', 'AbortSignalWakers'],
+  ) as unknown as AbortSignalObject;
   signal.AbortSignalAborted = false;
   signal.AbortSignalReason = Value.undefined;
   signal.AbortSignalWakers = new Set();
@@ -112,7 +120,7 @@ export function AbortSignalAbort(signal: AbortSignalObject, reason: Value): void
 
 function* AbortControllerConstructor(_args: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
   if (NewTarget === Value.undefined) {
-    return Throw.TypeError('ConstructorRequiresNew', Value('AbortController'));
+    return Throw.TypeError('$1 requires new', Value('AbortController'));
   }
   const realm = surroundingAgent.currentRealmRecord;
   const controller = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%'], []);

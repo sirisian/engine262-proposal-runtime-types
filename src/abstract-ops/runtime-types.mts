@@ -1489,7 +1489,7 @@ export function MetadataAsObject(metadata: Value): Value {
 // proposal-runtime-types M19: parameter and return boundaries. Both read the
 // annotations off the function's code node and are complete no-ops when none
 // are present, so an unannotated function keeps its exact behaviour and cost.
-interface AnnotatedFunction {
+export interface AnnotatedFunction {
   readonly FormalParameters?: unknown;
   readonly ECMAScriptCode?: unknown;
 }
