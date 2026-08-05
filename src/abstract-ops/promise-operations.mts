@@ -31,6 +31,7 @@ import {
 import {
   HostPromiseRejectionTracker,
   surroundingAgent,
+  type Agent,
 } from '#self';
 import {
   Throw,
@@ -79,7 +80,19 @@ export class PromiseReactionRecord {
 
   readonly Handler: JobCallbackRecord | undefined;
 
-  constructor(O: PromiseReactionRecord) {
+  /**
+   * proposal-runtime-types #sec-threading-scheduling: the agent that CREATED
+   * this reaction, which is the agent its job runs on - "a promise reaction runs
+   * on the thread that created it". Set here rather than where the job is
+   * dispatched, because the settling agent is the wrong answer and is what is
+   * surrounding at dispatch time.
+   *
+   * An await resumption IS a promise reaction, so this field is also what keeps
+   * an async function's continuation on the thread that suspended it.
+   */
+  readonly Agent: Agent;
+
+  constructor(O: Omit<PromiseReactionRecord, 'Agent'> & { Agent?: Agent }) {
     Assert(O.Capability instanceof PromiseCapabilityRecord
         || O.Capability === Value.undefined);
     Assert(O.Type === 'Fulfill' || O.Type === 'Reject');
@@ -88,6 +101,7 @@ export class PromiseReactionRecord {
     this.Capability = O.Capability;
     this.Type = O.Type;
     this.Handler = O.Handler;
+    this.Agent = O.Agent ?? surroundingAgent;
   }
 }
 
@@ -273,7 +287,12 @@ function TriggerPromiseReactions(reactions: readonly PromiseReactionRecord[], ar
     // a. Let job be NewPromiseReactionJob(reaction, argument).
     const job = NewPromiseReactionJob(reaction, argument);
     // b. Perform HostEnqueuePromiseJob(job.[[Job]], job.[[Realm]]).
-    HostEnqueuePromiseJob(job.Job, job.Realm);
+    //
+    // proposal-runtime-types #sec-threading-scheduling: the job goes to the
+    // agent that CREATED the reaction, not to whichever agent is settling the
+    // promise now. Under one shared heap any thread may settle a promise, and
+    // the thread that attached is the one whose queue the reaction belongs on.
+    HostEnqueuePromiseJob(job.Job, job.Realm, reaction.Agent);
   });
   // 2. Return undefined.
   return Value.undefined;

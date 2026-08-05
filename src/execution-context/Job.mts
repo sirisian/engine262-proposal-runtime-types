@@ -9,6 +9,7 @@ import {
   type Arguments,
   type ValueEvaluator,
   surroundingAgent,
+  type Agent,
   type PlainEvaluator,
   GetActiveScriptOrModule,
 } from '#self';
@@ -46,14 +47,20 @@ export function* HostCallJobCallback(jobCallback: JobCallbackRecord, V: Value, a
 // Atomics: HostEnqueueGenericJob
 
 /** https://tc39.es/ecma262/#sec-hostenqueuepromisejob */
-export function HostEnqueuePromiseJob(job: () => PlainEvaluator, realm: Realm | null) {
+export function HostEnqueuePromiseJob(job: () => PlainEvaluator, realm: Realm | null, agent?: Agent) {
   if (surroundingAgent.debugger_isPreviewing) {
     return;
   }
 
   const callerRealm = realm || surroundingAgent.currentRealmRecord;
   const scriptOrModule = GetActiveScriptOrModule();
-  surroundingAgent.jobQueue.enqueuePromiseJob({
+  // proposal-runtime-types #sec-threading-scheduling: "HostEnqueuePromiseJob
+  // enqueues a job on the microtask queue of the agent it is paired with." A
+  // caller that knows the home agent of a reaction passes it; everything else
+  // enqueues on the surrounding agent, which is the single-threaded behaviour
+  // and is also correct for a reaction attached by the agent now running.
+  const target = agent ?? surroundingAgent;
+  target.jobQueue.enqueuePromiseJob({
     queueName: 'PromiseJobs',
     job,
     callerRealm,
