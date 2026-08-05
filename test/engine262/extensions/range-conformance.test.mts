@@ -729,24 +729,42 @@ test('sec-meta-declarations: a meta default may hold a range, and a pattern', ()
   expect(evaluated('type NB = { bounds?: RangeBounds }; meta NB { default = { bounds: .. }; subtype(a,b){return true;} validate(v,c){ return c.bounds.isFull; } } type A = float64.<{ }>; "ok";')).toBe('ok');
 });
 
-test('sec-metadata-narrowing: DIVERGENCE - no comparison narrows through a metadata hook', () => {
-  // The narrowing clause has a comparison give a value a bounded type inside a
-  // branch, which primitivemetadata.md's `narrow` implements as an intersection.
+test('sec-metadata-narrowing: both hooks the protocol defines are now invoked', () => {
+  // R5 asked the engine to call `narrow` and `rescale`, which it called neither
+  // of. Both are called now, and each is pinned by its own rows: the narrowing
+  // rows above, and the conversion row below.
   //
-  // DIVERGENCE (F4): the engine invokes `subtype`, `validate`,
-  // `conversionFactor`, `quantize`, and `describe`, and neither `narrow` nor
-  // `rescale`. A `narrow` hook is therefore never called, which is asserted here
-  // by its absence having no observable effect.
-  expect(evaluated(`
-    type NB2 = { bounds?: Range };
-    let called = false;
-    meta NB2 {
-      default = {};
-      subtype(a, b) { return true; }
+  // `rescale` translates a constraint across a unit conversion -
+  // sec-metadata-conversion: "`rescale` on the portions that flow, so a bound
+  // stated in metres arrives stated in kilometres". Without it a sum of bounds
+  // "would have added a metre-space number to a kilometre-space one and
+  // produced a bound that means nothing".
+  const dims = `type Dim2 = { m?: number, ratio?: number };
+    meta Dim2 { default = { m: 0, ratio: 1 };
+      subtype(a, b) { return a.m === b.m; }
       validate(v, c) { return true; }
-      narrow(cur, op, val) { called = true; return cur; }
-    }
-    let x := float64 = 5;
-    if (x >= 0) { x; }
-    String(called);`)).toBe('false');
+      conversionFactor(from, to) { return (from.ratio ?? 1) / (to.ratio ?? 1); } }
+    type NBr = { bounds?: RangeBounds };
+    meta NBr { default = {};
+      subtype(a, b) { return b.bounds === undefined || (a.bounds !== undefined && b.bounds.contains(a.bounds)); }
+      validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }
+      rescale(c, f) { return c.bounds === undefined ? c : { bounds: c.bounds.scale(f) }; } }`;
+  // A bound stated in metres arrives stated in kilometres, and the value with it.
+  expect(evaluated(`${dims}
+    const d = (300 := float64.<{ m: 1, ratio: 1, bounds: 100..=500 }>);
+    String((d := float64.<{ m: 1, ratio: 1000 }>) is float64.<{ m: 1, ratio: 1000, bounds: 0.1..=0.5 }>);`)).toBe('true');
+  expect(evaluated(`${dims}
+    const d = (300 := float64.<{ m: 1, ratio: 1, bounds: 100..=500 }>);
+    String(Number(d := float64.<{ m: 1, ratio: 1000 }>));`)).toBe('0.3');
+  // A meta type defining no `rescale` has declined to say what its constraint
+  // means after a factor, so its portion is DROPPED rather than assumed
+  // unchanged - carrying it would keep `100..=500` on a value that is now 0.3.
+  const noHook = dims.replace('rescale(c, f) { return c.bounds === undefined ? c : { bounds: c.bounds.scale(f) }; }', '');
+  expect(evaluated(`${noHook}
+    const d = (300 := float64.<{ m: 1, ratio: 1, bounds: 100..=500 }>);
+    String((d := float64.<{ m: 1, ratio: 1000 }>) is float64.<{ m: 1, ratio: 1000 }>);`)).toBe('true');
+  // And a conversion that produces no factor changes nothing.
+  expect(evaluated(`${dims}
+    const d = (300 := float64.<{ m: 1, ratio: 1, bounds: 100..=500 }>);
+    String(Number(d := float64.<{ m: 1, ratio: 1 }>));`)).toBe('300');
 });
