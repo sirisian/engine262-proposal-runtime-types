@@ -5,6 +5,7 @@ export * from './runtime-semantics/all.mts';
 export * from './value.mts';
 export * from './host-defined/engine.mts';
 export { runSingleJobInQueue, type JobQueue, BasicJobQueue } from './host-defined/job-queue.mts';
+export { ThreadCluster, runJobOn } from './host-defined/thread-cluster.mts';
 export {
   type EventLoop, type EventLoopRunType, type NodeJSJobType, AbstractEventLoop, MicroTaskEventLoop, WebLikeEventLoop, NodeJSLikeEventLoop,
 } from './host-defined/event-loop.mts';

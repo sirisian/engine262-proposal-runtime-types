@@ -15,10 +15,12 @@ import {
 } from '../completion.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
 import { assignProps } from './bootstrap.mts';
+import { FunctionProto_callThread } from '../runtime-semantics/CallThread.mts';
 import {
   Assert,
   Call,
   Construct,
+  surroundingAgent,
   CreateListFromArrayLike,
   IsCallable,
   IsConstructor,
@@ -226,6 +228,8 @@ export function bootstrapFunctionPrototype(realmRec: Realm) {
     ['apply', FunctionProto_apply, 2],
     ['bind', FunctionProto_bind, 1],
     ['call', FunctionProto_call, 1],
+    // proposal-runtime-types #sec-function.prototype.callthread
+    surroundingAgent.feature('runtime-types') ? ['callThread', FunctionProto_callThread, 0] : undefined,
     ['toString', FunctionProto_toString, 0],
     [wellKnownSymbols.hasInstance, FunctionProto_hasInstance, 1, readonly],
   ]);

@@ -1,3 +1,4 @@
+import type { ThreadCluster } from './thread-cluster.mts';
 import { Value } from '../value.mts';
 import {
   EnsureCompletion,
@@ -169,6 +170,12 @@ export interface AgentHostDefined {
   supportedImportAttributes?: readonly string[];
   /** Promise rejection is standardized, but uncaught exception is not. */
   uncaughtExceptionTrackers?: Set<(error: Value) => void>;
+  /**
+   * proposal-runtime-types #sec-threading-agent-cluster: the cluster this agent is
+   * a thread of. Present when the embedder has opted into threads; callThread adds
+   * the agents it creates to it, and the driver runs them.
+   */
+  threadCluster?: ThreadCluster;
 }
 
 export interface ResumeEvaluateOptions {

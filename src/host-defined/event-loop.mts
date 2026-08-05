@@ -3,6 +3,7 @@ import {
   Agent,
   type GCMarker, type Job, type Markable,
   runSingleJobInQueue,
+  surroundingAgent as currentAgent,
 } from '#self';
 
 /** https://nodejs.org/learn/asynchronous-work/event-loop-timers-and-nexttick */
@@ -116,6 +117,17 @@ export abstract class AbstractEventLoop implements EventLoop {
   }
 
   runOnce() {
+    // proposal-runtime-types #sec-threading-scheduling: an event loop belongs to
+    // one agent and may only flush that agent's queue while that agent is the
+    // surrounding one. Under a shared heap another agent can enqueue here - a
+    // promise reaction goes to the agent that CREATED it, whichever agent settles
+    // the promise - and the enqueue notifies this loop. Flushing then would run
+    // this agent's job while a DIFFERENT agent is mid-evaluation, on that agent's
+    // execution context stack, which runSingleJobInQueue asserts against.
+    //
+    // Deferring is the whole fix: the job stays queued until this agent is next
+    // driven, which for a single-agent program is immediately and unchanged.
+    if (currentAgent !== undefined && currentAgent !== this.surroundingAgent) return;
     if (this.surroundingAgent.executionContextStack.length > 0 || this.surroundingAgent.isPaused()) return;
     if (this.#flushState === 'running') {
       this.#flushState = 'rerun';
