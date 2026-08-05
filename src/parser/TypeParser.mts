@@ -410,9 +410,16 @@ export abstract class TypeParser extends ExpressionParser {
   //   `<` TypeParameterList `,`? `>`
   // TypeParameter :
   //   BindingIdentifier TypeParameterConstraint? TypeParameterDefault?
-  parseTypeParameters(): ParseNode.TypeParameters {
+  /**
+   * `dotted` accepts the `.<` spelling an OPERATOR's own type parameters use -
+   * `operator +.<B2>(...)`. Both existing call sites tested for `PERIOD_LT` and
+   * then called this, which expects `<`, so every per-operator type parameter
+   * list was a Syntax Error: the test passed and the parse failed one token
+   * later. The `[]` operator carried the same latent bug.
+   */
+  parseTypeParameters(dotted = false): ParseNode.TypeParameters {
     const node = this.startNode<ParseNode.TypeParameters>();
-    this.expect(Token.LT);
+    this.expect(dotted ? Token.PERIOD_LT : Token.LT);
     this.noFuseGT += 1;
     const TypeParameterList: ParseNode.TypeParameter[] = [];
     do {
@@ -848,7 +855,7 @@ export abstract class TypeParser extends ExpressionParser {
       this.expect(Token.RBRACK);
       node.OperatorName = '[]';
       if (this.test(Token.PERIOD_LT)) {
-        node.TypeParameters = this.parseTypeParameters();
+        node.TypeParameters = this.parseTypeParameters(true);
       }
       this.scope.with({
         lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
@@ -886,7 +893,7 @@ export abstract class TypeParser extends ExpressionParser {
         node.OperatorName = TokenValues[this.next().type] as string;
         if (this.test(Token.PERIOD_LT)) {
           // OperatorTypeParameters : `.<` TypeParameterList `>`
-          node.TypeParameters = this.parseTypeParameters();
+          node.TypeParameters = this.parseTypeParameters(true);
         }
         this.scope.with({
           lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
