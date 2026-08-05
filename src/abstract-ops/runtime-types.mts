@@ -18,7 +18,7 @@ import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTyp
 import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
-import { CreateRangeObject } from '../intrinsics/Range.mts';
+import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 
 /**
@@ -954,6 +954,31 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
 export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
   if (!(value instanceof ObjectValue)) {
     return value;
+  }
+  // table-metadata-values: a RANGE and a PATTERN are carried structurally, as
+  // endpoints-and-bounds and as source-and-flags. Walking own enumerable keys
+  // cannot see either - a range's endpoints are internal slots behind prototype
+  // accessors, and a RegExp's source likewise - so a default holding one
+  // snapshotted as an EMPTY record and the meta type was then rejected for a
+  // default that "must be a value of its constraint shape". Carrying them here
+  // in the same markers `metadataValueFromType` produces is what lets
+  // MetadataAsObject rebuild them and the membership judgment see a real value.
+  if (isRangeObject(value)) {
+    const marker: Record<string, unknown> = Object.create(null);
+    marker.__range = true;
+    marker.start = value.RangeStart;
+    marker.end = value.RangeEnd;
+    marker.startBound = value.RangeStartBound;
+    marker.endBound = value.RangeEndBound;
+    return Object.freeze(marker) as unknown as Value;
+  }
+  const asRegExp = value as { OriginalSource?: JSStringValue, OriginalFlags?: JSStringValue };
+  if (asRegExp.OriginalSource !== undefined && asRegExp.OriginalFlags !== undefined) {
+    const marker: Record<string, unknown> = Object.create(null);
+    marker.__pattern = true;
+    marker.source = asRegExp.OriginalSource.stringValue();
+    marker.flags = asRegExp.OriginalFlags.stringValue();
+    return Object.freeze(marker) as unknown as Value;
   }
   const isList = Q(IsArray(value)) === Value.true;
   const out: unknown[] | Record<string, unknown> = isList ? [] : Object.create(null);

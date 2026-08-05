@@ -560,21 +560,24 @@ test('table-metadata-values: DIVERGENCE - the value language is not closed', () 
   expect(evaluated(`${meta} type T = float64.<{ bounds: () => void }>; "ok";`)).toBe('ok');
 });
 
-test('sec-meta-declarations: DIVERGENCE - a meta default cannot hold a range', () => {
+test('sec-meta-declarations: a meta default may hold a range, and a pattern', () => {
   // "a meta type whose key means an unconstrained bound says so in its
-  //  `default`", which is what makes an omitted key and a written full range one
-  //  portion. primitivemetadata.md writes `default = { bounds: .., nonZero: false }`.
+  //  `default`", which is what makes a parameterization that omits the key and
+  //  one that writes the full range under it one portion.
   //
-  // DIVERGENCE (Q6): the default is judged by ordinary membership against the
-  // constraint shape, and that judgement admits neither a Range against a
-  // `Range` field nor a RegExp against a `RegExp` one. So the total default the
-  // design adopted -- to delete every absence check from the hooks -- cannot be
-  // written, and the optional-key form above is what the engine can host. A
-  // general meta-type limit rather than a range-specific one.
-  expectThrown('type X = { bounds: Range }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";');
-  expectThrown('type X = { p: RegExp }; meta X { default = { p: /x/ }; subtype(a,b){return true;} } "ok";');
-  // The optional-key shape is what works.
-  expect(evaluated('type X = { bounds?: Range }; meta X { default = {}; subtype(a,b){return true;} } "ok";')).toBe('ok');
+  // The snapshot a default is judged against walks own enumerable keys, and a
+  // range's endpoints are internal slots behind prototype accessors - so a
+  // default holding one snapshotted as an EMPTY record and the declaration was
+  // rejected. Carried structurally now, in the same markers the metadata value
+  // language uses, which fixes the pattern case the code had already pinned as
+  // failing for the identical reason.
+  expect(evaluated('type X = { bounds: RangeBounds }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";')).toBe('ok');
+  expect(evaluated('type X = { p: RegExp }; meta X { default = { p: /x/ }; subtype(a,b){return true;} } "ok";')).toBe('ok');
+  // primitivemetadata.md's own total default, the one adopted so that no hook
+  // tests for absence.
+  expect(evaluated('type NB = { bounds?: RangeBounds, nonZero?: boolean }; meta NB { default = { bounds: .., nonZero: false }; subtype(a,b){return true;} validate(v,c){return true;} } "ok";')).toBe('ok');
+  // And a hook receives the default's range as a range.
+  expect(evaluated('type NB = { bounds?: RangeBounds }; meta NB { default = { bounds: .. }; subtype(a,b){return true;} validate(v,c){ return c.bounds.isFull; } } type A = float64.<{ }>; "ok";')).toBe('ok');
 });
 
 test('sec-metadata-narrowing: DIVERGENCE - no comparison narrows through a metadata hook', () => {
