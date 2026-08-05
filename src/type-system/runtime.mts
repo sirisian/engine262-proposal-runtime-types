@@ -1184,6 +1184,18 @@ function metadataValueFromType(t: TypeRecord): unknown {
     marker.flags = t.Flags;
     return Object.freeze(marker);
   }
+  if (t.Kind === 'range') {
+    // A leaf of the metadata language, carried structurally like a pattern. The
+    // marker is what lets the comparison and the hook boundary tell it from a
+    // nested record.
+    const marker: Record<string, unknown> = Object.create(null);
+    marker.__range = true;
+    marker.start = t.Start;
+    marker.end = t.End;
+    marker.startBound = t.StartBound;
+    marker.endBound = t.EndBound;
+    return Object.freeze(marker);
+  }
   if (t.Kind === 'object') {
     const nested: Record<string, unknown> = Object.create(null);
     for (const p of t.Properties) {
@@ -1607,6 +1619,25 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
     case 'PatternType':
       // table-metadata-values: source and flags, never a RegExp object.
       return { Kind: 'pattern', Source: node.Source, Flags: node.Flags };
+    case 'RangeType': {
+      // table-metadata-values: the endpoints and their bounds, never a Range
+      // object. An endpoint is a compile-time constant, so it is read straight
+      // off the literal node.
+      const endpoint = (lit: ParseNode.LiteralType | null): Value | undefined => {
+        if (lit === null) {
+          return undefined;
+        }
+        const raw = lit.negated && typeof lit.value === 'number' ? -lit.value : lit.value;
+        return Value(raw as never);
+      };
+      return {
+        Kind: 'range',
+        Start: endpoint(node.RangeTypeStart),
+        End: endpoint(node.RangeTypeEnd),
+        StartBound: node.RangeTypeStartBound ?? undefined,
+        EndBound: node.RangeTypeEndBound ?? undefined,
+      };
+    }
     case 'LiteralType': {
       const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
       if (node.kind === 'imaginary') {
@@ -1791,7 +1822,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return Throw.TypeError('$1 is not a type', result);
     }
     default:
-      return Throw.TypeError('$1 is not supported yet', Value(`a type of kind ${node.type}`));
+      // Exhaustive over the type nodes; kept as a defensive branch for a node
+      // shape the parser could not have produced.
+      return Throw.TypeError('$1 is not supported yet', Value(`a type of kind ${(node as ParseNode).type}`));
   }
 }
 

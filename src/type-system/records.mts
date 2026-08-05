@@ -264,6 +264,17 @@ export type TypeRecord =
   // source and flags so that one pattern written in two modules is one type. A
   // RegExp object is materialized only where a hook receives the metadata.
   | { readonly Kind: 'pattern', readonly Source: string, readonly Flags: string }
+  // proposal-runtime-types (table-metadata-values): a range, carried as its
+  // endpoints and their bounds so that one range written in two modules is one
+  // type. A Range object is materialized only where a hook receives the
+  // metadata. An absent endpoint is the shape saying it has none.
+  | {
+    readonly Kind: 'range',
+    readonly Start: Value | undefined,
+    readonly End: Value | undefined,
+    readonly StartBound: 'closed' | 'open' | undefined,
+    readonly EndBound: 'closed' | 'open' | undefined,
+  }
   | { readonly Kind: 'parameterized', readonly Base: TypeRecord, readonly Metadata: Value }
   | {
     readonly Kind: 'nominal',
@@ -605,6 +616,25 @@ function displayMetadataValue(m: unknown): string {
   }
   if (Array.isArray(m)) {
     return `[${m.map(displayMetadataValue).join(', ')}]`;
+  }
+  // table-metadata-values: a pattern and a range are carried structurally, so
+  // without these they print as their carrier's fields -- `{ __range: true,
+  // start: 0, ... }` -- inside every diagnostic that names the type. They print
+  // as what was written instead.
+  const pattern = m as { __pattern?: boolean, source?: string, flags?: string };
+  if (pattern.__pattern === true) {
+    return `/${pattern.source ?? ''}/${pattern.flags ?? ''}`;
+  }
+  const range = m as {
+    __range?: boolean, start?: unknown, end?: unknown,
+    startBound?: 'closed' | 'open', endBound?: 'closed' | 'open',
+  };
+  if (range.__range === true) {
+    const start = range.start === undefined ? '' : displayMetadataValue(range.start);
+    const end = range.end === undefined ? '' : displayMetadataValue(range.end);
+    const open = range.startBound === 'open' ? '<..' : '..';
+    const close = range.endBound === undefined ? '' : (range.endBound === 'open' ? '<' : '=');
+    return `${start}${open}${close}${end}`;
   }
   if (typeof m === 'object') {
     return `{ ${Object.entries(m as Record<string, unknown>).map(([k, v]) => `${k}: ${displayMetadataValue(v)}`).join(', ')} }`;

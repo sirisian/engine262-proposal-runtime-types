@@ -2698,6 +2698,7 @@ export namespace ParseNode {
     | PredefinedType
     | LiteralType
     | PatternType
+    | RangeType
     | TypeReference
     | ComputedType
     | ArrayType
@@ -3073,6 +3074,21 @@ export namespace ParseNode {
     readonly type: 'PatternType';
     readonly Source: string;
     readonly Flags: string;
+  }
+
+  // RangeType : the range family, in type position
+  //
+  // proposal-runtime-types (table-metadata-values): a range is a metadata value,
+  // carried as its ENDPOINTS AND BOUNDS rather than as a Range object, so that
+  // one range written in two modules is one type. A sibling of PatternType for
+  // the same reason: its identity is the shape, the bound at each endpoint the
+  // shape has, and SameValue at each endpoint's value.
+  export interface RangeType extends BaseParseNode {
+    readonly type: 'RangeType';
+    readonly RangeTypeStart: LiteralType | null;
+    readonly RangeTypeEnd: LiteralType | null;
+    readonly RangeTypeStartBound: RangeBound | null;
+    readonly RangeTypeEndBound: RangeBound | null;
   }
 
   // LiteralType : NumericLiteral / `-` NumericLiteral / StringLiteral / `true` / `false`
@@ -3714,6 +3730,7 @@ export type ParseNode =
   | ParseNode.PredefinedType
   | ParseNode.LiteralType
   | ParseNode.PatternType
+  | ParseNode.RangeType
   | ParseNode.TypeName
   | ParseNode.TypeReference
   | ParseNode.TypeArguments

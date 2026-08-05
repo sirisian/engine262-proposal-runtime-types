@@ -18,6 +18,7 @@ import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTyp
 import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
+import { CreateRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 
 /**
@@ -1451,6 +1452,18 @@ export function MetadataAsObject(metadata: Value): Value {
   const pattern = metadata as unknown as { __pattern?: boolean, source?: string, flags?: string };
   if (pattern.__pattern === true) {
     return X(RegExpCreate(Value(pattern.source ?? ''), Value(pattern.flags ?? '')));
+  }
+  // table-metadata-values: a range is carried as its endpoints and their bounds,
+  // and a hook that reads one is handed a Range built from those. Materialized
+  // here for the same reason a pattern is: the carried form stays structural, so
+  // one range written in two modules is one type, while a hook still receives a
+  // value with the operations `RangeBounds` gives it.
+  const range = metadata as unknown as {
+    __range?: boolean, start?: NumberValue, end?: NumberValue,
+    startBound?: 'closed' | 'open', endBound?: 'closed' | 'open',
+  };
+  if (range.__range === true) {
+    return CreateRangeObject(range.start, range.end, range.startBound, range.endBound, surroundingAgent.currentRealmRecord);
   }
   if (!Array.isArray(metadata) && Object.getPrototypeOf(metadata) !== null) {
     return metadata;

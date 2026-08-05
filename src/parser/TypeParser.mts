@@ -156,8 +156,25 @@ export abstract class TypeParser extends ExpressionParser {
       case Token.NUMBER:
       case Token.BIGINT:
       case Token.IMAGINARY:
-      case Token.SUB:
-        return this.parseLiteralType();
+      case Token.SUB: {
+        const literal = this.parseLiteralType();
+        // proposal-runtime-types (table-metadata-values): a range in type
+        // position, whose endpoints are compile-time constants. A numeric
+        // literal followed by a member of the range family begins one.
+        if (this.feature('runtime-types') && this.testRangeTypeOperator()) {
+          return this.parseRangeType(literal);
+        }
+        return literal;
+      }
+      case Token.DOT_DOT:
+      case Token.DOT_DOT_LT:
+      case Token.DOT_DOT_EQ:
+        // The start-omitted forms `..<b`, `..=b`, and `..`. A leading `<..` is
+        // not among them: an omitted start has no inclusivity to state.
+        if (this.feature('runtime-types')) {
+          return this.parseRangeType(null);
+        }
+        return this.unexpected();
       case Token.DIV:
         // proposal-runtime-types (table-metadata-values): a pattern in type
         // position. A `/` is division or the start of a pattern depending on
@@ -213,6 +230,55 @@ export abstract class TypeParser extends ExpressionParser {
     node.Source = literal.RegularExpressionBody;
     node.Flags = literal.RegularExpressionFlags;
     return this.finishNode(node, 'PatternType');
+  }
+
+  private testRangeTypeOperator(): boolean {
+    return this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_LT) || this.test(Token.DOT_DOT_EQ)
+      || this.test(Token.LT_DOT_DOT) || this.test(Token.LT_DOT_DOT_LT) || this.test(Token.LT_DOT_DOT_EQ);
+  }
+
+  // RangeType : the range family with constant endpoints, in type position.
+  //
+  // The token fixes both bounds and whether an end follows, exactly as it does
+  // in expression position, so nothing here has to guess at end-presence.
+  private parseRangeType(start: ParseNode.LiteralType | null): ParseNode.RangeType {
+    const node = start === null
+      ? this.startNode<ParseNode.RangeType>()
+      : this.startNode<ParseNode.RangeType>(start);
+    let startBound: ParseNode.RangeBound | null;
+    let endBound: ParseNode.RangeBound | null;
+    switch (this.peek().type) {
+      case Token.DOT_DOT:
+        startBound = start === null ? null : 'closed';
+        endBound = null;
+        break;
+      case Token.DOT_DOT_LT:
+        startBound = start === null ? null : 'closed';
+        endBound = 'open';
+        break;
+      case Token.DOT_DOT_EQ:
+        startBound = start === null ? null : 'closed';
+        endBound = 'closed';
+        break;
+      case Token.LT_DOT_DOT:
+        startBound = 'open';
+        endBound = null;
+        break;
+      case Token.LT_DOT_DOT_LT:
+        startBound = 'open';
+        endBound = 'open';
+        break;
+      default:
+        startBound = 'open';
+        endBound = 'closed';
+        break;
+    }
+    this.next(); // consume the range operator
+    node.RangeTypeStart = start;
+    node.RangeTypeStartBound = startBound;
+    node.RangeTypeEndBound = endBound;
+    node.RangeTypeEnd = endBound === null ? null : this.parseLiteralType();
+    return this.finishNode(node, 'RangeType');
   }
 
   // LiteralType :

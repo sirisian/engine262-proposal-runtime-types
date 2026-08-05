@@ -1,4 +1,5 @@
 import { SameValue } from '../abstract-ops/all.mts';
+import { Value } from '../value.mts';
 import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import {
@@ -49,6 +50,18 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   const bp = b as { __pattern?: boolean, source?: string, flags?: string };
   if (ap.__pattern || bp.__pattern) {
     return ap.__pattern === bp.__pattern && ap.source === bp.source && ap.flags === bp.flags;
+  }
+  // table-metadata-values: a range is equivalent to a range of the same shape,
+  // with the same bound at each endpoint the shape has, and SameValue at each
+  // endpoint's value. Carried structurally for the same reason a pattern is.
+  const ar = a as { __range?: boolean, start?: Value, end?: Value, startBound?: string, endBound?: string };
+  const br = b as { __range?: boolean, start?: Value, end?: Value, startBound?: string, endBound?: string };
+  if (ar.__range || br.__range) {
+    if (ar.__range !== br.__range || ar.startBound !== br.startBound || ar.endBound !== br.endBound) {
+      return false;
+    }
+    const sameEnd = (x: Value | undefined, y: Value | undefined) => (x === undefined || y === undefined ? x === y : SameValue(x, y) === true);
+    return sameEnd(ar.start, br.start) && sameEnd(ar.end, br.end);
   }
   return ak.every((k) => {
     const av = (a as Record<string, unknown>)[k];
