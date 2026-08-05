@@ -60,6 +60,7 @@ import { bootstrapProxy } from '../intrinsics/Proxy.mts';
 import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
 import { bootstrapComposite } from '../intrinsics/Composite.mts';
 import { bootstrapAbortController } from '../intrinsics/AbortController.mts';
+import { bootstrapAtomics } from '../intrinsics/Atomics.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
@@ -223,6 +224,9 @@ export function CreateIntrinsics(realmRec: Realm) {
     // the threading extension has to supply one; this is the minimum that lets the
     // cancellation rules run, and a real host's object replaces it unchanged.
     bootstrapAbortController(realmRec);
+    // proposal-runtime-types #sec-threading-atomics: the Atomics operations over
+    // typed values. Feature-gated, and only the reference shape so far.
+    bootstrapAtomics(realmRec);
   }
   bootstrapTypePrototype(realmRec);
   // proposal-runtime-types: an enum's Type Object gets %Enum.prototype%, which
@@ -528,7 +532,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'AbortController',
 
     // Other Properties of the Global Object
-    // 'Atomics',
+    'Atomics',
     'JSON',
     'Math',
     'Reflect',

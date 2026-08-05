@@ -758,8 +758,16 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
     NewTarget: newTarget,
   };
   // proposal-runtime-types (references extension): a built-in function has no
-  // `ref` parameters, so every one of its parameters consumes a value and a
-  // ref argument decays at this boundary. This is also what makes the
+  // `ref` parameters unless it says so, so every one of its parameters consumes
+  // a value and a ref argument decays at this boundary.
+  //
+  // #sec-atomics-reference-arguments needs the exception: `Atomics.add(ref a, v)`
+  // has to reach the operation as a Reference Record, since operating on the
+  // BINDING is the whole point and its value would be a copy. A built-in declares
+  // the positions it takes by reference in RefParameterIndices, and those do not
+  // decay. Everything else is unchanged, including the reflective call paths -
+  // `f.call(null, ref x)` still decays here, %Function.prototype.call% declaring
+  // no such position. This is also what makes the
   // reflective call paths decay channels: `f.call(null, ref x)` decays HERE,
   // on entry to %Function.prototype.call%, so the list it forwards to its
   // target carries values, and `bind` stores values in [[BoundArguments]]
@@ -767,7 +775,7 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
   let decayed: Value[] | null = null;
   for (let i = 0; i < argumentsList.length; i += 1) {
     const arg = argumentsList[i]!;
-    if (arg instanceof ReferenceValue) {
+    if (arg instanceof ReferenceValue && !(F as { RefParameterIndices?: readonly number[] }).RefParameterIndices?.includes(i)) {
       if (decayed === null) {
         decayed = [...argumentsList] as Value[];
       }
