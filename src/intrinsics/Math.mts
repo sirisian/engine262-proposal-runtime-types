@@ -11,6 +11,7 @@ import {
 import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { type RangeObject } from './Range.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -431,6 +432,86 @@ export function TypedRandom(t: TypeRecord, realm: Realm): Value | undefined {
   const draw = Math.floor(d * cardinality);
   const value = isUint ? draw : draw - (2 ** (bits - 1));
   return new TypedNumberValue(value, t);
+}
+
+/**
+ * proposal-runtime-types (random.md): the RANGE form `Math.random.<T>(range)`.
+ *
+ * "The bounds are a range, which may be any of the range forms. Its element type
+ * is `T` and its interval is part of its type." Each of the four intervals is a
+ * different draw, which is the whole reason the range syntax had to reach all
+ * four: `0..<1` must not produce 1, `0<..=1` must not produce 0, and `-1..=1`
+ * must be able to produce both endpoints.
+ *
+ * Returns undefined where the form is not one this produces, so the caller falls
+ * through to the ordinary call rather than silently ignoring the bound.
+ */
+export function TypedRandomInRange(t: TypeRecord, range: RangeObject, realm: Realm): Value | ReturnType<typeof Throw.RangeError> | undefined {
+  if (t.Kind !== 'primitive') {
+    return undefined;
+  }
+  const name = t.Name;
+  const isFloat = name === 'float16' || name === 'float32' || name === 'float64';
+  const isUint = name === 'uint';
+  const isInt = name === 'int';
+  if (!isFloat && !isUint && !isInt) {
+    return undefined;
+  }
+  const start = range.RangeStart === undefined ? undefined : R(range.RangeStart);
+  const end = range.RangeEnd === undefined ? undefined : R(range.RangeEnd);
+  const startOpen = range.RangeStartBound === 'open';
+  const endOpen = range.RangeEndBound === 'open';
+  const d = nextRandomDouble(realm);
+
+  if (isUint || isInt) {
+    const bits = t.Arguments[0] as number;
+    if (typeof bits !== 'number' || bits > 32) {
+      return undefined; // wide integers are deferred with the rest of the form
+    }
+    // "An open-ended range takes its missing endpoint from `T`", which for an
+    // integer type is its own least and greatest value.
+    const typeLo = isUint ? 0 : -(2 ** (bits - 1));
+    const typeHi = isUint ? (2 ** bits) - 1 : (2 ** (bits - 1)) - 1;
+    let lo = start === undefined ? typeLo : (startOpen ? start + 1 : start);
+    let hi = end === undefined ? typeHi : (endOpen ? end - 1 : end);
+    if (!Number.isInteger(lo) || !Number.isInteger(hi)) {
+      return Throw.TypeError('a range over an integer type needs integer endpoints');
+    }
+    lo = Math.max(lo, typeLo);
+    hi = Math.min(hi, typeHi);
+    if (lo > hi) {
+      // "An empty range produces no value ... a RangeError when the call is made."
+      return Throw.RangeError('the range is empty');
+    }
+    return new TypedNumberValue(lo + Math.floor(d * (hi - lo + 1)), t);
+  }
+
+  // A float range needs both endpoints: an open-ended one would take its missing
+  // endpoint from `T`, and random.md restricts that to "a type with finite
+  // bounds: an integer type, or any type carrying `minimum`/`maximum`", which is
+  // the metadata form and is deferred with the rest of it.
+  if (start === undefined || end === undefined) {
+    return undefined;
+  }
+  if (startOpen ? start >= end : start > end) {
+    return Throw.RangeError('the range is empty');
+  }
+  // The draw rides a grid of the width's significand, as the no-argument form
+  // does, so the value is exactly representable and the interval's own endpoints
+  // are respected rather than approached.
+  const grid = name === 'float64' ? 2 ** 53 : (name === 'float32' ? 2 ** 24 : 2 ** 11);
+  const span = end - start;
+  let u: number;
+  if (!startOpen && !endOpen) {
+    u = Math.floor(d * (grid + 1)) / grid; // [0, 1], both endpoints attainable
+  } else if (!startOpen && endOpen) {
+    u = Math.floor(d * grid) / grid; // [0, 1)
+  } else if (startOpen && !endOpen) {
+    u = 1 - (Math.floor(d * grid) / grid); // (0, 1]
+  } else {
+    u = (Math.floor(d * (grid - 1)) + 1) / grid; // (0, 1)
+  }
+  return new TypedNumberValue(start + (u * span), t);
 }
 
 /** https://tc39.es/ecma262/#sec-math.round */

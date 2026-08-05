@@ -15,7 +15,8 @@ import { ToIndex } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
-import { TypedRandom } from '../intrinsics/Math.mts';
+import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { X } from '../completion.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
@@ -408,14 +409,29 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // (a plain number, a bigint, a wide integer), so that call is ordinary too.
   if (surroundingAgent.feature('runtime-types')
       && memberExpr.type === 'TypeArgumentsExpression'
-      && args.length === 0
+      && args.length <= 1
       && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
     const mathRandom = Q(yield* Get(surroundingAgent.intrinsic('%Math%'), Value('random')));
     if (SameValue(func, mathRandom)) {
       const typeRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
-      const produced = TypedRandom(typeRecord, surroundingAgent.currentRealmRecord);
-      if (produced !== undefined) {
-        return produced;
+      if (args.length === 0) {
+        const produced = TypedRandom(typeRecord, surroundingAgent.currentRealmRecord);
+        if (produced !== undefined) {
+          return produced;
+        }
+      } else {
+        // proposal-runtime-types (random.md): the range form. Before this the
+        // single argument fell through to the ordinary `Math.random()`, which
+        // takes none - so a written bound was DROPPED and the call answered
+        // with a draw from [0, 1) that the caller never asked for.
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const only = argList[0];
+        if (argList.length === 1 && only !== undefined && isRangeObject(only)) {
+          const produced = TypedRandomInRange(typeRecord, only, surroundingAgent.currentRealmRecord);
+          if (produced !== undefined) {
+            return produced as Value;
+          }
+        }
       }
     }
   }

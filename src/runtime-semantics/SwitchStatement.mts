@@ -21,7 +21,9 @@ import {
 import {
   surroundingAgent,
   Assert, GetValue, IsStrictlyEqual, DeclarativeEnvironmentRecord,
+  Get, Call, IsCallable,
 } from '#self';
+import { isRangeObject } from '../intrinsics/Range.mts';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-caseclauseisselected */
 function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value): PlainEvaluator<boolean> {
@@ -37,6 +39,20 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
   // a typed value matched no numeric label, which is the form an enum-like
   // dispatch over a `uint8` takes.
   if (surroundingAgent.feature('runtime-types')) {
+    // proposal-runtime-types (ranges.md, #sec-matchrange): a RANGE label selects
+    // by containment rather than by identity - "when a case label is a range,
+    // the clause matches if the range contains the discriminant". Without this a
+    // range label never selects, because a range is never `===` a number, so
+    // ranges.md's own `switch (statusCode) { case 200..<300: ... }` fell through
+    // to `default`. The containment is the one `is` already performs on a range
+    // pattern, so the two spellings agree by construction.
+    if (isRangeObject(clauseSelector)) {
+      const contains = Q(yield* Get(clauseSelector, Value('contains')));
+      if (IsCallable(contains)) {
+        return Q(yield* Call(contains, clauseSelector, [input])) === Value.true;
+      }
+      return false;
+    }
     const adopted = AdoptLiteralOperand(input, clauseSelector, {
       left: false,
       right: isNumericLiteralOperand(constructor.Expression as ParseNode),

@@ -28,8 +28,7 @@ import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
  * and `Bound.Open`) and the literal forms' specialization, the
  * `uint8.<{ bounds: 1..=6 }>` metadata carrier (primitive metadata),
  * `a[start..<end]` slicing to a view (the array view substrate),
- * range case labels matching by containment, `x is uint8.<{ bounds: 1..=6 }>`, the `Math.random`
- * source, and the ordering-based generalization to bigint, dimensioned quantities,
+ * `x is uint8.<{ bounds: 1..=6 }>`, and the ordering-based generalization to bigint, dimensioned quantities,
  * and Temporal.
  */
 
@@ -388,11 +387,14 @@ test('the range operator does not exist with the feature off', () => {
   expect((runFlagOff('let x = 1.5; x;') as { Type: string }).Type).toBe('normal');
 });
 
-test('a range case label does not yet match by containment (documents the gap)', () => {
-  // ranges.md: a range case label should match a discriminant the range contains.
-  // Today the label parses but is compared by identity, so an integer in the
-  // range does not select the case and control falls through to the default.
-  expect(evaluated('let x = 3; let r = "none"; switch (x) { case 0..<5: r = "in"; break; default: r = "def"; } r;')).toBe('def');
-  // an exact endpoint likewise does not match by identity
-  expect(evaluated('let x = 0; let r = "none"; switch (x) { case 0..<5: r = "in"; break; default: r = "def"; } r;')).toBe('def');
+test('a range case label matches by containment', () => {
+  // ranges.md: "when a case label is a range, the clause matches if the range
+  // contains the discriminant", which is the containment `is` already performed
+  // on a range pattern -- the two spellings now agree by construction.
+  const f = 'const f = (c) => { switch (c) { case 200..<300: return "Ok"; case 400..<500: return "ClientError"; case 500..<600: return "ServerError"; default: return "Unknown"; } };';
+  expect(evaluated(`${f} f(204) + "," + f(404) + "," + f(503) + "," + f(302);`))
+    .toBe('Ok,ClientError,ServerError,Unknown');
+  // The endpoint the label excludes selects the default.
+  expect(evaluated('const g = (x) => { switch (x) { case 0..<5: return "in"; } return "out"; }; g(0) + "," + g(4) + "," + g(5);'))
+    .toBe('in,in,out');
 });

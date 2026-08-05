@@ -144,10 +144,10 @@ test('sec-range-literals: DIVERGENCE - a parenthesized range is not rejected as 
 });
 
 // =============================================================================
-// sec-ranges — the value and its shapes
+// sec-ranges - the value and its shapes
 // =============================================================================
 
-test('sec-ranges: DIVERGENCE — the four shapes and RangeBounds are not bound', () => {
+test('sec-ranges: DIVERGENCE - the four shapes and RangeBounds are not bound', () => {
   // "There are four shapes: `Range.<T, S, E>` carrying both endpoints,
   //  `RangeFrom.<T, S>` and `RangeTo.<T, E>` carrying one, and `RangeFull.<T>`
   //  carrying neither. Each implements `RangeBounds.<T>`, which is the
@@ -164,7 +164,7 @@ test('sec-ranges: DIVERGENCE — the four shapes and RangeBounds are not bound', (
   expect(evaluated('let r: Range = 0..<10; typeof r;')).toBe('object');
 });
 
-test('sec-ranges: DIVERGENCE — `Bound` is not bound and the parameterization does not exist', () => {
+test('sec-ranges: DIVERGENCE - `Bound` is not bound and the parameterization does not exist', () => {
   // "_S_ and _E_ are values of `Bound`, either `Bound.Closed` or `Bound.Open`,
   //  one for each endpoint the shape has."
   //
@@ -174,7 +174,7 @@ test('sec-ranges: DIVERGENCE — `Bound` is not bound and the parameterization doe
   expectThrown('let r: Range.<uint8, Bound.Closed, Bound.Open> = 0..<10; "ok";');
 });
 
-test('sec-ranges: DIVERGENCE — `interval` exposes a string, not an `Interval`', () => {
+test('sec-ranges: DIVERGENCE - `interval` exposes a string, not an `Interval`', () => {
   // "The four-way name of a pair is an `Interval`, which a range exposes and a
   //  diagnostic prefers over the parameterization."
   //
@@ -196,7 +196,7 @@ test('sec-ranges: a range is an expression and appears wherever one does', () =>
   expect(evaluated('String([0..<3][0].end);')).toBe('3');
 });
 
-test('sec-ranges: DIVERGENCE — a range is a value, but does not compare as one', () => {
+test('sec-ranges: DIVERGENCE - a range is a value, but does not compare as one', () => {
   // "A range is a value, so it allocates nothing and copies."
   //
   // DIVERGENCE, recorded and NOT this plan's to fix: two equal ranges are not
@@ -210,7 +210,7 @@ test('sec-ranges: DIVERGENCE — a range is a value, but does not compare as one',
 });
 
 // =============================================================================
-// sec-ranges — the RangeBounds operations
+// sec-ranges - the RangeBounds operations
 // =============================================================================
 
 test('sec-ranges: `contains` takes either a value or a range', () => {
@@ -246,7 +246,7 @@ test('sec-ranges: the shape of an intersection follows from its operands', () =>
   expect(evaluated('const r = (0..<5).intersect(..); r.start + "," + r.end;')).toBe('0,5');
 });
 
-test('sec-ranges: DIVERGENCE — `scale` is present on every range, not only where the element type scales', () => {
+test('sec-ranges: DIVERGENCE - `scale` is present on every range, not only where the element type scales', () => {
   // "`scale` ... is present on the instantiations whose element type defines
   //  scalar multiplication, which an ordering does not imply: a range over
   //  `Temporal.Instant` has an order and no arithmetic, and has no `scale`."
@@ -269,7 +269,7 @@ test('sec-ranges: a zero factor yields the closed range at zero, and leaves an e
 });
 
 // =============================================================================
-// sec-ranges — the value's members and iteration
+// sec-ranges - the value's members and iteration
 // =============================================================================
 
 test('sec-ranges: `start` and `end` are the endpoints, absent for an omitted one', () => {
@@ -315,7 +315,7 @@ test('sec-ranges: a non-integer interval is a TypeError to iterate without an ex
   expectThrown('[...(0.5..<2.5)];');
 });
 
-test('sec-ranges: DIVERGENCE — the element type is Number only, not any ordered type', () => {
+test('sec-ranges: DIVERGENCE - the element type is Number only, not any ordered type', () => {
   // "A range is a value type class over an ORDERED element type."
   //
   // DIVERGENCE (F2): endpoints must be Numbers. bigint is rejected, and with it
@@ -324,23 +324,68 @@ test('sec-ranges: DIVERGENCE — the element type is Number only, not any ordered 
   expectThrown('const r = 0n..<10n; r;');
 });
 
-test('sec-ranges: DIVERGENCE — `reverse` is declared by the design and absent everywhere else', () => {
-  // ranges.md declares `reverse(): Iterator.<T>` on the class and its prose
-  // leans on it: "`(0..<10).reverse()` is how you count down".
-  //
-  // DIVERGENCE (D2), three ways: absent from the engine prototype, absent from
-  // this clause's member sentence, and required by the design. The clause is
-  // where it should be added, since a member the design declares and the
-  // specification never mentions is a hole in the specification first.
-  expect(evaluated('String(typeof (0..<3).reverse);')).toBe('undefined');
+test('sec-ranges: `reverse` iterates the same members in the opposite order', () => {
+  expect(evaluated('[...(0..<10).reverse()].join(",");')).toBe('9,8,7,6,5,4,3,2,1,0');
+  expect(evaluated('[...(0..=3).reverse()].join(",");')).toBe('3,2,1,0');
+  // Each endpoint's bound is respected from the other side.
+  expect(evaluated('[...(0<..<4).reverse()].join(",");')).toBe('3,2,1');
+  expect(evaluated('[...(0<..=4).reverse()].join(",");')).toBe('4,3,2,1');
+  // "how a descending traversal is written given that a descending range is
+  //  empty" -- the same members, not exchanged endpoints.
+  expect(evaluated('String([...(5..<5).reverse()].length);')).toBe('0');
+  // A range with no end has no last member, mirroring a range with no start
+  // not iterating forward.
+  expectThrown('(5..).reverse();');
 });
 
-test('sec-ranges: DIVERGENCE — `Range.of` is declared by the design and absent from the engine', () => {
+test('sec-ranges: DIVERGENCE - `Range.of` is declared by the design and absent from the engine', () => {
   // ranges.md declares `static of<T, S: Bound, E: Bound>(start, end)`, which is
   // the only way to construct a range in code generic over its bounds.
   //
   // DIVERGENCE (F5): not implemented. Blocked on `Bound` (D4).
   expect(evaluated('String(typeof Range.of);')).toBe('undefined');
+});
+
+// =============================================================================
+// random.md - the range form of Math.random
+// =============================================================================
+
+test('random.md: a range bound is consumed rather than ignored', () => {
+  // Before R1 the single argument fell through to the ordinary `Math.random()`,
+  // which takes none: a written bound was DROPPED and the call answered with a
+  // draw from [0, 1). Silently wrong is worse than unimplemented, which is why
+  // this row exists even though the form is the feature and not the defect.
+  expect(evaluated('let ok = true; for (let i = 0; i < 400; i += 1) { const v = Number(Math.random.<uint8>(1..=6)); if (v < 1 || v > 6) ok = false; } String(ok);')).toBe('true');
+});
+
+test('random.md: each of the four intervals is a different draw', () => {
+  // "A die. 1 through 6" -- both endpoints attainable.
+  expect(evaluated('let lo = 99, hi = -1; for (let i = 0; i < 400; i += 1) { const v = Number(Math.random.<uint8>(1..=6)); if (v < lo) lo = v; if (v > hi) hi = v; } lo + "," + hi;')).toBe('1,6');
+  // "0 through 99" -- the end is excluded.
+  expect(evaluated('let hi = -1; for (let i = 0; i < 800; i += 1) { const v = Number(Math.random.<uint32>(0..<100)); if (v > hi) hi = v; } String(hi);')).toBe('99');
+  // An open start excludes its own endpoint too.
+  expect(evaluated('let lo = 99, hi = -1; for (let i = 0; i < 800; i += 1) { const v = Number(Math.random.<uint8>(0<..<10)); if (v < lo) lo = v; if (v > hi) hi = v; } lo + "," + hi;')).toBe('1,9');
+  // The float intervals, on float16's grid where an endpoint is observable.
+  expect(evaluated('let n = 0; for (let i = 0; i < 40000; i += 1) { if (Number(Math.random.<float16>(0..=1)) === 1) n += 1; } String(n > 0);')).toBe('true');
+  expect(evaluated('let bad = 0; for (let i = 0; i < 20000; i += 1) { const v = Number(Math.random.<float16>(0..<1)); if (v >= 1) bad += 1; } String(bad);')).toBe('0');
+  expect(evaluated('let bad = 0; for (let i = 0; i < 20000; i += 1) { const v = Number(Math.random.<float16>(0<..<1)); if (v <= 0 || v >= 1) bad += 1; } String(bad);')).toBe('0');
+});
+
+test('random.md: an open-ended range takes its missing endpoint from T', () => {
+  expect(evaluated('let ok = true; for (let i = 0; i < 600; i += 1) { const v = Number(Math.random.<uint8>(..)); if (v < 0 || v > 255) ok = false; } String(ok);')).toBe('true');
+  expect(evaluated('let ok = true; for (let i = 0; i < 300; i += 1) { if (Number(Math.random.<int32>(0..)) < 0) ok = false; } String(ok);')).toBe('true');
+});
+
+test('random.md: an empty range produces no value', () => {
+  // "a RangeError when the call is made".
+  expect(evaluated('let k = "no"; try { Math.random.<uint8>(5..<5); } catch (e) { k = e.constructor.name; } k;')).toBe('RangeError');
+  // "5, the only value the range contains".
+  expect(evaluated('String(Number(Math.random.<uint8>(5..=5)));')).toBe('5');
+});
+
+test('random.md: the no-argument form is unchanged', () => {
+  expect(evaluated('let ok = true; for (let i = 0; i < 200; i += 1) { const v = Number(Math.random.<float32>()); if (v < 0 || v >= 1) ok = false; } String(ok);')).toBe('true');
+  expect(evaluated('let ok = true; for (let i = 0; i < 200; i += 1) { const v = Math.random(); if (v < 0 || v >= 1) ok = false; } String(ok);')).toBe('true');
 });
 
 // =============================================================================
@@ -353,20 +398,24 @@ test('sec-matchrange: a range pattern matches by containment', () => {
   expect(evaluated('String(10 is 1..<10) + "," + String(10 is 1..=10);')).toBe('false,true');
 });
 
-test('sec-matchrange: DIVERGENCE — a range `case` label does not match by containment', () => {
-  // MatchRange "matches a range pattern by containment", and `is` above does.
-  // ranges.md's own example is a `switch (statusCode)` over `case 200..<300`.
-  //
-  // DIVERGENCE (D3): CaseClauseIsSelected compares by strict equality, so a
-  // range label never selects and control reaches `default`. The asymmetry with
-  // `is` is the tell: the containment operation exists and the `switch` path
-  // does not call it.
-  expect(evaluated('let r = "def"; switch (3) { case 0..<5: r = "in"; break; } r;')).toBe('def');
-  expect(evaluated('let r = "def"; switch (0) { case 0..<5: r = "in"; break; } r;')).toBe('def');
+test('sec-matchrange: a range `case` label matches by containment', () => {
+  // ranges.md's own example, which fell through to `default` before.
+  const f = 'const f = (c) => { switch (c) { case 200..<300: return "Ok"; case 400..<500: return "ClientError"; case 500..<600: return "ServerError"; default: return "Unknown"; } };';
+  expect(evaluated(`${f} f(204) + "," + f(404) + "," + f(503) + "," + f(302);`))
+    .toBe('Ok,ClientError,ServerError,Unknown');
+  // Each endpoint's own bound decides.
+  expect(evaluated('const g=(x)=>{switch(x){case 0..<5: return "in";} return "out";}; g(0)+","+g(4)+","+g(5);'))
+    .toBe('in,in,out');
+  // A label agrees with the same range used as an `is` pattern.
+  expect(evaluated('let ok=true; for (let i=-2;i<8;i++){ const s=(()=>{switch(i){case 0..<5: return true;} return false;})(); if (s !== (i is 0..<5)) ok=false; } String(ok);'))
+    .toBe('true');
+  // Ordinary labels are unaffected.
+  expect(evaluated('const h=(x)=>{switch(x){case 1: return "one"; case "a": return "A";} return "other";}; h(1)+","+h("a")+","+h(2);'))
+    .toBe('one,A,other');
 });
 
 // =============================================================================
-// table-metadata-values — the Range row
+// table-metadata-values - the Range row
 // =============================================================================
 
 const NB = `
@@ -437,7 +486,7 @@ test('table-metadata-values: DIVERGENCE - the value language is not closed', () 
   expect(evaluated(`${meta} type T = float64.<{ bounds: () => void }>; "ok";`)).toBe('ok');
 });
 
-test('sec-meta-declarations: DIVERGENCE — a meta default cannot hold a range', () => {
+test('sec-meta-declarations: DIVERGENCE - a meta default cannot hold a range', () => {
   // "a meta type whose key means an unconstrained bound says so in its
   //  `default`", which is what makes an omitted key and a written full range one
   //  portion. primitivemetadata.md writes `default = { bounds: .., nonZero: false }`.
@@ -454,7 +503,7 @@ test('sec-meta-declarations: DIVERGENCE — a meta default cannot hold a range', (
   expect(evaluated('type X = { bounds?: Range }; meta X { default = {}; subtype(a,b){return true;} } "ok";')).toBe('ok');
 });
 
-test('sec-metadata-narrowing: DIVERGENCE — no comparison narrows through a metadata hook', () => {
+test('sec-metadata-narrowing: DIVERGENCE - no comparison narrows through a metadata hook', () => {
   // The narrowing clause has a comparison give a value a bounded type inside a
   // branch, which primitivemetadata.md's `narrow` implements as an intersection.
   //

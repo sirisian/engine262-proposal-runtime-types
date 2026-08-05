@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, NumberValue, wellKnownSymbols,
+  Value, ObjectValue, NumberValue, isTypedNumber, wellKnownSymbols,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
@@ -260,10 +260,17 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   if (isRangeObject(value)) {
     return rangeContainsRange(self, value) ? Value.true : Value.false;
   }
-  if (!(value instanceof NumberValue)) {
+  // #sec-matchrange: containment admits "a value of a type ORDERED WITH the
+  // element type", so a typed number counts. Without this a `uint8` reaching
+  // `contains` -- which is how a range `case` label sees an enum-like
+  // discriminant, and how a typed value reaches a range pattern -- answered
+  // false for a value plainly inside the range.
+  const numeric = value instanceof NumberValue ? R(value)
+    : (isTypedNumber(value) ? Number(value.numberValue()) : undefined);
+  if (numeric === undefined) {
     return Value.false;
   }
-  const x = R(value);
+  const x = numeric;
   // One comparison per endpoint, each by its own bound.
   if (self.RangeStart !== undefined) {
     const start = R(self.RangeStart);
@@ -331,6 +338,34 @@ function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallConte
   return it;
 }
 
+// ranges.md: "a descending range is empty, not reversed ... `(0..<10).reverse()`
+// is how you count down". So `reverse` iterates the SAME members in the opposite
+// order, which is a step of -1 from the last member rather than a range with its
+// endpoints exchanged - exchanging them would give an empty range by the rule
+// above, which is precisely the mistake the rule exists to prevent.
+function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  if (self.RangeEnd === undefined) {
+    // A descending traversal has to start somewhere, and a range with no end
+    // has no last member -- the mirror of a range with no start not iterating.
+    return Throw.TypeError('a range with no end cannot be reversed');
+  }
+  const end = R(self.RangeEnd);
+  const start = self.RangeStart === undefined ? undefined : R(self.RangeStart);
+  if (!Number.isInteger(end) || (start !== undefined && !Number.isInteger(start))) {
+    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
+  }
+  // The last member is the end itself where the end's bound includes it, and one
+  // below where it does not; iteration then runs down to the start, whose own
+  // bound decides whether the start is reached.
+  const first = self.RangeEndBound === 'closed' ? end : end - 1;
+  const stopBound: RangeBound | undefined = self.RangeStartBound === 'open' ? 'open' : 'closed';
+  return CreateRangeIterator(first, start, -1, undefined, stopBound, surroundingAgent.currentRealmRecord);
+}
+
 function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -371,6 +406,7 @@ export function bootstrapRangePrototype(realmRec: Realm): void {
     ['contains', RangeProto_contains, 1],
     ['intersect', RangeProto_intersect, 1],
     ['scale', RangeProto_scale, 1],
+    ['reverse', RangeProto_reverse, 0],
     ['step', RangeProto_step, 1],
     [wellKnownSymbols.iterator, RangeProto_iterator, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Range');
