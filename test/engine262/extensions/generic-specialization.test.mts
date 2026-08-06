@@ -127,3 +127,52 @@ test('a generator method of a specialization reads its parameters', () => {
   expect(evaluated('class C<W: uint32> { *g() { yield W; yield W; } }'
     + ' const it = new C.<4>().g(); it.next(); String(it.next().value);')).toBe('4');
 });
+
+// -- G3: the rest of the matrix ----------------------------------------------
+test('a value parameter reaches the remaining body shapes', () => {
+  // a setter, which the getter case above does not cover
+  expect(evaluated('class C<W: uint32> { set s(v) { this.n = v * W; } }'
+    + ' const c = new C.<4>(); c.s = (2 := uint32); String(c.n);')).toBe('8');
+  // a static block, which runs when the class is DEFINED - so an unspecialized
+  // generic class leaves it unrun and the specialization runs it
+  expect(evaluated('class C<W: uint32> { static v; static { C.v = W; } } String((C.<4>).v);')).toBe('4');
+  // a function expression nested in a method, which is a different creation
+  // path from the arrow covered above
+  expect(evaluated('class C<W: uint32> { m() { const f = function () { return W; }; return f(); } }'
+    + ' String(new C.<4>().m());')).toBe('4');
+});
+
+test('a TYPE parameter reaches the same bodies as a value parameter', () => {
+  expect(evaluated('class C<T> { m() { return (1 := T) is uint8; } } String(new C.<uint8>().m());')).toBe('true');
+  expect(evaluated('class C<T> { static m() { return (1 := T) is uint8; } } String((C.<uint8>).m());')).toBe('true');
+  expect(evaluated('class C<T> { constructor() { this.v = (1 := T); } }'
+    + ' String(new C.<uint8>().v is uint8);')).toBe('true');
+});
+
+test('specialization identity distinguishes value and type arguments', () => {
+  expect(evaluated('class C<T> { } String((C.<uint8>) === (C.<uint8>));')).toBe('true');
+  expect(evaluated('class C<T> { } String((C.<uint8>) === (C.<uint16>));')).toBe('false');
+  // a value argument and a type argument are different arguments
+  expect(evaluated('class C<W> { } String((C.<4>) === (C.<uint8>));')).toBe('false');
+});
+
+test('a specialization satisfies an annotation naming the same application', () => {
+  // the type arguments the specialization's class type carries are what make
+  // this hold - without them a specialization refused its own value
+  expect(evaluated('class B<T> {} const b: B.<uint8> = new B.<uint8>(); String(typeof b);')).toBe('object');
+});
+
+test('heritage that does not read a parameter is unaffected', () => {
+  // only a parameter-reading heritage waits for an application
+  expect(evaluated('class Base { m() { return 5; } } class C<W: uint32> extends Base { }'
+    + ' String(new C.<4>().m());')).toBe('5');
+  // and a generic class needs no heritage at all
+  expect(evaluated('class C<W: uint32> { m() { return W; } } String(new C.<4>().m());')).toBe('4');
+});
+
+test('a specialization may itself be extended', () => {
+  expect(evaluated('class C<W: uint32> { m() { return W; } } class D extends C.<4> { }'
+    + ' String(new D().m());')).toBe('4');
+  expect(evaluated('class C<W: uint32> extends [W].<uint8> { } class D extends C.<4> { }'
+    + ' String(new D().length);')).toBe('4');
+});

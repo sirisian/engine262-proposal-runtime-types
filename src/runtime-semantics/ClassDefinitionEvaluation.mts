@@ -872,8 +872,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // built by an application initializes it over that application's
       // bindings. An instance field needs no such rule: it runs at
       // construction, and only a specialization is constructed.
-      if (unspecializedGeneric && elementRecord instanceof ClassElementDefinitionRecord
-          && (elementRecord.Kind === 'field' || elementRecord.Kind === 'accessor')) {
+      // A static BLOCK runs at definition too, so it waits for an application
+      // the same way a static field does.
+      if (unspecializedGeneric
+          && ((elementRecord instanceof ClassElementDefinitionRecord
+            && (elementRecord.Kind === 'field' || elementRecord.Kind === 'accessor'))
+            || elementRecord instanceof ClassStaticBlockDefinitionRecord)) {
         continue;
       }
       // a. If elementRecord is a ClassFieldDefinition Record, then
@@ -1139,7 +1143,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // proposal-runtime-types #sec-generics: see the note on the decorated
       // path above - an unspecialized generic class leaves a static field
       // uninitialized, and the specialization initializes it over its bindings.
-      if (unspecializedGeneric && elementRecord instanceof ClassFieldDefinitionRecord) {
+      if (unspecializedGeneric
+          && (elementRecord instanceof ClassFieldDefinitionRecord
+            || elementRecord instanceof ClassStaticBlockDefinitionRecord)) {
         continue;
       }
       // a. If elementRecord is a ClassFieldDefinition Record, then
