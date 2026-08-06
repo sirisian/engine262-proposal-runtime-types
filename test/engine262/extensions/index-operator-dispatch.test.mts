@@ -146,3 +146,46 @@ test('a parenthesized comma supplies one index', () => {
 test('multi-index access is inert with the feature off', () => {
   expect(runFlagOff('let a = [10, 20, 30]; a[1, 2];')).toMatchObject({ Type: 'normal' });
 });
+
+// -- #sec-class-operators: a ref read direction serves writes ------------------
+const REFGET = 'class C { #d = [1, 2]; get operator[](i: uint32) { return ref this.#d[i]; } peek(i) { return this.#d[i]; } } ';
+
+test('a write goes through a borrow the read direction returned', () => {
+  // the design writes `get operator[]() { return ref this[...]; }` with no
+  // setter, because a reference already denotes the place a write goes
+  expect(evaluated(`${REFGET}const c = new C(); c[0] = 5; String(c.peek(0));`)).toBe('5');
+  // and reading still decays, so a value use sees the referent
+  expect(evaluated(`${REFGET}String(new C()[1]);`)).toBe('2');
+  // several indices work the same way
+  expect(evaluated('class C { #d = [0, 0, 0, 0];'
+    + ' get operator[](x: uint32, y: uint32) { return ref this.#d[y * 2 + x]; }'
+    + ' peek(i) { return this.#d[i]; } }'
+    + ' const c = new C(); c[1, 1] = 9; String(c.peek(3));')).toBe('9');
+});
+
+test('a borrowed index supports read-modify-write', () => {
+  expect(evaluated(`${REFGET}const c = new C(); c[0] += 10; String(c.peek(0));`)).toBe('11');
+  expect(evaluated(`${REFGET}const c = new C(); c[0]++; String(c.peek(0));`)).toBe('2');
+  expect(evaluated(`${REFGET}const c = new C(); c[0] ||= 7; String(c.peek(0));`)).toBe('1');
+});
+
+test('a write direction is used where one is declared', () => {
+  expect(evaluated('let via = ""; class C { #d = [1];'
+    + ' get operator[](i: uint32) { return ref this.#d[i]; }'
+    + ' set operator[](i: uint32, v) { via = "setter"; this.#d[i] = v; } }'
+    + ' const c = new C(); c[0] = 7; via;')).toBe('setter');
+});
+
+test('a read direction yielding a value still cannot serve a write', () => {
+  // there is no location for the write to reach, so it would not be read back
+  expectThrown('class C { #d = [1]; get operator[](i: uint32) { return this.#d[i]; } } new C()[0] = 5;');
+});
+
+test('a write through a borrowed index is checked as the element requires', () => {
+  expect(evaluated('class C { d: [].<uint8> = [1, 2];'
+    + ' get operator[](i: uint32) { return ref this.d[i]; } }'
+    + ' const c = new C(); c[0] = 200; String(c.d[0]);')).toBe('200');
+  expectThrown('class C { d: [].<uint8> = [1];'
+    + ' get operator[](i: uint32) { return ref this.d[i]; } }'
+    + ' const c = new C(); c[0] = 300;');
+});

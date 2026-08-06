@@ -244,11 +244,26 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     Q(yield* Call(V.IndexSetOperator, V.Base as Value, [...(V.IndexArguments ?? [V.ReferencedName as Value]), W] as Value[]));
     return undefined;
   }
-  // Where the class declares the read half and no write half, the write reaches
-  // nothing the read will ever look at, so it is reported rather than silently
-  // stored on an ordinary property. The design's other way to make such a write
-  // work, a `get operator[]` that returns a reference, is not implemented yet.
+  // proposal-runtime-types #sec-class-operators: where the class declares only
+  // a read direction and that direction returns a BORROW, the borrow is the
+  // location and the write stores through it - the design's `get operator[]() {
+  // return ref this[...]; }`, which is written without a setter because a
+  // reference already denotes the place a write goes.
+  //
+  // This is the assignment-target rule of #sec-location-consuming-contexts
+  // applied to an index access: the accessor is a call whose result is a
+  // reference, and an assignment whose target is such a call stores through it.
   if (V.IndexOperator !== undefined) {
+    // A read-modify-write applies the accessor once per direction, as it does
+    // for a declared getter/setter pair: the read yields the value and the
+    // write asks for the location again. Collapsing the two would mean the
+    // reference carrying the borrow the read produced.
+    const borrow = Q(yield* Call(V.IndexOperator, V.Base as Value, (V.IndexArguments ?? [V.ReferencedName as Value]) as Value[]));
+    if (borrow instanceof ReferenceValue) {
+      return Q(yield* PutValue(borrow.Location, W));
+    }
+    // A read direction that yields a value has no location for the write to
+    // reach, so the write would not be read back and is reported instead.
     return Throw.TypeError('this index accessor has no set operator[], so the write would not be read back');
   }
   // 5. If IsPropertyReference(V) is true, then
