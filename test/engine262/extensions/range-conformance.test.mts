@@ -626,6 +626,24 @@ test('sec-metadata-narrowing: a program that narrows nothing is untouched', () =
   expectThrown('const x: uint8 = 300; "ok";');
 });
 
+test('ranges.md: DIVERGENCE - the range index operator awaits the view substrate', () => {
+  // "`array[a..<b]` and `array.window(a, b)` are the same operation, and the
+  //  range form should be the one people write" - and it produces a VIEW, which
+  //  is the whole of why it is an operator rather than a method.
+  //
+  // DIVERGENCE (plan item F3). Neither `window` nor any view type exists, so the
+  // operator cannot. What it must NOT do meanwhile is what it did: a range
+  // coerced to a property key is a string no object has, so `a[1..<3]` answered
+  // *undefined* - a quiet non-answer to a question the language will answer.
+  // It refuses now, which says the same thing without the silence.
+  expectThrown('let a: [].<uint8> = [1,2,3,4,5]; a[1..<3];');
+  expectThrown('const a = [1,2,3]; a[0..<2];');
+  // Ordinary keys are untouched, which is what keeps the refusal narrow.
+  expect(evaluated('const a=[1,2,3]; String(a[1]);')).toBe('2');
+  expect(evaluated('const o={x:7}; String(o["x"]);')).toBe('7');
+  expect(evaluated('const s=Symbol("k"); const o={}; o[s]=1; String(o[s]);')).toBe('1');
+});
+
 // =============================================================================
 // sec-matchrange
 // =============================================================================

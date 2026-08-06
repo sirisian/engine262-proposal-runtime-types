@@ -1,3 +1,4 @@
+import { isRangeObject } from '../intrinsics/Range.mts';
 import {
   UndefinedValue, JSStringValue, SymbolValue,
   ObjectValue,
@@ -516,6 +517,19 @@ export function ToObject(argument: Value): ValueCompletion<ObjectValue> {
 
 /** https://tc39.es/ecma262/#sec-topropertykey */
 export function* ToPropertyKey(argument: Value): ValueEvaluator<PropertyKeyValue> {
+  // proposal-runtime-types (ranges.md): `a[start..<end]` is the RANGE INDEX
+  // operator - "`array[a..<b]` and `array.window(a, b)` are the same operation,
+  // and the range form should be the one people write" - and it produces a
+  // VIEW, which is the whole of why it is an operator rather than a method.
+  //
+  // The view substrate does not exist yet, so the operator cannot. What must
+  // not happen meanwhile is what did: a range coerced to a property key is a
+  // string no object has, so `a[1..<3]` answered *undefined* - a quiet
+  // non-answer to a question the language is going to give a real answer to.
+  // Refusing says the same thing without the silence.
+  if (surroundingAgent.feature('runtime-types') && isRangeObject(argument)) {
+    return Throw.TypeError('a range index needs the view substrate, which is not implemented');
+  }
   // 1. Let key be ? ToPrimitive(argument, string).
   const key = Q(yield* ToPrimitive(argument, 'string'));
   // 2. If Type(key) is Symbol, then
