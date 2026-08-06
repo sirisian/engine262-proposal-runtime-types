@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  Agent, ManagedRealm, setSurroundingAgent, ThreadCluster,
+  Agent, ManagedRealm, runSingleJobInQueue, setSurroundingAgent, ThreadCluster,
 } from '#self';
 
 /**
@@ -247,6 +247,37 @@ test('D2 cancellation: an abort wakes a wait parked inside an async thread', () 
   h.evaluate('c.abort("cancelled");');
   h.cluster.runUntilIdle();
   expect(h.evaluate('log.join(" | ")')).toBe('parking | woken by abort: cancelled');
+});
+
+test('callThread works in a host that configured no cluster', () => {
+  // The devtools case. Every agent is an agent of a cluster, possibly of one, so
+  // a host that has configured none is not a host without threads - it is one
+  // that has not been asked yet. A cluster created on demand drives itself from
+  // the spawning agent's own job queue, one job per pump, so the threads are
+  // interleaved by the host's existing event loop and callThread works in an
+  // embedder that has done nothing to enable it.
+  const agent = new Agent({ features: ['runtime-types'], eventLoopRunType: 'manual' });
+  setSurroundingAgent(agent);
+  const realm = new ManagedRealm();
+  const evaluate = (source: string) => {
+    setSurroundingAgent(agent);
+    return (realm.evaluateScriptSkipDebugger(source).Value as { stringValue?(): string }).stringValue?.() ?? '';
+  };
+  evaluate(`
+    globalThis.out = 'pending';
+    function body() { return 7; }
+    body.callThread().then((v) => { out = 'resolved ' + v; });
+    "";
+  `);
+  // Drive only the HOST's queue, as an embedder does.
+  let guard = 0;
+  while (agent.jobQueue.length > 0) {
+    guard += 1;
+    expect(guard).toBeLessThan(500);
+    setSurroundingAgent(agent);
+    runSingleJobInQueue(agent.jobQueue.shift()!, () => {}, () => {});
+  }
+  expect(evaluate('String(out)')).toBe('resolved 7');
 });
 
 // -- D8: the options bag --------------------------------------------------------

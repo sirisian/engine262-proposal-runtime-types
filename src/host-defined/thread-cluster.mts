@@ -27,6 +27,13 @@ export class ThreadCluster {
   /** The agent that evaluated the program. It is a thread like the others. */
   readonly mainAgent: Agent;
 
+  /**
+   * Whether this cluster drives itself from the spawning agent's job queue,
+   * which is the case when no host configured one. A cluster the host owns is
+   * driven by the host, and this is false.
+   */
+  selfDriven = false;
+
   #threads: Agent[] = [];
 
   #order: Agent[] = [];
@@ -80,6 +87,35 @@ export class ThreadCluster {
     // because the body, every await resumption inside it, and every trailing
     // microtask are all jobs of this queue, checking here covers all of them
     // without naming them separately.
+    if (agent.threadAbortSignal?.AbortSignalAborted === true && agent.threadAbortDelivered !== true) {
+      agent.jobQueue.clearForAbort?.();
+      return true;
+    }
+    runJobOn(agent, job);
+    return true;
+  }
+
+  /** Whether any SPAWNED thread has a job waiting; the main agent is not one. */
+  get hasThreadWork(): boolean {
+    return this.#threads.some((a) => a.jobQueue.length > 0);
+  }
+
+  /**
+   * Run one job of one spawned thread, round-robin, and answer whether there was
+   * one. Distinct from runOneJob, which includes the main agent: a self-driven
+   * cluster is pumped FROM the main agent's queue, so running the main agent's
+   * own jobs here would re-enter it.
+   */
+  runOneThreadJob(): boolean {
+    const ready = this.#threads.filter((a) => a.jobQueue.length > 0);
+    if (ready.length === 0) {
+      return false;
+    }
+    const last = this.#order[this.#order.length - 1];
+    const at = last === undefined ? 0 : Math.max(0, (ready.indexOf(last) + 1) % ready.length);
+    const agent = ready[at];
+    this.#order.push(agent);
+    const job = agent.jobQueue.shift()!;
     if (agent.threadAbortSignal?.AbortSignalAborted === true && agent.threadAbortDelivered !== true) {
       agent.jobQueue.clearForAbort?.();
       return true;

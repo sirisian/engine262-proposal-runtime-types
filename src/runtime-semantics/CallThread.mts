@@ -34,6 +34,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import type { OverloadSignature } from '../type-system/overloads.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
+import { ThreadCluster } from '../host-defined/thread-cluster.mts';
 import {
   AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
 } from '../intrinsics/AbortController.mts';
@@ -151,8 +152,12 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
     return capability.Promise;
   }
 
-  const cluster = surroundingAgent.hostDefinedOptions.threadCluster;
-  Assert(cluster !== undefined);
+  // #sec-threading-agent-cluster: every agent is an agent of a cluster, possibly
+  // of one, so a host that has not configured a cluster is not a host without
+  // threads - it is a host that has not been asked for one yet. Asserting here
+  // made callThread crash the engine outright in any embedder that had not wired
+  // a driver, which is every embedder but the tests.
+  const cluster = GetOrCreateThreadCluster();
 
   const thread = new Agent({
     ...surroundingAgent.hostDefinedOptions,
@@ -238,6 +243,7 @@ export function CreateThread(func: FunctionObject, args: Arguments, signal: Abor
     });
   }
 
+  SchedulePump(cluster, spawner, realm);
   return capability.Promise;
 }
 
@@ -260,6 +266,45 @@ function SettleFromThread(spawner: Agent, spawnerRealm: Agent['currentRealmRecor
   HostEnqueuePromiseJob(function* settleJob(): PlainEvaluator {
     X(Call(settle, Value.undefined, [value]));
   }, spawnerRealm, spawner);
+}
+
+/**
+ * The cluster the surrounding agent belongs to, created on first use.
+ *
+ * A cluster created here has no external driver - the tests drive theirs - so it
+ * is pumped from the spawning agent's own job queue: each pump runs one job of
+ * one thread and re-schedules itself while any thread still has work. The threads
+ * are therefore interleaved by the host's existing event loop rather than by a
+ * scheduler the host has to know about, and `callThread` works in an embedder
+ * that has done nothing to enable it.
+ */
+function GetOrCreateThreadCluster(): ThreadCluster {
+  const existing = surroundingAgent.hostDefinedOptions.threadCluster;
+  if (existing !== undefined) {
+    return existing;
+  }
+  const cluster = new ThreadCluster(surroundingAgent);
+  cluster.selfDriven = true;
+  surroundingAgent.hostDefinedOptions.threadCluster = cluster;
+  return cluster;
+}
+
+/**
+ * Keep a self-driven cluster moving by riding the spawner's queue. One job per
+ * pump, so a thread cannot starve the agent that is pumping it, and no pump is
+ * scheduled once every thread is idle.
+ */
+function SchedulePump(cluster: ThreadCluster, spawner: Agent, realm: Agent['currentRealmRecord']): void {
+  if (!cluster.selfDriven) {
+    return;
+  }
+  HostEnqueuePromiseJob(function* pump(): PlainEvaluator {
+    const ran = cluster.runOneThreadJob();
+    if (ran || cluster.hasThreadWork) {
+      SchedulePump(cluster, spawner, realm);
+    }
+    return Value.undefined;
+  }, realm, spawner);
 }
 
 function enqueueOn(agent: Agent, realm: ReturnType<() => Agent['currentRealmRecord']>, job: () => PlainEvaluator): void {
