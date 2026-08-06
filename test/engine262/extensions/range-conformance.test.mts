@@ -419,17 +419,22 @@ test('sec-ranges: the element type is any ORDERED type, not Number alone', () =>
   expectThrown('const r = 0..<10n; r;');
 });
 
-test('sec-ranges: DIVERGENCE - length and iteration are Number-only', () => {
-  // The ordering operations generalize; these do not. `length` and iteration
-  // are integer ARITHMETIC, and an implicit step of one is `1` or `1n` by the
-  // element type - so they answer for a Number range and refuse a bigint one.
-  //
-  // DIVERGENCE (plan item F2, the remainder of R6). Refusing is the sound half:
-  // the alternative was answering with Number arithmetic over bigint endpoints.
-  expectThrown('[...(0n..<3n)];');
-  expectThrown('(0n..<10n).length;');
-  // Number ranges are untouched.
-  expect(evaluated('[...0..<4].join(",") + "|" + String((0..<10).length);')).toBe('0,1,2,3|10');
+test('sec-ranges: length and iteration count in the element type', () => {
+  // The ordering operations generalize by comparison; these generalize by
+  // ARITHMETIC - the implicit step of one is `1` or `1n` by the element type,
+  // and a bigint range's count is a BigInt, which a Number could not always
+  // hold.
+  expect(evaluated('String((0n..<10n).length) + "," + String((0n..=10n).length) + "," + String((0n<..<10n).length);')).toBe('10,11,9');
+  expect(evaluated('[...(0n..<4n)].join(",");')).toBe('0,1,2,3');
+  expect(evaluated('[...(0n<..<4n)].join(",");')).toBe('1,2,3');
+  expect(evaluated('[...(0n..<4n).reverse()].join(",");')).toBe('3,2,1,0');
+  expect(evaluated('let s = 0n; for (const i of 0n..<5n) { s += i; } String(s);')).toBe('10');
+  expect(evaluated('String((5n..<5n).length);')).toBe('0');
+  // The same answers a Number range gives, which is the point: the element type
+  // changes the arithmetic and nothing else.
+  expect(evaluated('String((0..<10).length) + "," + String((0..=10).length) + "," + String((0<..<10).length);')).toBe('10,11,9');
+  // A non-integer endpoint still has no implicit step.
+  expectThrown('(0.5..<2.5).length;');
 });
 
 test('sec-ranges: `reverse` iterates the same members in the opposite order', () => {
