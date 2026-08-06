@@ -1118,6 +1118,13 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
   if (name === 'vector') {
     return false;
   }
+  // proposal-runtime-types #sec-the-type-type: the values of `type` are the
+  // Type Objects. `type` is itself a type, so the Type Object FOR `type` is
+  // among them - the clause's own recursive case, which follows from asking
+  // what the value is rather than what it names.
+  if (name === 'type') {
+    return isTypeObject(value);
+  }
   switch (name) {
     case 'uint':
     case 'int':

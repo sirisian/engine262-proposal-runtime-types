@@ -562,6 +562,16 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // resolve as primitives "except `object`", which is an ~object~ Type Record
     // with empty Properties). It is not a ~primitive~ record.
     case 'object': return { Kind: 'object', Properties: [], IndexSignatures: [] };
+    // proposal-runtime-types #sec-the-type-type: `type` is the type whose
+    // values are the Type Objects, described by the Type Record { [[Kind]]:
+    // ~primitive~, [[Name]]: "type", [[Arguments]]: << >> }. It resolves here
+    // with the other named types of the language, so the one lookup serves both
+    // the type position (`new Map.<type, any>()`) and the expression position.
+    //
+    // It is not a value type - its values are Objects and have identity, which
+    // interning fixes - but it is a ~primitive~ record in the sense of the kinds,
+    // being a named type rather than a structural description.
+    case 'type': return makePrimitive('type');
     case 'float16': case 'float32': case 'float64': case 'float128':
     case 'decimal32': case 'decimal64': case 'decimal128':
     case 'number': case 'string': case 'boolean': case 'bigint': case 'symbol':

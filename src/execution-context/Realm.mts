@@ -368,6 +368,10 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     bindRangeEnumGlobals(realmRec);
     for (const name of [
       'any', 'never', 'boolean1',
+      // proposal-runtime-types #sec-the-type-type: `type` binds too, so a Type
+      // Object is nameable where a value is expected - `m.set(type, ...)`, and
+      // the clause's own recursive case that `type` is a value of `type`.
+      'type',
       // proposal-runtime-types: the primitive type names bind as global
       // type-values too, so `HelloWorld === string` and the like work in
       // expression position, not only the numeric value types.
