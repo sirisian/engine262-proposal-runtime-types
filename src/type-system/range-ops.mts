@@ -5,7 +5,7 @@ import {
   isRangeObject, CreateRangeObject, type RangeObject, type RangeBound,
 } from '../intrinsics/Range.mts';
 import {
-  F, R, surroundingAgent, type Realm,
+  F, R, surroundingAgent, type BigIntValue, type Realm,
 } from '#self';
 
 /**
@@ -31,10 +31,25 @@ interface Interval {
   hi: Edge;
 }
 
+/**
+ * An endpoint as this module's interval algebra holds it.
+ *
+ * A range may be written over a bigint type, and `R` hands back a bigint for
+ * one. The algebra below is numeric throughout - it scales and divides
+ * endpoints, and rebuilds them with `F` - so a bigint endpoint is taken as its
+ * double here. That is exact to 2**53 and lossy past it; carrying the kind
+ * through instead would mean making the interval arithmetic itself generic,
+ * which is a larger change than this module currently supports.
+ */
+function edgeOf(v: NumberValue | BigIntValue): number {
+  const n = R(v);
+  return typeof n === 'bigint' ? Number(n) : n;
+}
+
 function toInterval(r: RangeObject): Interval {
   return {
-    lo: { v: r.RangeStart === undefined ? undefined : R(r.RangeStart), open: r.RangeStartBound === 'open' },
-    hi: { v: r.RangeEnd === undefined ? undefined : R(r.RangeEnd), open: r.RangeEndBound === 'open' },
+    lo: { v: r.RangeStart === undefined ? undefined : edgeOf(r.RangeStart), open: r.RangeStartBound === 'open' },
+    hi: { v: r.RangeEnd === undefined ? undefined : edgeOf(r.RangeEnd), open: r.RangeEndBound === 'open' },
   };
 }
 

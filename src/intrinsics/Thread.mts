@@ -9,7 +9,9 @@ import {
 } from '#self';
 import type { Realm } from '../execution-context/Realm.mts';
 import { assignProps } from './bootstrap.mts';
-import { EnsureCompletion, AbruptCompletion, type ValueCompletion } from '../completion.mts';
+import {
+  EnsureCompletion, AbruptCompletion, type ThrowCompletion, type ValueCompletion,
+} from '../completion.mts';
 
 /**
  * proposal-runtime-types #sec-threading-parallel-iteration.
@@ -71,7 +73,7 @@ function* Thread_parallelFor(args: Arguments): ValueEvaluator {
   // and lets those below finish, and the completion reported is the
   // lowest-numbered failure - which is the completion a SEQUENTIAL execution
   // would have produced, since it reaches the lowest failing index first.
-  let failure: { slice: number, completion: AbruptCompletion } | undefined;
+  let failure: { slice: number, completion: ThrowCompletion } | undefined;
   for (let i = 0; i < slices.length; i += 1) {
     if (failure !== undefined) {
       // Slices above the failing one are cancelled.
@@ -81,7 +83,7 @@ function* Thread_parallelFor(args: Arguments): ValueEvaluator {
     for (let n = from; n < to; n += 1) {
       const result = EnsureCompletion(yield* Call(body, Value.undefined, [Value(n)]));
       if (result instanceof AbruptCompletion) {
-        failure = { slice: i, completion: result };
+        failure = { slice: i, completion: result as ThrowCompletion };
         break;
       }
     }
@@ -110,7 +112,7 @@ function* Thread_parallelReduce(args: Arguments): ValueEvaluator {
   const combine = args[4] ?? Value.undefined;
   const slices = partition(begin, end);
   const partials: Value[] = [];
-  let failure: { slice: number, completion: AbruptCompletion } | undefined;
+  let failure: { slice: number, completion: ThrowCompletion } | undefined;
   for (let i = 0; i < slices.length; i += 1) {
     if (failure !== undefined) {
       break;
@@ -120,7 +122,7 @@ function* Thread_parallelReduce(args: Arguments): ValueEvaluator {
     for (let n = from; n < to; n += 1) {
       const result = EnsureCompletion(yield* Call(perElement, Value.undefined, [accumulator, Value(n)]));
       if (result instanceof AbruptCompletion) {
-        failure = { slice: i, completion: result };
+        failure = { slice: i, completion: result as ThrowCompletion };
         break;
       }
       accumulator = result.Value;

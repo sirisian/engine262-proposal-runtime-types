@@ -6,7 +6,6 @@ import {
   NewPromiseCapability,
   ObjectValue,
   OrdinaryObjectCreate,
-  Q,
   Throw,
   Value,
   X,
@@ -235,7 +234,6 @@ function grantNextWaiter(lock: LockObject): void {
 function settleOn(agent: Agent, realm: Realm, settle: Value, value: Value): void {
   HostEnqueuePromiseJob(function* settleJob(): PlainEvaluator {
     X(Call(settle, Value.undefined, [value]));
-    return Value.undefined;
   }, realm, agent);
 }
 

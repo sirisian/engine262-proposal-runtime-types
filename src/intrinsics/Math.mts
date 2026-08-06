@@ -457,8 +457,16 @@ export function TypedRandomInRange(t: TypeRecord, range: RangeObject, realm: Rea
   if (!isFloat && !isUint && !isInt) {
     return undefined;
   }
-  const start = range.RangeStart === undefined ? undefined : R(range.RangeStart);
-  const end = range.RangeEnd === undefined ? undefined : R(range.RangeEnd);
+  const startEdge = range.RangeStart === undefined ? undefined : R(range.RangeStart);
+  const endEdge = range.RangeEnd === undefined ? undefined : R(range.RangeEnd);
+  // A bigint endpoint is the wide-integer form, which this draw defers along
+  // with `bits > 32` below: the grid it rides is a double's significand, so an
+  // endpoint that does not fit one has no exactly representable draw here.
+  if (typeof startEdge === 'bigint' || typeof endEdge === 'bigint') {
+    return undefined;
+  }
+  const start: number | undefined = startEdge;
+  const end: number | undefined = endEdge;
   const startOpen = range.RangeStartBound === 'open';
   const endOpen = range.RangeEndBound === 'open';
   const d = nextRandomDouble(realm);

@@ -1,4 +1,5 @@
 import {
+  Descriptor,
   Assert,
   Get,
   GetValue,
@@ -91,7 +92,7 @@ function* ValidateAtomicTarget(args: Arguments, operation: 'integer-only' | 'any
     // operation to be atomic over, and an accessor is not storage.
     const key = Q(yield* ToPropertyKey(args[1] ?? Value.undefined));
     const desc = Q(yield* first.GetOwnProperty(key));
-    if (desc === Value.undefined || desc.Value === undefined) {
+    if (!(desc instanceof Descriptor) || desc.Value === undefined) {
       return Throw.TypeError('$1 is not assignable to $2', args[1] ?? Value.undefined, Value('a typed own data property'));
     }
     target = { Shape: 'property', Object: first, Key: key, Type: RuntimeTypeOf(desc.Value) };
@@ -199,7 +200,7 @@ function* Atomics_compareExchange(args: Arguments): ValueEvaluator {
   return old;
 }
 
-function arithmetic(name: string, apply: (a: number, b: number) => number, restriction: 'integer-only' | 'any-value-type') {
+function arithmetic(_name: string, apply: (a: number, b: number) => number, restriction: 'integer-only' | 'any-value-type') {
   return function* op(args: Arguments): ValueEvaluator {
     const target = Q(yield* ValidateAtomicTarget(args, restriction));
     const operand = operandOf(target, args);
@@ -369,7 +370,6 @@ function settleWaiter(waiter: Waiter, settle: Value, value: Value): void {
   waiter.agent.threadPendingWaits = Math.max(0, (waiter.agent.threadPendingWaits ?? 1) - 1);
   HostEnqueuePromiseJob(function* settleJob(): PlainEvaluator {
     X(Call(settle, Value.undefined, [value]));
-    return Value.undefined;
   }, waiter.realm, waiter.agent);
 }
 
