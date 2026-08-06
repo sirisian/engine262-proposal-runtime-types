@@ -728,25 +728,35 @@ test('table-metadata-values: each endpoint a shape has is a compile-time constan
   expectError('const n = 5; type T = float64.<{ bounds: 0..<n }>; "ok";');
 });
 
-test('table-metadata-values: DIVERGENCE - the value language is not closed', () => {
+test('table-metadata-values: the value language is closed', () => {
   // "Nothing else is a metadata value. A function, an object other than the
-  //  forms above, and *undefined* are not." And of ranges specifically: "A range
-  //  is admitted as a VALUE and not as an implementation of `RangeBounds.<T>` ...
-  //  A class of a program's own that implements the interface has no structural
-  //  comparison, could not be written into an expansion artifact, and would give
-  //  interning no answer."
-  //
-  // DIVERGENCE (plan item D7): a claimed key accepts ANY type in its value
-  // position - a user class implementing the interface, a built-in like `Date`,
-  // and even a function type - so the closure the clause states is not
-  // enforced. Found through the Range row but not range-specific: the three
-  // reasons the clause gives (structural comparison, artifact, interning) apply
-  // to every admitted form.
-  const meta = `type NB = { bounds?: Range };
-    meta NB { default = {}; subtype(a,b){return true;} validate(v,c){return true;} }`;
-  expect(evaluated(`${meta} class MyR { contains(v){return true;} } type T = float64.<{ bounds: MyR }>; "ok";`)).toBe('ok');
-  expect(evaluated(`${meta} type T = float64.<{ bounds: Date }>; "ok";`)).toBe('ok');
-  expect(evaluated(`${meta} type T = float64.<{ bounds: () => void }>; "ok";`)).toBe('ok');
+  //  forms above, and *undefined* are not." And of ranges: a range "is admitted
+  //  as a VALUE and not as an implementation of `RangeBounds.<T>` ... A class of
+  //  a program's own that implements the interface has no structural
+  //  comparison, could not be written into an expansion artifact, and would
+  //  give interning no answer."
+  const meta = `type NBc = { bounds?: RangeBounds };
+    meta NBc { default = {}; subtype(a,b){return true;} validate(v,c){return true;} }`;
+  expectThrown(`${meta} class MyR { contains(v){return true;} } type T = float64.<{ bounds: MyR }>; "ok";`);
+  expectThrown(`${meta} type T = float64.<{ bounds: Date }>; "ok";`);
+  expectThrown(`${meta} type T = float64.<{ bounds: () => void }>; "ok";`);
+  // Every ADMITTED form still is one.
+  expect(evaluated(`${meta} type T = float64.<{ bounds: 0..<10 }>; "ok";`)).toBe('ok');
+  expect(evaluated('type N = { n?: number }; meta N { default={}; subtype(a,b){return true;} } type T = float64.<{ n: 5 }>; "ok";')).toBe('ok');
+  expect(evaluated('type S = { s?: string }; meta S { default={}; subtype(a,b){return true;} } type T = float64.<{ s: "x" }>; "ok";')).toBe('ok');
+  expect(evaluated('type B = { b?: boolean }; meta B { default={}; subtype(a,b){return true;} } type T = float64.<{ b: true }>; "ok";')).toBe('ok');
+  expect(evaluated('type P = { p?: RegExp }; meta P { default={}; subtype(a,b){return true;} } type T = string.<{ p: /abc/ }>; "ok";')).toBe('ok');
+});
+
+test('table-metadata-values: the closure reaches a metadata record, not a type argument', () => {
+  // A parameterization's object-typed argument is two things in one shape: a
+  // metadata RECORD written inline, whose properties must be metadata values,
+  // and a TYPE ARGUMENT to a generic, whose properties are ordinary types. The
+  // parser tells them apart - an inline record is an `ObjectType` and a name a
+  // `TypeReference` - and closing over both refused `Composite.<K>`, which is
+  // not metadata at all.
+  expect(evaluated('type K = { x: uint8 }; let c: Composite.<K>; "ok";')).toBe('ok');
+  expect(evaluated('let c: Composite = Composite({ x: 1 }); "ok";')).toBe('ok');
 });
 
 test('sec-meta-declarations: a meta default may hold a range, and a pattern', () => {

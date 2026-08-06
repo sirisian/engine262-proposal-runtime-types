@@ -1260,6 +1260,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const metadata = MetadataObjectFromType(args[0] as TypeRecord);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata };
               const keys = Object.keys(metadata as unknown as Record<string, unknown>);
+              // table-metadata-values: the value language is CLOSED - "Nothing
+              // else is a metadata value. A function, an object other than the
+              // forms above, and *undefined* are not." A property whose type is
+              // none of the admitted forms is DROPPED by
+              // `MetadataObjectFromType`, so `float64.<{ bounds: SomeClass }>`
+              // was accepted and carried no bounds at all. The drop is
+              // observable as a missing key, which finds it without writing the
+              // form list twice.
+              //
+              // Only where the argument was WRITTEN INLINE. A parameterization's
+              // object-typed argument is two things in one shape: a metadata
+              // record, `float64.<{ bounds: 0..<10 }>`, whose properties must be
+              // metadata values; and a type argument to a generic,
+              // `Composite.<K>`, whose properties are ordinary types. The parser
+              // already tells them apart - an inline record is an `ObjectType`
+              // node and a name is a `TypeReference` - and the record they
+              // resolve to does not.
+              const argNode = node.TypeArguments!.TypeArgumentList[0] as ParseNode | undefined;
+              if (argNode?.type === 'ObjectType') {
+                for (const prop of (args[0] as TypeRecord & { Kind: 'object' }).Properties) {
+                  if (typeof prop.key === 'string' && !(prop.key in (metadata as unknown as Record<string, unknown>))) {
+                    report(prop.type, record);
+                  }
+                }
+              }
               if (keys.length > 0) {
                 unclaimed.push({ node, display: displayType(record), base, keys });
               }
