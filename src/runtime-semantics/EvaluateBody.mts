@@ -54,13 +54,11 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // unannotated function, so a method reading `W` got no frame at all and
   // reported "W is not defined"; the captured frame is pushed here instead,
   // around the body proper.
+  // Pushed by OrdinaryCallEvaluateBody; read here only to keep the inference
+  // fallback below from shadowing what the specialization already bound.
   const captured = surroundingAgent.feature('runtime-types')
     ? (functionObject as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
     : undefined;
-  if (captured !== undefined) {
-    pushTypeParameterFrame(captured);
-  }
-  try {
   // proposal-runtime-types: the parameter boundary, skipped entirely when the
   // function has no annotations.
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
@@ -111,11 +109,6 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   }
   // 2. Return the result of evaluating FunctionStatementList.
   return yield* Evaluate_FunctionStatementList(FunctionStatementList);
-  } finally {
-    if (captured !== undefined) {
-      popTypeParameterFrame();
-    }
-  }
 }
 
 /** https://tc39.es/ecma262/#sec-arrow-function-definitions-runtime-semantics-evaluation */
@@ -134,13 +127,11 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
 export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  // Pushed by OrdinaryCallEvaluateBody; read here only to keep the inference
+  // fallback below from shadowing what the specialization already bound.
   const captured = surroundingAgent.feature('runtime-types')
     ? (functionObject as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
     : undefined;
-  if (captured !== undefined) {
-    pushTypeParameterFrame(captured);
-  }
-  try {
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
     // Capability B: infer generic type parameters from the call arguments.
     const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
@@ -188,11 +179,6 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
   }
   // 2. Return the result of evaluating ExpressionBody.
   return yield* Evaluate(ExpressionBody);
-  } finally {
-    if (captured !== undefined) {
-      popTypeParameterFrame();
-    }
-  }
 }
 
 /** https://tc39.es/ecma262/#sec-async-arrow-function-definitions-EvaluateBody */

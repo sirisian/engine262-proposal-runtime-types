@@ -31,7 +31,9 @@ import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
-import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import {
+  currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
+} from '../type-system/runtime.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -212,8 +214,30 @@ export function OrdinaryCallBindThis(F: ECMAScriptFunctionObject, calleeContext:
 
 /** https://tc39.es/ecma262/#sec-ordinarycallevaluatebody */
 export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: Arguments) {
-  // 1. Return the result of EvaluateBody of the parsed code that is F.[[ECMAScriptCode]] passing F and argumentsList as the arguments.
-  return EnsureCompletion(yield* (EvaluateBody(F.ECMAScriptCode!, F, argumentsList)));
+  // proposal-runtime-types #sec-generics: a body declared inside a
+  // specialization sees that specialization's bindings. The frame captured when
+  // the function was created is pushed HERE, at the single point every body
+  // dispatch passes through, rather than in each body evaluator.
+  //
+  // It was in two of them, and the three it was not in were exactly the bodies
+  // that failed: a field initializer runs through EvaluateBody_AssignmentExpression
+  // and a generator method through EvaluateBody_GeneratorBody, and both reported
+  // that the parameter was not defined while a method and a constructor read it
+  // correctly. One push cannot be forgotten by a body evaluator added later.
+  const captured = surroundingAgent.feature('runtime-types')
+    ? (F as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
+    : undefined;
+  if (captured !== undefined) {
+    pushTypeParameterFrame(captured);
+  }
+  try {
+    // 1. Return the result of EvaluateBody of the parsed code that is F.[[ECMAScriptCode]] passing F and argumentsList as the arguments.
+    return EnsureCompletion(yield* (EvaluateBody(F.ECMAScriptCode!, F, argumentsList)));
+  } finally {
+    if (captured !== undefined) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 // -decorator (removed in the decorator proposal)

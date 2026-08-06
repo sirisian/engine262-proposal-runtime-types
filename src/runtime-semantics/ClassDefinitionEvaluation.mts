@@ -591,14 +591,19 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   // the specialization built by an application evaluates it for real, over that
   // application's bindings. Only a heritage that actually reads a parameter is
   // deferred: one that does not evaluates at the declaration as it always has.
-  let deferredHeritage = false;
-  if (ClassHeritage && surroundingAgent.feature('runtime-types')) {
+  //
+  // "Unspecialized" is the declaration of a generic class evaluated with no
+  // application's bindings in scope: the name is bound, and the parts that
+  // depend on a parameter wait for an application to supply one.
+  let unspecializedGeneric = false;
+  if (surroundingAgent.feature('runtime-types')) {
     const owner = (ClassTail as unknown as { parent?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).parent;
     const params = owner?.TypeParameters?.TypeParameterList;
     if (params && params.length > 0 && currentTypeParameterFrame() === undefined) {
-      deferredHeritage = true;
+      unspecializedGeneric = true;
     }
   }
+  const deferredHeritage = unspecializedGeneric && !!ClassHeritage;
   if (!ClassHeritage || deferredHeritage) {
     // a. Let protoParent be %Object.prototype%.
     protoParent = surroundingAgent.intrinsic('%Object.prototype%');
@@ -859,6 +864,18 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // 31. For each element elementRecord of staticElements, do
     for (const elementRecord of staticElements) {
       let result;
+      // proposal-runtime-types #sec-generics: a STATIC field of a generic class
+      // is initialized when the class is defined, and an initializer reading a
+      // type parameter has nothing to read until an application binds one. The
+      // unspecialized declaration therefore leaves such a field undefined, as it
+      // leaves a parameter-reading heritage unevaluated, and the specialization
+      // built by an application initializes it over that application's
+      // bindings. An instance field needs no such rule: it runs at
+      // construction, and only a specialization is constructed.
+      if (unspecializedGeneric && elementRecord instanceof ClassElementDefinitionRecord
+          && (elementRecord.Kind === 'field' || elementRecord.Kind === 'accessor')) {
+        continue;
+      }
       // a. If elementRecord is a ClassFieldDefinition Record, then
       if (elementRecord instanceof ClassElementDefinitionRecord && (elementRecord.Kind === 'field' || elementRecord.Kind === 'accessor')) {
         // a. Let result be DefineField(F, elementRecord).
@@ -1119,6 +1136,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // 31. For each element elementRecord of staticElements, do
     for (const elementRecord of staticElements) {
       let result;
+      // proposal-runtime-types #sec-generics: see the note on the decorated
+      // path above - an unspecialized generic class leaves a static field
+      // uninitialized, and the specialization initializes it over its bindings.
+      if (unspecializedGeneric && elementRecord instanceof ClassFieldDefinitionRecord) {
+        continue;
+      }
       // a. If elementRecord is a ClassFieldDefinition Record, then
       if (elementRecord instanceof ClassFieldDefinitionRecord) {
         // a. Let result be DefineField(F, elementRecord).
