@@ -1824,6 +1824,84 @@ export abstract class ExpressionParser extends FunctionParser {
 
   // ClassTail : ClassHeritage? `{` ClassBody? `}`
   // ClassHeritage : `extends` LeftHandSideExpression
+  /**
+   * proposal-runtime-types #sec-class-operators: does this read direction yield
+   * a REFERENCE?
+   *
+   * Either spelling counts, because the design uses both: an explicit return
+   * annotation of a reference type, as an interface writes it, and a body that
+   * returns a borrow, as `get operator[](i) { return ref this.#d[i]; }` does
+   * without annotating anything. `return ref e` is its own production, so this
+   * is a syntactic question and not a inference one.
+   */
+  readDirectionYieldsReference(e: ParseNode.OperatorDefinition): boolean {
+    const annotation = (e as { TypeAnnotation?: { Type?: { type?: string } } | null }).TypeAnnotation;
+    if (annotation?.Type?.type === 'ReferenceType') {
+      return true;
+    }
+    let found = false;
+    const walk = (node: unknown): void => {
+      if (found || !node || typeof node !== 'object') {
+        return;
+      }
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      const n = node as { type?: string, Expression?: unknown };
+      if (n.type === 'ReturnStatement' && (n.Expression as { type?: string } | undefined)?.type === 'RefExpression') {
+        found = true;
+        return;
+      }
+      // A nested function has its own returns, so its body is not this
+      // accessor's; the walk stops at one.
+      if (n.type === 'FunctionExpression' || n.type === 'FunctionDeclaration'
+          || n.type === 'ArrowFunction' || n.type === 'MethodDefinition'
+          || n.type === 'ClassExpression' || n.type === 'ClassDeclaration') {
+        return;
+      }
+      for (const key of Object.keys(n)) {
+        if (key !== 'parent') {
+          walk((n as Record<string, unknown>)[key]);
+        }
+      }
+    };
+    walk((e as { FunctionBody?: unknown }).FunctionBody);
+    return found;
+  }
+
+  /**
+   * Records an index accessor and reports the pair the clause refuses: a
+   * reference-returning read direction and a write direction for the same
+   * number of indices.
+   */
+  recordIndexAccessor(
+    e: ParseNode.OperatorDefinition,
+    reads: Map<number, ParseNode.OperatorDefinition>,
+    writes: Map<number, ParseNode.OperatorDefinition>,
+  ): void {
+    if (e.OperatorName !== '[]') {
+      return;
+    }
+    const params = e.FormalParameters?.length ?? 0;
+    const isWrite = (e as { AccessorKind?: string }).AccessorKind === 'set';
+    // The write direction takes the indices and then the value, so its index
+    // count is one less than its parameter count.
+    const indices = isWrite ? Math.max(0, params - 1) : params;
+    if (isWrite) {
+      writes.set(indices, e);
+      const read = reads.get(indices);
+      if (read && this.readDirectionYieldsReference(read)) {
+        this.addEarlyError(Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
+      }
+      return;
+    }
+    reads.set(indices, e);
+    if (writes.has(indices) && this.readDirectionYieldsReference(e)) {
+      this.addEarlyError(Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
+    }
+  }
+
   // ClassBody : ClassElementList
   parseClassTail(): ParseNode.ClassTail {
     const node = this.startNode<ParseNode.ClassTail>();
@@ -1861,6 +1939,11 @@ export abstract class ExpressionParser extends FunctionParser {
         }
         const staticPrivates = new Set();
         const instancePrivates = new Set();
+        // Index accessors seen so far, by index count, so that a read and a
+        // write direction declared for the same count can be compared however
+        // they are ordered in the body.
+        const indexReads = new Map<number, ParseNode.OperatorDefinition>();
+        const indexWrites = new Map<number, ParseNode.OperatorDefinition>();
         while (!this.eat(Token.RBRACE)) {
           const m = this.parseClassElement();
           ClassBody.push(m);
@@ -1873,6 +1956,14 @@ export abstract class ExpressionParser extends FunctionParser {
           if (m.type === 'OperatorDefinition') {
             // proposal-runtime-types: operators have no ClassElementName and
             // take no part in the name bookkeeping below.
+            //
+            // #sec-class-operators: an index accessor whose read direction
+            // yields a REFERENCE already denotes the place a write goes, so a
+            // write direction for the same number of indices would give the
+            // write two meanings. Declaring both is refused here rather than
+            // letting one silently win, which would leave the other looking
+            // live while nothing reached it.
+            this.recordIndexAccessor(m, indexReads, indexWrites);
             continue;
           }
 

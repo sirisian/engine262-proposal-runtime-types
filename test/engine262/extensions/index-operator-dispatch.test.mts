@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff } from '../readme/harness.mts';
+import {
+  evaluated, expectError, expectThrown, runFlagOff,
+} from '../readme/harness.mts';
 
 /**
  * User-defined index operator dispatch (read direction).
@@ -170,8 +172,11 @@ test('a borrowed index supports read-modify-write', () => {
 });
 
 test('a write direction is used where one is declared', () => {
+  // paired with a VALUE read direction, which is the combination that stays
+  // legal: pairing one with a `ref` read direction is refused below, since the
+  // borrow already denotes where the write goes
   expect(evaluated('let via = ""; class C { #d = [1];'
-    + ' get operator[](i: uint32) { return ref this.#d[i]; }'
+    + ' get operator[](i: uint32) { return this.#d[i]; }'
     + ' set operator[](i: uint32, v) { via = "setter"; this.#d[i] = v; } }'
     + ' const c = new C(); c[0] = 7; via;')).toBe('setter');
 });
@@ -188,4 +193,39 @@ test('a write through a borrowed index is checked as the element requires', () =
   expectThrown('class C { d: [].<uint8> = [1];'
     + ' get operator[](i: uint32) { return ref this.d[i]; } }'
     + ' const c = new C(); c[0] = 300;');
+});
+
+test('a class may not declare both a ref read direction and a write direction', () => {
+  // the borrow already denotes where the write goes, so a setter for the same
+  // number of indices would give the write two meanings
+  expectError('class C { #d = [1]; get operator[](i: uint32) { return ref this.#d[i]; }'
+    + ' set operator[](i: uint32, v) { this.#d[i] = v; } } "ran";');
+  // in either declaration order
+  expectError('class C { #d = [1]; set operator[](i: uint32, v) { this.#d[i] = v; }'
+    + ' get operator[](i: uint32) { return ref this.#d[i]; } } "ran";');
+  // and however the read direction says it yields a reference
+  expectError('class C { #d = [1]; get operator[](i: uint32): ref uint32 { return ref this.#d[i]; }'
+    + ' set operator[](i: uint32, v) { this.#d[i] = v; } } "ran";');
+});
+
+test('the pair is refused only where it is actually ambiguous', () => {
+  // a read direction yielding a VALUE needs its write direction
+  expect(evaluated('class C { #d = [1]; get operator[](i: uint32) { return this.#d[i]; }'
+    + ' set operator[](i: uint32, v) { this.#d[i] = v; } }'
+    + ' const c = new C(); c[0] = 7; String(c[0]);')).toBe('7');
+  // a reference read direction alone is the design's own form
+  expect(evaluated('class C { #d = [1]; get operator[](i: uint32) { return ref this.#d[i]; }'
+    + ' peek(i) { return this.#d[i]; } }'
+    + ' const c = new C(); c[0] = 7; String(c.peek(0));')).toBe('7');
+  // directions for different numbers of indices do not collide
+  expect(evaluated('class C { #d = [1, 2, 3, 4];'
+    + ' get operator[](i: uint32) { return ref this.#d[i]; }'
+    + ' set operator[](x: uint32, y: uint32, v) { this.#d[y * 2 + x] = v; }'
+    + ' peek(i) { return this.#d[i]; } }'
+    + ' const c = new C(); c[0] = 9; c[1, 1] = 8; String(c.peek(0)) + "," + String(c.peek(3));')).toBe('9,8');
+  // a return inside a nested function is not this accessor's return
+  expect(evaluated('class C { #d = [1];'
+    + ' get operator[](i: uint32) { const f = () => 1; return this.#d[i]; }'
+    + ' set operator[](i: uint32, v) { this.#d[i] = v; } }'
+    + ' const c = new C(); c[0] = 4; String(c[0]);')).toBe('4');
 });
