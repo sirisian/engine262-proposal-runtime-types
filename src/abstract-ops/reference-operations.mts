@@ -87,6 +87,16 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     if (surroundingAgent.feature('runtime-types') && typeof V.ReferencedName === 'object' && 'stringValue' in V.ReferencedName) {
       const bound = lookupTypeParameter((V.ReferencedName as JSStringValue).stringValue());
       if (bound !== null) {
+        // #sec-generics: a VALUE generic parameter is bound to the literal type
+        // of its argument, "with the value recoverable as that type's one
+        // value". A body that reads it where a value is required - the design's
+        // `y * W + x` - reads that value; one that reads it where a type is
+        // required reads the type, which the value still carries, since the
+        // literal type's single value IS its view of the binding. Handing back
+        // the Type Object for a value parameter made arithmetic over it NaN.
+        if (bound.Kind === 'literal') {
+          return bound.Value;
+        }
         return GetTypeObject(bound);
       }
     }
