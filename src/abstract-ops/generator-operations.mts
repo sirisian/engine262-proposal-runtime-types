@@ -7,6 +7,7 @@ import {
   ReturnCompletion,
   ThrowCompletion,
 } from '../completion.mts';
+import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import {
   JSStringValue, ObjectValue, UndefinedValue, Value,
@@ -48,6 +49,14 @@ export function GeneratorStart(generator: GeneratorObject, generatorBody: ParseN
   const genContext = surroundingAgent.runningExecutionContext;
   // 3. Set the Generator component of genContext to generator.
   genContext.Generator = generator;
+  // proposal-runtime-types #sec-generics: the specialization bindings this body
+  // will resume under. They are in scope now, while the call that created the
+  // generator is still running, and gone by the time the body is resumed - so
+  // the context keeps them and RunSuspendedContext pushes them at each
+  // resumption.
+  if (surroundingAgent.feature('runtime-types')) {
+    genContext.TypeParameterFrame = currentTypeParameterFrame();
+  }
   // 4. Let closure be a new Abstract Closure with no parameters that captures generatorBody
   //    and performs the following steps when called:
   const closure = function* closure(): ValueEvaluator {

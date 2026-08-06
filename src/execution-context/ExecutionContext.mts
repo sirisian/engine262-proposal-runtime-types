@@ -1,5 +1,7 @@
 import type { ExecutionContextHostDefined, GCMarker } from '../host-defined/engine.mts';
 import { __ts_cast__ } from '../utils/language.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   NullValue, type FunctionObject, Value, type GeneratorObject, type AsyncGeneratorObject, AbstractModuleRecord, type ScriptRecord, EnvironmentRecord, PrivateEnvironmentRecord, CallSite, PromiseCapabilityRecord, Realm,
   surroundingAgent,
@@ -48,6 +50,10 @@ export class ExecutionContext {
   CodeEvaluationState?: YieldOrAwaitEvaluator;
 
   Function: NullValue | FunctionObject = Value.null;
+
+  // proposal-runtime-types #sec-generics: the specialization bindings a
+  // suspended body resumes under, where this context runs one.
+  TypeParameterFrame?: Map<string, TypeRecord>;
 
   ScriptOrModule: AbstractModuleRecord | ScriptRecord | NullValue = Value.null;
 
@@ -191,7 +197,17 @@ export function RunSuspendedContext(context: ExecutionContext, completionRecord:
 export function RunSuspendedContext(context: ExecutionContext, completionRecord: EvaluatorNextType_Await | EvaluatorNextType_AsyncYield): AwaitEvaluator
 export function* RunSuspendedContext(context: ExecutionContext, completionRecord: EvaluatorNextType): YieldOrAwaitEvaluator {
   const callerContext = surroundingAgent.runningExecutionContext;
-
+  // proposal-runtime-types #sec-generics: a suspended body resumes long after
+  // the call that started it returned, so the specialization frame pushed
+  // around that call is no longer active. The context carries it and it is
+  // pushed again for the duration of each resumption - which is why a
+  // generator method of a specialized class could not read `W` while an
+  // ordinary method could.
+  const captured = (context as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame;
+  if (captured !== undefined) {
+    pushTypeParameterFrame(captured);
+  }
+  try {
   // Suspend callerContext.
   // Push context onto the execution context stack; context is now the running execution context.
   surroundingAgent.executionContextStack.push(context);
@@ -224,6 +240,11 @@ export function* RunSuspendedContext(context: ExecutionContext, completionRecord
   // Assert: When we reach this step, context has already been removed from the execution context stack and callerContext is the running execution context again.
   Assert(runningExecutionContext() === callerContext);
   return result;
+  } finally {
+    if (captured !== undefined) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 /** https://tc39.es/ecma262/#sec-runcallercontext */

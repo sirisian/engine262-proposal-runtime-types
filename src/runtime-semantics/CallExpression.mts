@@ -14,6 +14,10 @@ import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
@@ -460,6 +464,63 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   const thisCall = CallExpression;
   // 8. Let tailCall be IsInTailPosition(thisCall).
   const tailCall = IsInTailPosition(thisCall);
+  // proposal-runtime-types #sec-generics: `f.<4>()` supplies the type arguments
+  // EXPLICITLY rather than leaving them to be inferred from the call's values,
+  // which is the only way to supply them when there are no values to infer from.
+  //
+  // The bindings are made active for the duration of the call, so the body sees
+  // them exactly as a specialized class's body sees its own - and a generator
+  // body started here captures them the same way. They are pushed after the
+  // callee and arguments are evaluated, so nothing in either sees them, and
+  // they take precedence over inference, which is filtered against the frames
+  // in scope.
+  let explicitFrame: Map<string, TypeRecord> | undefined;
+  if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
+    const params = functionTypeParameters(func as never);
+    // A HIGHER-KINDED parameter's argument is a generic declaration rather than
+    // a type, so it is not resolvable as one; that form keeps the path that
+    // already handles it (#sec-higher-kinded-parameters).
+    const kindedParam = params?.some((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
+    if (params && params.length > 0 && !kindedParam) {
+      const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
+      if (typeArgs.length !== params.length) {
+        return Throw.TypeError(
+          '$1 takes $2 type arguments; $3 expects one taking $4',
+          Value('the call'), Value(String(typeArgs.length)),
+          Value(params[0]!.BindingIdentifier.name), Value(String(params.length)),
+        );
+      }
+      const frame = new Map<string, TypeRecord>();
+      for (let i = 0; i < params.length; i += 1) {
+        const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null };
+        let record = Q(yield* TypeNodeToTypeRecord(typeArgs[i]!));
+        // A value parameter's argument is a value OF the declared type, so the
+        // literal it binds carries a value of that type rather than the plain
+        // number the argument was written as.
+        if (record.Kind === 'literal' && p.TypeParameterConstraint) {
+          const declared = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
+          const converted = EnsureCompletion(yield* ConvertValue(record.Value as Value, declared as never));
+          if (converted.Type === 'normal') {
+            record = { ...record, Value: converted.Value as Value } as never;
+          }
+        }
+        if (p.BindingIdentifier?.name) {
+          frame.set(p.BindingIdentifier.name, record);
+        }
+      }
+      explicitFrame = frame;
+    }
+  }
+  // 7. Let thisCall be this CallExpression.
+  // 8. Let tailCall be IsInTailPosition(thisCall).
   // 9. Return ? EvaluateCall(func, ref, arguments, tailCall).
+  if (explicitFrame !== undefined) {
+    pushTypeParameterFrame(explicitFrame);
+    try {
+      return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));
+    } finally {
+      popTypeParameterFrame();
+    }
+  }
   return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));
 }

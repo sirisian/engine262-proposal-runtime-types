@@ -96,3 +96,34 @@ test('a generic alias is unaffected', () => {
 test('a wrong number of type arguments is refused', () => {
   expectThrown('class C<W: uint32, H: uint32> { } new C.<4>();');
 });
+
+// -- explicit type arguments on a generic function call -----------------------
+test('a call may supply its type arguments explicitly', () => {
+  // the only way to supply them where there are no values to infer from
+  expect(evaluated('function f<W: uint32>() { return W; } String(f.<4>());')).toBe('4');
+  expect(evaluated('function f<W: uint32>(): uint32 { return W; } String(f.<4>());')).toBe('4');
+  // the bound value carries its declared type, so it mixes with typed values
+  expect(evaluated('function f<W: uint32>() { return W * (2 := uint32); } String(f.<4>());')).toBe('8');
+  // a type parameter supplied explicitly is usable as a type
+  expect(evaluated('function f<T>() { return (1 := T) is uint8; } String(f.<uint8>());')).toBe('true');
+  // and a generator body started by such a call resumes under them
+  expect(evaluated('function* g<W: uint32>() { yield W; } String(g.<4>().next().value);')).toBe('4');
+});
+
+test('explicit type arguments take precedence over inference', () => {
+  expect(evaluated('function f<T>(v: T) { return Reflect.typeOf(v); } String(typeof f.<uint8>((1 := uint8)));')).toBe('object');
+  // inference alone is unchanged
+  expect(evaluated('function id<T>(v: T): T { return v; } String(id(5));')).toBe('5');
+});
+
+test('a wrong number of explicit type arguments is refused', () => {
+  expectThrown('function f<W: uint32, H: uint32>() { return W; } f.<4>();');
+});
+
+test('a generator method of a specialization reads its parameters', () => {
+  // the body resumes after the call that made it returned, so the context
+  // carries the bindings and pushes them at each resumption
+  expect(evaluated('class C<W: uint32> { *g() { yield W; } } String(new C.<4>().g().next().value);')).toBe('4');
+  expect(evaluated('class C<W: uint32> { *g() { yield W; yield W; } }'
+    + ' const it = new C.<4>().g(); it.next(); String(it.next().value);')).toBe('4');
+});

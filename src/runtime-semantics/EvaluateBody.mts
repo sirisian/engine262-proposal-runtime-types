@@ -10,7 +10,7 @@ import { Evaluate, type StatementEvaluator } from '../evaluator.mts';
 import { IsAnonymousFunctionDefinition, type FunctionDeclaration } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Mutable } from '../utils/language.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame } from '../type-system/runtime.mts';
 import {
   Evaluate_FunctionStatementList,
   FunctionDeclarationInstantiation,
@@ -54,26 +54,22 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // unannotated function, so a method reading `W` got no frame at all and
   // reported "W is not defined"; the captured frame is pushed here instead,
   // around the body proper.
-  // Pushed by OrdinaryCallEvaluateBody; read here only to keep the inference
-  // fallback below from shadowing what the specialization already bound.
-  const captured = surroundingAgent.feature('runtime-types')
-    ? (functionObject as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
-    : undefined;
   // proposal-runtime-types: the parameter boundary, skipped entirely when the
   // function has no annotations.
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
     // Capability B: a generic function infers its type parameters from the call
     // arguments and evaluates its parameter and return types over those bindings.
     const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
-    // proposal-runtime-types #sec-generics: where this body came from a
-    // SPECIALIZATION, the parameters it names are already bound to that
-    // application's arguments. The inference above falls back to `any` for a
+    // proposal-runtime-types #sec-generics: a parameter already bound by a
+    // frame in scope - a specialization's, or the explicit arguments of
+    // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a
     // method of a generic class, which is right when nothing better is known
     // and wrong here - pushed over the captured frame it shadowed `W` with
     // `any`, so a body reading it got a Type Object and its arithmetic gave
     // NaN. The fallback is kept for the names the specialization does not bind.
-    if (bindings && captured !== undefined) {
-      for (const name of captured.keys()) {
+    const alreadyBound = currentTypeParameterFrame();
+    if (bindings && alreadyBound !== undefined) {
+      for (const name of alreadyBound.keys()) {
         bindings.delete(name);
       }
     }
@@ -127,23 +123,19 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
 export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
-  // Pushed by OrdinaryCallEvaluateBody; read here only to keep the inference
-  // fallback below from shadowing what the specialization already bound.
-  const captured = surroundingAgent.feature('runtime-types')
-    ? (functionObject as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
-    : undefined;
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
     // Capability B: infer generic type parameters from the call arguments.
     const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
-    // proposal-runtime-types #sec-generics: where this body came from a
-    // SPECIALIZATION, the parameters it names are already bound to that
-    // application's arguments. The inference above falls back to `any` for a
+    // proposal-runtime-types #sec-generics: a parameter already bound by a
+    // frame in scope - a specialization's, or the explicit arguments of
+    // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a
     // method of a generic class, which is right when nothing better is known
     // and wrong here - pushed over the captured frame it shadowed `W` with
     // `any`, so a body reading it got a Type Object and its arithmetic gave
     // NaN. The fallback is kept for the names the specialization does not bind.
-    if (bindings && captured !== undefined) {
-      for (const name of captured.keys()) {
+    const alreadyBound = currentTypeParameterFrame();
+    if (bindings && alreadyBound !== undefined) {
+      for (const name of alreadyBound.keys()) {
         bindings.delete(name);
       }
     }
