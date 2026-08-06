@@ -11,12 +11,16 @@ import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { builtinTypeRecord, propertyKeyValue } from '../type-system/records.mts';
+import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
+import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
+import { DefaultValueOf } from '../type-system/runtime.mts';
+import { anyType } from '../type-system/records.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
   SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
-  GetMethod, LengthOfArrayLike, ToBoolean,
+  GetMethod, LengthOfArrayLike, ToBoolean, ArrayCreate, CreateBuiltinFunction,
+  GetPrototypeFromConstructor,
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
@@ -951,7 +955,90 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
  * A generic alias Type Object specializes; any other base keeps its Reference
  * so member calls retain their this binding.
  */
+/**
+ * proposal-runtime-types: the constructor of an array type written in
+ * expression position, one per interned type so that two mentions of
+ * `[4].<uint8>` are one constructor.
+ *
+ * An instance is an ordinary Array carrying the element type, which is what a
+ * typed array is everywhere else in this implementation - so the element store
+ * check, the array methods, and `length` all work on one without a second kind
+ * of object to teach them about. A fixed extent is filled with the element
+ * type's default value, since `new [100].<uint8>()` is asking for a hundred of
+ * them; a dynamic one starts empty and grows.
+ */
+const arrayTypeConstructors = new Map<unknown, ObjectValue>();
+
+function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
+  const literal = node.Expression as unknown as ParseNode.ArrayLiteral;
+  const elements = (literal.ElementList ?? []) as readonly ParseNode[];
+  // `[]` is dynamic; `[N]` is a fixed extent. Anything else is not an array
+  // type, so it keeps its reading as a literal with type arguments.
+  let extent: number | 'dynamic' = 'dynamic';
+  if (elements.length === 1) {
+    const only = elements[0] as { type?: string, value?: unknown };
+    if (only.type === 'NumericLiteral' && typeof only.value === 'number') {
+      extent = only.value;
+    } else {
+      return Throw.TypeError('$1 is not a type', Value('an array type needs a numeric extent or none'));
+    }
+  } else if (elements.length > 1) {
+    return Throw.TypeError('$1 is not a type', Value('an array type needs a numeric extent or none'));
+  }
+  const args = node.TypeArguments.TypeArgumentList;
+  const element = args.length > 0 ? Q(yield* TypeNodeToTypeRecord(args[0]!)) : anyType;
+  const record = CanonicalizeType({ Kind: 'array', Element: element, Extent: extent } as never);
+  // Keyed by the INTERNED Type Object rather than the record: canonicalizing
+  // yields an equal record each time but not the same one, so a Map over
+  // records never hit and `[4].<uint8>` gave a fresh constructor per mention.
+  const key = GetTypeObject(record);
+  const cached = arrayTypeConstructors.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const realm = surroundingAgent.currentRealmRecord;
+  const ctor = CreateBuiltinFunction(markBuiltinFunctionAsConstructor(function* ArrayTypeConstructor(_args: readonly (Value | undefined)[], context: { NewTarget?: Value }): ValueEvaluator {
+    const { NewTarget } = context;
+    if (NewTarget === Value.undefined) {
+      return Throw.TypeError('$1 requires new', Value(displayType(record as never)));
+    }
+    const length = extent === 'dynamic' ? 0 : extent;
+    const array = X(ArrayCreate(length)) as ObjectValue & { TypedElement?: unknown };
+    // A fixed extent is populated, since its elements exist from the start.
+    if (extent !== 'dynamic') {
+      const dflt = (DefaultValueOf(element as never) ?? Value.undefined) as Value;
+      for (let i = 0; i < length; i += 1) {
+        X(CreateDataProperty(array, Value(String(i)), dflt));
+      }
+    }
+    array.TypedElement = element;
+    // A subclass constructs through here with itself as NewTarget, so the
+    // instance takes the subclass prototype and its methods.
+    const proto = Q(yield* GetPrototypeFromConstructor(NewTarget as never, '%Array.prototype%'));
+    X(array.SetPrototypeOf(proto));
+    return array;
+  }), 0, displayType(record as never), [], realm) as ObjectValue;
+  // The prototype a subclass inherits from: array instances are Arrays, so the
+  // methods come from %Array.prototype%.
+  X(CreateDataProperty(ctor, Value('prototype'), realm.Intrinsics['%Array.prototype%']));
+  arrayTypeConstructors.set(key, ctor);
+  return ctor;
+}
+
 export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
+  // proposal-runtime-types (README "Typed Arrays"): an ARRAY TYPE written in
+  // expression position - `new [100].<uint8>()`, or `class G extends
+  // [W * H].<uint8>` - denotes the type's constructor.
+  //
+  // The base of such an expression parses as an array LITERAL, since that is
+  // what `[100]` is where an expression is expected, and its type arguments
+  // were evaluated and discarded: `new [100].<uint8>()` reported "[object
+  // Array] is not a constructor" and `extends [4].<uint8>` the same for its
+  // superclass. Resolved here, before the base is evaluated as a literal,
+  // because evaluating it is exactly the reading that has to be avoided.
+  if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'ArrayLiteral') {
+    return Q(yield* ArrayTypeConstructorFor(node));
+  }
   const ref = yield* Evaluate(node.Expression);
   const inspected = EnsureCompletion(ref);
   if (inspected.Type !== 'normal') {
