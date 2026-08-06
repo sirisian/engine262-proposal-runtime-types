@@ -3230,6 +3230,12 @@ export abstract class ExpressionParser extends FunctionParser {
           && !isSpecialMethod
           && firstName.type === 'IdentifierName'
           && !this.test(Token.LPAREN)
+          // proposal-runtime-types #sec-generics: `{ m<T>() { } }` is a METHOD
+          // that declares type parameters, not the shorthand `{ m }`. A
+          // shorthand is followed by `,` or `}`, so a `<` here can only begin
+          // the parameter list - without this the name was taken as a
+          // shorthand and the `<` reported as unexpected.
+          && !(surroundingAgent.feature('runtime-types') && this.test(Token.LT))
           && (!isKeywordRaw(firstName.name)
             || (firstName.name === 'yield' && !this.scope.hasYield())
             || (firstName.name === 'await' && !this.scope.hasAwait()))) {
@@ -3273,6 +3279,17 @@ export abstract class ExpressionParser extends FunctionParser {
         this.expect(Token.RPAREN);
         node.UniqueFormalParameters = null;
       } else {
+        // proposal-runtime-types #sec-generics: a METHOD may declare type
+        // parameters, `emit<T>(event: T)`, which generics.md writes as the
+        // illustration of a type parameter used as a value. They are parsed
+        // before the formal parameter list, as a function declaration's are,
+        // and applied with `.<...>` at the call or inferred from its arguments.
+        //
+        // `<` here can only begin type parameters: a method name is never
+        // followed by a relational operator in this position.
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
+          (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = this.parseTypeParameters();
+        }
         node.PropertySetParameterList = null;
         node.UniqueFormalParameters = this.parseUniqueFormalParameters();
       }

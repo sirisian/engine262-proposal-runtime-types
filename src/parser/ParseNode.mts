@@ -1937,6 +1937,11 @@ export namespace ParseNode {
   export interface MethodDefinition extends BaseParseNode {
     readonly type: 'MethodDefinition';
 
+    // proposal-runtime-types #sec-generics: type parameters this method
+    // declares of its own, applied with `.<...>` at the call or inferred from
+    // its arguments.
+    readonly TypeParameters?: TypeParameters | null;
+
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
@@ -1980,6 +1985,11 @@ export namespace ParseNode {
   //   `*` ClassElementName `(` UniqueFormalParameters `)` `{` GeneratorBody `}`
   export interface GeneratorMethod extends BaseParseNode {
     readonly type: 'GeneratorMethod';
+
+    // proposal-runtime-types #sec-generics: type parameters this method
+    // declares of its own, applied with `.<...>` at the call or inferred from
+    // its arguments.
+    readonly TypeParameters?: TypeParameters | null;
 
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
@@ -2040,6 +2050,11 @@ export namespace ParseNode {
   export interface AsyncGeneratorMethod extends BaseParseNode {
     readonly type: 'AsyncGeneratorMethod';
 
+    // proposal-runtime-types #sec-generics: type parameters this method
+    // declares of its own, applied with `.<...>` at the call or inferred from
+    // its arguments.
+    readonly TypeParameters?: TypeParameters | null;
+
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;
     readonly Decorators?: readonly Decorator[] | null;
@@ -2088,6 +2103,11 @@ export namespace ParseNode {
   //   `async` ClassElementName `(` UniqueFormalParameters `)` `{` AsyncBody `}`
   export interface AsyncMethod extends BaseParseNode {
     readonly type: 'AsyncMethod';
+
+    // proposal-runtime-types #sec-generics: type parameters this method
+    // declares of its own, applied with `.<...>` at the call or inferred from
+    // its arguments.
+    readonly TypeParameters?: TypeParameters | null;
 
     // proposal-runtime-types
     readonly TypeAnnotation?: TypeAnnotation;

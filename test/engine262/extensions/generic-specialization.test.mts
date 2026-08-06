@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectError, expectThrown } from '../readme/harness.mts';
+import {
+  evaluated, expectError, expectThrown, expectThrownKind,
+} from '../readme/harness.mts';
 
 /**
  * A specialization's bindings reach the bodies of its declaration (spec
@@ -203,4 +205,59 @@ test('an accessor keeps everything else it could already do', () => {
   // a relational operator in a body is untouched, as is a property named `get`
   expect(evaluated('class C { m() { const n = 2; return 1 < n; } } String(new C().m());')).toBe('true');
   expect(evaluated('const o = { get: 1 }; String(o.get);')).toBe('1');
+});
+
+// -- a method may declare type parameters -------------------------------------
+test('a method may declare type parameters', () => {
+  // generics.md writes this as the illustration of a type parameter used as a
+  // value; the grammar admitted it on a function but not on a method
+  expect(evaluated('class C { m<W: uint32>() { return W; } } String(new C().m.<4>());')).toBe('4');
+  expect(evaluated('const o = { m<W: uint32>() { return W; } }; String(o.m.<4>());')).toBe('4');
+  expect(evaluated('class C { static m<W: uint32>() { return W; } } String(C.m.<4>());')).toBe('4');
+  expect(evaluated('class C { m<W: uint32>() { return W; } go() { return this.m.<4>(); } } String(new C().go());')).toBe('4');
+  expect(evaluated('class C { #m<W: uint32>() { return W; } go() { return this.#m.<4>(); } } String(new C().go());')).toBe('4');
+  // a generator method, and a method carrying a return annotation as well
+  expect(evaluated('class C { *m<W: uint32>() { yield W; } } String(new C().m.<4>().next().value);')).toBe('4');
+  expect(evaluated('class C { m<W: uint32>(): uint32 { return W; } } String(new C().m.<4>());')).toBe('4');
+  expect(evaluated('class C { async m<W: uint32>() { return W; } } String(typeof new C().m);')).toBe('function');
+});
+
+test('a method\'s type arguments may be explicit or inferred', () => {
+  expect(evaluated('class C { m<T>() { return (1 := T) is uint8; } } String(new C().m.<uint8>());')).toBe('true');
+  // inferred from the call's arguments, as for a function
+  expect(evaluated('class C { t<T>(v: T) { return (1 := T) is uint8; } } String(new C().t((1 := uint8)));')).toBe('true');
+  expectThrown('class C { m<W: uint32, H: uint32>() { return W; } } new C().m.<4>();');
+});
+
+test('a method\'s parameters and its class\'s coexist', () => {
+  // both readable in one body
+  expect(evaluated('class C<W: uint32> { m<T>() { return String(W) + ":" + String((1 := T) is uint8); } }'
+    + ' String(new C.<4>().m.<uint8>());')).toBe('4:true');
+  // and the method\'s shadows the class\'s where the names collide
+  expect(evaluated('class C<T> { m<T>() { return (1 := T) is uint16; } }'
+    + ' String(new C.<uint8>().m.<uint16>());')).toBe('true');
+});
+
+test('ordinary methods and object shorthand are untouched', () => {
+  expect(evaluated('class C { m() { return 5; } } String(new C().m());')).toBe('5');
+  // `{ m }` is still the shorthand it always was
+  expect(evaluated('const m = 7; const o = { m }; String(o.m);')).toBe('7');
+  expect(evaluated('const o = { m() { return 3; } }; String(o.m());')).toBe('3');
+});
+
+test('a method\'s own parameter may annotate its signature', () => {
+  // `emit<T>(event: T)` - the shape generics.md writes - where the annotation
+  // names the method's own parameter and is resolved before the body runs
+  expect(evaluated('class C { m<T>(v: T) { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
+  expect(evaluated('class C { m<T>(v: T): T { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
+  // and enforced: a value of another type is refused at the boundary
+  expectThrownKind('class C { m<T>(v: T) { return v; } } new C().m.<uint8>("x");', 'TypeError');
+});
+
+test('a higher-kinded method parameter follows the function rule', () => {
+  // it stands for a generic declaration rather than a type, so it is supplied
+  // by explicit application and never inferred
+  expect(evaluated('type Identity<T> = T; class C { m<W<_>>() { return 1; } }'
+    + ' String(new C().m.<Identity>());')).toBe('1');
+  expectThrownKind('class C { m<W<_>>() { return 1; } } new C().m();', 'TypeError');
 });

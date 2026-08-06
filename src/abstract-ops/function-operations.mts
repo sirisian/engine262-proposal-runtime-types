@@ -34,6 +34,7 @@ import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/
 import {
   currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
 } from '../type-system/runtime.mts';
+import { functionTypeParameters } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -227,14 +228,34 @@ export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, arguments
   const captured = surroundingAgent.feature('runtime-types')
     ? (F as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame
     : undefined;
+  let toPush = captured;
   if (captured !== undefined) {
-    pushTypeParameterFrame(captured);
+    // proposal-runtime-types #sec-generics: a method's OWN parameters shadow
+    // the enclosing specialization's. The class frame is pushed here, after a
+    // call site has already pushed any explicit arguments, so pushing a name
+    // the method itself declares would let the class's binding win - and
+    // `class C<T> { m<T>() {} }` applied as `C.<uint8>().m.<uint16>()` read the
+    // class's `T`. The name a method declares is left to the method.
+    const own = functionTypeParameters(F as never);
+    if (own && own.length > 0) {
+      const filtered = new Map(captured);
+      for (const p of own) {
+        const name = (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+        if (name) {
+          filtered.delete(name);
+        }
+      }
+      toPush = filtered.size > 0 ? filtered : undefined;
+    }
+  }
+  if (toPush !== undefined) {
+    pushTypeParameterFrame(toPush);
   }
   try {
     // 1. Return the result of EvaluateBody of the parsed code that is F.[[ECMAScriptCode]] passing F and argumentsList as the arguments.
     return EnsureCompletion(yield* (EvaluateBody(F.ECMAScriptCode!, F, argumentsList)));
   } finally {
-    if (captured !== undefined) {
+    if (toPush !== undefined) {
       popTypeParameterFrame();
     }
   }
