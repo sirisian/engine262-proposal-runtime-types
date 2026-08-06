@@ -250,7 +250,7 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
  * here rather than at each operation is what keeps `contains`, `isEmpty`,
  * `intersect`, and the arithmetic from each having to remember it.
  */
-function endpointOf(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | bigint | undefined {
+export function endpointOf(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | bigint | undefined {
   if (v === undefined) {
     return undefined;
   }

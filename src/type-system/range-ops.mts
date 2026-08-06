@@ -1,8 +1,8 @@
-import { Value, NumberValue } from '../value.mts';
+import { Value, NumberValue, type TypedNumberValue } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import {
-  isRangeObject, CreateRangeObject, type RangeObject, type RangeBound,
+  isRangeObject, CreateRangeObject, endpointOf, type RangeObject, type RangeBound,
 } from '../intrinsics/Range.mts';
 import {
   F, R, surroundingAgent, type BigIntValue, type Realm,
@@ -41,8 +41,11 @@ interface Interval {
  * through instead would mean making the interval arithmetic itself generic,
  * which is a larger change than this module currently supports.
  */
-function edgeOf(v: NumberValue | BigIntValue): number {
-  const n = R(v);
+function edgeOf(v: NumberValue | BigIntValue | TypedNumberValue): number {
+  // Through `endpointOf`, so a TYPED endpoint reads the same way it does
+  // everywhere else. Interval arithmetic is over Number, so a bigint endpoint
+  // narrows here rather than at each operation.
+  const n = endpointOf(v)!;
   return typeof n === 'bigint' ? Number(n) : n;
 }
 

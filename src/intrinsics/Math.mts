@@ -11,7 +11,7 @@ import {
 import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
-import { type RangeObject } from './Range.mts';
+import { endpointOf, type RangeObject } from './Range.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -457,8 +457,11 @@ export function TypedRandomInRange(t: TypeRecord, range: RangeObject, realm: Rea
   if (!isFloat && !isUint && !isInt) {
     return undefined;
   }
-  const startEdge = range.RangeStart === undefined ? undefined : R(range.RangeStart);
-  const endEdge = range.RangeEnd === undefined ? undefined : R(range.RangeEnd);
+  // Through `endpointOf`, so a TYPED endpoint reads here the way it reads
+  // everywhere else - `Math.random.<uint8>(x..=y)` over typed bounds is the
+  // ordinary case, not a special one.
+  const startEdge = endpointOf(range.RangeStart);
+  const endEdge = endpointOf(range.RangeEnd);
   // A bigint endpoint is the wide-integer form, which this draw defers along
   // with `bits > 32` below: the grid it rides is a double's significand, so an
   // endpoint that does not fit one has no exactly representable draw here.
