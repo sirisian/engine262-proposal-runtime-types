@@ -121,7 +121,9 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     // whose base declares an index operator reads through the operator, called
     // with the index as its argument, rather than through the ordinary [[Get]].
     if (V.IndexOperator !== undefined) {
-      const operatorResult = Q(yield* Call(V.IndexOperator, V.Base as Value, [V.ReferencedName as Value]));
+      // #sec-class-operators: the accessor receives every index the access
+      // supplied, which for a single-index access is a list of one.
+      const operatorResult = Q(yield* Call(V.IndexOperator, V.Base as Value, (V.IndexArguments ?? [V.ReferencedName as Value]) as Value[]));
       // proposal-runtime-types (references extension): an index operator that
       // returns a borrow (`return ref this.data[i]`) reads through to the
       // referent, so the access yields the element's current value.
@@ -237,7 +239,9 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
   // value last. Without this the write created an ordinary property while the read
   // kept dispatching, so the value written was never the value read back.
   if (V.IndexSetOperator !== undefined) {
-    Q(yield* Call(V.IndexSetOperator, V.Base as Value, [V.ReferencedName as Value, W]));
+    // The write direction takes the indices and then the value, the shape the
+    // design writes as `set operator[](...args, value)`.
+    Q(yield* Call(V.IndexSetOperator, V.Base as Value, [...(V.IndexArguments ?? [V.ReferencedName as Value]), W] as Value[]));
     return undefined;
   }
   // Where the class declares the read half and no write half, the write reaches

@@ -529,10 +529,20 @@ export function reservedOnlyDecorators(decorators: readonly ParseNode.Decorator[
 
 function operatorTableKey(e: ParseNode.OperatorDefinition): string {
   const name = e.OperatorName ?? '';
+  // proposal-runtime-types #sec-class-operators: an index accessor is keyed by
+  // its INDEX COUNT as well as its name. A class may declare more than one -
+  // the design's grid declares `[i]` and `[x, y]` together - and a table keyed
+  // by name alone let the second overwrite the first, so only one of them was
+  // ever reachable. The write direction takes the indices and then the value,
+  // so its index count is one less than its parameter count.
+  const params = e.FormalParameters?.length ?? 0;
   if (name === '[]' && e.AccessorKind === 'set') {
-    return '[]=';
+    return `[]=#${Math.max(0, params - 1)}`;
   }
-  return (e.FormalParameters?.length ?? 0) === 0 ? `unary ${name}` : name;
+  if (name === '[]') {
+    return `[]#${params}`;
+  }
+  return params === 0 ? `unary ${name}` : name;
 }
 
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {

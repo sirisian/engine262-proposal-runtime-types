@@ -1212,6 +1212,11 @@ export class ReferenceRecord {
   // place of the ordinary property [[Get]]/[[Set]]. The value is the index
   // operator function.
   readonly IndexOperator?: Value;
+
+  // proposal-runtime-types #sec-class-operators: the indices a computed access
+  // supplied, where an index accessor applies. `m[x, y]` reaches a two-index
+  // accessor with both, and the single-index case carries a list of one.
+  readonly IndexArguments?: readonly Value[];
   readonly IndexSetOperator?: Value;
 
   // proposal-runtime-types #sec-soa-references: set when this reference denotes
@@ -1238,15 +1243,17 @@ export class ReferenceRecord {
     Strict,
     ThisValue,
     IndexOperator,
+    IndexArguments,
     IndexSetOperator,
     SoAElement,
     ArrayBorrow,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexSetOperator' | 'SoAElement' | 'ArrayBorrow'>) {
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexArguments' | 'IndexSetOperator' | 'SoAElement' | 'ArrayBorrow'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
     this.ThisValue = ThisValue;
     this.IndexOperator = IndexOperator;
+    this.IndexArguments = IndexArguments;
     this.IndexSetOperator = IndexSetOperator;
     this.SoAElement = SoAElement;
     this.ArrayBorrow = ArrayBorrow;
