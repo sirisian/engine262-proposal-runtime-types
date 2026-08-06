@@ -673,14 +673,39 @@ test('sec-ranges: an endpoint is a value of an ORDERED type', () => {
   expectThrown('NaN..<9;');
   expectThrown('0..<NaN;');
   expectThrown('function f(){ return 0/0; } f()..<9;');
-  // An infinite endpoint is coherent and stays admitted; it is not the same as
-  // an ABSENT one, which `endBound` reports.
+  // An infinite endpoint is admitted; see the row below for how it differs from
+  // an absent one.
   expect(evaluated('String((0..<Infinity).contains(1e9));')).toBe('true');
   // Everything that was refused stays refused: no coercion, no mixed kinds.
   expectThrown('"3"..<9;');
   expectThrown('true..<9;');
   expectThrown('3n..<9;');
   expectThrown('const o = { valueOf() { return 3; } }; o..<9;');
+});
+
+test('sec-ranges: an infinite endpoint is not the same as an absent one', () => {
+  // "An endpoint may be INFINITE, and an infinite endpoint is not the same as an
+  //  absent one: `0..<Infinity` has an end and `0..` has none, so they report
+  //  different `endBound` and `interval` and only the latter is `isFull` when
+  //  both sides are absent."
+  expect(evaluated('const r = 0..<Infinity; String(r.end) + "/" + String(r.endBound === Range.Bound.Open) + "/" + String(r.interval === Range.Interval.ClosedOpen);'))
+    .toBe('Infinity/true/true');
+  expect(evaluated('const r = 0..; String(r.end) + "/" + String(r.endBound) + "/" + String(r.interval);'))
+    .toBe('undefined/undefined/undefined');
+  expect(evaluated('String((..).isFull) + "/" + String((-Infinity..<Infinity).isFull);')).toBe('true/false');
+
+  // "They contain the same values and iterate the same, an infinite end
+  //  stopping the iteration nowhere exactly as an absent end does." Without
+  //  this, containment agreed while iteration disagreed - `0..` counted forever
+  //  and `0..<Infinity` refused - which is the incoherence the rule removes.
+  expect(evaluated('String((0..<Infinity).contains(1e9)) + "/" + String((0..).contains(1e9));')).toBe('true/true');
+  expect(evaluated('Iterator.from(0..<Infinity).take(4).toArray().join(",");')).toBe('0,1,2,3');
+  expect(evaluated('const a = Iterator.from(0..<Infinity).take(4).toArray().join(","); const b = Iterator.from(0..).take(4).toArray().join(","); String(a === b);')).toBe('true');
+  // The bounds still apply: an open start begins one step in either way.
+  expect(evaluated('Iterator.from(0<..<Infinity).take(3).toArray().join(",");')).toBe('1,2,3');
+  expect(evaluated('Iterator.from((0..<Infinity).step(2)).take(3).toArray().join(",");')).toBe('0,2,4');
+  // A non-integer endpoint still has no implicit step; Infinity is not one.
+  expectThrown('[...(0.5..<2.5)];');
 });
 
 // =============================================================================

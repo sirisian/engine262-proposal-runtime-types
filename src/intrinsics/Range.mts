@@ -387,7 +387,12 @@ function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObjec
   const rawStart = (endpointOf(self.RangeStart) as number | bigint);
   const rawEnd = endpointOf(self.RangeEnd);
   const start = rawStart;
-  const end = rawEnd;
+  // An INFINITE end is not a member the iteration can stop at, so it stops the
+  // iteration nowhere - which is what an ABSENT end already does. The two
+  // spellings contain the same values, so they must iterate the same: without
+  // this, `0..` counted forever and `0..<Infinity` refused, and containment
+  // agreed while iteration disagreed.
+  const end = typeof rawEnd === 'number' && !Number.isFinite(rawEnd) ? undefined : rawEnd;
   // A bigint endpoint is an integer by construction; the test below is the
   // Number one.
   if (typeof start === 'number' && (!Number.isInteger(start) || (typeof end === 'number' && !Number.isInteger(end)))) {
@@ -472,7 +477,8 @@ function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: Func
   if (sStart === undefined) {
     return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
   }
-  return CreateRangeIterator(sStart, numericEndpoint(self.RangeEnd), step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
+  const sEnd = numericEndpoint(self.RangeEnd);
+  return CreateRangeIterator(sStart, typeof sEnd === 'number' && !Number.isFinite(sEnd) ? undefined : sEnd, step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
 }
 
 export function bootstrapRangeIteratorPrototype(realmRec: Realm): void {
