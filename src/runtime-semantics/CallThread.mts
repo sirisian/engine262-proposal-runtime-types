@@ -1,7 +1,6 @@
 import {
   Agent,
   AbruptCompletion,
-  Assert,
   Call,
   EnsureCompletion,
   Get,
@@ -303,7 +302,6 @@ function SchedulePump(cluster: ThreadCluster, spawner: Agent, realm: Agent['curr
     if (ran || cluster.hasThreadWork) {
       SchedulePump(cluster, spawner, realm);
     }
-    return Value.undefined;
   }, realm, spawner);
 }
 
