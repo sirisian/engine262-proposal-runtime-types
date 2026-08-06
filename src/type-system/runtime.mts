@@ -11,6 +11,7 @@ import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
@@ -101,6 +102,44 @@ export function popTypeParameterFrame(): void {
  * active captures it here and pushes it again at each call. That is what
  * carries `W` into a method body rather than only into the heritage clause.
  */
+/**
+ * proposal-runtime-types #sec-generics: the bindings a declaration takes when
+ * it is used with NO argument list, or undefined where it needs one.
+ *
+ * A declaration every one of whose parameters has a default has a meaning
+ * without arguments - `class C<T = uint8>` used as `new C()`, and `type A<T =
+ * uint8>` used as `A`. One parameter without a default is enough to need an
+ * application, since nothing would bind it.
+ *
+ * Each default resolves with the bindings made so far in scope, so a later
+ * default may name an earlier parameter.
+ */
+export function* AllDefaultsFrame(declaration: unknown): PlainEvaluator<Map<string, TypeRecord> | undefined> {
+  const params = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null })
+    ?.TypeParameters?.TypeParameterList;
+  if (!params || params.length === 0) {
+    return undefined;
+  }
+  if (!params.every((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault)) {
+    return undefined;
+  }
+  const frame = new Map<string, TypeRecord>();
+  for (const p of params) {
+    const name = p.BindingIdentifier?.name;
+    pushTypeParameterFrame(frame);
+    let record;
+    try {
+      record = Q(yield* TypeNodeToTypeRecord((p as unknown as { TypeParameterDefault: ParseNode.Type }).TypeParameterDefault));
+    } finally {
+      popTypeParameterFrame();
+    }
+    if (name) {
+      frame.set(name, record);
+    }
+  }
+  return frame;
+}
+
 export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined {
   if (typeParameterFrames.length === 0) {
     return undefined;
@@ -133,8 +172,35 @@ export function lookupTypeParameter(name: string): TypeRecord | null {
 
 export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
-  if (params.length !== argRecords.length) {
+  // #sec-generics: a trailing parameter with a DEFAULT may be omitted, so an
+  // alias may be written with fewer arguments than parameters - and with none
+  // at all where every parameter has one, which is what makes a bare `A` a type
+  // for `type A<T = uint8> = [].<T>`. Each omitted parameter takes its default,
+  // resolved with the bindings made so far so that a later default may name an
+  // earlier parameter.
+  const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
+  const leastArgs = firstDefault === -1 ? params.length : firstDefault;
+  if (argRecords.length < leastArgs || argRecords.length > params.length) {
     return Throw.TypeError('$1 is not a type', Value(declaration.BindingIdentifier.name));
+  }
+  if (argRecords.length < params.length) {
+    const filled = [...argRecords];
+    const frame = new Map<string, TypeRecord>();
+    for (let i = 0; i < params.length; i += 1) {
+      const name = params[i]!.BindingIdentifier?.name;
+      if (i >= filled.length) {
+        pushTypeParameterFrame(frame);
+        try {
+          filled.push(Q(yield* TypeNodeToTypeRecord((params[i] as unknown as { TypeParameterDefault: ParseNode.Type }).TypeParameterDefault)));
+        } finally {
+          popTypeParameterFrame();
+        }
+      }
+      if (name) {
+        frame.set(name, filled[i]!);
+      }
+    }
+    argRecords = filled;
   }
   // proposal-runtime-types #sec-evaluation-budget: instantiating an alias is
   // type-level evaluation and must be metered. Without this a self-referential
@@ -243,6 +309,18 @@ export function* InferGenericBindings(
 
       if (bound === null && tp.TypeParameterDefault) {
         bound = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterDefault));
+        // #sec-type-parameters: a VALUE parameter's argument "is a value of the
+        // named type", and a default is an argument like any other - so `H:
+        // uint32 = 2` binds a `uint32` and not the plain number it was spelled
+        // as. Both halves of the literal move: its VALUE becomes one of the
+        // constraint's, and its BASE becomes the constraint, without which the
+        // check below refused a default against its own declared constraint.
+        if (bound.Kind === 'literal' && constraint !== null && constraint.Kind === 'primitive') {
+          const converted = EnsureCompletion(yield* ConvertValue(bound.Value, constraint));
+          if (converted.Type === 'normal') {
+            bound = { ...bound, Value: converted.Value as Value, Base: constraint } as never;
+          }
+        }
       }
       if (bound === null) {
         // Nothing to infer from and no default: bind `any` so downstream

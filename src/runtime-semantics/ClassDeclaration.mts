@@ -4,6 +4,9 @@ import { Q, NormalCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import {
+  AllDefaultsFrame, pushTypeParameterFrame, popTypeParameterFrame,
+} from '../type-system/runtime.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import {
   InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
@@ -46,8 +49,29 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
   }
   // 1. Let className be StringValue of BindingIdentifier.
   const className = StringValue(BindingIdentifier);
-  // 2. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments className, className, decorators.
-  const value = Q(yield* ClassDefinitionEvaluation(ClassTail, className, className, sourceText, decorators));
+  // proposal-runtime-types #sec-generics: a generic class every one of whose
+  // parameters has a DEFAULT has a well-defined meaning with no arguments, so
+  // the declaration binds those defaults and the class is built over them -
+  // `new C()` on `class C<T = uint8>` is `new C.<uint8>()`. Without this the
+  // declaration took the unspecialized path, where the parts that depend on a
+  // parameter wait for an application that a bare `new C()` never makes, and a
+  // body reading the parameter reported it undefined.
+  //
+  // A class with any parameter lacking a default still waits: there is nothing
+  // to bind it to.
+  const defaultsFrame = Q(yield* AllDefaultsFrame(ClassDeclaration));
+  if (defaultsFrame !== undefined) {
+    pushTypeParameterFrame(defaultsFrame);
+  }
+  let value;
+  try {
+    // 2. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments className, className, decorators.
+    value = Q(yield* ClassDefinitionEvaluation(ClassTail, className, className, sourceText, decorators));
+  } finally {
+    if (defaultsFrame !== undefined) {
+      popTypeParameterFrame();
+    }
+  }
   // proposal-runtime-types M21: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
     const typeObject = GetTypeObject({ Kind: 'nominal', Declaration: ClassDeclaration, Arguments: [], Constructor: value });

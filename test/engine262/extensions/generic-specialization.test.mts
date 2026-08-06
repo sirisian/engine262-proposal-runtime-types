@@ -292,3 +292,32 @@ test('a default may name an earlier parameter', () => {
   expect(evaluated('class C<T, U = [].<T>> { m() { let a: U = []; return "ok"; } }'
     + ' String(new C.<uint8>().m());')).toBe('ok');
 });
+
+test('a value parameter default binds a value of its declared type', () => {
+  // `H: uint32 = 2` binds a uint32, not the plain number it was spelled as:
+  // both halves of the literal move, so it satisfies its own constraint
+  expect(evaluated('function f<H: uint32 = 2>() { return H; } String(f());')).toBe('2');
+  expect(evaluated('function f<H: uint32 = 2>() { return H is uint32; } String(f());')).toBe('true');
+  expect(evaluated('function f<W: uint32, H: uint32 = 2>() { return W * H; } String(f.<4>());')).toBe('8');
+  expect(evaluated('class C<H: uint32 = 2> { m() { return H; } } String(new C().m());')).toBe('2');
+});
+
+test('a declaration whose parameters all have defaults needs no arguments', () => {
+  // `new C()` is `new C.<uint8>()`, so the parts that depend on the parameter
+  // are built rather than waiting for an application that never comes
+  expect(evaluated('class C<T = uint8> { m() { return (1 := T) is uint8; } } String(new C().m());')).toBe('true');
+  expect(evaluated('class C<T = uint8> { f = (1 := T); } String(new C().f is uint8);')).toBe('true');
+  expect(evaluated('class C<W: uint32 = 4> extends [W].<uint8> { } String(new C().length);')).toBe('4');
+  // and a bare `A` is a type for an alias whose parameters all have defaults
+  expect(evaluated('type A<T = uint8> = [].<T>; let a: A = []; a.push((1 := uint8)); String(a.length);')).toBe('1');
+  expect(evaluated('type A<T = uint8, U = [].<T>> = U; let a: A = []; String(a.length);')).toBe('0');
+  // an explicit argument still overrides the default
+  expect(evaluated('class C<T = uint8> { m() { return (1 := T) is uint16; } } String(new C.<uint16>().m());')).toBe('true');
+});
+
+test('a parameter without a default still needs its argument', () => {
+  // one parameter lacking a default is enough to need an application
+  expect(evaluated('class C<T> { m() { return 1; } } String(new C().m());')).toBe('1');
+  expectThrown('type A<T> = [].<T>; let a: A;');
+  expectThrown('type A<T, U = uint8> = [].<T>; let a: A;');
+});
