@@ -483,7 +483,14 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const kindedParam = params?.some((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
     if (params && params.length > 0 && !kindedParam) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
-      if (typeArgs.length !== params.length) {
+      // #sec-generics: an argument list may omit a TRAILING parameter that has
+      // a default, which then binds the default's type. A parameter without one
+      // may not be omitted, and the parse-time rule that defaults come last
+      // makes the count of required parameters simply the count before the
+      // first default.
+      const required = params.findIndex((p: ParseNode.TypeParameter) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
+      const least = required === -1 ? params.length : required;
+      if (typeArgs.length < least || typeArgs.length > params.length) {
         return Throw.TypeError(
           '$1 takes $2 type arguments; $3 expects one taking $4',
           Value('the call'), Value(String(typeArgs.length)),
@@ -492,8 +499,18 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       }
       const frame = new Map<string, TypeRecord>();
       for (let i = 0; i < params.length; i += 1) {
-        const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null };
-        let record = Q(yield* TypeNodeToTypeRecord(typeArgs[i]!));
+        const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: ParseNode.Type | null };
+        // A parameter past the supplied arguments takes its default, which is
+        // resolved with the frame built so far in scope - so a later default
+        // may name an earlier parameter.
+        const argNode = i < typeArgs.length ? typeArgs[i]! : p.TypeParameterDefault!;
+        pushTypeParameterFrame(frame);
+        let record;
+        try {
+          record = Q(yield* TypeNodeToTypeRecord(argNode));
+        } finally {
+          popTypeParameterFrame();
+        }
         // A value parameter's argument is a value OF the declared type, so the
         // literal it binds carries a value of that type rather than the plain
         // number the argument was written as.

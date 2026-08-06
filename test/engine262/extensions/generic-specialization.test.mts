@@ -261,3 +261,34 @@ test('a higher-kinded method parameter follows the function rule', () => {
     + ' String(new C().m.<Identity>());')).toBe('1');
   expectThrownKind('class C { m<W<_>>() { return 1; } } new C().m();', 'TypeError');
 });
+
+// -- type parameter defaults --------------------------------------------------
+test('a type parameter default binds where no argument is supplied', () => {
+  // the binding boundary was gated on ANNOTATIONS, so a generic function with a
+  // default and nothing annotated got no frame and reported that T was undefined
+  expect(evaluated('function f<T = uint8>() { return (1 := T) is uint8; } String(f());')).toBe('true');
+  expect(evaluated('class C { m<T = uint8>() { return (1 := T) is uint8; } } String(new C().m());')).toBe('true');
+  // where it already worked, it still does
+  expect(evaluated('function f<T = uint8>(v: uint8) { return (1 := T) is uint8; } String(f((1 := uint8)));')).toBe('true');
+  expect(evaluated('function f<T = uint8>(): boolean { return (1 := T) is uint8; } String(f());')).toBe('true');
+  // an explicit argument still wins over the default
+  expect(evaluated('function f<T = uint8>() { return (1 := T) is uint16; } String(f.<uint16>());')).toBe('true');
+});
+
+test('a trailing default may be omitted from an argument list', () => {
+  expect(evaluated('function f<T, U = uint8>(v: T) { return (1 := U) is uint8; }'
+    + ' String(f.<uint16>((1 := uint16)));')).toBe('true');
+  expect(evaluated('class C<T, U = uint8> { m() { return (1 := U) is uint8; } }'
+    + ' String(new C.<uint16>().m());')).toBe('true');
+  // a parameter without a default may not be omitted
+  expectThrown('class C<T, U> { m() { return 1; } } new C.<uint8>().m();');
+});
+
+test('a default may name an earlier parameter', () => {
+  // the trailing-only rule makes this well founded, and the default is resolved
+  // with the bindings made so far in scope
+  expect(evaluated('function f<T, U = [].<T>>(v: T) { let a: U = []; return "ok"; }'
+    + ' String(f.<uint8>((1 := uint8)));')).toBe('ok');
+  expect(evaluated('class C<T, U = [].<T>> { m() { let a: U = []; return "ok"; } }'
+    + ' String(new C.<uint8>().m());')).toBe('ok');
+});

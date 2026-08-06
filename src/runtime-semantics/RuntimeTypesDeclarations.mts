@@ -1063,7 +1063,11 @@ const classSpecializations = new Map<unknown, Map<string, Value>>();
 function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const args = node.TypeArguments.TypeArgumentList;
-  if (args.length !== params.length) {
+  // #sec-generics: a trailing parameter with a default may be omitted, so a
+  // class every one of whose parameters has a default may be applied with none.
+  const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
+  const leastArgs = firstDefault === -1 ? params.length : firstDefault;
+  if (args.length < leastArgs || args.length > params.length) {
     return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(declaration.BindingIdentifier?.name ?? 'a class'), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
   }
   const frame = new Map<string, TypeRecord>();
@@ -1079,7 +1083,16 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
       TypeParameterConstraint?: ParseNode.Type | null,
     };
     const name = param.BindingIdentifier?.name;
-    let record = Q(yield* TypeNodeToTypeRecord(args[i]!));
+    // A parameter past the supplied arguments takes its default, resolved with
+    // the frame built so far so that a default may name an earlier parameter.
+    const argNode = i < args.length ? args[i]! : (param as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault!;
+    pushTypeParameterFrame(frame);
+    let record;
+    try {
+      record = Q(yield* TypeNodeToTypeRecord(argNode));
+    } finally {
+      popTypeParameterFrame();
+    }
     // #sec-type-parameters: a VALUE parameter's argument "is a value of the
     // named type", so the literal type it binds carries a value OF that type.
     // Without this `W: uint32` bound the plain number the argument was written

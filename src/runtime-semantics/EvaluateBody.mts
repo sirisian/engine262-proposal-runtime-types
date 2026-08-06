@@ -37,6 +37,7 @@ import {
   EnforceParameterTypes,
   EnforceReturnType,
   InferGenericCallBindings,
+  functionTypeParameters,
 } from '#self';
 
 export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.FunctionBody | ParseNode.AsyncBody | ParseNode.GeneratorBody | ParseNode.AsyncGeneratorBody) {
@@ -55,8 +56,17 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // reported "W is not defined"; the captured frame is pushed here instead,
   // around the body proper.
   // proposal-runtime-types: the parameter boundary, skipped entirely when the
-  // function has no annotations.
-  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
+  // function has neither annotations nor type parameters.
+  //
+  // #sec-generics: a type parameter with a DEFAULT binds that default when no
+  // argument is supplied, and the binding happens below - so gating on
+  // annotations alone left `function f<T = uint8>() { ... T ... }` with no
+  // frame at all, reporting that T was not defined. A function with type
+  // parameters needs the boundary whether or not anything in it is annotated;
+  // one with neither is unaffected, since the operations below then find
+  // nothing to do.
+  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
+      && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: a generic function infers its type parameters from the call
     // arguments and evaluates its parameter and return types over those bindings.
     const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
@@ -123,7 +133,8 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
 export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
-  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode && functionHasAnnotations(functionObject)) {
+  if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
+      && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: infer generic type parameters from the call arguments.
     const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
     // proposal-runtime-types #sec-generics: a parameter already bound by a
