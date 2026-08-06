@@ -31,6 +31,7 @@ import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
+import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -560,7 +561,18 @@ export function OrdinaryFunctionCreate(functionPrototype: ObjectValue, sourceTex
     'HostInitialName',
   ];
   // 3. Let F be ! OrdinaryObjectCreate(functionPrototype, internalSlotsList).
-  const F = X(OrdinaryObjectCreate(functionPrototype, internalSlotsList)) as Mutable<ECMAScriptFunctionObject>;
+  const F = X(OrdinaryObjectCreate(functionPrototype, internalSlotsList)) as Mutable<ECMAScriptFunctionObject> & { TypeParameterFrame?: unknown };
+  // proposal-runtime-types #sec-generics: a function created while a
+  // specialization's bindings are in scope carries them, so its body sees the
+  // same `W` the declaration did however much later it is called. This is the
+  // one place every function shape passes through - a method, an accessor, a
+  // field initializer, a static block, and the constructor alike.
+  if (surroundingAgent.feature('runtime-types')) {
+    const frame = currentTypeParameterFrame();
+    if (frame !== undefined) {
+      F.TypeParameterFrame = frame;
+    }
+  }
   // 4. Set F.[[Call]] to the definition specified in 10.2.1.
   F.Call = FunctionCallSlot;
   // 5. Set F.[[SourceText]] to sourceText.

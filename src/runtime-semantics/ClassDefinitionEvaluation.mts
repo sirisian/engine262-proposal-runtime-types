@@ -1,4 +1,5 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { CallDecorator } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
@@ -583,7 +584,22 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   let protoParent;
   let constructorParent: ObjectValue;
   // 7. If ClassHeritage is not present, then
-  if (!ClassHeritage) {
+  // proposal-runtime-types #sec-generics: a generic class whose heritage READS
+  // a type parameter, the design's `class G<W: uint32> extends [W * H].<uint8>`,
+  // has no heritage to evaluate until an application binds the parameters. The
+  // declaration still binds the name, so it is evaluated with no heritage and
+  // the specialization built by an application evaluates it for real, over that
+  // application's bindings. Only a heritage that actually reads a parameter is
+  // deferred: one that does not evaluates at the declaration as it always has.
+  let deferredHeritage = false;
+  if (ClassHeritage && surroundingAgent.feature('runtime-types')) {
+    const owner = (ClassTail as unknown as { parent?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).parent;
+    const params = owner?.TypeParameters?.TypeParameterList;
+    if (params && params.length > 0 && currentTypeParameterFrame() === undefined) {
+      deferredHeritage = true;
+    }
+  }
+  if (!ClassHeritage || deferredHeritage) {
     // a. Let protoParent be %Object.prototype%.
     protoParent = surroundingAgent.intrinsic('%Object.prototype%');
     // b. Let constructorParent be %Function.prototype%.

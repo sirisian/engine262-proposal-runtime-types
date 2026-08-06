@@ -10,12 +10,15 @@ import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
-import { InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import {
+  InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
+  pushTypeParameterFrame, popTypeParameterFrame,
+} from '../type-system/runtime.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { anyType } from '../type-system/records.mts';
-import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, AssociateClassType, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
   SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
@@ -25,6 +28,7 @@ import {
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
 import { DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
+import { ClassDefinitionEvaluation } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -980,7 +984,16 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     if (only.type === 'NumericLiteral' && typeof only.value === 'number') {
       extent = only.value;
     } else {
-      return Throw.TypeError('$1 is not a type', Value('an array type needs a numeric extent or none'));
+      // An extent written over generic parameters - the design's `[W * H]` -
+      // is an expression, evaluable once an application has bound them.
+      const computed = Q(yield* GetValue(Q(yield* Evaluate(only as never))));
+      const n = computed instanceof NumberValue
+        ? Number((computed as unknown as { value: number }).value)
+        : Number((computed as unknown as { value?: number }).value ?? NaN);
+      if (!Number.isInteger(n) || n < 0) {
+        return Throw.TypeError('$1 is not a type', Value('an array type needs a numeric extent or none'));
+      }
+      extent = n;
     }
   } else if (elements.length > 1) {
     return Throw.TypeError('$1 is not a type', Value('an array type needs a numeric extent or none'));
@@ -1025,6 +1038,102 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   return ctor;
 }
 
+/**
+ * A stable identity for one type argument. Interned Type Objects are one per
+ * type, so an id per object distinguishes arguments that RENDER alike - `C.<4>`
+ * and `C.<8>` both display as their base type, and keying on the rendering made
+ * them one specialization.
+ */
+const specializationIds = new WeakMap<object, number>();
+let nextSpecializationId = 0;
+function specializationKeyOf(record: TypeRecord): string {
+  const interned = GetTypeObject(record) as unknown as object;
+  let id = specializationIds.get(interned);
+  if (id === undefined) {
+    id = nextSpecializationId;
+    nextSpecializationId += 1;
+    specializationIds.set(interned, id);
+  }
+  return String(id);
+}
+
+/** One specialization per declaration and argument list. */
+const classSpecializations = new Map<unknown, Map<string, Value>>();
+
+function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
+  const params = declaration.TypeParameters?.TypeParameterList ?? [];
+  const args = node.TypeArguments.TypeArgumentList;
+  if (args.length !== params.length) {
+    return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(declaration.BindingIdentifier?.name ?? 'a class'), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
+  }
+  const frame = new Map<string, TypeRecord>();
+  const key: string[] = [];
+  // The arguments the specialization's TYPE carries. A `B.<Identity>` used as
+  // an annotation resolves to the nominal with these arguments, so the type of
+  // an instance built from the specialization has to carry them too - without
+  // them `const b: B.<Identity> = new B.<Identity>()` refused its own value.
+  const argRecords: TypeRecord[] = [];
+  for (let i = 0; i < params.length; i += 1) {
+    const param = params[i] as unknown as {
+      BindingIdentifier?: { name?: string },
+      TypeParameterConstraint?: ParseNode.Type | null,
+    };
+    const name = param.BindingIdentifier?.name;
+    let record = Q(yield* TypeNodeToTypeRecord(args[i]!));
+    // #sec-type-parameters: a VALUE parameter's argument "is a value of the
+    // named type", so the literal type it binds carries a value OF that type.
+    // Without this `W: uint32` bound the plain number the argument was written
+    // as, and a body mixing it with typed values - the design's `y * W + x`,
+    // whose other operands are `uint32` - reported that the two numeric types
+    // do not mix.
+    if (record.Kind === 'literal' && param.TypeParameterConstraint) {
+      const declared = Q(yield* TypeNodeToTypeRecord(param.TypeParameterConstraint));
+      const converted = EnsureCompletion(yield* ConvertValue(record.Value as Value, declared as never));
+      if (converted.Type === 'normal') {
+        record = { ...record, Value: converted.Value as Value } as never;
+      }
+    }
+    if (name) {
+      frame.set(name, record);
+    }
+    key.push(specializationKeyOf(record));
+    argRecords.push(record);
+  }
+  let byArgs = classSpecializations.get(declaration);
+  if (byArgs === undefined) {
+    byArgs = new Map();
+    classSpecializations.set(declaration, byArgs);
+  }
+  const cacheKey = key.join(',');
+  const cached = byArgs.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  pushTypeParameterFrame(frame);
+  let specialized;
+  try {
+    const className = Value(declaration.BindingIdentifier?.name ?? '');
+    specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
+      declaration.ClassTail,
+      className,
+      className,
+      '',
+      [],
+    ));
+  } finally {
+    popTypeParameterFrame();
+  }
+  if (specialized.Type !== 'normal') {
+    return specialized as never;
+  }
+  const ctor = specialized.Value as Value;
+  AssociateClassType(ctor, GetTypeObject({
+    Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
+  } as never));
+  byArgs.set(cacheKey, ctor);
+  return ctor;
+}
+
 export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
   // proposal-runtime-types (README "Typed Arrays"): an ARRAY TYPE written in
   // expression position - `new [100].<uint8>()`, or `class G extends
@@ -1049,6 +1158,27 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return ref;
   }
   const value = peeked.Value;
+  // proposal-runtime-types #sec-generics: applying arguments to a GENERIC CLASS
+  // yields its specialization - "each distinct application is a distinct type
+  // with its own Type Object and its own specialized body". The class is
+  // evaluated again over the application's bindings, so its heritage clause and
+  // every body in it read the parameters as this application bound them, and
+  // two applications with the same arguments are one specialization.
+  if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
+    const classType = LookupClassType(value as unknown as object);
+    const declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'
+      ? classType.TypeRecord.Declaration as unknown as { type?: string, TypeParameters?: { TypeParameterList?: readonly unknown[] }, ClassTail?: unknown, BindingIdentifier?: { name?: string } }
+      : undefined;
+    const params = declaration?.TypeParameters?.TypeParameterList;
+    // A HIGHER-KINDED parameter stands for a generic declaration rather than a
+    // type (#sec-higher-kinded-parameters), so its argument is not resolvable
+    // as one and specializing over it is not this path's business; the nominal
+    // instantiation below carries such arguments as it always has.
+    const kinded = params?.some((p) => ((p as { Arity?: number }).Arity ?? 0) > 0);
+    if (params && params.length > 0 && declaration.ClassTail && !kinded) {
+      return Q(yield* SpecializeGenericClass(declaration as never, node));
+    }
+  }
   if (isTypeObject(value)) {
     const record = value.TypeRecord;
     if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {

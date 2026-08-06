@@ -92,6 +92,30 @@ export function popTypeParameterFrame(): void {
 }
 
 /**
+ * proposal-runtime-types #sec-generics: the bindings currently in scope, or
+ * undefined where none are.
+ *
+ * A specialized declaration's parameters are in scope "within the body and
+ * signatures of its declaration", and a body runs long after the declaration
+ * was evaluated - so a function created while a specialization's frame is
+ * active captures it here and pushes it again at each call. That is what
+ * carries `W` into a method body rather than only into the heritage clause.
+ */
+export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined {
+  if (typeParameterFrames.length === 0) {
+    return undefined;
+  }
+  // Flattened innermost-last, so a nested specialization shadows an outer one.
+  const merged = new Map<string, TypeRecord>();
+  for (const frame of typeParameterFrames) {
+    for (const [name, record] of frame) {
+      merged.set(name, record);
+    }
+  }
+  return merged;
+}
+
+/**
  * proposal-runtime-types: the Type Record bound to a type parameter
  * of the given name in the active frames, innermost first, or null if none. A
  * type parameter referenced as a builder-call argument (`joinResult(P, d)`)
