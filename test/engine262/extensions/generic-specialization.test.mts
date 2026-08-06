@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../readme/harness.mts';
+import { evaluated, expectError, expectThrown } from '../readme/harness.mts';
 
 /**
  * A specialization's bindings reach the bodies of its declaration (spec
@@ -175,4 +175,32 @@ test('a specialization may itself be extended', () => {
     + ' String(new D().m());')).toBe('4');
   expect(evaluated('class C<W: uint32> extends [W].<uint8> { } class D extends C.<4> { }'
     + ' String(new D().length);')).toBe('4');
+});
+
+// -- an accessor may not declare type parameters ------------------------------
+test('an accessor may not declare type parameters', () => {
+  // a getter is never written as a call, so a parameter it declared could be
+  // neither supplied nor inferred; a setter could infer one from the assigned
+  // value, but parameterizing one half of a property and not the other would
+  // leave the two halves of one construct with different rules
+  expectError('class C { get p<T>() { return 1; } } "ran";');
+  expectError('class C { set p<T>(v) { } } "ran";');
+  expectError('const o = { get p<T>() { return 1; } }; "ran";');
+  expectError('const o = { set p<T>(v) { } }; "ran";');
+  expectError('class C { static get p<T>() { return 1; } } "ran";');
+});
+
+test('an accessor keeps everything else it could already do', () => {
+  // an annotated getter and setter, which are unaffected
+  expect(evaluated('class C { get p(): uint8 { return (5 := uint8); } } String(new C().p);')).toBe('5');
+  expect(evaluated('class C { #v; set p(v: uint8) { this.#v = v; } get p() { return this.#v; } }'
+    + ' const c = new C(); c.p = (5 := uint8); String(c.p);')).toBe('5');
+  expectThrown('class C { set p(v: uint8) { } } const c = new C(); c.p = 300;');
+  // and an accessor of a GENERIC class still reads that class's parameters:
+  // the refusal is of parameters of the accessor's own, not of the class's
+  expect(evaluated('class C<T> { get p() { return (1 := T) is uint8; } } String(new C.<uint8>().p);')).toBe('true');
+  expect(evaluated('class C<W: uint32> { get p() { return W; } } String(new C.<4>().p);')).toBe('4');
+  // a relational operator in a body is untouched, as is a property named `get`
+  expect(evaluated('class C { m() { const n = 2; return 1 < n; } } String(new C().m());')).toBe('true');
+  expect(evaluated('const o = { get: 1 }; String(o.get);')).toBe('1');
 });

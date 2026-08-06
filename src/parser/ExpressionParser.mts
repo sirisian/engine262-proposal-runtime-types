@@ -3171,6 +3171,19 @@ export abstract class ExpressionParser extends FunctionParser {
         || this.test(Token.RBRACE)
         || this.test(Token.COLON)
         || this.test(Token.ASSIGN));
+    // proposal-runtime-types #sec-class-operators: an ACCESSOR may not declare
+    // type parameters. A getter is never written as a call and takes no
+    // arguments, so a parameter it declared could be neither supplied nor
+    // inferred; a setter could infer one from the assigned value, but
+    // parameterizing one half of a property and not the other would leave the
+    // two halves of one construct with different rules. A method serves where a
+    // parameterized accessor would, and says which type it is applied to at the
+    // site rather than deducing it from a value.
+    //
+    // Refused HERE rather than left to fall off the grammar, so the diagnostic
+    // names the rule instead of reporting an unexpected token - the reading
+    // that cost a full investigation when a generic METHOD, which is a real
+    // gap, was mistaken for a limitation of the call syntax.
     const isSpecialMethod = isGenerator
       || ((isSetter || isGetter || isAsync) && !this.test(Token.LPAREN) && !isAsyncShorthandProperty);
 
@@ -3245,6 +3258,10 @@ export abstract class ExpressionParser extends FunctionParser {
       yield: isGenerator,
       classStaticBlock: false,
     }, () => {
+      if (isSpecialMethod && (isGetter || isSetter) && this.test(Token.LT)) {
+        this.addEarlyError(Throw.SyntaxError('an accessor may not declare type parameters; use a method'), this.peek());
+        this.parseTypeParameters();
+      }
       if (isSpecialMethod && isGetter) {
         this.expect(Token.LPAREN);
         this.expect(Token.RPAREN);
