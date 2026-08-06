@@ -1,4 +1,6 @@
-import { NumberValue, BigIntValue } from '../value.mts';
+import { NumberValue, BigIntValue, TypedNumberValue, isTypedNumber } from '../value.mts';
+import { R } from '../abstract-ops/all.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -20,21 +22,40 @@ export function* Evaluate_RangeExpression({
   // `R` that Number's do, so the ordering operations are polymorphic already.
   // Both endpoints must be the SAME kind: a range mixing them has no element
   // type, and comparing across them is the error a range exists to prevent.
-  let start: NumberValue | BigIntValue | undefined;
+  //
+  // A TYPED number is ordered with Number by the same rule `contains` uses -
+  // #sec-matchrange admits "a value of a type ORDERED WITH the element type" -
+  // so it is an endpoint too. Refusing it while `contains` admitted it was a
+  // contradiction a reader met immediately, since `0..<a.length` over a typed
+  // array produces exactly that pair.
+  //
+  // NaN is refused. It is not a value of an ordered type: it is the value for
+  // which the ordering is UNDEFINED, so every comparison against it is false and
+  // a range holding one reports itself non-empty while containing nothing - a
+  // value that claims inhabitants it cannot produce. Refusing it here, at the
+  // one place an endpoint enters, is what keeps every ordering operation
+  // downstream coherent without any of them testing for it.
+  const endpoint = function* endpoint(node: never): PlainEvaluator<NumberValue | BigIntValue | TypedNumberValue> {
+    const value = Q(yield* GetValue(Q(yield* Evaluate(node))));
+    if (value instanceof BigIntValue) {
+      return value;
+    }
+    if (value instanceof NumberValue || isTypedNumber(value)) {
+      const numeric = value instanceof NumberValue ? R(value) : Number(value.numberValue());
+      if (Number.isNaN(numeric)) {
+        return Throw.TypeError('a range endpoint must be ordered, and NaN is not');
+      }
+      return value;
+    }
+    return Throw.TypeError('a range endpoint must be a number');
+  };
+  let start: NumberValue | BigIntValue | TypedNumberValue | undefined;
   if (RangeStart !== null) {
-    const value = Q(yield* GetValue(Q(yield* Evaluate(RangeStart))));
-    if (!(value instanceof NumberValue) && !(value instanceof BigIntValue)) {
-      return Throw.TypeError('a range endpoint must be a number');
-    }
-    start = value;
+    start = Q(yield* endpoint(RangeStart as never));
   }
-  let end: NumberValue | BigIntValue | undefined;
+  let end: NumberValue | BigIntValue | TypedNumberValue | undefined;
   if (RangeEnd !== null) {
-    const value = Q(yield* GetValue(Q(yield* Evaluate(RangeEnd))));
-    if (!(value instanceof NumberValue) && !(value instanceof BigIntValue)) {
-      return Throw.TypeError('a range endpoint must be a number');
-    }
-    end = value;
+    end = Q(yield* endpoint(RangeEnd as never));
   }
   if (start !== undefined && end !== undefined
       && (start instanceof BigIntValue) !== (end instanceof BigIntValue)) {

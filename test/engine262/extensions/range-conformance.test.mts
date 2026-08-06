@@ -644,6 +644,45 @@ test('ranges.md: DIVERGENCE - the range index operator awaits the view substrate
   expect(evaluated('const s=Symbol("k"); const o={}; o[s]=1; String(o[s]);')).toBe('1');
 });
 
+test('sec-range-literals: an endpoint is any expression, not only a literal', () => {
+  // The operands are ShortCircuitExpressions, so a call, a member access, a
+  // conditional, and a parenthesized sum are all endpoints. And a range binds
+  // LOOSER than the additive operators, so the parentheses in `(1+2)..<10` are
+  // optional - which is the row that would break first if that precedence moved.
+  expect(evaluated('const r = (1+2)..<10; String(r.start) + "/" + String(r.end);')).toBe('3/10');
+  expect(evaluated('const r = 1+2..<10; String(r.start) + "/" + String(r.end);')).toBe('3/10');
+  expect(evaluated('function f(x){ return x*2; } const r = f(3)..=1; String(r.start) + "/" + String(r.end);')).toBe('6/1');
+  expect(evaluated('const a = [1,2,3]; String((0..<a.length).end);')).toBe('3');
+  // In TYPE position an endpoint is a compile-time constant, so the same
+  // expression is a Syntax Error - a range is an expression in value position
+  // and a constant in type position.
+  expectError('type T = float64.<{ bounds: (1+2)..<10 }>; "ok";');
+});
+
+test('sec-ranges: an endpoint is a value of an ORDERED type', () => {
+  // A typed number is ordered with Number by #sec-matchrange's rule - the same
+  // rule `contains` uses - so it is an endpoint too. Refusing it while
+  // `contains` admitted it was a contradiction reached by `0..<a.length` over a
+  // typed array, which is the first place a reader meets it.
+  expect(evaluated('const x = (3 := uint8), y = (9 := uint8); const r = x..<y; String(r.start) + "/" + String(r.end);')).toBe('3/9');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; const r = 0..<a.length; String(r.end) + "/" + String(r.contains(2));')).toBe('3/true');
+  // NaN is refused. It is the value for which the ordering is UNDEFINED, so a
+  // range holding one reported itself non-empty while containing nothing - a
+  // value claiming inhabitants it cannot produce. Refused where an endpoint
+  // ENTERS, so no ordering operation downstream has to test for it.
+  expectThrown('NaN..<9;');
+  expectThrown('0..<NaN;');
+  expectThrown('function f(){ return 0/0; } f()..<9;');
+  // An infinite endpoint is coherent and stays admitted; it is not the same as
+  // an ABSENT one, which `endBound` reports.
+  expect(evaluated('String((0..<Infinity).contains(1e9));')).toBe('true');
+  // Everything that was refused stays refused: no coercion, no mixed kinds.
+  expectThrown('"3"..<9;');
+  expectThrown('true..<9;');
+  expectThrown('3n..<9;');
+  expectThrown('const o = { valueOf() { return 3; } }; o..<9;');
+});
+
 // =============================================================================
 // sec-matchrange
 // =============================================================================

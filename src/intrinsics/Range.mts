@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, NumberValue, BigIntValue, isTypedNumber, wellKnownSymbols,
+  Value, ObjectValue, NumberValue, BigIntValue, TypedNumberValue, isTypedNumber, wellKnownSymbols,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
@@ -47,8 +47,8 @@ import {
 export type RangeBound = 'closed' | 'open';
 
 export interface RangeObject extends OrdinaryObject {
-  RangeStart: NumberValue | BigIntValue | undefined;
-  RangeEnd: NumberValue | BigIntValue | undefined;
+  RangeStart: NumberValue | BigIntValue | TypedNumberValue | undefined;
+  RangeEnd: NumberValue | BigIntValue | TypedNumberValue | undefined;
   RangeStartBound: RangeBound | undefined;
   RangeEndBound: RangeBound | undefined;
 }
@@ -57,7 +57,7 @@ export function isRangeObject(value: Value): value is RangeObject {
   return value instanceof ObjectValue && 'RangeStartBound' in value;
 }
 
-export function CreateRangeObject(start: NumberValue | BigIntValue | undefined, end: NumberValue | BigIntValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
+export function CreateRangeObject(start: NumberValue | BigIntValue | TypedNumberValue | undefined, end: NumberValue | BigIntValue | TypedNumberValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
   const proto = realmRec.Intrinsics['%Range.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound']) as Mutable<RangeObject>;
   obj.RangeStart = start;
@@ -167,8 +167,8 @@ function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallC
   if (self.RangeStart === undefined || self.RangeEnd === undefined) {
     return Throw.TypeError('a range without both endpoints has no length');
   }
-  const start = R(self.RangeStart);
-  const end = R(self.RangeEnd);
+  const start = (endpointOf(self.RangeStart) as number | bigint);
+  const end = (endpointOf(self.RangeEnd) as number | bigint);
   // A bigint endpoint is an integer by construction; the test is the Number one.
   if (typeof start === 'number' && (!Number.isInteger(start) || !Number.isInteger(end as number))) {
     return Throw.TypeError('a range with a non-integer endpoint has no length');
@@ -214,8 +214,8 @@ function* RangeProto_isEmptyGetter(_args: Arguments, { thisValue }: FunctionCall
     // An unbounded range is not empty.
     return Value.false;
   }
-  const start = R(self.RangeStart);
-  const end = R(self.RangeEnd);
+  const start = (endpointOf(self.RangeStart) as number | bigint);
+  const end = (endpointOf(self.RangeEnd) as number | bigint);
   // Descending is empty, as before. At EQUAL endpoints the bounds decide: `5..=5`
   // holds exactly one value, while `5..<5`, `5<..=5`, and `5<..<5` hold none,
   // because an open endpoint excludes the only value the interval could contain.
@@ -244,7 +244,23 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
  * implicit step of one is `1` or `1n` depending on the element type. Until that
  * is threaded through, they answer only for a Number range.
  */
-function numericEndpoint(v: NumberValue | BigIntValue | undefined): number | undefined {
+/**
+ * An endpoint's mathematical value. A TYPED number is ordered with Number by
+ * #sec-matchrange's rule, so it is an endpoint like any other - and reading it
+ * here rather than at each operation is what keeps `contains`, `isEmpty`,
+ * `intersect`, and the arithmetic from each having to remember it.
+ */
+function endpointOf(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | bigint | undefined {
+  if (v === undefined) {
+    return undefined;
+  }
+  if (isTypedNumber(v)) {
+    return Number(v.numberValue());
+  }
+  return R(v);
+}
+
+function numericEndpoint(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | undefined {
   if (v === undefined) {
     return undefined;
   }
@@ -323,14 +339,14 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   const x = numeric;
   // One comparison per endpoint, each by its own bound.
   if (self.RangeStart !== undefined) {
-    const start = R(self.RangeStart);
+    const start = (endpointOf(self.RangeStart) as number | bigint);
     const withinStart = self.RangeStartBound === 'open' ? x > start : x >= start;
     if (!withinStart) {
       return Value.false;
     }
   }
   if (self.RangeEnd !== undefined) {
-    const end = R(self.RangeEnd);
+    const end = (endpointOf(self.RangeEnd) as number | bigint);
     const withinEnd = self.RangeEndBound === 'closed' ? x <= end : x < end;
     if (!withinEnd) {
       return Value.false;
@@ -368,8 +384,8 @@ function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObjec
   if (self.RangeStart === undefined) {
     return null;
   }
-  const rawStart = R(self.RangeStart);
-  const rawEnd = self.RangeEnd === undefined ? undefined : R(self.RangeEnd);
+  const rawStart = (endpointOf(self.RangeStart) as number | bigint);
+  const rawEnd = endpointOf(self.RangeEnd);
   const start = rawStart;
   const end = rawEnd;
   // A bigint endpoint is an integer by construction; the test below is the
@@ -415,8 +431,8 @@ function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContex
     // has no last member -- the mirror of a range with no start not iterating.
     return Throw.TypeError('a range with no end cannot be reversed');
   }
-  const end = R(self.RangeEnd);
-  const start = self.RangeStart === undefined ? undefined : R(self.RangeStart);
+  const end = (endpointOf(self.RangeEnd) as number | bigint);
+  const start = endpointOf(self.RangeStart);
   // A bigint endpoint is an integer by construction; the test is the Number one.
   if (typeof end === 'number' && (!Number.isInteger(end) || (typeof start === 'number' && !Number.isInteger(start)))) {
     return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
