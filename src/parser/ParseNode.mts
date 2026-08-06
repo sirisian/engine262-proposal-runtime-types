@@ -1295,6 +1295,10 @@ export namespace ParseNode {
   export interface BindingRestProperty extends BaseParseNode {
     readonly type: 'BindingRestProperty';
     readonly BindingIdentifier: BindingIdentifier;
+
+    // proposal-runtime-types #sec-typed-destructuring: the type of what the
+    // rest COLLECTS, an object type rather than a member type.
+    readonly TypeAnnotation?: TypeAnnotation;
   }
 
   // BindingPropertyList :

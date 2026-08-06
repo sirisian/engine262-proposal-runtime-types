@@ -435,6 +435,17 @@ export abstract class FunctionParser extends IdentifierParser {
           if (node.Initializer) {
             this.addEarlyError(Throw.SyntaxError('A ref parameter may not have a default value'), node.Initializer);
           }
+          // proposal-runtime-types: nor an OPTIONAL marker, for the same
+          // reason. `?` says the argument may be omitted, and a `ref`
+          // parameter binds a LOCATION that an omitted argument does not
+          // supply - so the pairing promised something no call could honour
+          // and failed at every one of them, with a message about a missing
+          // `ref` argument that never mentioned the `?`. The combination
+          // exists only because `?` comes from SingleNameBinding and `ref`
+          // from FormalParameter and neither production knows of the other.
+          if ((node as { Optional?: boolean }).Optional === true) {
+            this.addEarlyError(Throw.SyntaxError('A ref parameter may not be optional'), node);
+          }
           return node;
         }
         default:

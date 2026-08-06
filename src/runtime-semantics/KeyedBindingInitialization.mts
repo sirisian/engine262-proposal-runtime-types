@@ -97,8 +97,16 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
       return NormalCompletion(undefined);
     }
     // proposal-runtime-types #sec-typed-destructuring: a member's annotation is
-    // enforced at the binding boundary, as an annotated binding's is.
-    if (node.TypeAnnotation) {
+    // enforced at the binding boundary, as an annotated binding's is - except
+    // where the member is marked OPTIONAL and the property was absent, which is
+    // the rule an optional parameter already follows: the marker says the value
+    // may not be there, so binding `undefined` is what it asks for.
+    //
+    // The marker was parsed and then ignored here, so `let { (x?: uint8) } = {}`
+    // failed its annotation against the absent property's undefined - the very
+    // failure the marker exists to prevent.
+    const absentAndOptional = node.Optional === true && v === Value.undefined;
+    if (node.TypeAnnotation && !absentAndOptional) {
       v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
     }
     // 5. If environment is undefined, return ? PutValue(lhs, v).

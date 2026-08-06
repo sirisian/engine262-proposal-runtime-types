@@ -669,15 +669,33 @@ export abstract class StatementParser extends TypeParser {
     if (ref && node.Initializer) {
       this.addEarlyError(Throw.SyntaxError('A ref member may not have a default value'), node.Initializer);
     }
+    // proposal-runtime-types: nor an optional marker. A `ref` member borrows the
+    // property's LOCATION, which is there whether or not the property is, so
+    // `?` distinguished nothing - `(ref x)` and `(ref x?)` behaved identically.
+    if (ref && optional) {
+      this.addEarlyError(Throw.SyntaxError('A ref member may not be optional'), node);
+    }
     return this.finishNode(node, 'SingleNameBinding');
   }
 
   // BindingRestProperty :
-  //  `...` BindingIdentifier
+  //  `...` BindingIdentifier TypeAnnotation?
   parseBindingRestProperty(): ParseNode.BindingRestProperty {
     const node = this.startNode<ParseNode.BindingRestProperty>();
     this.expect(Token.ELLIPSIS);
     node.BindingIdentifier = this.parseBindingIdentifier();
+    // proposal-runtime-types #sec-typed-destructuring: an object rest may state
+    // the type of what it COLLECTS, as an array rest already may
+    // (`let [a: uint8, ...b: [].<uint8>]`) and as a rest parameter does. The
+    // rest is where a payload's unmodelled remainder goes, so leaving it the
+    // one untypeable position typed the members an author already understands
+    // and not the part they understand least.
+    //
+    // No parentheses here: they exist for a MEMBER because `{ a: uint8 }`
+    // already means a rename, and a rest has no such collision.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+      (node as ParseNode.Unfinished<ParseNode.BindingRestProperty>).TypeAnnotation = this.parseTypeAnnotation();
+    }
     return this.finishNode(node, 'BindingRestProperty');
   }
 
