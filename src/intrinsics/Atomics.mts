@@ -146,11 +146,25 @@ function* AtomicRead(target: AtomicTarget): ValueEvaluator {
  * rather than writing a slot directly.
  */
 function* AtomicWrite(target: AtomicTarget, value: Value): PlainEvaluator<void> {
+  // #sec-atomics-typed-operations: "A value stored through any of these
+  // operations passes the typed-storage boundary ... so a store of a value not
+  // of the target's type throws as an ordinary assignment to that storage would,
+  // and the same conversion applies."
+  //
+  // The conversion is performed HERE rather than left to the storage, because a
+  // LEXICAL BINDING has no run-time typed-storage boundary in this engine (see
+  // the note in threading-atomics.test.mts). Without it the arithmetic wrote back
+  // a plain Number, which a binding accepts, and the slot silently stopped being
+  // a uint32 - so ONE `Atomics.add(ref a, 5)` succeeded and the next threw
+  // "number is not a value type Atomics operates on", the operation having
+  // destroyed the type it was operating on. A typed own data property converts on
+  // its own; converting first is what that storage would do anyway.
+  const converted = Q(yield* ConvertValue(value, target.Type));
   if (target.Shape === 'reference') {
-    Q(yield* PutValue(target.Reference.Location, value));
+    Q(yield* PutValue(target.Reference.Location, converted));
     return;
   }
-  Q(yield* Set(target.Object, target.Key, value, Value.true));
+  Q(yield* Set(target.Object, target.Key, converted, Value.true));
 }
 
 function* Atomics_load(args: Arguments): ValueEvaluator {

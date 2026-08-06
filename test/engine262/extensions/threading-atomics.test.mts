@@ -118,6 +118,32 @@ test('D9 compareExchange: -0 matches 0, the forgiving direction for a sentinel',
   expect(evaluated('let f: float64 = -0; Atomics.compareExchange(ref f, 0, 7.0); String(f);')).toBe('7');
 });
 
+test('Atomics: an operation preserves the target\'s type, so a second one works', () => {
+  // A write goes through the typed-storage boundary, and the arithmetic
+  // operations convert their result to the target's type before storing it.
+  // Without that the write put a plain Number in the slot - which a lexical
+  // binding accepts, having no run-time boundary of its own - and the binding
+  // silently stopped being a uint32, so the FIRST add succeeded and the second
+  // threw "number is not a value type Atomics operates on". An operation must not
+  // destroy the type it is operating on.
+  expect(ok('let a: uint32 = 0; Atomics.add(ref a, 5); Reflect.typeOf(a) === uint32;')).toBe(true);
+  expect(evaluated('let a: uint32 = 0; Atomics.add(ref a, 5); Atomics.add(ref a, 5); String(a);')).toBe('10');
+  expect(evaluated('let a: uint32 = 0; Atomics.store(ref a, 3); Atomics.add(ref a, 1); String(a);')).toBe('4');
+  expect(evaluated('let a: uint32 = 0; Atomics.exchange(ref a, 3); Atomics.add(ref a, 1); String(a);')).toBe('4');
+  expect(evaluated('let a: uint32 = 0; Atomics.compareExchange(ref a, 0, 3); Atomics.add(ref a, 1); String(a);')).toBe('4');
+  expect(evaluated('let a: uint8 = 0b1100; Atomics.and(ref a, 0b1010); Atomics.or(ref a, 0b0001); String(a);')).toBe('9');
+});
+
+test('Atomics: repeated operations on a shared binding behave the same', () => {
+  // D10 again, now over more than one operation: the modifier is not consulted,
+  // so marked and unmarked storage accumulate identically.
+  expect(evaluated('let a: shared uint32 = 0; Atomics.add(ref a, 5); Atomics.add(ref a, 5); String(a);')).toBe('10');
+});
+
+test('Atomics: a typed property keeps its type across operations too', () => {
+  expect(evaluated('class C { n: uint32 = 0; } var c = new C(); Atomics.add(c, "n", 5); Atomics.add(c, "n", 5); String(c.n);')).toBe('10');
+});
+
 // -- The typed own data property shape -----------------------------------------
 test('Atomics: a typed own data property is a target', () => {
   // `Atomics.add(obj, 'count', v)`: the key takes argument position 1, so the
