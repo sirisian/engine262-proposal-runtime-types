@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
-  Agent, ManagedRealm, performDevtoolsEval, setSurroundingAgent, skipDebugger,
+  Agent, EnsureCompletion, JSStringValue, ManagedRealm, performDevtoolsEval, setSurroundingAgent,
+  skipDebugger,
 } from '#self';
 
 /**
@@ -15,9 +16,22 @@ import {
  */
 function evaluate(realm: ManagedRealm, source: string) {
   const pop = realm.pushTopContext();
-  const completion = skipDebugger(performDevtoolsEval(source, realm, false, true));
+  // A ValueCompletion is `Value | NormalCompletion | ThrowCompletion`, so a
+  // result that is already a bare value carries no [[Type]] to read. Normalize
+  // once here rather than at each assertion.
+  const completion = EnsureCompletion(skipDebugger(performDevtoolsEval(source, realm, false, true)));
   pop?.();
   return completion;
+}
+
+/** The string a console entry evaluated to, or a description of what it was instead. */
+function stringOf(realm: ManagedRealm, source: string): string {
+  const completion = evaluate(realm, source);
+  if (completion.Type !== 'normal') {
+    return `<${completion.Type}>`;
+  }
+  const value = completion.Value;
+  return value instanceof JSStringValue ? value.stringValue() : `<${typeof value}>`;
 }
 
 test('a generic class with a parameter-reading heritage declares in the console', () => {
@@ -28,14 +42,13 @@ test('a generic class with a parameter-reading heritage declares in the console'
 
   expect(evaluate(realm, grid).Type).toBe('normal');
   // and the specialization it defers to works across console entries
-  expect(evaluate(realm, 'String(new GridArray.<4,4>().length)').Value?.stringValue?.()).toBe('16');
-  expect(evaluate(realm, 'const g = new GridArray.<4,4>(); g[2,1] = 10; String(g[2,1])')
-    .Value?.stringValue?.()).toBe('10');
+  expect(stringOf(realm, 'String(new GridArray.<4,4>().length)')).toBe('16');
+  expect(stringOf(realm, 'const g = new GridArray.<4,4>(); g[2,1] = 10; String(g[2,1])')).toBe('10');
 });
 
 test('an ordinary console entry is unaffected', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(evaluate(realm, 'let x = 1; String(x + 1)').Value?.stringValue?.()).toBe('2');
-  expect(evaluate(realm, 'class C { m() { return 5; } } String(new C().m())').Value?.stringValue?.()).toBe('5');
+  expect(stringOf(realm, 'let x = 1; String(x + 1)')).toBe('2');
+  expect(stringOf(realm, 'class C { m() { return 5; } } String(new C().m())')).toBe('5');
 });
