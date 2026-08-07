@@ -101,6 +101,26 @@ export interface NarrowingRequest {
 
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
 
+/**
+ * #sec-bounds-checks: "The index of a read or write of a fixed-length
+ * `[N].<T>` is known to be below _N_, because _N_ is a compile-time constant
+ * and the index is a value generic, a `where`-constrained parameter, or the
+ * counter of a `for` over a range with that bound. The bound is proven
+ * statically and no check is performed."
+ *
+ * This records the accesses for which that proof holds. It has no observable
+ * effect: eliding a check that would have PASSED changes no program's
+ * behaviour, which is why the clause is phrased as what an implementation
+ * establishes rather than as behaviour. The set is what a production engine
+ * consumes, and what a test can assert so the proof's SOUNDNESS is pinned - the
+ * cases where it must NOT fire being the ones that matter.
+ */
+const boundsProvenAccesses = new WeakMap<object, Set<object>>();
+
+export function TakeBoundsProvenAccesses(root: object): ReadonlySet<object> {
+  return boundsProvenAccesses.get(root) ?? new Set();
+}
+
 export function TakeNarrowingRequests(root: object): readonly NarrowingRequest[] {
   return narrowingRequests.get(root) ?? [];
 }
@@ -3661,9 +3681,92 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // The enclosing `for`-over-a-range loops, innermost last: each binding name
+  // with the exclusive upper bound its range proves and whether the lower bound
+  // is at least zero. A counter drawn from `0..<N` is in [0, N), which is what
+  // makes an index into a `[N]` provable without any check.
+  const rangeCounters: { name: string, exclusiveEnd: number, nonNegative: boolean }[] = [];
+  const provenHere = new Set<object>();
+
+  /**
+   * The exclusive upper bound a range EXPRESSION proves for its counter, where
+   * both endpoints are compile-time constants. `0..<10` proves 10 and `0..=10`
+   * proves 11; an open start raises the floor and does not change the ceiling.
+   * A non-constant endpoint proves nothing, which is why `0..<a.length` is not
+   * here - it bounds the counter when the range was BUILT, not when the index
+   * is used.
+   */
+  const rangeCounterBound = (expr: ParseNode | null | undefined) => {
+    if (!expr || (expr as ParseNode).type !== 'RangeExpression') {
+      return undefined;
+    }
+    const r = expr as unknown as {
+      RangeStart?: { type?: string, value?: unknown, negated?: boolean } | null,
+      RangeEnd?: { type?: string, value?: unknown, negated?: boolean } | null,
+      RangeStartBound?: string | null, RangeEndBound?: string | null,
+    };
+    const constant = (lit: typeof r.RangeStart) => {
+      if (!lit || typeof lit.value !== 'number' || lit.negated) {
+        return undefined;
+      }
+      return lit.value;
+    };
+    const start = constant(r.RangeStart);
+    const end = constant(r.RangeEnd);
+    if (start === undefined || end === undefined || !Number.isInteger(start) || !Number.isInteger(end)) {
+      return undefined;
+    }
+    const floor = r.RangeStartBound === 'open' ? start + 1 : start;
+    const ceiling = r.RangeEndBound === 'open' ? end : end + 1;
+    return { exclusiveEnd: ceiling, nonNegative: floor >= 0 };
+  };
+
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node) {
       return;
+    }
+    if (!Array.isArray(node) && (node as ParseNode).type === 'ForOfStatement') {
+      const f = node as unknown as {
+        AssignmentExpression?: ParseNode, ForDeclaration?: ParseNode,
+        ForBinding?: ParseNode, Statement?: ParseNode,
+      };
+      const bound = rangeCounterBound(f.AssignmentExpression);
+      const decl = (f.ForDeclaration ?? f.ForBinding) as unknown as {
+        ForBinding?: { BindingIdentifier?: { name?: string } },
+        BindingIdentifier?: { name?: string },
+      } | undefined;
+      const name = decl?.ForBinding?.BindingIdentifier?.name ?? decl?.BindingIdentifier?.name;
+      walk(f.AssignmentExpression);
+      if (bound && typeof name === 'string') {
+        rangeCounters.push({ name, ...bound });
+        try {
+          walk(f.Statement);
+        } finally {
+          rangeCounters.pop();
+        }
+        return;
+      }
+      walk(f.Statement);
+      return;
+    }
+    // #sec-bounds-checks: a computed index into a fixed-length `[N].<T>` whose
+    // key is a range counter proven below _N_.
+    if (!Array.isArray(node) && (node as ParseNode).type === 'MemberExpression') {
+      const m = node as unknown as {
+        MemberExpression?: ParseNode, Expression?: ParseNode, IdentifierName?: unknown,
+      };
+      const key = m.Expression as unknown as { type?: string, name?: string } | undefined;
+      if (m.MemberExpression && key && key.type === 'IdentifierReference' && typeof key.name === 'string') {
+        const counter = rangeCounters.findLast((c) => c.name === key.name);
+        if (counter && counter.nonNegative) {
+          const objType = staticTypeIn(m.MemberExpression, null);
+          const extent = (objType as unknown as { Kind?: string, Extent?: number | string } | null);
+          if (extent && extent.Kind === 'array' && typeof extent.Extent === 'number'
+              && counter.exclusiveEnd <= extent.Extent) {
+            provenHere.add(node as object);
+          }
+        }
+      }
     }
     if (Array.isArray(node)) {
       // Function declarations are hoisted, so a call may precede the
@@ -4458,7 +4561,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // already exist keyed by node - so it must not replace the list the sweep was
   // built from, which is also what keeps a third walk from ever looking needed.
   if (!narrowingResolutions.has(root)) {
-    narrowingRequests.set(root, narrowingRequestsHere);
+    boundsProvenAccesses.set(root, provenHere);
+  narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);
   return errors;
