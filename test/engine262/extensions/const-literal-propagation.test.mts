@@ -78,6 +78,21 @@ test('nothing observable about the binding changes', () => {
   expect(evaluated('const n: number = 5; String((5 := uint8) === n);')).toBe('false');
 });
 
+test('C2: with no contextual type, an adopting constant is a `number`', () => {
+  // Untyped code must run unchanged - this proposal's rule - which is also what
+  // keeps the design on the right side of Haskell's monomorphism restriction:
+  // a polymorphic binding with no default answer is where that language's
+  // ambiguity confusion comes from.
+  expect(evaluated('const K = 3.14; String(K * 2);')).toBe('6.28');
+  expect(evaluated('const K = 3.14; K + "x";')).toBe('3.14x');
+  expect(evaluated('const K = 3.14; String(K > 3);')).toBe('true');
+  expect(evaluated('const K = 3.14; JSON.stringify({ v: K });')).toBe('{"v":3.14}');
+  expect(evaluated('const K = 3.14; function f(x) { return x * 2; } String(f(K));')).toBe('6.28');
+  // The same for a well-known constant.
+  expect(evaluated('String(Math.PI * 2);')).toBe('6.283185307179586');
+  expect(evaluated('typeof Math.PI;')).toBe('number');
+});
+
 test('every typed position adopts, for a literal and a const alike', () => {
   expect(evaluated('const K = 0.1; function f(): float32 { return K; } String(Number(f()));')).toBe('0.10000000149011612');
   expect(evaluated('const K = 0.1; function f(x: float32): float32 { return x; } String(Number(f(K)));')).toBe('0.10000000149011612');
