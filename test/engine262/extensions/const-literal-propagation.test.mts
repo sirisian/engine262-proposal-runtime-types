@@ -93,6 +93,21 @@ test('C2: with no contextual type, an adopting constant is a `number`', () => {
   expect(evaluated('typeof Math.PI;')).toBe('number');
 });
 
+test('D6: a constant inside a container does NOT adopt', () => {
+  // Decided, and asserted so the decision is visible rather than incidental. The
+  // reason is MUTABILITY: a property can be assigned, so it cannot carry a type
+  // decided per read, and tracking provenance into a container would be the
+  // inference this design does not do. Freezing does not change it - the rule is
+  // about what the type system tracks, not what the value happens to allow.
+  expectThrown('const o = { r: 3.14 }; let a: float64 = 2.0; o.r * a;');
+  expectThrown('const arr = [3.14]; let a: float64 = 2.0; arr[0] * a;');
+  expectThrown('const { r } = { r: 3.14 }; let a: float64 = 2.0; r * a;');
+  expectThrown('const [x] = [3.14]; let a: float64 = 2.0; x * a;');
+  expectThrown('const o = Object.freeze({ r: 3.14 }); let a: float64 = 2.0; o.r * a;');
+  // The escape is the one every other type uses: annotate.
+  expect(evaluated('const o: { r: float64 } = { r: 3.14 }; let a: float64 = 2.0; String(Number(o.r * a));')).toBe('6.28');
+});
+
 test('every typed position adopts, for a literal and a const alike', () => {
   expect(evaluated('const K = 0.1; function f(): float32 { return K; } String(Number(f()));')).toBe('0.10000000149011612');
   expect(evaluated('const K = 0.1; function f(x: float32): float32 { return x; } String(Number(f(K)));')).toBe('0.10000000149011612');
