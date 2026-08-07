@@ -2265,7 +2265,11 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   // declaration of one name replaces the first, unlike a function declaration,
   // which does form an overload group), so this is always the one declaration
   // the context was handed.
-  if (node) {
+  // proposal-runtime-types #sec-reflection-shape-class gives `signatures` to a
+  // method and an operator and NOT to a getter or setter: a getter has exactly
+  // one signature and takes no parameters, so a List of one is ceremony rather
+  // than information, and its `type` already reports the function type.
+  if (node && kind !== 'ClassGetter' && kind !== 'ClassSetter') {
     const one = Q(yield* FunctionSignatureReflectionOf(node, realm));
     X(CreateDataProperty(context, Value('signatures'), X(CreateArrayFromList([one]))));
   }

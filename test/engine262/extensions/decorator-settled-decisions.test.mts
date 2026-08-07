@@ -227,3 +227,29 @@ test('an object method, getter, and setter report their type', () => {
   expect(evaluated(`${grab} const o = { @f m(x: uint8): uint8 { return x; } }; String(c.signatures.length);`)).toBe('1');
   expect(evaluated(`${grab} const o = { @f m(x: uint8): uint8 { return x; } }; String(c.signatures[0].parameters.length);`)).toBe('1');
 });
+
+test('an object field reports the type of the value it holds', () => {
+  // An object literal's field carries no annotation: `{ a: uint8 = 1 }` parses
+  // as the property `a` holding the ASSIGNMENT EXPRESSION `uint8 = 1`, which is
+  // why `{ a: uint8 = 300 }` stores 300 rather than refusing it. So the type a
+  // field reports is the type of its value - the answer that suits a family
+  // reached from an INSTANCE rather than from a declaration.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} const o = { @f a: "s" }; String(c.type === string);`)).toBe('true');
+  expect(evaluated(`${grab} const o = { @f a: true }; String(c.type === boolean);`)).toBe('true');
+  // A typed value keeps its type through the literal.
+  expect(evaluated(`${grab} let v: uint8 = 3; const o = { @f a: v }; String(c.type === uint8);`)).toBe('true');
+});
+
+test('a getter and setter carry no `signatures`', () => {
+  // #sec-reflection-shape-class gives `signatures` to a method and an operator
+  // and not to a getter or setter: a getter has exactly one signature and takes
+  // no parameters, so a List of one is ceremony rather than information, and
+  // `type` already reports the function type.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} class A { @f get v(): uint8 { return 1; } } String(Object.getOwnPropertyNames(c).includes('signatures'));`)).toBe('false');
+  expect(evaluated(`${grab} class A { @f set v(x: uint8) {} } String(Object.getOwnPropertyNames(c).includes('signatures'));`)).toBe('false');
+  // A method and an operator keep theirs.
+  expect(evaluated(`${grab} class A { @f m(): uint8 { return 1; } } String(c.signatures.length);`)).toBe('1');
+  expect(evaluated(`${grab} class V { @f operator +(o: V): V { return o; } } String(c.signatures.length);`)).toBe('1');
+});

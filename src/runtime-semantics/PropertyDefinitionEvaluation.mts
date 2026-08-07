@@ -10,7 +10,7 @@ import {
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
-import { CreateArrayFromList } from '../abstract-ops/all.mts';
+import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import {
   Q, X,
@@ -150,11 +150,15 @@ export function* ObjectMemberDecoratorContext(kind: string, name: Value, target:
   if (node && kind !== 'Object') {
     let memberType;
     if (kind === 'ObjectField') {
-      const annotation = (node as { TypeAnnotation?: { Type?: ParseNode } }).TypeAnnotation;
-      if (annotation?.Type) {
-        const resolved = Q(yield* TypeNodeToTypeRecord(annotation.Type as never));
-        memberType = resolved;
-      }
+      // An object literal's field carries no annotation - `{ a: uint8 = 1 }`
+      // parses as the property `a` holding the ASSIGNMENT EXPRESSION
+      // `uint8 = 1`, not as an annotated field, which is why it stores 300 for
+      // `{ a: uint8 = 300 }` rather than refusing it. So the type a field
+      // reports is the type of the value it holds, which is the answer that
+      // suits a family reached from an INSTANCE rather than a declaration
+      // (#sec-reflection-shape-object).
+      const held = Q(yield* Get(target as ObjectValue, name as never));
+      memberType = RuntimeTypeOf(held);
     } else {
       memberType = Q(yield* MemberFunctionTypeRecord(node));
     }
