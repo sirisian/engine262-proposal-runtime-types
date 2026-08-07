@@ -151,3 +151,21 @@ test('a function context reports its signatures', () => {
   expect(evaluated(`${grab} @f function q(a: uint8): uint8 { return a; } String(c.signatures[0].parameters.length);`)).toBe('1');
   expect(evaluated(`${grab} @f function q(): uint8 { return 1; } String(c.signatures[0].parameters.length);`)).toBe('0');
 });
+
+test('a loop block context carries its head clauses', () => {
+  // proposal-runtime-types #sec-reflection-shape-block. The builder always
+  // supported condition, initializer, and update; only `if` and `while` passed
+  // them, so a do-while had no condition and a `for` had none of its three. A
+  // for-of reflection that cannot say what it binds has lost what distinguishes
+  // it from a bare block.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} let i = 0; do @f { i += 1; } while (i < 1); String(c.condition);`)).toBe('i < 1');
+  expect(evaluated(`${grab} for (const v of [1]) @f { } String(c.binding);`)).toBe('const v');
+  expect(evaluated(`${grab} for (const k in { a: 1 }) @f { } String(c.binding);`)).toBe('const k');
+  // The head's three clauses sit in different slots depending on whether the
+  // first is a declaration, so both shapes are pinned.
+  expect(evaluated(`${grab} for (let i = 0; i < 1; i++) @f { } String(c.condition) + '/' + String(c.update);`)).toBe('i < 1/i++');
+  expect(evaluated(`${grab} let j; for (j = 0; j < 1; j++) @f { } String(c.initializer) + '/' + String(c.condition);`)).toBe('j = 0/j < 1');
+  // A clause the head omits reads undefined rather than being absent.
+  expect(evaluated(`${grab} for (let i = 0; i < 1;) @f { i++; } String(c.update);`)).toBe('undefined');
+});

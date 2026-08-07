@@ -989,7 +989,15 @@ export abstract class StatementParser extends TypeParser {
         // `initializer`, `condition` and `update` - parts of the OWNING
         // statement, which the block node cannot otherwise reach. Recorded here
         // because this is the one place both are in hand.
-        (statement as { BlockParts?: ParseNode.BlockParts }).BlockParts = parts;
+        // NON-ENUMERABLE, because these are REFERENCES to nodes that already sit
+        // elsewhere in the tree - the condition of the `if`, the binding of the
+        // `for`-`of`. A walker that enumerates a node's properties to find its
+        // children would otherwise reach each of them twice and report, for
+        // instance, two ForBindings for one `for`-`of` head. The block reflection
+        // reads this by name and does not enumerate, so nothing it needs is lost.
+        Object.defineProperty(statement as object, 'BlockParts', {
+          value: parts, writable: true, enumerable: false, configurable: true,
+        });
       }
     }
     return statement;
@@ -1045,7 +1053,7 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.RPAREN);
     // Semicolons are completely optional after a do-while, even without a newline
     this.eat(Token.SEMICOLON);
-    this.markBlockKind((node as { Statement?: unknown }).Statement, 'DoWhileBlock');
+    this.markBlockKind((node as { Statement?: unknown }).Statement, 'DoWhileBlock', { condition: node.Expression });
     return this.finishNode(node, 'DoWhileStatement');
   }
 
@@ -1094,7 +1102,7 @@ export abstract class StatementParser extends TypeParser {
         this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock', forParts(node));
     return this.finishNode(node, 'ForStatement');
       }
       const isLexicalStart = () => {
@@ -1155,7 +1163,7 @@ export abstract class StatementParser extends TypeParser {
           this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock', forParts(node));
     return this.finishNode(node, 'ForStatement');
         }
         inner.ForBinding = this.repurpose(list[0], 'ForBinding', (_, oldNode) => {
@@ -1182,7 +1190,7 @@ export abstract class StatementParser extends TypeParser {
           this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock', forInOfParts(node));
     return this.finishNode(node, 'ForInStatement');
         }
         // proposal-runtime-types #sec-reference-syntax: reference iteration is
@@ -1198,7 +1206,7 @@ export abstract class StatementParser extends TypeParser {
         this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock', forInOfParts(node));
         return this.finishNode(node, isAwait ? 'ForAwaitStatement' : 'ForOfStatement');
       }
       if (this.eat(Token.VAR)) {
@@ -1227,7 +1235,7 @@ export abstract class StatementParser extends TypeParser {
           this.inIterationHead = false;
           this.expect(Token.RPAREN);
           node.Statement = this.parseStatement();
-          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+          this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock', forParts(node));
     return this.finishNode(node, 'ForStatement');
         }
         node.ForBinding = this.repurpose(list[0], 'ForBinding', (_, oldNode) => {
@@ -1245,7 +1253,7 @@ export abstract class StatementParser extends TypeParser {
         this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, node.AssignmentExpression ? 'ForOfBlock' : 'ForInBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, node.AssignmentExpression ? 'ForOfBlock' : 'ForInBlock', forInOfParts(node));
         return this.finishNode(node, node.AssignmentExpression ? 'ForOfStatement' : 'ForInStatement');
       }
 
@@ -1268,7 +1276,7 @@ export abstract class StatementParser extends TypeParser {
         this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForInBlock', forInOfParts(node));
     return this.finishNode(node, 'ForInStatement');
       }
       const isExactlyAsync = expression.type === 'IdentifierReference'
@@ -1283,7 +1291,7 @@ export abstract class StatementParser extends TypeParser {
         this.inIterationHead = false;
         this.expect(Token.RPAREN);
         node.Statement = this.parseStatement();
-        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock');
+        this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForOfBlock', forInOfParts(node));
         return this.finishNode(node, isAwait ? 'ForAwaitStatement' : 'ForOfStatement');
       }
 
@@ -1307,7 +1315,7 @@ export abstract class StatementParser extends TypeParser {
       this.expect(Token.RPAREN);
 
       node.Statement = this.parseStatement();
-      this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock');
+      this.markBlockKind((node as { Statement?: unknown }).Statement, 'ForBlock', forParts(node));
     return this.finishNode(node, 'ForStatement');
     });
   }
@@ -1681,4 +1689,39 @@ export abstract class StatementParser extends TypeParser {
     this.semicolon();
     return this.finishNode(node, 'ExpressionStatement');
   }
+}
+
+/**
+ * proposal-runtime-types #sec-reflection-shape-block: the head clauses a
+ * `for (;;)` reflection reports. A clause the head omits is absent from the
+ * record and the reflection reports it as *undefined*, which is the same answer
+ * by a different route and is what lets a reader walk one shape.
+ */
+function forParts(node: { LexicalDeclaration?: unknown, VariableDeclarationList?: unknown, Expression_a?: unknown, Expression_b?: unknown, Expression_c?: unknown }): ParseNode.BlockParts {
+  // The head's three clauses occupy different slots depending on what the FIRST
+  // one is: a declaration takes its own field and the remaining two expressions
+  // shift up, where an expression initializer occupies Expression_a and pushes
+  // the other two along. Reading them positionally without that gives a `for`
+  // reflection an `update` in its `condition`, which is what the first version
+  // of this did.
+  const declared = (node.LexicalDeclaration ?? node.VariableDeclarationList) as ParseNode.BaseParseNode | undefined;
+  if (declared !== undefined) {
+    return {
+      initializer: declared,
+      condition: node.Expression_a as ParseNode.BaseParseNode | undefined,
+      update: node.Expression_b as ParseNode.BaseParseNode | undefined,
+    };
+  }
+  return {
+    initializer: node.Expression_a as ParseNode.BaseParseNode | undefined,
+    condition: node.Expression_b as ParseNode.BaseParseNode | undefined,
+    update: node.Expression_c as ParseNode.BaseParseNode | undefined,
+  };
+}
+
+/** The binding a `for`-`in` or `for`-`of` head introduces. */
+function forInOfParts(node: { ForBinding?: unknown, ForDeclaration?: unknown, LeftHandSideExpression?: unknown }): ParseNode.BlockParts {
+  return {
+    binding: (node.ForBinding ?? node.ForDeclaration ?? node.LeftHandSideExpression) as ParseNode.BaseParseNode | undefined,
+  };
 }

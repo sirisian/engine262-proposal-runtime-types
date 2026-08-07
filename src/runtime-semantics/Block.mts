@@ -159,5 +159,8 @@ export function* BlockDecoratorContext(
   if (parts?.update !== undefined) {
     X(CreateDataProperty(context, Value('update'), stream(parts.update as ParseNode)));
   }
+  if (parts?.binding !== undefined) {
+    X(CreateDataProperty(context, Value('binding'), stream(parts.binding as ParseNode)));
+  }
   return context;
 }

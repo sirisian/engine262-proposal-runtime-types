@@ -25,6 +25,12 @@ export namespace ParseNode {
     readonly condition?: BaseParseNode;
     readonly initializer?: BaseParseNode;
     readonly update?: BaseParseNode;
+    /**
+     * proposal-runtime-types #sec-reflection-shape-block: the binding a
+     * `for`-`in` or `for`-`of` head introduces. A ForOfBlock reflection that
+     * cannot say what it binds has lost what distinguishes it from a bare block.
+     */
+    readonly binding?: BaseParseNode;
   }
 
   export interface BaseParseNode {
