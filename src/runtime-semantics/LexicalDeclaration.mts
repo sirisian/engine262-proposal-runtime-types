@@ -1,5 +1,7 @@
 import { EnforceAnnotation } from '../abstract-ops/all.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
+import { InitializerTokensOf } from './ClassDefinitionEvaluation.mts';
+import { EnsureCompletion } from '../completion.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import {
@@ -208,7 +210,7 @@ export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst, Decorato
       }
       const value = Q(yield* GetValue(Q(yield* ResolveBinding(Value(id.name)))));
       Q(yield* ApplyDecorators(Decorators, Q(yield* BindingDecoratorContext(
-        LetOrConst === 'const' ? 'Const' : 'Let', Value(id.name), value,
+        LetOrConst === 'const' ? 'Const' : 'Let', Value(id.name), value, binding as ParseNode,
       ))));
     }
     return NormalCompletion(undefined);
@@ -240,12 +242,25 @@ export function* Evaluate_LexicalDeclaration({ BindingList, LetOrConst, Decorato
 }
 
 /** decorators.md's `LetReflection` / `ConstReflection`: `name`, `type`, `value`. */
-export function* BindingDecoratorContext(kind: string, name: Value, value: Value): ValueEvaluator {
+export function* BindingDecoratorContext(kind: string, name: Value, value: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
+  // proposal-runtime-types #sec-reflection-shape-binding: a Let or Const
+  // reflection reports its `type` and its `initializer` beside its `initial`.
+  // It had neither, so a binding's decorator could see what the binding started
+  // with and not what it was declared AS - which of the four fields is the one a
+  // typed proposal exists to answer.
+  const annotation = (node as { TypeAnnotation?: { Type?: ParseNode } } | undefined)?.TypeAnnotation;
+  if (annotation?.Type) {
+    const declared = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type as never));
+    if (declared.Type === 'normal') {
+      X(CreateDataProperty(context, Value('type'), GetTypeObject(declared.Value as unknown as TypeRecord, realm) as Value));
+    }
+  }
+  X(CreateDataProperty(context, Value('initializer'), InitializerTokensOf(node)));
   // decorators.md's LetReflection and ConstReflection name this `initial`, and
   // the name is the accurate one: a decorator sees the value the binding was
   // DECLARED with, not a live view - a `let` reassigned later still reports what

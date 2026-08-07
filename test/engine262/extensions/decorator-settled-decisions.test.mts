@@ -46,11 +46,15 @@ test('DECISION 2: the layout reflection says which field it describes', () => {
 });
 
 test('DECISION 3: a binding reflection reports `initial`, not `value`', () => {
+  // The binding above is unannotated, so it reports no `type` - a member that
+  // annotates nothing reports nothing rather than a type of `any`, which is how
+  // the field and method contexts already read an absent annotation.
+  //
   // decorators.md's LetReflection and ConstReflection both name this `initial`,
   // and the name is the accurate one: a decorator sees what the binding was
   // DECLARED with, not a live view. `value` implied a liveness the object never
   // had - a `let` reassigned later still reports what it started with.
-  expect(evaluated('let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } @g let x = 41; f;')).toBe('kind,name,initial');
+  expect(evaluated('let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } @g let x = 41; f;')).toBe('kind,name,initializer,initial');
   expect(evaluated('let v; function g(c) { v = c.initial; } @g let x = 41; String(Number(v));')).toBe('41');
   expect(evaluated('let v; function g(c) { v = c.initial; } @g const y = 7; String(Number(v));')).toBe('7');
   // The reassignment case, which is what makes the name a claim rather than a
@@ -108,4 +112,30 @@ test('AND THE RULE MADE HONEST: a function\'s sub-targets fire on their own', ()
   // is what the guard is FOR - the fix must not make every function declaration
   // resolve its own binding.
   expect(evaluated(`${tag} function g(x: uint8) { return x; } String(l.length);`)).toBe('0');
+});
+
+test('an operator context says WHICH operator, and carries its type', () => {
+  // proposal-runtime-types #sec-reflection-shape-class: ClassOperator reports
+  // `operator`, `type`, and `signatures`. It reported none of the three - the
+  // call site alone withheld the declaration node the other two are derived
+  // from, and nothing read the operator name at all. An operator reflection
+  // that cannot say which operator it is has lost what distinguishes it from a
+  // method's.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} class V { @f operator +(o: V): V { return o; } } String(c.operator);`)).toBe('+');
+  expect(evaluated(`${grab} class V { @f operator -(o: V): V { return o; } } String(c.operator);`)).toBe('-');
+  expect(evaluated(`${grab} class V { @f operator +(o: V): V { return o; } } String(c.signatures.length);`)).toBe('1');
+  expect(evaluated(`${grab} class V { @f operator +(o: V): V { return o; } } String(typeof c.type);`)).toBe('object');
+});
+
+test('a binding context reports its declared type and its initializer', () => {
+  // #sec-reflection-shape-binding gives Let and Const a `type` and an
+  // `initializer` beside `initial`. They had neither, so a binding's decorator
+  // could see what the binding started with and not what it was declared AS.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} @f let v: uint32 = 3; String(c.type === uint32);`)).toBe('true');
+  expect(evaluated(`${grab} @f const k: string = "s"; String(c.type === string);`)).toBe('true');
+  expect(evaluated(`${grab} @f let v: uint32 = 3; String(typeof c.initializer);`)).toBe('object');
+  // An unannotated binding reports no type, rather than a type of `any`.
+  expect(evaluated(`${grab} @f let u = 1; String(Object.getOwnPropertyNames(c).includes('type'));`)).toBe('false');
 });

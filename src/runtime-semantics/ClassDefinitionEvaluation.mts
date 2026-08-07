@@ -1003,8 +1003,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           // in the class operator table rather than as a property.
           const ownDecorators = (e as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
           if (ownDecorators?.length) {
+            // Passing the declaration is what gives the context its `type` and
+            // `signatures`: both are derived from the node, and an operator's
+            // context had neither because this call site alone withheld it.
             const replacement = Q(yield* ApplyDecorators(ownDecorators, Q(yield* ClassMemberDecoratorContext(
-              ownerKind, ownerName, e.static === true, currentClassName ?? Value.undefined, home,
+              ownerKind, ownerName, e.static === true, currentClassName ?? Value.undefined, home, e as ParseNode,
             )), true));
             if (replacement !== undefined && isOperator) {
               RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), replacement as never);
@@ -2234,6 +2237,14 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   if (kind === 'ClassMethod' || kind === 'ClassOperator') {
     X(CreateDataProperty(context, Value('abstract'), Value.false));
   }
+  // proposal-runtime-types #sec-reflection-shape-class: a ClassOperator
+  // reflection reports the `operator` it overloads. Without it an operator's
+  // reflection cannot say WHICH operator it is, which is the one thing
+  // distinguishing it from a method's.
+  if (kind === 'ClassOperator') {
+    const operatorName = (node as { OperatorName?: string } | undefined)?.OperatorName;
+    X(CreateDataProperty(context, Value('operator'), operatorName === undefined ? Value.undefined : Value(operatorName)));
+  }
   // decorators.md: `ClassMethodReflection<T extends (...args) => any>` has
   // `type: T`, and `ClassGetterReflection` has `type: () => T`. **Both are the
   // member's FUNCTION type, not its return type** - easy to miss, and missed
@@ -2514,7 +2525,7 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
  * They are not two spellings of one thing. `x: uint8 = f()` has no `initial`
  * and a perfectly good `initializer`.
  */
-function InitializerTokensOf(node: unknown): Value {
+export function InitializerTokensOf(node: unknown): Value {
   // An absent initializer is NULL here, not undefined - the parser writes the
   // field either way. Guarding only for undefined let a null through and
   // `TokensOf` read `sourceText` off it.
