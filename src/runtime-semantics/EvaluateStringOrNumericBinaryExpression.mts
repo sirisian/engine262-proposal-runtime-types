@@ -15,6 +15,28 @@ import { GetValue } from '#self';
  * throws. So the operand nodes answer the question and the answer travels with
  * the values (F52). A parenthesized literal and a negated one are literals.
  */
+/**
+ * The numeric constants of `Math`, named because none can be written as a
+ * literal that denotes it. `Number`'s limits are deliberately absent: they are
+ * facts about a REPRESENTATION rather than real numbers, so taking a position's
+ * type would let `Number.MAX_SAFE_INTEGER` silently become a `float32` that is
+ * not the maximum safe integer of anything.
+ */
+const WELL_KNOWN_MATH_CONSTANTS = new Set([
+  'PI', 'E', 'LN2', 'LN10', 'LOG2E', 'LOG10E', 'SQRT2', 'SQRT1_2',
+]);
+
+function isWellKnownNumericConstant(n: ParseNode): boolean {
+  const m = n as ParseNode & {
+    MemberExpression?: { type?: string, name?: string },
+    IdentifierName?: { name?: string },
+  };
+  return m.MemberExpression?.type === 'IdentifierReference'
+    && m.MemberExpression.name === 'Math'
+    && typeof m.IdentifierName?.name === 'string'
+    && WELL_KNOWN_MATH_CONSTANTS.has(m.IdentifierName.name);
+}
+
 export function isNumericLiteralOperand(node: ParseNode): boolean {
   let n = node;
   for (;;) {
@@ -25,6 +47,17 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
     if (n.type === 'UnaryExpression' && ((n as { operator?: string }).operator === '-' || (n as { operator?: string }).operator === '+')) {
       n = (n as { UnaryExpression: ParseNode }).UnaryExpression;
       continue;
+    }
+    // A well-known numeric constant answers yes. `Math.PI * r` must mean what
+    // `3.14159... * r` means, and the constant cannot be WRITTEN as a literal
+    // that denotes it, which is the only reason a list is needed at all.
+    //
+    // Narrowing its `float64` value to the position's type is CORRECTLY
+    // ROUNDED, not double rounding: an intermediate of 2p + 2 bits rounds
+    // equivalently to rounding once, and `float64`'s 53 covers `float32`'s 50
+    // and `float16`'s 24. Verified for all eight constants at both widths.
+    if (n.type === 'MemberExpression' && isWellKnownNumericConstant(n)) {
+      return true;
     }
     // A `const` bound to a compile-time numeric constant answers yes: its use
     // behaves as if the initializer were written here, which is what makes
