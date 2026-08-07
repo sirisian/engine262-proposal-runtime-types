@@ -1,4 +1,5 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
+import type { ExecutionContext } from './execution-context/ExecutionContext.mts';
 import { CheckModule, CheckScript, TakeNarrowingRequests } from './type-system/check.mts';
 import { RegExpParser, type RegExpParserContext } from './parser/RegExpParser.mts';
 import {
@@ -86,6 +87,34 @@ export interface ParseScriptHostDefined {
   scriptId?: string;
   readonly doNotTrackScriptId?: boolean;
 }
+/**
+ * Parsing may need the realm: a parse error is reported as a SyntaxError
+ * OBJECT, and constructing one reads %SyntaxError% from the running execution
+ * context's realm. A caller that parses outside any execution context - which
+ * a host embedding does when it compiles source before entering the realm -
+ * therefore crashed the host on any malformed input, reading `Realm` of an
+ * undefined context, instead of receiving the list of errors ParseScript
+ * promises to return.
+ *
+ * The realm is already in hand here, so the parse runs on its context when
+ * nothing else is running. `ManagedRealm.compileScript` does this around its
+ * own call; doing it here as well makes every caller safe, including hosts
+ * this implementation does not control.
+ */
+function withRealmContext<T>(realm: Realm, f: () => T): T {
+  const managed = realm as Realm & { topContext?: ExecutionContext };
+  if (managed.topContext === undefined
+      || surroundingAgent.runningExecutionContext === managed.topContext) {
+    return f();
+  }
+  surroundingAgent.executionContextStack.push(managed.topContext);
+  try {
+    return f();
+  } finally {
+    surroundingAgent.executionContextStack.pop(managed.topContext);
+  }
+}
+
 export function ParseScript(sourceText: string, realm: Realm, hostDefined: ParseScriptHostDefined = {}): ScriptRecord | ObjectValue[] {
   // 1. Assert: sourceText is an ECMAScript source text (see clause 10).
   // 2. Parse sourceText using Script as the goal symbol and analyse the parse result for
@@ -101,9 +130,9 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
     json: hostDefined[kInternal]?.json,
     allowAllPrivateNames: hostDefined[kInternal]?.allowAllPrivateNames,
   };
-  let body = wrappedParse(parseOptions, (p) => p.parseScript());
+  let body = withRealmContext(realm, () => wrappedParse(parseOptions, (p) => p.parseScript()));
   if (Array.isArray(body) && hostDefined[kInternal]?.allowAwait) {
-    body = wrappedParse(parseOptions, (p) => p.scope.with({ await: true }, () => p.parseScript()));
+    body = withRealmContext(realm, () => wrappedParse(parseOptions, (p) => p.scope.with({ await: true }, () => p.parseScript())));
   }
   // 3. If body is a List of errors, return body.
   if (Array.isArray(body)) {
@@ -154,7 +183,7 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   //    early error detection may be interweaved in an implementation-dependent manner. If more
   //    than one parsing error or early error is present, the number and ordering of error
   //    objects in the list is implementation-dependent, but at least one must be present.
-  const body = wrappedParse<ParseNode.Module>({ source: sourceText, specifier: hostDefined.specifier }, (p) => p.parseModule());
+  const body = withRealmContext(realm, () => wrappedParse<ParseNode.Module>({ source: sourceText, specifier: hostDefined.specifier }, (p) => p.parseModule()));
   // 3. If body is a List of errors, return body.
   if (Array.isArray(body)) {
     const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
