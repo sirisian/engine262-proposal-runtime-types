@@ -75,10 +75,11 @@ test('an unsupplied trailing position takes its default', () => {
   expect(evaluated("const a: [uint8, string = 'z', uint8 = 7] = [1];"
     + " String(a.length) + ',' + String(a[2]);")).toBe('3,7');
   expect(evaluated("const a: [uint8, string = 'z', uint8 = 7] = [1, 'x']; String(a[2]);")).toBe('7');
-  // KNOWN GAP: where the supplied array is short enough that membership already
-  // admits it, the conversion's "already of the type" shortcut returns it
-  // unchanged and the defaults are not filled. Filling happens wherever the
-  // value is NOT already a member, which is every case above.
+  // the case that membership alone would call "already of the type": the
+  // conversion's shortcut steps aside so the defaults are still filled
+  expect(evaluated('const a: [uint8 = 5] = []; String(a[0]);')).toBe('5');
+  // and a default is converted to its position's type as a supplied value is
+  expect(evaluated("const a: [string, uint8 = 200] = ['x']; String(a[1] is uint8);")).toBe('true');
   // and it works in a return position, which is the design's example
   expect(evaluated("function f(): [uint8, string = 'z'] { return [1]; }"
     + " const r = f(); String(r.length) + ',' + String(r[1]);")).toBe('2,z');

@@ -522,7 +522,22 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       return Q(yield* RequireTypeAfterCast(cast, t));
     }
   }
-  const already = Q(yield* IsOfType(value, t));
+  // proposal-runtime-types #sec-array-and-tuple-types: a tuple whose trailing
+  // positions carry defaults admits a SHORTER value, so membership calls such a
+  // value already of the type - and returning it unchanged would skip filling
+  // the defaults it was admitted without. The conversion below is what supplies
+  // them, so the shortcut steps aside for exactly that case.
+  //
+  // Only HERE, in the converting operation. RequireType checks and never
+  // converts, so the same guard there sent a value it should have accepted down
+  // a path that rebuilds one - which is what 481 failing tests were saying.
+  let shortOfADefault = false;
+  if (t.Kind === 'tuple' && t.Elements.some((e) => e.Initial !== 'none')
+      && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+    const lengthNow = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length'))))) as NumberValue);
+    shortOfADefault = lengthNow < t.Elements.length;
+  }
+  const already = !shortOfADefault && Q(yield* IsOfType(value, t));
   if (already) {
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
