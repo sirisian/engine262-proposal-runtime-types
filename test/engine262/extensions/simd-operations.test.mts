@@ -78,3 +78,46 @@ test('the comparison rules around equality are unchanged', () => {
   // and strict equality keeps its own semantics rather than comparing lanes
   expect(evaluated('String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 4));')).toBe('false');
 });
+
+// -- phase 2: mask consumers --------------------------------------------------
+/**
+ * A comparison produces a mask in two shapes: the COMPACT one, a lane per input
+ * lane and one bit per lane, and the WIDE one, a lane of the boolean type of
+ * the same width as the compared element. Only the compact shape was recognised
+ * as a mask, so `all`, `any`, and `select` were absent from the very value the
+ * design's examples call them on - `const m: boolean32x4 = a < b; if (m.any())`.
+ */
+test('a wide mask answers the operations that consume a mask', () => {
+  const M = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1);'
+    + ' const m: boolean32x4 = a < b; ';
+  expect(evaluated(`${M}String(m.any());`)).toBe('true');
+  expect(evaluated(`${M}String(m.all());`)).toBe('false');
+  // all set, and none set
+  expect(evaluated('const m: boolean32x4 = float32x4(1, 1, 1, 1) < float32x4(2, 2, 2, 2);'
+    + ' String(m.all()) + "," + String(m.any());')).toBe('true,true');
+  expect(evaluated('const m: boolean32x4 = float32x4(9, 9, 9, 9) < float32x4(2, 2, 2, 2);'
+    + ' String(m.all()) + "," + String(m.any());')).toBe('false,false');
+});
+
+test('select takes a lane from each arm by the mask', () => {
+  const M = 'const m: boolean32x4 = float32x4(1, 2, 9, 9) < float32x4(5, 5, 0, 0); ';
+  // lanes 0 and 1 are set, 2 and 3 are clear
+  expect(evaluated(`${M}const s = m.select(float32x4(10, 20, 30, 40), float32x4(50, 60, 70, 80));`
+    + ' String(s.x) + "," + String(s.y) + "," + String(s.z) + "," + String(s.w);')).toBe('10,20,70,80');
+  // "U is not the receiver's lane type": a mask selects between vectors of any
+  // lane type sharing its lane count
+  expect(evaluated(`${M}String(m.select(int32x4(1, 1, 1, 1), int32x4(2, 2, 2, 2)).x);`)).toBe('1');
+  // both arms must be one type, and must share the mask's lane count
+  expectThrown(`${M}m.select(int32x4(1, 1, 1, 1), float32x4(2, 2, 2, 2));`);
+  expectThrown(`${M}m.select(float64x2(1, 1), float64x2(2, 2));`);
+});
+
+test('the compact mask and non-masks are unchanged', () => {
+  // a bit-lane vector is a mask and always was
+  expect(evaluated('const b: boolean8 = (1 := boolean1); String(b.all()) + "," + String(b.any());')).toBe('false,true');
+  // a vector that is not a mask has no such member
+  expectThrown('float32x4(1, 2, 3, 4).all();');
+  // and a mask is still an ordinary vector: it swizzles and indexes
+  const M = 'const m: boolean32x4 = float32x4(1, 2, 9, 9) < float32x4(5, 5, 0, 0); ';
+  expect(evaluated(`${M}String(m.xyxy.x.all()) + "," + String(m[2].any());`)).toBe('true,false');
+});

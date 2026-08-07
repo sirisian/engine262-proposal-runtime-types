@@ -92,14 +92,14 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
     // proposal-runtime-types #sec-vector-masks: the operations that CONSUME a
     // mask. Declared on a vector whose lane type is `uint.<1>` alone, which is
     // what the design names boolean_N.
-    if ((name === 'all' || name === 'any') && isBitLaneType(shape.laneType)) {
-      const set = v.lanes.map((lane) => (lane as { numberValue?(): number }).numberValue?.() === 1);
+    if ((name === 'all' || name === 'any') && isMaskLaneType(shape.laneType)) {
+      const set = v.lanes.map((lane) => maskLaneIsSet(lane as Value));
       const answer = name === 'all' ? set.every((x) => x) : set.some((x) => x);
       return CreateBuiltinFunction(function* reduceMask(): ValueEvaluator {
         return answer ? Value.true : Value.false;
       }, 0, Value(name), []) as Value;
     }
-    if (name === 'select' && isBitLaneType(shape.laneType)) {
+    if (name === 'select' && isMaskLaneType(shape.laneType)) {
       // "Lane j of the result is lane j of whenSet where lane j of the receiver
       // is set, and lane j of whenClear otherwise." U is NOT the receiver's lane
       // type: a mask selects between vectors of any lane type sharing its count.
@@ -119,7 +119,7 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
         }
         const chosen: Value[] = [];
         for (let i = 0; i < shape.laneCount; i += 1) {
-          const bit = (v.lanes[i] as { numberValue?(): number }).numberValue?.() === 1;
+          const bit = maskLaneIsSet(v.lanes[i] as Value);
           chosen.push((bit ? (whenSet as VectorValue).lanes[i] : (whenClear as VectorValue).lanes[i]) as Value);
         }
         return new VectorValue(chosen, (whenSet as VectorValue).TypeRecord);
@@ -320,6 +320,41 @@ export function* vectorConstantLane(
  * integer is that correspondence read in each direction. This is what the
  * design names `boolean1` and builds `boolean8` and its siblings from.
  */
+/**
+ * proposal-runtime-types #sec-vector-masks: whether a vector is a MASK, in
+ * either of the two shapes a comparison produces.
+ *
+ * The COMPACT mask has a lane per input lane and one bit per lane, so its lane
+ * type is `uint.<1>`. The WIDE mask has a lane of the boolean type of the same
+ * width as the compared element - a `float32x4` comparison yields a
+ * `boolean32x4` - so its lane type is itself a bit vector.
+ *
+ * Only the compact shape was recognised, so the operations were absent from the
+ * very value the design's own examples call them on: `const m: boolean32x4 = a <
+ * b; if (m.any())`.
+ */
+export function isMaskLaneType(laneType: TypeRecord): boolean {
+  if (isBitLaneType(laneType)) {
+    return true;
+  }
+  return laneType.Kind === 'primitive'
+    && laneType.Name === 'vector'
+    && laneType.Arguments.length === 2
+    && isBitLaneType(laneType.Arguments[0] as TypeRecord);
+}
+
+/**
+ * Whether a mask lane is set. A comparison sets "every bit set or every bit
+ * clear" in a wide lane, so a lane of bits is set exactly when all of them are.
+ */
+export function maskLaneIsSet(lane: Value): boolean {
+  if (lane.type === 'Vector') {
+    const bits = (lane as VectorValue).lanes;
+    return bits.length > 0 && bits.every((b) => (b as { numberValue?(): number }).numberValue?.() === 1);
+  }
+  return (lane as { numberValue?(): number }).numberValue?.() === 1;
+}
+
 export function isBitLaneType(laneType: TypeRecord): boolean {
   return laneType.Kind === 'primitive'
     && laneType.Name === 'uint'
