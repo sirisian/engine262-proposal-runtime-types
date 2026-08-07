@@ -144,7 +144,7 @@ test('each member position takes its own context', () => {
   expect(evaluated('let c; function grab(x) { c = x; } class A { @grab static m() {} } String(c.static);')).toBe('true');
   // A method's context carries the same `classContext` a field's does.
   expect(evaluated('let c; function grab(x) { c = x; } class Named { @grab m() {} } c.classContext.kind + "/" + String(c.classContext.name);')).toBe('Class/Named');
-  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab m() {} } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,name,static,private,abstract,signatures,classContext,metadata,addInitializer');
+  expect(evaluated('let c; function grab(x) { c = x; } class A { @grab m() {} } Object.getOwnPropertyNames(c).join(",");')).toBe('kind,name,static,private,protected,abstract,signatures,classContext,metadata,addInitializer');
 
   // MIXED members fire in document order and the class still comes last, which
   // is the composition the ordering rule promises across kinds rather than

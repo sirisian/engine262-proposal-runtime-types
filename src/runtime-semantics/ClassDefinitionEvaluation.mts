@@ -1705,6 +1705,17 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   // so the context reports it as a field's does. Without this the modifier was
   // invisible to a decorator as well as unenforced.
   X(CreateDataProperty(context, Value('readonly'), decl.readonly === true ? Value.true : Value.false));
+  // proposal-runtime-types #sec-reflection-shape-class: a ClassAccessor
+  // reflection carries the accessor's TYPE, as the field context beside it does
+  // and by reading the same annotation. It had none, so an accessor's decorator
+  // could see its name, its visibility, and its initial value, and not what it
+  // holds - which is the one question the type system makes the facility for.
+  if (decl.TypeAnnotation?.Type) {
+    const accessorType = EnsureCompletion(yield* TypeNodeToTypeRecord(decl.TypeAnnotation.Type as never));
+    if (accessorType.Type === 'normal') {
+      X(CreateDataProperty(context, Value('type'), GetTypeObject(accessorType.Value as unknown as TypeRecord, realm) as Value));
+    }
+  }
   X(CreateDataProperty(context, Value('initial'), Q(yield* DeclaredInitialOf(decl))));
   X(CreateDataProperty(context, Value('initializer'), InitializerTokensOf(decl)));
   X(CreateDataProperty(context, Value('metadata'), Q(yield* MemberMetadataFor(classCtor, key))));
@@ -2215,6 +2226,11 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   X(CreateDataProperty(context, Value('name'), key));
   X(CreateDataProperty(context, Value('static'), isStatic ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
+  // proposal-runtime-types #sec-reflection-shape-class: a method, getter, and
+  // setter each report `protected` beside `static` and `private`. The field and
+  // accessor contexts already did, so a decorator reading visibility got two of
+  // three answers here and three there, for no reason a reader could see.
+  X(CreateDataProperty(context, Value('protected'), (node as { protected?: boolean } | undefined)?.protected === true ? Value.true : Value.false));
   if (kind === 'ClassMethod' || kind === 'ClassOperator') {
     X(CreateDataProperty(context, Value('abstract'), Value.false));
   }

@@ -34,7 +34,7 @@ test('a method context reports its FUNCTION type', () => {
 test('the rest of the method context is unchanged', () => {
   expect(evaluated('(() => { let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } '
     + 'class A { @g m(): uint8 { return uint8(1); } } return f; })();'))
-    .toBe('kind,name,static,private,abstract,type,signatures,classContext,metadata,addInitializer');
+    .toBe('kind,name,static,private,protected,abstract,type,signatures,classContext,metadata,addInitializer');
   // A static method and an operator go through the same builder.
   expect(evaluated('(() => { let k; function g(c) { k = c.kind; } '
     + 'class A { @g static m(): uint8 { return uint8(1); } } return k; })();')).toBe('ClassMethod');

@@ -116,3 +116,25 @@ test('PINNED: what stage E does not do', () => {
   expect(evaluated('class B { protected a: uint8 = 1; } class D extends B { read() { return this.a; } } String(new D().read());')).toBe('1');
   expect(evaluated('class B { protected a: uint8 = 1; } const o = new B(); String(o.a);')).toBe('1');
 });
+
+test('an accessor context reports its TYPE', () => {
+  // proposal-runtime-types #sec-reflection-shape-class gives ClassAccessor a
+  // `type`, and the field context beside it always had one by reading the same
+  // annotation. Without it an accessor's decorator could see its name, its
+  // visibility, and its initial value, and not what it holds - which is the one
+  // question the type system makes the facility for.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.type === uint32);`)).toBe('true');
+  expect(evaluated(`${grab} class A { @f accessor s: string = ""; } String(c.type === string);`)).toBe('true');
+});
+
+test('a method, getter, and setter context report `protected`', () => {
+  // They reported `static` and `private` and not `protected`, where the field
+  // and accessor contexts reported all three - two of three answers here and
+  // three there, for no reason a reader could see.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} class A { @f protected m(): uint8 { return 1; } } String(c.protected);`)).toBe('true');
+  expect(evaluated(`${grab} class A { @f m(): uint8 { return 1; } } String(c.protected);`)).toBe('false');
+  expect(evaluated(`${grab} class A { @f protected get v(): uint8 { return 1; } } String(c.protected);`)).toBe('true');
+  expect(evaluated(`${grab} class A { @f protected set v(x: uint8) {} } String(c.protected);`)).toBe('true');
+});
