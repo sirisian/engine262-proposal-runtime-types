@@ -77,6 +77,21 @@ export function refineLeftHandSideExpression(node: ParseNode.ArrayLiteral | Pars
       return refined;
     }
     case 'PropertyDefinition':
+      // proposal-runtime-types: a `ref` member carries its target through to the
+      // pattern, where the evaluation borrows the property's LOCATION rather
+      // than reading its value.
+      if ((node as unknown as { RefTarget?: unknown }).RefTarget) {
+        return {
+          type: 'AssignmentProperty',
+          PropertyName: node.PropertyName,
+          RefTarget: (node as unknown as { RefTarget?: unknown }).RefTarget,
+          AssignmentElement: {
+            type: 'AssignmentElement',
+            DestructuringAssignmentTarget: (node as unknown as { RefTarget: ParseNode.AssignmentExpressionOrHigher }).RefTarget,
+            Initializer: undefined,
+          },
+        } as never;
+      }
       return {
         type: 'AssignmentProperty',
         PropertyName: node.PropertyName,

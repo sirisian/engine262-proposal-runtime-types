@@ -1,6 +1,8 @@
 import {
-  JSStringValue, ReferenceRecord, Value, type PropertyKeyValue,
+  JSStringValue, ObjectValue, ReferenceRecord, Value, type PropertyKeyValue,
 } from '../value.mts';
+import { Throw } from '../host-defined/error-messages.mts';
+import { RebindRefBinding, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import {
   IsAnonymousFunctionDefinition,
   IsIdentifierRef,
@@ -28,6 +30,7 @@ import { surroundingAgent } from '#self';
 import {
   ArrayCreate,
   CopyDataProperties,
+  ToPropertyKey,
   CreateDataPropertyOrThrow,
   GetIterator,
   GetV,
@@ -103,6 +106,39 @@ function* PropertyDestructuringAssignmentEvaluation(AssignmentPropertyList: Pars
       // 5. Perform ? PutValue(lref, v).
       Q(yield* PutValue(lref, v));
       // 6. Return a new List containing P.
+      propertyNames.push(P);
+    } else if ((AssignmentProperty as unknown as { RefTarget?: ParseNode.IdentifierReference }).RefTarget) {
+      // proposal-runtime-types #sec-typed-destructuring: a `ref` member of an
+      // ASSIGNMENT pattern re-borrows: the named binding is pointed at the
+      // property's LOCATION on the object being destructured, as the
+      // declaration form's `ref` member binds one. Assignment destructuring is
+      // the only form whose targets already exist, which is what this is for.
+      const refTarget = (AssignmentProperty as unknown as { RefTarget: ParseNode.IdentifierReference }).RefTarget;
+      const name = yield* Evaluate_PropertyName((AssignmentProperty as unknown as { PropertyName: ParseNode.PropertyNameLike }).PropertyName);
+      const P = Q(yield* ToPropertyKey(name as Value)) as PropertyKeyValue;
+      if (!(value instanceof ObjectValue)) {
+        return Throw.TypeError('cannot take a ref of a property of a primitive');
+      }
+      const location = new ReferenceRecord({
+        Base: value,
+        ReferencedName: P,
+        Strict: Value.true,
+        ThisValue: undefined,
+        IndexOperator: undefined,
+        IndexSetOperator: undefined,
+        SoAElement: undefined,
+      });
+      const bindingId = StringValue(refTarget);
+      const lref = Q(yield* ResolveBinding(bindingId, undefined, refTarget.strict));
+      const holder = lref.Base !== 'unresolvable' && typeof (lref.Base as { HasBinding?: unknown }).HasBinding === 'function'
+        ? RefBindingHolder(lref.Base as EnvironmentRecord, bindingId)
+        : undefined;
+      if (holder === undefined) {
+        return Throw.TypeError('$1 is not a ref binding', bindingId);
+      }
+      if (!RebindRefBinding(holder, bindingId, location)) {
+        return Throw.TypeError('$1 is not a ref binding', bindingId);
+      }
       propertyNames.push(P);
     } else {
       Assert('PropertyName' in AssignmentProperty);

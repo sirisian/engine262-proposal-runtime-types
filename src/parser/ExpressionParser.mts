@@ -1673,7 +1673,48 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parsePropertyDefinitionInner(): ParseNode.PropertyDefinitionLike {
+    // proposal-runtime-types #sec-typed-destructuring: the parenthesized member
+    // of a destructuring ASSIGNMENT, `({ (ref x) } = o)` and `({ (ref r): x } =
+    // o)`. An object literal has no other reading for a `(` at this position, so
+    // admitting one costs nothing and this is a cover: the form is refined into
+    // an assignment pattern where it is one, and reported where it is not.
+    //
+    // Only `ref` is admitted. An ANNOTATION here would have to mean a check
+    // rather than a binding - there is no new binding in an assignment to give
+    // a type to - and it would leave `({ (a: uint8) } = src)` with two types
+    // for one target where `a` was declared at another. `is` and `:=` already
+    // express the check.
+    // Only `(ref` is claimed here. A `(` at this position ALREADY means a typed
+    // own property, `{ (a: uint8): 1 }`, so the two are told apart by the token
+    // after the parenthesis rather than by the parenthesis itself.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.LPAREN)
+        && this.peekAhead().type === Token.IDENTIFIER && this.peekAhead().value === 'ref') {
+      return this.parseRefAssignmentProperty();
+    }
     return this.parseBracketedDefinition('property');
+  }
+
+  /** `(` `ref` IdentifierReference `)` (`:` PropertyName)? */
+  parseRefAssignmentProperty(): ParseNode.PropertyDefinitionLike {
+    const node = this.startNode<ParseNode.PropertyDefinition>();
+    this.expect(Token.LPAREN);
+    // The caller has already established that `ref` follows the parenthesis.
+    this.next();
+    const target = this.parseIdentifierReference();
+    if (this.test(Token.COLON)) {
+      this.unexpected(this.peek());
+    }
+    if (this.test(Token.CONDITIONAL)) {
+      this.addEarlyError(Throw.SyntaxError('A ref member may not be optional'), this.peek());
+    }
+    this.expect(Token.RPAREN);
+    (node as ParseNode.Unfinished<ParseNode.PropertyDefinition> & { RefTarget?: unknown }).RefTarget = target;
+    // Without a rename the property is the target's own name.
+    node.PropertyName = this.eat(Token.COLON)
+      ? this.parsePropertyName()
+      : this.repurpose({ ...target }, 'IdentifierName') as never;
+    node.AssignmentExpression = target as never;
+    return this.finishNode(node, 'PropertyDefinition');
   }
 
   parseFunctionExpression(kind: FunctionKind): ParseNode.FunctionExpressionLike {
