@@ -11,6 +11,7 @@ import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
+import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
@@ -481,11 +482,74 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
  * `seen` breaks reference cycles: a property whose value is an Object already on
  * the path is given the `object` type rather than being expanded again.
  */
+/**
+ * The ~array~ Type Record for an Array, or null where the value is not one.
+ *
+ * The union stops at `any`: once an element admits everything there is nothing
+ * a further element could add, which also bounds the walk over a large array
+ * whose elements vary.
+ */
+function runtimeArrayType(value: ObjectValue, seen: Set<ObjectValue>): TypeRecord | null {
+  if (!isArrayExoticObject(value)) {
+    return null;
+  }
+  const stamped = (value as { TypedElement?: TypeRecord, TypedExtent?: number });
+  if (stamped.TypedElement !== undefined) {
+    return {
+      Kind: 'array',
+      Element: stamped.TypedElement,
+      Extent: stamped.TypedExtent ?? 'dynamic',
+    } as TypeRecord;
+  }
+  const lengthValue = (value as { properties?: Map<PropertyKeyValue, Descriptor> })
+    .properties?.get(Value('length'))?.Value;
+  const length = lengthValue instanceof NumberValue ? Number(lengthValue.numberValue()) : 0; // eslint-disable-line @engine262/mathematical-value -- an Array length, not a mathematical value in the spec sense
+  const members: TypeRecord[] = [];
+  for (let i = 0; i < length; i += 1) {
+    const element = (value as { properties: Map<PropertyKeyValue, Descriptor> })
+      .properties.get(Value(String(i)))?.Value;
+    // A hole, or an element on the cycle already being described, admits
+    // anything as far as this type is concerned.
+    const elementType = element === undefined
+      ? anyType
+      : (element instanceof ObjectValue && seen.has(element) ? anyType : RuntimeTypeOf2(element, seen));
+    if (elementType.Kind === 'primitive' && elementType.Name === 'any') {
+      return { Kind: 'array', Element: anyType, Extent: 'dynamic' } as TypeRecord;
+    }
+    if (!members.some((m) => SameType(m, elementType))) {
+      members.push(elementType);
+    }
+  }
+  const Element = members.length === 0
+    ? anyType
+    : (members.length === 1 ? members[0]! : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord));
+  return { Kind: 'array', Element, Extent: 'dynamic' } as TypeRecord;
+}
+
 function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeRecord {
   // A Proxy (or any Object) carrying an explicit runtime type reports it.
   const carried = (value as { RuntimeType?: TypeRecord }).RuntimeType;
   if (carried) {
     return carried;
+  }
+  // proposal-runtime-types #sec-runtimetypeof: an Array reports an ~array~ Type
+  // Record, not the ~object~ Type Record describing its indices as properties.
+  //
+  // Membership walks a value's elements (#sec-array-membership), so `['a'] is
+  // [].<string>` is true - but everything that RANKS types instead of walking
+  // values went through here and saw an object type, which no array type
+  // relates to. Overload resolution is the visible case: with `f(x:
+  // [].<int32>)` and `f(s: [].<string>)` declared, NO argument could select
+  // either, however it was written, because the comparison was between an
+  // object type and an array type. Generic inference and `Reflect.typeOf` read
+  // the same answer.
+  //
+  // A typed array reports the type it carries; an untyped one reports the
+  // element type its contents support, which is the union of their types and is
+  // exactly what membership asks of every element.
+  const arrayType = runtimeArrayType(value, seen);
+  if (arrayType) {
+    return arrayType;
   }
   // A class instance reports its class's nominal type, found by walking the
   // prototype chain to a constructor with an associated class Type Object.
