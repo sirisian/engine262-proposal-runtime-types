@@ -14,7 +14,22 @@ import {
 
 const cascadeStack = new WeakMap<EnvironmentRecord, EnvironmentRecord>();
 // This is modified based on PerformEval, used internally for devtools console.
-export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, strictCaller: boolean, doNotTrack: boolean): ValueEvaluator {
+/**
+ * What an evaluation reports about itself beyond its value. `isAsync` is set when
+ * the source only parsed under `{ await: true }` and was therefore evaluated as
+ * an async body - which means the value is the promise standing for it, not the
+ * value the source produced.
+ *
+ * A caller that wants what the user typed to have produced has to settle that
+ * promise, and has to know the difference: `Promise.resolve(1)` is a synchronous
+ * body whose value IS a promise and must be shown as one, while
+ * `await Promise.resolve(1)` is an async body whose promise stands for `1`.
+ */
+export interface DevtoolsEvalReport {
+  isAsync: boolean;
+}
+
+export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, strictCaller: boolean, doNotTrack: boolean, report?: DevtoolsEvalReport): ValueEvaluator {
   let inFunction = false;
   let inMethod = false;
   let inDerivedConstructor = false;
@@ -62,6 +77,9 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
   let script = wrappedParse(parseOption, (parser) => parser.scope.with(parseParam, () => parser.parseScript()));
   if (Array.isArray(script)) {
     isAsync = true;
+    if (report) {
+      report.isAsync = true;
+    }
     script = wrappedParse(parseOption, (parser) => parser.scope.with({ ...parseParam, await: true }, () => parser.parseScript()));
   }
   if (Array.isArray(script)) {

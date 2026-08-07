@@ -8,6 +8,7 @@ import { getParsedEvent } from './internal-utils.mts';
 import { InspectorContext } from './context.mts';
 import {
   Call, NormalCompletion, ObjectValue, ParseScript, ScriptRecord, surroundingAgent, ThrowCompletion, skipDebugger, Value, type FunctionObject,
+  CreateBuiltinFunction, PerformPromiseThen, type Arguments, type DevtoolsEvalReport, type ManagedRealm, type PromiseObject,
   ParseModule,
   SourceTextModuleRecord,
   ValueOfNormalCompletion,
@@ -325,9 +326,13 @@ function evaluate(options: {
     }
   }
   const promise = new Promise<Protocol.Runtime.EvaluateResponse>((resolve) => {
+    // Filled in by performDevtoolsEval when the source only parsed as an async
+    // body, which is what makes its value a promise standing for the result
+    // rather than the result.
+    const evalReport: DevtoolsEvalReport = { isAsync: false };
     let toBeEvaluated;
     if (isPreview || isRepl || options.evalMode === 'console' || isCallOnFrame) {
-      toBeEvaluated = performDevtoolsEval(options.expression, realm.realm, false, !!(isPreview || isCallOnFrame));
+      toBeEvaluated = performDevtoolsEval(options.expression, realm.realm, false, !!(isPreview || isCallOnFrame), evalReport);
     } else {
       let parsed!: ScriptRecord | SourceTextModuleRecord | ObjectValue[];
       const realm = context.getRealm(options.uniqueContextId);
@@ -379,6 +384,19 @@ function evaluate(options: {
       let completion;
       surroundingAgent.evaluate(toBeEvaluated, (c) => {
         completion = c;
+        // An async body answers the promise standing for its result, and the
+        // console asked for the result. The devtools frontend does not unwrap
+        // this - it displays whatever the backend returns - so settling here is
+        // the difference between `await 1;` reading as `1` and as `Promise {}`.
+        //
+        // Only when the body WAS async. A synchronous body whose value happens
+        // to be a promise - `Promise.resolve(1)` - is a promise the user asked
+        // to see, and settling that would answer 1 for an expression that never
+        // awaited anything.
+        if (evalReport.isAsync && !(c instanceof ThrowCompletion) && isPromiseObject(c.Value)) {
+          settleThenResolve(realm.realm, c.Value, context, resolve);
+          return;
+        }
         resolve(context.createEvaluationResult(c));
       });
       if (!completion) surroundingAgent.resumeEvaluate();
@@ -419,4 +437,36 @@ function evaluate(options: {
     };
   });
   return promise;
+}
+
+/** Whether a value is a promise, by its internal slot rather than by its shape. */
+function isPromiseObject(value: Value): value is PromiseObject {
+  return value instanceof ObjectValue && 'PromiseState' in value;
+}
+
+/**
+ * Attach to `promise` and answer the inspector's response from how it settles: a
+ * fulfilment through the ordinary result path, a rejection through
+ * exceptionDetails so a failed `await` reads in the console as a thrown error
+ * rather than as a returned rejected promise.
+ *
+ * The reactions are ordinary promise jobs on the agent's queue, so the host's
+ * event loop is what runs them - the same loop that was already going to run
+ * whatever the awaited work was waiting on.
+ */
+function settleThenResolve(
+  realm: ManagedRealm,
+  promise: PromiseObject,
+  context: InspectorContext,
+  resolve: (response: Protocol.Runtime.EvaluateResponse) => void,
+): void {
+  const onFulfilled = CreateBuiltinFunction(function* onFulfilledSteps(args: Arguments) {
+    resolve(context.createEvaluationResult(NormalCompletion(args[0] ?? Value.undefined)));
+    return Value.undefined;
+  } as never, 1, Value(''), [], realm);
+  const onRejected = CreateBuiltinFunction(function* onRejectedSteps(args: Arguments) {
+    resolve(context.createEvaluationResult(ThrowCompletion(args[0] ?? Value.undefined)));
+    return Value.undefined;
+  } as never, 1, Value(''), [], realm);
+  PerformPromiseThen(promise, onFulfilled, onRejected);
 }

@@ -16,7 +16,7 @@ export * from './completion.mts';
 export * from './parse.mts';
 export * from './modules.mts';
 export * from './host-defined/inspect.mts';
-export { performDevtoolsEval } from './host-defined/devtoolsEval.mts';
+export { performDevtoolsEval, type DevtoolsEvalReport } from './host-defined/devtoolsEval.mts';
 export { type Formattable, Throw } from './host-defined/error-messages.mts';
 export * from './evaluator.mts';
 

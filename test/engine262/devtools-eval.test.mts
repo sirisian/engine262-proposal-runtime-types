@@ -163,10 +163,10 @@ test('Runtime.evaluate: without replMode, top-level await is still a syntax erro
 }));
 
 test('Runtime.evaluate: replMode accepts top-level await', () => makeInspector().evaluate('await 1;', { replMode: true }).then((r) => {
+  // That it EVALUATED rather than refusing. What it answers is pinned by the
+  // settling tests below.
   expect(r?.exceptionDetails).toBeUndefined();
-  // It answers a promise, which is what Phase 3 of the plan settles before
-  // replying; what this test pins is that it EVALUATED rather than refusing.
-  expect(r?.result?.subtype).toBe('promise');
+  expect(r?.result).toBeDefined();
 }));
 
 test('Runtime.evaluate: replMode leaves synchronous input alone', () => makeInspector().evaluate('6*7;', { replMode: true }).then((r) => {
@@ -179,4 +179,42 @@ test('Runtime.evaluate: bindings from a replMode await persist to the next evalu
   await evaluate('let persisted = await 5; 0;', { replMode: true });
   const second = await evaluate('persisted;', { replMode: true });
   expect(second?.result?.value).toBe(5);
+});
+
+test('Runtime.evaluate: an async body is settled before the reply', async () => {
+  // The frontend does not unwrap what the backend returns, so this is the
+  // difference between `await 1;` reading as 1 and as `Promise {}`.
+  const { evaluate } = makeInspector();
+  const one = await evaluate('await 1;', { replMode: true });
+  expect(one?.result?.type).toBe('number');
+  expect(one?.result?.value).toBe(1);
+
+  const chained = await evaluate('await Promise.resolve(7);', { replMode: true });
+  expect(chained?.result?.value).toBe(7);
+});
+
+test('Runtime.evaluate: a synchronous body whose value is a promise stays a promise', async () => {
+  // `Promise.resolve(1)` never awaited anything, and the user asked to see the
+  // promise. Settling it because it happens to be one would answer 1 for an
+  // expression that did not await - which is why the settling keys off whether
+  // the BODY was async rather than off the shape of its value.
+  const { evaluate } = makeInspector();
+  const r = await evaluate('Promise.resolve(1);', { replMode: true });
+  expect(r?.result?.subtype).toBe('promise');
+});
+
+test('Runtime.evaluate: a rejected await is reported as an exception', async () => {
+  const { evaluate } = makeInspector();
+  const r = await evaluate('await Promise.reject(new TypeError("boom"));', { replMode: true });
+  expect(r?.exceptionDetails).toBeDefined();
+  expect(r?.result?.subtype).not.toBe('promise');
+});
+
+test('Runtime.evaluate: the reported callThread example reads back its value', async () => {
+  const { evaluate } = makeInspector();
+  await evaluate('let a: uint32 = 0; function A() { Atomics.add(ref a, 5); } 0;', { replMode: true });
+  const awaited = await evaluate('await A.callThread();', { replMode: true });
+  expect(awaited?.exceptionDetails).toBeUndefined();
+  const read = await evaluate('a;', { replMode: true });
+  expect(read?.result?.value).toBe(5);
 });
