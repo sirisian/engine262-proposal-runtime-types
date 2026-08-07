@@ -1,5 +1,7 @@
 import { NormalCompletion } from '../completion.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
+import { FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
+import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
@@ -50,7 +52,7 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
     Q(yield* ApplySubTargetDecorators(FunctionDeclaration as never, 'Function', typeof name === 'string' ? Value(name) : Value.undefined, fn));
     if (FunctionDeclaration.Decorators?.length) {
       const replacement = Q(yield* ApplyDecorators(FunctionDeclaration.Decorators, Q(yield* FunctionDecoratorContext(
-        typeof name === 'string' ? Value(name) : Value.undefined, fn,
+        typeof name === 'string' ? Value(name) : Value.undefined, fn, FunctionDeclaration as never,
       )), true));
       // decorators.md's table: a `Reflect.Function` decorator's return "replaces
       // the function". The binding is already initialized by the time the
@@ -68,13 +70,22 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
 }
 
 /** decorators.md's `FunctionReflection`: `name`, `type`, `signatures`, `metadata`. */
-export function* FunctionDecoratorContext(name: Value, fn: Value): ValueEvaluator {
+export function* FunctionDecoratorContext(name: Value, fn: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value('Function')));
   StampReflectionContext(context, 'Function');
   X(CreateDataProperty(context, Value('name'), name));
   X(CreateDataProperty(context, Value('type'), fn));
+  // proposal-runtime-types #sec-reflection-shape-function: a Function
+  // reflection reports its `signatures`, and this is the ONE place the whole
+  // set is reachable - a FunctionParameter context reflects the one signature
+  // its decoration was written on. Without it an overloaded function reflected
+  // as though it had one.
+  if (node) {
+    const one = Q(yield* FunctionSignatureReflectionOf(node, realm));
+    X(CreateDataProperty(context, Value('signatures'), X(CreateArrayFromList([one]))));
+  }
   // A function has no base declaration, so its metadata inherits nothing - the
   // prototype chain that carries a class member's is a CLASS structure, and
   // decorators.md's inheritance rule is written about one.

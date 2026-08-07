@@ -2109,7 +2109,7 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
  * parameter CONTEXT reports, from the same node, so the two cannot disagree
  * about one declaration.
  */
-function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundingAgent.currentRealmRecord): ValueEvaluator {
+export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundingAgent.currentRealmRecord): ValueEvaluator {
   const sig = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   const n = node as {
     UniqueFormalParameters?: readonly ParseNode[] | null,

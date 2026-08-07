@@ -139,3 +139,15 @@ test('a binding context reports its declared type and its initializer', () => {
   // An unannotated binding reports no type, rather than a type of `any`.
   expect(evaluated(`${grab} @f let u = 1; String(Object.getOwnPropertyNames(c).includes('type'));`)).toBe('false');
 });
+
+test('a function context reports its signatures', () => {
+  // proposal-runtime-types #sec-reflection-shape-function: the Function
+  // reflection is the ONE place the whole set of signatures is reachable - a
+  // FunctionParameter context reflects the one signature its decoration was
+  // written on. Without it an overloaded function reflected as though it had
+  // one signature, and a reader had nowhere else to look.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} @f function q(a: uint8): uint8 { return a; } String(c.signatures.length);`)).toBe('1');
+  expect(evaluated(`${grab} @f function q(a: uint8): uint8 { return a; } String(c.signatures[0].parameters.length);`)).toBe('1');
+  expect(evaluated(`${grab} @f function q(): uint8 { return 1; } String(c.signatures[0].parameters.length);`)).toBe('0');
+});
