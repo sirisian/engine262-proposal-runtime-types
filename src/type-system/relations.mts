@@ -314,6 +314,11 @@ function tupleTypeAt(elements: readonly TupleElementRecord[], i: number): TypeRe
 }
 
 /** #sec-issubtype */
+/** Whether a Type Record is the `any` type, the element of the array family's top. */
+function isAnyElement(t: TypeRecord): boolean {
+  return t.Kind === 'any';
+}
+
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
   if (SameTypeWithAssumptions(s, t, assumptions)) {
     return true;
@@ -403,6 +408,28 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (t.Kind === 'shared' && s.Kind !== 'shared') {
     return IsSubtype(s, t.Target, next);
   }
+  // proposal-runtime-types #sec-issubtype: `[].<any>` is the top of the ARRAY
+  // FAMILY - an array of some element type - so every array and every tuple is
+  // one. `any` is already the type that accepts every value, and this is that
+  // reading carried to the array types.
+  //
+  // Element invariance is untouched for every other element type: a
+  // `[].<uint8>` is still not a `[].<number>`, for the reason the clause gives
+  // for a generic class - the wider view would accept a Number into storage
+  // typed `uint8`. What makes `any` safe where a general covariance would not
+  // be is that a store to an element is checked against the ARRAY's own element
+  // type at run time (#table-check-sites), so writing through the wider view is
+  // refused whatever the static type said. Kotlin forbids writes through
+  // `Array<*>` because it has no such check; this one does.
+  //
+  // Without this the bound the design writes, `T extends []`, admitted only an
+  // array whose element type was literally `any` - which is to say nothing at
+  // all, since no array is written that way - and the same was true of an
+  // ordinary parameter typed `[].<any>`.
+  if (t.Kind === 'array' && t.Extent === 'dynamic' && isAnyElement(t.Element)
+      && (s.Kind === 'array' || s.Kind === 'tuple')) {
+    return true;
+  }
   if (s.Kind !== t.Kind) {
     return false;
   }
@@ -411,6 +438,11 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       const ta = t as Extract<TypeRecord, { Kind: 'array' }>;
       if (ta.Extent !== 'dynamic' && ta.Extent !== s.Extent) {
         return false;
+      }
+      // A fixed target with an `any` element still fixes the extent, and takes
+      // any element type within it.
+      if (isAnyElement(ta.Element)) {
+        return true;
       }
       return SameTypeWithAssumptions(s.Element, ta.Element, next);
     }
