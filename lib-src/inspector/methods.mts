@@ -209,6 +209,34 @@ export const Runtime: RuntimeNamespace = {
       uniqueContextId: options.uniqueContextId!,
     }, context);
   },
+  /**
+   * https://chromedevtools.github.io/devtools-protocol/v8/Runtime/#method-awaitPromise
+   *
+   * Settle a promise the frontend already holds and answer from how it settled.
+   * Distinct from `Runtime.evaluate`'s `awaitPromise` flag, which settles the
+   * result of an evaluation: this one is handed an object id.
+   */
+  awaitPromise(req, { context }) {
+    const object = context.getObject(req.promiseObjectId);
+    if (!isPromiseObject(object!)) {
+      return {
+        result: { type: 'undefined' },
+        exceptionDetails: {
+          text: 'Runtime.awaitPromise: the object is not a promise.',
+          lineNumber: 0,
+          columnNumber: 0,
+          exceptionId: 0,
+        },
+      };
+    }
+    const realm = context.getRealm(undefined);
+    if (!realm) {
+      return unsupportedError;
+    }
+    return new Promise<Protocol.Runtime.AwaitPromiseResponse>((resolve) => {
+      settleThenResolve(realm.realm, object, context, resolve);
+    }) as unknown as Protocol.Runtime.AwaitPromiseResponse;
+  },
   getExceptionDetails(req, { context }) {
     const object = context.getObject(req.errorObjectId)!;
     if (object instanceof ObjectValue) {
@@ -292,15 +320,17 @@ function evaluate(options: {
   // so the flag alone must not select a path that evaluates. Previews already
   // route below by `isPreview` and keep their own handling.
   const isRepl = !!options.replMode && !isPreview;
-  if (options.awaitPromise) {
-    return unsupportedError;
-  }
   const realm = context.getRealm(options.uniqueContextId);
   if (!realm) {
     return unsupportedError;
   }
 
   const isCallOnFrame = typeof options.callFrameId === 'string';
+  // `awaitPromise` asks for a promise RESULT to be settled before replying. A
+  // preview must not honour it - waiting on a promise is the running a preview
+  // exists to avoid - and neither can a paused call frame, whose loop is not
+  // turning, so a wait there would never end.
+  const shouldAwaitResult = !!options.awaitPromise && !isPreview && !isCallOnFrame;
   let callOnFramePoppedLevel = 0;
   const oldExecutionStack = [...surroundingAgent.executionContextStack];
   if (isCallOnFrame) {
@@ -357,7 +387,23 @@ function evaluate(options: {
       if (!isEvaluator(toBeEvaluated)) {
         throw new Assert.Error('Unexpected');
       }
-      resolve(context.createEvaluationResult(skipDebugger(toBeEvaluated)));
+      const completion = skipDebugger(toBeEvaluated);
+      if (evalReport.isAsync && isCallOnFrame) {
+        // The body suspended on an `await`, and the frame it was evaluated on is
+        // paused: the loop that would settle it is not turning, so answering the
+        // promise would answer something that can never resolve. Say why instead.
+        resolve({
+          result: { type: 'undefined' },
+          exceptionDetails: {
+            text: 'Cannot await on a paused call frame: resume execution first.',
+            lineNumber: 0,
+            columnNumber: 0,
+            exceptionId: 0,
+          },
+        });
+        return;
+      }
+      resolve(context.createEvaluationResult(completion));
     };
     if (isPreview) {
       surroundingAgent.debugger_scopePreview(noDebuggerEvaluate);
@@ -367,6 +413,7 @@ function evaluate(options: {
       noDebuggerEvaluate();
       return;
     }
+
 
     if (toBeEvaluated instanceof ModuleRecord) {
       realm.realm.evaluateModule(toBeEvaluated, undefined, (completion) => {
@@ -393,7 +440,7 @@ function evaluate(options: {
         // to be a promise - `Promise.resolve(1)` - is a promise the user asked
         // to see, and settling that would answer 1 for an expression that never
         // awaited anything.
-        if (evalReport.isAsync && !(c instanceof ThrowCompletion) && isPromiseObject(c.Value)) {
+        if ((evalReport.isAsync || shouldAwaitResult) && !(c instanceof ThrowCompletion) && isPromiseObject(c.Value)) {
           settleThenResolve(realm.realm, c.Value, context, resolve);
           return;
         }

@@ -218,3 +218,46 @@ test('Runtime.evaluate: the reported callThread example reads back its value', a
   const read = await evaluate('a;', { replMode: true });
   expect(read?.result?.value).toBe(5);
 });
+
+// -- Phase 4: the edges ---------------------------------------------------------
+test('Runtime.evaluate: awaitPromise settles a promise result', async () => {
+  // Distinct from the async-body settling above: here the body is synchronous
+  // and its VALUE is a promise, which the caller has explicitly asked to have
+  // settled. Before this the flag was refused outright with `unsupported`.
+  const { evaluate } = makeInspector();
+  const r = await evaluate('Promise.resolve(3);', { replMode: true, awaitPromise: true });
+  expect(r?.result?.type).toBe('number');
+  expect(r?.result?.value).toBe(3);
+});
+
+test('Runtime.evaluate: awaitPromise passes a non-promise straight through', async () => {
+  // So a caller can set the flag unconditionally and never have two shapes of
+  // response to reason about.
+  const { evaluate } = makeInspector();
+  const r = await evaluate('1;', { replMode: true, awaitPromise: true });
+  expect(r?.result?.value).toBe(1);
+});
+
+test('Runtime.evaluate: awaitPromise reports a rejection as an exception', async () => {
+  const { evaluate } = makeInspector();
+  const r = await evaluate('Promise.reject(new TypeError("r"));', { replMode: true, awaitPromise: true });
+  expect(r?.exceptionDetails).toBeDefined();
+});
+
+test('Runtime.evaluate: without awaitPromise a promise result is still a promise', async () => {
+  const { evaluate } = makeInspector();
+  const r = await evaluate('Promise.resolve(3);', { replMode: true });
+  expect(r?.result?.subtype).toBe('promise');
+});
+
+test('Runtime.evaluate: a preview does not leak the side effects of an awaited body', async () => {
+  // A preview runs while the user is still typing, so it must not be observable.
+  // It is already run under debugger_scopePreview, where promise jobs are not
+  // enqueued and effects do not escape - which is why previews are left to
+  // evaluate rather than made to refuse `await`: refusing would remove a working
+  // preview to solve a problem the preview machinery already solves.
+  const { evaluate } = makeInspector();
+  await evaluate('globalThis.leaked = 1; await 1;', { replMode: true, throwOnSideEffect: true });
+  const observed = await evaluate('String(globalThis.leaked);', { replMode: true });
+  expect(observed?.result?.value).toBe('undefined');
+});
