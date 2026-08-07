@@ -304,3 +304,56 @@ test('the mask conversions are unaffected', () => {
   expect(evaluated('const m: vector.<boolean1, 4> = int32x4(1, 2, 3, 4) == int32x4(1, 9, 9, 9);'
     + ' String(m.any());')).toBe('true');
 });
+
+// -- phase 7: masked operations as inputs -------------------------------------
+/**
+ * Intel's masking is not only a RESULT form: nearly every arithmetic intrinsic
+ * has a write-masked variant, whose untaken lanes are blended from a source, and
+ * a zero-masked one, whose untaken lanes are zeroed. `select` over the operation
+ * already denotes both, so no syntax is added; an implementation may lower the
+ * composition to one predicated instruction, and the bound on that permission is
+ * purity, which the last test here pins.
+ */
+test('select over an operation is the write-masked and zero-masked form', () => {
+  // lanes 0 and 1 set, lanes 2 and 3 clear
+  const M = 'const a = int32x4(10, 20, 30, 40); const b = int32x4(1, 2, 3, 4);'
+    + ' const m: boolean32x4 = int32x4(1, 1, 9, 9) < int32x4(5, 5, 0, 0); ';
+  const all4 = (e: string) => `const s = ${e};`
+    + ' String(s.x) + "," + String(s.y) + "," + String(s.z) + "," + String(s.w);';
+  // write-masked: _mm512_mask_add_epi32(a, k, a, b)
+  expect(evaluated(M + all4('m.select(a + b, a)'))).toBe('11,22,30,40');
+  // zero-masked: _mm512_maskz_add_epi32(k, a, b)
+  expect(evaluated(`${M}const zero = int32x4(0, 0, 0, 0); ${all4('m.select(a + b, zero)')}`)).toBe('11,22,0,0');
+  // and the same shape over the other operators
+  expect(evaluated(M + all4('m.select(a - b, a)'))).toBe('9,18,30,40');
+  expect(evaluated(M + all4('m.select(a * b, a)'))).toBe('10,40,30,40');
+  expect(evaluated(M + all4('m.select(a & b, a)'))).toBe('0,0,30,40');
+  expect(evaluated(`${M}const zero = int32x4(0, 0, 0, 0); ${all4('m.select(a << b, zero)')}`)).toBe('20,80,0,0');
+});
+
+test('a degenerate mask gives the unmasked and the untouched result', () => {
+  const A = 'const a = int32x4(10, 20, 30, 40); const b = int32x4(1, 2, 3, 4); ';
+  const all4 = (e: string) => `const s = ${e};`
+    + ' String(s.x) + "," + String(s.y) + "," + String(s.z) + "," + String(s.w);';
+  expect(evaluated(`${A}const m: boolean32x4 = int32x4(1, 1, 1, 1) < int32x4(5, 5, 5, 5); `
+    + all4('m.select(a + b, a)'))).toBe('11,22,33,44');
+  expect(evaluated(`${A}const m: boolean32x4 = int32x4(9, 9, 9, 9) < int32x4(5, 5, 5, 5); `
+    + all4('m.select(a + b, a)'))).toBe('10,20,30,40');
+});
+
+test('masked operations compose, and both arms are still evaluated', () => {
+  const M = 'const a = int32x4(10, 20, 30, 40); const b = int32x4(1, 2, 3, 4);'
+    + ' const m: boolean32x4 = int32x4(1, 1, 9, 9) < int32x4(5, 5, 0, 0); ';
+  // a masked result feeding another masked operation
+  expect(evaluated(`${M}const s = m.select(m.select(a + b, a) * b, a);`
+    + ' String(s.x) + "," + String(s.y) + "," + String(s.z);')).toBe('11,44,30');
+  // a lane-wise Math call as the arm
+  expect(evaluated('const a = float32x4(1, 4, 9, 16);'
+    + ' const m: boolean32x4 = float32x4(1, 1, 9, 9) < float32x4(5, 5, 0, 0);'
+    + ' const s = m.select(Math.sqrt(a), a); String(s.x) + "," + String(s.z);')).toBe('1,9');
+  // select is an ordinary call, so an argument that runs user code runs whatever
+  // the mask holds - this is the bound on eliding an arm's computation
+  expect(evaluated("let log = ''; function f(t) { log += t; return int32x4(1, 1, 1, 1); }"
+    + ' const m: boolean32x4 = int32x4(1, 9, 9, 9) < int32x4(5, 0, 0, 0);'
+    + " m.select(f('set'), f('clear')); log;")).toBe('setclear');
+});
