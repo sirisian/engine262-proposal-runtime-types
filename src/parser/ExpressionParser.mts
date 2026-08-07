@@ -2285,10 +2285,32 @@ export abstract class ExpressionParser extends FunctionParser {
       // `continue`, `await` and `yield` mean in it what they mean in the
       // enclosing function". Parsing it as a block is what makes that true - a
       // function body would rebind all five at once.
+      // proposal-runtime-types #sec-reflection-shape-block: a match arm's block
+      // takes decorators, as every other block position does. The test was for
+      // `{` alone, so a leading `@` was an unexpected token and the
+      // MatchArmBlock context could not be reached at all.
+      const armDecorators = surroundingAgent.feature('runtime-types') && !clause.IsThrow && this.test(Token.AT)
+        ? this.parseDecorators()
+        : null;
       clause.IsBlock = !clause.IsThrow && this.test(Token.LBRACE);
+      if (armDecorators?.length && !clause.IsBlock) {
+        // Decorators reached, and what followed was not a block. Nothing else in
+        // an arm takes them, so say which rule was broken rather than reporting
+        // whatever token turned up.
+        this.addEarlyError(Throw.SyntaxError('a decorator in a match arm must be followed by a block'), clause as never);
+      }
       if (clause.IsBlock) {
         const armBlock = (this as unknown as { parseBlock(): ParseNode.Block }).parseBlock();
         clause.Body = armBlock;
+        if (armDecorators?.length) {
+          (armBlock as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = armDecorators;
+          (this as unknown as { markBlockKind(b: unknown, k: string, p?: ParseNode.BlockParts): unknown }).markBlockKind(armBlock, 'MatchArmBlock', {
+            subject: node.Expression as never,
+            pattern: (clause.Pattern ?? undefined) as never,
+            guard: (clause.Guard ?? undefined) as never,
+            index: Clauses.length,
+          });
+        }
         // proposal-runtime-types #sec-do-expression-modifications: a match
         // arm's Block IS a `do` expression's Block, so it carries that form's
         // Early Errors. An arm ending in a declaration was a silent ~void~

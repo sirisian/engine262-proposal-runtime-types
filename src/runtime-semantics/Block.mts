@@ -162,5 +162,14 @@ export function* BlockDecoratorContext(
   if (parts?.binding !== undefined) {
     X(CreateDataProperty(context, Value('binding'), stream(parts.binding as ParseNode)));
   }
+  // #sec-reflection-shape-block, MatchArmBlock. `pattern` is *undefined* for a
+  // `default` clause and `guard` where the clause is unguarded, present either
+  // way so a reader walks one shape.
+  if (parts?.subject !== undefined) {
+    X(CreateDataProperty(context, Value('subject'), stream(parts.subject as ParseNode)));
+    X(CreateDataProperty(context, Value('pattern'), stream(parts.pattern as ParseNode | undefined)));
+    X(CreateDataProperty(context, Value('guard'), stream(parts.guard as ParseNode | undefined)));
+    X(CreateDataProperty(context, Value('index'), parts.index === undefined ? Value.undefined : Value(parts.index)));
+  }
   return context;
 }

@@ -31,6 +31,16 @@ export namespace ParseNode {
      * cannot say what it binds has lost what distinguishes it from a bare block.
      */
     readonly binding?: BaseParseNode;
+    /**
+     * proposal-runtime-types #sec-reflection-shape-block, the MatchArmBlock
+     * fields: the `match`'s argument, the clause's pattern (absent for a
+     * `default`), its guard (absent where unguarded), and its position among
+     * its siblings.
+     */
+    readonly subject?: BaseParseNode;
+    readonly pattern?: BaseParseNode;
+    readonly guard?: BaseParseNode;
+    readonly index?: number;
   }
 
   export interface BaseParseNode {

@@ -281,3 +281,24 @@ test('the declaration and the layout are two contexts, not one', () => {
   // all is the mistake.
   expect(evaluated(`class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>('a').offset);`)).toBe('undefined');
 });
+
+test('a match arm block takes a decorator and reports its clause', () => {
+  // proposal-runtime-types #sec-reflection-shape-block. The MatchArmBlock
+  // context could not be reached at all: an arm tested for `{` alone, so a
+  // leading `@` was an unexpected token. `match` itself parsed fine - it was
+  // the decorated arm that did not.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} match (1) { when 1: @f { "one"; } }; c.kind;`)).toBe('MatchArmBlock');
+  // `subject` is the match's ARGUMENT, which is the thing an arm's decorator
+  // cannot otherwise see.
+  expect(evaluated(`${grab} match (1+1) { when 2: @f { "two"; } }; String(c.subject);`)).toBe('1+1');
+  expect(evaluated(`${grab} match (2) { when 2: @f { "b"; } }; String(c.pattern);`)).toBe('2');
+  // `index` is the clause's position among its siblings.
+  expect(evaluated(`${grab} match (2) { when 1: { "a"; } when 2: @f { "b"; } }; String(c.index);`)).toBe('1');
+  // A `default` clause has no pattern, and an unguarded one no guard - present
+  // and undefined either way, so a reader walks one shape.
+  expect(evaluated(`${grab} match (9) { when 1: { "a"; } default: @f { "d"; } }; String(c.pattern);`)).toBe('undefined');
+  expect(evaluated(`${grab} match (2) { when 2: @f { "b"; } }; String(c.guard);`)).toBe('undefined');
+  // Per ENTRY, as every block decorator is: two calls, two contexts.
+  expect(evaluated(`let n = 0; function g(x) { n += 1; } function h() { return match (1) { when 1: @g { 0; } }; } h(); h(); String(n);`)).toBe('2');
+});
