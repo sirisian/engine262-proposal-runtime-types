@@ -410,3 +410,38 @@ test('Math.fma rounds once', () => {
   expect(evaluated('String(Math.fma(float32x4(2, 2, 2, 2), float32x4(3, 3, 3, 3),'
     + ' float32x4(4, 4, 4, 4)).x);')).toBe('10');
 });
+
+/**
+ * `operatoroverloading.md`: "`Math.rsqrt(x)` is exactly `1 / Math.sqrt(x)`,
+ * correctly rounded, so it does not lower to a bare `rsqrtps`, which is a
+ * twelve-bit approximation."
+ *
+ * CORRECTLY ROUNDED is stronger than evaluating `1 / Math.sqrt(x)` in doubles,
+ * which rounds twice and differs for roughly a quarter of inputs. The values
+ * below are the exactly-computed ones, and four of them are cases where the
+ * naive form gives a different double - so an implementation that shimmed over
+ * `1 / Math.sqrt(x)`, or reached for the approximate instruction, fails here.
+ */
+test('Math.rsqrt is correctly rounded', () => {
+  expect(evaluated('String(Math.rsqrt(4));')).toBe('0.5');
+  // these four differ from `1 / Math.sqrt(x)`
+  expect(evaluated('String(Math.rsqrt(2));')).toBe('0.7071067811865476');
+  expect(evaluated('String(Math.rsqrt(0.5));')).toBe('1.4142135623730951');
+  expect(evaluated('String(Math.rsqrt(3));')).toBe('0.5773502691896257');
+  expect(evaluated('String(Math.rsqrt(7));')).toBe('0.37796447300922725');
+  // and the naive form is visibly not the same function
+  expect(evaluated('String(1 / Math.sqrt(2));')).toBe('0.7071067811865475');
+  // extremes stay exact rather than overflowing through the intermediate
+  expect(evaluated('String(Math.rsqrt(1e300)) + "," + String(Math.rsqrt(1e-300));')).toBe('1e-150,1e+150');
+});
+
+test('Math.rsqrt at the boundary values', () => {
+  // 1/sqrt(x) at a zero: sqrt(-0) is -0, so the reciprocal keeps the sign
+  expect(evaluated('String(Math.rsqrt(0));')).toBe('Infinity');
+  expect(evaluated('String(Math.rsqrt(-0));')).toBe('-Infinity');
+  expect(evaluated('String(Math.rsqrt(-1));')).toBe('NaN');
+  expect(evaluated('String(Math.rsqrt(NaN));')).toBe('NaN');
+  expect(evaluated('String(Math.rsqrt(Infinity));')).toBe('0');
+  // and the vector half comes from the lane-wise dispatch
+  expect(evaluated('String(Math.rsqrt(float32x4(4, 16, 64, 256)).x);')).toBe('0.5');
+});

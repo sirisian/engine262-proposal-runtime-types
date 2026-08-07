@@ -660,6 +660,81 @@ function nextAfter(v: number, dir: number): number {
   return buf.getFloat64(0);
 }
 
+/**
+ * proposal-runtime-types (operatoroverloading.md): "`Math.rsqrt(x)` is exactly
+ * `1 / Math.sqrt(x)`, correctly rounded, so it does not lower to a bare
+ * `rsqrtps`, which is a twelve-bit approximation."
+ *
+ * CORRECTLY ROUNDED is the operative half, and it is stronger than evaluating
+ * `1 / Math.sqrt(x)` in doubles: that rounds twice, once at the square root and
+ * once at the division, and differs from the correctly rounded result for
+ * roughly a quarter of inputs. The weaker reading would also leave the function
+ * with nothing to offer, a program being able to write `1 / Math.sqrt(x)` for
+ * itself; what it cannot write for itself is the single rounding.
+ *
+ * The result is chosen by an EXACT test rather than computed approximately: for
+ * adjacent doubles either side of the true value, the true 1/sqrt(x) is below
+ * their midpoint _m_ exactly when _m_^2 * x > 1, and that comparison is done in
+ * rationals of BigInts.
+ */
+function* Math_rsqrt([x = Value.undefined]: Arguments): ValueEvaluator {
+  const n = Q(yield* ToNumber(x));
+  if (n.isNaN()) {
+    return F(NaN);
+  }
+  const v = R(n);
+  if (v < 0) {
+    return F(NaN);
+  }
+  if (v === 0) {
+    // 1/sqrt(+0) is +Infinity and 1/sqrt(-0) is -Infinity, since sqrt(-0) is -0
+    // and 1/-0 is -Infinity. The sign is read from the Number rather than from
+    // R, which reports a mathematical value and so has no negative zero.
+    return F(Object.is(n.value, -0) ? -Infinity : Infinity);
+  }
+  if (v === Infinity) {
+    return F(0);
+  }
+  return F(correctlyRoundedRsqrt(v));
+}
+
+/** The double nearest to the real number 1/sqrt(v), for finite positive v. */
+function correctlyRoundedRsqrt(v: number): number {
+  const exceedsOne = (c: number): boolean => {
+    // c^2 * v > 1, exactly.
+    const cf = splitDouble(c);
+    const vf = splitDouble(v);
+    return cf.n * cf.n * vf.n > cf.d * cf.d * vf.d;
+  };
+  let c = 1 / Math.sqrt(v);
+  if (!Number.isFinite(c) || c === 0) {
+    return c;
+  }
+  // Walk to the smallest double whose square exceeds 1/v, which brackets the
+  // true value with its predecessor. The estimate is within a couple of ulps.
+  let guard = 0;
+  while (exceedsOne(c) && guard < 8) {
+    c = nextAfter(c, 0);
+    guard += 1;
+  }
+  while (!exceedsOne(c) && guard < 16) {
+    c = nextAfter(c, Infinity);
+    guard += 1;
+  }
+  const below = nextAfter(c, 0);
+  if (!Number.isFinite(below) || below <= 0) {
+    return c;
+  }
+  // Nearer of the two: the true value is below the midpoint exactly when the
+  // midpoint's square exceeds 1/v.
+  const mid = splitDouble(below);
+  const above = splitDouble(c);
+  const midN = mid.n * above.d + above.n * mid.d;
+  const midD = mid.d * above.d * 2n;
+  const vf = splitDouble(v);
+  return midN * midN * vf.n > midD * midD * vf.d ? below : c;
+}
+
 function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefined]: Arguments): ValueEvaluator {
   const a = Q(yield* ToNumber(x));
   const b = Q(yield* ToNumber(y));
@@ -1522,6 +1597,7 @@ export function bootstrapMath(realmRec: Realm) {
     ['sin', withNumericLibrarySignatures(Math_sin, 'sin'), 1],
     ['sinh', withNumericLibrarySignatures(Math_sinh, 'sinh'), 1],
     ['fma', withNumericLibrarySignatures(Math_fma, 'fma'), 3],
+    ['rsqrt', withNumericLibrarySignatures(Math_rsqrt, 'rsqrt'), 1],
     ['sqrt', withNumericLibrarySignatures(Math_sqrt, 'sqrt'), 1],
     ['sumPrecise', withNumericLibrarySignatures(Math_sumPrecise, 'sumPrecise'), 1],
     ['tan', withNumericLibrarySignatures(Math_tan, 'tan'), 1],
