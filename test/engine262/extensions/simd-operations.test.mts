@@ -266,3 +266,41 @@ test('a BigInt is not a 64-bit integer', () => {
   expectThrown('const a: int64 = 1n;');
   expectThrown('int64x2(1n, 2n);');
 });
+
+// -- phase 6: lane-type conversion --------------------------------------------
+/**
+ * A vector converts to another vector of the same lane COUNT by converting each
+ * lane - the target's `cvtdq2ps` and `f32x4.convert_i32x4_s`.
+ *
+ * The scalar rule decides the spelling rather than a preference: an implicit
+ * `const b: float32 = someInt32` is refused and `(a := float32)` converts, so a
+ * vector does the same. No lane-type conversion happens silently.
+ */
+test('a vector converts lane-wise through an explicit conversion', () => {
+  expect(evaluated('const f = (int32x4(1, 2, 3, 4) := float32x4);'
+    + ' String(f.x) + "," + String(f.w);')).toBe('1,4');
+  // the result really carries the target lane type
+  expect(evaluated('const f = (int32x4(1, 2, 3, 4) := float32x4); String(f.x is float32);')).toBe('true');
+  // float to integer truncates, as the scalar conversion does
+  expect(evaluated('const i = (float32x4(1.7, 2.9, 3, 4) := int32x4);'
+    + ' String(i.x) + "," + String(i.y);')).toBe('1,2');
+  expect(evaluated('const v = (float64x2(1.9, 2.1) := int64x2); String(v.x);')).toBe('1');
+  // signed to unsigned wraps, as the scalar conversion does
+  expect(evaluated('const v = (int32x4(-1, 2, 3, 4) := uint32x4); String(v.x);')).toBe('4294967295');
+});
+
+test('conversion does not happen silently, and does not change the lane count', () => {
+  // an implicit boundary refuses, exactly as it does for a scalar
+  expectThrown('const f: float32x4 = int32x4(1, 2, 3, 4);');
+  // changing the lane count is packing or unpacking, a different operation
+  expectThrown('uint8x16(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16) := int32x4;');
+  // converting to the same type is the identity
+  expect(evaluated('const f = (float32x4(1, 2, 3, 4) := float32x4); String(f.x);')).toBe('1');
+});
+
+test('the mask conversions are unaffected', () => {
+  expect(evaluated('const m: boolean32x4 = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1);'
+    + ' String(m.any());')).toBe('true');
+  expect(evaluated('const m: vector.<boolean1, 4> = int32x4(1, 2, 3, 4) == int32x4(1, 9, 9, 9);'
+    + ' String(m.any());')).toBe('true');
+});

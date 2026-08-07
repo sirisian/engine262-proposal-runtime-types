@@ -157,6 +157,31 @@ function isNumberConversionSource(value: Value): boolean {
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types (simd.md): a vector converts to another vector of the
+  // same lane COUNT by converting each lane, which is the target's
+  // `cvtdq2ps`/`scvtf`/`f32x4.convert_i32x4_s`. The scalar rule decides the
+  // spelling: an implicit `const b: float32 = someInt32` is refused and
+  // `(a := float32)` converts, so a vector does the same and no lane-type
+  // conversion happens silently.
+  //
+  // The lane count must match. Changing it is packing or unpacking - a
+  // different instruction with a different result shape - and is not this.
+  if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
+    const fromShape = vectorShape(value as VectorValue);
+    const toLane = t.Arguments[0] as TypeRecord;
+    const toCount = t.Arguments[1];
+    if (fromShape && typeof toCount === 'number' && toCount === fromShape.laneCount
+        && !SameType(fromShape.laneType, toLane)
+        && toLane.Kind === 'primitive' && toLane.Name !== 'vector'
+        && !isBitLaneType(fromShape.laneType)) {
+      const converted: Value[] = [];
+      for (let i = 0; i < fromShape.laneCount; i += 1) {
+        converted.push(Q(yield* ConvertValue((value as VectorValue).lanes[i] as Value, toLane)) as Value);
+      }
+      return new VectorValue(converted, t);
+    }
+  }
+
   // proposal-runtime-types (PLAN-decimal.md stage F): a DECIMAL out to a binary
   // float or a Number is the ordinary direction of loss - the nearest double to
   // the decimal's value - and needs no rule of its own, unlike the direction in.
