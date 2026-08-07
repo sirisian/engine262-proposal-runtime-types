@@ -532,6 +532,7 @@ export interface Throw {
   | 'this instance is placed on a buffer that no longer covers it'
   | 'this instance is placed on a detached buffer'
   | 'this operator is not defined for a decimal'
+  | 'this operator is not defined for a binary floating-point type'
   | 'this operator is not defined for a rational'
   | 'this reference is into an SoA element that has since been removed'
   | 'this reference is into an SoA that has since grown'

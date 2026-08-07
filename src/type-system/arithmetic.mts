@@ -187,6 +187,16 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
   if (target instanceof AbruptCompletion) {
     return target as ThrowCompletion;
   }
+  // proposal-runtime-types #table-family-operations: a binary floating-point type
+  // "does not define bitwiseNOT, the shifts, and the bitwise operations, since
+  // each would require converting the operand to an integer type". The decimal
+  // family already refuses them; the binary one fell through to Number
+  // semantics, so `(4 := float32) << (1 := float32)` answered 8 for an operation
+  // the table says the type does not have.
+  if ((target.Kind === 'primitive' && /^float(16|32|64|128)$/.test(target.Name))
+      && (op === '<<' || op === '>>' || op === '>>>' || op === '&' || op === '|' || op === '^')) {
+    return Throw.TypeError('this operator is not defined for a binary floating-point type') as ThrowCompletion;
+  }
   const math = mathOp(op, payload(x), payload(y));
   return new TypedNumberValue(wrapToType(math, target), target);
 }
