@@ -1,3 +1,4 @@
+import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import {
   Q, X,
@@ -67,6 +68,11 @@ export function AsyncGeneratorStart(generator: AsyncGeneratorObject, generatorBo
   const genContext = surroundingAgent.runningExecutionContext;
   // 3. Set the Generator component of genContext to generator.
   genContext.Generator = generator;
+  // proposal-runtime-types #sec-generics: an async generator suspends at both
+  // `await` and `yield`, so it needs the captured frame for the same reason a
+  // generator and an async function do - and it is a THIRD start path, so the
+  // capture in GeneratorStart and AsyncBlockStart does not reach it.
+  genContext.TypeParameterFrame = currentTypeParameterFrame();
   const closure = function* resumer(): YieldEvaluator {
     const acGenContext = surroundingAgent.runningExecutionContext;
     const acGenerator = acGenContext.Generator as AsyncGeneratorObject;
