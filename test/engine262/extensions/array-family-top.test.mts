@@ -54,3 +54,20 @@ test('a store through the wider view is still checked', () => {
   expect(evaluated('const a: [].<uint8> = [1]; const b: [].<any> = a;'
     + ' function ok() { return 200; } b[0] = ok(); String(a[0]);')).toBe('200');
 });
+
+test('the bound composes with the rest of the array work', () => {
+  // a parameter bound by the family may be indexed and measured
+  expect(evaluated("function g<T extends []>(v: T) { return v[0]; }"
+    + ' const a: [].<uint8> = [7]; String(g(a));')).toBe('7');
+  expect(evaluated('function g<T extends []>(v: T) { return v.length; }'
+    + " const t: [number, string] = [1, 'a']; String(g(t));")).toBe('2');
+  // a borrow taken through the wider view writes the original
+  expect(evaluated('const a: [].<uint8> = [1]; const b: [].<any> = a;'
+    + ' let ref r = b[0]; r = 5; String(a[0]);')).toBe('5');
+  // and a borrow into a fixed-extent array still writes it
+  expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
+  // an SoA is not an array and is still refused, as soa.md requires
+  expect(evaluated('class P { x: uint8; } const s = new SoA.<P>();'
+    + " function p(v: [].<any>): string { return 'ok'; }"
+    + " try { p(s); 'no'; } catch (e) { e.constructor.name; }")).toBe('TypeError');
+});

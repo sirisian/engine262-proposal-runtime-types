@@ -50,3 +50,18 @@ test('mixed, nested, and non-array values are unaffected', () => {
   expect(evaluated("function h(x: int32): string { return 'int32'; }"
     + " function h(s: string): string { return 'string'; } h('t');")).toBe('string');
 });
+
+test('the runtime type handles the awkward array shapes', () => {
+  // a hole contributes nothing a type could name, and a cycle must not recurse
+  expect(evaluated("function p(v: [].<any>): string { return 'ok'; } const s = [1, , 3]; p(s);")).toBe('ok');
+  expect(evaluated("function p(v: [].<any>): string { return 'ok'; }"
+    + ' const s = [1]; s.push(s); p(s);')).toBe('ok');
+  // a nested typed array is described through its element
+  expect(evaluated('const inner: [].<uint8> = [1]; const outer = [inner];'
+    + ' String(outer is [].<[].<uint8>>);')).toBe('true');
+  // the extent is part of the reported type
+  expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; const b: [4].<uint8> = [5, 6, 7, 8];'
+    + ' String(Reflect.typeOf(a) === Reflect.typeOf(b));')).toBe('true');
+  expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; const d: [].<uint8> = [1];'
+    + ' String(Reflect.typeOf(a) === Reflect.typeOf(d));')).toBe('false');
+});

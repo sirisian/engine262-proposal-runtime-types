@@ -63,3 +63,20 @@ test('a growable array and a plain array are untouched', () => {
 test('a fixed SoA refuses growth as it always did', () => {
   expectThrownKind('class P { x: float32; } const s = new SoA.<P, 4>(); s.push({ x: 1 });', 'TypeError');
 });
+
+test('a fixed-extent array cannot be shortened either', () => {
+  // the extent is the length, so removing is as much a change as adding
+  expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.pop();', 'TypeError');
+  expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.shift();', 'TypeError');
+  expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.splice(0, 1);', 'TypeError');
+  expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; delete a[0];', 'TypeError');
+});
+
+test('operations that keep the length are unaffected', () => {
+  // an extent constrains the LENGTH, not the contents
+  expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; a.fill(7);'
+    + " String(a.length) + ',' + String(a[0]);")).toBe('4,7');
+  expect(evaluated('const a: [4].<uint8> = [4, 3, 2, 1]; a.sort(); String(a.length);')).toBe('4');
+  expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; a.reverse();'
+    + " String(a.length) + ',' + String(a[0]);")).toBe('4,4');
+});

@@ -53,3 +53,14 @@ test('the array form is unaffected, and covariance is now testable', () => {
   // and it is covariance, not equivalence
   expectThrown('type T1 = [uint8 | string]; type T2 = [uint8]; const a: T1 = [1]; const b: T2 = a;');
 });
+
+test('every position a tuple may occupy converts', () => {
+  // a return, a field, and a nesting - the boundary is the same one
+  expect(evaluated("function f(): [uint8, string] { return [1, 'x']; }"
+    + ' const r = f(); String(r[0] is uint8);')).toBe('true');
+  expect(evaluated("class C { t: [uint8, string] = [1, 'x']; }"
+    + ' String(new C().t[0] is uint8);')).toBe('true');
+  expect(evaluated("const a: [[uint8], string] = [[1], 'x']; String(a[0][0] is uint8);")).toBe('true');
+  // a tuple position whose type is an ARRAY converts through the array rule
+  expect(evaluated("const a: [[].<uint8>, string] = [[1], 'x']; String(a[0][0] is uint8);")).toBe('true');
+});
