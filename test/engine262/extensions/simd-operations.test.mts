@@ -174,3 +174,47 @@ test('adding the forms did not weaken the selection rules', () => {
   // and a type that is none of the three is still refused
   expectThrown(`const m: float64x2 = ${C};`);
 });
+
+// -- phase 4: negation and the lane-wise Math surface -------------------------
+test('negation applies lane-wise and keeps the vector type', () => {
+  expect(evaluated('const v = -float32x4(1, 2, 3, 4); String(v.x) + "," + String(v.w);')).toBe('-1,-4');
+  expect(evaluated('const v = -int32x4(-1, 2, -3, 4); String(v.x) + "," + String(v.y);')).toBe('1,-2');
+  // and the scalar operator is untouched
+  expect(evaluated('String(-5) + "," + String(-(-5));')).toBe('-5,5');
+});
+
+/**
+ * A Math function applies lane-wise to a vector, returning a vector of the
+ * argument's shape. The exactly-specified functions give the scalar result for
+ * each lane; the approximated ones are approximated independently of their
+ * scalar forms, so a lane of `Math.sin(v)` need not equal the scalar
+ * `Math.sin` of that lane.
+ */
+test('the exact Math functions apply lane-wise', () => {
+  expect(evaluated('const v = Math.sqrt(float32x4(1, 4, 9, 16));'
+    + ' String(v.x) + "," + String(v.y) + "," + String(v.z) + "," + String(v.w);')).toBe('1,2,3,4');
+  expect(evaluated('const v = Math.abs(int32x4(-1, 2, -3, 4)); String(v.x) + "," + String(v.z);')).toBe('1,3');
+  expect(evaluated('const v = Math.min(float32x4(1, 5, 3, 7), float32x4(4, 2, 6, 0));'
+    + ' String(v.x) + "," + String(v.y) + "," + String(v.w);')).toBe('1,2,0');
+  expect(evaluated('const v = Math.max(float32x4(1, 5, 3, 7), float32x4(4, 2, 6, 0));'
+    + ' String(v.x) + "," + String(v.y);')).toBe('4,5');
+  expect(evaluated('String(Math.floor(float32x4(1.7, 2, 3, 4)).x) + ","'
+    + ' + String(Math.ceil(float32x4(1.1, 2, 3, 4)).x) + ","'
+    + ' + String(Math.trunc(float32x4(-2.9, 2, 3, 4)).x);')).toBe('1,2,-2');
+});
+
+test('the approximated Math functions apply lane-wise too', () => {
+  expect(evaluated('const v = Math.sin(float32x4(0, 0, 0, 0)); String(v.x);')).toBe('0');
+  expect(evaluated('const v = Math.cos(float32x4(0, 0, 0, 0)); String(v.x);')).toBe('1');
+  expect(evaluated('const v = Math.pow(float32x4(2, 3, 4, 5), float32x4(2, 2, 2, 2));'
+    + ' String(v.x) + "," + String(v.y);')).toBe('4,9');
+  expect(evaluated('String(Math.log(float32x4(1, 1, 1, 1)).x) + ","'
+    + ' + String(Math.exp(float32x4(0, 0, 0, 0)).x);')).toBe('0,1');
+});
+
+test('a scalar beside a vector broadcasts, and shapes must agree', () => {
+  expect(evaluated('const v = Math.min(float32x4(1, 5, 3, 7), 4); String(v.x) + "," + String(v.y);')).toBe('1,4');
+  expectThrown('Math.min(float32x4(1, 2, 3, 4), float64x2(1, 2));');
+  // the scalar functions are unaffected
+  expect(evaluated('String(Math.sqrt(16)) + "," + String(Math.min(3, 5)) + "," + String(Math.sin(0));')).toBe('4,3,0');
+});

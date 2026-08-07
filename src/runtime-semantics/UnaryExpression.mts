@@ -1,4 +1,6 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
+import { vectorShape } from '../type-system/vector-ops.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { Q } from '../completion.mts';
 import {
   Value, ReferenceRecord, UndefinedValue, BigIntValue, BooleanValue, JSStringValue, NullValue, NumberValue, ObjectValue, SymbolValue,
@@ -197,6 +199,26 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   const rawValue = Q(yield* GetValue(expr));
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('-', rawValue as TypedNumberValue);
+  }
+  // proposal-runtime-types (simd.md): negation applies lane-wise and keeps the
+  // vector's type, as every other arithmetic operator on a vector does. Without
+  // this the operand reached ToNumeric, which has no reading for a vector, and
+  // `-v` reported that the vector was not assignable to its own type.
+  if (surroundingAgent.feature('runtime-types') && rawValue.type === 'Vector') {
+    const v = rawValue as VectorValue;
+    const shape = vectorShape(v);
+    // A lane carries its own numeric type, so negating one is the typed unary
+    // this function already performs on a scalar.
+    if (shape !== null && v.lanes.every((lane) => lane instanceof TypedNumberValue)) {
+      const lanes: Value[] = [];
+      for (const lane of v.lanes) {
+        lanes.push(Q(yield* CheckedConvertValue(
+          typedUnary('-', lane as TypedNumberValue) as Value,
+          shape.laneType,
+        )) as Value);
+      }
+      return new VectorValue(lanes, v.TypeRecord);
+    }
   }
   // proposal-runtime-types (decimal.md): unary minus on a decimal keeps its
   // COHORT MEMBER - `-1.50` is `-1.50`, not `-1.5` - since negation changes the

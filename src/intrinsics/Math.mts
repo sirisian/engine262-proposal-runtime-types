@@ -1,4 +1,4 @@
-import {
+import { VectorValue,
   Value,
   NumberValue,
   BigIntValue,
@@ -8,12 +8,14 @@ import {
   type NativeSteps,
   type FunctionCallContext,
 } from '../value.mts';
-import { Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
+import { EnsureCompletion, Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { endpointOf, type RangeObject } from './Range.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
+import { vectorShape } from '../type-system/vector-ops.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows, type IntegerRow } from '../type-system/numeric-signatures.mts';
 import { Decimal } from '../host-defined/decimal.mts';
@@ -830,6 +832,43 @@ function withNumericLibrarySignatures(steps: NativeSteps, functionName: string):
         plain = yield* plain;
       }
       return plain;
+    }
+    // proposal-runtime-types #sec-vector-lane-wise-math: a Math function applies
+    // LANE-WISE to a vector argument, returning a vector of the argument's
+    // shape. Arguments of one shape apply at each lane, and a scalar beside a
+    // vector broadcasts.
+    //
+    // The exact functions - min, max, abs, sqrt, floor, ceil, round, trunc -
+    // give the scalar result for each lane. The approximated ones are
+    // approximated independently of their scalar forms, so a lane of
+    // `Math.sin(v)` need not equal `Math.sin(v.lane.<j>())`; this implementation
+    // computes lane-wise with the scalar function, which is one permitted
+    // answer among several.
+    const vectorArg = args.find((a) => a !== undefined && a.type === 'Vector') as VectorValue | undefined;
+    if (vectorArg !== undefined) {
+      const shape = vectorShape(vectorArg);
+      if (shape === null) {
+        return Throw.TypeError('$1 is not assignable to $2', vectorArg, Value('a vector'));
+      }
+      for (const arg of args) {
+        if (arg !== undefined && arg.type === 'Vector'
+            && !SameType((arg as VectorValue).TypeRecord as TypeRecord, vectorArg.TypeRecord as TypeRecord)) {
+          return Throw.TypeError('$1 is not assignable to $2', arg, Value(displayType(vectorArg.TypeRecord as TypeRecord)));
+        }
+      }
+      const lanes: Value[] = [];
+      for (let i = 0; i < shape.laneCount; i += 1) {
+        const laneArgs = args.map((a) => (a !== undefined && a.type === 'Vector'
+          ? (a as VectorValue).lanes[i] as Value
+          : a)) as Arguments;
+        let lane = steps.call(this, laneArgs, context);
+        if (isEvaluator(lane)) {
+          lane = yield* lane;
+        }
+        const laneValue = Q(EnsureCompletion(lane)) as Value;
+        lanes.push(Q(yield* CheckedConvertValue(laneValue, shape.laneType)) as Value);
+      }
+      return new VectorValue(lanes, vectorArg.TypeRecord);
     }
     // Every signature takes its numeric parameters at one type. Two typed
     // arguments of different types are viable at no signature.
