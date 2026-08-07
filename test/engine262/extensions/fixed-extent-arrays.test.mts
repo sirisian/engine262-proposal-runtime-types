@@ -23,6 +23,28 @@ test('a fixed-extent array cannot be grown', () => {
   expectThrownKind('const a = new [4].<float32>(); a.length = 9;', 'TypeError');
 });
 
+test('an out-of-bounds READ is a RangeError', () => {
+  // errorhandling.md: "an array access out of bounds is a `RangeError`, from the
+  // bounds checks the array sections describe". It returned *undefined* - the
+  // ordinary JavaScript answer for a missing property, and the wrong one for a
+  // value whose type says how many elements it has.
+  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[9];', 'RangeError');
+  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[4];', 'RangeError');
+  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[-1];', 'RangeError');
+  // A DYNAMIC extent is bounds-checked too: its length is what it is, even
+  // though it may grow.
+  expectThrownKind('const a: [].<float32> = [1, 2, 3]; a[9];', 'RangeError');
+
+  // A WRITE past a fixed extent stays a TypeError, because that is attempted
+  // GROWTH rather than an out-of-bounds access - the same rule as `push` and
+  // `length =` above, and the extent is part of the type.
+  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[7] = 1;', 'TypeError');
+
+  // A plain array keeps JavaScript's behaviour: nothing about it says what its
+  // length ought to be.
+  expect(evaluated('const a = [1, 2, 3]; String(a[9]);')).toBe('undefined');
+});
+
 test('everything within the extent still works', () => {
   expect(evaluated('const a: [4].<float32> = [1, 2, 3, 4]; a[2] = 9; String(a[2]);')).toBe('9');
   expect(evaluated('const a: [4].<float32> = [1, 2, 3, 4]; String(a.length);')).toBe('4');

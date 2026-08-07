@@ -982,6 +982,35 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         }
       }
     }
+    // proposal-runtime-types errorhandling.md: "an ARRAY ACCESS OUT OF BOUNDS is
+    // a `RangeError`, from the bounds checks the array sections describe", and
+    // README's Bounds Checks: "indexed access into a typed array is
+    // bounds-checked, as it is today".
+    //
+    // A read past the end returned *undefined* - the ordinary JavaScript answer
+    // for a missing property, and the wrong one for a value whose type says how
+    // many elements it has. A WRITE past a fixed extent is a separate rule and
+    // stays a TypeError: that is attempted GROWTH, and the extent is part of the
+    // type, which is why it sits beside `push` and `length =` rather than here.
+    //
+    // Only typed arrays. A plain array keeps JavaScript's behaviour, because
+    // nothing about it says what its length ought to be.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const typed = this as unknown as { TypedExtent?: number, TypedElement?: unknown };
+      if (typed.TypedElement !== undefined || typed.TypedExtent !== undefined) {
+        const text = P.stringValue();
+        const index = Number(text);
+        if (String(index) === text && Number.isInteger(index)) {
+          const lengthValue = Q(yield* OrdinaryGet(this, Value('length'), this));
+          const len = lengthValue instanceof NumberValue
+            ? R(lengthValue)
+            : (isTypedNumber(lengthValue) ? Number(lengthValue.numberValue()) : undefined);
+          if (typeof len === 'number' && (index < 0 || index >= len)) {
+            return Throw.RangeError('$1 is out of range for $2', P, Value('the array'));
+          }
+        }
+      }
+    }
     // proposal-runtime-types soa.md: a field read through a `ref` into an SoA is
     // "an indexed load from a column whose base offset is known at compile
     // time". The reference names a column set and an index, so the read is
