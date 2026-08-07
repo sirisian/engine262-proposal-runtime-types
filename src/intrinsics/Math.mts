@@ -676,6 +676,7 @@ function nextAfter(v: number, dir: number): number {
  * adjacent doubles either side of the true value, the true 1/sqrt(x) is below
  * their midpoint _m_ exactly when _m_^2 * x > 1, and that comparison is done in
  * rationals of BigInts.
+ * https://sirisian.github.io/ecmascript-types/#sec-numeric-library
  */
 function* Math_rsqrt([x = Value.undefined]: Arguments): ValueEvaluator {
   const n = Q(yield* ToNumber(x));
@@ -735,6 +736,7 @@ function correctlyRoundedRsqrt(v: number): number {
   return midN * midN * vf.n > midD * midD * vf.d ? below : c;
 }
 
+/** https://sirisian.github.io/ecmascript-types/#sec-numeric-library */
 function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefined]: Arguments): ValueEvaluator {
   const a = Q(yield* ToNumber(x));
   const b = Q(yield* ToNumber(y));
@@ -750,6 +752,7 @@ function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefine
   return F(fusedMultiplyAdd(R(a), R(b), R(c)));
 }
 
+/** https://tc39.es/ecma262/#sec-math.sqrt */
 function* Math_sqrt([x = Value.undefined]: Arguments): ValueEvaluator {
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0) || n.value === Infinity) return n;
@@ -1354,6 +1357,7 @@ function integerRange(t: TypeRecord & { Kind: 'primitive' }): { low: bigint, hig
  * Each takes its width from the operand's type, which is what makes it well
  * defined - a population count is over a type's bits - so like `clz` they have
  * no untyped signature.
+ * https://sirisian.github.io/ecmascript-types/#sec-integer-operations
  */
 function* Math_popcount([x = Value.undefined]: Arguments): ValueEvaluator {
   if (!isTypedNumber(x)) {
@@ -1374,6 +1378,7 @@ function* Math_popcount([x = Value.undefined]: Arguments): ValueEvaluator {
   return F(count);
 }
 
+/** https://sirisian.github.io/ecmascript-types/#sec-integer-operations */
 function* Math_mulHigh([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
   const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'mulHigh'));
   const width = integerWidth(o.t);
@@ -1384,6 +1389,7 @@ function* Math_mulHigh([x = Value.undefined, y = Value.undefined]: Arguments): V
   return new TypedNumberValue(Number(fitted), o.t);
 }
 
+/** https://sirisian.github.io/ecmascript-types/#sec-integer-operations */
 function* Math_average([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
   const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'average'));
   // Rounded away from zero, as `pavgb` and `urhadd` round, and summed in BigInt
@@ -1404,6 +1410,7 @@ function* Math_average([x = Value.undefined, y = Value.undefined]: Arguments): V
  * The bound is a relative error of at most 2**-12, which both instructions meet.
  * An implementation may return any value within it; this one returns the
  * correctly rounded result, which is within it trivially.
+ * https://sirisian.github.io/ecmascript-types/#sec-numeric-library
  */
 function* Math_rsqrtApprox([x = Value.undefined]: Arguments): ValueEvaluator {
   return yield* Math_rsqrt([x] as Arguments);
@@ -1487,7 +1494,13 @@ function withLaneWiseOnly(steps: NativeSteps): NativeSteps {
     }
     return plain;
   };
+  // Name AND specification section, as `withNumericLibrarySignatures` does. This
+  // copied only the name, so a function wrapped here lost the `section` the
+  // build's comment transform had emitted for it - which is why annotating
+  // `Math_rsqrtApprox`'s comment produced the assignment in the bundle and left
+  // the exposed function without one.
   Object.defineProperty(wrapped, 'name', { value: (steps as { name?: string }).name ?? 'wrapped', configurable: true });
+  wrapped.section = (steps as { section?: string }).section;
   return wrapped;
 }
 

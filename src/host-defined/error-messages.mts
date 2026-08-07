@@ -603,6 +603,7 @@ export interface Throw {
   | '$1 is not a range iterator'
   | '$1 is not a rational'
   | '$1 is not a rebindable ref binding'
+  | '$1 is not a ref binding'
   | '$1 is not a signature'
   | '$1 is not a string'
   | '$1 is not a supported calendar'
