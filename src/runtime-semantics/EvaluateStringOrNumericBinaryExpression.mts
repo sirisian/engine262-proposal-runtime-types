@@ -1,6 +1,6 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
-import { IsConstLiteralUse } from '../type-system/check.mts';
+import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
 import { GetValue } from '#self';
@@ -83,5 +83,9 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
   return Q(yield* ApplyStringOrNumericBinaryOperator(lval, opText, rval, {
     left: isNumericLiteralOperand(leftOperand as ParseNode),
     right: isNumericLiteralOperand(rightOperand as ParseNode),
+    // For the diagnostic only: a `let` bound to a numeric constant does not
+    // adopt, deliberately, but it is the one failure with a one-word fix.
+    leftLetConst: IsLetConstantUse(leftOperand as object),
+    rightLetConst: IsLetConstantUse(rightOperand as object),
   }));
 }

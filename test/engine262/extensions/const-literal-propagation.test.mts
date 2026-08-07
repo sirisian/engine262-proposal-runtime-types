@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../readme/harness.mts';
+import { evaluated, expectThrown, run } from '../readme/harness.mts';
 
 /**
  * A `const` bound to a compile-time numeric constant behaves as if its
@@ -46,6 +46,25 @@ test('F74: a `let` does not adopt, and shadowing is respected', () => {
   expectThrown('const K = 0.1; function g(K){ let a: float32 = 2.0; return K * a; } g(0.1);');
   // An inner `const` correctly still adopts.
   expect(evaluated('const K = 3.14; function g(){ const K = 0.1; let a: float32 = 2.0; return Number(K * a); } String(g());')).toBe('0.20000000298023224');
+});
+
+test('a `let` of a constant gets a diagnostic that carries the fix', () => {
+  // The failure is correct - a mutable binding's type must be fixed, or a
+  // reassignment has nothing to check against - but it is the one case here with
+  // a one-word fix, so the message says so rather than reporting an unexplained
+  // mismatch. It names the position's actual type, and fires on either side.
+  const msg = (src: string): string => {
+    const c = run(src) as { Type: string, Value?: { HostDefinedMessageString?: string } };
+    return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : 'no-throw';
+  };
+  expect(msg('let K = 3.14; let r: float64 = 2.0; K * r;')).toContain('declare it "const"');
+  expect(msg('let K = 3.14; let r: float64 = 2.0; K * r;')).toContain('"float64"');
+  expect(msg('let K = 3.14; let r: float64 = 2.0; r * K;')).toContain('declare it "const"');
+  expect(msg('let K = 0.1; let a: float32 = 2.0; K * a;')).toContain('"float32"');
+  // A `let` whose initializer is NOT a compile-time constant has no such fix,
+  // so it keeps the ordinary message.
+  expect(msg('function f(){ return 3.14; } let K = f(); let r: float64 = 2.0; K * r;')).toContain('do not mix');
+  expect(msg('function anyv(){ return 3.14; } let r: float64 = 2.0; anyv() * r;')).toContain('do not mix');
 });
 
 test('nothing observable about the binding changes', () => {

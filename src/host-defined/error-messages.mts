@@ -868,6 +868,7 @@ export interface Throw {
   | '$1 takes $2 type arguments; $3 expects one taking $4'
   | '$1-$2-$3 is not a valid date'
   | 'Duration($1, $2, $3, $4) is not a valid duration'
+  | "a $1 holds a $2 rather than taking this position's $3; declare it $4 if it is never reassigned, or annotate it"
   | 'option $1 does not accept value $2 (only $3 accepted)'
   , $1: Formattable, $2: Formattable, $3: Formattable): ThrowCompletion;
   // auto-generate end

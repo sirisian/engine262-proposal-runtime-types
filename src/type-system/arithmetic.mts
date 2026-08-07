@@ -182,7 +182,7 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * passes which side was written as a numeric literal, and a literal adopts the
  * other's type while any other untyped operand is a mix and throws.
  */
-export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean }): TypedNumberValue | ThrowCompletion {
+export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypedNumberValue | ThrowCompletion {
   const target = TypedOperandType(x, y, literals);
   if (target instanceof AbruptCompletion) {
     return target as ThrowCompletion;
@@ -249,7 +249,7 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
  * arithmetic ones, because it is the same rule and a second copy would drift
  * (F53).
  */
-export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean }): TypeRecord | ThrowCompletion {
+export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypeRecord | ThrowCompletion {
   const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
   const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
   // `bigint` is a numeric type like any other here, so a typed value does not
@@ -269,6 +269,15 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
   if (!xt || !yt) {
     const untypedIsLiteral = xt ? literals?.right : literals?.left;
     if (!untypedIsLiteral) {
+      // A `let` bound to a numeric constant is the one failure here with a
+      // one-word fix, so say it rather than reporting an unexplained mismatch.
+      // The binding does not adopt because a mutable one's type must be fixed -
+      // a reassignment would otherwise have nothing to check against - and
+      // `const` is the better spelling anyway for something never reassigned.
+      const untypedIsLetConst = xt ? literals?.rightLetConst : literals?.leftLetConst;
+      if (untypedIsLetConst) {
+        return Throw.TypeError('a $1 holds a $2 rather than taking this position\'s $3; declare it $4 if it is never reassigned, or annotate it', Value('let'), Value('number'), Value(displayType(target)), Value('const'));
+      }
       return Throw.TypeError('a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them', Value('number'), Value(displayType(target)));
     }
     const literalValue = payload(xt ? y : x);
