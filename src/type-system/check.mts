@@ -117,6 +117,19 @@ const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
  */
 const boundsProvenAccesses = new WeakMap<object, Set<object>>();
 
+/**
+ * Uses of a `const` bound to a compile-time numeric constant. The binary
+ * operator asks its OPERAND NODE whether it is a literal - `isNumericLiteralOperand`
+ * - and these answer yes, so `K * r` adopts `r`'s type exactly as `3.14 * r`
+ * does. Marked here because only the checker knows which binding a name
+ * resolves to; consulted at evaluation because that is where the value is made.
+ */
+const constLiteralUses = new WeakSet<object>();
+
+export function IsConstLiteralUse(node: object): boolean {
+  return constLiteralUses.has(node);
+}
+
 export function TakeBoundsProvenAccesses(root: object): ReadonlySet<object> {
   return boundsProvenAccesses.get(root) ?? new Set();
 }
@@ -3698,6 +3711,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // with the exclusive upper bound its range proves and whether the lower bound
   // is at least zero. A counter drawn from `0..<N` is in [0, N), which is what
   // makes an index into a `[N]` provable without any check.
+  // The `const` bindings whose initializer is a compile-time numeric constant,
+  // scoped like the frames beside them so a shadowing `let` does not inherit the
+  // treatment.
+  const constLiteralNames: Set<string>[] = [new Set()];
+
+  /**
+   * A compile-time numeric constant expression: a numeric literal, a sign
+   * applied to one, a parenthesized one, or an operator over two of them. The
+   * boundary is deliberately the SAME shape literal propagation already has, so
+   * `2 * 3.14` qualifies and `f()` does not - widening it would put the checker
+   * in the business of evaluating arbitrary code.
+   */
+  const isNumericConstantExpression = (expr: ParseNode | null | undefined): boolean => {
+    if (!expr) {
+      return false;
+    }
+    const e = expr as ParseNode & {
+      Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string,
+      AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+      ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, value?: unknown,
+    };
+    switch (e.type) {
+      case 'NumericLiteral':
+        return typeof e.value === 'number';
+      case 'ParenthesizedExpression':
+        return isNumericConstantExpression(e.Expression);
+      case 'UnaryExpression':
+        return (e.operator === '-' || e.operator === '+') && isNumericConstantExpression(e.UnaryExpression);
+      // The operands are named after the productions rather than left/right.
+      case 'AdditiveExpression':
+        return isNumericConstantExpression(e.AdditiveExpression)
+          && isNumericConstantExpression(e.MultiplicativeExpression);
+      case 'MultiplicativeExpression':
+        return isNumericConstantExpression(e.MultiplicativeExpression)
+          && isNumericConstantExpression(e.ExponentiationExpression);
+      case 'ExponentiationExpression':
+        return isNumericConstantExpression(e.UpdateExpression)
+          && isNumericConstantExpression(e.ExponentiationExpression);
+      default:
+        return false;
+    }
+  };
   const rangeCounters: { name: string, exclusiveEnd: number, nonNegative: boolean }[] = [];
   const provenHere = new Set<object>();
 
@@ -3761,6 +3816,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       walk(f.Statement);
       return;
+    }
+    if (!Array.isArray(node) && (node as ParseNode).type === 'IdentifierReference') {
+      const name = (node as unknown as { name?: string }).name;
+      if (typeof name === 'string') {
+        for (let i = constLiteralNames.length - 1; i >= 0; i -= 1) {
+          if (constLiteralNames[i].has(name)) {
+            constLiteralUses.add(node as object);
+            break;
+          }
+        }
+      }
     }
     // #sec-bounds-checks: a computed index into a fixed-length `[N].<T>` whose
     // key is a range counter proven below _N_.
@@ -4196,6 +4262,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (n.Initializer) {
             requireAssignable(staticTypeIn(n.Initializer, declared), declared);
             walk(n.Initializer);
+          }
+          // A `const` bound to a compile-time numeric constant behaves as if
+          // its initializer were written at each use: `const K = 3.14` used in
+          // a `float64` position is a `float64` and in a `float32` position a
+          // `float32`, which is what the literal `3.14` already does.
+          //
+          // Nothing about the BINDING changes - no type is inferred, `typeof K`
+          // is `'number'`, and `K === 3.14` holds. What changes is which value
+          // a USE produces, which is the same question literal propagation
+          // answers one site earlier.
+          //
+          // `let` is excluded: a mutable binding may be reassigned, so its type
+          // must be fixed or the reassignment has nothing to check against.
+          const isConstDeclaration = (n as ParseNode).type === 'LexicalBinding'
+            && (n as unknown as { parent?: { LetOrConst?: string } }).parent?.LetOrConst === 'const';
+          if (!n.TypeAnnotation && isConstDeclaration && n.Initializer
+              && isNumericConstantExpression(n.Initializer)) {
+            constLiteralNames[constLiteralNames.length - 1].add(n.BindingIdentifier.name);
           }
           declare(n.BindingIdentifier.name, declared);
           return;

@@ -1,5 +1,6 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
+import { IsConstLiteralUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
 import { GetValue } from '#self';
@@ -24,6 +25,12 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
     if (n.type === 'UnaryExpression' && ((n as { operator?: string }).operator === '-' || (n as { operator?: string }).operator === '+')) {
       n = (n as { UnaryExpression: ParseNode }).UnaryExpression;
       continue;
+    }
+    // A `const` bound to a compile-time numeric constant answers yes: its use
+    // behaves as if the initializer were written here, which is what makes
+    // `const K = 3.14; K * r` mean what `3.14 * r` means.
+    if (n.type === 'IdentifierReference' && IsConstLiteralUse(n as object)) {
+      return true;
     }
     return n.type === 'NumericLiteral';
   }
