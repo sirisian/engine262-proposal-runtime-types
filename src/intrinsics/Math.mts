@@ -1346,6 +1346,69 @@ function integerRange(t: TypeRecord & { Kind: 'primitive' }): { low: bigint, hig
  * do not. These have NO untyped signature: the forms exist for the integer types,
  * and a call with no typed operand names no type to work in.
  */
+/**
+ * proposal-runtime-types: the integer bit and widening operations, each one
+ * instruction on every target. `Math.clz` is already here; these are its
+ * neighbours.
+ *
+ * Each takes its width from the operand's type, which is what makes it well
+ * defined - a population count is over a type's bits - so like `clz` they have
+ * no untyped signature.
+ */
+function* Math_popcount([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (!isTypedNumber(x)) {
+    Q(yield* ToNumber(x));
+    return Throw.TypeError('$1 requires an argument of a sized integer type', Value('Math.popcount'));
+  }
+  const record = x.TypeRecord as TypeRecord;
+  if (record.Kind !== 'primitive' || !isIntegerTypeName(record.Name)) {
+    return Throw.TypeError('$1 has no signature taking a value of type $2', Value('Math.popcount'), Value(displayType(record)));
+  }
+  const width = integerWidth(record as TypeRecord & { Kind: 'primitive' });
+  let bits = BigInt.asUintN(width, BigInt(x.value));
+  let count = 0;
+  while (bits > 0n) {
+    count += Number(bits & 1n);
+    bits >>= 1n;
+  }
+  return F(count);
+}
+
+function* Math_mulHigh([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
+  const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'mulHigh'));
+  const width = integerWidth(o.t);
+  // The half of the product an ordinary multiply discards, which is what
+  // `pmulhw` and `smulh` return.
+  const high = (o.a * o.b) >> BigInt(width);
+  const fitted = o.t.Name === 'uint' ? BigInt.asUintN(width, high) : BigInt.asIntN(width, high);
+  return new TypedNumberValue(Number(fitted), o.t);
+}
+
+function* Math_average([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
+  const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'average'));
+  // Rounded away from zero, as `pavgb` and `urhadd` round, and summed in BigInt
+  // so the intermediate cannot overflow the operands' width - which is the
+  // reason to have the operation rather than write `(a + b) / 2`.
+  const sum = o.a + o.b;
+  const rounded = sum >= 0n ? (sum + 1n) / 2n : (sum - 1n) / 2n;
+  return new TypedNumberValue(Number(rounded), o.t);
+}
+
+/**
+ * proposal-runtime-types (operatoroverloading.md open question): an APPROXIMATE
+ * reciprocal square root, carrying the error bound the design asks for rather
+ * than "whatever the hardware does" - `rsqrtps` is a twelve-bit approximation
+ * and `frsqrte` an eight-bit one, so with no stated bound the same program
+ * answers differently per architecture.
+ *
+ * The bound is a relative error of at most 2**-12, which both instructions meet.
+ * An implementation may return any value within it; this one returns the
+ * correctly rounded result, which is within it trivially.
+ */
+function* Math_rsqrtApprox([x = Value.undefined]: Arguments): ValueEvaluator {
+  return yield* Math_rsqrt([x] as Arguments);
+}
+
 function* resolveIntegerOperands(args: Arguments, functionName: string): PlainEvaluator<{ t: TypeRecord & { Kind: 'primitive' }, a: bigint, b: bigint }> {
   let carried: (TypeRecord & { Kind: 'primitive' }) | undefined;
   for (const arg of args.slice(0, 2)) {
@@ -1407,6 +1470,27 @@ function settleInteger(exact: bigint, t: TypeRecord & { Kind: 'primitive' }, mod
  * so `Math.addSaturating` over a `uint8x16` was refused while the scalar form
  * worked.
  */
+/**
+ * Lane-wise dispatch WITHOUT the numeric-library signature resolution. The
+ * operations below compute something the signature rows do not describe - a
+ * population count is not one of the integer rows - so they carry their own
+ * typed handling and need only the vector half from here.
+ */
+function withLaneWiseOnly(steps: NativeSteps): NativeSteps {
+  const wrapped: NativeSteps = function* withLaneWiseOnly(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext) {
+    if (surroundingAgent.feature('runtime-types') && args.some((a) => a !== undefined && a.type === 'Vector')) {
+      return Q(yield* applyLaneWise(this, steps, args, context));
+    }
+    let plain = steps.call(this, args, context);
+    if (isEvaluator(plain)) {
+      plain = yield* plain;
+    }
+    return plain;
+  };
+  Object.defineProperty(wrapped, 'name', { value: (steps as { name?: string }).name ?? 'wrapped', configurable: true });
+  return wrapped;
+}
+
 function* applyLaneWise(thisValue: ThisParameterType<NativeSteps>, steps: NativeSteps, args: Arguments, context: FunctionCallContext): ValueEvaluator {
   const vectorArg = args.find((a) => a !== undefined && a.type === 'Vector') as VectorValue | undefined;
   if (vectorArg === undefined) {
@@ -1598,6 +1682,10 @@ export function bootstrapMath(realmRec: Realm) {
     ['sinh', withNumericLibrarySignatures(Math_sinh, 'sinh'), 1],
     ['fma', withNumericLibrarySignatures(Math_fma, 'fma'), 3],
     ['rsqrt', withNumericLibrarySignatures(Math_rsqrt, 'rsqrt'), 1],
+    ['rsqrtApprox', withLaneWiseOnly(Math_rsqrtApprox), 1],
+    ['popcount', withLaneWiseOnly(Math_popcount), 1],
+    ['mulHigh', withLaneWiseOnly(Math_mulHigh), 2],
+    ['average', withLaneWiseOnly(Math_average), 2],
     ['sqrt', withNumericLibrarySignatures(Math_sqrt, 'sqrt'), 1],
     ['sumPrecise', withNumericLibrarySignatures(Math_sumPrecise, 'sumPrecise'), 1],
     ['tan', withNumericLibrarySignatures(Math_tan, 'tan'), 1],

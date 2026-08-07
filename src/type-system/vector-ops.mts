@@ -126,6 +126,31 @@ export function* vectorGet(v: VectorValue, key: PropertyKeyValue): PlainEvaluato
       }, 2, Value('select'), []) as Value;
     }
 
+    // proposal-runtime-types: the dot product, a REDUCTION over two vectors, so
+    // it belongs on the vector as `sum` does rather than on Math beside the
+    // lane-wise functions. `vdpps` on x86-64, an `fmla` chain on AArch64,
+    // `i32x4.dot_i16x8_s` in WASM.
+    if (name === 'dot') {
+      return CreateBuiltinFunction(function* dotLanes([other = Value.undefined]: Arguments): ValueEvaluator {
+        if (other.type !== 'Vector'
+            || !SameType((other as VectorValue).TypeRecord as TypeRecord, v.TypeRecord as TypeRecord)) {
+          return Throw.TypeError('$1 is not assignable to $2', other, Value(displayType(v.TypeRecord as TypeRecord)));
+        }
+        let total: Value | undefined;
+        for (let i = 0; i < v.lanes.length; i += 1) {
+          const product = Q(yield* ApplyStringOrNumericBinaryOperator(
+            v.lanes[i] as Value, '*', (other as VectorValue).lanes[i] as Value,
+          )) as Value;
+          if (total === undefined) {
+            total = product;
+          } else {
+            total = Q(yield* ApplyStringOrNumericBinaryOperator(total, '+', product)) as Value;
+          }
+        }
+        return total ?? Value(0);
+      }, 1, Value('dot'), []) as Value;
+    }
+
     if (name === 'sum') {
       return CreateBuiltinFunction(function* sumLanes(): ValueEvaluator {
         // `Q` is a macro and may not appear inside a conditional expression, so

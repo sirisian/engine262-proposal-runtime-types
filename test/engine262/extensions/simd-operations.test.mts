@@ -445,3 +445,51 @@ test('Math.rsqrt at the boundary values', () => {
   // and the vector half comes from the lane-wise dispatch
   expect(evaluated('String(Math.rsqrt(float32x4(4, 16, 64, 256)).x);')).toBe('0.5');
 });
+
+// -- phase 8d: the remaining integer and reduction operations ------------------
+/**
+ * Each is one instruction on every target and each was absent. `Math.clz` was
+ * already here and specified; these are its neighbours, and like it they take
+ * their width from the operand's type and so have no untyped signature.
+ */
+test('the integer bit and widening operations', () => {
+  expect(evaluated('String(Math.popcount((7 := uint8)));')).toBe('3');
+  expect(evaluated('String(Math.popcount((255 := uint8)));')).toBe('8');
+  // a signed value counts the bits of its two's-complement representation
+  expect(evaluated('String(Math.popcount((-1 := int8)));')).toBe('8');
+  // the width is the whole of its meaning, so a plain Number has no signature
+  expectThrown('Math.popcount(7);');
+  // the half of the product an ordinary multiply discards
+  expect(evaluated('String(Math.mulHigh((65535 := uint16), (65535 := uint16)));')).toBe('65534');
+  expect(evaluated('String(Math.mulHigh((-32768 := int16), (2 := int16)));')).toBe('-1');
+  // rounded away from zero, as pavgb rounds, and summed without overflowing
+  expect(evaluated('String(Math.average((255 := uint8), (255 := uint8)));')).toBe('255');
+  expect(evaluated('String(Math.average((1 := uint8), (2 := uint8)));')).toBe('2');
+});
+
+test('the integer operations apply lane-wise too', () => {
+  expect(evaluated('String(Math.popcount(uint8x16(7, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)).lane.<0>());')).toBe('3');
+  expect(evaluated('String(Math.mulHigh(uint16x8(65535, 1, 1, 1, 1, 1, 1, 1),'
+    + ' uint16x8(65535, 1, 1, 1, 1, 1, 1, 1)).lane.<0>());')).toBe('65534');
+  expect(evaluated('String(Math.average(uint8x16(255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),'
+    + ' uint8x16(255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)).lane.<0>());')).toBe('255');
+});
+
+test('the dot product is a reduction over two vectors', () => {
+  // a reduction, so it belongs on the vector as `sum` does rather than on Math
+  expect(evaluated('String(float32x4(1, 2, 3, 4).dot(float32x4(1, 1, 1, 1)));')).toBe('10');
+  expect(evaluated('String(int32x4(1, 2, 3, 4).dot(int32x4(2, 2, 2, 2)));')).toBe('20');
+  expectThrown('float32x4(1, 2, 3, 4).dot(float64x2(1, 1));');
+  expect(evaluated('String(float32x4(1, 2, 3, 4).sum());')).toBe('10');
+});
+
+test('the approximate reciprocal square root carries a stated bound', () => {
+  // the design asked for "a named intrinsic and a specified error bound": the
+  // bound is a relative error of at most 2**-12, which rsqrtps and frsqrte both
+  // meet. Any value within it conforms; this implementation returns the
+  // correctly rounded one, which is within it trivially.
+  expect(evaluated('String(Math.rsqrtApprox(4));')).toBe('0.5');
+  expect(evaluated('const r = Math.rsqrtApprox(2);'
+    + ' String(Math.abs(r - Math.rsqrt(2)) / Math.rsqrt(2) <= Math.pow(2, -12));')).toBe('true');
+  expect(evaluated('String(Math.rsqrtApprox(float32x4(4, 16, 64, 256)).x);')).toBe('0.5');
+});
