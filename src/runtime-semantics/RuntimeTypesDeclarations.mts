@@ -256,19 +256,21 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   // ENUMERATORS run first and the enum's own decorators last - the same rule a
   // class and its fields follow, applied to a third container kind.
   if (surroundingAgent.feature('runtime-types') && node.type === 'EnumDeclaration') {
-    for (const member of node.EnumMemberList ?? []) {
+    const members = node.EnumMemberList ?? [];
+    for (let index = 0; index < members.length; index += 1) {
+      const member = members[index];
       const decorators = (member as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
       if (!decorators?.length) {
         continue;
       }
       const memberName = (member as { IdentifierName?: { name?: string } }).IdentifierName?.name;
       Q(yield* ApplyDecorators(decorators, Q(yield* EnumDecoratorContext(
-        'EnumEnumerator', typeof memberName === 'string' ? Value(memberName) : Value.undefined, value,
+        'EnumEnumerator', typeof memberName === 'string' ? Value(memberName) : Value.undefined, value, { index },
       ))));
     }
     const own = (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
     if (own?.length) {
-      Q(yield* ApplyDecorators(own, Q(yield* EnumDecoratorContext('Enum', name, value))));
+      Q(yield* ApplyDecorators(own, Q(yield* EnumDecoratorContext('Enum', name, value, { size: members.length }))));
     }
   }
 
@@ -1240,13 +1242,28 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
 }
 
 /** decorators.md's `EnumReflection` and `EnumEnumeratorReflection`. */
-export function* EnumDecoratorContext(kind: string, name: Value, target: Value): ValueEvaluator {
+export function* EnumDecoratorContext(kind: string, name: Value, target: Value, extra?: { size?: number, index?: number, valueType?: Value }): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
   X(CreateDataProperty(context, Value('name'), name));
-  X(CreateDataProperty(context, Value('type'), target));
+  // proposal-runtime-types #sec-reflection-shape-enum. An Enum reflection
+  // reports the enum's `type`, the `valueType` its enumerators take their
+  // values in, and its `size`. An ENUMERATOR reports its `value` and its
+  // `index` and NO type - the type is the enum's, and repeating it per member
+  // would be the same Type Object once per enumerator.
+  if (kind === 'Enum') {
+    X(CreateDataProperty(context, Value('type'), target));
+    X(CreateDataProperty(context, Value('valueType'), extra?.valueType ?? Value.undefined));
+    X(CreateDataProperty(context, Value('size'), extra?.size === undefined ? Value.undefined : Value(extra.size)));
+  } else {
+    const memberValue = name === Value.undefined ? Value.undefined : Q(yield* Get(target as ObjectValue, name as never));
+    X(CreateDataProperty(context, Value('value'), memberValue));
+    // Declaration order, which is not the value wherever a program assigns
+    // values explicitly.
+    X(CreateDataProperty(context, Value('index'), extra?.index === undefined ? Value.undefined : Value(extra.index)));
+  }
   // The enum's own metadata under the empty member, an enumerator's under its
   // name - so `@f enum E { @g A }` gives two objects rather than one shared.
   const memberName = kind === 'Enum' ? '' : (name instanceof JSStringValueClass ? name.stringValue() : kind);

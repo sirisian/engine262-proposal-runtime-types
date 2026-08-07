@@ -169,3 +169,20 @@ test('a loop block context carries its head clauses', () => {
   // A clause the head omits reads undefined rather than being absent.
   expect(evaluated(`${grab} for (let i = 0; i < 1;) @f { i++; } String(c.update);`)).toBe('undefined');
 });
+
+test('an enum reports its size, and an enumerator its value and index', () => {
+  // proposal-runtime-types #sec-reflection-shape-enum. The Enum context carried
+  // only name, type, and metadata, and the enumerator carried a `type` that was
+  // the enum's Type Object repeated once per member. An enumerator reflection
+  // that cannot report its value has lost its subject.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} @f enum E { A, B, C } String(c.size);`)).toBe('3');
+  expect(evaluated(`${grab} @f enum E { A } String(c.name);`)).toBe('E');
+  expect(evaluated(`${grab} enum E { A, @f B } String(c.index);`)).toBe('1');
+  expect(evaluated(`${grab} enum E { A, @f B } String(c.value);`)).toBe('1');
+  // `index` is DECLARATION ORDER, which is not the value where a program
+  // assigns values explicitly.
+  expect(evaluated(`${grab} enum E { A = 10, @f B = 20 } String(c.index) + '/' + String(c.value);`)).toBe('1/20');
+  // No `type` on an enumerator: it is the enum's, reached through the enum.
+  expect(evaluated(`${grab} enum E { @f A } String(Object.getOwnPropertyNames(c).includes('type'));`)).toBe('false');
+});
