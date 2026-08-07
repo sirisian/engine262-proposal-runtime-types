@@ -786,6 +786,43 @@ test('ranges.md: a helper that must consume every value refuses a range with no 
   expect(evaluated('(0..<4).toArray().join(",") + "/" + String((1..=4).reduce((a, b) => a + b, 0));')).toBe('0,1,2,3/10');
 });
 
+test('ranges.md: a range helper answers exactly as the iterator it delegates to', () => {
+  // The claim delegation actually makes. Testing that `filter` filters would
+  // pass for a reimplementation; testing that it agrees with
+  // `Iterator.from(r).filter` is what pins it to the built-in.
+  const same = (helper) => `const r = 0..<6; String(r.${helper} === Iterator.from(r).${helper});`;
+  expect(evaluated(same('filter(v => v % 2 === 0).toArray().join(",")'))).toBe('true');
+  expect(evaluated(same('map(v => v * 3).toArray().join(",")'))).toBe('true');
+  expect(evaluated(same('flatMap(v => [v]).toArray().join(",")'))).toBe('true');
+  expect(evaluated(same('reduce((a, b) => a + b, 0)'))).toBe('true');
+  expect(evaluated(same('toArray().join(",")'))).toBe('true');
+  expect(evaluated(same('some(v => v === 3)'))).toBe('true');
+  expect(evaluated(same('every(v => v < 6)'))).toBe('true');
+  expect(evaluated(same('find(v => v > 3)'))).toBe('true');
+  // `reduce` carries both overloads, so the no-initial form comes along.
+  expect(evaluated('String((1..=4).reduce((a, b) => a + b));')).toBe('10');
+  // The callback's second argument is the ITERATION index, not the value - the
+  // one iterable where a reader might expect them to coincide.
+  expect(evaluated('(10..<13).map((v, i) => v + ":" + i).toArray().join(",");')).toBe('10:0,11:1,12:2');
+  // A helper is a range method, so it refuses a receiver that is not one.
+  expectThrown('Range.prototype.map.call(5, v => v);');
+});
+
+test('ranges.md: helper chains compose, and keep the element type', () => {
+  // `map` changes the element type and the chain carries it with no annotation
+  // at any step - the type comes from the range literal (R2b) and flows.
+  expect(evaluated('const a = (0..<3).map(v => String(v)).toArray(); String(a.length) + "/" + a.join("");')).toBe('3/012');
+  // Leaving the family and staying in it compose in either order.
+  expect(evaluated('(0..<10).filter(v => v % 2 === 0).map(v => v * 10).take(2).toArray().join(",");')).toBe('0,20');
+  expect(evaluated('(0..<10).take(5).drop(2).toArray().join(",");')).toBe('2,3,4');
+  expect(evaluated('(0..<10).drop(2).take(3).toArray().join(",");')).toBe('2,3,4');
+  // An open start and a bigint element type both flow through unchanged.
+  expect(evaluated('(0<..<5).map(v => v * 2).toArray().join(",");')).toBe('2,4,6,8');
+  expect(evaluated('(0n..<5n).filter(v => v % 2n === 0n).toArray().join(",");')).toBe('0,2,4');
+  // `find` answers undefined where nothing matches, as it does on an iterator.
+  expect(evaluated('String((0..<3).find(v => v > 9));')).toBe('undefined');
+});
+
 // =============================================================================
 // sec-matchrange
 // =============================================================================
