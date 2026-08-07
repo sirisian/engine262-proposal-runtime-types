@@ -1803,11 +1803,28 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
       continue;
     }
     const name = Value(sb.BindingIdentifier.name);
-    const has = Q(yield* env.HasBinding(name));
-    if (has === Value.false) {
+    // A NON-SIMPLE parameter list - one with a default, a rest element, or a
+    // destructuring pattern - binds its parameters in a separate parameter
+    // environment, and FunctionDeclarationInstantiation then makes the
+    // VariableEnvironment a NEW record whose outer is that one. An environment
+    // record's HasBinding is not recursive, so asking the variable environment
+    // found nothing and every parameter of such a function was skipped
+    // SILENTLY: `f(0.1)` converted for `f(x: float32)` and did not for
+    // `f(x: float32 = 0.1)`, and the same held for rest and pattern parameters.
+    //
+    // So walk outward for the record that actually holds the binding, which is
+    // the variable environment itself when the list is simple.
+    let holder: typeof env | undefined = env;
+    while (holder) {
+      if (Q(yield* holder.HasBinding(name)) === Value.true) {
+        break;
+      }
+      holder = (holder as unknown as { OuterEnv?: typeof env }).OuterEnv;
+    }
+    if (!holder) {
       continue;
     }
-    const current = Q(yield* env.GetBindingValue(name, Value.true));
+    const current = Q(yield* holder.GetBindingValue(name, Value.true));
     // proposal-runtime-types: an optional parameter whose argument was omitted
     // holds undefined and is not checked against its type (README "Optional
     // Parameters": `function f(a: uint32, b?: uint32)` may be called `f(1)`). A
@@ -1816,7 +1833,7 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
       continue;
     }
     const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current));
-    Q(yield* env.SetMutableBinding(name, converted, Value.false));
+    Q(yield* holder.SetMutableBinding(name, converted, Value.false));
   }
   return undefined;
 }
