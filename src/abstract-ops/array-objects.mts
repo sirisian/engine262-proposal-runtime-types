@@ -152,6 +152,14 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (newLen !== numberLen) {
     return Throw.RangeError('Array length must be uint32.');
   }
+  // proposal-runtime-types #sec-array-and-tuple-types: the length of a
+  // FIXED-extent array is its type's extent, so assigning another is refused.
+  // The store check above bounds the elements; this bounds the length itself,
+  // which `push` and a direct `a.length = n` both reach.
+  const extent = (array as { TypedExtent?: number }).TypedExtent;
+  if (extent !== undefined && newLen !== extent) {
+    return Throw.TypeError('a fixed-extent array cannot be grown');
+  }
   newLenDesc = Descriptor({ ...Desc, Value: F(newLen) });
   const oldLenDesc = OrdinaryGetOwnProperty(array, Value('length'));
   Assert(!(oldLenDesc instanceof UndefinedValue));

@@ -206,6 +206,9 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      if (t.Extent !== 'dynamic') {
+        (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
+      }
     }
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
@@ -511,6 +514,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      if (t.Extent !== 'dynamic') {
+        (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
+      }
     }
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
@@ -733,7 +739,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // converted once at the boundary and every later store went unchecked,
         // so a `[].<uint8>` accepted a string and degraded to plain Numbers as
         // it was written to (F49, F51).
+        // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
+        // part of the type, so the array carries it as it carries the element
+        // type. Without it the extent was dropped at the boundary and nothing
+        // enforced it afterwards: a `[4].<float32>` accepted `push`, a `length`
+        // assignment, and a store past the end, growing a type whose extent the
+        // layout rules and the array views both treat as a compile-time
+        // constant.
         (out as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+        if (t.Extent !== 'dynamic') {
+          (out as { TypedExtent?: number }).TypedExtent = t.Extent as number;
+        }
         return out;
       }
     }

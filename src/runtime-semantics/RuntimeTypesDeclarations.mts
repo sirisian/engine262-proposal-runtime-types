@@ -1025,6 +1025,13 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
       }
     }
     array.TypedElement = element;
+    // #sec-array-and-tuple-types: a fixed extent is part of the type, so a
+    // constructed array carries it exactly as a converted one does - otherwise
+    // `new [4].<float32>()` could be grown where `const a: [4].<float32>`
+    // could not, and the same type would have two behaviours.
+    if (extent !== 'dynamic') {
+      (array as { TypedExtent?: number }).TypedExtent = extent;
+    }
     // A subclass constructs through here with itself as NewTarget, so the
     // instance takes the subclass prototype and its methods.
     const proto = Q(yield* GetPrototypeFromConstructor(NewTarget as never, '%Array.prototype%'));

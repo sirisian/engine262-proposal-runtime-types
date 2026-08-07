@@ -1080,8 +1080,17 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         // is invalidated at its next use, which is what a packed backing store
         // requires and what a program must not be able to depend on the absence
         // of.
-        const typed = Receiver as { TypedCapacity?: number, TypedGeneration?: number };
+        const typed = Receiver as { TypedCapacity?: number, TypedGeneration?: number, TypedExtent?: number };
         const index = Number((P as JSStringValue).stringValue());
+        // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
+        // part of the type and does not move. A store past the end would grow
+        // the array, and the extent is a compile-time constant that the layout
+        // rules and the array views both compute from - `byteElementLength`
+        // defaults from it and a view's size check is stated in terms of it -
+        // so an extent a store could change is not a constant at all.
+        if (typed.TypedExtent !== undefined && index >= typed.TypedExtent) {
+          return Throw.TypeError('a fixed-extent array cannot be grown');
+        }
         const capacity = typed.TypedCapacity ?? 0;
         if (index >= capacity) {
           typed.TypedCapacity = Math.max(index + 1, capacity * 2, 4);
