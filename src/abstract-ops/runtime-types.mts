@@ -1,7 +1,7 @@
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
-import { GetTypeObject } from '../type-system/intern.mts';
+import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -353,6 +353,26 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
  * numeric conversion which would wrap, truncate, or round to an infinity throws
  * (a RangeError in the spec) rather than discarding information.
  */
+/**
+ * proposal-runtime-types #sec-type-annotations: "the ELEMENT TYPE of a rest is
+ * the [[Element]] of an ~array~ type and the union of the [[Type]] fields of a
+ * ~tuple~ type's elements". A rest's own [[Type]] is the type of what it
+ * COLLECTS, so converting a position against it compared one value to the whole
+ * collection.
+ */
+function restElementType(collected: TypeRecord): TypeRecord {
+  if (collected.Kind === 'array') {
+    return collected.Element;
+  }
+  if (collected.Kind === 'tuple') {
+    const members = collected.Elements.map((e) => e.Type);
+    return members.length === 1
+      ? members[0]!
+      : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord);
+  }
+  return collected;
+}
+
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // proposal-runtime-types #sec-threading-shared-modifier: "The modifier is
   // therefore not observable in the value; it is observable in where the value is
@@ -702,6 +722,42 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // has both. Returning the value directly skipped every one of them - six
     // tests across five files caught it, which is what those tests are for.
     return Q(yield* requireMembership(value, t));
+  }
+  // proposal-runtime-types #sec-array-and-tuple-types: a plain array in a TUPLE
+  // position converts POSITION-WISE, as one in an array position converts
+  // element-wise. Only the array form converted, so a tuple of value types
+  // could not be written from a literal at all - `const a: [uint8] = [1]` was
+  // refused where `const a: [1].<uint8> = [1]` was accepted, and the design's
+  // "a tuple of value types is itself a value type laid out contiguously" had
+  // no way to be built.
+  //
+  // A boundary converts everywhere in this proposal except a `ref` binding,
+  // which checks and never converts because converting a borrow would rewrite
+  // the caller's storage. A tuple literal builds a NEW array, so there is no
+  // aliased storage to protect and the array rule applies unchanged.
+  if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+    const lenValue = Q(yield* Get(value, Value('length')));
+    const len = R(Q(yield* ToNumber(lenValue))) as number;
+    const elements = t.Elements;
+    const rest = elements.find((e) => e.Rest);
+    const fixedCount = elements.filter((e) => !e.Rest).length;
+    // Without a rest the length is the position count; with one the fixed
+    // positions are the floor.
+    if (rest === undefined ? len !== fixedCount : len < fixedCount) {
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    }
+    const out = X(ArrayCreate(len));
+    for (let i = 0; i < len; i += 1) {
+      // A position past the declared ones belongs to the rest, whose [[Type]]
+      // is the type of what it collects.
+      const declared = i < elements.length && !elements[i]!.Rest
+        ? elements[i]!.Type
+        : (rest !== undefined ? restElementType(rest.Type) : undefined);
+      const el = Q(yield* Get(value, Value(String(i))));
+      const converted = declared === undefined ? el : Q(yield* CheckedConvertValue(el, declared));
+      X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
+    }
+    return out;
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
