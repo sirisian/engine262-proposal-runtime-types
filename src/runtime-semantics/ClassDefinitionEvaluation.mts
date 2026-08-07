@@ -2177,7 +2177,7 @@ function DeclaredConstantOf(init: { type?: string, value?: unknown } | null | un
  * and its return - which is what decorators.md's `type` field on those contexts
  * holds. *undefined* where the declaration annotates nothing.
  */
-function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeRecord | undefined> {
+export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeRecord | undefined> {
   const n = node as {
     UniqueFormalParameters?: readonly ParseNode[] | null,
     PropertySetParameterList?: readonly ParseNode[] | null,

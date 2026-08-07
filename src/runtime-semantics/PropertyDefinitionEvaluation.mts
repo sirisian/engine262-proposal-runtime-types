@@ -9,6 +9,8 @@ import {
 } from '../static-semantics/all.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
+import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
+import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import {
   Q, X,
@@ -65,7 +67,7 @@ function* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition: Pa
     // written for the undecorated-owner case can find.
     Q(yield* ApplySubTargetDecorators(PropertyDefinition as never, kind, name, object as Value));
     if (decorators?.length) {
-      const replacement = Q(yield* ApplyDecorators(decorators, Q(yield* ObjectMemberDecoratorContext(kind, name, object as Value)), true));
+      const replacement = Q(yield* ApplyDecorators(decorators, Q(yield* ObjectMemberDecoratorContext(kind, name, object as Value, PropertyDefinition as never)), true));
       // The table gives ObjectMethod, ObjectGetter and ObjectSetter a
       // replacement and gives ObjectField none - "the field's initial value" is
       // a CLASS row, and an object literal's field is already its value, so
@@ -116,7 +118,7 @@ function objectMemberName(node: ParseNode): Value {
 }
 
 /** decorators.md's `ObjectFieldReflection` and its siblings. */
-export function* ObjectMemberDecoratorContext(kind: string, name: Value, target: Value): ValueEvaluator {
+export function* ObjectMemberDecoratorContext(kind: string, name: Value, target: Value, node?: ParseNode): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
@@ -138,6 +140,31 @@ export function* ObjectMemberDecoratorContext(kind: string, name: Value, target:
   // not. It read *undefined* in every position anyway.
   if (kind !== 'Object') {
     X(CreateDataProperty(context, Value('name'), name));
+  }
+  // proposal-runtime-types #sec-reflection-shape-object: every member of this
+  // family reports its `type` - the annotation for a field, the FUNCTION type
+  // for a method, getter, or setter, which is how the Class family reads the
+  // same two shapes. The builder took no node, so five of the family's nine
+  // contexts answered nothing about what they hold. A member that annotates
+  // nothing still reports nothing, rather than a type of all-`any`.
+  if (node && kind !== 'Object') {
+    let memberType;
+    if (kind === 'ObjectField') {
+      const annotation = (node as { TypeAnnotation?: { Type?: ParseNode } }).TypeAnnotation;
+      if (annotation?.Type) {
+        const resolved = Q(yield* TypeNodeToTypeRecord(annotation.Type as never));
+        memberType = resolved;
+      }
+    } else {
+      memberType = Q(yield* MemberFunctionTypeRecord(node));
+    }
+    if (memberType) {
+      X(CreateDataProperty(context, Value('type'), GetTypeObject(memberType, realm) as Value));
+    }
+  }
+  if (kind === 'ObjectMethod' && node) {
+    const one = Q(yield* FunctionSignatureReflectionOf(node, realm));
+    X(CreateDataProperty(context, Value('signatures'), X(CreateArrayFromList([one]))));
   }
   // "For objects the metadata is on the INSTANCE", so an object member's
   // context points at the object rather than at a constructor.

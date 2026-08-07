@@ -213,3 +213,17 @@ test('an Object reflection has no name, and a setter parameter no index', () => 
   expect(evaluated(`${grab} class A { set v(@f x: uint8) {} } String(Object.getOwnPropertyNames(c).includes('index'));`)).toBe('false');
   expect(evaluated(`${grab} class A { m(@f x: uint8) {} } String(c.index);`)).toBe('0');
 });
+
+test('an object method, getter, and setter report their type', () => {
+  // proposal-runtime-types #sec-reflection-shape-object: the family mirrors the
+  // Class family member for member, and five of its nine contexts answered
+  // nothing about what they hold - the builder took no declaration node, so it
+  // could not read the annotation the Class family reads for the same shapes.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} const o = { @f m(x: uint8): uint8 { return x; } }; String(typeof c.type);`)).toBe('object');
+  expect(evaluated(`${grab} const o = { @f get v(): uint8 { return 1; } }; String(typeof c.type);`)).toBe('object');
+  expect(evaluated(`${grab} const o = { @f set v(x: uint8) {} }; String(typeof c.type);`)).toBe('object');
+  // An ObjectMethod reports its signatures, as a class method does.
+  expect(evaluated(`${grab} const o = { @f m(x: uint8): uint8 { return x; } }; String(c.signatures.length);`)).toBe('1');
+  expect(evaluated(`${grab} const o = { @f m(x: uint8): uint8 { return x; } }; String(c.signatures[0].parameters.length);`)).toBe('1');
+});
