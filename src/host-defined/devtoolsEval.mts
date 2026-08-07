@@ -9,7 +9,7 @@ import {
   EvalDeclarationInstantiation,
   Evaluate,
   ExecutionContext,
-  FunctionEnvironmentRecord, GetThisEnvironment, IsStrict, ManagedRealm, NewPromiseCapability, NormalCompletion, surroundingAgent, Throw, ThrowCompletion, X, Value, wrappedParse, type PlainCompletion, type ValueCompletion, type ValueEvaluator,
+  FunctionEnvironmentRecord, GetThisEnvironment, IsStrict, ManagedRealm, NewPromiseCapability, NormalCompletion, surroundingAgent, Throw, ThrowCompletion, X, Value, setNodeParent, wrappedParse, type PlainCompletion, type ValueCompletion, type ValueEvaluator,
 } from '#self';
 
 const cascadeStack = new WeakMap<EnvironmentRecord, EnvironmentRecord>();
@@ -94,6 +94,14 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
     }
     return Value.undefined;
   }
+  // proposal-runtime-types: link the parse tree's parent pointers, as ParseScript
+  // and ParseModule do. Several rules read a node's enclosing declaration - the
+  // class heritage deferral asks the ClassTail for its declaration's type
+  // parameters - and without the links they find nothing, so a generic class
+  // whose heritage reads a parameter, `class G<W: uint32> extends [W].<uint8>`,
+  // evaluated that heritage as if it were not generic and reported that `W` was
+  // not defined. It worked in a script and failed only in the console.
+  setNodeParent(script, undefined);
   const body = script.ScriptBody;
   if (inClassFieldInitializer && ContainsArguments(body)) {
     return Throw.SyntaxError('arguments cannot be referenced in a class field initializer');
