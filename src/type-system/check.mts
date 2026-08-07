@@ -121,6 +121,19 @@ export function TakeBoundsProvenAccesses(root: object): ReadonlySet<object> {
   return boundsProvenAccesses.get(root) ?? new Set();
 }
 
+/**
+ * TEST HOOK. The count from the most recent check, because the proof is
+ * otherwise unreachable: eliding a check that would have PASSED is
+ * unobservable, and the set is keyed on a root a script cannot name. Without
+ * this the analysis could only be verified by temporary instrumentation, which
+ * verifies it once rather than keeping it verified.
+ */
+let lastBoundsProvenCount = 0;
+
+export function BoundsProvenCountForLastCheck(): number {
+  return lastBoundsProvenCount;
+}
+
 export function TakeNarrowingRequests(root: object): readonly NarrowingRequest[] {
   return narrowingRequests.get(root) ?? [];
 }
@@ -4562,6 +4575,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // built from, which is also what keeps a third walk from ever looking needed.
   if (!narrowingResolutions.has(root)) {
     boundsProvenAccesses.set(root, provenHere);
+  lastBoundsProvenCount = provenHere.size;
   narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);

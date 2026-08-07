@@ -3,6 +3,9 @@ export * from './execution-context/all.mts';
 export * from './static-semantics/all.mts';
 export * from './runtime-semantics/all.mts';
 export * from './value.mts';
+// Test hook for the bounds proof (sec-bounds-checks), which is otherwise
+// unreachable: the elision is unobservable and the set is keyed on a root.
+export { BoundsProvenCountForLastCheck } from './type-system/check.mts';
 export * from './host-defined/engine.mts';
 export { runSingleJobInQueue, type JobQueue, BasicJobQueue } from './host-defined/job-queue.mts';
 export { ThreadCluster, runJobOn } from './host-defined/thread-cluster.mts';
