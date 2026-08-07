@@ -10,6 +10,10 @@ import type { ParseNode } from './ParseNode.mts';
 import { type Locatable } from './Lexer.mts';
 
 export abstract class IdentifierParser extends BaseParser {
+  // Supplied by TypeParser further down the chain; declared here so a function
+  // declaration can take the  clauses #sec-function-declarations gives it.
+  protected abstract parseWhereClauses(): ParseNode.WhereClause[];
+
   // IdentifierName
   parseIdentifierName() {
     const node = this.startNode<ParseNode.IdentifierName>();

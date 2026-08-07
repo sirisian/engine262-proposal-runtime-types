@@ -1,7 +1,7 @@
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
-import { functionTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { functionTypeParameters, functionWhereClauses } from '../abstract-ops/runtime-types.mts';
 import { vectorConstantLane } from '../type-system/vector-ops.mts';
 import { VectorValue } from '../value.mts';
 import { Throw } from '../host-defined/error-messages.mts';
@@ -523,6 +523,34 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         if (p.BindingIdentifier?.name) {
           frame.set(p.BindingIdentifier.name, record);
+        }
+      }
+      // #sec-where-clauses: a `where` clause is "a compile-time-evaluable
+      // Boolean expression over its parameters, checked at each specialization
+      // once its parameters are bound. Where the expression is *false* for an
+      // application's bindings, that application is a type error, reported
+      // against the clause's source."
+      //
+      // Checked HERE, with the frame complete, because that is the moment the
+      // parameters are bound - and parsing the clause without checking it would
+      // let `where U < 4` be written and silently ignored, which is worse than
+      // the Syntax Error it replaced.
+      const whereClauses = functionWhereClauses(func as never);
+      if (whereClauses && whereClauses.length > 0) {
+        pushTypeParameterFrame(frame);
+        try {
+          for (const clause of whereClauses) {
+            const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+            if (!predicate) {
+              continue;
+            }
+            const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+            if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+              return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+            }
+          }
+        } finally {
+          popTypeParameterFrame();
         }
       }
       explicitFrame = frame;

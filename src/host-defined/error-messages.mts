@@ -752,6 +752,7 @@ export interface Throw {
   | 'Unsupported import attribute "$1"'
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
+  | 'a $1 clause is not satisfied by this application'
   | 'a call assigned to must return a ref, and $1 does not'
   | 'a call in a ++ or -- operand must return a ref, and $1 does not'
   | 'a decimal is constructed from a string of digits; the conversion from $1 is not yet defined'

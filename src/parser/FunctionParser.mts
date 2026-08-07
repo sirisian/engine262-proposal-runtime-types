@@ -124,6 +124,17 @@ export abstract class FunctionParser extends IdentifierParser {
         node.TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
+      // proposal-runtime-types #sec-function-declarations: "A function
+      // declaration may carry `where` clauses ... between its return annotation
+      // and its body. On an ordinary function they are the compile-time bound
+      // over its generic parameters." The clause was implemented for dependent
+      // record types and nowhere else, so this form - the one
+      // #sec-bounds-checks names, and the one README's own
+      // `where U <= Unit.Hour` uses - was a Syntax Error.
+      if (surroundingAgent.feature('runtime-types') && this.test('where')) {
+        (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+      }
+
       const body = this.parseFunctionBody(isAsync, isGenerator, false);
       this.setFunctionBodyGeneric(node, body.type, body);
 

@@ -1698,6 +1698,18 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
  * declares, or null when it is not generic. Like the return annotation, they sit
  * on the declaration, the code node's parent.
  */
+/**
+ * The `where` clauses of a function's declaration, which
+ * #sec-function-declarations places "between its return annotation and its
+ * body" and #sec-where-clauses has checked "at each specialization once its
+ * parameters are bound".
+ */
+export function functionWhereClauses(fn: AnnotatedFunction): readonly ParseNode[] | null {
+  const code = fn.ECMAScriptCode as { parent?: { WhereClauses?: readonly ParseNode[] | null } } | null | undefined;
+  const list = code?.parent?.WhereClauses;
+  return list && list.length > 0 ? list : null;
+}
+
 export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
   const code = fn.ECMAScriptCode as { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } } | null | undefined;
   const list = code?.parent?.TypeParameters?.TypeParameterList;
