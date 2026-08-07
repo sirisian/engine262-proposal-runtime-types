@@ -708,6 +708,57 @@ test('sec-ranges: an infinite endpoint is not the same as an absent one', () => 
   expectThrown('[...(0.5..<2.5)];');
 });
 
+test('ranges.md: a range carries the iterator helpers, delegating to a fresh iterator', () => {
+  // The nine that LEAVE the family, each forwarding to the built-in method on a
+  // freshly constructed iterator.
+  expect(evaluated('(0..<5).map(v => v * 2).toArray().join(",");')).toBe('0,2,4,6,8');
+  expect(evaluated('(0..<10).filter(v => v % 2 === 0).toArray().join(",");')).toBe('0,2,4,6,8');
+  expect(evaluated('(0..<3).flatMap(v => [v, v]).toArray().join(",");')).toBe('0,0,1,1,2,2');
+  expect(evaluated('String((1..=4).reduce((a, b) => a + b, 0));')).toBe('10');
+  expect(evaluated('(0..<4).toArray().join(",");')).toBe('0,1,2,3');
+  expect(evaluated('let s = 0; (1..=4).forEach(v => { s += v; }); String(s);')).toBe('10');
+  expect(evaluated('String((0..<5).some(v => v === 3)) + "/" + String((0..<5).some(v => v === 9));')).toBe('true/false');
+  expect(evaluated('String((0..<5).every(v => v < 5)) + "/" + String((0..<5).every(v => v < 3));')).toBe('true/false');
+  expect(evaluated('String((0..<9).find(v => v > 4));')).toBe('5');
+});
+
+test('ranges.md: delegating keeps a range a VALUE, which is the whole design', () => {
+  // A fresh iterator per call, so a range is traversable twice where an iterator
+  // is not - and still answers `contains` afterwards. Making a range BE an
+  // iterator would make `[...r]` consume it.
+  expect(evaluated('const r = 0..<3; r.map(v => v).toArray().join("") + "/" + r.map(v => v).toArray().join("");')).toBe('012/012');
+  expect(evaluated('const r = 0..<3; r.toArray(); String(r.contains(1)) + "/" + String(r.end);')).toBe('true/3');
+  expect(evaluated('const r = 0..<3; String(typeof r.next) + "/" + [...r].join("") + "/" + [...r].join("");')).toBe('undefined/012/012');
+  // And the chain is lazy: `take(3)` over a thousand-element range pulls three.
+  expect(evaluated('let n = 0; const r = 0..<1000; String(r.map(v => { n += 1; return v; }).take(3).toArray().length) + "/" + String(n);')).toBe('3/3');
+});
+
+test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED', () => {
+  // The first n values of a contiguous range are a contiguous range, and so are
+  // the rest - the same test `intersect` passes and `step` fails. So these two
+  // return a `Range` where `map` returns an `Iterator`: closure, not uniformity.
+  expect(evaluated('const t = (0..<10).take(3); String(t is Range) + "/" + String(t.start) + "/" + String(t.end);')).toBe('true/0/3');
+  expect(evaluated('const d = (0..<10).drop(7); String(d is Range) + "/" + String(d.start) + "/" + String(d.end);')).toBe('true/7/10');
+  // An open start shifts which values are taken, as it shifts the first index.
+  // The result normalizes to CLOSED-OPEN: `1..<4`, not `0<..=3`, both being {1,2,3}.
+  expect(evaluated('const t = (0<..<10).take(3); String(t.start) + "/" + String(t.end) + "/" + t.toArray().join("");')).toBe('1/4/123');
+  // Unbounded, over-take, over-drop, and zero.
+  expect(evaluated('const t = (0..).take(3); String(t.start) + "/" + String(t.end);')).toBe('0/3');
+  expect(evaluated('const d = (0..).drop(3); String(d.start) + "/" + String(d.end);')).toBe('3/undefined');
+  expect(evaluated('const t = (0..<3).take(10); t.toArray().join("");')).toBe('012');
+  expect(evaluated('String((0..<3).drop(10).isEmpty);')).toBe('true');
+  expect(evaluated('String((0..<5).take(0).isEmpty);')).toBe('true');
+  // Closure is the point: the result is still a range, so it still intersects.
+  expect(evaluated('const r = (0..<10).take(5).intersect(3..<8); String(r.start) + "/" + String(r.end);')).toBe('3/5');
+  expect(evaluated('String((0..<10).take(3).contains(1)) + "/" + String((0..<10).take(3).contains(5));')).toBe('true/false');
+  // The element type's arithmetic, so a bigint range takes in bigint.
+  expect(evaluated('const t = (0n..<10n).take(3); t.toArray().join("");')).toBe('012');
+  // Where there is no implicit step, or no first value to count from, they
+  // refuse with the message iteration gives.
+  expectThrown('(0.5..<2.5).take(2);');
+  expectThrown('(..<5).take(2);');
+});
+
 // =============================================================================
 // sec-matchrange
 // =============================================================================

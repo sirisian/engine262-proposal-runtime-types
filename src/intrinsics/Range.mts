@@ -5,7 +5,7 @@ import {
 import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { surroundingAgent, Throw } from '#self';
+import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToIntegerOrInfinity } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
 import {
   rangeContainsRange, rangeIntersect, rangeScale, scaleFactor,
@@ -409,6 +409,142 @@ function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObjec
   return CreateRangeIterator(nStart, numericEndpoint(self.RangeEnd), 1, self.RangeStartBound, self.RangeEndBound, realmRec);
 }
 
+/**
+ * ranges.md: the ITERATOR HELPERS, on a range.
+ *
+ * Each constructs a FRESH iterator and forwards, which is the whole design. A
+ * range is a VALUE - reusable, structurally compared, still answering
+ * `contains` after being traversed - where an iterator is a single-use cursor.
+ * Making a range *be* an iterator would make `[...r]` consume it; delegating
+ * keeps `r.map(f)` callable twice and `r` a value afterwards.
+ *
+ * The range's own iterator already inherits `Iterator.prototype`, so the
+ * forwarded method is the built-in one and the resulting chain is BRANDED -
+ * standardlibrary.md's fast path, rather than the structural check a
+ * hand-written iterable pays on the way in.
+ */
+function* delegateToIterator(name: string, args: Arguments, thisValue: Value): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  const it = integerIterator(self, surroundingAgent.currentRealmRecord);
+  if (it === null) {
+    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
+  }
+  const fn = Q(yield* Get(it, Value(name)));
+  if (!IsCallable(fn)) {
+    return Throw.TypeError('$1 is not a function', fn);
+  }
+  return Q(yield* Call(fn, it, args));
+}
+
+function* RangeProto_map(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('map', args, thisValue);
+}
+
+function* RangeProto_filter(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('filter', args, thisValue);
+}
+
+function* RangeProto_flatMap(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('flatMap', args, thisValue);
+}
+
+function* RangeProto_reduce(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('reduce', args, thisValue);
+}
+
+function* RangeProto_toArray(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('toArray', args, thisValue);
+}
+
+function* RangeProto_forEach(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('forEach', args, thisValue);
+}
+
+function* RangeProto_some(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('some', args, thisValue);
+}
+
+function* RangeProto_every(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('every', args, thisValue);
+}
+
+function* RangeProto_find(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* delegateToIterator('find', args, thisValue);
+}
+
+/**
+ * ranges.md: `take` and `drop` stay in the FAMILY, where the other nine leave it.
+ *
+ * They are CLOSED over an integer range: the first n values of a contiguous
+ * range are a contiguous range, and so are the rest after the first n. That is
+ * the same test `intersect` passes and `step` fails, and it is why these two
+ * return a `Range` where `map` and `filter` return an `Iterator` - closure, not
+ * uniformity. `(0..<10).take(3).contains(1)` therefore still answers.
+ *
+ * The result is always CLOSED-OPEN, which normalizes an open start away:
+ * `(0<..<10).take(3)` is `1..<4`, not `0<..=3`. Both denote {1, 2, 3}; the
+ * closed-open spelling is the one that names the values it actually holds.
+ */
+function* takeOrDrop(which: 'take' | 'drop', args: Arguments, thisValue: Value): ValueEvaluator {
+  const self = thisRange(thisValue);
+  if (!self) {
+    return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  const rawStart = endpointOf(self.RangeStart);
+  if (rawStart === undefined) {
+    // No first value to count from, which is why a range with no start does not
+    // iterate either.
+    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
+  }
+  const rawEnd = endpointOf(self.RangeEnd);
+  const big = typeof rawStart === 'bigint';
+  if (!big && (!Number.isInteger(rawStart) || (typeof rawEnd === 'number' && Number.isFinite(rawEnd) && !Number.isInteger(rawEnd)))) {
+    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
+  }
+  const limitValue = Q(yield* ToIntegerOrInfinity(args[0] ?? Value.undefined));
+  if (limitValue < 0) {
+    return Throw.RangeError('$1 is out of range for $2', args[0] ?? Value.undefined, Value('take'));
+  }
+  // The first value the range yields: its start, or one step in where the start
+  // is open - the same rule the iterator's first index follows.
+  const one = big ? 1n : 1;
+  const first = self.RangeStartBound === 'open'
+    ? (rawStart as number) + (one as number)
+    : rawStart;
+  // The exclusive end, so the clamp below is one comparison rather than two.
+  const endExclusive = rawEnd === undefined || (typeof rawEnd === 'number' && !Number.isFinite(rawEnd))
+    ? undefined
+    : (self.RangeEndBound === 'open' ? rawEnd : (rawEnd as number) + (one as number));
+  const limit = big ? BigInt(limitValue) : limitValue;
+  const shifted = (first as number) + (limit as number);
+  const clamp = (v: number | bigint) => (endExclusive === undefined ? v : (v < endExclusive ? v : endExclusive));
+  const realmRec = surroundingAgent.currentRealmRecord;
+  const asValue = (v: number | bigint) => (typeof v === 'bigint' ? Value(v) : F(v));
+  if (which === 'take') {
+    const end = clamp(shifted);
+    return CreateRangeObject(asValue(first), asValue(end), 'closed', 'open', realmRec);
+  }
+  const newFirst = clamp(shifted);
+  return CreateRangeObject(
+    asValue(newFirst),
+    endExclusive === undefined ? undefined : asValue(endExclusive),
+    'closed',
+    'open',
+    realmRec,
+  );
+}
+
+function* RangeProto_take(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* takeOrDrop('take', args, thisValue);
+}
+
+function* RangeProto_drop(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* takeOrDrop('drop', args, thisValue);
+}
+
 function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -503,6 +639,17 @@ export function bootstrapRangePrototype(realmRec: Realm): void {
     ['scale', RangeProto_scale, 1],
     ['reverse', RangeProto_reverse, 0],
     ['step', RangeProto_step, 1],
+    ['map', RangeProto_map, 1],
+    ['filter', RangeProto_filter, 1],
+    ['flatMap', RangeProto_flatMap, 1],
+    ['reduce', RangeProto_reduce, 1],
+    ['toArray', RangeProto_toArray, 0],
+    ['forEach', RangeProto_forEach, 1],
+    ['some', RangeProto_some, 1],
+    ['every', RangeProto_every, 1],
+    ['find', RangeProto_find, 1],
+    ['take', RangeProto_take, 1],
+    ['drop', RangeProto_drop, 1],
     [wellKnownSymbols.iterator, RangeProto_iterator, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Range');
   realmRec.Intrinsics['%Range.prototype%'] = proto;
