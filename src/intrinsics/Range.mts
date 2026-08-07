@@ -428,6 +428,27 @@ function* delegateToIterator(name: string, args: Arguments, thisValue: Value): V
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
+  // ranges.md: a helper that must consume EVERY value cannot run on a range with
+  // no end. `toArray`, `reduce`, and `forEach` each read the whole sequence, so
+  // on `0..` they would not return - refusing says so instead of hanging, in the
+  // way `sec-ranges` already makes a range with no START not iterable.
+  //
+  // `some`, `every`, and `find` are exempt, and the reason is short-circuiting
+  // rather than which verdict they return: `every` stops at the first value that
+  // fails exactly as `some` stops at the first that passes, so all three
+  // terminate whenever the predicate decides. Grouping `every` with `toArray`
+  // would refuse `(0..).every(v => v < 5)`, which answers false immediately.
+  //
+  // An INFINITE end is an absent one here too, as it is for iteration: the two
+  // spellings contain the same values, so they must refuse the same.
+  if (name === 'toArray' || name === 'reduce' || name === 'forEach') {
+    const endValue = endpointOf(self.RangeEnd);
+    const endless = endValue === undefined
+      || (typeof endValue === 'number' && !Number.isFinite(endValue));
+    if (endless) {
+      return Throw.TypeError('a range with no end cannot be consumed entirely; bound it with take(n)');
+    }
+  }
   const it = integerIterator(self, surroundingAgent.currentRealmRecord);
   if (it === null) {
     return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');

@@ -759,6 +759,33 @@ test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED',
   expectThrown('(..<5).take(2);');
 });
 
+test('ranges.md: a helper that must consume every value refuses a range with no end', () => {
+  // `toArray`, `reduce`, and `forEach` each read the WHOLE sequence, so on `0..`
+  // they would not return. Refusing says so, in the way `sec-ranges` already
+  // makes a range with no START not iterable - the mirror rule.
+  expectThrown('(0..).toArray();');
+  expectThrown('(0..).reduce((a, b) => a + b, 0);');
+  expectThrown('(0..).forEach(v => {});');
+  // An infinite end is an absent one here too, as it is for iteration.
+  expectThrown('(0..<Infinity).toArray();');
+
+  // `some`, `every`, and `find` are exempt, and the reason is SHORT-CIRCUITING
+  // rather than which verdict they return: `every` stops at the first value that
+  // fails exactly as `some` stops at the first that passes. Grouping `every`
+  // with `toArray` would refuse a call that answers immediately.
+  expect(evaluated('String((0..).every(v => v < 5));')).toBe('false');
+  expect(evaluated('String((0..).some(v => v === 5));')).toBe('true');
+  expect(evaluated('String((0..).find(v => v > 5));')).toBe('6');
+
+  // The lazy helpers are untouched - nothing is consumed until something asks.
+  expect(evaluated('(0..).map(v => v * 2).take(3).toArray().join(",");')).toBe('0,2,4');
+  expect(evaluated('(0..).filter(v => v % 2 === 0).take(3).toArray().join(",");')).toBe('0,2,4');
+  // And `take` is how an endless range becomes consumable.
+  expect(evaluated('(0..).take(4).toArray().join(",");')).toBe('0,1,2,3');
+  // A bounded range is unaffected.
+  expect(evaluated('(0..<4).toArray().join(",") + "/" + String((1..=4).reduce((a, b) => a + b, 0));')).toBe('0,1,2,3/10');
+});
+
 // =============================================================================
 // sec-matchrange
 // =============================================================================

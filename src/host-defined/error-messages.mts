@@ -444,6 +444,7 @@ export interface Throw {
   | 'a range with a non-integer endpoint has no implicit step; use step(by)'
   | 'a range with a non-integer endpoint has no length'
   | 'a range with a non-integer or missing endpoint has no implicit step; use step(by)'
+  | 'a range with no end cannot be consumed entirely; bound it with take(n)'
   | 'a range with no end cannot be reversed'
   | 'a range with no start cannot be iterated'
   | 'a range without both endpoints has no length'
