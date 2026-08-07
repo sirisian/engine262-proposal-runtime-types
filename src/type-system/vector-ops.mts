@@ -478,8 +478,26 @@ export function* vectorComparison(
     const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
     const l = (left as { numberValue?(): number }).numberValue?.() ?? NaN;
     const r = (right as { numberValue?(): number }).numberValue?.() ?? NaN;
+    // #sec-vector-comparisons: "Which comparison each operator performs on a
+    // lane is what it performs on a scalar." A hardware comparison chooses among
+    // predicates differing on whether a NaN operand compares true (unordered) or
+    // false (ordered); `<`, `<=`, `>`, `>=` and `==` are ordered and `!=` is
+    // unordered, which is exactly what the JavaScript operators below already do
+    // - `NaN < 1` and `NaN === NaN` are false, and `NaN !== NaN` is true.
     let holds = false;
-    if (operator === '<') { holds = l < r; } else if (operator === '>') { holds = l > r; } else if (operator === '<=') { holds = l <= r; } else { holds = l >= r; }
+    if (operator === '<') {
+      holds = l < r;
+    } else if (operator === '>') {
+      holds = l > r;
+    } else if (operator === '<=') {
+      holds = l <= r;
+    } else if (operator === '>=') {
+      holds = l >= r;
+    } else if (operator === '==') {
+      holds = l === r;
+    } else {
+      holds = l !== r;
+    }
     lanes.push(Q(yield* CheckedConvertValue(Value(holds ? 1 : 0), bitType)) as Value);
   }
   return new VectorValue(lanes, maskType);

@@ -1,0 +1,80 @@
+import { test, expect } from 'vitest';
+import { evaluated, expectThrown } from '../readme/harness.mts';
+
+/**
+ * SIMD operations, sectioned by the phases of the coverage plan so that what is
+ * covered reads against the instruction tables.
+ *
+ * The regression floor comes first: it is what every later phase must not
+ * break, and the two most fragile entries are the ambiguity error - which every
+ * new comparison result form threatens - and masks behaving as ordinary
+ * vectors.
+ */
+
+// -- regression floor ---------------------------------------------------------
+test('construction, lanes, and permutation', () => {
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.x);')).toBe('1');
+  expect(evaluated('const a = float32x4(7); String(a.w);')).toBe('7');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.lane.<0>());')).toBe('1');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.withLane.<0>(9).x);')).toBe('9');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a[2]);')).toBe('3');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.xyxy.z);')).toBe('1');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); const b = float32x4(5, 6, 7, 8);'
+    + ' String(a.shuffle.<0, 1, 4, 5>(b).z);')).toBe('5');
+});
+
+test('arithmetic and reduction', () => {
+  expect(evaluated('const a = float32x4(4, 4, 4, 4); const b = float32x4(2, 2, 2, 2);'
+    + " String((a + b).x) + ',' + String((a - b).x) + ',' + String((a * b).x) + ',' + String((a / b).x);")).toBe('6,2,8,2');
+  expect(evaluated('const a = int32x4(1, 2, 3, 4); const b = int32x4(4, 3, 2, 1);'
+    + " String((a & b).x) + ',' + String((a | b).x) + ',' + String((a ^ b).x);")).toBe('0,5,5');
+  expect(evaluated('const a = int32x4(1, 2, 3, 4); const b = int32x4(4, 3, 2, 1); String((a << b).x);')).toBe('16');
+  expect(evaluated('const a = int32x4(1, 2, 3, 4); const b = int32x4(4, 3, 2, 1); String((a % b).x);')).toBe('1');
+  expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.sum());')).toBe('10');
+});
+
+// -- phase 1: equality comparisons -------------------------------------------
+/**
+ * A comparison between vectors of one shape yields one lane per input lane, and
+ * equality is a comparison like any other - Intel's `_mm_cmpeq_epi32` beside
+ * its `_mm_cmpgt_epi32`. Only the ORDERING operators reached the vector path,
+ * so `a == b` fell through to the scalar comparison and answered one boolean.
+ */
+test('equality between vectors yields a mask', () => {
+  const EQ = 'const m: boolean32x4 = int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2); ';
+  const NE = 'const m: boolean32x4 = int32x4(0, 1, 2, 3) != int32x4(0, 1, 3, 2); ';
+  // lane 0 matches, lane 2 does not; a set lane is all-ones and a clear one all-zero
+  expect(evaluated(`${EQ}String(m.lane.<0>().all());`)).toBe('true');
+  expect(evaluated(`${EQ}String(m.lane.<2>().any());`)).toBe('false');
+  expect(evaluated(`${NE}String(m.lane.<0>().any());`)).toBe('false');
+  expect(evaluated(`${NE}String(m.lane.<2>().all());`)).toBe('true');
+  // and on float lanes
+  expect(evaluated('const m: boolean32x4 = float32x4(1, 2, 3, 4) == float32x4(1, 9, 3, 9);'
+    + ' String(m.lane.<0>().all()) + "," + String(m.lane.<1>().any());')).toBe('true,false');
+});
+
+test('a NaN lane follows the scalar operator, ordered or unordered', () => {
+  // `==` is ordered, so a NaN lane is clear - `NaN == NaN` is false
+  expect(evaluated('const m: boolean32x4 = float32x4(NaN, 1, 1, 1) == float32x4(NaN, 1, 1, 1);'
+    + ' String(m.lane.<0>().any());')).toBe('false');
+  // `!=` is unordered, so a NaN lane is SET - `NaN != NaN` is true
+  expect(evaluated('const m: boolean32x4 = float32x4(NaN, 1, 1, 1) != float32x4(NaN, 1, 1, 1);'
+    + ' String(m.lane.<0>().all());')).toBe('true');
+  // the ordering operators are ordered too
+  expect(evaluated('const m: boolean32x4 = float32x4(NaN, 1, 1, 1) < float32x4(NaN, 2, 2, 2);'
+    + ' String(m.lane.<0>().any());')).toBe('false');
+});
+
+test('the comparison rules around equality are unchanged', () => {
+  // a comparison with no expected type is still ambiguous among its result forms
+  expectThrown('const m = int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2);');
+  // vectors of different shapes are still refused
+  expectThrown('const m: boolean32x4 = int32x4(0, 1, 2, 3) == float32x4(0, 1, 3, 2);');
+  // ordering comparisons still produce a mask
+  expect(evaluated('const m: boolean32x4 = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1);'
+    + ' String(m.lane.<0>().all());')).toBe('true');
+  // scalar equality is untouched
+  expect(evaluated('String(1 == 1) + "," + String(NaN == NaN) + "," + String(NaN != NaN);')).toBe('true,false,true');
+  // and strict equality keeps its own semantics rather than comparing lanes
+  expect(evaluated('String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 4));')).toBe('false');
+});

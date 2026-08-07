@@ -1,5 +1,6 @@
 import { Q, X } from '../completion.mts';
 import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import { vectorComparison } from '../type-system/vector-ops.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
@@ -39,6 +40,18 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   // the right) and `!=` returns its negation. Strict equality `===`/`!==` keeps
   // its own semantics and does not consult the operator. The untyped path is
   // unaffected.
+  // proposal-runtime-types #sec-vector-comparisons: a comparison between vectors
+  // of one shape yields one lane per input lane, and equality is a comparison
+  // like any other - Intel's `_mm_cmpeq_epi32` beside its `_mm_cmpgt_epi32`.
+  // Only the ORDERING operators reached the vector path, so `a == b` fell
+  // through to the scalar abstract comparison and answered a single boolean:
+  // `const m: boolean32x4 = a == b` reported that *false* was not assignable to
+  // `uint.<1>`.
+  if (surroundingAgent.feature('runtime-types')
+      && (lval.type === 'Vector' || rval.type === 'Vector')
+      && (operator === '==' || operator === '!=')) {
+    return Q(yield* vectorComparison(lval, operator, rval)) as never;
+  }
   if (surroundingAgent.feature('runtime-types')
       && lval instanceof ObjectValue
       && (operator === '==' || operator === '!=')) {
