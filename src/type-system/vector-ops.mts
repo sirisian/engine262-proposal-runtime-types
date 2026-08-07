@@ -472,6 +472,56 @@ function maskTypeFor(laneCount: number): TypeRecord {
  * result forms are selected by the expected type through return-type
  * overloading, which this engine does not yet reach for vectors.
  */
+/**
+ * #sec-vector-comparisons: "Which comparison each operator performs on a lane is
+ * what it performs on a scalar." A hardware comparison chooses among predicates
+ * differing on whether a NaN operand compares true (unordered) or false
+ * (ordered); `<`, `<=`, `>`, `>=` and `==` are ordered and `!=` is unordered,
+ * which is exactly what the JavaScript operators here already do - `NaN < 1` and
+ * `NaN === NaN` are false, and `NaN !== NaN` is true.
+ *
+ * Shared by both result forms so the two cannot disagree about a lane.
+ */
+/**
+ * A lane read as a JavaScript number, for the comparison predicates. A lane is a
+ * TypedNumberValue rather than a NumberValue, which R does not accept, so the
+ * numeric value is read directly - in one place, so the two result forms cannot
+ * read a lane differently.
+ */
+// eslint-disable-next-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
+const laneNumber = (lane: Value): number => (lane as { numberValue?(): number }).numberValue?.() ?? NaN;
+
+function comparisonHolds(operator: string, l: number, r: number): boolean {
+  switch (operator) {
+    case '<': return l < r;
+    case '>': return l > r;
+    case '<=': return l <= r;
+    case '>=': return l >= r;
+    case '==': return l === r;
+    default: return l !== r;
+  }
+}
+
+/**
+ * The lane value whose every bit is set, for the all-ones result form. A signed
+ * integer lane reads it as -1 and an unsigned one as its maximum; a float lane
+ * reads the same bits as a NaN, which is what the hardware writes and what makes
+ * the form useful as the operand of a bitwise AND.
+ */
+function* allOnesLaneValue(laneType: TypeRecord): PlainEvaluator<Value> {
+  const width = laneType.Kind === 'primitive' && laneType.Arguments.length >= 1
+    ? Number(laneType.Arguments[0])
+    : 32;
+  if (laneType.Kind === 'primitive' && laneType.Name === 'uint') {
+    return Q(yield* CheckedConvertValue(Value(2 ** width - 1), laneType)) as Value;
+  }
+  if (laneType.Kind === 'primitive' && laneType.Name === 'int') {
+    return Q(yield* CheckedConvertValue(Value(-1), laneType)) as Value;
+  }
+  // A float lane: every bit set is a NaN.
+  return Q(yield* CheckedConvertValue(Value(NaN), laneType)) as Value;
+}
+
 export function* vectorComparison(
   lval: Value,
   operator: string,
@@ -505,34 +555,31 @@ export function* vectorComparison(
       'the comparison is ambiguous among its result forms; write the result type',
     )) as Value;
   }
+  // #sec-vector-comparisons: the third result form is "the compared vector type
+  // itself, its matching lanes all-ones" - Intel's `_mm_cmpeq_epi32`, whose
+  // result is a vector rather than a mask register and is used as an operand to
+  // a bitwise AND. Where the expected type is the type being compared, that is
+  // the form asked for.
+  const comparedType = (leftShape ? lval : rval as Value) as VectorValue;
+  if (SameType(expected, comparedType.TypeRecord as TypeRecord)) {
+    const laneType = shape.laneType;
+    const allOnes = Q(yield* allOnesLaneValue(laneType));
+    const zero = Q(yield* CheckedConvertValue(Value(0), laneType)) as Value;
+    const chosen: Value[] = [];
+    for (let i = 0; i < shape.laneCount; i += 1) {
+      const left = leftShape ? (lval as VectorValue).lanes[i] as Value : lval;
+      const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
+      chosen.push(comparisonHolds(operator, laneNumber(left), laneNumber(right)) ? allOnes : zero);
+    }
+    return new VectorValue(chosen, comparedType.TypeRecord);
+  }
   const lanes: Value[] = [];
   const maskType = maskTypeFor(shape.laneCount);
   const bitType = (maskType as { Arguments: readonly unknown[] }).Arguments[0] as TypeRecord;
   for (let i = 0; i < shape.laneCount; i += 1) {
     const left = leftShape ? (lval as VectorValue).lanes[i] as Value : lval;
     const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
-    const l = (left as { numberValue?(): number }).numberValue?.() ?? NaN;
-    const r = (right as { numberValue?(): number }).numberValue?.() ?? NaN;
-    // #sec-vector-comparisons: "Which comparison each operator performs on a
-    // lane is what it performs on a scalar." A hardware comparison chooses among
-    // predicates differing on whether a NaN operand compares true (unordered) or
-    // false (ordered); `<`, `<=`, `>`, `>=` and `==` are ordered and `!=` is
-    // unordered, which is exactly what the JavaScript operators below already do
-    // - `NaN < 1` and `NaN === NaN` are false, and `NaN !== NaN` is true.
-    let holds = false;
-    if (operator === '<') {
-      holds = l < r;
-    } else if (operator === '>') {
-      holds = l > r;
-    } else if (operator === '<=') {
-      holds = l <= r;
-    } else if (operator === '>=') {
-      holds = l >= r;
-    } else if (operator === '==') {
-      holds = l === r;
-    } else {
-      holds = l !== r;
-    }
+    const holds = comparisonHolds(operator, laneNumber(left), laneNumber(right));
     lanes.push(Q(yield* CheckedConvertValue(Value(holds ? 1 : 0), bitType)) as Value);
   }
   return new VectorValue(lanes, maskType);

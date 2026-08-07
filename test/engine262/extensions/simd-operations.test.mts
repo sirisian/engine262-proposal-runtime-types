@@ -121,3 +121,56 @@ test('the compact mask and non-masks are unchanged', () => {
   const M = 'const m: boolean32x4 = float32x4(1, 2, 9, 9) < float32x4(5, 5, 0, 0); ';
   expect(evaluated(`${M}String(m.xyxy.x.all()) + "," + String(m[2].any());`)).toBe('true,false');
 });
+
+// -- phase 3: the remaining comparison result forms ---------------------------
+/**
+ * Three results are defined: the wide mask, the compact mask (a bit vector of
+ * one bit per lane), and the compared vector type itself with its matching
+ * lanes all-ones. The last is Intel's `_mm_cmpeq_epi32`, whose result is a
+ * vector rather than a mask register and whose use is as the operand of a
+ * bitwise AND.
+ *
+ * There is no `boolean4` shorthand - the `boolean`N names are bit WIDTHS, not
+ * lane counts - so a four-lane compact mask is written `vector.<boolean1, 4>`.
+ */
+test('a comparison yields the compared vector type with all-ones lanes', () => {
+  const C = 'int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2)';
+  expect(evaluated(`const v: int32x4 = ${C}; String(v.x) + "," + String(v.z);`)).toBe('-1,0');
+  expect(evaluated('const v: uint32x4 = uint32x4(1, 2, 3, 4) == uint32x4(1, 9, 9, 9); String(v.x);')).toBe('4294967295');
+  // a float lane reads the all-ones bits as a NaN, which is what the hardware writes
+  expect(evaluated('const v: float32x4 = float32x4(1, 2, 3, 4) == float32x4(1, 9, 9, 9);'
+    + ' String(v.x !== v.x);')).toBe('true');
+  // every operator reaches the form, not just equality
+  expect(evaluated('const v: int32x4 = int32x4(0, 1, 2, 3) != int32x4(0, 1, 3, 2);'
+    + ' String(v.x) + "," + String(v.z);')).toBe('0,-1');
+  expect(evaluated('const v: int32x4 = int32x4(1, 2, 9, 9) < int32x4(5, 5, 0, 0);'
+    + ' String(v.x) + "," + String(v.z);')).toBe('-1,0');
+});
+
+test('the all-ones form is what a bitwise AND consumes', () => {
+  // the reason the form exists: masking lanes without a branch
+  const C = 'const v: int32x4 = int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2); ';
+  expect(evaluated(`${C}const kept = v & int32x4(7, 7, 7, 7);`
+    + ' String(kept.x) + "," + String(kept.z);')).toBe('7,0');
+});
+
+test('the compact mask is a bit vector of one bit per lane', () => {
+  const C = 'int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2)';
+  expect(evaluated(`const m: vector.<boolean1, 4> = ${C};`
+    + ' String(m.all()) + "," + String(m.any());')).toBe('false,true');
+  expect(evaluated(`const m: vector.<boolean1, 4> = ${C};`
+    + ' String(m.lane.<0>()) + "," + String(m.lane.<2>());')).toBe('1,0');
+  // and it consumes as a mask
+  expect(evaluated(`const m: vector.<boolean1, 4> = ${C};`
+    + ' String(m.select(int32x4(9, 9, 9, 9), int32x4(5, 5, 5, 5)).x);')).toBe('9');
+});
+
+test('adding the forms did not weaken the selection rules', () => {
+  const C = 'int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2)';
+  // the wide mask still resolves
+  expect(evaluated(`const m: boolean32x4 = ${C}; String(m.any());`)).toBe('true');
+  // no expected type is still ambiguous among the three
+  expectThrown(`const m = ${C};`);
+  // and a type that is none of the three is still refused
+  expectThrown(`const m: float64x2 = ${C};`);
+});
