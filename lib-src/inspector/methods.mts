@@ -274,10 +274,23 @@ function evaluate(options: {
   evalMode: InspectorContext['evaluateMode'],
   throwOnSideEffect?: boolean,
   awaitPromise?: boolean,
+  /**
+   * The protocol's own signal that this is REPL input, which among other things
+   * means top-level `await` is expected to work. The devtools console sets it on
+   * every evaluation it makes and does no rewriting of its own - it relies on
+   * the backend to accept the await - so ignoring it is what made
+   * `await x;` a SyntaxError in the console.
+   */
+  replMode?: boolean,
   callFrameId?: string,
 }, inspectorContext: DebuggerContext): Protocol.Runtime.EvaluateResponse | Promise<Protocol.Runtime.EvaluateResponse> {
   const { context } = inspectorContext;
   const isPreview = options.throwOnSideEffect;
+  // A preview carries `replMode` too - the console requests previews with
+  // `throwOnSideEffect: true, replMode: true` while the user is still typing -
+  // so the flag alone must not select a path that evaluates. Previews already
+  // route below by `isPreview` and keep their own handling.
+  const isRepl = !!options.replMode && !isPreview;
   if (options.awaitPromise) {
     return unsupportedError;
   }
@@ -313,7 +326,7 @@ function evaluate(options: {
   }
   const promise = new Promise<Protocol.Runtime.EvaluateResponse>((resolve) => {
     let toBeEvaluated;
-    if (isPreview || options.evalMode === 'console' || isCallOnFrame) {
+    if (isPreview || isRepl || options.evalMode === 'console' || isCallOnFrame) {
       toBeEvaluated = performDevtoolsEval(options.expression, realm.realm, false, !!(isPreview || isCallOnFrame));
     } else {
       let parsed!: ScriptRecord | SourceTextModuleRecord | ObjectValue[];
