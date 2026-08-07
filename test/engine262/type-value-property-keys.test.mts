@@ -24,7 +24,7 @@ function evaluated(source: string): string {
 test('a typed number keys by its numeric string (the BigInt precedent)', () => {
   // Distinct values, but the same property key: consistent with 1n === 1 being
   // false while o[1n] and o[1] alias.
-  expect(evaluated('const n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('const o = {}; o[5 := uint8] = "typed"; o[5];')).toBe('typed');
   expect(evaluated('const o = { 5: "plain" }; o[5 := uint8];')).toBe('plain');
 });

@@ -24,11 +24,11 @@ test('a typed number is never strictly equal to a plain Number', () => {
   // the comparison that asks whether a typed value and a Number are the same
   // value, and the answer is still no.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('const n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('5 === (5 := uint8) ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('const m = 5; m === (5 := uint8) ? "eq" : "neq";')).toBe('neq');
+  expect(evaluated('let m = 5; m === (5 := uint8) ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(0 := int8) === 0 ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('const z = 0; (0 := int8) === z ? "eq" : "neq";')).toBe('neq');
+  expect(evaluated('let z = 0; (0 := int8) === z ? "eq" : "neq";')).toBe('neq');
 });
 
 test('typed numbers of different types are not strictly equal', () => {

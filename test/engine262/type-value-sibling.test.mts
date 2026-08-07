@@ -53,7 +53,9 @@ test('identity across the sibling boundary (behavioural, via the engine)', () =>
   // sibling distinction R1 states is asserted with a variable below, which
   // adopts nothing.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('const n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  // A `let`: a `const` of a numeric constant now adopts its context type, so it
+  // is no longer the way to write a plain `number`.
+  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(5 := uint8) === (5 := uint8) ? "eq" : "neq";')).toBe('eq');
   expect(evaluated('(5 := uint8) === (5 := uint16) ? "eq" : "neq";')).toBe('neq');
 });

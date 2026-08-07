@@ -219,6 +219,22 @@ interface EnumInfo {
 
 interface Frame {
   readonly bindings: Map<string, TypeRecord>;
+
+  /**
+   * Names bound by a `const` whose initializer is a compile-time numeric
+   * constant. Held in the FRAME so it is scoped exactly as the bindings beside
+   * it: a parallel stack was not pushed per scope, so an inner `let K` inherited
+   * an outer `const K`'s treatment and adopted a type it must not.
+   */
+  readonly constLiterals: Set<string>;
+
+  /**
+   * Every name this frame declares, whether or not it got a type. An
+   * unannotated `let` registers NO binding - its type is null - so the bindings
+   * map cannot answer "does this frame shadow the name", which is what the
+   * const-literal lookup needs in order to stop at an inner `let`.
+   */
+  readonly declaredNames: Set<string>;
   // The names this frame NARROWS rather than declares. sec-narrowing: "a
   // narrowed binding is invalidated by an assignment that leaves the narrowed
   // type", so an assignment has to find the DECLARED type to check against and
@@ -354,7 +370,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
   const unclaimed: UnclaimedKeyCheck[] = [];
-  const frames: Frame[] = [{ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
+  const frames: Frame[] = [{ bindings: new Map(), constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
   const returnTypes: Known[] = [];
 
   const report = (source: TypeRecord, target: TypeRecord) => {
@@ -1652,7 +1668,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindings.set(TOPIC_NAME, topic);
         }
         frames.push({
-          bindings, aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings, constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         try {
           return staticType(p.Body);
@@ -2563,7 +2579,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
         const newFrame = () => ({
-          bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings: new Map(), constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         frames.push(newFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
@@ -3205,6 +3221,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const declare = (name: string, t: Known) => {
+    frames[frames.length - 1].declaredNames.add(name);
     if (t) {
       frames[frames.length - 1].bindings.set(name, t);
     }
@@ -3539,7 +3556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
-    frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
@@ -3591,7 +3608,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     try {
       return f();
     } finally {
@@ -3711,10 +3728,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // with the exclusive upper bound its range proves and whether the lower bound
   // is at least zero. A counter drawn from `0..<N` is in [0, N), which is what
   // makes an index into a `[N]` provable without any check.
-  // The `const` bindings whose initializer is a compile-time numeric constant,
-  // scoped like the frames beside them so a shadowing `let` does not inherit the
-  // treatment.
-  const constLiteralNames: Set<string>[] = [new Set()];
 
   /**
    * A compile-time numeric constant expression: a numeric literal, a sign
@@ -3735,6 +3748,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (e.type) {
       case 'NumericLiteral':
         return typeof e.value === 'number';
+      // D3: a reference to a marked `const` is itself constant, so
+      // `const A = 3.14; const B = A * 2` chains. Without this the feature
+      // applies exactly one level deep, and `const TAU = 2 * PI` - which is what
+      // people write - is refused for a reason no user could state.
+      //
+      // Resolved through the frames rather than by name, and stopping at the
+      // first frame that declares the name, so an inner `let` shadowing an
+      // adopting `const` does not make its uses constant.
+      case 'IdentifierReference': {
+        const refName = (e as unknown as { name?: string }).name;
+        if (typeof refName !== 'string') {
+          return false;
+        }
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          if (frames[i].constLiterals.has(refName)) {
+            return true;
+          }
+          if (frames[i].declaredNames.has(refName)) {
+            return false;
+          }
+        }
+        return false;
+      }
       case 'ParenthesizedExpression':
         return isNumericConstantExpression(e.Expression);
       case 'UnaryExpression':
@@ -3820,9 +3856,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!Array.isArray(node) && (node as ParseNode).type === 'IdentifierReference') {
       const name = (node as unknown as { name?: string }).name;
       if (typeof name === 'string') {
-        for (let i = constLiteralNames.length - 1; i >= 0; i -= 1) {
-          if (constLiteralNames[i].has(name)) {
+        // Innermost first, and STOP at the first frame that binds the name -
+        // an inner `let K` shadows an outer adopting `const K` and must not
+        // inherit its treatment.
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          if (frames[i].constLiterals.has(name)) {
             constLiteralUses.add(node as object);
+            break;
+          }
+          if (frames[i].declaredNames.has(name)) {
             break;
           }
         }
@@ -4011,7 +4053,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
@@ -4279,7 +4321,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (n as unknown as { parent?: { LetOrConst?: string } }).parent?.LetOrConst === 'const';
           if (!n.TypeAnnotation && isConstDeclaration && n.Initializer
               && isNumericConstantExpression(n.Initializer)) {
-            constLiteralNames[constLiteralNames.length - 1].add(n.BindingIdentifier.name);
+            frames[frames.length - 1].constLiterals.add(n.BindingIdentifier.name);
           }
           declare(n.BindingIdentifier.name, declared);
           return;

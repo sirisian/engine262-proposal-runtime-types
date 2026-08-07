@@ -65,6 +65,6 @@ test('explicit Number() unwraps a typed number to a plain Number', () => {
 test('R1 identity is unaffected by arithmetic changes', () => {
   // The literal adopts (F74); the variable does not, and that is where R1 lives.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('const n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(5 := uint8) is uint8 ? "yes" : "no";')).toBe('yes');
 });

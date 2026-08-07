@@ -962,7 +962,7 @@ test('the literal rule reaches equality and case labels', () => {
   expect(evaluated('const c = (65 := uint16); let r = "none"; switch (c) { case 65: r = "hit"; break; } r;')).toBe('hit');
   // R1 IS UNTOUCHED, and this is where it lives: a VARIABLE adopts nothing, so
   // it still asks whether a typed value and a Number are the same value.
-  expect(evaluated('const n = 65; String((65 := uint16) === n);')).toBe('false');
+  expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('false');
   expect(evaluated('function anyv() { return 65; } String((65 := uint16) === anyv());')).toBe('false');
   expect(evaluated('String((65 := uint16) === (65 := uint8));')).toBe('false');
   // A literal the type cannot hold is simply not equal to any value of it - a
@@ -1116,7 +1116,7 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   // costs this test was pinning has been paid off by that decision. The
   // remaining cost is the comparison against a variable.
   expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length === 3) + "/" + String(a.length == 3);')).toBe('true/true');
-  expect(evaluated('let a: [].<uint8> = [1,2,3]; const n = 3; String(a.length === n);')).toBe('false');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 3; String(a.length === n);')).toBe('false');
 });
 
 // -- The deletion rule of the same clause ----------------------------------

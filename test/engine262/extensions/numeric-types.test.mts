@@ -108,6 +108,12 @@ test('numeric types: a typed value is never strictly equal to a plain number of 
   // same magnitude, nor a value of another numeric type. The plain magnitude is
   // recovered with Number(), which does compare equal. This underlies why
   // comparisons in these tests extract with Number() before asserting a value.
+  // DECISION REVISED: F74 held this using a `const`, "a VARIABLE, which adopts
+  // nothing". A `const` bound to a compile-time numeric constant now adopts its
+  // context's type, as if its initializer were written at each use, so `let` is
+  // the spelling for an ordinary `number` variable - and `const n: number = 5`
+  // is the way to pin one. R1 itself is unchanged and holds three ways: a
+  // `let`, an annotated `const`, and a function return.
   // DECISION CHANGED (F74): the literal rule reaches equality, so a LITERAL in
   // one of these positions takes the other operand's type and the comparison
   // is uint8 against uint8. R1 is untouched by that - what changed is that a
@@ -118,8 +124,6 @@ test('numeric types: a typed value is never strictly equal to a plain number of 
   expect(evaluated('String((0.5 := float32) === 0.5);')).toBe('true');
   // R1 itself: a typed value is not strictly equal to a plain Number, nor to a
   // value of another numeric type.
-  // A `let` binding adopts nothing. An unannotated `const` with a compile-time
-  // evaluable initializer is a different case and is pinned below.
   expect(evaluated('let n = 5; String((5 := uint8) === n);')).toBe('false');
   expect(evaluated('function anyv() { return 5; } String((5 := uint8) === anyv());')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
