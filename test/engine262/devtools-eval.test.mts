@@ -261,3 +261,22 @@ test('Runtime.evaluate: a preview does not leak the side effects of an awaited b
   const observed = await evaluate('String(globalThis.leaked);', { replMode: true });
   expect(observed?.result?.value).toBe('undefined');
 });
+
+// -- The static checker on the console path -------------------------------------
+test('devtools eval: the static checker runs, as it does for a script', () => {
+  // This path is a copy of PerformEval and had neither its check nor
+  // ParseScript's, so nothing typed in the console was checked at all. A lexical
+  // binding has no run-time typed-storage boundary to catch it afterwards, so
+  // the omission did not soften the diagnosis - it removed it.
+  const c = makeConsole();
+  expect(c.evaluate("type Direction = 'north' | 'south' | 'east' | 'west';\nlet d: Direction = 'north';\nd = 0;").thrown).toBe(true);
+  expect(c.evaluate('let a: uint8 = 0; a = 300;').thrown).toBe(true);
+  expect(c.evaluate('let s: string = 1;').thrown).toBe(true);
+});
+
+test('devtools eval: a well-typed program is untouched', () => {
+  const c = makeConsole();
+  const r = c.evaluate("type D = 'n' | 's'; let d: D = 'n'; d = 's'; d;");
+  expect(r.thrown).toBe(false);
+  expect(c.stringOf(r.value)).toBe('s');
+});

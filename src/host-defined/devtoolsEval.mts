@@ -11,6 +11,7 @@ import {
   ExecutionContext,
   FunctionEnvironmentRecord, GetThisEnvironment, IsStrict, ManagedRealm, NewPromiseCapability, NormalCompletion, surroundingAgent, Throw, ThrowCompletion, X, Value, setNodeParent, wrappedParse, type PlainCompletion, type ValueCompletion, type ValueEvaluator,
 } from '#self';
+import { CheckScript } from '../type-system/check.mts';
 
 const cascadeStack = new WeakMap<EnvironmentRecord, EnvironmentRecord>();
 // This is modified based on PerformEval, used internally for devtools console.
@@ -88,6 +89,7 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
     }
     return ThrowCompletion(script[0]);
   }
+
   if (!script.ScriptBody) {
     if (scriptContext) {
       surroundingAgent.executionContextStack.pop(scriptContext);
@@ -102,6 +104,28 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
   // evaluated that heritage as if it were not generic and reported that `W` was
   // not defined. It worked in a script and failed only in the console.
   setNodeParent(script, undefined);
+
+  // proposal-runtime-types #sec-type-errors: run the static checker over what
+  // was parsed, as ParseScript does for a script and PerformEval does for a
+  // direct eval. Placed after the parent links are wired above, because the
+  // checker reads the shape a node sits in.
+  //
+  // This path had neither, so nothing typed in the console was checked at all:
+  // `let a: uint8 = 0; a = 300;` left 300 in a uint8 here while the same text is
+  // refused at script scope, and a value outside a declared literal union was
+  // stored without complaint. A lexical binding has no run-time typed-storage
+  // boundary to catch it afterwards, so skipping the checker did not soften the
+  // diagnosis - it removed it.
+  if (surroundingAgent.feature('runtime-types')) {
+    const typeErrors = CheckScript(script);
+    if (typeErrors.length > 0) {
+      if (scriptContext) {
+        surroundingAgent.executionContextStack.pop(scriptContext);
+      }
+      return ThrowCompletion(typeErrors[0]);
+    }
+  }
+
   const body = script.ScriptBody;
   if (inClassFieldInitializer && ContainsArguments(body)) {
     return Throw.SyntaxError('arguments cannot be referenced in a class field initializer');
