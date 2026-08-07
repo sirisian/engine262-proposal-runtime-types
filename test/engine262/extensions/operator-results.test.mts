@@ -64,12 +64,15 @@ test('a vector operator applies lane-wise and keeps the shape', () => {
 // -- bigint, string, enum, nominal, reference ---------------------------------
 test('the remaining families behave as their own rules say', () => {
   expect(evaluated('String(1n + 2n);')).toBe('3');
+  // a BigInt has the shifts and bitwise operations, where a float does not
+  expect(evaluated('String(4n << 1n);')).toBe('8');
   // a BigInt does not mix with a Number, as in ECMAScript today
   expectThrown('1n + 2;');
   expect(evaluated("String('a' + 'b');")).toBe('ab');
   expect(evaluated("String('a' * 'b');")).toBe('NaN');
   // an enum member computes at its underlying type
   expect(evaluated('enum E { A = 1, B = 2 } String((E.A + E.B) is number);')).toBe('true');
+  expect(evaluated('enum E { A = 1, B = 2 } String(E.A | E.B);')).toBe('3');
   // a class defines its operators, and without one the ordinary rules apply
   expect(evaluated('class C { operator+(o) { return 7; } } String(new C() + new C());')).toBe('7');
   expect(evaluated('class D {} String(typeof (new D() + new D()));')).toBe('string');
