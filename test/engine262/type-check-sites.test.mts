@@ -261,7 +261,13 @@ test('an enum is a subtype of its underlying type, and reflects as an enum', () 
   // relation held nowhere, because the enum's record did not carry the
   // underlying type to relate it to (F62).
   expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(C, uint8));')).toBe('true');
-  expect(evaluated('enum D { A, B }; String(Reflect.isAssignable(D, number));')).toBe('true');
+  // An enum declared without a `: Type` has the underlying type `int32`, which
+  // sec-enums names - it defaulted to `number`, so an unannotated enum related
+  // to a type the clause does not give it and not to the one it does. `number`
+  // is a value type like the rest and nothing widens to it.
+  expect(evaluated('enum D { A, B }; String(Reflect.isAssignable(D, int32));')).toBe('true');
+  expect(evaluated('enum D { A, B }; String(Reflect.isAssignable(D, number));')).toBe('false');
+  expect(evaluated('enum D { A, B }; let x: int32 = D.B; String(x);')).toBe('1');
   // The relation is one-directional and does not reach unrelated types.
   expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(uint8, C));')).toBe('false');
   expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(C, string));')).toBe('false');

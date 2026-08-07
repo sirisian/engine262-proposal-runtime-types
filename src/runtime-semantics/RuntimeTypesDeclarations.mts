@@ -103,9 +103,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);
     }
+    // proposal-runtime-types #sec-enums: "The type after `:` is the enum's
+    // underlying type, and an enum declared without one has the underlying type
+    // `int32`." This defaulted to `number`, so an unannotated enum carried a
+    // type - just not the one the clause names, which is why
+    // `Reflect.typeOf(D.A) === int32` was false for one.
     const underlying = node.TypeAnnotation
       ? Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type))
-      : builtinTypeRecord('number') ?? undefined;
+      : builtinTypeRecord('int32') ?? undefined;
     const record: TypeRecord = {
       Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues, Underlying: underlying ?? undefined,
     };
@@ -270,7 +275,16 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     }
     const own = (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
     if (own?.length) {
-      Q(yield* ApplyDecorators(own, Q(yield* EnumDecoratorContext('Enum', name, value, { size: members.length }))));
+      // #sec-reflection-shape-enum: `valueType` is the Type Object of the type
+      // the enumerators take their values in - the enum's Underlying, which the
+      // declaration resolves and stores and nothing read until now. It reports
+      // the DEFAULT where the program wrote no annotation, so a reader need not
+      // know whether one was written.
+      const underlyingRecord = (value as { TypeRecord?: { Underlying?: TypeRecord } }).TypeRecord?.Underlying;
+      Q(yield* ApplyDecorators(own, Q(yield* EnumDecoratorContext('Enum', name, value, {
+        size: members.length,
+        valueType: underlyingRecord ? GetTypeObject(underlyingRecord) as Value : undefined,
+      }))));
     }
   }
 

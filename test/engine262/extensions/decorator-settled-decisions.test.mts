@@ -302,3 +302,17 @@ test('a match arm block takes a decorator and reports its clause', () => {
   // Per ENTRY, as every block decorator is: two calls, two contexts.
   expect(evaluated(`let n = 0; function g(x) { n += 1; } function h() { return match (1) { when 1: @g { 0; } }; } h(); h(); String(n);`)).toBe('2');
 });
+
+test('an enum reports the type its enumerators take their values in', () => {
+  // Closes the enum family. #sec-reflection-shape-enum gives the Enum
+  // reflection a `valueType`, and it read undefined: the declaration resolves
+  // the annotation and stores it as the record's Underlying, and nothing had
+  // ever read it back out.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} @f enum E: uint8 { A } String(c.valueType === uint8);`)).toBe('true');
+  expect(evaluated(`${grab} @f enum C: float32 { Zero } String(c.valueType === float32);`)).toBe('true');
+  // It reports the DEFAULT where the program wrote no annotation, so a reader
+  // need not know whether one was written. #sec-enums: "an enum declared
+  // without one has the underlying type int32" - this defaulted to `number`.
+  expect(evaluated(`${grab} @f enum D { A } String(c.valueType === int32);`)).toBe('true');
+});
