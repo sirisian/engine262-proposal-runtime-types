@@ -186,3 +186,30 @@ test('an enum reports its size, and an enumerator its value and index', () => {
   // No `type` on an enumerator: it is the enum's, reached through the enum.
   expect(evaluated(`${grab} enum E { @f A } String(Object.getOwnPropertyNames(c).includes('type'));`)).toBe('false');
 });
+
+test('a Tuple or Record reflection is just its type', () => {
+  // proposal-runtime-types #sec-reflection-shape-structural: these reflect a
+  // composite VALUE where Reflect.Type reflects a type, and their whole shape is
+  // `type` - no name, no metadata, the Structural family being one of those
+  // sec-decorator-metadata gives none. They were being built by the object
+  // member builder and carried all three.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} const e = @f Composite([0]); Object.keys(c).sort().join(',');`)).toBe('kind,type');
+  expect(evaluated(`${grab} const d = @f Composite({ a: 1 }); Object.keys(c).sort().join(',');`)).toBe('kind,type');
+  // Which context fires is decided by the VALUE, not the syntax.
+  expect(evaluated(`${grab} const e = @f Composite([0]); c.kind;`)).toBe('Tuple');
+  expect(evaluated(`${grab} const d = @f Composite({ a: 1 }); c.kind;`)).toBe('Record');
+});
+
+test('an Object reflection has no name, and a setter parameter no index', () => {
+  // An object literal has no name to report: the language names an anonymous
+  // function or class from its binding and pointedly not an object literal, and
+  // a name from the binding would report where the value went rather than what
+  // it is. It read undefined in every position anyway.
+  const grab = 'let c; function f(x) { c = x; } ';
+  expect(evaluated(`${grab} const o = @f { a: 1 }; String(Object.getOwnPropertyNames(c).includes('name'));`)).toBe('false');
+  // A setter takes exactly one parameter, so an index that is always 0 reports
+  // nothing. Every other parameter reflection keeps its index.
+  expect(evaluated(`${grab} class A { set v(@f x: uint8) {} } String(Object.getOwnPropertyNames(c).includes('index'));`)).toBe('false');
+  expect(evaluated(`${grab} class A { m(@f x: uint8) {} } String(c.index);`)).toBe('0');
+});

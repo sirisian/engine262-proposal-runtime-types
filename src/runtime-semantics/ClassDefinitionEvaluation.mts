@@ -2444,7 +2444,11 @@ export function* SubTargetContext(kind: string, index: number, ownerKind: string
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
-  if (index >= 0) {
+  // proposal-runtime-types #sec-reflection-shape-class: a SETTER parameter
+  // carries no `index` where the other parameter reflections do, because a
+  // setter takes exactly one parameter and an index that is always 0 reports
+  // nothing.
+  if (index >= 0 && kind !== 'ClassSetterParameter' && kind !== 'ObjectSetterParameter') {
     X(CreateDataProperty(context, Value('index'), Value(index)));
   }
   // decorators.md's `ClassMethodParameterReflection` gives `type`, `name` and

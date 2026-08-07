@@ -9,6 +9,7 @@ import {
 } from '../static-semantics/all.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import {
   Q, X,
   NormalCompletion,
@@ -120,7 +121,24 @@ export function* ObjectMemberDecoratorContext(kind: string, name: Value, target:
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value(kind)));
   StampReflectionContext(context, kind);
-  X(CreateDataProperty(context, Value('name'), name));
+  // proposal-runtime-types #sec-reflection-shape-structural: a Tuple or Record
+  // reflects a composite VALUE and its whole shape is `type` - no name, no
+  // metadata, the Structural family being one of those sec-decorator-metadata
+  // gives none. A reader wanting the structure walks `type` with Reflect.Type.
+  if (kind === 'Tuple' || kind === 'Record') {
+    X(CreateDataProperty(context, Value('type'), GetTypeObject(RuntimeTypeOf(target), realm) as Value));
+    return context;
+  }
+  // #sec-reflection-shape-object gives the Object reflection `type` and
+  // `metadata` and NO name. An object literal has no name to report: the
+  // language names an anonymous function or class from the binding it is
+  // assigned to and pointedly not an object literal, and a name taken from the
+  // binding would be a property of where the value went rather than of the
+  // value - which the family being keyed on the INSTANCE already says it is
+  // not. It read *undefined* in every position anyway.
+  if (kind !== 'Object') {
+    X(CreateDataProperty(context, Value('name'), name));
+  }
   // "For objects the metadata is on the INSTANCE", so an object member's
   // context points at the object rather than at a constructor.
   X(CreateDataProperty(context, Value('objectContext'), target));
