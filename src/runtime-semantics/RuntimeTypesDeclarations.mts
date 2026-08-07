@@ -1,4 +1,5 @@
 import { NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -84,33 +85,62 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // Enum members take their initializer's value, or the previous numeric
     // value plus one, starting from 0. The members are data properties of the
     // enum's Type Object, and membership is SameValue against the list.
+    // The underlying type is resolved BEFORE the members, because every one of
+    // them passes through it.
+    const underlyingRecord = node.TypeAnnotation
+      ? Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type))
+      : builtinTypeRecord('int32') ?? undefined;
+    // Numeric in the sense the clause means: an enumeration that numbers itself
+    // from 0 needs a type those numbers are values of.
+    const underlyingIsNumeric = underlyingRecord !== undefined
+      && underlyingRecord.Kind === 'primitive'
+      && /^(u?int|float|decimal)/.test(underlyingRecord.Name)
+      && underlyingRecord.Name !== 'number'
+      ? true
+      : underlyingRecord?.Kind === 'primitive' && underlyingRecord.Name === 'number';
+
     const memberValues: Value[] = [];
     const memberNames: string[] = [];
     let nextAuto = 0;
+    let previous: Value | undefined;
     for (const member of node.EnumMemberList) {
       let v: Value;
       if (member.Initializer) {
         const ref = Q(yield* Evaluate(member.Initializer));
         v = Q(yield* GetValue(ref));
-      } else {
+      } else if (previous === undefined) {
+        // #sec-enums: "The first enumerator, when it has no initializer, takes
+        // 0, and it is a type error when the underlying type is not numeric,
+        // since a non-numeric enumeration must define its starting value."
+        if (!underlyingIsNumeric) {
+          return Throw.TypeError('$1 is not assignable to $2', Value('an enumerator with no initializer'), Value('an enum whose underlying type is not numeric; give it a value'));
+        }
         v = Value(nextAuto);
+      } else {
+        // "A later enumerator with no initializer takes the result of applying
+        // the underlying type's prefix increment operator to the one before."
+        if (!underlyingIsNumeric) {
+          return Throw.TypeError('$1 is not assignable to $2', Value('an enumerator with no initializer'), Value('an enum whose underlying type is not numeric; give it a value'));
+        }
+        v = Value(nextAuto);
+      }
+      // #sec-enums: an enumerator's value is a value of the underlying type, so
+      // it passes that type's boundary - `enum E: uint8 { A = 300 }` is the
+      // mistake `let a: uint8 = 300` is, and was accepted here because nothing
+      // read the underlying type the declaration had already resolved.
+      if (underlyingRecord !== undefined) {
+        v = Q(yield* CheckedConvertValue(v, underlyingRecord));
       }
       if (v instanceof NumberValue) {
         nextAuto = (R(v) as number) + 1;
       } else {
         nextAuto += 1;
       }
+      previous = v;
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);
     }
-    // proposal-runtime-types #sec-enums: "The type after `:` is the enum's
-    // underlying type, and an enum declared without one has the underlying type
-    // `int32`." This defaulted to `number`, so an unannotated enum carried a
-    // type - just not the one the clause names, which is why
-    // `Reflect.typeOf(D.A) === int32` was false for one.
-    const underlying = node.TypeAnnotation
-      ? Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type))
-      : builtinTypeRecord('int32') ?? undefined;
+    const underlying = underlyingRecord;
     const record: TypeRecord = {
       Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues, Underlying: underlying ?? undefined,
     };

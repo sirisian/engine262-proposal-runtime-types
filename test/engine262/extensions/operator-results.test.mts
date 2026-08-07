@@ -70,8 +70,12 @@ test('the remaining families behave as their own rules say', () => {
   expectThrown('1n + 2;');
   expect(evaluated("String('a' + 'b');")).toBe('ab');
   expect(evaluated("String('a' * 'b');")).toBe('NaN');
-  // an enum member computes at its underlying type
-  expect(evaluated('enum E { A = 1, B = 2 } String((E.A + E.B) is number);')).toBe('true');
+  // an enum member computes at its underlying type, which for an enum declared
+  // without a `: Type` is `int32` and not `number` - the clause names int32,
+  // and this engine defaulted to number until the enumerators began carrying
+  // the type at all.
+  expect(evaluated('enum E { A = 1, B = 2 } String((E.A + E.B) is int32);')).toBe('true');
+  expect(evaluated('enum E { A = 1, B = 2 } String((E.A + E.B) is number);')).toBe('false');
   expect(evaluated('enum E { A = 1, B = 2 } String(E.A | E.B);')).toBe('3');
   // a class defines its operators, and without one the ordinary rules apply
   expect(evaluated('class C { operator+(o) { return 7; } } String(new C() + new C());')).toBe('7');

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../readme/harness.mts';
+import { evaluated, expectThrownKind } from '../readme/harness.mts';
 
 /**
  * The four decisions settled after the cycle-131 review, implemented together
@@ -315,4 +315,39 @@ test('an enum reports the type its enumerators take their values in', () => {
   // need not know whether one was written. #sec-enums: "an enum declared
   // without one has the underlying type int32" - this defaulted to `number`.
   expect(evaluated(`${grab} @f enum D { A } String(c.valueType === int32);`)).toBe('true');
+});
+
+test('an enumerator value passes its underlying type', () => {
+  // proposal-runtime-types #sec-enums. The declaration resolved the underlying
+  // type and stored it, and nothing checked a value against it - so an enum
+  // whose annotation said uint8 accepted 300 and a string, and a program that
+  // wrote `enum Flags: uint8` LOOKED checked.
+  // Out of range is a RangeError and a wrong kind a TypeError, which is what
+  // the same value assigned to a `uint8` field gives - the enumerator passes
+  // the boundary rather than a check of its own.
+  expectThrownKind('enum E: uint8 { A = 300 } E.A;', 'RangeError');
+  expectThrownKind('enum E: uint8 { A = "s" } E.A;', 'TypeError');
+  // "The first enumerator, when it has no initializer, takes 0, and it is a
+  // type error when the underlying type is not numeric, since a non-numeric
+  // enumeration must define its starting value."
+  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+  expect(evaluated('enum E: string { A = "x" } String(E.A);')).toBe('x');
+  // The values that fit are unchanged.
+  expect(evaluated('enum E: uint8 { A, B } String(E.B);')).toBe('1');
+  expect(evaluated('enum C: float32 { Zero, One } String(C.One);')).toBe('1');
+});
+
+test('an enumerator value carries its underlying type', () => {
+  // Which is what the subtype rule needs: "an enum type is a subtype of its
+  // underlying type, so a value of an enum type is usable wherever the
+  // underlying type is required". Reflect.typeOf of an enumerator was neither
+  // the annotated type nor int32 before the values passed the boundary.
+  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === uint8);')).toBe('true');
+  expect(evaluated('enum C: float32 { Zero } String(Reflect.typeOf(C.Zero) === float32);')).toBe('true');
+  expect(evaluated('enum D { A } String(Reflect.typeOf(D.A) === int32);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A, B } let v: uint8 = E.B; String(v);')).toBe('1');
+  // The reverse conversion still works, and now compares two values of one
+  // type: it converts its argument to the underlying type before looking.
+  expect(evaluated('enum E: uint8 { A, B } String(E(1));')).toBe('1');
+  expectThrownKind('enum E: uint8 { A, B } E(99);', 'TypeError');
 });

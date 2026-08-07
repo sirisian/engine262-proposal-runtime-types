@@ -1,4 +1,5 @@
 import type { ObjectValue, Arguments } from '../value.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { VectorValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
@@ -199,8 +200,17 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       }
     }
     if (record.Kind === 'nominal' && record.EnumMembers !== undefined) {
+      // #sec-enums: "calling the enum type with a value of the underlying type
+      // returns the enumerator whose value it is". The argument is converted to
+      // the underlying type FIRST, so the comparison is between two values of
+      // one type. Comparing before converting made `E(1)` fail once the
+      // enumerators carried their type: the stored `1` was a `uint8` and the
+      // argument an untyped Number, which SameValue distinguishes.
+      const converted = record.Underlying !== undefined
+        ? Q(yield* CheckedConvertValue(arg, record.Underlying))
+        : arg;
       for (const member of record.EnumMembers) {
-        if (SameValue(arg, member)) {
+        if (SameValue(converted, member)) {
           return member;
         }
       }
