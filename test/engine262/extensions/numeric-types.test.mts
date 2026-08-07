@@ -118,12 +118,32 @@ test('numeric types: a typed value is never strictly equal to a plain number of 
   expect(evaluated('String((0.5 := float32) === 0.5);')).toBe('true');
   // R1 itself: a typed value is not strictly equal to a plain Number, nor to a
   // value of another numeric type.
-  expect(evaluated('const n = 5; String((5 := uint8) === n);')).toBe('false');
+  // A `let` binding adopts nothing. An unannotated `const` with a compile-time
+  // evaluable initializer is a different case and is pinned below.
+  expect(evaluated('let n = 5; String((5 := uint8) === n);')).toBe('false');
   expect(evaluated('function anyv() { return 5; } String((5 := uint8) === anyv());')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint8));')).toBe('true');
   expect(evaluated('String(Number((5 := uint8)) === 5);')).toBe('true');
   expect(evaluated('String(Number((0 := uint8)) === 0);')).toBe('true');
+});
+
+test('numeric types: an immutable binding with a constant initializer is a literal', () => {
+  // The literal rule reaches equality (F74), and an unannotated `const` whose
+  // initializer is compile-time evaluable IS a literal for it: the binding
+  // cannot be reassigned and its value is known, so it adopts the other
+  // operand's type exactly as the written literal does.
+  expect(evaluated('const n = 5; String((5 := uint8) === n);')).toBe('true');
+  expect(evaluated('const n = 5; String((5 := uint16) === n);')).toBe('true');
+  expect(evaluated('const n = 2 + 3; String((5 := uint8) === n);')).toBe('true');
+  // it is the literal's VALUE that must match, not merely its presence
+  expect(evaluated('const n = 6; String((5 := uint8) === n);')).toBe('false');
+  // and everything that can be reassigned, or that states its own type, adopts
+  // nothing
+  expect(evaluated('let n = 5; String((5 := uint8) === n);')).toBe('false');
+  expect(evaluated('var n = 5; String((5 := uint8) === n);')).toBe('false');
+  expect(evaluated('const n: number = 5; String((5 := uint8) === n);')).toBe('false');
+  expect(evaluated('function f(n) { return (5 := uint8) === n; } String(f(5));')).toBe('false');
 });
 
 test('numeric types: loose equality compares mathematical values across the numeric types', () => {

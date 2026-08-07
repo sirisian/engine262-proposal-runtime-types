@@ -22,7 +22,9 @@ test('typed json: a numeric leaf converts to its target type', () => {
   // is genuinely typed is the one above, against a typed value, and the one
   // below, against a variable.
   expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); (o.a === 5) ? "plain" : "not-plain";')).toBe('plain');
-  expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); const n = 5; (o.a === n) ? "plain" : "not-plain";')).toBe('not-plain');
+  // against a binding that adopts nothing. A `const` with a constant initializer
+  // is a literal for this rule, so it must be a `let` to ask the question.
+  expect(evaluated('let o = JSON.parse.<{ a: uint8 }>(\'{"a":5}\'); let n = 5; (o.a === n) ? "plain" : "not-plain";')).toBe('not-plain');
 });
 
 test('typed json: a plain number field stays an ordinary Number', () => {
