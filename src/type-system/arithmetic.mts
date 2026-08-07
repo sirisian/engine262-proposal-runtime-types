@@ -69,6 +69,21 @@ export function wrapToType(math: number, t: TypeRecord): number {
   if (!Number.isFinite(math)) {
     return 0;
   }
+  // A modulus of 2**bits is not exactly representable as a Number once bits
+  // exceeds 53, and the reduction below then loses the value entirely: for
+  // `int64`, `-5 + 2**64` rounds to exactly 2**64, the signed step subtracts
+  // 2**64, and the result is 0. Every negative value of an `int64` or `int128`
+  // became zero this way, as did `-v` and `Math.abs` over one.
+  //
+  // Above 53 bits the reduction is done in BigInt, which is exact, and the
+  // two's-complement step is what BigInt.asIntN and asUintN already are.
+  if (bits > 53) {
+    const truncated = BigInt(Math.trunc(math));
+    const wrapped = t.Name === 'int'
+      ? BigInt.asIntN(bits, truncated)
+      : BigInt.asUintN(bits, truncated);
+    return Number(wrapped);
+  }
   const modulus = 2 ** bits;
   // Truncate toward zero, then reduce modulo 2**bits into [0, modulus).
   let reduced = Math.trunc(math) % modulus;

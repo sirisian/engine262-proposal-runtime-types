@@ -218,3 +218,51 @@ test('a scalar beside a vector broadcasts, and shapes must agree', () => {
   // the scalar functions are unaffected
   expect(evaluated('String(Math.sqrt(16)) + "," + String(Math.min(3, 5)) + "," + String(Math.sin(0));')).toBe('4,3,0');
 });
+
+// -- phase 5: 64-bit lanes ----------------------------------------------------
+/**
+ * A 64-bit lane holds a Number, as `int64` does: BigInt literals keep the `n`
+ * suffix and stay `bigint`, and an unsuffixed literal reaches `int64` by
+ * propagation, so `int64x2(1n, 2n)` is a type error and `int64x2(1, 2)` is the
+ * spelling.
+ *
+ * Every negative value of an `int64` or `int128` was zero before this phase -
+ * scalar and lane alike - because the reduction modulo 2**bits was done in
+ * Number arithmetic, where `-5 + 2**64` rounds to exactly 2**64 and the
+ * two's-complement step then subtracts it back to nothing.
+ */
+test('a 64-bit lane holds negative values', () => {
+  expect(evaluated('const a: int64 = -5; String(a);')).toBe('-5');
+  expect(evaluated('const a: int128 = -5; String(a);')).toBe('-5');
+  expect(evaluated('String(int64x2(-5, 2).x);')).toBe('-5');
+  expect(evaluated('const a: int64 = 3; const b: int64 = 10; String(a - b);')).toBe('-7');
+  expect(evaluated('const v = -int64x2(1, 2); String(v.x);')).toBe('-1');
+  expect(evaluated('String(Math.abs(int64x2(-5, 2)).x);')).toBe('5');
+});
+
+test('the operation surface works across 64-bit lanes', () => {
+  expect(evaluated('const a = int64x2(10, 20); const b = int64x2(3, 4);'
+    + ' String((a + b).x) + "," + String((a * b).y);')).toBe('13,80');
+  expect(evaluated('String((uint64x2(6, 6) & uint64x2(3, 3)).x);')).toBe('2');
+  expect(evaluated('String(int64x2(3, 4).sum());')).toBe('7');
+  expect(evaluated('const a = int64x2(1, 2); String(a.lane.<1>()) + "," + String(a.withLane.<0>(9).x);')).toBe('2,9');
+  expect(evaluated('const a = int64x2(1, 2); String(a.xy.y);')).toBe('2');
+  expect(evaluated('const a = float64x2(1.5, 2.5); String((a + a).x) + ","'
+    + ' + String(Math.sqrt(float64x2(4, 9)).y);')).toBe('3,3');
+});
+
+test('comparisons and masks work at 64 bits', () => {
+  expect(evaluated('const m: boolean64x2 = int64x2(1, 5) < int64x2(3, 3);'
+    + ' String(m.any()) + "," + String(m.all());')).toBe('true,false');
+  // the all-ones form, which the wrapping defect turned into zeroes
+  expect(evaluated('const v: int64x2 = int64x2(1, 5) < int64x2(3, 3);'
+    + ' String(v.x) + "," + String(v.y);')).toBe('-1,0');
+  expect(evaluated('const m: boolean64x2 = int64x2(1, 5) < int64x2(3, 3);'
+    + ' String(m.select(int64x2(7, 7), int64x2(9, 9)).x);')).toBe('7');
+});
+
+test('a BigInt is not a 64-bit integer', () => {
+  // "Cannot mix uint64 and bigint" - the families convert explicitly
+  expectThrown('const a: int64 = 1n;');
+  expectThrown('int64x2(1n, 2n);');
+});
