@@ -884,6 +884,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   if (value.type === 'Vector') {
     return SameType((value as VectorValue).TypeRecord as TypeRecord, t);
   }
+  // proposal-runtime-types #sec-enums: "membership in `int32` follows from
+  // `Count` being a subtype of it, not from a second runtime type". An
+  // enumerator's runtime type is its ENUM, so a test against the underlying
+  // type has to go through the subtype relation - without this, tagging
+  // enumerators with the enum made `E.A is uint8` false for a `uint8` enum.
+  if (value instanceof TypedNumberValue) {
+    const valueRecord = (value as TypedNumberValue).TypeRecord as TypeRecord | undefined;
+    if (valueRecord?.Kind === 'nominal' && valueRecord.EnumMembers !== undefined
+        && valueRecord.Underlying !== undefined
+        && !(t.Kind === 'nominal' && t.EnumMembers !== undefined)) {
+      return yield* IsOfType(new TypedNumberValue((value as TypedNumberValue).value, valueRecord.Underlying), t);
+    }
+  }
   if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
     if (value instanceof ObjectValue && 'DecimalSignificand' in value) {
       const width = (value as unknown as { DecimalWidth: number }).DecimalWidth;

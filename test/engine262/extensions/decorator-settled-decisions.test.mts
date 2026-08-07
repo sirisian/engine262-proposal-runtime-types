@@ -337,17 +337,42 @@ test('an enumerator value passes its underlying type', () => {
   expect(evaluated('enum C: float32 { Zero, One } String(C.One);')).toBe('1');
 });
 
-test('an enumerator value carries its underlying type', () => {
-  // Which is what the subtype rule needs: "an enum type is a subtype of its
-  // underlying type, so a value of an enum type is usable wherever the
-  // underlying type is required". Reflect.typeOf of an enumerator was neither
-  // the annotated type nor int32 before the values passed the boundary.
-  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === uint8);')).toBe('true');
-  expect(evaluated('enum C: float32 { Zero } String(Reflect.typeOf(C.Zero) === float32);')).toBe('true');
-  expect(evaluated('enum D { A } String(Reflect.typeOf(D.A) === int32);')).toBe('true');
+test('an enumerator reports its ENUM as its type and belongs to the underlying one', () => {
+  // #sec-enums: "`Reflect.typeOf(Count.Zero)` reports `Count`, by the rule that
+  // a value's runtime type is the most specific type of which it is a value.
+  // This does not make the enumerator anything other than a value the
+  // underlying type also accepts: membership in `int32` follows from `Count`
+  // being a subtype of it, not from a second runtime type."
+  //
+  // Both halves are easy to get wrong in opposite directions. Leaving the
+  // underlying type on the converted value made typeOf report `uint8`; tagging
+  // the enum without routing membership through the subtype relation made
+  // `E.A is uint8` false.
+  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === E);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === uint8);')).toBe('false');
+  expect(evaluated('enum E: uint8 { A } String(E.A is E);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A } String(E.A is uint8);')).toBe('true');
+  expect(evaluated('enum D { A } String(Reflect.typeOf(D.A) === D);')).toBe('true');
   expect(evaluated('enum E: uint8 { A, B } let v: uint8 = E.B; String(v);')).toBe('1');
   // The reverse conversion still works, and now compares two values of one
   // type: it converts its argument to the underlying type before looking.
   expect(evaluated('enum E: uint8 { A, B } String(E(1));')).toBe('1');
   expectThrownKind('enum E: uint8 { A, B } E(99);', 'TypeError');
+});
+
+test('an enumerator without an initializer continues from the one before', () => {
+  // #sec-enums: "A later enumerator with no initializer takes the result of
+  // applying the underlying type's prefix increment operator to the one
+  // before." Continuing from a COUNTER rather than from the value made an
+  // initialized enumerator lose its effect on the next: `{ A = 10, B }`
+  // reported 1, because a converted enumerator is a TypedNumberValue and the
+  // counter only read the Number case.
+  expect(evaluated('enum E: uint8 { A = 10, B, C } String(E.B) + "," + String(E.C);')).toBe('11,12');
+  expect(evaluated('enum D { A = 5, B } String(D.B);')).toBe('6');
+  // The increment is the underlying type's, so a float32 enum continues by one
+  // from a fractional value rather than from the next integer.
+  expect(evaluated('enum C: float32 { Zero = 0.5, One } String(C.One);')).toBe('1.5');
+  // And continuing past the type's range is the RangeError it would be if
+  // written out - which the counter reset had hidden.
+  expectThrownKind('enum E: uint8 { A = 255, B } E.B;', 'RangeError');
 });

@@ -1,5 +1,6 @@
 import { NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
+import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -101,6 +102,12 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
 
     const memberValues: Value[] = [];
     const memberNames: string[] = [];
+    // Built before the members so each one can be tagged with it. `EnumMembers`
+    // is the same array the loop fills, so the record is complete by the time
+    // anything reads it.
+    const enumRecord: TypeRecord = {
+      Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues, Underlying: underlyingRecord ?? undefined,
+    };
     let nextAuto = 0;
     let previous: Value | undefined;
     for (const member of node.EnumMemberList) {
@@ -130,21 +137,31 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // read the underlying type the declaration had already resolved.
       if (underlyingRecord !== undefined) {
         v = Q(yield* CheckedConvertValue(v, underlyingRecord));
+        // #sec-enums: "`Reflect.typeOf(Count.Zero)` reports `Count`, by the rule
+        // that a value's runtime type is the most specific type of which it is
+        // a value." The conversion above is what CHECKS the value and what
+        // normalizes it; leaving the underlying type on it made an enumerator
+        // report `uint8` where the clause says it reports the enum, and
+        // membership in the underlying type follows from the subtype relation
+        // rather than from a second runtime type.
+        if (v instanceof TypedNumberValue) {
+          v = new TypedNumberValue((v as TypedNumberValue).value, enumRecord);
+        }
       }
-      if (v instanceof NumberValue) {
-        nextAuto = (R(v) as number) + 1;
-      } else {
-        nextAuto += 1;
-      }
+      // #sec-enums: "A later enumerator with no initializer takes the result of
+      // applying the underlying type's prefix increment operator to the one
+      // before." Continue from the value just stored, whatever it converted to
+      // - a converted enumerator is a TypedNumberValue rather than a Number, so
+      // reading only the Number case counted from 0 again and made
+      // `enum E: uint8 { A = 10, B }` report 1 rather than 11, and hid the
+      // overflow in `{ A = 255, B }` behind the same reset.
+      const numeric = NumericValueOfEnumerator(v);
+      nextAuto = numeric === undefined ? nextAuto + 1 : numeric + 1;
       previous = v;
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);
     }
-    const underlying = underlyingRecord;
-    const record: TypeRecord = {
-      Kind: 'nominal', Declaration: node, Arguments: [], EnumMembers: memberValues, Underlying: underlying ?? undefined,
-    };
-    const obj = GetTypeObject(record);
+    const obj = GetTypeObject(enumRecord);
     for (let i = 0; i < memberNames.length; i += 1) {
       X(CreateDataPropertyOrThrow(obj, Value(memberNames[i]), memberValues[i]));
       // The design's index operator: `Count[0]` is `Count.Zero` beside
@@ -1333,4 +1350,19 @@ export function* EnumDecoratorContext(kind: string, name: Value, target: Value, 
   const memberName = kind === 'Enum' ? '' : (name instanceof JSStringValueClass ? name.stringValue() : kind);
   X(CreateDataProperty(context, Value('metadata'), MetadataObjectFor(target, undefined, memberName)));
   return context;
+}
+
+
+/**
+ * The number an enumerator continues from, or *undefined* where its value is not
+ * numeric. A converted enumerator is a TypedNumberValue and an unconverted one a
+ * NumberValue, and both carry the same reading.
+ */
+function NumericValueOfEnumerator(v: Value): number | undefined {
+  const n = (v as unknown as { numberValue?: () => number }).numberValue;
+  if (typeof n === 'function') {
+    const read = n.call(v);
+    return typeof read === 'number' ? read : undefined;
+  }
+  return v instanceof NumberValue ? (R(v) as number) : undefined;
 }

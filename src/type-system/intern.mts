@@ -209,8 +209,17 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       const converted = record.Underlying !== undefined
         ? Q(yield* CheckedConvertValue(arg, record.Underlying))
         : arg;
+      // An enumerator's runtime type is its ENUM, so the stored value and the
+      // converted argument carry different Type Records and SameValue tells
+      // them apart. Compare what they hold: both are values of the underlying
+      // type, which is the sense in which one IS the other.
+      const held = (v: Value) => ((v as unknown as { numberValue?: () => number }).numberValue
+        ? (v as unknown as { numberValue(): number }).numberValue()
+        : undefined);
+      const wanted = held(converted);
       for (const member of record.EnumMembers) {
-        if (SameValue(converted, member)) {
+        const hasSameContent = wanted !== undefined && held(member) === wanted;
+        if (hasSameContent || SameValue(converted, member)) {
           return member;
         }
       }
