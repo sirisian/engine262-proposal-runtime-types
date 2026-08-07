@@ -45,6 +45,19 @@ test('an out-of-bounds READ is a RangeError', () => {
   expect(evaluated('const a = [1, 2, 3]; String(a[9]);')).toBe('undefined');
 });
 
+test('a value generic may be the extent', () => {
+  // `f.<4, 2>` binds a `uint32` 4, not a Number 4, and the two are never
+  // SameValue - so requiring a plain Number rejected `[N].<T>` with a
+  // value-generic extent, which is the shape sec-bounds-checks is written about.
+  expect(evaluated('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4, 2>(a)));')).toBe('9');
+  expect(evaluated('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4>(a)));')).toBe('4');
+  // The extent still has to match the argument.
+  expectThrownKind('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; f.<3>(a);', 'TypeError');
+  // A bare value generic index is NOT proven - inside the body nothing relates
+  // I to N - so the bounds check does its work.
+  expectThrownKind('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; f.<4, 9>(a);', 'RangeError');
+});
+
 test('everything within the extent still works', () => {
   expect(evaluated('const a: [4].<float32> = [1, 2, 3, 4]; a[2] = 9; String(a[2]);')).toBe('9');
   expect(evaluated('const a: [4].<float32> = [1, 2, 3, 4]; String(a.length);')).toBe('4');

@@ -1793,10 +1793,19 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // budget joins later.
           const ref = Q(yield* Evaluate(node.ArrayExtent));
           const v = Q(yield* GetValue(ref));
-          if (!(v instanceof NumberValue) || !Number.isInteger(R(v)) || (R(v) as number) < 0) {
+          // A TYPED number counts. A value generic binds the value its
+          // constraint admits - `f.<4, 2>` over `<N: uint32, I: uint32>` binds a
+          // `uint32` 4, not a Number 4, and the two are never SameValue under
+          // this proposal - so requiring a plain Number rejected `[N].<T>` with
+          // a value-generic extent, which is the very shape #sec-bounds-checks
+          // is written about. The unwrap admits both spellings of one number,
+          // as the array membership rule already does for a length.
+          const numeric = v instanceof NumberValue ? R(v)
+            : (isTypedNumber(v) ? Number(v.numberValue()) : undefined);
+          if (typeof numeric !== 'number' || !Number.isInteger(numeric) || numeric < 0) {
             return Throw.TypeError('$1 is not a type', v);
           }
-          Extent = R(v) as number;
+          Extent = numeric;
         }
       }
       return { Kind: 'array', Element, Extent };

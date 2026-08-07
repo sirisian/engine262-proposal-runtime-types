@@ -70,12 +70,17 @@ test('Typed return for destructuring: the tuple/object return type resolves', ()
 
 // ── Documented deferrals ──────────────────────────────────────────────────────
 // These record the current boundary so the deferral is visible and testable.
-test('Typed return for destructuring: converting the returned literal is deferred (documents the gap)', () => {
-  // Target: `const [a, b] = f()` binds a=1, b=2. Today, converting the returned
-  // array [1,2] to the tuple type [uint8, uint32] at the boundary is the
-  // aggregate-value runtime deferred to the memory-layout extension, so it throws.
-  expectThrown('function f(): [uint8, uint32] { return [1, 2]; } const [a, b] = f(); a;');
-  expectThrown('let t: [uint8, uint32] = [1, 2]; t;');
+test('Typed return for destructuring: the returned literal converts', () => {
+  // This documented a gap - converting `[1, 2]` to `[uint8, uint32]` at the
+  // boundary threw - and the gap closed when the array extent and the tuple
+  // element conversion learned to accept a TYPED number. A value generic binds
+  // a `uint32` 4 and not a Number 4, and requiring the plain spelling refused
+  // conversions that should have succeeded.
+  expect(evaluated('function f(): [uint8, uint32] { return [1, 2]; } const [a, b] = f(); String(Number(a)) + "/" + String(Number(b));')).toBe('1/2');
+  expect(evaluated('function f(): [uint8, uint32] { return [1, 2]; } const [a, b] = f(); String(a is uint8) + "/" + String(b is uint32);')).toBe('true/true');
+  expect(evaluated('let t: [uint8, uint32] = [1, 2]; String(Number(t[0])) + "/" + String(Number(t[1]));')).toBe('1/2');
+  // A literal the element type cannot hold is still refused.
+  expectThrown('function f(): [uint8, uint32] { return [999, 2]; } const [a, b] = f(); a;');
 });
 
 test('Object destructuring: the parenthesized pattern syntax binds', () => {
