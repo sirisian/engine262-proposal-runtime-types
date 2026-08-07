@@ -3,6 +3,18 @@ import type { InspectorContext } from './context.mts';
 
 export interface DebuggerPreference {
   previewDebug: boolean;
+  /**
+   * Log every inbound protocol message, with its parameters, to the host's
+   * stderr. Off by default.
+   *
+   * What a frontend actually sends is not knowable from this repository, and
+   * some of it decides behaviour: `Runtime.evaluate` carries `replMode`, which
+   * is how the console says "this is REPL input" and is what enables top-level
+   * await in V8, and `awaitPromise`, which asks the backend to settle a promise
+   * result before replying. Guessing at either is how a feature gets built for
+   * a request that never arrives.
+   */
+  logProtocolMessages: boolean;
 }
 
 export interface DebuggerContext {

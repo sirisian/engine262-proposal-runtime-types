@@ -4,6 +4,7 @@ import {
   DeclarativeEnvironmentRecord,
   DynamicParsedCodeRecord,
   EnsureCompletion,
+  ReturnCompletion,
   EnvironmentRecord,
   EvalDeclarationInstantiation,
   Evaluate,
@@ -130,7 +131,19 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
     if (isAsync) {
       const promiseCapability = X(NewPromiseCapability(surroundingAgent.intrinsic('%Promise%')));
       X(yield* AsyncBlockStart(promiseCapability, function* evaluate(): ValueEvaluator {
-        return yield* Evaluate(body);
+        // AsyncBlockStart resolves a NORMAL completion with undefined and a
+        // RETURN completion with its value, which is right for an async function
+        // body: falling off the end of one produces undefined, and only `return`
+        // carries a value. This body is a REPL body, where the completion value
+        // is the entire point - so it has to arrive as a return completion, or
+        // the value is discarded and `await 1; 42;` answers undefined.
+        const completion = EnsureCompletion(yield* Evaluate(body));
+        if (completion.Type !== 'normal') {
+          return completion;
+        }
+        // An empty completion - a statement that produces no value - becomes
+        // undefined, matching what the synchronous path does below.
+        return ReturnCompletion(completion.Value === undefined ? Value.undefined : completion.Value);
       }, evalContext));
       result = promiseCapability.Promise;
     } else {

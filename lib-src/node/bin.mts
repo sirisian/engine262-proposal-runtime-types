@@ -109,6 +109,7 @@ const argv = parseArgs({
     'test262-harness': { type: 'boolean', short: 't' },
     // hidden options
     'preview-debug': { type: 'boolean' },
+    'log-protocol': { type: 'boolean' },
   },
 });
 
@@ -247,6 +248,7 @@ async function setupInspector(mode: 'file' | 'eval' | 'pipe' | 'repl') {
   const inspector = await NodeWebsocketInspector.new();
   inspector.attachAgent(surroundingAgent, [realm]);
   inspector.preference.previewDebug = argv.values['preview-debug'] || false;
+  inspector.preference.logProtocolMessages = argv.values['log-protocol'] || false;
   writeStdout([
     `Inspector attached at 127.0.0.1:${inspector.port}${inspectArg ? '' : ', use --no-inspect to disable'}`,
     'Paste this URL into Chromium to open DevTools:',

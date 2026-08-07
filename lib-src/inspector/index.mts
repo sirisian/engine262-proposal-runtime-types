@@ -98,9 +98,15 @@ export abstract class Inspector {
 
   protected abstract send(data: object): void;
 
-  readonly preference: DebuggerPreference = { previewDebug: false };
+  readonly preference: DebuggerPreference = { previewDebug: false, logProtocolMessages: false };
 
   protected onMessage(id: unknown, methodArg: string, params: unknown): void {
+    if (this.preference.logProtocolMessages) {
+      // Before the filters below, so that a message this implementation ignores
+      // is still visible - what a frontend sends and what this acts on are
+      // different questions, and the first is the one being asked.
+      this.#logInboundMessage(methodArg, params);
+    }
     if (ignoreMethods.includes(methodArg)) {
       return;
     }
@@ -139,6 +145,31 @@ export abstract class Inspector {
       resolve(f(params, this.#debugContext));
     }).then((result = {}) => {
       this.send({ id, result });
+    });
+  }
+
+  /**
+   * Report one inbound protocol message to the devtools console, which is where
+   * whoever turned this on is looking. Parameters are JSON where they will
+   * serialize and a key list where they will not, so a message carrying
+   * something cyclic still reports which fields were present - usually the whole
+   * question.
+   */
+  #logInboundMessage(method: string, params: unknown): void {
+    let rendered;
+    try {
+      rendered = JSON.stringify(params);
+    } catch {
+      rendered = params && typeof params === 'object' ? `{ ${Object.keys(params).join(', ')} }` : String(params);
+    }
+    if (rendered !== undefined && rendered.length > 800) {
+      rendered = `${rendered.slice(0, 800)}...`;
+    }
+    this.sendEvent['Runtime.consoleAPICalled']({
+      timestamp: Date.now(),
+      type: 'debug',
+      executionContextId: 0,
+      args: [{ type: 'string', value: `[protocol] ${method} ${rendered ?? ''}` }],
     });
   }
 
@@ -207,3 +238,4 @@ export abstract class Inspector {
     },
   };
 }
+
