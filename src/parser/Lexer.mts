@@ -245,6 +245,14 @@ export abstract class Lexer {
     let line: number;
     let column: number | undefined;
     const decoratingSource = this.decoratingSource ?? this.source;
+    // NON-SPEC: whether the offending position is the END of the input. A REPL
+    // distinguishes source that is malformed from source that is merely
+    // unfinished - the first should be reported, the second waited on - and
+    // this is the only place that knows which it was.
+    const atEndOfInput = typeof location === 'number'
+      ? location >= decoratingSource.length
+      : ('type' in location && location.type === Token.EOS);
+    (error as { HostDefinedAtEndOfInput?: boolean }).HostDefinedAtEndOfInput = atEndOfInput;
     if (typeof location === 'number') {
       line = this.line;
       if (location === decoratingSource.length) {

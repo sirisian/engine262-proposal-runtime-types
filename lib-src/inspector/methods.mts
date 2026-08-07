@@ -138,8 +138,17 @@ export const Runtime: RuntimeNamespace = {
     }
     if (Array.isArray(parsed)) {
       const e = context.createExceptionDetails(ThrowCompletion(parsed[0]), false);
-      // Note: it has to be this message to trigger devtools' line wrap.
-      e.exception!.description = 'SyntaxError: Unexpected end of input';
+      // Note: this message is what triggers devtools' line wrap, so it is used
+      // where the input really did end early - devtools then waits for the rest
+      // rather than submitting.
+      //
+      // It used to be set for EVERY parse error, which made malformed input
+      // indistinguishable from unfinished input: the console would not submit
+      // on Enter and never showed the actual error, so a program with a genuine
+      // syntax error could not be run or diagnosed at all.
+      if ((parsed[0] as { HostDefinedAtEndOfInput?: boolean }).HostDefinedAtEndOfInput) {
+        e.exception!.description = 'SyntaxError: Unexpected end of input';
+      }
       return { exceptionDetails: e };
     }
     if (options.persistScript) {
