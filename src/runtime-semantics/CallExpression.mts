@@ -259,7 +259,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // which decorators.md makes the default, by walking the base chain.
       const memberRead = contextRecord.Kind === 'nominal'
         && typeof contextRecord.LibraryName === 'string'
-        && ['Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
+        && ['Reflect.ClassField', 'Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
           'Reflect.ClassAccessor', 'Reflect.ClassOperator'].includes(contextRecord.LibraryName);
       if (memberRead) {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
@@ -320,7 +320,14 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base, memberName.stringValue())));
         return reflection;
       }
-      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassField') {
+      // proposal-runtime-types #sec-reflection-shape-class-field-layout: the
+      // LAYOUT view answers here, under its own context. It used to answer under
+      // `Reflect.ClassField`, which is also what the DECORATOR CONTEXT of that
+      // name reports - so one retrieval expression gave the placement shape and
+      // the declaration shape depending on how a reader arrived. `ClassField`
+      // now falls through to the member path above and answers the declaration
+      // reflection, the same one its decorator context carries.
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassFieldLayout') {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const argList = Q(yield* ArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;

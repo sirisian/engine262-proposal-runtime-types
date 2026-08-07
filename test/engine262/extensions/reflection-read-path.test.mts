@@ -93,13 +93,15 @@ test('the two FIELD paths are merged into one read', () => {
   // class that had one - and the declaration record built for methods held
   // fields too. Two paths that disagreed about the same question. Merged: the
   // record supplies what was DECLARED, the layout supplies where it SITS.
-  expect(evaluated('class A { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('4');
+  expect(evaluated('class A { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('4');
   expect(evaluated('class A { static s: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassField, A>("s").static);')).toBe('true');
   // A class with NO layout reads its declaration facts and reports no
   // placement - absent rather than *undefined* would be wrong here, since the
   // field genuinely has no offset to report.
-  expect(evaluated('class A { a; b: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("b").kind;')).toBe('field');
-  expect(evaluated('class A { a; b: uint8; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('undefined');
+  // `kind` names the CONTEXT, so this is 'ClassField' - it read 'field', the one
+  // shape reporting something other than the context that produced it.
+  expect(evaluated('class A { a; b: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("b").kind;')).toBe('ClassField');
+  expect(evaluated('class A { a; b: uint8; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('undefined');
   // A name that was never declared is still refused, which is what says the
   // merge widened the answer rather than the acceptance.
   expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("z");')).toBe('TypeError');

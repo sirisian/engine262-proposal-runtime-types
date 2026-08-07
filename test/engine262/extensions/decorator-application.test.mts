@@ -70,7 +70,7 @@ test('a reserved layout control and a user decorator share one field', () => {
   const both = 'const log = []; function audit(c) { log.push("audit:" + String(c.name)); } '
     + 'class A { @align(4) @audit a: uint8; b: uint32; } ';
   expect(evaluated(`${both} log.join(",");`)).toBe('audit:a');
-  expect(evaluated(`${both} String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);`)).toBe('4');
+  expect(evaluated(`${both} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);`)).toBe('4');
   // A control alone still evaluates no expression — there is no binding named
   // `packed` and it does not need one. (`packed` is a CLASS control, so it goes
   // on the class; a class control written in a field position is simply not the

@@ -53,7 +53,7 @@ test('the LAYOUT is unaffected by the modifier', () => {
   // and a readonly one is still a field's worth of storage, so removing the
   // setter must not remove the slot.
   expect(evaluated('class A { readonly accessor a: uint32 = 1; } '
-    + 'String(Reflect.getReflection.<Reflect.ClassField, A>("a").byteLength);')).toBe('4');
+    + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").byteLength);')).toBe('4');
   expect(evaluated('class A { x: uint32 = 0; readonly accessor a: uint8 = 1; } '
-    + 'String(Reflect.getReflection.<Reflect.ClassField, A>("a").offset);')).toBe('4');
+    + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").offset);')).toBe('4');
 });

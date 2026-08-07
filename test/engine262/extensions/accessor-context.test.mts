@@ -72,7 +72,7 @@ test('PROTECTED parses, reports, and does not move the layout', () => {
   // does", so the field after it sits where it would have anyway.
   const withProtected = 'class A { a: uint8; protected b: uint32; c: uint8; } ';
   expect(evaluated(`${withProtected} String((type A).byteLength);`)).toBe('12');
-  expect(evaluated(`${withProtected} String(Reflect.getReflection.<Reflect.ClassField, A>("c").offset);`)).toBe('8');
+  expect(evaluated(`${withProtected} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("c").offset);`)).toBe('8');
   // And a member NAMED `protected` still works, which is the hazard a
   // contextual keyword always carries.
   expect(evaluated('class A { protected = 5; } String(new A().protected);')).toBe('5');

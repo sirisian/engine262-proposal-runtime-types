@@ -20,7 +20,7 @@ test('a field context reports its OFFSET and BYTE LENGTH', () => {
   // And they AGREE with the layout reflection, which is the property that
   // matters: two reflections of one field must not disagree.
   expect(evaluated('class A { x: uint32 = 0; a: uint8 = 3; } '
-    + 'String(Reflect.getReflection.<Reflect.ClassField, A>("a").offset);')).toBe('4');
+    + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").offset);')).toBe('4');
 });
 
 test('a STATIC or UNTYPED field reports neither', () => {

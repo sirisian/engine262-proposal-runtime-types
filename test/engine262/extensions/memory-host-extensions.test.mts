@@ -26,15 +26,15 @@ test('memory layout: the reserved layout controls place a class and its fields',
   // name no function and take no context, they set property-descriptor keys.
   // So they are recognized syntactically and never evaluated.
   expect(evaluated('@packed class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('3/1');
-  expect(evaluated('@packed class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('1');
+  expect(evaluated('@packed class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('1');
   // The design's four-control example, which exercises `alignAll`, `size`,
   // `offset`, and `align` in one declaration. `align` REPLACES a field's
   // alignment rather than strengthening it, so `y` lands at byte 8 and not at
   // 16 - taking the max is the obvious wrong implementation.
   const four = '@alignAll(16) @size(32) class A { @offset(2) x: float32; @align(4) y: float32x4; } ';
   expect(evaluated(`${four} String((type A).byteLength) + "/" + String((type A).alignment);`)).toBe('32/16');
-  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassField, A>("x").offset);`)).toBe('2');
-  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassField, A>("y").offset);`)).toBe('8');
+  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("x").offset);`)).toBe('2');
+  expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("y").offset);`)).toBe('8');
   // A class with no controls is unaffected.
   expect(evaluated('class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
   // ANY OTHER DECORATOR IS REFUSED. This proposal's decorators extension -
@@ -338,15 +338,15 @@ test('memory layout: sub-byte fields pack into shared bytes', () => {
   // The design's RGB565, exactly.
   const rgb = '@packed class RGB565 { r: uint.<5>; g: uint.<6>; b: uint.<5>; } ';
   expect(evaluated(`${rgb} String((type RGB565).byteLength) + "/" + String((type RGB565).bitLength);`)).toBe('2/16');
-  expect(evaluated(`${rgb} const R = (n) => Reflect.getReflection.<Reflect.ClassField, RGB565>(n); String(R("r").offsetBit) + "/" + String(R("g").offsetBit) + "/" + String(R("b").offsetBit);`)).toBe('0/5/11');
-  expect(evaluated(`${rgb} String(Reflect.getReflection.<Reflect.ClassField, RGB565>("g").isBitField);`)).toBe('true');
+  expect(evaluated(`${rgb} const R = (n) => Reflect.getReflection.<Reflect.ClassFieldLayout, RGB565>(n); String(R("r").offsetBit) + "/" + String(R("g").offsetBit) + "/" + String(R("b").offsetBit);`)).toBe('0/5/11');
+  expect(evaluated(`${rgb} String(Reflect.getReflection.<Reflect.ClassFieldLayout, RGB565>("g").isBitField);`)).toBe('true');
 
   // "Automatic packing reaches only a field under 8 bits, so a `uint.<12>`
   // occupies 2 bytes unless an `offsetBit` places it." The BYTE BOUNDARY is the
   // line, not the type's name.
   expect(evaluated('class W { a: uint.<12>; } String((type W).byteLength) + "/" + String((type W).bitLength);')).toBe('2/12');
   // `offsetBit` places one explicitly, which is what fixes bit order exactly.
-  expect(evaluated('@packed class E { a: uint.<3>; @offsetBit(8) b: uint.<4>; } const R = (n) => Reflect.getReflection.<Reflect.ClassField, E>(n); String(R("a").offsetBit) + "/" + String(R("b").offsetBit) + "/" + String((type E).bitLength);')).toBe('0/8/12');
+  expect(evaluated('@packed class E { a: uint.<3>; @offsetBit(8) b: uint.<4>; } const R = (n) => Reflect.getReflection.<Reflect.ClassFieldLayout, E>(n); String(R("a").offsetBit) + "/" + String(R("b").offsetBit) + "/" + String((type E).bitLength);')).toBe('0/8/12');
 
   // bitLength is now the UNROUNDED extent: a class of one `uint.<5>` is 5 bits
   // in 1 byte, where the walk previously reported 8 because it derived
@@ -436,7 +436,7 @@ test('memory layout: overlapping fields reinterpret, and the store check is per 
   // declares, and neither field knows the other shares its bytes.
   const u = '@packed class U { value: float32; @offset(0) bits: uint32; } const b = new ArrayBuffer(8); const u = new(b, 0) U(); ';
   // Both fields are placed at byte 0.
-  expect(evaluated(`${u} String(Reflect.getReflection.<Reflect.ClassField, U>("value").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassField, U>("bits").offset);`)).toBe('0/0');
+  expect(evaluated(`${u} String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("value").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("bits").offset);`)).toBe('0/0');
   // A float written through one field is read as its BIT PATTERN through the
   // other, which is what a program overlapping two types asked for and is why
   // the C union is expressible at all. 1.0 as a float32 is 0x3F800000.
@@ -476,7 +476,7 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // class" says the width is the implementation's business, and this
   // implementation spends 8 bytes at alignment 8.
   expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('8/8');
-  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassField, R>("r").offset);')).toBe('16/8');
+  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('16/8');
   // KNOWN LIMIT, recorded rather than asserted away: a SELF-referential class
   // declares, constructs, and links, but its own layout is not computed at its
   // declaration. The self-reference resolves to a type built from the
@@ -492,7 +492,7 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // being handed a stale one back. The linked list lays out like any other
   // class holding a reference.
   expect(evaluated('class N { value: uint32; next: N | null; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('16/8');
-  expect(evaluated('class N { value: uint32; next: N | null; } String(Reflect.getReflection.<Reflect.ClassField, N>("next").offset);')).toBe('8');
+  expect(evaluated('class N { value: uint32; next: N | null; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next").offset);')).toBe('8');
 });
 
 test('memory layout: a class may not contain itself by value', () => {

@@ -1217,6 +1217,28 @@ export function classFieldContextRecord(): TypeRecord {
   };
 }
 
+/**
+ * proposal-runtime-types #sec-reflection-shape-class-field-layout: the LAYOUT
+ * view of a field, which is a different reflection from the declaration one and
+ * now has a different name to be reached by.
+ *
+ * Both were `Reflect.ClassField` - memorylayout.md reached the placement through
+ * it and decorators.md named its decorator context by it - so one retrieval
+ * expression answered two shapes depending on which document a reader had open.
+ * Like Reflect.Type this is a reflection context and NOT a decorator context:
+ * nothing decorates a placement.
+ */
+const classFieldLayoutContextDeclaration = { type: 'ReflectionContext', name: 'ClassFieldLayout' } as unknown as ParseNode;
+
+export function classFieldLayoutContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: classFieldLayoutContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.ClassFieldLayout',
+  };
+}
+
 export function bootstrapReflectClassField(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {
     return;
@@ -1486,6 +1508,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
+  X(reflect.DefineOwnProperty(Value('ClassFieldLayout'), Descriptor({
+    Value: GetTypeObject(classFieldLayoutContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
   // The value side of the same table: register every context under the name it
   // was just bound to, so that a reflection object can REPORT its context type
   // and the ordinary overload machinery can select on it.
@@ -1514,12 +1542,15 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
     return Throw.TypeError('$1 is not a field of this type', Value(name));
   }
   const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
-  X(CreateDataProperty(obj, Value('kind'), Value('field')));
-  if (declaration !== undefined) {
-    X(CreateDataProperty(obj, Value('static'), declaration.static ? Value.true : Value.false));
-    X(CreateDataProperty(obj, Value('private'), declaration.private ? Value.true : Value.false));
-    X(CreateDataProperty(obj, Value('protected'), declaration.protected ? Value.true : Value.false));
-  }
+  // proposal-runtime-types #sec-reflection-shape-rules: `kind` names the CONTEXT
+  // that produced the reflection. This read `'field'`, the one place a shape
+  // reported something other than its context name.
+  X(CreateDataProperty(obj, Value('kind'), Value('ClassFieldLayout')));
+  // #sec-reflection-shape-class-field-layout: this carries no `static`,
+  // `private`, or `protected`. Those are facts about the DECLARATION and the
+  // ClassField reflection reports them; duplicating them here is what let the
+  // two shapes look like variants of one thing rather than answers to different
+  // questions.
   if (!placement) {
     // Declared but not placed: the class has no layout, so the PLACEMENT half
     // is absent rather than *undefined*, which is how this suite reports a

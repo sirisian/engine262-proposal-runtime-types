@@ -33,7 +33,7 @@ test('a private typed field is laid out exactly as a public one', () => {
   const privateMiddle = 'class A { a: uint8; #b: uint32; c: uint8; } ';
   const noMiddle = 'class A { a: uint8; c: uint8; } ';
   const size = 'String((type A).byteLength);';
-  const offsetOfC = 'String(Reflect.getReflection.<Reflect.ClassField, A>("c").offset);';
+  const offsetOfC = 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("c").offset);';
   expect(evaluated(publicMiddle + size)).toBe('12');
   expect(evaluated(privateMiddle + size)).toBe('12');
   expect(evaluated(publicMiddle + offsetOfC)).toBe('8');
@@ -63,7 +63,7 @@ test('an ACCESSOR occupies its slot, which is stage C\'s question', () => {
   // between two fields, and the offset of the one after it.
   const withAccessor = 'class A { a: uint8; accessor b: uint32 = 0; c: uint8; } ';
   expect(evaluated(`${withAccessor} String((type A).byteLength);`)).toBe('12');
-  expect(evaluated(`${withAccessor} String(Reflect.getReflection.<Reflect.ClassField, A>("c").offset);`)).toBe('8');
+  expect(evaluated(`${withAccessor} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("c").offset);`)).toBe('8');
   // Identical to the public and private forms above: "participates in the
   // memory layout" means the same layout, not a layout of its own.
   expect(evaluated('class A { a: uint8; b: uint32; c: uint8; } String((type A).byteLength);')).toBe('12');

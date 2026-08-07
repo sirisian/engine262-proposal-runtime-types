@@ -259,7 +259,9 @@ test('PINNED: the SCALE half of the rule has no metadata to read', () => {
 });
 
 test('STAGE E: a decimal field has the IEEE 754 width and alignment', () => {
-  const R = (f: string, p: string) => `String(Reflect.getReflection.<Reflect.ClassField, C>("${f}").${p})`;
+  // The placement is reached through Reflect.ClassFieldLayout since the two
+  // views were split; Reflect.ClassField answers what a field was DECLARED as.
+  const R = (f: string, p: string) => `String(Reflect.getReflection.<Reflect.ClassFieldLayout, C>("${f}").${p})`;
   // IEEE 754-2008's interchange formats: decimal32 is 4 bytes, decimal64 is 8,
   // decimal128 is 16. **The width is a property of the TYPE, not of the
   // representation** - the interpreter holds a BigInt significand and an

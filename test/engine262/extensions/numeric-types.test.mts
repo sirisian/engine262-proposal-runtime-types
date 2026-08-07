@@ -374,20 +374,20 @@ test('memory layout: a value type class lays out by natural alignment', () => {
 test('memory layout: a field reports its offset through the ClassField reflection', () => {
   // #sec-layout-properties: "A field's offset is read through the reflection of
   // its declaration rather than from the type, because it belongs to the field:
-  // Reflect.getReflection.<Reflect.ClassField, T>(name) reports an offset and a
+  // Reflect.getReflection.<Reflect.ClassFieldLayout, T>(name) reports an offset and a
   // byteLength ... This is the offsetof a serializer, a placement
   // construction, or a vertex attribute descriptor needs."
   const V = 'class Vertex { x: float32; y: float32; z: float32; } ';
-  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("y").offset);`)).toBe('4');
-  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("y").byteLength);`)).toBe('4');
-  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassField, Vertex>("z").offset);`)).toBe('8');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("y").offset);`)).toBe('4');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("y").byteLength);`)).toBe('4');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("z").offset);`)).toBe('8');
   // The offset is the LAID-OUT one, so the padding the alignment rule inserts
   // is visible here: `b` is at 2 and not at 1.
-  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('2');
+  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('2');
   // Inheritance appends, so a base's field keeps its offset when read through
   // the subclass and the subclass's field follows it.
   const S = 'class B { a: uint8; } class S extends B { b: uint8; } ';
-  expect(evaluated(`${S} String(Reflect.getReflection.<Reflect.ClassField, S>("a").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassField, S>("b").offset);`)).toBe('0/1');
+  expect(evaluated(`${S} String(Reflect.getReflection.<Reflect.ClassFieldLayout, S>("a").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, S>("b").offset);`)).toBe('0/1');
 
   // A context is used in TYPE position, so it has to BE a type for the call to
   // resolve; `Reflect.ClassField` is a Type Object for the same reason
@@ -400,8 +400,9 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   // it sits and only a laid-out class has that to say. Before they were merged
   // this threw, so a declared field on a class carrying an untyped one was
   // unreflectable although the record held it.
-  expect(evaluated('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a").kind;')).toBe('field');
-  expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassField, U>("a").offset);')).toBe('undefined');
+  // `kind` names the CONTEXT that produced the reflection.
+  expect(evaluated('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a").kind;')).toBe('ClassField');
+  expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("a").offset);')).toBe('undefined');
   expectThrownKind('class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
   // The one-argument form is untouched.
   expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type');

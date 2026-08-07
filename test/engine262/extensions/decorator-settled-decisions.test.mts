@@ -34,15 +34,22 @@ test('DECISION 1: an operator return takes ClassOperatorReturn', () => {
 });
 
 test('DECISION 2: the layout reflection says which field it describes', () => {
-  // `getReflection.<Reflect.ClassField, T>(name)` reported only layout numbers.
+  // Reached by `Reflect.ClassFieldLayout` since the two views were split: the
+  // placement is its own context, and `Reflect.ClassField` answers what the
+  // field was DECLARED as (#sec-reflection-shape-class-field-layout).
+  //
+  // `getReflection.<Reflect.ClassFieldLayout, T>(name)` reported only layout numbers.
   // Redundant when fetched BY name, necessary when the set is enumerated -
   // which is the form that reads a whole layout out - and the design's
   // ClassFieldReflection lists `name` either way.
-  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").name);')).toBe('b');
-  // The bit-field surface stays where it is and is now documented as the
-  // memory-layout extension's own reflection rather than left unwritten.
-  expect(evaluated('class A { a: uint8; b: uint16; } Object.keys(Reflect.getReflection.<Reflect.ClassField, A>("b")).join(",");'))
-    .toBe('kind,static,private,protected,name,offset,byteLength,bitLength,alignment,offsetBit,isBitField');
+  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").name);')).toBe('b');
+  // The bit-field surface stays where it is and is the memory-layout
+  // extension's own reflection. It carries no `static`, `private`, or
+  // `protected`: those are facts about the DECLARATION, which the ClassField
+  // reflection reports, and duplicating them here is what let the two shapes
+  // look like variants of one thing rather than answers to different questions.
+  expect(evaluated('class A { a: uint8; b: uint16; } Object.keys(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b")).join(",");'))
+    .toBe('kind,name,offset,byteLength,bitLength,alignment,offsetBit,isBitField');
 });
 
 test('DECISION 3: a binding reflection reports `initial`, not `value`', () => {
@@ -252,4 +259,25 @@ test('a getter and setter carry no `signatures`', () => {
   // A method and an operator keep theirs.
   expect(evaluated(`${grab} class A { @f m(): uint8 { return 1; } } String(c.signatures.length);`)).toBe('1');
   expect(evaluated(`${grab} class V { @f operator +(o: V): V { return o; } } String(c.signatures.length);`)).toBe('1');
+});
+
+test('the declaration and the layout are two contexts, not one', () => {
+  // proposal-runtime-types #sec-reflection-shape-class-field-layout. One
+  // retrieval expression used to answer two shapes: memorylayout.md reached a
+  // field's placement through Reflect.ClassField and decorators.md named its
+  // decorator context by the same expression, so which shape a reader got
+  // depended on which document was open.
+  const V = 'class V { x: uint32 = 1; y: uint8 = 2; } ';
+  // The declaration view: what the field WAS DECLARED as.
+  expect(evaluated(`${V} Reflect.getReflection.<Reflect.ClassField, V>('x').kind;`)).toBe('ClassField');
+  expect(evaluated(`${V} String(Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.ClassField, V>('x')).includes('type'));`)).toBe('true');
+  // The layout view: where its bytes are, and none of the declaration facts the
+  // other reports.
+  expect(evaluated(`${V} Reflect.getReflection.<Reflect.ClassFieldLayout, V>('y').kind;`)).toBe('ClassFieldLayout');
+  expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, V>('y').offset);`)).toBe('4');
+  expect(evaluated(`${V} String(Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.ClassFieldLayout, V>('y')).includes('private'));`)).toBe('false');
+  // They answer differently for a class with no layout, and both are right: the
+  // declaration reflection reports no placement, and asking the layout one at
+  // all is the mistake.
+  expect(evaluated(`class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>('a').offset);`)).toBe('undefined');
 });
