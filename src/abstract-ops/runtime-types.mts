@@ -741,13 +741,29 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     const elements = t.Elements;
     const rest = elements.find((e) => e.Rest);
     const fixedCount = elements.filter((e) => !e.Rest).length;
-    // Without a rest the length is the position count; with one the fixed
-    // positions are the floor.
-    if (rest === undefined ? len !== fixedCount : len < fixedCount) {
+    // #sec-array-and-tuple-types: a trailing position with a default may be
+    // omitted, which is what lets a shorter array satisfy a longer tuple. The
+    // floor is therefore the count of positions carrying NEITHER a rest nor a
+    // default, and the supplied length may fall anywhere from there to the
+    // position count.
+    const requiredCount = elements.filter((e) => !e.Rest && e.Initial === 'none').length;
+    if (len < requiredCount || (rest === undefined && len > fixedCount)) {
       return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
     }
-    const out = X(ArrayCreate(len));
-    for (let i = 0; i < len; i += 1) {
+    // An unsupplied position takes its default, converted to that position's
+    // type as a supplied value would be.
+    const filled = Math.max(len, rest === undefined ? fixedCount : len);
+    const out = X(ArrayCreate(filled));
+    for (let i = 0; i < filled; i += 1) {
+      if (i >= len) {
+        const declaredDefault = elements[i]!.Initial;
+        if (declaredDefault === 'none') {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        const convertedDefault = Q(yield* CheckedConvertValue(declaredDefault, elements[i]!.Type));
+        X(CreateDataPropertyOrThrow(out, Value(String(i)), convertedDefault));
+        continue;
+      }
       // A position past the declared ones belongs to the rest, whose [[Type]]
       // is the type of what it collects.
       const declared = i < elements.length && !elements[i]!.Rest

@@ -233,7 +233,15 @@ export interface IndexSignatureRecord {
 export interface TupleElementRecord {
   readonly Type: TypeRecord;
   readonly Rest: boolean;
-  readonly Initial: 'none';
+  /**
+   * proposal-runtime-types #sec-array-and-tuple-types: the declared default's
+   * VALUE, or ~none~ where the position has none. A tuple type is interned, so
+   * the value is shared by every use of the type - which is why a default must
+   * be compile-time evaluable, and so a value type or a string, copied rather
+   * than aliased. It was typed `'none'` alone, so a parsed default had nowhere
+   * to go and the membership rule that reads it could never fire.
+   */
+  readonly Initial: Value | 'none';
 }
 
 export type TypeRecord =

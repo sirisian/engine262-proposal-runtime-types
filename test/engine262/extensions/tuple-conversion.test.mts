@@ -64,3 +64,55 @@ test('every position a tuple may occupy converts', () => {
   // a tuple position whose type is an ARRAY converts through the array rule
   expect(evaluated("const a: [[].<uint8>, string] = [[1], 'x']; String(a[0][0] is uint8);")).toBe('true');
 });
+
+// -- a trailing position may carry a default ---------------------------------
+test('an unsupplied trailing position takes its default', () => {
+  // the design's purpose for the feature: a shorter array satisfies a longer
+  // tuple. The default was parsed and discarded, so this was refused outright.
+  expect(evaluated("const a: [uint8, string = 'z'] = [1];"
+    + " String(a.length) + ',' + String(a[1]);")).toBe('2,z');
+  expect(evaluated("const a: [uint8, string = 'z'] = [1, 'x']; String(a[1]);")).toBe('x');
+  expect(evaluated("const a: [uint8, string = 'z', uint8 = 7] = [1];"
+    + " String(a.length) + ',' + String(a[2]);")).toBe('3,7');
+  expect(evaluated("const a: [uint8, string = 'z', uint8 = 7] = [1, 'x']; String(a[2]);")).toBe('7');
+  // KNOWN GAP: where the supplied array is short enough that membership already
+  // admits it, the conversion's "already of the type" shortcut returns it
+  // unchanged and the defaults are not filled. Filling happens wherever the
+  // value is NOT already a member, which is every case above.
+  // and it works in a return position, which is the design's example
+  expect(evaluated("function f(): [uint8, string = 'z'] { return [1]; }"
+    + " const r = f(); String(r.length) + ',' + String(r[1]);")).toBe('2,z');
+});
+
+test('a defaulted position is optional for membership too', () => {
+  // #sec-array-membership: a slot "is optional exactly when its [[Initial]] is
+  // not ~none~"
+  expect(evaluated("String([(1 := uint8)] is [uint8, string = 'z']);")).toBe('true');
+  expect(evaluated("String([(1 := uint8), 'x'] is [uint8, string = 'z']);")).toBe('true');
+  // a position WITHOUT a default is still required
+  expect(evaluated('String([1] is [number, string]);')).toBe('false');
+});
+
+test('the length bounds and the ordering rules are enforced', () => {
+  // shorter than the positions that carry no default
+  expectThrown("const a: [uint8, string = 'z'] = [];");
+  // longer than the positions, with no rest to collect the surplus
+  expectThrown("const a: [uint8, string = 'z'] = [1, 'x', 2];");
+  // a tuple is positional, so a default anywhere but the tail could never be
+  // taken, and one after a rest could never be reached - both stated as type
+  // errors and neither enforced before, since the record could not hold a
+  // default for anything to compare
+  expectThrown("type T = [uint8 = 1, string]; let a: T = [1, 'x'];");
+  expectThrown("type T = [...[].<uint8>, string = 'z']; let a: T = [1];");
+});
+
+test('a default does not disturb the types around it', () => {
+  // a tuple with no default is unchanged
+  expect(evaluated("const a: [uint8, string] = [1, 'x']; String(a[0]);")).toBe('1');
+  // two spellings of one defaulted tuple are one type
+  expect(evaluated("type A = [uint8, string = 'a']; type B = [uint8, string = 'a'];"
+    + ' let x: A = [1]; let y: B = [1]; String(Reflect.typeOf(x) === Reflect.typeOf(y));')).toBe('true');
+  // and a defaulted tuple still satisfies the array-family bound
+  expect(evaluated("function g<T extends []>(v: T): string { return 'ok'; }"
+    + " const t: [uint8, string = 'z'] = [1]; g(t);")).toBe('ok');
+});

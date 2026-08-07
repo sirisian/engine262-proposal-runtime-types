@@ -1028,7 +1028,14 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // element against it directly meant no rest ever matched anything.
       const restCount = t.Elements.filter((e) => e.Rest).length;
       if (restCount === 0) {
-        if (len !== t.Elements.length) {
+        // #sec-array-membership: an element's slot "is optional exactly when its
+        // [[Initial]] is not ~none~", so a value may stop short of the trailing
+        // positions that carry a default. The exact-length test could never see
+        // one, because [[Initial]] was always ~none~ - which is what made the
+        // design's "a shorter array satisfies a longer tuple return"
+        // unreachable.
+        const requiredLength = t.Elements.filter((e) => e.Initial === 'none').length;
+        if (len < requiredLength || len > t.Elements.length) {
           return false;
         }
         for (let i = 0; i < len; i += 1) {
@@ -1795,9 +1802,35 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return { Kind: 'array', Element, Extent };
     }
     case 'TupleType': {
-      const Elements = [];
+      const Elements: { Type: TypeRecord, Rest: boolean, Initial: Value | 'none' }[] = [];
+      let sawDefault = false;
+      let sawRest = false;
       for (const e of node.TupleElementList) {
-        Elements.push({ Type: Q(yield* TypeNodeToTypeRecord(e.Type)), Rest: e.Rest, Initial: 'none' as const });
+        // #sec-array-and-tuple-types: a tuple is positional, so the only way to
+        // leave a position unsupplied is to stop short of it. A default anywhere
+        // but the tail could never be taken, and one after a rest could never be
+        // reached. Both are stated as type errors and neither was enforced,
+        // because the record could not represent a default and so nothing
+        // downstream could see their order.
+        if (sawDefault && !e.Initializer && !e.Rest) {
+          return Throw.TypeError('$1 is not a type', Value('a tuple position without a default may not follow one with a default'));
+        }
+        if (sawRest && e.Initializer) {
+          return Throw.TypeError('$1 is not a type', Value('a tuple position with a default may not follow a rest'));
+        }
+        let Initial: Value | 'none' = 'none';
+        if (e.Initializer) {
+          // The default's VALUE, evaluated once for the type. A tuple type is
+          // interned, so this value is shared by every use of the type; the
+          // compile-time restriction is what makes that unobservable, since a
+          // value type or a string is copied rather than aliased.
+          Initial = Q(yield* GetValue(Q(yield* Evaluate(e.Initializer))));
+          sawDefault = true;
+        }
+        if (e.Rest) {
+          sawRest = true;
+        }
+        Elements.push({ Type: Q(yield* TypeNodeToTypeRecord(e.Type)), Rest: e.Rest, Initial });
       }
       return { Kind: 'tuple', Elements };
     }
