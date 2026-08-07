@@ -463,17 +463,37 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       // A `return` or `break` inside propagates as the abrupt completion it is,
       // which is what makes the arm a block rather than a function body.
       const blockResult = EnsureCompletion(yield* Evaluate(clause.Body as never));
+      // The clause environment must be dropped on EVERY exit, not only the ones
+      // that fall through to the next clause. Leaving it installed made the
+      // running context's LexicalEnvironment a child of the one the surrounding
+      // code expects, so a `for` head containing a match then asked its loop
+      // environment for a binding that lives one link up:
+      //
+      //   for (let i = match ([1]) { when [_]: 1; default: 0; }; i < 3; i++)
+      //
+      // crashed on `Assert(binding !== undefined)` inside
+      // CreatePerIterationEnvironment. `var` was unaffected, having no
+      // per-iteration environment to copy, and a match with no bound names
+      // crashed too, since the clause environment is created either way - which
+      // is why this is not about the bindings.
+      surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
       if (blockResult.Type !== 'normal') {
         return blockResult as never;
       }
       return (blockResult.Value ?? Value.undefined) as unknown as Value;
     }
-    const bodyRef = Q(yield* Evaluate(clause.Body as never));
-    const body = Q(yield* GetValue(bodyRef as never));
-    if (clause.IsThrow) {
-      return ThrowCompletion(body) as never;
+    const bodyRef = EnsureCompletion(yield* Evaluate(clause.Body as never));
+    const body = bodyRef.Type === 'normal'
+      ? EnsureCompletion(yield* GetValue(bodyRef.Value as never))
+      : bodyRef;
+    surroundingAgent.runningExecutionContext.LexicalEnvironment = outerEnv;
+    if (body.Type !== 'normal') {
+      return body as never;
     }
-    return body;
+    if (clause.IsThrow) {
+      return ThrowCompletion(body.Value) as never;
+    }
+    return body.Value as Value;
   }
   return Throw.TypeError('$1 matched no clause of this match', subject);
 }

@@ -2502,6 +2502,28 @@ export abstract class ExpressionParser extends FunctionParser {
         break;
       }
       const prop = this.startNode<ParseNode.MatchProperty>();
+      // MatchProperty : MatchBindingPattern - the SHORTHAND, where the bound
+      // name is also the member name: `when { status: 200, let body }` binds
+      // `body` from the `body` member. The spec gives it as an alternative of
+      // MatchProperty, and patternmatching.md's opening example uses it, but the
+      // parser only accepted `key: pattern` and so refused the design's own
+      // headline form.
+      if (this.test('let') || this.test(Token.CONST)) {
+        const binding = this.parseMatchPattern();
+        if ((binding as ParseNode).type !== 'MatchBindingPattern') {
+          this.restoreLexerCheckpoint(checkpoint);
+          this.earlyErrors = savedEarlyErrors;
+          return null;
+        }
+        prop.Key = (binding as unknown as { Name: string }).Name;
+        prop.Pattern = binding;
+        sawNonType = true;
+        Properties.push(this.finishNode(prop, 'MatchProperty'));
+        if (!this.eat(Token.COMMA)) {
+          break;
+        }
+        continue;
+      }
       if (!this.test(Token.IDENTIFIER) && !this.test(Token.STRING)) {
         this.restoreLexerCheckpoint(checkpoint);
         this.earlyErrors = savedEarlyErrors;

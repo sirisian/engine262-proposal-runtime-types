@@ -426,6 +426,7 @@ export interface Throw {
   | 'a column of this type cannot be written'
   | 'a computed member name must be a literal or a `const` bound to a Symbol'
   | 'a decimal operand requires a decimal on both sides'
+  | 'a decorator in a match arm must be followed by a block'
   | 'a field of this type cannot be placed in a buffer'
   | 'a fixed-extent SoA cannot be grown'
   | 'a fixed-extent SoA cannot be shortened'
