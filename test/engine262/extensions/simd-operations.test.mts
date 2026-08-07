@@ -357,3 +357,56 @@ test('masked operations compose, and both arms are still evaluated', () => {
     + ' const m: boolean32x4 = int32x4(1, 9, 9, 9) < int32x4(5, 0, 0, 0);'
     + " m.select(f('set'), f('clear')); log;")).toBe('setclear');
 });
+
+// -- phase 8: the designed-but-unimplemented surface ---------------------------
+/**
+ * `README.md` states the checked and saturating forms are "overloaded for every
+ * integer type", and an integer-lane vector is one. The scalar forms worked;
+ * the vector forms were refused, because these were registered without the
+ * wrapper that carries the lane-wise dispatch.
+ */
+test('the checked and saturating forms apply lane-wise', () => {
+  const U = 'const a = uint8x16(255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);'
+    + ' const b = uint8x16(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1); ';
+  // lane 0 saturates at the maximum, lane 1 is an ordinary sum
+  expect(evaluated(`${U}String(Math.addSaturating(a, b).lane.<0>());`)).toBe('255');
+  expect(evaluated(`${U}String(Math.addSaturating(a, b).lane.<1>());`)).toBe('2');
+  expect(evaluated('const a = uint8x16(0, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5);'
+    + ' const b = uint8x16(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);'
+    + ' String(Math.subSaturating(a, b).lane.<0>());')).toBe('0');
+  expect(evaluated('const a = int32x4(2147483647, 1, 1, 1); const b = int32x4(1, 1, 1, 1);'
+    + ' String(Math.addSaturating(a, b).x);')).toBe('2147483647');
+  // the checked form raises where a lane cannot hold the result, and division
+  // truncates toward zero exactly as `/` does
+  expectThrown(`${U}Math.addChecked(a, b);`);
+  expect(evaluated('const a = int32x4(7, 9, 11, 13); const b = int32x4(2, 2, 2, 2);'
+    + ' String(Math.divChecked(a, b).x);')).toBe('3');
+  expectThrown('const a = int32x4(1, 1, 1, 1); const z = int32x4(0, 0, 0, 0); Math.divChecked(a, z);');
+  // the scalar forms are unchanged
+  expect(evaluated('const a: uint8 = 255; String(Math.addSaturating(a, 1));')).toBe('255');
+});
+
+/**
+ * `operatoroverloading.md`: "`Math.fma(a, b, c)` computes `a * b + c` with a
+ * single rounding. It is overloaded for the scalar and vector types."
+ *
+ * The single rounding is the whole of it: computing `a * b` and then adding
+ * rounds twice and is a different function. The two cases below are ones where
+ * the answers differ, so an implementation that shimmed over `*` and `+` would
+ * fail them; the expected values are the exactly-computed ones.
+ */
+test('Math.fma rounds once', () => {
+  expect(evaluated('String(Math.fma(2, 3, 4));')).toBe('10');
+  expect(evaluated('String(Math.fma(-2, 3, 1));')).toBe('-5');
+  // a * b is not representable, so the double rounding loses the difference
+  expect(evaluated('String(Math.fma(1e16, 1e16, -1e32));')).toBe('-5366162204393472');
+  expect(evaluated('String(1e16 * 1e16 - 1e32);')).toBe('0');
+  expect(evaluated('String(Math.fma(1.0000000000000002, 3, -3));')).toBe('6.661338147750939e-16');
+  expect(evaluated('String(1.0000000000000002 * 3 - 3);')).toBe('8.881784197001252e-16');
+  // the non-finite cases agree with the ordinary operators, no rounding occurring
+  expect(evaluated('String(Math.fma(NaN, 1, 1));')).toBe('NaN');
+  expect(evaluated('String(Math.fma(Infinity, 1, 1));')).toBe('Infinity');
+  // and the vector half comes from the lane-wise dispatch
+  expect(evaluated('String(Math.fma(float32x4(2, 2, 2, 2), float32x4(3, 3, 3, 3),'
+    + ' float32x4(4, 4, 4, 4)).x);')).toBe('10');
+});

@@ -561,6 +561,120 @@ function* Math_sinh([x = Value.undefined]: Arguments): ValueEvaluator {
 }
 
 /** https://tc39.es/ecma262/#sec-math.sqrt */
+/**
+ * proposal-runtime-types (operatoroverloading.md): `Math.fma(a, b, c)` computes
+ * `a * b + c` with a SINGLE rounding, and is overloaded for the scalar and
+ * vector types - the lane-wise wrapper supplies the vector half.
+ *
+ * The single rounding is the whole of it. Computing `a * b` and then adding
+ * rounds twice and is a different function, so this cannot be a shim over `*`
+ * and `+`. The exact product of two doubles needs more bits than a double has,
+ * so it is formed here in the arbitrary-precision rationals that BigInt gives
+ * and rounded once at the end.
+ */
+/**
+ * `a * b + c` rounded once. The product and sum are formed exactly as a rational
+ * of BigInts - every finite double is one - and the result is rounded to the
+ * nearest double at the end, which is what a hardware FMA does and what
+ * multiplying and then adding does not.
+ */
+function fusedMultiplyAdd(a: number, b: number, c: number): number {
+  const exact = exactTimes(a, b);
+  const sum = { n: exact.n * splitDouble(c).d + splitDouble(c).n * exact.d, d: exact.d * splitDouble(c).d };
+  return ratioToDouble(sum.n, sum.d);
+}
+
+/** A finite double as an exact fraction n/d of BigInts. */
+function splitDouble(v: number): { n: bigint, d: bigint } {
+  if (Number.isInteger(v)) {
+    return { n: BigInt(v), d: 1n };
+  }
+  let scaled = v;
+  let d = 1n;
+  while (!Number.isInteger(scaled)) {
+    scaled *= 2;
+    d *= 2n;
+  }
+  return { n: BigInt(scaled), d };
+}
+
+function exactTimes(a: number, b: number): { n: bigint, d: bigint } {
+  const x = splitDouble(a);
+  const y = splitDouble(b);
+  return { n: x.n * y.n, d: x.d * y.d };
+}
+
+/** The nearest double to n/d. */
+function ratioToDouble(n: bigint, d: bigint): number {
+  if (n === 0n) {
+    return 0;
+  }
+  const negative = (n < 0n) !== (d < 0n);
+  const an = n < 0n ? -n : n;
+  const ad = d < 0n ? -d : d;
+  // A first estimate, then the two doubles either side of it: the estimate is
+  // within an ulp, so the exact error of the three settles which is nearest.
+  let guess = Number(an) / Number(ad);
+  if (!Number.isFinite(guess)) {
+    const shift = BigInt(Math.max(0, an.toString(2).length - 900));
+    guess = (Number(an >> shift) / Number(ad)) * 2 ** Number(shift);
+  }
+  if (!Number.isFinite(guess)) {
+    return negative ? -Infinity : Infinity;
+  }
+  let best = guess;
+  let bestErr: bigint | null = null;
+  for (const cand of [guess, nextAfter(guess, Infinity), nextAfter(guess, -Infinity)]) {
+    if (!Number.isFinite(cand)) {
+      continue;
+    }
+    const cf = splitDouble(cand);
+    const diff = cf.n * ad - an * cf.d;
+    const err = (diff < 0n ? -diff : diff) * (cf.d === 0n ? 1n : 1n);
+    const scaled = err * (ad === 0n ? 1n : 1n);
+    const normalized = scaled * cf.d / cf.d;
+    if (bestErr === null || normalized < bestErr) {
+      bestErr = normalized;
+      best = cand;
+    }
+  }
+  return negative ? -best : best;
+}
+
+/** The next representable double from `v` toward `dir`. */
+function nextAfter(v: number, dir: number): number {
+  if (Number.isNaN(v) || v === dir) {
+    return v;
+  }
+  const buf = new DataView(new ArrayBuffer(8));
+  buf.setFloat64(0, v);
+  let bits = buf.getBigUint64(0);
+  if (v === 0) {
+    bits = dir > 0 ? 1n : (1n << 63n) | 1n;
+  } else if ((v > 0) === (dir > v)) {
+    bits += 1n;
+  } else {
+    bits -= 1n;
+  }
+  buf.setBigUint64(0, bits);
+  return buf.getFloat64(0);
+}
+
+function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefined]: Arguments): ValueEvaluator {
+  const a = Q(yield* ToNumber(x));
+  const b = Q(yield* ToNumber(y));
+  const c = Q(yield* ToNumber(z));
+  if (a.isNaN() || b.isNaN() || c.isNaN()) {
+    return F(NaN);
+  }
+  if (!a.isFinite() || !b.isFinite() || !c.isFinite()) {
+    // No exact product to form: the ordinary operators already agree with a
+    // single rounding when an operand is an infinity, since no rounding occurs.
+    return F(R(a) * R(b) + R(c));
+  }
+  return F(fusedMultiplyAdd(R(a), R(b), R(c)));
+}
+
 function* Math_sqrt([x = Value.undefined]: Arguments): ValueEvaluator {
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0) || n.value === Infinity) return n;
@@ -844,31 +958,8 @@ function withNumericLibrarySignatures(steps: NativeSteps, functionName: string):
     // `Math.sin(v)` need not equal `Math.sin(v.lane.<j>())`; this implementation
     // computes lane-wise with the scalar function, which is one permitted
     // answer among several.
-    const vectorArg = args.find((a) => a !== undefined && a.type === 'Vector') as VectorValue | undefined;
-    if (vectorArg !== undefined) {
-      const shape = vectorShape(vectorArg);
-      if (shape === null) {
-        return Throw.TypeError('$1 is not assignable to $2', vectorArg, Value('a vector'));
-      }
-      for (const arg of args) {
-        if (arg !== undefined && arg.type === 'Vector'
-            && !SameType((arg as VectorValue).TypeRecord as TypeRecord, vectorArg.TypeRecord as TypeRecord)) {
-          return Throw.TypeError('$1 is not assignable to $2', arg, Value(displayType(vectorArg.TypeRecord as TypeRecord)));
-        }
-      }
-      const lanes: Value[] = [];
-      for (let i = 0; i < shape.laneCount; i += 1) {
-        const laneArgs = args.map((a) => (a !== undefined && a.type === 'Vector'
-          ? (a as VectorValue).lanes[i] as Value
-          : a)) as Arguments;
-        let lane = steps.call(this, laneArgs, context);
-        if (isEvaluator(lane)) {
-          lane = yield* lane;
-        }
-        const laneValue = Q(EnsureCompletion(lane)) as Value;
-        lanes.push(Q(yield* CheckedConvertValue(laneValue, shape.laneType)) as Value);
-      }
-      return new VectorValue(lanes, vectorArg.TypeRecord);
+    if (args.some((a) => a !== undefined && a.type === 'Vector')) {
+      return Q(yield* applyLaneWise(this, steps, args, context));
     }
     // Every signature takes its numeric parameters at one type. Two typed
     // arguments of different types are viable at no signature.
@@ -1230,8 +1321,52 @@ function settleInteger(exact: bigint, t: TypeRecord & { Kind: 'primitive' }, mod
 }
 
 /** The eight checked and saturating forms, which differ only in that treatment. */
+/**
+ * proposal-runtime-types #sec-vector-lane-wise-math: apply a Math function at
+ * each lane, returning a vector of the argument's shape. Arguments of one shape
+ * apply lane by lane, and a scalar beside a vector broadcasts.
+ *
+ * Shared by every Math function that admits a vector. The checked and saturating
+ * forms are "overloaded for every integer type" (README), and an integer-lane
+ * vector is one - they were registered without the wrapper that carried this,
+ * so `Math.addSaturating` over a `uint8x16` was refused while the scalar form
+ * worked.
+ */
+function* applyLaneWise(thisValue: ThisParameterType<NativeSteps>, steps: NativeSteps, args: Arguments, context: FunctionCallContext): ValueEvaluator {
+  const vectorArg = args.find((a) => a !== undefined && a.type === 'Vector') as VectorValue | undefined;
+  if (vectorArg === undefined) {
+    return Throw.TypeError('$1 is not assignable to $2', Value(0), Value('a vector'));
+  }
+  const shape = vectorShape(vectorArg);
+  if (shape === null) {
+    return Throw.TypeError('$1 is not assignable to $2', vectorArg, Value('a vector'));
+  }
+  for (const arg of args) {
+    if (arg !== undefined && arg.type === 'Vector'
+        && !SameType((arg as VectorValue).TypeRecord as TypeRecord, vectorArg.TypeRecord as TypeRecord)) {
+      return Throw.TypeError('$1 is not assignable to $2', arg, Value(displayType(vectorArg.TypeRecord as TypeRecord)));
+    }
+  }
+  const lanes: Value[] = [];
+  for (let i = 0; i < shape.laneCount; i += 1) {
+    const laneArgs = args.map((a) => (a !== undefined && a.type === 'Vector'
+      ? (a as VectorValue).lanes[i] as Value
+      : a)) as Arguments;
+    let lane = steps.call(thisValue, laneArgs, context);
+    if (isEvaluator(lane)) {
+      lane = yield* lane;
+    }
+    const laneValue = Q(EnsureCompletion(lane)) as Value;
+    lanes.push(Q(yield* CheckedConvertValue(laneValue, shape.laneType)) as Value);
+  }
+  return new VectorValue(lanes, vectorArg.TypeRecord);
+}
+
 function namedArithmetic(functionName: string, mode: OverflowMode, combine: (a: bigint, b: bigint) => bigint | 'divide-by-zero'): NativeSteps {
-  const steps: NativeSteps = function* namedArithmetic(args: Arguments): ValueEvaluator {
+  const steps: NativeSteps = function* namedArithmetic(this: ThisParameterType<NativeSteps>, args: Arguments, context: FunctionCallContext): ValueEvaluator {
+    if (args.some((a) => a !== undefined && a.type === 'Vector')) {
+      return Q(yield* applyLaneWise(this, steps, args, context));
+    }
     const operands = Q(yield* resolveIntegerOperands(args, functionName));
     const exact = combine(operands.a, operands.b);
     if (exact === 'divide-by-zero') {
@@ -1386,6 +1521,7 @@ export function bootstrapMath(realmRec: Realm) {
     ['sign', withNumericLibrarySignatures(Math_sign, 'sign'), 1],
     ['sin', withNumericLibrarySignatures(Math_sin, 'sin'), 1],
     ['sinh', withNumericLibrarySignatures(Math_sinh, 'sinh'), 1],
+    ['fma', withNumericLibrarySignatures(Math_fma, 'fma'), 3],
     ['sqrt', withNumericLibrarySignatures(Math_sqrt, 'sqrt'), 1],
     ['sumPrecise', withNumericLibrarySignatures(Math_sumPrecise, 'sumPrecise'), 1],
     ['tan', withNumericLibrarySignatures(Math_tan, 'tan'), 1],
