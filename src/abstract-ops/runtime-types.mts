@@ -1033,7 +1033,6 @@ export function LookupPrimitiveOperator(value: Value, opText: string): Primitive
     return null;
   }
   const tables = primitiveTablesForAgent();
-  (globalThis as { __k?: string[] }).__k?.push(`entered size=${tables.size}`);
   if (tables.size === 0) {
     return null;
   }
@@ -1052,7 +1051,6 @@ export function LookupPrimitiveOperator(value: Value, opText: string): Primitive
   if (name === null) {
     return null;
   }
-  (globalThis as { __k?: string[] }).__k?.push(`lookup name=${name} op=${opText} tables=${[...tables.keys()].join(",")} hit=${!!tables.get(name)?.get(opText)}`);
   return tables.get(name)?.get(opText) ?? null;
 }
 
