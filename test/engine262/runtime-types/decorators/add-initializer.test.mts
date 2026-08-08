@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-decorators.md stage H, the `addInitializer` half.
+ * Spec: #sec-addinitializer (AddInitializer). Design: decorators.md.
  *
  * decorators.md gives it to the contexts that "represent declaration sites
  * where initialization logic can be injected", and rule 4 of its ordering

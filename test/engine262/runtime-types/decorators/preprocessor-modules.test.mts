@@ -4,7 +4,8 @@ import {
 } from '#self';
 
 /**
- * PLAN-engine-decorator-replacement stage E: the evaluability requirement of
+ * Spec: #sec-preprocessor-modules (Preprocessor Modules) - the evaluability
+ * requirement of
  * `sec-preprocessor-modules`.
  */
 
@@ -60,7 +61,7 @@ test('a SHADOWED name is the module\'s own', () => {
   expect(check('export function d(i) { const Date = 1; return Date; }')).toBe('evaluable');
 });
 
-test('PINNED: this is the NAMING half only', () => {
+test('this is the NAMING half only', () => {
   // A full evaluability judgment - a body reads only its parameters, constants
   // and other evaluable functions - is a whole static analysis, and **this
   // engine holds no construct to it today**: the pre-evaluation type check says

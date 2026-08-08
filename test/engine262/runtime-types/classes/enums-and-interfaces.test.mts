@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-enums (Enums), #sec-interfaces-semantics (Interfaces).
@@ -131,4 +132,104 @@ test('the two decorator proposals are mutually exclusive', () => {
   expect(() => new Agent({ features: ['runtime-types', 'decorators'] })).toThrow();
   expect(() => new Agent({ features: ['runtime-types'] })).not.toThrow();
   expect(() => new Agent({ features: ['decorators'] })).not.toThrow();
+});
+
+// -- Enumerator values, continuation, and names ----------------------------------
+
+test('an enumerator value passes its underlying type', () => {
+  // #sec-enums. The declaration resolved the underlying
+  // type and stored it, and nothing checked a value against it - so an enum
+  // whose annotation said uint8 accepted 300 and a string, and a program that
+  // wrote `enum Flags: uint8` LOOKED checked.
+  // Out of range is a RangeError and a wrong kind a TypeError, which is what
+  // the same value assigned to a `uint8` field gives - the enumerator passes
+  // the boundary rather than a check of its own.
+  expectThrownKind('enum E: uint8 { A = 300 } E.A;', 'RangeError');
+  expectThrownKind('enum E: uint8 { A = "s" } E.A;', 'TypeError');
+  // "The first enumerator, when it has no initializer, takes 0, and it is a
+  // type error when the underlying type is not numeric, since a non-numeric
+  // enumeration must define its starting value."
+  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+  expect(evaluated('enum E: string { A = "x" } String(E.A);')).toBe('x');
+  // The values that fit are unchanged.
+  expect(evaluated('enum E: uint8 { A, B } String(E.B);')).toBe('1');
+  expect(evaluated('enum C: float32 { Zero, One } String(C.One);')).toBe('1');
+});
+
+test('an enumerator reports its ENUM as its type and belongs to the underlying one', () => {
+  // #sec-enums: "`Reflect.typeOf(Count.Zero)` reports `Count`, by the rule that
+  // a value's runtime type is the most specific type of which it is a value.
+  // This does not make the enumerator anything other than a value the
+  // underlying type also accepts: membership in `int32` follows from `Count`
+  // being a subtype of it, not from a second runtime type."
+  //
+  // Both halves are easy to get wrong in opposite directions. Leaving the
+  // underlying type on the converted value made typeOf report `uint8`; tagging
+  // the enum without routing membership through the subtype relation made
+  // `E.A is uint8` false.
+  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === E);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A } String(Reflect.typeOf(E.A) === uint8);')).toBe('false');
+  expect(evaluated('enum E: uint8 { A } String(E.A is E);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A } String(E.A is uint8);')).toBe('true');
+  expect(evaluated('enum D { A } String(Reflect.typeOf(D.A) === D);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A, B } let v: uint8 = E.B; String(v);')).toBe('1');
+  // The reverse conversion still works, and now compares two values of one
+  // type: it converts its argument to the underlying type before looking.
+  expect(evaluated('enum E: uint8 { A, B } String(E(1));')).toBe('1');
+  expectThrownKind('enum E: uint8 { A, B } E(99);', 'TypeError');
+});
+
+test('an enumerator without an initializer continues from the one before', () => {
+  // #sec-enums: "A later enumerator with no initializer takes the result of
+  // applying the underlying type's prefix increment operator to the one
+  // before." Continuing from a COUNTER rather than from the value made an
+  // initialized enumerator lose its effect on the next: `{ A = 10, B }`
+  // reported 1, because a converted enumerator is a TypedNumberValue and the
+  // counter only read the Number case.
+  expect(evaluated('enum E: uint8 { A = 10, B, C } String(E.B) + "," + String(E.C);')).toBe('11,12');
+  expect(evaluated('enum D { A = 5, B } String(D.B);')).toBe('6');
+  // The increment is the underlying type's, so a float32 enum continues by one
+  // from a fractional value rather than from the next integer.
+  expect(evaluated('enum C: float32 { Zero = 0.5, One } String(C.One);')).toBe('1.5');
+  // And continuing past the type's range is the RangeError it would be if
+  // written out - which the counter reset had hidden.
+  expectThrownKind('enum E: uint8 { A = 255, B } E.B;', 'RangeError');
+});
+
+test('an enumerator initialized with a function of two parameters is computed', () => {
+  // #sec-enums: such an enumerator "is given the result of calling that function
+  // with the enumerator's index and its name as a String, and a following
+  // enumerator with no initializer is given the result of calling the most
+  // recently given such function with its own index and name, until an
+  // initializer replaces it". The function was being converted as a VALUE and
+  // refused, so the design's own example did not run.
+  expect(evaluated('enum C: float32 { Zero = (index, name) => index * 100, One, Two } String(C.Zero) + "," + String(C.One) + "," + String(C.Two);')).toBe('0,100,200');
+  expect(evaluated('enum N: string { A = (i, name) => name, B } String(N.A) + "," + String(N.B);')).toBe('A,B');
+  // "an initializer that is not such a function sets its enumerator's value
+  // without disturbing the function for those after it"
+  expect(evaluated('enum R { A = (i, n) => i * 10, B, C = 7, D } String(R.A) + "," + String(R.B) + "," + String(R.C) + "," + String(R.D);')).toBe('0,10,7,30');
+});
+
+test('a non-numeric enum continues by repeating where the type has no increment', () => {
+  // #sec-enums: "where the underlying type declares no prefix increment, it
+  // takes a value equal to the previous one". Only the FIRST enumerator of a
+  // non-numeric enum needs an initializer; refusing every one of them made
+  // `enum E: string { A = "x", B }` an error where the clause gives B the value
+  // of A.
+  expect(evaluated('enum E: string { A = "x", B } String(E.B);')).toBe('x');
+  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+});
+
+test('two enumerators of one declaration may not share a name', () => {
+  // #sec-enums: "It is a type error if two enumerators of one declaration have
+  // the same name." Nothing checked it, so `enum E { A, A }` was accepted and
+  // the later enumerator silently won - the same failure the interface
+  // duplicate-member check exists to prevent, where the meaning of a
+  // declaration depends on which member is read.
+  expectThrownKind('enum E { A, A } E.A;', 'TypeError');
+  expectThrownKind('enum E { A = 1, B, A = 3 } E.A;', 'TypeError');
+  // Distinct names are unaffected, and two enumerators MAY share a value - it is
+  // the name that must be unique.
+  expect(evaluated('enum E { A, B, C } String(E.C);')).toBe('2');
+  expect(evaluated('enum E { A = 1, B = 1 } String(E.B);')).toBe('1');
 });

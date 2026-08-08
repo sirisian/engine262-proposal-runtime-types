@@ -2,15 +2,18 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
- * proposal-runtime-types, decorators.md - stage A of PLAN-decorators.md: the
- * decorator CALL. The contexts themselves are stage B onward; what this stage
- * settles is that a decoration finds its function, evaluates and applies it in
- * the specified order, and hands it a context.
+ * Spec: #sec-decorator-application (Decorator Application). Design:
+ * decorators.md.
+ *
+ * The decorator CALL: a decoration finds its function, evaluates and applies
+ * it in the specified order, and hands it a context. The shapes those contexts
+ * carry are reflection-shapes.test.mts; what is asserted here is the call and
+ * its ordering, family by family.
  *
  * Only `ClassField` exists as a context today, so everything here is verified
- * on a field. The class-level position is still refused, and that refusal is
- * asserted rather than assumed - a stage that quietly opened more than it
- * claimed would look identical until stage B contradicted it.
+ * Each family's boundary is asserted rather than assumed: a position that
+ * quietly admits more than it claims looks identical to a correct one until
+ * something downstream contradicts it.
  */
 
 test('a decorator on a class field is found and called', () => {
@@ -31,8 +34,8 @@ test('a decorator on a class field is found and called', () => {
   expect(evaluated('const l = []; function g() { return (c) => l.push("factory"); } class B { @g() x: uint8; } l.join(",");')).toBe('');
   // The context identifies what was decorated. The rest of decorators.md's
   // ClassFieldReflection - type, static, private, readonly, initial, offset,
-  // metadata - is stage B; `kind` and `name` are what stage A needs to show the
-  // right declaration reached the right decorator.
+  // metadata - is reflection-shapes.test.mts; `kind` and `name` are what shows
+  // the right declaration reached the right decorator.
   expect(evaluated('let k; function f(c) { k = c.kind; } class A { @f a: uint8; } k;')).toBe('ClassField');
   // Each field's own decoration, in document order.
   expect(evaluated('const log = []; function f(c) { log.push(String(c.name)); } class A { @f a: uint8; @f b: uint8; } log.join(",");')).toBe('a,b');
@@ -78,19 +81,19 @@ test('a reserved layout control and a user decorator share one field', () => {
   expect(evaluated('@packed class A { a: uint8; b: uint16; } String((type A).byteLength);')).toBe('3');
 });
 
-test('what stage A does not open', () => {
+test('what the decorator call does not open', () => {
   // A decorator has to BE a function. `@notFn` where the binding holds 5 is a
   // TypeError at the decorated declaration rather than a silent no-op.
   expectThrownKind('const notFn = 5; class C { @notFn y: uint8; }', 'TypeError');
-  // The class-level position WAS refused here, and stage B (cycle 117) removed
-  // that refusal deliberately - which is what the assertion was for. It now
+  // The class-level position was refused here once, and that refusal was
+  // removed deliberately - which is what the assertion was for. It now
   // asserts the opposite, and the two lines together are the record that the
   // opening was intended rather than accidental.
   expect(evaluated('let k; function f(c) { k = c.kind; } @f class A {} k;')).toBe('Class');
 });
 
 test('the class family: contexts exist and carry their declaration', () => {
-  // Stage B of PLAN-decorators.md. decorators.md's `ClassReflection` is `name`,
+  // decorators.md's `ClassReflection` is `name`,
   // `type`, `abstract`, `metadata`; `ClassFieldReflection` adds `static`,
   // `private`, `protected`, `readonly`, `initial`, and the layout pair.
   expect(evaluated('[typeof Reflect.Class, typeof Reflect.ClassMethod, typeof Reflect.ClassGetter, typeof Reflect.ClassSetter, typeof Reflect.ClassAccessor, typeof Reflect.ClassOperator].join(",");')).toBe('object,object,object,object,object,object');
@@ -213,11 +216,8 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
   expect(evaluated('function f(c) {} class Op { constructor(v) { this.v = v; } operator +(@f r: Op): Op { return new Op(this.v + r.v); } } '
     + 'String((new Op(2) + new Op(3)).v);')).toBe('5');
 
-  // The operator's OWN decorator is still a SyntaxError, so this stage opened
-  // the sub-targets and nothing else. Stated here rather than assumed, for the
-  // same reason stage A asserted what it did not open.
-  // The operator's own decorator now has a grammar too (phase five), so what
-  // this asserts is that the two are INDEPENDENT: the sub-targets fire whether
+  // The operator's own decorator has a grammar of its own, so what this
+  // asserts is that the two are INDEPENDENT: the sub-targets fire whether
   // or not the operator itself is decorated, which is the rule a shared `if`
   // has broken three times.
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } '
@@ -237,9 +237,9 @@ test('an ABSTRACT method\'s parameters and return are decorated too', () => {
 });
 
 test('sub-targets: parameters and returns apply before their declaration', () => {
-  // Stage C of PLAN-decorators.md. decorators.md writes the positions as
+  // decorators.md writes the positions as
   // `d(@f a: uint32): @f uint32` - a decorator before the parameter, and before
-  // the return TYPE. Neither position parsed before this stage, so this is a
+  // the return TYPE. Both need grammar of their own, so this is a
   // grammar change as much as a semantics one.
   //
   // decorators.md "Order": "A declaration's sub-targets apply before the
@@ -267,7 +267,7 @@ test('sub-targets: parameters and returns apply before their declaration', () =>
 });
 
 test('the whole ordering rule composes across every level', () => {
-  // THE TEST section 6.2 OF THE PLAN ASKED FOR, for the class family: one program
+  // The whole rule in one assertion, for the class family: one program
   // decorating every position it legally can, one array, ONE EQUALITY on the
   // joined log.
   //
@@ -287,7 +287,7 @@ test('the whole ordering rule composes across every level', () => {
 });
 
 test('the function family and bindings', () => {
-  // Stage D of PLAN-decorators.md. `@f function g() {}` and `@f let x = 1;`
+  // `@f function g() {}` and `@f let x = 1;`
   // needed grammar too: `@` had routed unconditionally to a class declaration,
   // so the decorator list is now parsed first and what follows decides which
   // declaration it was.
@@ -338,9 +338,9 @@ test('a decorated function declaration DOES NOT HOIST', () => {
   expect(evaluated('function d(c) { return function () { return 99; }; } @d function h() { return 1; } String(h());')).toBe('99');
 });
 test('the object family mirrors the class family', () => {
-  // Stage E of PLAN-decorators.md, whose premise was: "structurally parallel to
-  // B and C, which is the point: if B and C are right this is mechanical, and
-  // if it is not mechanical then B or C generalized wrongly."
+  // Structurally parallel to the class family and its sub-targets, which is
+  // the point: if those are right this is mechanical, and if it is not
+  // mechanical then one of them generalized wrongly."
   //
   // Mostly mechanical, with ONE exception recorded below.
   const obj = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
@@ -360,9 +360,8 @@ test('the object family mirrors the class family', () => {
   // it: the sub-target mapping. An owner kind that does not name its own
   // parameter and return contexts silently borrows the CLASS ones - which is
   // invisible to an ordering test, since the sequence is identical either way.
-  // Stage D hit it for `Function` and stage E hit it again for all three object
-  // member kinds. Asserted by kind, not by order, which is the only way to see
-  // it.
+  // It bites for `Function` and again for all three object member kinds.
+  // Asserted by kind, not by order, which is the only way to see it.
   expect(evaluated('let c; function grab(x) { c = x; } const o = { m(@grab p: uint32) {} }; c.kind;')).toBe('ObjectMethodParameter');
   expect(evaluated('let c; function grab(x) { c = x; } const o = { get g(): @grab uint32 { return 1; } }; c.kind;')).toBe('ObjectGetterReturn');
   expect(evaluated('let c; function grab(x) { c = x; } const o = { set s(@grab v: uint32) {} }; c.kind;')).toBe('ObjectSetterParameter');
@@ -372,12 +371,12 @@ test('the object family mirrors the class family', () => {
   expect(evaluated('let c; function grab(x) { c = x; } const o = { @grab a: 1 }; String(typeof c.objectContext);')).toBe('object');
 
   // `@` in expression position no longer implies a class - the same dispatch
-  // the statement position needed in stage D.
+  // the statement position needs.
   expect(evaluated('function f(c) {} const a = @f class {}; const b = @f { x: 1 }; typeof a + "/" + typeof b;')).toBe('function/object');
 });
 
 test('block decorators fire on entry, every entry', () => {
-  // Stage F of PLAN-decorators.md. decorators.md "Order": "Block, `let`, and
+  // decorators.md "Order": "Block, `let`, and
   // `const` decorators are on the other timeline: they fire when the STATEMENT
   // EXECUTES rather than when a declaration is evaluated. A block decorator on
   // a loop body therefore fires ONCE PER ITERATION, which makes block
@@ -417,7 +416,7 @@ test('a block reflection carries its BLOCK as tokens - the deferral is closed', 
   expect(evaluated('let h = ""; function g(c) { h = String("condition" in c); } @g { 1; } h;')).toBe('false');
 });
 test('the enum family: enumerators before their enum', () => {
-  // Stage G of PLAN-decorators.md. decorators.md writes `@f enum Count { @f
+  // decorators.md writes `@f enum Count { @f
   // Zero, ... }`, and the ordering rule applies to a third container kind
   // exactly as it does to a class and an object literal: members first, in
   // document order, container last.

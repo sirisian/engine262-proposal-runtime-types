@@ -134,3 +134,26 @@ test('a method, getter, and setter context report `protected`', () => {
   expect(evaluated(`${grab} class A { @f protected get v(): uint8 { return 1; } } String(c.protected);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f protected set v(x: uint8) {} } String(c.protected);`)).toBe('true');
 });
+
+// -- access over the accessor's own slot -----------------------------------------
+
+test('the accessor context carries `access` over its own slot', () => {
+  // decorators.md's replacement for `Reflect.ClassAccessor` is a `{ get, set }`
+  // pair. A replacement that cannot reach the ORIGINAL storage has to close
+  // over storage of its own, orphaning the layout slot the backing occupies -
+  // so the context now hands the pair over, as TC39's `context.access` does.
+  expect(evaluated('let t = "?"; function f(c) { t = typeof c.access + "/" + typeof c.access.get + "/" + typeof c.access.set; } '
+    + 'class A { @f accessor a: uint8 = 1; } t;')).toBe('object/function/function');
+  // THE ASSERTION THAT MATTERS is that it reaches the REAL storage, both ways -
+  // a pair that merely existed would satisfy a `typeof` check and still leave
+  // the slot dead.
+  expect(evaluated('let g; function f(c) { g = c.access; } class A { @f accessor a: uint8 = 5; } '
+    + 'const o = new A(); o.a = 9; String(g.get.call(o));')).toBe('9');
+  expect(evaluated('let g; function f(c) { g = c.access; } class A { @f accessor a: uint8 = 5; } '
+    + 'const o = new A(); g.set.call(o, 3); String(o.a);')).toBe('3');
+  // It follows the receiver rather than closing over one instance.
+  expect(evaluated('let g; function f(c) { g = c.access; } class A { @f accessor a: uint8 = 5; } '
+    + 'const x = new A(), y = new A(); x.a = 1; y.a = 2; String(g.get.call(x)) + "/" + String(g.get.call(y));')).toBe('1/2');
+  // A plain field has no pair, so it has no `access`.
+  expect(evaluated('let t = "?"; function f(c) { t = typeof c.access; } class A { @f a: uint8 = 1; } t;')).toBe('undefined');
+});

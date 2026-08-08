@@ -27,7 +27,7 @@ import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 const rejectionKind = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "NO-THROW"; } catch (e) { e.constructor.name; }`);
 
 test('a decoration selects among declarations by CONTEXT type', () => {
-  // THE DISCRIMINATING FORM, and it is the assertion cycle 129 pinned in its
+  // THE DISCRIMINATING FORM, and it is the assertion pinned in its
   // failing direction: the same two declarations must give the same answer in
   // EITHER order. Order-independence is what distinguishes selection from the
   // last declaration happening to be the right one.

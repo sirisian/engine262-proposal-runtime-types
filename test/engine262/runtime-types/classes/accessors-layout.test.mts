@@ -84,3 +84,25 @@ test('an SoA over a class with a private slot is REFUSED', () => {
   // is about the private slot and not about the change.
   expect(evaluated('class P { a: uint8; b: uint32; } const s = new SoA.<P>(4); String(s.length);')).toBe('4');
 });
+
+// -- The layout slot reports the declared name -----------------------------------
+
+test('an accessor\'s layout slot reports the DECLARED name', () => {
+  // README says an accessor "participates in the memory layout exactly as
+  // a field does". Reflecting it as one is the consistent completion: its
+  // backing is an unnameable Private Name, and a slot no program can name
+  // leaves a hole in a layout walk - a serializer would see bytes it could not
+  // label. Not C#'s answer, whose generated `<a>k__BackingField` leaks a
+  // compiler artifact into every reflective enumeration.
+  const cls = 'class A { a: uint8; accessor b: uint32 = 0; c: uint8; } ';
+  expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);`)).toBe('4');
+  expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassField, A>("b").name);`)).toBe('b');
+  // The layout itself is untouched - this names a slot, it does not move one.
+  expect(evaluated(`${cls} String((type A).byteLength);`)).toBe('12');
+  expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("c").offset);`)).toBe('8');
+  // A GENUINE private field keeps its invisibility: it was never reachable by
+  // name, so nothing about it changed. The two cases are distinct and only one
+  // was ever meant to be reached.
+  expect(evaluated('class A { a: uint8; #b: uint32; } '
+    + 'try { eval("Reflect.getReflection.<Reflect.ClassField, A>(\\"b\\");"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+});

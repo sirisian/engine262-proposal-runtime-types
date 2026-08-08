@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-decorators.md stage H, the REPLACEMENT half.
+ * Spec: #sec-replacement-values (Replacement Values). Design: decorators.md.
  *
  * decorators.md: "Decorators can optionally return a replacement for the
  * decorated target. If a decorator returns `void` (or `undefined`), no
@@ -84,7 +84,7 @@ test('the FIELD row: the return is the initial VALUE, not an initializer', () =>
   expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } '
     + 'const x = new A(), y = new A(); String(x.a) + "/" + String(y.a);')).toBe('99/99');
   // "The return type must be compatible with the original", so a replacement is
-  // checked like any other store - out of range is the RangeError F12's split
+  // checked like any other store - out of range is the RangeError the split
   // gives, not a TypeError.
   expect(evaluated('function rep(c) { return 300; } '
     + 'try { eval("class A { @rep a: uint8 = 1; } new A();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
@@ -121,7 +121,7 @@ test('the FUNCTION and OBJECT rows', () => {
 });
 
 test('the ELEVENTH row: an operator is replaced by re-registration', () => {
-  // Unreachable until phase five opened `@f operator +`. An operator lives in
+  // Reachable only once `@f operator +` has a grammar. An operator lives in
   // the class operator table rather than as a property, so its replacement is
   // installed by registering the returned function in place of the declared
   // one - and `2 + 3` answering 99 is only reachable through that table.

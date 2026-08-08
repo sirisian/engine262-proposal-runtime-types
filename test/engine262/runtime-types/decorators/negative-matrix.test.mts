@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff } from '../harness.mts';
 
 /**
- * PLAN-decorators.md section 6.3, the NEGATIVE matrix: "A decoration in a position
+ * The NEGATIVE matrix: "A decoration in a position
  * that admits no decorator, and a context used on the wrong kind of
  * declaration, must be errors. This is the half that keeps the grammar
  * honest."
@@ -34,7 +34,7 @@ function rejectionKind(source: string): string {
 }
 
 test('positions that admit no decorator are SYNTAX errors', () => {
-  // A type declaration: section 7.3 of the plan settled this, and with the stronger of
+  // A type declaration, and with the stronger of
   // the two answers it considered - the grammar admits no decorator there at
   // all, so the question of whether it should be a type error does not arise.
   // "A position that cannot be written cannot be written wrongly."
@@ -59,7 +59,7 @@ test('positions that admit no decorator are SYNTAX errors', () => {
 
 test('the block family admits the BLOCK and not the statement', () => {
   // The distinction is easy to lose and worth pinning from both sides, because
-  // stage F added the block's two entry points and a grammar that admitted
+  // The block's two entry points come with a grammar that admits
   // `@f if` would look, from a passing positive test, exactly like one that
   // admits `if (c) @f { }`.
   expect(rejectionKind('function f(c){} @f if (true) { }')).toBe('SyntaxError');
@@ -82,17 +82,17 @@ test('what the decoration RESOLVES TO is judged, and by kind', () => {
   expect(rejectionKind('const f = "s"; class A { @f a: uint8; }')).toBe('TypeError');
   expect(rejectionKind('const f = 5; class A { @f a: uint8; }')).toBe('TypeError');
   // `@f()` is judged on the CALLEE, like `@f`: the two are one form, and since
-  // cycle 130 there is no factory whose result could be judged instead. What a
-  // decorator RETURNS is not inspected at all yet - replacement is stage H.
+  // there is no factory whose result could be judged instead. What a
+  // decorator RETURNS is inspected only on the replacement path.
   expect(rejectionKind('const f = 5; class A { @f() a: uint8; }')).toBe('TypeError');
   expect(rejectionKind('function f(c) { return 5; } class A { @f() a: uint8; }')).toBe('NO-THROW');
 });
 
 test('a reserved layout control is not shadowable by a user binding', () => {
-  // section 6.3: "Include the reserved names. `@packed` and its siblings are
-  // recognized syntactically and never evaluated (cycle 94); a user decorator
+  // The reserved names: `@packed` and its siblings are
+  // recognized syntactically and never evaluated; a user decorator
   // named `packed` must still be refused, and that interaction is easy to
-  // break while opening the door in stage A."
+  // break while opening the door."
   //
   // MEASURED, and the answer is a shade different from the plan's wording: a
   // user binding named `packed` is not REFUSED, it is IGNORED - the control is
@@ -117,8 +117,7 @@ test('a reserved layout control is not shadowable by a user binding', () => {
 });
 
 test('the two positions that once parsed and did nothing now FIRE', () => {
-  // Both were pinned here as accepted-and-silent. Phase two of
-  // PLAN-decorators-remaining.md closed them.
+  // Both were once accepted-and-silent; both are now reachable.
   //
   // 1. A CONSTRUCTOR is "a `ClassMethod` whose name is *\"constructor\"*", and it
   // was the one member a decorator could be written on and never fire - it is
@@ -150,7 +149,7 @@ test('the two positions that once parsed and did nothing now FIRE', () => {
 });
 
 test('a decoration is refused with the feature off', () => {
-  // The `@` grammar belongs to runtime-types (cycle 94). With the feature off
+  // The `@` grammar belongs to runtime-types. With the feature off
   // there is no decorator syntax at all, which is what keeps this proposal's
   // decorators from being mistaken for the TC39 ones: the two share the
   // spelling and nothing else.
