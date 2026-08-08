@@ -182,6 +182,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // overflow in `{ A = 255, B }` behind the same reset.
       const numeric = NumericValueOfEnumerator(v);
       nextAuto = numeric === undefined ? nextAuto + 1 : numeric + 1;
+      // #sec-enums: "It is a type error if two enumerators of one declaration
+      // have the same name." Nothing checked it, so `enum E { A, A }` was
+      // accepted and the later enumerator silently won - the same failure the
+      // interface check above exists to prevent, where the meaning of a
+      // declaration depends on which member is read.
+      if (memberNames.includes(member.IdentifierName.name)) {
+        return Throw.TypeError('$1 is already an enumerator of this enum', Value(member.IdentifierName.name));
+      }
       previous = v;
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);

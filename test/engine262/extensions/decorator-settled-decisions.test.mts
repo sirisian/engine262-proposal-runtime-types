@@ -400,3 +400,17 @@ test('a non-numeric enum continues by repeating where the type has no increment'
   expect(evaluated('enum E: string { A = "x", B } String(E.B);')).toBe('x');
   expectThrownKind('enum E: string { A } E.A;', 'TypeError');
 });
+
+test('two enumerators of one declaration may not share a name', () => {
+  // #sec-enums: "It is a type error if two enumerators of one declaration have
+  // the same name." Nothing checked it, so `enum E { A, A }` was accepted and
+  // the later enumerator silently won - the same failure the interface
+  // duplicate-member check exists to prevent, where the meaning of a
+  // declaration depends on which member is read.
+  expectThrownKind('enum E { A, A } E.A;', 'TypeError');
+  expectThrownKind('enum E { A = 1, B, A = 3 } E.A;', 'TypeError');
+  // Distinct names are unaffected, and two enumerators MAY share a value - it is
+  // the name that must be unique.
+  expect(evaluated('enum E { A, B, C } String(E.C);')).toBe('2');
+  expect(evaluated('enum E { A = 1, B = 1 } String(E.B);')).toBe('1');
+});

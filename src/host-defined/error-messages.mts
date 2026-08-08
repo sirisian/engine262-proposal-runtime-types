@@ -580,6 +580,7 @@ export interface Throw {
   | '$1 is already claimed by another meta type'
   | '$1 is already declared'
   | '$1 is already declared on this interface'
+  | '$1 is already an enumerator of this enum'
   | '$1 is an abstract class and cannot be instantiated'
   | '$1 is missing from this composite'
   | '$1 is not a Promise constructor'
