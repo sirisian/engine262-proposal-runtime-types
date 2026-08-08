@@ -2,9 +2,9 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-pattern-matching.md phase three: extractors and matchers.
+ * Spec: #sec-patternmatches (PatternMatches) - extractors and matchers.
  *
- * `sec-patternmatches`, the `MatchNamePattern ( MatchPatternList? )` steps. "The
+ * #sec-patternmatches, the `MatchNamePattern ( MatchPatternList? )` steps. "The
  * typed protocol is a method, usually static, from the subject to a tuple or
  * `null`."
  */
@@ -66,12 +66,12 @@ test('IsOfType and IsSubtype now AGREE about composites', () => {
   expect(evaluated('String(Composite({ x: 1 }) is Composite);')).toBe('true');
 });
 
-test('PINNED: a bare name that is not a type is refused by the CHECKER', () => {
+test('a bare name that is not a type is refused by the CHECKER', () => {
   // The spec dispatches a bare `MatchNamePattern` on what the name turns out to
   // hold - a Type Object tests membership, a range tests containment, a value
   // with a matcher tests through it, and "anything else is a constant compared
   // by SameValue". The runtime dispatch is written; it is unreachable for a
   // plain constant because the CHECKER rejects `5 is K` as "K is not a type"
-  // before evaluation. Widening that is checker work and lands with phase five.
+  // before evaluation. Widening that is checker work.
   expect(outcome('const K = 5; 5 is K;')).toBe('TypeError');
 });

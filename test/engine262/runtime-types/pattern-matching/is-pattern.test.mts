@@ -2,9 +2,9 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-pattern-matching.md phase one: `is` takes a pattern.
+ * Spec: #sec-is-pattern (The Is Pattern) - `is` takes a pattern.
  *
- * `sec-is-pattern`: "`subject is P` is the one-arm `match`, EXACTLY: it matches,
+ * #sec-is-pattern: "`subject is P` is the one-arm `match`, EXACTLY: it matches,
  * binds, and narrows as `when P` would." The right operand is "widened from
  * |Type| to |MatchPattern|, OF WHICH A |Type| IS ONE FORM, so every existing
  * `is` keeps its parse and its meaning".
@@ -68,17 +68,17 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
   expect(evaluated('String("s" is not uint8);')).toBe('true');
 });
 
-test('PINNED: the forms still outstanding after phase two', () => {
+test('the forms still outstanding', () => {
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  // BINDINGS landed in phase five: `is` creates a declarative environment for
+  // BINDINGS work: `is` creates a declarative environment for
   // them exactly as a clause does. Their SCOPE - "in exactly the positions the
   // truth of the test governs" - is still the checker's business.
   expect(evaluated('String(1 is let x);')).toBe('true');
   // ARRAY patterns, and the `[[Iterations]]` half of the cache with them.
   // `[1, 2]` currently parses as a TUPLE TYPE of two literal types, so the
   // answer coincides with what an array pattern would give - the same
-  // coincidence objects have, pinned by its RESULT.
+  // coincidence objects have, asserted by its RESULT.
   expect(evaluated('String([1, 2] is [1, 2]);')).toBe('true');
-  // NARROWING is phase five: a non-type pattern narrows nothing yet.
+  // NARROWING: a non-type pattern narrows nothing yet.
   expect(evaluated('String(typeof (1 is 1));')).toBe('boolean');
 });

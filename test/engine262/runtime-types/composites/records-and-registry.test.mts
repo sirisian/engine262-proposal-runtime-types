@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase two: record composites and the registry.
+ * Spec: #sec-composites (Composites) - record composites and the registry.
  *
  * `sec-composites`: a composite is a frozen, null-prototyped object that is
  * INTERNED, so two creations from the same contents are the same object.
@@ -103,16 +103,14 @@ test('CANONICALIZATION: a stored zero is the class representative', () => {
   expect(evaluated('String(Reflect.typeOf(Composite({ v: float32(-0) }).v) === (type float32));')).toBe('true');
 });
 
-test('PINNED: what phase two does not do', () => {
-  // The TUPLE kind landed in phase five, and the reason it was refused rather
-  // than answered as a record is now assertable: the intern key includes the
-  // KIND, so the two never collide. composite-tuples.test.mts owns it.
+test('what a record composite is not', () => {
+  // A TUPLE composite is a separate kind, and the two never collide because
+  // the intern key includes the KIND. composite-tuples.test.mts owns it.
   expect(evaluated('String(Composite([1, 2]) === Composite({ 0: 1, 1: 2 }));')).toBe('false');
-  // Composite TYPES landed in phase three; the TYPED CREATION form
-  // `Composite.<T>({...})` is phase four, so a shape can be NAMED but not yet
-  // CREATED at.
+  // A shape can be NAMED by a composite TYPE; creating at one is the TYPED
+  // CREATION form `Composite.<T>({...})`, which typed-creation.test.mts owns.
   expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
-  // The weak-position refusal and the custom matcher landed in phase six.
+  // The weak-position refusal and the custom matcher are integrations;
   // composite-integrations.test.mts owns them.
   expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('TypeError');
   expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('symbol');

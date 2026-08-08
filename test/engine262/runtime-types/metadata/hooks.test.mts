@@ -1,6 +1,11 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
+/**
+ * Spec: #sec-primitive-metadata (Primitive Metadata) - the hooks a meta
+ * declaration may supply, and what each is asked.
+ */
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();

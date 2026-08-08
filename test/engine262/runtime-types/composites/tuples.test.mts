@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase five: TUPLE composites.
+ * Spec: #sec-findorcreatetuplecomposite - TUPLE composites.
  *
  * `sec-findorcreatetuplecomposite`. The upstream proposal defers a list form on
  * prototype and cost grounds; this design keeps it because "the objections are

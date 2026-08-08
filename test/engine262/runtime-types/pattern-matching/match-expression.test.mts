@@ -1,11 +1,11 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectError } from '../harness.mts';
+import { evaluated, expectError, expectThrown } from '../harness.mts';
 
 /**
- * PLAN-pattern-matching.md phase four: the `match` expression.
+ * Spec: #sec-match-expression (The Match Expression).
  *
- * `sec-match-expression`. The only phase that can break an existing program,
- * which is why the plan puts it after a working core rather than first.
+ * The one form of this feature that can break an existing program, since
+ * `match` is not a reserved word.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -26,7 +26,7 @@ test('clauses are tried in source order, first match wins', () => {
   expect(evaluated('match (2) { when 1: "a"; when 2: "b"; when 2: "c"; default: "d"; }')).toBe('b');
   // "If no clause matches, a TypeError is thrown" - and the exhaustiveness
   // rules make that throw statically impossible exactly where the types can
-  // prove it, which is phase five.
+  // prove it - exhaustiveness.test.mts owns that half.
   expect(outcome('match (5) { when 1: 1; }')).toBe('TypeError');
 });
 
@@ -149,7 +149,7 @@ test('a BLOCK arm is a do expression\'s block', () => {
   expectError('const ys = []; const x = match (1) { when 1: { for (const y of ys) { 1 } } default: 0; };');
 });
 
-test('PINNED: an abrupt completion cannot leave a block arm', () => {
+test('an abrupt completion cannot leave a block arm', () => {
   // The plan flagged this as the place an implementation could be "wrong in
   // five ways at once": in a block arm `return`, `break`, `continue`, `await`
   // and `yield` must mean what they mean IN THE ENCLOSING FUNCTION, and the
@@ -160,7 +160,7 @@ test('PINNED: an abrupt completion cannot leave a block arm', () => {
   // no way to travel out of an expression context in this engine. So it throws
   // rather than returning, which is at least LOUD: the wrong answer here would
   // be silently swallowing the `return` and yielding a value.
-  // Pinned by what it PRODUCES: the arm parses and runs, and the abrupt
+  // Asserted by what it PRODUCES: the arm parses and runs, and the abrupt
   // completion is produced - but taking the enclosing function's value throws,
   // so the `return` neither returns nor is silently swallowed.
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -168,13 +168,77 @@ test('PINNED: an abrupt completion cannot leave a block arm', () => {
   expect(outcome2('String((function f() { match (1) { when 1: { return "r"; } default: 0; } return "fell"; })());')).toBe('SyntaxError');
 });
 
-test('PINNED: what phase four does not yet carry', () => {
+test('what the match expression does not yet carry', () => {
   // STATEMENT position works through the same speculative parse as expression
   // position, since a `match` expression is a valid expression statement - the
   // COVER the spec describes is what a conforming parser needs, and the
   // speculation reaches the same programs here.
   expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('ACCEPTED');
-  // BINDINGS landed in phase five - pattern-bindings.test.mts owns them. What
-  // remains of the checker half is NARROWING and EXHAUSTIVENESS.
+  // BINDINGS are bindings.test.mts's. What remains of the checker half is
+  // NARROWING and EXHAUSTIVENESS.
   expect(evaluated('String(match (1) { when let x: x + 1; default: 0; });')).toBe('2');
+});
+
+// -- The environment a match restores --------------------------------------------
+
+/**
+ * A `match` clause evaluates its arm in a declarative environment holding the
+ * clause's bound names. That environment must be dropped on EVERY exit, not
+ * only on the paths that fall through to the next clause - the success paths
+ * returned without restoring it, leaving the running context's
+ * LexicalEnvironment a child of the one the surrounding code expects.
+ *
+ * A `for` head containing a match then asked its loop environment for a binding
+ * that lived one link up, and crashed on `Assert(binding !== undefined)` inside
+ * CreatePerIterationEnvironment.
+ */
+
+test('a match in a `for` head does not disturb the loop environment', () => {
+  expect(evaluated('let out = 0; for (let i = match ([1]) { when [let n]: n; default: 0; }; i < 3; i++) { out += i; } String(out);')).toBe('3');
+  expect(evaluated('let out = 0; for (let i = 0; i < match ([3]) { when [let n]: n; default: 0; }; i++) { out += i; } String(out);')).toBe('3');
+  expect(evaluated('let out = 0; for (let i = 0; i < 3; i += match ([1]) { when [let n]: n; default: 0; }) { out += i; } String(out);')).toBe('3');
+  // Not about the BINDINGS: the clause environment is created either way, so a
+  // match binding nothing crashed too.
+  expect(evaluated('let out = 0; for (let i = match ([1]) { when [_]: 1; default: 0; }; i < 3; i++) { out += i; } String(out);')).toBe('3');
+  // `var` was unaffected, having no per-iteration environment to copy - which is
+  // the observation that located the fault.
+  expect(evaluated('let out = 0; for (var i = match ([1]) { when [let n]: n; default: 0; }; i < 3; i++) { out += i; } String(out);')).toBe('3');
+});
+
+test('every arm form restores the environment', () => {
+  // Expression arm, block arm, throwing arm, and a nested match.
+  expect(evaluated('let out = 0; for (const x of [[1],[2]]) { out += match (x) { when [let n]: n; default: 0; }; } String(out);')).toBe('3');
+  expect(evaluated('String(match ([1]) { when [let n]: { n * 2; } default: 0; });')).toBe('2');
+  expect(evaluated('let k = "no"; try { match ([1]) { when [let n]: throw new Error("x"); default: 0; }; } catch (e) { k = "caught"; } k;')).toBe('caught');
+  expect(evaluated('let out = 0; for (let i = 0; i < 2; i++) { out += match ([i]) { when [let n]: match ([n]) { when [let m]: m; default: 0; }; default: 0; }; } String(out);')).toBe('1');
+});
+
+test('a clause binding still does not escape its arm', () => {
+  // The restore must drop the environment, not merge it: `n` is unreachable
+  // after the match, which is what makes the arm a scope.
+  expect(evaluated('let out = 0; for (const x of [[1]]) { out += match (x) { when [let n]: n; default: 0; }; } String(out);')).toBe('1');
+  expectThrown('match ([1]) { when [let n]: n; default: 0; }; n;');
+});
+
+/**
+ * `MatchProperty : MatchBindingPattern` - the shorthand where the bound name is
+ * also the member name. The specification gives it as an alternative and
+ * patternmatching.md's opening example uses it, but the parser accepted only
+ * `key: pattern`, so the design's own headline form was a Syntax Error.
+ */
+test('an object pattern may bind a member by its own name', () => {
+  // The design's opening example.
+  expect(evaluated('const r = { status: 200, body: "hi" }; String(match (r) { when { status: 200, let body }: body; default: "no"; });')).toBe('hi');
+  expect(evaluated('const o = { a: 1 }; String(match (o) { when { let a }: a; default: 0; });')).toBe('1');
+  expect(evaluated('const o = { a: 1, b: 2 }; String(match (o) { when { let a, let b }: a + b; default: 0; });')).toBe('3');
+  expect(evaluated('const o = { k: 1, v: 9 }; String(match (o) { when { k: 1, let v }: v; default: 0; });')).toBe('9');
+  expect(evaluated('const o = { a: 1 }; String(match (o) { when { const a }: a; default: 0; });')).toBe('1');
+  // A member the subject lacks fails the clause rather than binding undefined.
+  expect(evaluated('const o = { b: 1 }; String(match (o) { when { let a }: a; default: "fell"; });')).toBe('fell');
+  // The explicit and array forms are untouched.
+  expect(evaluated('const o = { a: 1 }; String(match (o) { when { a: let x }: x; default: 0; });')).toBe('1');
+  expect(evaluated('String(match ([1]) { when [let n]: n; default: 0; });')).toBe('1');
+  // And it composes with the environment fix above.
+  expect(evaluated('let out = 0; for (let i = match ({ a: 1 }) { when { let a }: a; default: 0; }; i < 3; i++) { out += i; } String(out);')).toBe('3');
+  expectThrown('match ({ a: 1 }) { when { let a }: a; default: 0; }; a;');
 });

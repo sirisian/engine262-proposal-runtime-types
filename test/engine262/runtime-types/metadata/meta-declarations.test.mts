@@ -1,6 +1,15 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
+/**
+ * Spec: #sec-meta-declarations (Meta Declarations), #sec-primitive-metadata.
+ *
+ * A `meta` declaration claims metadata keys for a type and supplies the hooks
+ * the judgments consult: `default`, `subtype`, `validate`, and the rest of
+ * #table-metadata-values. This file covers the declaration form, what each
+ * hook is asked and when, and the errors a malformed one produces.
+ */
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
@@ -81,14 +90,14 @@ test('meta: a base-form meta with no validate admits any metadata of its base', 
   // The surviving form of "no hook means no constraint": absence of `validate`
   // judges nothing, so every value of the base is admitted, while the
   // parameterization still keeps two metadata apart for identity. The
-  // base-form declaration is ALSO what keeps the program legal since Phase 3:
-  // without it, `a` is an unclaimed key and the pass rejects the
-  // parameterization that writes it (the C9 waiver, F44/F45).
+  // base-form declaration is ALSO what keeps the program legal: without it,
+  // `a` is an unclaimed key and the pass rejects the parameterization that
+  // writes it.
   expect(evaluated('meta float64 { default = {}; subtype(a, b) { return true; } } String((1 := float64) is float64.<{ a: 1 }>);')).toBe('true');
 });
 
-// CLOSED. This pinned the last hole in the keystone: a meta declaration against
-// a METADATA type reached nothing, because registration keyed on that type's own
+// A meta declaration against
+// a METADATA type reaches nothing where registration keys on that type's own
 // Type Object while IsOfType looked up on the parameterization's base. The
 // claiming rule of sec-primitive-metadata is what connects them, and the hook
 // below is now consulted.
@@ -170,8 +179,8 @@ test('meta: a hook declared against the base still applies', () => {
 // `validate` therefore admits no bare value of the base at all, which is what
 // makes a brand a brand."
 //
-// Cycle 14 skipped a meta type that offered no judgment, which admitted the bare
-// value and made a brand a comment.
+// Skipping a meta type that offers no judgment would admit the bare value and
+// make a brand a comment.
 test('meta: a meta type that claims a key and defines no validate refuses bare values', () => {
   expect(evaluated(`
     type Brand = { tag: number };
@@ -196,11 +205,10 @@ test('meta: a meta type that defines validate still decides normally', () => {
 
 test('meta: a metadata key no meta type claims is a type error at the parameterization', () => {
   // "A metadata object whose own key no meta type claims is a type error at
-  // the parameterization that writes it" - landed in the checking pass by the
-  // metadata plan's Phase 3 (F44), and covering this EXPRESSION position since
-  // Phase 4 (F45): the `is` operand writes the parameterization as surely as
-  // an annotation does, so the walk resolves it and the pass rejects it,
-  // naming the key.
+  // the parameterization that writes it" - adjudicated in the checking pass,
+  // and covering this EXPRESSION position as well: the `is` operand writes the
+  // parameterization as surely as an annotation does, so the walk resolves it
+  // and the pass rejects it, naming the key.
   expect(run('String((1 := float64) is float64.<{ claimedByNobody: 1 }>);')).toMatchObject({ Type: 'throw' });
 });
 
@@ -327,11 +335,11 @@ test('meta: a bare value enters a parameterization only through construction', (
     meta U { default = { unit: 0 }; subtype(a, b) { return true; } validate(v, m) { return true; } }
     String(Number(float32.<{ unit: 1 }>(7)));
   `)).toBe('7');
-  // OPEN, pinned as it behaves rather than as it should: a hook that REFUSES does
-  // not yet keep the value out on this path. The judgment is reached and answers
-  // correctly through `is` (covered above), so the gap is between the Type Object
-  // call and the construction boundary rather than in the judgment. Recorded in
-  // the next-phase document as the open half of ConvertParameterization.
+  // Pinned as it behaves rather than as it should: a hook that REFUSES does
+  // not yet keep the value out on this path. The judgment is reached and
+  // answers correctly through `is` (covered above), so the gap is between the
+  // Type Object call and the construction boundary rather than in the
+  // judgment - the open half of ConvertParameterization.
   expect(evaluated(`
     type U2 = { u2: number };
     meta U2 { default = { u2: 0 }; subtype(a, b) { return true; } validate(v, m) { return Number(v) > 0; } }
@@ -350,7 +358,7 @@ test('meta: the brand is shed freely on the way up', () => {
   `)).toBe('7');
 });
 
-// -- `subtype` is required (STATIC-CHECKER-PLAN.md Phase 2) -------------------
+// -- `subtype` is required ---------------------------------------------------
 // "It is an early error ... a missing `default` or `subtype`." The engine
 // enforced only `default` until now. `subtype` is required for a reason the brand
 // makes plain: it is the meta type's half of the metadata subtype judgment, so a

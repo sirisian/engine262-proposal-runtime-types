@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase four: `Composite.<T>(source)`.
+ * Spec: #sec-composite-typeobject-call - `Composite.<T>(source)`.
  *
  * `sec-composite-typeobject-call`: "Calling the Type Object of a composite type
  * over a shape S ... returns the result of CompositeFromShape(S, source). This
@@ -61,7 +61,7 @@ test('a required absence and an undeclared property throw', () => {
   expect(outcome('interface I { x: uint8 } Composite.<I>(1);')).toBe('TypeError');
 });
 
-test('the TUPLE half of typed creation, which phase five completed', () => {
+test('the TUPLE half of typed creation', () => {
   expect(evaluated('type T = [uint8, uint8]; String(Reflect.typeOf(Composite.<T>([1, 2])[0]) === (type uint8));')).toBe('true');
   expect(evaluated('type T = [uint8, uint8]; String(Composite.<T>([1, 2]) === Composite([uint8(1), uint8(2)]));')).toBe('true');
   // A required POSITION absent throws, as a required member does.

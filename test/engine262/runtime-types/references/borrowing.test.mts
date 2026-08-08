@@ -1,10 +1,12 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectError, expectThrownKind, expectStaticTypeError, expectThrownFlagOff, runFlagOff,
+  evaluated, ok, bool, expectThrown, expectError, expectThrownKind, expectStaticTypeError,
+  expectThrownFlagOff, runFlagOff,
 } from '../harness.mts';
 
 /**
- * Capability O - references and borrowing (references.md).
+ * Spec: #sec-references-and-borrowing (References and Borrowing). Design:
+ * references.md.
  *
  * A `ref` is a borrow: a handle to a storage location - a variable, an object
  * property, or an array element - that reads and writes through to the original
@@ -239,7 +241,7 @@ test('a var head never claims ref', () => {
   expectError('let a = [1]; for (var ref p of a) { } "ran";');
 });
 
-// -- #sec-reference-values: the decay channels (Phase 2) -----------------------
+// -- #sec-reference-values: the decay channels --------------------------------
 test('a returned reference decays at the call boundary wherever it is consumed', () => {
   const first = 'function first(a) { return ref a[0]; } ';
   // typeof sees the referent, never the reference
@@ -293,7 +295,7 @@ test('a built-in function boundary decays, which covers the reflective calls', (
   expect(evaluated('function f(a) { return String(a === 5); } let x = 5; let b = f.bind(null, ref x); x = 9; b();')).toBe('true');
 });
 
-// -- #sec-reference-liveness: the two-tier model (Phase 3) ---------------------
+// -- #sec-reference-liveness: the two-tier model ------------------------------
 const soa = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
 
 test('the loop rule refuses a length change at the operation', () => {
@@ -345,7 +347,7 @@ test('a reference to an ordinary property is a slot alias and never relocates', 
   expect(evaluated('let a = [1, 2]; let ref b = a[0]; a.shift(); String(b);')).toBe('2');
 });
 
-// -- #sec-location-consuming-contexts (Phase 4) --------------------------------
+// -- #sec-location-consuming-contexts ----------------------------------------
 const first = 'function first(a) { return ref a[0]; } ';
 
 test('a returned reference is consumed as a location by ++ and --', () => {
@@ -380,7 +382,7 @@ test('a call that returns no reference has no location to consume', () => {
 });
 
 test('a ref return may name a local, whose environment outlives the call', () => {
-  // D5: the collector owns the lifetime, as it does for a closure
+  // The collector owns the lifetime, as it does for a closure
   expect(evaluated('function localRef() { let v = 3; return ref v; } String(localRef());')).toBe('3');
   expect(ok('function localRef() { let v = 3; return ref v; } localRef()++;')).toBe(true);
 });
@@ -393,7 +395,7 @@ test('a reference value satisfies a ref type through its referent', () => {
   expectThrownKind('function fr(a): ref uint32 { return ref a[0]; } let b = ["x"]; fr(b);', 'TypeError');
 });
 
-// -- D6: what a destructuring ref member will mean (Phase 5) -------------------
+// -- What a destructuring ref member will mean -------------------------------
 // The `{ (ref a) }` member form waits on the parenthesized typed own-property
 // pattern, which the specification does not yet state. What it will MEAN is
 // settled, and the part of that meaning reachable today is pinned here: a
@@ -418,7 +420,7 @@ test('borrowing a member does not require borrowing the object', () => {
   expect(evaluated('function g({ a }) { return a; } let o = { a: 1 }; String(g(ref o));')).toBe('1');
 });
 
-// -- #sec-soa-references: one borrow representation (Phase 6) ------------------
+// -- #sec-soa-references: one borrow representation --------------------------
 const soaP = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
 
 test('a borrow of an SoA element is a reference like any other', () => {
@@ -483,7 +485,7 @@ test('a plain array still propagates into a new typed array', () => {
   // into a NEW array, and the caller's plain array is untouched
   expect(evaluated('function h(x: [].<uint8>) { return x[0] is uint8; } let p = [1, 2]; String(h(p));')).toBe('true');
   expect(evaluated('function h(x: [].<uint8>) { x[0] = 5; } let p = [1]; h(p); String(p[0] is uint8);')).toBe('false');
-  // and the empty-array stamp still carries the element type (F71)
+  // and the empty-array stamp still carries the element type
   expect(evaluated('const a: [].<uint8> = []; a.push(65); String(a[0] is uint8);')).toBe('true');
 });
 
@@ -584,7 +586,7 @@ test('any callee shape that returns a borrow may be assigned through', () => {
   expect(evaluated('const fb = (a) => { return ref a[0]; }; let a = [1]; fb(a) = 5; String(a[0]);')).toBe('5');
   expect(evaluated('function outer() { return function (a) { return ref a[0]; }; } let a = [1]; outer()(a) = 5; String(a[0]);')).toBe('5');
   expect(evaluated('function getObj() { return { first(a) { return ref a[0]; } }; } let a = [1]; getObj().first(a) = 5; String(a[0]);')).toBe('5');
-  // a borrow of the callee's own local: the environment outlives the call (D5)
+  // a borrow of the callee's own local: the environment outlives the call
   expect(ok('function localRef() { let v = 3; return ref v; } localRef() = 9;')).toBe(true);
   expect(evaluated('let x = 1; (function () { return ref x; })() = 5; String(x);')).toBe('5');
   // a property borrow, a typed element, and a whole SoA element
@@ -648,4 +650,64 @@ test('the borrowing forms are inert with the feature off', () => {
   expect((runFlagOff('let a = [1]; for (let ref p of a) { } "ok";') as { Type: string }).Type).toBe('throw');
   // but `ref` as a plain identifier still works with the flag off
   expect((runFlagOff('let ref = 3; ref;') as { Type: string }).Type).toBe('normal');
+});
+
+// -- The ref TYPE ----------------------------------------------------------------
+
+/**
+ * Extension coverage - references.md (the `ref` type and borrowing runtime).
+ *
+ * The `ref` TYPE is wired at the type level: `ref T` parses, resolves to a
+ * reference Type Record, interns, is invariant in its target, and reflects. The
+ * borrowing RUNTIME is implemented too: the call-site `ref` argument
+ * and `ref` return, `ref` parameter aliasing, the `let ref` / `const ref`
+ * lexical binding and rebinding, the index-based `for (const ref p of a)` loop,
+ * decay to the referent at value boundaries, and the two liveness rules. The
+ * fuller borrowing surface (location-consuming returns such as `first(a)++`,
+ * destructuring `ref` members, and the SoA/typed-buffer substrate) is exercised
+ * in extensions/ref-borrowing.test.mts and noted there as deferred.
+ */
+
+// -- The ref type at the type level --------------------------------------------
+test('ref type: `ref T` resolves and reflects as a reference to its target', () => {
+  expect(evaluated('type R = ref int32; Reflect.getReflection(R).kind;')).toBe('reference');
+  // the target leaf is the target type object
+  expect(ok('type R = ref int32; Reflect.getReflection(R).target === int32;')).toBe(true);
+});
+
+test('ref type: reference types intern by their target', () => {
+  expect(ok('type A = ref int32; type B = ref int32; A === B;')).toBe(true);
+  // distinct targets are distinct references
+  expect(bool('type A = ref int32; type B = ref uint32; String(A === B);')).toBe(false);
+});
+
+test('ref type: a reference is invariant in its target', () => {
+  // assignable to itself
+  expect(ok('type A = ref int32; type B = ref int32; Reflect.isAssignable(A, B);')).toBe(true);
+  // not assignable across different targets (invariant)
+  expect(bool('type A = ref int32; type B = ref uint32; String(Reflect.isAssignable(A, B));')).toBe(false);
+});
+
+test('ref type: a ref over an object type resolves', () => {
+  expect(evaluated('type R = ref { a: uint8 }; Reflect.getReflection(R).kind;')).toBe('reference');
+});
+
+// -- The ref parameter declaration parses --------------------------------------
+test('ref parameter: a `ref` parameter declaration parses', () => {
+  expect(evaluated('function f(ref a: int32) { return a; } typeof f;')).toBe('function');
+  // a ref parameter with a body referencing it parses
+  expect(evaluated('function f(ref a: int32) { let b = a; return b; } typeof f;')).toBe('function');
+});
+
+// -- The borrowing runtime ----------------------------------------------------
+test('ref runtime: the call-site `ref` argument passes the caller location', () => {
+  // Target (references.md): `f(ref a)` passes the caller's location, so a write
+  // in the callee is a write in the caller.
+  expect(evaluated('function f(ref a) { a++; } let x = 0; f(ref x); String(x);')).toBe('1');
+});
+
+test('ref runtime: the `for (const ref p of a)` form binds each element by reference', () => {
+  // Target (references.md): a ref loop binds each element by reference, so the
+  // body writes into the array in place.
+  expect(evaluated('let a = [1, 2, 3]; for (let ref p of a) { p = p * 10; } a[0] + "," + a[1] + "," + a[2];')).toBe('10,20,30');
 });

@@ -5,11 +5,12 @@ import {
 } from '../harness.mts';
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 1, per #sec-higher-kinded-parameters.
+ * Spec: #sec-higher-kinded-parameters (Higher-Kinded Parameters).
  *
  * A parameter is higher-kinded when its name is followed by a bracketed list of
- * `_`, and the count of holes is its arity. Nothing here gives the arity a
- * meaning yet - that is phase 2 - so these are parse assertions.
+ * `_`, and the count of holes is its arity. This first group is about the
+ * GRAMMAR alone, so the assertions are parse assertions; the arity's meaning
+ * follows below.
  */
 
 test('a higher-kinded parameter declares, at each arity and position', () => {
@@ -66,7 +67,7 @@ test('the shared tokens still mean what they did', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 2: the arity reaches the record.
+ * The arity reaches the record.
  *
  * A `~parameter~` Type Record carries the arity its declaration wrote, and the
  * central rule follows from it - a higher-kinded parameter stands for a
@@ -112,7 +113,7 @@ test('an ordinary parameter is untouched', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 3.
+ * Application.
  *
  * The APPLICATION half works: `W.<T>` where `W` is a bound higher-kinded
  * parameter resolves the parameter to the declaration an application bound to
@@ -166,8 +167,8 @@ test('the two failures carry different messages', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 4 - probed, and three of the four
- * clauses need work that is now located rather than guessed at.
+ * The four clauses of a kinded ARGUMENT, three of which need work that is
+ * located rather than guessed at.
  *
  * 1. FIXED. A kinded argument was resolved as a type, so it worked in a
  *    parameter annotation and failed in a `const` one. `function f(x: B.<Identity>) {}` is
@@ -190,7 +191,7 @@ test('the two failures carry different messages', () => {
  *    WhereClauses of sec-where-clauses where sec-checked-contracts admits
  *    them", and checked contracts is a specified extension the engine has not
  *    implemented. A kinded constraint will work when `where` does, and needs
- *    nothing of its own beyond what phase 3 already resolves.
+ *    nothing of its own beyond what application already resolves.
  *
  * 3. VARIANCE HOLDS. Applications binding different wrappers are distinct, for
  *    a class argument and for an alias argument alike.
@@ -257,8 +258,7 @@ test('applications binding different alias wrappers are distinct', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 5 - done, at the third attempt, and
- * the two failed ones located it.
+ * Inference, or rather the refusal of it.
  *
  * A higher-kinded parameter is bound only by explicit application and never
  * inferred. Refusing that in InferGenericBindings, where a call's bindings are
@@ -301,7 +301,7 @@ test('the refusal explains that inference is not attempted', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 6 - the prerequisite, nearly.
+ * `Identity`, the wrapper meaning NO wrapper.
  *
  * `Identity`, the wrapper meaning NO wrapper, resolves as a TYPE in every
  * position: `Identity.<uint8>` is `uint8` in a parameter annotation and in a

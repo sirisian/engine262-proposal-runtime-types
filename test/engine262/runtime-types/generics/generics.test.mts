@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from '../harness.mts';
+import { evaluated, ok, expectThrown, run } from '../harness.mts';
 
 /**
  * Extension coverage - generics.md.
@@ -202,7 +202,7 @@ test('generics: a user generic is invariant', () => {
 });
 
 /**
- * PHASE 3 - done. Kept for the diagnosis, which was most of the work.
+ * The nominal-argument comparison, and where invariance does not reach.
  *
  * `const x: A.<uint16> = new A.<uint8>()` is accepted, and invariance does not
  * hold for a user generic. Neither is a gap in the comparison: nominal argument
@@ -263,12 +263,39 @@ test('generics: the deferred surface is refused, not silently wrong', () => {
   `)).toBe(false);
 
   // Generic parameters on a decorator do not parse. This is the form that
-  // appears in generics.md and in neither specification table until phase 1
-  // put it in the hooks row.
+  // appears in generics.md and in the hooks row of #table-extension-hooks.
   expect(ok('function d<T>(c: Reflect.ClassField) {} class C { @d.<uint8> f: uint8 = 1; }')).toBe(false);
 
   // A VALUE type parameter declares, which is worth pinning separately: the
   // hooks row defers "argument-bound value generics and inference from an
   // expected type", not the declaration form, and the two are easy to conflate.
   expect(ok('class A<N: uint32> {}')).toBe(true);
+});
+
+// -- Generic type aliases --------------------------------------------------------
+
+test('generic aliases instantiate by substitution and intern', () => {
+  expect(evaluated(`type Pair<A, B> = [A, B];
+    type P1 = Pair.<uint8, string>;
+    type P2 = Pair.<uint8, string>;
+    P1 === P2 ? "same" : "different";`)).toBe('same');
+  // Substitution is transparent: the instantiation is the substituted type.
+  expect(evaluated('type Pair<A, B> = [A, B]; type P = Pair.<uint8, string>; type T2 = [uint8, string]; P === T2 ? "same" : "different";')).toBe('same');
+  expect(evaluated('type Pair<A, B> = [A, B]; type P = Pair.<uint8, string>; [(1 := uint8), "a"] instanceof P ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type Pair<A, B> = [A, B]; Pair.<uint8, string> !== Pair.<string, uint8> ? "ok" : "no";')).toBe('ok');
+});
+
+test('generic structural bodies substitute', () => {
+  expect(evaluated(`type Box<T> = { v: T };
+    type B = Box.<number>;
+    ({ v: 1 } is B) && !({ v: "s" } is B) ? "ok" : "no";`)).toBe('ok');
+  expect(evaluated('type Box<T> = { v: T }; type N = Box.<Box.<number>>; ({ v: { v: 1 } } is N) ? "ok" : "no";')).toBe('ok');
+});
+
+test('expression-position type arguments specialize', () => {
+  expect(evaluated('type Pair<A, B> = [A, B]; const P = Pair.<uint8, string>; type Q = Pair.<uint8, string>; P === Q ? "same" : "different";')).toBe('same');
+});
+
+test('arity mismatches throw', () => {
+  expect(run('type Pair<A, B> = [A, B]; type P = Pair.<uint8>;')).toMatchObject({ Type: 'throw' });
 });

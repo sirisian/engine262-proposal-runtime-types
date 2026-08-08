@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase one: SameValueZero within a typed float.
+ * Spec: #sec-composite-modifications (Composite Modifications) - SameValueZero
+ * within a typed float.
  *
  * The specification enumerates the SameValueZero equivalence classes with more
  * than one member as "the signed zeros, handled above for the Number type and
@@ -68,10 +69,10 @@ test('a typed NaN is one key, as an untyped one is', () => {
 });
 
 test('the DECIMAL cohorts now HAVE a value level, and split as specified', () => {
-  // This pin recorded that decimal types annotated but had no values, so there
-  // was no cohort to canonicalize. PLAN-decimal.md stages A and B closed it.
+  // A decimal type with no value level has no cohort to canonicalize, so this
+  // needs the decimal values to exist first.
   //
-  // The split the composites work needed: SameValue distinguishes cohort
+  // The split composites need: SameValue distinguishes cohort
   // members, SameValueZero and a Map key compare numerical value.
   expect(evaluated('let d: decimal128 = 1.0; d.toString();')).toBe('1.0');
   expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; String(Object.is(a, b));')).toBe('false');
@@ -80,8 +81,8 @@ test('the DECIMAL cohorts now HAVE a value level, and split as specified', () =>
   // A decimal belongs to the decimal type of its own WIDTH.
   expect(evaluated('let d: decimal128 = 1.0; String(d is decimal128);')).toBe('true');
   expect(evaluated('let d: decimal128 = 1.0; String(d is decimal32);')).toBe('false');
-  // STILL PINNED: the composite's own reduction rule is stage D - "where the
-  // type declares no scale, the REDUCED member is stored".
+  // STILL OPEN: the composite's own reduction rule - "where the type declares
+  // no scale, the REDUCED member is stored".
   expect(evaluated('try { interface D { v: decimal128 } '
     + 'String(Composite.<D>({ v: 1.0 }).v.toString()); } catch (e) { e.constructor.name; }')).not.toBe('1');
 });

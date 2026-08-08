@@ -2,9 +2,9 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-pattern-matching.md phase five, NARROWING.
+ * Spec: #sec-declared-narrowing (Declared Narrowing), #sec-narrowfrom.
  *
- * `sec-match-narrowing`. What a pattern establishes about its subject is what
+ * What a pattern establishes about its subject is what
  * the arm may rely on - and what it CANNOT establish is as much of the design as
  * what it can: "`not` and arm-failure narrow only what subtraction can
  * represent - union members, sealed subclasses, literals, `null`".
@@ -31,7 +31,7 @@ test('`not` NEGATES the narrowing rather than abandoning it', () => {
   expect(outcome('function f(v: uint8 | string) { if (v is not not uint8) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('ACCEPTED');
 });
 
-test('PINNED: what narrowing does NOT do, by the design\'s own account', () => {
+test('what narrowing does NOT do, by the design\'s own account', () => {
   // "A failed structural pattern narrows nothing", because negation types do
   // not exist here - so a `not` over an object pattern establishes nothing in
   // the true branch and the union survives intact.
@@ -62,8 +62,8 @@ test('an ANNOTATED binding types as its annotation', () => {
 });
 
 test('a MEMBER binding may be annotated too', () => {
-  // The third position the colon rule reaches, settled by the same context flag
-  // - a member position has no clause colon, so `let n: uint8` is complete.
+  // The third position the colon rule reaches, by the same context flag - a
+  // member position has no clause colon, so `let n: uint8` is complete.
   const outcome3 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   expect(outcome3('function f(v: { a: uint8 }) { return match (v) { when { a: let n: uint8 }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
   expect(evaluated('String(match ({ a: uint8(1) }) { when { a: let n: uint8 }: 1; default: 0; });')).toBe('1');

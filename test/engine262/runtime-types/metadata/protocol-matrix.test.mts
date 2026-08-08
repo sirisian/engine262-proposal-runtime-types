@@ -1,12 +1,13 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
-// The metadata protocol's verification matrix (METADATA-PROTOCOL-PLAN.md,
-// Phase 5): the probe ledger of cycles 36 through 39, committed. Each test
-// names the phase it guards; the plan's audit findings (C1 through C9) are
-// cited where a test exists BECAUSE of one. Failure triage order, from the
-// plan: suspect the plan's reading of the spec first, the probe's framing
-// second, the engine third - the order that paid F38, F39, and F40.
+// Spec: #sec-primitive-metadata (Primitive Metadata) - a verification matrix
+// for the metadata protocol, grouped by the property each group establishes:
+// the default snapshot and portion completion, participation and the sit-out,
+// the unclaimed-key error, and the whole protocol composed over one program.
+//
+// Triage order when one of these fails: suspect the reading of the
+// specification first, the test's framing second, and the engine third.
 
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
@@ -58,7 +59,7 @@ const dims = `
 
 // The quantize hook receives a TYPED value and plain metadata numbers, so the
 // arithmetic between them must say which type it is in - the same rule that
-// forbids uint8 + uint16 (F52). Casting the metadata is the shortest honest
+// forbids uint8 + uint16. Casting the metadata is the shortest honest
 // spelling, and it is worth seeing here: every hook that computes with both a
 // value and its constraint pays this.
 const qs = `
@@ -71,9 +72,9 @@ const qs = `
   }
 `;
 
-// -- Phase 1: the default snapshot, and portion completion (C2) ---------------
+// -- The default snapshot, and portion completion --------------------------------
 
-test('P1a: validate sees the complete portion, so the DEFAULTED key enforces too', () => {
+test('validate sees the complete portion, so the DEFAULTED key enforces too', () => {
   // The money trio: before completion the third line failed for the wrong
   // reason (undefined comparison); now it fails for the right one.
   expect(evaluated(`${bounds} String(((50 := float64.<{ min: 10 }>)) is float64.<{ min: 10 }>);`)).toBe('true');
@@ -81,7 +82,7 @@ test('P1a: validate sees the complete portion, so the DEFAULTED key enforces too
   expectThrown(`${bounds} (150 := float64.<{ min: 10 }>); "admitted";`);
 });
 
-test('P1b: subtype sees complete portions on both sides of a deferred pair', () => {
+test('subtype sees complete portions on both sides of a deferred pair', () => {
   expect(evaluated(`
     type S = { lo: number, hi: number };
     meta S { default = { lo: 0, hi: 9 };
@@ -93,12 +94,12 @@ test('P1b: subtype sees complete portions on both sides of a deferred pair', () 
   `)).toBe('hi+lo|hi+lo');
 });
 
-test('P1c: a getter on the default runs once, at declaration, never per judgment', () => {
+test('a getter on the default runs once, at declaration, never per judgment', () => {
   // The increment carries NO initializer elsewhere: the checking pass
   // pre-evaluates meta declarations before the script body runs, so an
   // initializer at the top of the script would clobber the declaration-time
   // increment and read "0" - the engine being right and the first probe
-  // being wrong (F42). Two constructions and a crossing later, still one.
+  // being wrong. Two constructions and a crossing later, still one.
   expect(evaluated(`
     type G = { g: number };
     meta G { default = { get g() { globalThis.n = (globalThis.n || 0) + 1; return 3; } };
@@ -109,16 +110,15 @@ test('P1c: a getter on the default runs once, at declaration, never per judgment
   `)).toBe('1');
 });
 
-test('P1e: the default of an object-shaped meta type must be an object OF the shape', () => {
-  // The minimal half landed in Phase 1, the full membership rule in Phase 4
-  // (the relocated edit 5): both are asserted, and a conforming default
-  // declares beside them.
+test('the default of an object-shaped meta type must be an object OF the shape', () => {
+  // The minimal rule and the full membership rule are both asserted, and a
+  // conforming default declares beside them.
   expectThrown('type B2 = { x: number }; meta B2 { default = 0; subtype(a, b) { return true; } } "declared";');
   expectThrown('type B3 = { x: number }; meta B3 { default = { wrong: 1 }; subtype(a, b) { return true; } } "declared";');
   expect(evaluated('type B4 = { x: number }; meta B4 { default = { x: 1 }; subtype(a, b) { return true; } } "declared";')).toBe('declared');
 });
 
-test('P1f: the optional-key form survives the full shape rule', () => {
+test('the optional-key form survives the full shape rule', () => {
   // NumberBounds' own convention: an optional-keyed shape with `default = {}`
   // declares, and validate reads the unwritten key as undefined.
   expect(evaluated(`
@@ -129,16 +129,16 @@ test('P1f: the optional-key form survives the full shape rule', () => {
   `)).toBe('true');
 });
 
-// P1d, the units regression, is the existing suite itself:
-// type-construction-boundary.test.mts and type-metadata-subtype.test.mts ran
-// byte-identical through the completion change, which is the guard against the
-// `undefined === undefined` accident F40 documented.
+// The units regression is the existing suite itself:
+// enforcement/boundary-check.test.mts and foundations/type-errors.test.mts run
+// byte-identical through the completion rule, which is the guard against an
+// `undefined === undefined` accident.
 
-// -- Phase 2: participation and the sit-out (C1, C3, C4) ----------------------
+// -- Participation and the sit-out -----------------------------------------------
 
-test('P2a: a brand written at its own default admits, and off it refuses, in one program', () => {
-  // Both halves in one test, per the plan's Phase 2 risk note: a regression
-  // that drops the meta type from the judgment reads as a failure, not a pass.
+test('a brand written at its own default admits, and off it refuses, in one program', () => {
+  // Both halves in one test, so that a regression dropping the meta type from
+  // the judgment reads as a failure rather than as a pass.
   expect(evaluated(`${brand}
     const atDefault = (1 := float32.<{ tag: "" }>) is float32.<{ tag: "" }>;
     let offDefault = "refused"; try { (1 := float32.<{ tag: "A" }>); offDefault = "admitted"; } catch (e) { }
@@ -146,12 +146,12 @@ test('P2a: a brand written at its own default admits, and off it refuses, in one
   `)).toBe('true/refused');
 });
 
-test('P2b: written exactly at the default sits out; written off it enforces both keys', () => {
+test('written exactly at the default sits out; written off it enforces both keys', () => {
   expect(evaluated(`${bounds} String(((999 := float64.<{ min: 0, max: 100 }>)) is float64.<{ min: 0, max: 100 }>);`)).toBe('true');
   expectThrown(`${bounds} (150 := float64.<{ min: 10 }>); "admitted";`);
 });
 
-test('P2c: a hostile subtype riding at its default on both sides cannot veto (C1)', () => {
+test('a hostile subtype riding at its default on both sides cannot veto', () => {
   // Under the specification's former all-declared quantifier this crossing
   // refused; the participation rule filters the hostile meta type out, since
   // its portions equal its default on both sides.
@@ -162,7 +162,7 @@ test('P2c: a hostile subtype riding at its default on both sides cannot veto (C1
   `)).toBe('2000');
 });
 
-test('P2d: an unrelated conversionFactor does not scale a crossing it has no metadata in (C1)', () => {
+test('an unrelated conversionFactor does not scale a crossing it has no metadata in', () => {
   // Under the former quantifier this answered 14000.
   expect(evaluated(`${dims}
     type F = { fkey: number };
@@ -171,11 +171,11 @@ test('P2d: an unrelated conversionFactor does not scale a crossing it has no met
   `)).toBe('2000');
 });
 
-test('P2e: a default-written key and an absent key are equivalent after completion', () => {
-  // h5, the false rejection Phase 1 fixed: completed portions agree, so the
+test('a default-written key and an absent key are equivalent after completion', () => {
+  // Completed portions agree, so the
   // pair is metadata-equivalent - assignable at the pass in both directions,
   // and the run crossing admits. This is also the principled remainder of the
-  // vacuous-admit rider (F44).
+  // vacuous-admit rider.
   const fixture = `
     type S2 = { p: number };
     meta S2 { default = { p: 0 }; subtype(a, b) { return a.p === b.p; } validate(v, c) { return true; } }
@@ -186,7 +186,7 @@ test('P2e: a default-written key and an absent key are equivalent after completi
   expect(evaluated(`${fixture} String(((1 := A) := Bb) is Bb);`)).toBe('true');
 });
 
-test('P2g: subtype(default, default) is never consulted, so a throwing hook cannot poison the realm (C1)', () => {
+test('subtype(default, default) is never consulted, so a throwing hook cannot poison the realm', () => {
   expect(evaluated(`${dims}
     type T2 = { tk: number };
     meta T2 { default = { tk: 5 }; subtype(a, b) { throw new Error("consulted"); } }
@@ -195,9 +195,9 @@ test('P2g: subtype(default, default) is never consulted, so a throwing hook cann
   `)).toBe('2000');
 });
 
-test('P2h: quantize fires toward a governing target and is silent toward a default one (C4)', () => {
-  // The first consultation of a hook that was implemented in cycle 25 and
-  // undeclarable until the parser matched the table.
+test('quantize fires toward a governing target and is silent toward a default one', () => {
+  // A hook is only useful once the parser admits it: this one was declarable
+  // nowhere until the parser matched the hook table.
   expect(evaluated(`${qs}
     type Coarse = float64.<{ step: 10 }>; type Fine = float64.<{ step: 1 }>;
     String(((26 := Fine) := Coarse));
@@ -208,7 +208,7 @@ test('P2h: quantize fires toward a governing target and is silent toward a defau
   `)).toBe('26');
 });
 
-test('P2i: the parser matches the hook table in both directions (C4)', () => {
+test('the parser matches the hook table in both directions', () => {
   expect(evaluated(`
     type R2 = { r: number };
     meta R2 { default = { r: 1 }; subtype(a, b) { return true; }
@@ -218,26 +218,26 @@ test('P2i: the parser matches the hook table in both directions (C4)', () => {
   expectThrown('type X = { x: number }; meta X { default = { x: 0 }; subtype(a, b) { return true; } frobnicate(v) { return v; } }');
 });
 
-// P2f, the governing hostile refusing and the governing factor scaling, is
-// asserted by type-construction-boundary.test.mts (the Kilometer-to-Velocity
-// refusal and the 2000 factor) and is cited rather than duplicated.
+// The governing hostile refusing and the governing factor scaling are
+// asserted by enforcement/boundary-check.test.mts (the Kilometer-to-Velocity
+// refusal and the 2000 factor) and are cited rather than duplicated.
 
-// -- Phase 3: the unclaimed-key error (C6, C9) --------------------------------
+// -- The unclaimed-key error -----------------------------------------------------
 
-test('P3a: an unclaimed key is a type error at the parameterization, naming the key', () => {
+test('an unclaimed key is a type error at the parameterization, naming the key', () => {
   const message = thrownMessage('function nc(x: float64.<{ claimedByNobody: 1 }>) { return x; } "ok";');
   expect(message).toContain('claimedByNobody');
   expect(message).toContain('is not claimed by any meta type');
 });
 
-test('P3b: the mistyped constraint is named at the type that writes it', () => {
-  // The vacuity hazard F40 led with: `mim` for `min` used to be a type that
-  // admitted everything, silently.
+test('the mistyped constraint is named at the type that writes it', () => {
+  // The vacuity hazard: `mim` for `min` would otherwise be a type that admits
+  // everything, silently.
   const message = thrownMessage(`${bounds} function nc(x: float64.<{ mim: 0 }>) { return x; } "ok";`);
   expect(message).toContain('mim');
 });
 
-test('P3c: a parameterization above its meta type is legal', () => {
+test('a parameterization above its meta type is legal', () => {
   // Claims register at evaluation and the pass pre-evaluates the source
   // text's meta declarations before adjudicating - the ordering the whole
   // design turns on.
@@ -249,14 +249,11 @@ test('P3c: a parameterization above its meta type is legal', () => {
   `)).toBe('ok');
 });
 
-test('P3d: direct eval is checked like any other Script', () => {
-  // Formerly the pinned BOUNDARY: the pass ran at ScriptEvaluation and
-  // ExecuteModule, and direct eval went through neither, so an unclaimed key
-  // inside eval was admitted. F44 called that one written boundary beating two
-  // half-boundaries, and said the resting place was wrong. It was: the checker
-  // itself runs in ParseScript, and eval parses through wrappedParse, so eval'd
-  // source was never checked at all - not the pass, not the walk (F55).
-  // Both run there now, and eval is a Script like any other.
+test('direct eval is checked like any other Script', () => {
+  // The checker runs in ParseScript and eval parses through wrappedParse, so
+  // both the pass and the walk have to reach it there; running them at
+  // ScriptEvaluation and ExecuteModule alone leaves eval'd source unchecked,
+  // and an unclaimed key inside eval admitted.
   expectThrown(`eval('type E = float32.<{ zzz: 1 }>; (1 := float32) is E');`);
   // A meta declaration and a use of it inside ONE eval still work, because the
   // pass pre-evaluates that text's own declarations before adjudicating it.
@@ -271,15 +268,14 @@ test('P3d: direct eval is checked like any other Script', () => {
   `)).toBe('object');
 });
 
-test('P3f: expression positions are collected too - is and the bare cast (F45)', () => {
-  // F44 claimed the type-meta pin had flipped; it had not, because the walk
-  // never resolved these positions. It does now, so the parameterization is
-  // adjudicated wherever it is WRITTEN.
+test('expression positions are collected too - is and the bare cast', () => {
+  // The walk has to resolve these positions as well as annotations, so the
+  // parameterization is adjudicated wherever it is WRITTEN.
   expectThrown('String((1 := float64) is float64.<{ zz1: 1 }>);');
   expectThrown('(1 := float64.<{ zz2: 1 }>); "admitted";');
 });
 
-test('P3g: the base-form waiver is per-base (C9)', () => {
+test('the base-form waiver is per-base', () => {
   // A meta registered against the base receives the whole metadata and speaks
   // for every key of that base's parameterizations - and only that base's.
   expect(evaluated(`
@@ -292,7 +288,7 @@ test('P3g: the base-form waiver is per-base (C9)', () => {
   `);
 });
 
-test('P3e: claims from a previously evaluated script persist per agent', () => {
+test('claims from a previously evaluated script persist per agent', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
   const first = realm.evaluateScriptSkipDebugger(`
@@ -305,9 +301,9 @@ test('P3e: claims from a previously evaluated script persist per agent', () => {
   expect(second).toMatchObject({ Type: 'normal' });
 });
 
-// -- Phase 4: the audit's own guards ------------------------------------------
+// -- The audit's own guards ------------------------------------------------------
 
-test('P4: completion, participation, and adjudication compose over one program', () => {
+test('completion, participation, and adjudication compose over one program', () => {
   // The protocol end to end: a two-key meta type with a real default, a
   // parameterization writing one key, the defaulted key enforcing, the
   // sit-out admitting the default-written form, the crossing scaled and

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase three: composite TYPES.
+ * Spec: #sec-composite-types (Composite Types).
  *
  * `sec-composite-types`: "A Type Record is a composite type when its [[Kind]] is
  * ~primitive~ and its [[Name]] is *"Composite"*", with [[Arguments]] the shape.
@@ -49,7 +49,7 @@ test('the TOP composite type is the type of every composite', () => {
   expect(outcome('let a: Composite = Composite({ x: 1 }); let b: Composite = Composite({ y: "s", z: true });')).toBe('ACCEPTED');
 });
 
-test('PINNED: a shape must be NAMED at the creation site, not inferred', () => {
+test('a shape must be NAMED at the creation site, not inferred', () => {
   // The clause: "The Static Type of a call of the Composite function is the TOP
   // composite type where the call supplies no TypeArguments and no contextual
   // type reaches it." A shapeless type satisfies no specific interface, so this
@@ -57,9 +57,7 @@ test('PINNED: a shape must be NAMED at the creation site, not inferred', () => {
   // "an unannotated `Composite` call in typed code produces `number` fields,
   // and code that means anything else should say so at the creation site".
   expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('TypeError');
-  // The remedy is the TYPED CREATION form, which phase four landed - and which
-  // this pin used to record as present-looking-but-inert: the syntax parsed and
-  // ran with the type argument IGNORED. composite-typed-creation.test.mts owns
-  // the assertions now.
+  // The remedy is the TYPED CREATION form;
+  // composite-typed-creation.test.mts owns the assertions.
   expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('true');
 });

@@ -2,9 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-pattern-matching.md phase two: the structural core.
- *
- * `sec-match-structural` and the Match Cache Record of `sec-match-expression`.
+ * Spec: #sec-match-structural (Structural Matching) and the Match Cache Record
+ * of #sec-match-expression.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -125,25 +124,23 @@ test('THE SPECULATION DECLINES what a type can express', () => {
   expect(evaluated("String({ kind: 'c' } is { kind: 'a' | 'b' });")).toBe('false');
 });
 
-test('PINNED: what the structural core still lacks', () => {
+test('what the structural core still lacks', () => {
   const bindings = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // BINDINGS and the REST binding need the scoping rule - "in scope in exactly
   // the positions the truth of the test governs" - which is checker work.
   expect(evaluated('String(1 is let x);')).toBe('true');
-  // A REST BINDING works in `is` position (cycle 218): it "collects the
+  // A REST BINDING works in `is` position: it "collects the
   // remaining own enumerable members", meaning those the pattern did not NAME.
   expect(evaluated('let out = "X"; if (({ a: 1, b: 2, c: 3 }) is { a: 1, ...let rest }) { out = Object.keys(rest).join(","); } out;')).toBe('b,c');
   expect(evaluated('let out = "X"; if (({ a: 1, b: 2 }) is { a: _, ...let rest }) { out = String(rest.a); } out;')).toBe('undefined');
   expect(evaluated('let out = "X"; if (({ a: 1 }) is { a: 1, ...let rest }) { out = String(Object.keys(rest).length); } out;')).toBe('0');
-  // PINNED: it does NOT yet work in a `match` CLAUSE, where the pattern parses
-  // under the colon-terminates rule and the rest binding's `let` meets it.
-  // A  CLAUSE with a rest binding does not parse - the pattern is read
+  // It does NOT yet work in a `match` CLAUSE: the pattern is read
   // under the colon-terminates rule and the rest binding's `let` meets it. The
   // exact failure is left unasserted because it is a host-level one, not a
   // language error the suite should encode.
   expect(evaluated('String(({ a: 1, b: 2 }) is { a: 1, ...let rest });')).toBe('true');
-  // A PLAIN binding in a member position does work - phase five landed it, and
-  // the rest binding needs the run-after-the-fixed-elements rule as well.
+  // A PLAIN binding in a member position does work; the rest binding needs the
+  // run-after-the-fixed-elements rule as well.
   expect(evaluated('String(match ({ a: 7 }) { when { a: let v }: v; default: 0; });')).toBe('7');
   // And a regexp's typed match result is not yet available to a juxtaposed
   // object pattern, which is where the capture types would flow into bindings.

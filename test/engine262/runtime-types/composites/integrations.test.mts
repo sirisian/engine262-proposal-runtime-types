@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-composites.md phase six: the integrations.
+ * Spec: #sec-composite-canbeheldweakly, #sec-composite-custommatcher,
+ * #sec-composite-hasinstance, #sec-composite-json - the integrations.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);

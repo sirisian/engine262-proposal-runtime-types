@@ -2,8 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
 /**
- * proposal-runtime-types (#sec-metadata-decomposition, table-metadata-values;
- * primitivemetadata.md): a RANGE as a metadata value.
+ * Spec: #sec-metadata-decomposition (Metadata Decomposition),
+ * #table-metadata-values. Design: primitivemetadata.md.
+ *
+ * A RANGE as a metadata value.
  *
  * The metadata language is closed, and this adds one row to it. A range is
  * admitted as a VALUE, not as an implementation of an interface: the four
