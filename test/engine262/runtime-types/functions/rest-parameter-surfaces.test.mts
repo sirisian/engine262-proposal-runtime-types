@@ -2,10 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-rest-parameters.md phase 6.5 to 6.8: the surfaces a rest parameter
- * reaches once it can sit anywhere.
+ * Spec: #sec-named-arguments (Named Arguments) and the surfaces a rest
+ * parameter reaches once it can sit anywhere.
  *
- * The plan asks for these groups because the feature is not one code path: a
+ * These groups exist because the feature is not one code path: a
  * parameter list is read by the parser, the checker's overload resolution, the
  * runtime binder, the named-argument assembly, the decorator walk, and generic
  * specialization, and a rest away from the end is a new shape for every one of

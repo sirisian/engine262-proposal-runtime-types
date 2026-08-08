@@ -1,0 +1,224 @@
+import { test, expect } from 'vitest';
+import {
+  evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff,
+} from '../harness.mts';
+
+/**
+ * Spec: #sec-type-annotations (Type Annotations) - rest parameters, and
+ * #sec-bindarguments (BindArguments) for the binding half below.
+ *
+ * The design's rest parameters section (README) writes three things the base
+ * grammar does not admit: a rest carrying a type, a rest followed by further
+ * parameters, and more than one rest in a list. #sec-type-annotations
+ * restates
+ * BindingRestElement to carry a TypeAnnotation and FormalParameters so that a
+ * rest is an ordinary element of the list.
+ *
+ * The first half of this file is about PARSING only - which run each rest
+ * takes is SequenceAssignment's question - so the calls in it are written so
+ * that the assignment is unambiguous under any rule. What they pin is that the
+ * forms PARSE, that they parse in every position a parameter list appears, and
+ * that the base language is untouched with the feature off.
+ */
+
+test('a rest parameter carries a type', () => {
+  expect(evaluated('function f(a: string, ...args: [].<uint32>) { return args.length; } String(f("a", 1, 2));')).toBe('2');
+  // The same annotation in a destructuring rest, which reaches its binding
+  // through the same production and so was equally unparseable.
+  expect(evaluated('let [a: uint8, ...b: [].<uint8>] = [1, 2, 3]; String(b.length);')).toBe('2');
+});
+
+test('a rest may be followed by further parameters', () => {
+  expect(ok('function f(...a: [].<uint32>, b: string) { return b; }')).toBe(true);
+  expect(ok('function f(a: uint8, ...b: [].<uint32>, c: string) { return c; }')).toBe(true);
+});
+
+test('a parameter list may hold more than one rest', () => {
+  // The design's own example, README "Rest Parameters".
+  expect(ok('function f(a: string, ...args: [].<uint32>, ...args2: [].<string>, callback: () => void) {}')).toBe(true);
+  // Its worked one, whose binding SequenceAssignment settles.
+  expect(ok('function f(...a: [].<uint32>, ...b: [].<uint32>, c: uint32): void {}')).toBe(true);
+  // Untyped rests separated by typed parameters, also from that section. No
+  // early error refuses these: under leftmost-greedy matching every list has a
+  // determined assignment, so a list the design calls confusing is allowed and
+  // discouraged rather than rejected.
+  expect(ok('function f(...args1, callback1: () => void, ...args2, callback2: () => void) {}')).toBe(true);
+});
+
+test('every parameter position admits the new forms', () => {
+  // A method, an accessor's owner, a class constructor, a generator, and an
+  // async function all reach FormalParameters or UniqueFormalParameters, so a
+  // regression in any of them would otherwise surface only in test262.
+  expect(ok('class C { m(...a: [].<uint32>, b: string) { return b; } }')).toBe(true);
+  expect(ok('class C { constructor(...a: [].<uint32>, b: string) {} }')).toBe(true);
+  expect(ok('function* g(...a: [].<uint32>, b: string) { yield b; }')).toBe(true);
+  expect(ok('async function h(...a: [].<uint32>, b: string) { return b; }')).toBe(true);
+  expect(ok('const o = { m(...a: [].<uint32>, b: string) { return b; } };')).toBe(true);
+
+  // Arrows come through the cover grammar and are refined afterwards, which is
+  // a separate path. A TYPED rest never parsed there at any position before
+  // this phase, so both halves are pinned.
+  expect(ok('const g = (...a: [].<uint32>) => a.length;')).toBe(true);
+  expect(ok('const g = (...a: [].<uint32>, b: string) => b;')).toBe(true);
+  expect(ok('const g = (...a, b) => b;')).toBe(true);
+});
+
+test('a rest still may not carry an initializer', () => {
+  // Unchanged from the base language, and the one early error the parser keeps.
+  expect(ok('function f(...a = []) {}')).toBe(false);
+});
+
+test('the base language is untouched with the feature off', () => {
+  // Everything the new grammar admits stays a Syntax Error without the feature,
+  // which is what makes the change additive.
+  expectErrorFlagOff('function f(...a, b) {}');
+  expectErrorFlagOff('const g = (...a, b) => b;');
+  expectErrorFlagOff('const g = (...a: uint8) => 1;');
+  expectErrorFlagOff('function f(...a: [].<uint32>, ...b: [].<string>) {}');
+
+  // And what the base language already accepted still runs, including a
+  // call-site spread, which shares the `...` token and no longer shares a code
+  // path with the parameter forms.
+  expect(evaluatedFlagOff('function f(a, ...b) { return b.length; } String(f(1, 2, 3));')).toBe('2');
+  expect(evaluatedFlagOff('const g = (...a) => a.length; String(g(1, 2));')).toBe('2');
+  expect(evaluatedFlagOff('function f(a, b) { return a + b; } const xs = [1, 2]; String(f(...xs));')).toBe('3');
+});
+
+test('a call-site spread is unaffected by the parameter forms', () => {
+  // `f(...xs)` and `function f(...xs: T)` share a token and nothing else; the
+  // annotation is read in the parameter grammars, not in an argument list.
+  expect(evaluated('function f(a: uint8, b: uint8) { return a + b; } const xs = [1, 2]; String(f(...xs));')).toBe('3');
+});
+
+// -- Binding a call ------------------------------------------------------------
+
+/*
+ * Binding a call: #sec-bindarguments.
+ *
+ * The forms parse and SequenceAssignment supplies the matcher; this binds a
+ * call through it, on both sides:
+ *
+ * - the CHECKER, where viability was an arity count that assumed one trailing
+ *   rest (#sec-resolveoverload), and
+ * - the RUN TIME, where FunctionDeclarationInstantiation walks the argument
+ *   iterator binding each parameter in turn, so a rest that is not last took a
+ *   single argument like any other parameter (#sec-bindarguments).
+ *
+ * The runtime assignment runs over RUN-TIME types rather than the checker's
+ * static ones, which is what a call arriving through `apply` or a spread of
+ * unknown length needs; for a call the checker has accepted, the two agree.
+ *
+ * The design's three worked examples are the acceptance tests: they are what
+ * the README prints, and an engine that does not reproduce them is wrong
+ * whatever else it does.
+ */
+
+test('the README\'s worked binding, exactly', () => {
+  // `f(...a, ...b, c)` called `f(0, 1, 2)` binds a to [0, 1], b to [], c to 2.
+  // The first rest takes all three, the tail cannot be satisfied, it gives one
+  // back, the second rest takes the remaining one and `c` cannot be satisfied,
+  // it gives that back too, and the assignment settles.
+  expect(evaluated(`
+    function f(...a: [].<number>, ...b: [].<number>, c: number) {
+      return a.length + "," + b.length + "," + c;
+    }
+    f(0, 1, 2);
+  `)).toBe('2,0,2');
+});
+
+test('the types decide where one run ends and the next begins', () => {
+  // `f(a: string, ...args, ...args2, callback)` with ('a', 0, 1, 2, 'a', 'b', fn).
+  expect(evaluated(`
+    function f(a: string, ...x: [].<number>, ...y: [].<string>, cb: () => void) {
+      return x.length + "," + y.length;
+    }
+    f("a", 0, 1, 2, "a", "b", () => {});
+  `)).toBe('3,2');
+});
+
+test('untyped rests are bounded by the typed parameters around them', () => {
+  // The design once explained this with a rule that "dynamic types have less
+  // precedence than typed parameters". No such rule exists: an untyped rest
+  // admits everything, and a longer first run simply leaves no function for the
+  // last parameter.
+  expect(evaluated(`
+    function f(...a1, cb1: () => void, ...a2, cb2: () => void) {
+      return a1.length + "," + a2.length;
+    }
+    f("a", 1, 1.0, () => {}, "b", 2, 2.0, () => {});
+  `)).toBe('3,3');
+});
+
+test('a rest gives back what the parameters after it require', () => {
+  expect(evaluated(`
+    function f(...a: [].<number>, b: string) { return a.length + ":" + b; }
+    f(1, 2, "x");
+  `)).toBe('2:x');
+
+  // A rest that receives nothing is an empty array, not undefined.
+  expect(evaluated(`
+    function f(...a: [].<number>, b: string) { return a.length + ":" + b; }
+    f("x");
+  `)).toBe('0:x');
+});
+
+test('a call no assignment satisfies is refused', () => {
+  expectThrown('function f(...a: [].<number>, b: string) { return 1; } f("x", "y");');
+});
+
+test('the trailing-rest path is untouched', () => {
+  // Every signature written before this feature takes the streaming walk and
+  // never reaches the assignment. This is the hottest path in the engine and
+  // the one place a mistake MISBINDS a program rather than rejecting it.
+  expect(evaluated('function f(a: string, ...r: [].<number>) { return a + r.length; } f("a", 1, 2);')).toBe('a2');
+  expect(evaluated('function f(a, ...r) { return r.length; } String(f(1, 2, 3));')).toBe('2');
+  expect(evaluatedFlagOff('function f(a, ...r) { return r.length; } String(f(1, 2, 3));')).toBe('2');
+});
+
+test('every call form reaches the same binding', () => {
+  const body = 'function f(...a: [].<number>, b: string) { return a.length + ":" + b; }';
+  // A dynamically built argument list, which is the case the runtime
+  // assignment exists for: the checker cannot see these lengths.
+  expect(evaluated(`${body} f.apply(null, [1, 2, "x"]);`)).toBe('2:x');
+  expect(evaluated(`${body} const xs = [1, 2, "x"]; f(...xs);`)).toBe('2:x');
+  expect(evaluated('class C { m(...a: [].<number>, b: string) { return a.length + ":" + b; } } new C().m(1, 2, "x");')).toBe('2:x');
+  expect(evaluated('function* g(...a: [].<number>, b: string) { yield a.length + ":" + b; } g(1, 2, "x").next().value;')).toBe('2:x');
+  expect(evaluated('const g = (...a: [].<number>, b: string) => a.length + ":" + b; g(1, 2, "x");')).toBe('2:x');
+});
+
+test('arguments still holds every argument', () => {
+  // The assignment distributes the arguments among the parameters; it does not
+  // consume them. `arguments` is the call's own list and is unaffected.
+  expect(evaluated('function f(...a: [].<number>, b: string) { return String(arguments.length); } f(1, 2, "x");')).toBe('3');
+});
+
+test('length counts the parameters before the first rest or default', () => {
+  // A rest may now lead, and `Function.prototype.length` stops at it wherever
+  // it sits rather than only at the last position.
+  expect(evaluated('function f(...a: [].<number>, b: string) {} String(f.length);')).toBe('0');
+  expect(evaluated('function f(a: number, ...b: [].<number>, c: string) {} String(f.length);')).toBe('1');
+  expect(evaluated('function f(a: number, b: number) {} String(f.length);')).toBe('2');
+  expect(evaluatedFlagOff('function f(a, ...b) {} String(f.length);')).toBe('1');
+});
+
+test('overload resolution admits a signature the assignment satisfies', () => {
+  // Viability is now the assignment rather than an arity count, so a rest away
+  // from the end no longer makes the parameter count an upper bound.
+  expect(evaluated(`
+    function f(...a: [].<number>, b: string) { return "mid"; }
+    f(1, 2, "x");
+  `)).toBe('mid');
+
+  // A signature matching on its fixed parameters is still preferred over one
+  // matching only by absorbing arguments into a rest.
+  expect(evaluated(`
+    function f(a: number) { return "fixed"; }
+    function f(...a: [].<number>) { return "rest"; }
+    f(1);
+  `)).toBe('fixed');
+  expect(evaluated(`
+    function f(a: number) { return "fixed"; }
+    function f(...a: [].<number>) { return "rest"; }
+    f(1, 2);
+  `)).toBe('rest');
+});

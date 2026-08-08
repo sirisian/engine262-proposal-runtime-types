@@ -2,22 +2,22 @@ import { test, expect } from 'vitest';
 import { ok, evaluated } from '../harness.mts';
 
 /**
- * PLAN-return-type-overloading.md phase 1: the filter.
+ * Spec: #sec-overloading-on-return-type (Overloading on Return Type),
+ * #sec-overload-resolution (Overload Resolution).
  *
  * #sec-overloading-on-return-type: "a signature is identified by its return
  * type as well as its parameter types. The return type does not participate in
  * ranking; it participates in filtering" - and where a call has no contextual
  * type and more than one signature remains viable, the call is ambiguous.
  *
- * The signature record carries its return type now, and the resolver filters
- * the TIED candidates by it when given a contextual type.
+ * The signature record carries its return type, and the resolver filters the
+ * TIED candidates by it when given a contextual type. `const a: string = f()`
+ * selects the string signature and `const b: uint32 = f()` selects the other,
+ * which is the clause's own example; a bare `f()` is a type error, which is
+ * the clause's ambiguity rule.
  *
- * PHASE 2 IS DONE. `const a: string = f()` selects the string signature and
- * `const b: uint32 = f()` selects the other, which is the clause's own example.
- * A bare `f()` remains a type error, which is the clause's ambiguity rule.
- *
- * Four defects were fixed reaching it, and the last one is the reason the
- * others were not enough on their own:
+ * Four things have to hold together for that, and the last is the reason the
+ * others are not enough on their own:
  *
  *   - The checker DROPPED `Return` when mapping its signatures into resolver
  *     candidates. Its signatures carry one; the mapping did not copy it.
@@ -93,8 +93,8 @@ test('an untyped catch-all still ranks last', () => {
 });
 
 /**
- * PHASE 3, THE ARGUMENT POSITION: attempted, reverted, and the obstacle is
- * generic inference rather than the contextual type.
+ * THE ARGUMENT POSITION is not covered, and the obstacle is generic inference
+ * rather than the contextual type.
  *
  * The clause specifies both cases: "`g(f())` selects the first where `g` takes
  * a `uint32`, because the parameter supplies the contextual type. `h(f())` is
@@ -155,7 +155,7 @@ test('a generic call is untouched by the argument context', () => {
  *
  * The annotation is pushed around the BODY rather than applied to its result.
  * Applied to a result it cannot select an overload, because the overload has
- * already run - which is what the binding boundary looked like before phase 2.
+ * already run - which is the same shape as an unfiltered binding boundary.
  */
 
 test('a return position supplies a contextual type', () => {
