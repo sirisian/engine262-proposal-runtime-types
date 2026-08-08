@@ -10,7 +10,7 @@ import {
   UpdateEmpty,
   Q,
 } from '../completion.mts';
-import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
@@ -53,12 +53,25 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
       }
       return false;
     }
-    const adopted = AdoptLiteralOperand(input, clauseSelector, {
+    // proposal-runtime-types #sec-enums: a `case` label is an equality
+    // position, so it takes the same reading of an enum operand - which is what
+    // lets `switch (byteFromWire) { case Opcode.Load: ... }` select.
+    let subject = input;
+    let selector = clauseSelector;
+    const decayed = DecayEnumOperands(subject, selector);
+    if (decayed) {
+      subject = decayed.left;
+      selector = decayed.right as typeof clauseSelector;
+    }
+    const adopted = AdoptLiteralOperand(subject, selector, {
       left: false,
       right: isNumericLiteralOperand(constructor.Expression as ParseNode),
     });
     if (adopted) {
       return IsStrictlyEqual(adopted.left, adopted.right);
+    }
+    if (decayed) {
+      return IsStrictlyEqual(subject, selector);
     }
   }
   return IsStrictlyEqual(input, clauseSelector);

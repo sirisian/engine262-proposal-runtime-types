@@ -25,11 +25,25 @@ function evaluated(source: string): string {
 test('enums bind objects with sequential member values', () => {
   expect(evaluated('enum Color { Red, Green, Blue } Color.Red === 0 && Color.Green === 1 && Color.Blue === 2 ? "ok" : "no";')).toBe('ok');
   expect(evaluated('enum E { A, B = 10, C } E.C === 11 ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('enum S { A = "a", B } typeof S.A === "string" && S.B === 1 ? "ok" : "no";')).toBe('ok');
+  // An enum with no `: Type` has the underlying type int32, so a string
+  // enumeration must say so - and #sec-enums gives `B` a value equal to `A`,
+  // "where the underlying type declares no prefix increment", rather than 1.
+  expect(evaluated('enum S: string { A = "a", B } typeof S.A === "string" && S.B === S.A ? "ok" : "no";')).toBe('ok');
+  expectThrownKind('enum S { A = "a" } S.A;', 'TypeError');
 });
 
-test('enum membership is SameValue against the members', () => {
-  expect(evaluated('enum E { A, B = 10 } (0 is E) && (10 is E) && !(3 is E) ? "ok" : "no";')).toBe('ok');
+test('a bare underlying value is not of the enum type; the enum call is the way in', () => {
+  // #sec-enums makes the reverse direction explicit: "calling the enum type
+  // with a value of the underlying type returns the enumerator whose value it
+  // is, and throws a TypeError when it is not one of them". If a bare 0 were
+  // already of type E that conversion would have nothing to validate, and the
+  // one-way rule would not be one-way. This is the rule of C#, Rust, and Swift,
+  // which the clause names.
+  expect(evaluated('enum E { A, B = 10 } !(0 is E) && !(10 is E) && !(3 is E) ? "ok" : "no";')).toBe('ok');
+  // What IS of the type: the enumerators, and what the enum call returns.
+  expect(evaluated('enum E { A, B = 10 } (E.A is E) && (E.B is E) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A, B = 10 } E(10) === E.B ? "ok" : "no";')).toBe('ok');
+  expectThrownKind('enum E { A, B = 10 } E(3);', 'TypeError');
   // MIGRATED TO STATIC FORM. This asserted a RUNTIME throw, caught by the try -
   // which is what a value outside the enum produced while the checker's enum
   // record carried no member VALUES to compare against. It carries them now, so
@@ -38,11 +52,12 @@ test('enum membership is SameValue against the members', () => {
   // still cannot decide.
   expect(run('enum E { A } let x: E = 5;')).toMatchObject({ Type: 'throw' });
   expect(evaluated('enum E { A } function anyv() { return 5; } try { let x: E = anyv(); "no"; } catch (err) { "caught"; }')).toBe('caught');
-  // A member of the enum is accepted, which is the other half of the same rule:
-  // membership is SameValue against the members, statically as at run time.
-  expect(evaluated('enum E { A, B } let x: E = 1; x === 1 ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('enum E { A = 5, B } let x: E = 6; x === 6 ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('enum S { A = "a" } let x: S = "a"; x === "a" ? "ok" : "no";')).toBe('ok');
+  // An enum-typed binding is initialized by an enumerator or by the enum call,
+  // and reads back as its underlying value: the one-way rule again, from the
+  // other side.
+  expect(evaluated('enum E { A, B } let x: E = E.B; x === 1 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A = 5, B } let x: E = E(6); x === 6 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum S: string { A = "a" } let x: S = S.A; x === "a" ? "ok" : "no";')).toBe('ok');
 });
 
 test('interfaces check structurally', () => {

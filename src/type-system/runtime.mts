@@ -22,7 +22,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
-import { restElementType } from './records.mts';
+import { restElementType, UnderlyingOf } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
@@ -893,7 +893,12 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     const valueRecord = (value as TypedNumberValue).TypeRecord as TypeRecord | undefined;
     if (valueRecord?.Kind === 'nominal' && valueRecord.EnumMembers !== undefined
         && valueRecord.Underlying !== undefined
-        && !(t.Kind === 'nominal' && t.EnumMembers !== undefined)) {
+        && !(t.Kind === 'nominal' && t.EnumMembers !== undefined)
+        // A qualified member such as `Color.Red` denotes the ENUMERATOR, and is
+        // a literal type over the enum. Reading the value at its underlying type
+        // before that test would compare an int32 against an enum-tagged member
+        // and answer false for the enumerator the type names.
+        && !(t.Kind === 'literal' && t.Base !== undefined && UnderlyingOf(t.Base) !== t.Base)) {
       return yield* IsOfType(new TypedNumberValue((value as TypedNumberValue).value, valueRecord.Underlying), t);
     }
   }
@@ -1561,7 +1566,15 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // associated class type (a Temporal class such as Temporal.Instant), in
         // which case it denotes that class type. Otherwise it is an enum member and
         // denotes the literal type of its value.
-        if (isTypeObject(base)) {
+        // A Type Object is an ObjectValue. Since an enumerator became a value
+        // TAGGED with its enum's Type Record, `isTypeObject` - which tests for
+        // the [[TypeRecord]] slot alone - answers true for one, and a numeric
+        // `Color.Red` in type position resolved to the whole enum: every
+        // enumerator was then a value of `type R = Color.Red`. A string enum's
+        // member, carrying no slot, took the literal path and behaved. The
+        // member denotes the ENUMERATOR, so only a real Type Object may take
+        // this branch.
+        if (base instanceof ObjectValue && isTypeObject(base)) {
           return base.TypeRecord;
         }
         if (base instanceof ObjectValue) {

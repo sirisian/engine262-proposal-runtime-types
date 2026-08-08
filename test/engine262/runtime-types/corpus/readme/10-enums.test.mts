@@ -100,12 +100,16 @@ test('enum: %Enum.prototype% carries the enumeration surface', () => {
   expect(evaluated('enum Count { Zero, One, Two }; [...Count.keys()].join("|");')).toBe('Zero|One|Two');
 });
 
-test('enum: an enumerator holds a plain underlying value; Reflect.typeOf reports the primitive (documents the gap)', () => {
-  // Target (#sec-enums): Reflect.typeOf(Count.Zero) reports Count (the most
-  // specific type). Today an enumerator holds its plain underlying value, so
-  // Reflect.typeOf reports the underlying primitive rather than the enum type, and
-  // the value is not a typed value of the underlying type. The subtype-usability
-  // property (verified above) holds regardless.
-  expect(bool('enum Count { Zero, One, Two }; String(Reflect.typeOf(Count.One) === Count);')).toBe(false);
-  expect(bool('enum Count: float32 { Zero, One, Two }; String(Count.Two === (2 := float32));')).toBe(false);
+test('enum: an enumerator IS a value of its enum, and of the underlying type', () => {
+  // #sec-enums: "Reflect.typeOf(Count.Zero) reports Count, by the rule that a
+  // value's runtime type is the most specific type of which it is a value. This
+  // does not make the enumerator anything other than a value the underlying type
+  // also accepts: membership in int32 follows from Count being a subtype of it."
+  // So both hold at once, and the subtype-usability property above holds with
+  // them.
+  expect(bool('enum Count { Zero, One, Two }; String(Reflect.typeOf(Count.One) === Count);')).toBe(true);
+  expect(bool('enum Count { Zero, One, Two }; String(Count.One is int32);')).toBe(true);
+  // And the comparison against a value of the underlying type answers by value,
+  // which is the subtype rule at an equality position.
+  expect(bool('enum Count: float32 { Zero, One, Two }; String(Count.Two === (2 := float32));')).toBe(true);
 });

@@ -374,15 +374,12 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return true;
     }
   }
-  // proposal-runtime-types #sec-enums: a value that IS one of an enum's members
-  // is of that enum type - the same SameValue test the runtime applies. Without
-  // this a literal could never reach an enum-typed position, so an enum-typed
-  // binding could not be initialized at all.
-  if (t.Kind === 'nominal' && t.EnumMembers !== undefined && s.Kind === 'literal') {
-    if (t.EnumMembers.some((m) => m !== undefined && SameValue(s.Value, m))) {
-      return true;
-    }
-  }
+  // proposal-runtime-types #sec-enums: a literal is NOT a subtype of an enum
+  // type. The clause makes the reverse direction explicit - "calling the enum
+  // type with a value of the underlying type returns the enumerator whose value
+  // it is, and throws a TypeError when it is not one of them" - so an enum-typed
+  // binding is initialized by an enumerator or by that call, and admitting a
+  // bare literal here would leave the call nothing to validate.
   if (t.Kind === 'intersection') {
     return t.Members.every((m) => IsSubtype(s, m, next));
   }

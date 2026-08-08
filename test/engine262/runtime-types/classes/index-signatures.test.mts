@@ -42,19 +42,25 @@ test('index signatures participate in identity', () => {
   expect(evaluated('type A = { [k: string]: number }; type B = { [k: string]: string }; A !== B ? "ok" : "no";')).toBe('ok');
 });
 
-test('qualified type names resolve enum members to literal types', () => {
-  // An enum member used as a type is the literal type of that member's value.
+test('a qualified type name resolves an enum member to that ENUMERATOR', () => {
+  // `Color.Red` in type position denotes the enumerator, not the whole enum and
+  // not the literal type of its value. That is what makes a discriminated union
+  // carry a guarantee: `{ kind: Shape.Circle }` is satisfied by the enumerator
+  // and not by any value that happens to share its number.
   expect(evaluated(`enum Color { Red, Green, Blue }
     type R = Color.Red;
-    (0 is R) && !(1 is R) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('enum E { A = "x", B = "y" } type TA = E.A; ("x" is TA) && !("y" is TA) ? "ok" : "no";')).toBe('ok');
+    (Color.Red is R) && !(Color.Green is R) && !(R === Color) ? "ok" : "no";`)).toBe('ok');
+  expect(evaluated('enum E: string { A = "x", B = "y" } type TA = E.A; (E.A is TA) && !(E.B is TA) ? "ok" : "no";')).toBe('ok');
+  // A bare value of the underlying type is not of it either, for the reason a
+  // bare value is not of the enum.
+  expect(evaluated('enum Color { Red, Green } type R = Color.Red; !(0 is R) ? "ok" : "no";')).toBe('ok');
   // As an annotation.
-  expect(evaluated('enum E { A = 5 } let x: E.A = 5; x == 5 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A = 5 } let x: E.A = E.A; x == 5 ? "ok" : "no";')).toBe('ok');
   expectThrown('enum E { A = 5 } let x: E.A = 6;');
 });
 
-test('a nonexistent qualified member is not a type', () => {
-  expect(evaluated('enum E { A } type T = E.A; (0 is T) ? "ok" : "no";')).toBe('ok');
+test('a qualified member resolves through its base, and a non-object base does not', () => {
+  expect(evaluated('enum E { A } type T = E.A; (E.A is T) ? "ok" : "no";')).toBe('ok');
   // Accessing through a non-object base throws.
   expectThrown('let x = 5; let y: x.foo = 1;');
 });

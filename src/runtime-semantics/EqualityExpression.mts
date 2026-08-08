@@ -1,5 +1,5 @@
 import { Q, X } from '../completion.mts';
-import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
 import { vectorComparison } from '../type-system/vector-ops.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
@@ -83,6 +83,15 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   // to write sixty-five. Adopting here is what Rust, Go, Swift, and Haskell do
   // with an untyped numeric literal.
   if (surroundingAgent.feature('runtime-types')) {
+    // proposal-runtime-types #sec-enums: an enum operand is read at its
+    // underlying type where the other operand is not of an enum type. Before
+    // the literal rule, so a literal adopts the UNDERLYING type rather than the
+    // enum, which no literal can represent.
+    const decayed = DecayEnumOperands(lval, rval);
+    if (decayed) {
+      lval = decayed.left;
+      rval = decayed.right;
+    }
     const adopted = AdoptLiteralOperand(lval, rval, {
       left: isNumericLiteralOperand(EqualityExpression as ParseNode),
       right: isNumericLiteralOperand(RelationalExpression as ParseNode),

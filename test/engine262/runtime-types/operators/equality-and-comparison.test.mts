@@ -65,9 +65,31 @@ test('SameValueZero (Map/Set keying) distinguishes typed numbers', () => {
   expect(evaluated('const s = new Set(); s.add((5 := uint8)); s.add((5 := uint16)); s.size === 2 ? "ok" : "no";')).toBe('ok');
 });
 
-test('literal-type membership no longer bleeds across the typed/plain boundary', () => {
-  // An enum member A = 1 is a literal type of the plain Number 1. A typed 1 is
-  // NOT a member; a plain 1 is.
+test('an enumerator type admits the enumerator and nothing that merely equals it', () => {
+  // `E.A` denotes the enumerator. A typed 1 is not it, and neither is a plain 1
+  // - membership is the one-way rule, and `E(1)` is the way across.
   expect(evaluated('enum E { A = 1 } type T = E.A; (1 := uint8) is T ? "member" : "not";')).toBe('not');
-  expect(evaluated('enum E { A = 1 } type T = E.A; 1 is T ? "member" : "not";')).toBe('member');
+  expect(evaluated('enum E { A = 1 } type T = E.A; 1 is T ? "member" : "not";')).toBe('not');
+  expect(evaluated('enum E { A = 1 } type T = E.A; E.A is T ? "member" : "not";')).toBe('member');
+  expect(evaluated('enum E { A = 1 } type T = E.A; E(1) is T ? "member" : "not";')).toBe('member');
+});
+
+test('an enum operand is read at its underlying type in a comparison', () => {
+  // #sec-enums: an enum value is "usable wherever the underlying type is
+  // required", and a comparison against a non-enum operand is such a position -
+  // which is what makes a value read from outside the program comparable
+  // against an enumerator at all.
+  expect(evaluated('enum C { Zero, One } C.One === 1 ? "eq" : "neq";')).toBe('eq');
+  expect(evaluated('enum C { Zero, One } 1 === C.One ? "eq" : "neq";')).toBe('eq');
+  expect(evaluated('enum C { Zero, One } let n: int32 = 1; C.One === n ? "eq" : "neq";')).toBe('eq');
+  expect(evaluated('enum C { Zero, One } C.One === 3 ? "eq" : "neq";')).toBe('neq');
+  // A `case` label is an equality position, so a switch over a value from
+  // outside selects.
+  expect(evaluated('enum C { Zero, One } let n: int32 = 1; let r = "no"; switch (n) { case C.One: r = "hit"; break; } r;')).toBe('hit');
+  // Two DISTINCT enums establish nothing about each other's position, so they
+  // stay distinct types and compare unequal even where their values agree.
+  expect(evaluated('enum Color { Red } enum Size { Small } Color.Red === Size.Small ? "eq" : "neq";')).toBe('neq');
+  // And a binding of the `number` type still adopts nothing, as it does for
+  // every other typed value.
+  expect(evaluated('enum C { Zero, One } let n = 1; C.One === n ? "eq" : "neq";')).toBe('neq');
 });

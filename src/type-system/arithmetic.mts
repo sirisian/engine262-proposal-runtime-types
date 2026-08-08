@@ -202,6 +202,38 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
 }
 
 /**
+ * proposal-runtime-types #sec-enums at an equality or `case` position.
+ *
+ * The clause's subtype rule reads an enum operand at its UNDERLYING type
+ * "wherever the underlying type is required". A comparison requires nothing of
+ * its operands - #sec-arithmetic-never-promotes says it "answers rather than
+ * computing" - so what licenses the reading here is the OTHER operand
+ * establishing that the position is an underlying-typed one: a literal, or a
+ * value of a type that is not an enum. Where both operands are of enum types
+ * nothing establishes it, so two distinct enums stay distinct and compare
+ * unequal, as two distinct value types do, and two values of ONE enum compare
+ * by value without needing this at all.
+ *
+ * This is the equality half of the rule; the arithmetic half is unconditional
+ * and lives in TypedOperandType, because there a numeric operand IS required.
+ *
+ * Returns the operand pair to use, or undefined where neither side changes.
+ */
+export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Value } | undefined {
+  const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const xIsEnum = xt !== null && UnderlyingOf(xt) !== xt;
+  const yIsEnum = yt !== null && UnderlyingOf(yt) !== yt;
+  if (xIsEnum === yIsEnum) {
+    return undefined;
+  }
+  if (xIsEnum) {
+    return { left: new TypedNumberValue((x as TypedNumberValue).value, UnderlyingOf(xt!)), right: y };
+  }
+  return { left: x, right: new TypedNumberValue((y as TypedNumberValue).value, UnderlyingOf(yt!)) };
+}
+
+/**
  * The literal rule alone, for the operators that ADOPT but do not otherwise
  * constrain their operands: equality compares rather than computes, so a
  * literal takes the other operand's type and a mismatch is an ordinary
