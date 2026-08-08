@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 import { expectThrownKind } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * Spec: #sec-enums (Enums), #sec-interfaces-semantics (Interfaces).

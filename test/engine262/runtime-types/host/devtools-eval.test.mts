@@ -42,6 +42,8 @@ function makeConsole() {
     }
     return { thrown: false, value, wasPromise: false };
   };
+  // See harness.mts: a TypedNumberValue is not a NumberValue, so R throws.
+  // eslint-disable-next-line @engine262/mathematical-value
   const numberOf = (v: Value) => (v as unknown as { numberValue(): number }).numberValue();
   const stringOf = (v: Value) => (v as unknown as { stringValue(): string }).stringValue();
   return { evaluate, numberOf, stringOf };
@@ -151,7 +153,9 @@ function makeInspector() {
       if (reply) {
         return reply.result as { result?: { type?: string, subtype?: string, value?: unknown }, exceptionDetails?: unknown };
       }
-      await new Promise((resolve) => { setTimeout(resolve, 0); });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
     }
     return undefined;
   };

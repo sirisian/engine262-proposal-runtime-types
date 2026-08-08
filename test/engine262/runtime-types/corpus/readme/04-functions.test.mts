@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
+import { evaluated, bool, ok } from '../../harness.mts';
 
 /**
  * README feature coverage - functions.

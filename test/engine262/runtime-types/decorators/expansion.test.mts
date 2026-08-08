@@ -196,13 +196,15 @@ test('a top-level `@f function` throws in a MODULE, not in a script', () => {
 const PRINT_PRE = `import { m } from "./x.js" with { preprocessor: "true" };${NL}`;
 
 function expandPrinted(body: string, macroSource: string): string {
-  let macro: unknown;
+  // The hook closure is installed before the macro exists, so the binding it
+  // reads has to be a holder rather than the value itself.
+  const macro: { current?: unknown } = {};
   setSurroundingAgent(new Agent({
     features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro : undefined) },
+    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
   } as never));
   const realm = new ManagedRealm();
-  macro = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
+  macro.current = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
   const compiled = realm.compileModule(PRINT_PRE + body) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };

@@ -26,7 +26,7 @@ function makeCluster(setup: string) {
   const realm = new ManagedRealm();
   const evaluate = (source: string) => {
     setSurroundingAgent(main);
-    const completion = realm.evaluateScriptSkipDebugger(source);
+    const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string, Value: unknown };
     if (completion.Type === 'throw') {
       throw new Error('evaluation threw');
     }

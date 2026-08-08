@@ -23,8 +23,16 @@ export function run(source: string) {
 function normalValueString(completion: unknown, source: string): string {
   expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
   const v = (completion as { Value: { stringValue?(): string, numberValue?(): number } }).Value;
-  if (v?.stringValue) { return v.stringValue(); }
-  if (v?.numberValue) { return String(v.numberValue()); }
+  if (v?.stringValue) {
+    return v.stringValue();
+  }
+  if (v?.numberValue) {
+    // R asserts `instanceof NumberValue`, and this proposal's TypedNumberValue
+    // is a SIBLING of NumberValue rather than a subclass, so R throws on a
+    // typed number. `.numberValue()` is the reading that works for both.
+    // eslint-disable-next-line @engine262/mathematical-value
+    return String(v.numberValue());
+  }
   return String(v);
 }
 

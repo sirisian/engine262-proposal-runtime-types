@@ -130,7 +130,6 @@ test('an ABRUPT COMPLETION leaves a block arm and means what it means outside', 
 });
 
 test('a `match` statement works in ANY position, and ASI applies', () => {
-  const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // THE CAUSE, after three rounds of describing the symptom: the guard read
   // `match [no LineTerminator here]` as "no line terminator BEFORE `match`",
   // where the grammar puts the restriction between `match` AND ITS PARENTHESIS.

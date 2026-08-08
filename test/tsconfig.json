@@ -15,6 +15,6 @@
     "./test262/test262-worker.mts",
     "./json/json.mts",
     "./inspector/*",
-    "./engine262/*"
+    "./engine262/**/*"
   ]
 }

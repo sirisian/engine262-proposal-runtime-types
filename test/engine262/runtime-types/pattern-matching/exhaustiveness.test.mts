@@ -1,8 +1,8 @@
 import { test, expect } from 'vitest';
+import { evaluated } from '../harness.mts';
 import {
   Agent, Atoms, AtomsOfType, ManagedRealm, setSurroundingAgent,
 } from '#self';
-import { evaluated } from '../harness.mts';
 
 /**
  * Spec: #sec-match-exhaustiveness (Match Exhaustiveness).

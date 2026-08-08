@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, expectThrown, expectErrorFlagOff } from '../../harness.mts';
+import { evaluated, expectThrown, expectErrorFlagOff } from '../../harness.mts';
 
 /**
  * README feature coverage - control structures.

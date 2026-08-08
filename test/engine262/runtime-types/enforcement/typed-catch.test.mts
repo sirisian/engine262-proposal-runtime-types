@@ -1,10 +1,10 @@
 import { expect, test } from 'vitest';
 import {
-  Agent, ManagedRealm, Parser, setSurroundingAgent,
-} from '#self';
-import {
   evaluated, bool, evaluatedSequence, ok, expectError,
 } from '../harness.mts';
+import {
+  Agent, ManagedRealm, Parser, setSurroundingAgent,
+} from '#self';
 
 /**
  * Spec: #sec-typed-catch (Typed Catch).

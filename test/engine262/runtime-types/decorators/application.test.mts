@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-decorator-application (Decorator Application). Design:
@@ -462,7 +462,5 @@ test('decorators: a user decorator runs under the runtime-types feature', () => 
 // tests is ABOUT the metadata protocol, so each waives adjudication through the
 // base-form route: a meta registered against the base speaks for every key of
 // its parameterizations. The interning and carrying assertions are untouched.
-const waive = 'meta float32 { default = {}; subtype(a, b) { return true; } } meta float64 { default = {}; subtype(a, b) { return true; } } ';
-
 
 // -- primitive metadata: parses and interns, does not carry/validate -----------

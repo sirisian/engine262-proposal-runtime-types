@@ -1,8 +1,8 @@
 import { test, expect } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 import {
   ok, evaluated, run,
 } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * Spec: #sec-higher-kinded-parameters (Higher-Kinded Parameters).
@@ -84,7 +84,7 @@ test('the refusal names the arity', () => {
   // `W.<T>` belongs needs to be told how many arguments it wants, and the
   // generics work found a refusal that was right for the wrong words because
   // nothing checked them.
-  const completion = run('class C<W<_, _>> { v: W; }');
+  const completion = run('class C<W<_, _>> { v: W; }') as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('throw');
   let message = '';
   for (const [key, desc] of (completion.Value as { properties: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> }).properties) {
@@ -148,7 +148,7 @@ test('the two failures carry different messages', () => {
   // the first attempt produced - is true and useless.
   const P = 'class Box<W<_>> {} ';
   const messageOf = (src: string) => {
-    const completion = run(src);
+    const completion = run(src) as unknown as { Type: string, Value: unknown };
     let message = '';
     const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
     for (const [key, desc] of value.properties ?? []) {
@@ -288,7 +288,7 @@ test('the refusal explains that inference is not attempted', () => {
   // The message says WHY rather than reporting a missing binding. Recovering W
   // and T from one argument admits two consistent answers, so choosing is a
   // search - and #sec-evaluation-budget meters computation rather than search.
-  const completion = run('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);');
+  const completion = run('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);') as unknown as { Type: string, Value: unknown };
   let message = '';
   const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
   for (const [key, desc] of value.properties ?? []) {
@@ -392,7 +392,7 @@ test('an unbounded type evaluation exhausts the budget and reports', () => {
   // what a host does when it wants the diagnostic rather than the stack.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
-  const completion = realm.evaluateScriptSkipDebugger('type R<T> = R.<T>; const a: R.<uint8> = 1;');
+  const completion = realm.evaluateScriptSkipDebugger('type R<T> = R.<T>; const a: R.<uint8> = 1;') as unknown as { Type: string, Value: unknown };
 
   expect(completion.Type).toBe('throw');
   let message = '';
@@ -412,6 +412,6 @@ test('an ordinary alias is unaffected by the metering', () => {
   // code that terminates.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
-  const completion = realm.evaluateScriptSkipDebugger('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";');
+  const completion = realm.evaluateScriptSkipDebugger('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";') as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('normal');
 });

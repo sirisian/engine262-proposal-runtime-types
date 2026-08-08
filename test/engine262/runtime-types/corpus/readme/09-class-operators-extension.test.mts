@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
+import { evaluated, bool, expectThrown } from '../../harness.mts';
 
 /**
  * README feature coverage - class operators, extension, sealed, abstract, mixins.

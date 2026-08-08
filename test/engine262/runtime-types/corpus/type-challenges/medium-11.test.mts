@@ -12,11 +12,6 @@ import { expectBuilderTrue } from './harness.mts';
  */
 
 const L = `function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }`;
-const TUP = `
-function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
-function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-`;
 
 // 9142 - CheckRepeatedChars - any character occurs more than once.
 test('medium 9142 - CheckRepeatedChars', () => {

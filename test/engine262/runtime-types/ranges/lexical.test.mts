@@ -180,7 +180,7 @@ describe('the family, its removed forms, and its edges', () => {
     // It is rejected instead: a range does not implement `Ordered`, so the
     // comparison is meaningless, and answering it silently is worse than an
     // error because it is invisible.
-    const kind = (src) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
+    const kind = (src: string) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
     expect(evaluated(kind('const a = 1, b = 2; (a..) < b;'))).toBe('TypeError');
     expect(evaluated(kind('(0..<3) < 5;'))).toBe('TypeError');
   });

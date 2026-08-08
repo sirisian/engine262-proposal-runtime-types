@@ -172,8 +172,10 @@ test('the gate is recorded on the parsed module, before the checker runs', () =>
   // decorator was about to produce.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  const gate = (source) => {
-    const compiled = realm.compileModule(source);
+  const gate = (source: string) => {
+    const compiled = realm.compileModule(source) as {
+      Value?: { ECMAScriptCode?: { ReplacementDecoratorNames?: readonly string[] } },
+    };
     return JSON.stringify(compiled.Value?.ECMAScriptCode?.ReplacementDecoratorNames ?? 'ABSENT');
   };
   expect(gate('import { derive } from "./m.js" with { preprocessor: "true" }; const x = 1;')).toBe('["derive"]');

@@ -1,16 +1,18 @@
 import { test, expect } from 'vitest';
+import { evaluated } from '../harness.mts';
 import {
   Agent, ManagedRealm, setSurroundingAgent, tokenizeText,
   TokenStreamText, type TokenRecord,
 } from '#self';
-import { evaluated } from '../harness.mts';
 
 /**
  * Spec: #sec-token-records (Token Records) and
  * #sec-tokensof.
  */
 
-const SOURCE = { URL: 't', Macro: undefined, Generation: 0 };
+const SOURCE = {
+  URL: 't', Text: '', Macro: undefined, Generation: 0,
+};
 
 function tokens(text: string): readonly TokenRecord[] {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));

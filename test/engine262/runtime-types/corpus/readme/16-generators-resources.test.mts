@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from '../../harness.mts';
+import { evaluated, ok } from '../../harness.mts';
 
 /**
  * README feature coverage - typed iteration and generators, explicit resource

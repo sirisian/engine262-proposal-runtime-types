@@ -46,7 +46,7 @@ function stmt(source: string) {
   return fn.FunctionBody.FunctionStatementList[0];
 }
 
-const diverges = (source: string, ctx = {}) => Diverges(stmt(source), ctx);
+const diverges = (source: string, ctx = {}) => Diverges(stmt(source) as never, ctx);
 
 /**
  * The same, for a statement whose break targets a label declared OUTSIDE it.

@@ -6,8 +6,6 @@ import { evaluated } from '../harness.mts';
  * of #sec-match-expression.
  */
 
-const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-
 test('INTERPOLATION evaluates and compares', () => {
   // "`${expression}` evaluates the expression and matches by SameValue against
   // the result, whatever the result is" - the escape hatch from every cleverer

@@ -45,7 +45,7 @@ function makeCluster(setup: string): Harness {
 
   const evaluate = (source: string) => {
     setSurroundingAgent(main);
-    const completion = realm.evaluateScriptSkipDebugger(source);
+    const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string, Value: unknown };
     if (completion.Type === 'throw') {
       throw new Error(`evaluation threw: ${String(completion.Value)}`);
     }
@@ -261,7 +261,8 @@ test('callThread works in a host that configured no cluster', () => {
   const realm = new ManagedRealm();
   const evaluate = (source: string) => {
     setSurroundingAgent(agent);
-    return (realm.evaluateScriptSkipDebugger(source).Value as { stringValue?(): string }).stringValue?.() ?? '';
+    const c = realm.evaluateScriptSkipDebugger(source) as unknown as { Value: unknown };
+    return (c.Value as { stringValue?(): string }).stringValue?.() ?? '';
   };
   evaluate(`
     globalThis.out = 'pending';

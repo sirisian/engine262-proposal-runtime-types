@@ -133,7 +133,7 @@ test('sec-range-literals: a parenthesized range is rejected as a relational oper
   //  a relational operand: a range does not implement `Ordered`, so
   //  `(0..<3) < 5` is a *TypeError* rather than the *false* an ordinary
   //  object's comparison would yield."
-  const kind = (src) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
+  const kind = (src: string) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
   expect(evaluated(kind('const a = 1, b = 2; (a..) < b;'))).toBe('TypeError');
   expect(evaluated(kind('(0..<3) < 5;'))).toBe('TypeError');
   // Either operand, and all four relational operators.
@@ -174,7 +174,7 @@ test('sec-ranges: the four pairs are the four intervals and nothing further is e
   // "_S_ and _E_ are values of `Bound` ... so the four intervals of a
   //  two-endpoint range, the closed, the two half-open, and the open, are the
   //  four pairs and nothing further is expressible."
-  const of = (r, s, e) => `String((${r}) is Range.<uint8, Range.Bound.${s}, Range.Bound.${e}>);`;
+  const of = (r: string, s: string, e: string) => `String((${r}) is Range.<uint8, Range.Bound.${s}, Range.Bound.${e}>);`;
   expect(evaluated(of('0..<10', 'Closed', 'Open'))).toBe('true');
   expect(evaluated(of('0..=10', 'Closed', 'Closed'))).toBe('true');
   expect(evaluated(of('0<..<10', 'Open', 'Open'))).toBe('true');
@@ -225,7 +225,7 @@ test('ranges.md: a range and its type print as they were written', () => {
   // "A diagnostic should prefer them: `ClosedRange.<uint8>` ... reads where
   //  `Range.<uint8, Bound.Closed, Bound.Closed>` does not." And a range VALUE
   //  named "[object Object]" told a reader nothing about the one thing wrong.
-  const message = (src) => {
+  const message = (src: string) => {
     const c = run(src) as { Value?: { HostDefinedMessageString?: string } };
     return c.Value?.HostDefinedMessageString ?? '';
   };
@@ -245,7 +245,7 @@ test('sec-ranges: a wrong interval is reported at CHECK time, before the code ru
   // does: its shape and bounds are its own, its ELEMENT comes from the position.
   // That is literal propagation, and taking the element from the literal instead
   // is what made an earlier attempt at this reject correct programs.
-  const dead = (src) => `if (false) { ${src} } "ran";`;
+  const dead = (src: string) => `if (false) { ${src} } "ran";`;
   expect(evaluated(dead('let r: ClosedOpenRange.<uint8> = 0..<10;'))).toBe('ran');
   expectThrown(dead('let r: ClosedRange.<uint8> = 0..<10;'));
   expectThrown(dead('let r: RangeFrom = 0..<10;'));
@@ -790,7 +790,7 @@ test('ranges.md: a range helper answers exactly as the iterator it delegates to'
   // The claim delegation actually makes. Testing that `filter` filters would
   // pass for a reimplementation; testing that it agrees with
   // `Iterator.from(r).filter` is what pins it to the built-in.
-  const same = (helper) => `const r = 0..<6; String(r.${helper} === Iterator.from(r).${helper});`;
+  const same = (helper: string) => `const r = 0..<6; String(r.${helper} === Iterator.from(r).${helper});`;
   expect(evaluated(same('filter(v => v % 2 === 0).toArray().join(",")'))).toBe('true');
   expect(evaluated(same('map(v => v * 3).toArray().join(",")'))).toBe('true');
   expect(evaluated(same('flatMap(v => [v]).toArray().join(",")'))).toBe('true');

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 import { evaluated as evaluatedWithoutTemporal } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * Extension coverage - temporal.md, Temporal as a type source.
@@ -24,8 +24,14 @@ function evaluated(source: string): string {
   const c = run(source) as unknown as { Type: string, Value: { stringValue?(): string, numberValue?(): number } };
   expect(c, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
   const v = c.Value;
-  if (v?.stringValue) { return v.stringValue(); }
-  if (v?.numberValue) { return String(v.numberValue()); }
+  if (v?.stringValue) {
+    return v.stringValue();
+  }
+  if (v?.numberValue) {
+    // See harness.mts: a TypedNumberValue is not a NumberValue, so R throws.
+    // eslint-disable-next-line @engine262/mathematical-value
+    return String(v.numberValue());
+  }
   return String(v);
 }
 function expectThrown(source: string) {

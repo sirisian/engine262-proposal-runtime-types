@@ -1,8 +1,8 @@
 import { test, expect } from 'vitest';
+import { evaluated } from '../harness.mts';
 import {
   Agent, DenotedUnionOf, DiscriminatingChainOf, ManagedRealm, Parser, setSurroundingAgent,
 } from '#self';
-import { evaluated } from '../harness.mts';
 
 /**
  * Spec: #sec-discriminated-where-chains (Discriminated Where Chains) -
@@ -28,7 +28,7 @@ function chain(source: string): string {
       return;
     }
     if (Array.isArray(n)) {
-      n.forEach(walk);
+      (n as unknown[]).forEach(walk);
       return;
     }
     if ((n as { type?: string }).type === 'WhereClause') {
@@ -103,25 +103,39 @@ const BASE = () => ({
   ],
   IndexSignatures: [],
 });
-const LIT = (k) => ({ Kind: 'literal', Value: k, Base: { Kind: 'string' } });
+const LIT = (k: string) => ({ Kind: 'literal', Value: k, Base: { Kind: 'string' } });
 
-function denoted(source, allConstants) {
+function denoted(source: string, allConstants: readonly string[]) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   void new ManagedRealm();
   const script = new Parser({ source, specifier: 't' }).parseScript();
-  let clause;
-  const walk = (n) => {
-    if (!n || typeof n !== 'object' || clause) { return; }
-    if (Array.isArray(n)) { n.forEach(walk); return; }
-    if (n.type === 'WhereClause') { clause = n; return; }
-    for (const key of Object.keys(n)) {
-      if (key === 'location' || key === 'sourceText' || key === 'parent') { continue; }
-      walk(n[key]);
+  let clause: Record<string, unknown> | undefined;
+  const walk = (n: unknown) => {
+    if (!n || typeof n !== 'object' || clause) {
+      return;
+    }
+    if (Array.isArray(n)) {
+      (n as unknown[]).forEach(walk);
+      return;
+    }
+    if ((n as { type?: string }).type === 'WhereClause') {
+      clause = n as Record<string, unknown>;
+      return;
+    }
+    for (const key of Object.keys(n as object)) {
+      if (key === 'location' || key === 'sourceText' || key === 'parent') {
+        continue;
+      }
+      walk((n as Record<string, unknown>)[key]);
     }
   };
   walk(script);
-  const chain = clause ? DiscriminatingChainOf(clause) : undefined;
-  const union = chain ? DenotedUnionOf(chain, BASE(), allConstants, LIT) : undefined;
+  const chain = clause ? DiscriminatingChainOf(clause as never) : undefined;
+  const union = chain
+    ? DenotedUnionOf(chain, BASE() as never, allConstants as never, LIT as never) as unknown as {
+      Members: { Properties: { key: string, type: { Kind: string, Value?: unknown } }[] }[],
+    }
+    : undefined;
   return union
     ? union.Members.map((m) => m.Properties.map((p) => `${p.key}=${p.type.Kind === 'literal' ? p.type.Value : p.type.Kind}`).join(' ')).join(' | ')
     : 'undefined';

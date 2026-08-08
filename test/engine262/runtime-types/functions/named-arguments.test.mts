@@ -85,5 +85,7 @@ test('with the feature off, a named-argument call is a syntax error', () => {
 test('with the feature off, positional calls are unaffected', () => {
   const c = runFlagOff('function f(a, b) { return b; } f(1, 2);') as { Type: string, Value: { numberValue?(): number } };
   expect(c.Type).toBe('normal');
+  // See harness.mts: a TypedNumberValue is not a NumberValue, so R throws.
+  // eslint-disable-next-line @engine262/mathematical-value
   expect(c.Value.numberValue?.()).toBe(2);
 });

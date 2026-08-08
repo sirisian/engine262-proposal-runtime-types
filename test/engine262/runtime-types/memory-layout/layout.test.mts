@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-memory-layout (Memory Layout), #sec-natural-alignment,

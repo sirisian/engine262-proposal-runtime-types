@@ -18,7 +18,7 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 function settle(source: string): string {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  const completion = realm.evaluateScriptSkipDebugger(source);
+  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string };
   if (completion.Type === 'throw') {
     return 'threw synchronously';
   }

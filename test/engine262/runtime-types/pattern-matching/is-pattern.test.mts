@@ -69,7 +69,6 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
 });
 
 test('the forms still outstanding', () => {
-  const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // BINDINGS work: `is` creates a declarative environment for
   // them exactly as a clause does. Their SCOPE - "in exactly the positions the
   // truth of the test governs" - is still the checker's business.
