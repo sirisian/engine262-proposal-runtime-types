@@ -433,6 +433,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return t;
   };
 
+  /**
+   * Whether _target_ is a class with a one-parameter constructor admitting
+   * _source_ - the first declaring form of sec-user-defined-conversions. One
+   * parameter exactly: a constructor of two is reached through target-typed
+   * construction, not through a conversion.
+   */
+  const convertingConstructorAccepts = (target: TypeRecord, source: TypeRecord): boolean => {
+    if (target.Kind !== 'nominal') {
+      return false;
+    }
+    const decl = (target as unknown as { Declaration?: ParseNode }).Declaration;
+    const body = (decl as unknown as {
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+    } | undefined)?.ClassTail?.ClassBody;
+    if (!body) {
+      return false;
+    }
+    for (const member of body) {
+      if ((member as { type?: string }).type !== 'MethodDefinition') {
+        continue;
+      }
+      const m = member as unknown as {
+        static?: boolean,
+        ClassElementName?: { name?: string, value?: string } | null,
+        UniqueFormalParameters?: readonly ParseNode[] | null,
+      };
+      const name = m.ClassElementName?.name ?? m.ClassElementName?.value;
+      if (m.static || name !== 'constructor') {
+        continue;
+      }
+      const params = m.UniqueFormalParameters ?? [];
+      if (params.length !== 1) {
+        continue;
+      }
+      const annotation = (params[0] as unknown as {
+        TypeAnnotation?: { Type: ParseNode.Type } | null,
+      }).TypeAnnotation;
+      if (!annotation) {
+        return true;
+      }
+      const want = resolveType(annotation.Type);
+      if (want && (IsAssignable(source, want) || literalFitsNumericType(source, want))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
@@ -574,6 +622,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (!IsAssignable(erasedSource, erasedTarget)) {
+      // sec-user-defined-conversions form 1: a constructor taking one parameter
+      // of type S converts S to T. Reached only AFTER assignability fails, which
+      // is both the clause's ordering and the ranking it needs - a value that
+      // already fits is never routed through a user conversion, so declaring a
+      // constructor cannot change which overload an existing call selects.
+      if (convertingConstructorAccepts(erasedTarget, erasedSource)) {
+        return;
+      }
       report(erasedSource, erasedTarget);
     }
   };

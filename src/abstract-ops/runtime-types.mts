@@ -2,6 +2,7 @@ import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
+import { Construct, IsConstructor } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -60,6 +61,20 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
     // CheckedConvertValue was ever reached.
     if (t.Kind === 'primitive' && t.Name === 'vector' && value.type !== 'Vector') {
       return Q(yield* CheckedConvertValue(value, t));
+    }
+    // sec-user-defined-conversions form 1: "A constructor taking one parameter
+    // of type S ... A converting constructor, so `let t: MyType = 1;` is legal
+    // when MyType's constructor takes a float32."
+    //
+    // Beside the broadcast above, and for the same reason it sits here: a value
+    // of the source type is not a MEMBER of the target - it CONVERTS to one - so
+    // the path that has just failed membership is where the conversion belongs.
+    // Reached only after IsOfType fails, which is the clause's ordering and the
+    // ranking it needs: a value that already fits never routes through a user
+    // conversion, so declaring a constructor changes no program that runs today.
+    const constructed = Q(yield* ConstructThroughConvertingConstructor(value, t));
+    if (constructed !== undefined) {
+      return constructed;
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
@@ -396,6 +411,28 @@ function restElementType(collected: TypeRecord): TypeRecord {
       : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord);
   }
   return collected;
+}
+
+/**
+ * sec-user-defined-conversions, form 1. Returns the constructed value, or
+ * ~undefined~ where the target declares no converting constructor, so the caller
+ * reports exactly as it did before.
+ */
+function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  if (t.Kind !== 'nominal') {
+    return undefined;
+  }
+  const ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  if (!ctor || !IsConstructor(ctor)) {
+    return undefined;
+  }
+  // One parameter EXACTLY: the clause says a constructor "taking one parameter",
+  // and a constructor of two is reached through target-typed construction.
+  const fn = ctor as unknown as { FormalParameters?: readonly unknown[] };
+  if ((fn.FormalParameters?.length ?? -1) !== 1) {
+    return undefined;
+  }
+  return Q(yield* Construct(ctor as never, [value]));
 }
 
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
