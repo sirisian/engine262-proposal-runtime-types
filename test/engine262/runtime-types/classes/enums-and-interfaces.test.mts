@@ -331,6 +331,22 @@ test('an enum over string takes sequential functions, and needs a starting value
   expect(evaluated('enum S: string { A = "x", B } String(S.B === S.A);')).toBe('true');
 });
 
+test('a later enumerator applies the underlying type\'s prefix increment', () => {
+  // #sec-enums: a later enumerator with no initializer "takes the result of
+  // applying the underlying type's prefix increment operator `operator++` to the
+  // previous enumerator's value, with the previous enumerator itself
+  // unmodified". The rule is stated over the TYPE, so it reaches every type that
+  // declares one - not only the Number family.
+  expect(evaluated('enum B: bigint { A = 1n, B, C } String(B.C);')).toBe('3');
+  // The design document's own example: a user-defined operator++ on the class
+  // the enumeration is over.
+  const A = 'class A { constructor(v) { this.v = v; } operator++() { return new A(this.v + 1); } } ';
+  expect(evaluated(`${A}enum E: A { Zero = new A(0), One, Two } String(E.Two.v);`)).toBe('2');
+  // "with the previous enumerator itself unmodified" - the operator returns a
+  // new value rather than mutating the one it is given.
+  expect(evaluated(`${A}enum E: A { Zero = new A(0), One } String(E.Zero.v);`)).toBe('0');
+});
+
 test('the underlying type\'s range and precision are the enum\'s', () => {
   // A signed type carries negative enumerators and continues through zero.
   expect(evaluated('enum N: int8 { Neg = -128, Next } String(N.Next);')).toBe('-127');

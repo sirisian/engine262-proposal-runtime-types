@@ -149,3 +149,24 @@ test('serialization: JSON.parse.<T> converts leaves and validates', () => {
 test('serialization: structuredClone is absent from the base engine (documents the gap)', () => {
   expectThrown('let o = structuredClone({ a: 5 }); o.a;');
 });
+
+// -- Enum-typed members ---------------------------------------------------------
+test('a typed parse reads an enum member back as its enumerator', () => {
+  // #sec-coercejsonvalue: "If type.[[Kind]] is ~nominal~, then if type is an
+  // enum type, then if value equals the value of an enumerator of type, return
+  // that enumerator." This is where an enum's values most often come from, and
+  // it is the read side of the reverse conversion `C(n)`.
+  const C = 'enum C { Zero, One } type T = { c: C }; ';
+  expect(evaluated(`${C}let o = JSON.parse.<T>('{"c":1}'); String(o.c === C.One);`)).toBe('true');
+  expect(evaluated(`${C}let o = JSON.parse.<T>('{"c":1}'); String(o.c is C);`)).toBe('true');
+  // A value matching no enumerator is a TypeError, as it is for `C(n)`.
+  expectThrown(`${C}JSON.parse.<T>('{"c":7}');`);
+  // The underlying type may be anything the enum is over.
+  const S = 'enum S: string { A = "x", B = "y" } type T = { s: S }; ';
+  expect(evaluated(`${S}let o = JSON.parse.<T>('{"s":"y"}'); String(o.s === S.B);`)).toBe('true');
+  expectThrown(`${S}JSON.parse.<T>('{"s":"z"}');`);
+  expect(evaluated('enum U: uint8 { A = 10, B = 20 } type T = { u: U }; '
+    + `let o = JSON.parse.<T>('{"u":20}'); String(o.u === U.B);`)).toBe('true');
+  // And an enum is a type argument like any other, so it reads at the top level.
+  expect(evaluated(`enum C { Zero, One } String(JSON.parse.<C>('1') === C.One);`)).toBe('true');
+});

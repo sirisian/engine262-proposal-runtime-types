@@ -627,9 +627,26 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
     }
     case 'nominal': {
       if (t.EnumMembers) {
-        // A JSON value equal to one of the enumerators' values parses to it.
+        // #sec-coercejsonvalue: "If value equals the value of an enumerator of
+        // type, return that enumerator." An enumerator carries its ENUM as its
+        // Type Record while a value read from JSON carries none, and SameValue
+        // tells those apart - so every enum-typed member was refused, and the
+        // one place an enum's values most often come from could not be read at
+        // all. Compare what the two HOLD, which is the reading the reverse
+        // conversion `C(n)` already takes.
+        // R asserts `instanceof NumberValue`, and an enumerator is a
+        // TypedNumberValue - a SIBLING of NumberValue rather than a subclass -
+        // so the payload is read directly, as the enum call's own comparison
+        // reads it.
+        const held = (v: Value) => {
+          const read = (v as unknown as { numberValue?: () => number }).numberValue;
+          // eslint-disable-next-line @engine262/mathematical-value
+          return typeof read === 'function' ? read.call(v) : undefined;
+        };
+        const wanted = held(value);
         for (const m of t.EnumMembers) {
-          if (SameValue(value, m)) {
+          const sameContent = wanted !== undefined && held(m) === wanted;
+          if (sameContent || SameValue(value, m)) {
             return m;
           }
         }

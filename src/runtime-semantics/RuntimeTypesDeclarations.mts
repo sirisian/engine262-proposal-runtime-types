@@ -1,5 +1,5 @@
-import { NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
-import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
+import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
+import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -143,14 +143,28 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       } else if (generator !== undefined) {
         v = Q(yield* Call(generator, Value.undefined, [Value(memberValues.length), Value(member.IdentifierName.name)]));
       } else if (!underlyingIsNumeric) {
-        // "...where the underlying type declares no prefix increment, it takes a
-        // value equal to the previous one." Only the FIRST enumerator of a
-        // non-numeric enum is an error; a later one continues, and a type with
-        // no `operator++` continues by repeating. Refusing every non-numeric
-        // enumerator without an initializer, which this did, made
-        // `enum E: string { A = "x", B }` an error where the clause gives B the
-        // value of A.
-        v = previous;
+        // #sec-enums: a later enumerator with no initializer "takes the result
+        // of applying the underlying type's prefix increment operator
+        // `operator++` to the previous enumerator's value, with the previous
+        // enumerator itself unmodified; where the underlying type declares no
+        // prefix increment, it takes a value equal to the previous one".
+        //
+        // Reading only the Number family for that made EVERY other underlying
+        // type take the repeat rule, so a `bigint` enumeration counted 1, 1, 1
+        // and the design document's own `class A { operator++() }` example gave
+        // every enumerator after the first the same value - silently, since the
+        // declaration is accepted either way. The two arms below are the types
+        // that DO declare a prefix increment and are not Number-family.
+        const incOp = previous instanceof ObjectValue
+          ? LookupClassOperator(previous, 'unary ++')
+          : null;
+        if (incOp !== null) {
+          v = Q(yield* Call(incOp, previous, []));
+        } else if (previous instanceof BigIntValue) {
+          v = Value((R(previous as BigIntValue) as bigint) + 1n);
+        } else {
+          v = previous;
+        }
       } else {
         // "A later enumerator with no initializer takes the result of applying
         // the underlying type's prefix increment operator to the one before."
