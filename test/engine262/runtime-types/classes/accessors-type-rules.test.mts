@@ -10,7 +10,9 @@ import { evaluated } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 /**
- * PLAN-accessor.md stage D, first rule: AN ACCESSOR OVERRIDE IS INVARIANT.
+ * Design: README.md; judged through #sec-typed-classes.
+ *
+ * The first rule: AN ACCESSOR OVERRIDE IS INVARIANT.
  *
  * README does not say this, and it falls out of the two variance rules that it
  * does say meeting on ONE declaration. A hand-written pair may refine its
@@ -56,7 +58,7 @@ test('the rule applies where it should and nowhere else', () => {
 test('a class NOTHING REFERENCES is checked, which is the infrastructure', () => {
   // The violation is the only thing in the program: no `new`, no annotation
   // naming the class, nothing that would have demanded its type. Before the
-  // walk was forced this reported nothing at all, and every rule stage D adds
+  // walk was forced this reported nothing at all, and every rule judged there
   // would have inherited that.
   expect(outcome('class B { accessor a: uint32 = 1; } class D extends B { accessor a: uint8 = 2; } 1;')).toBe('TypeError');
 });
@@ -116,7 +118,7 @@ test('README\'s worked Shelter/Kennel example, both directions', () => {
   expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('TypeError');
 });
 
-test('PINNED: the one rule stage D has not implemented', () => {
+test('the one rule not implemented: field and accessor substitution', () => {
   // Field/accessor substitution, which needs the member KIND recorded on the
   // class type - only accessor keys are tracked, and only within one walk.
   expect(outcome('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
@@ -134,7 +136,7 @@ test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
   // `Dog` argument satisfied an `Animal` parameter, while `let a: Animal = new
   // Dog()` was refused. The run time walks a prototype chain; the checker had
   // no chain to walk, so the class type now carries the class it extends -
-  // exactly as an enum carries its underlying type (F62).
+  // exactly as an enum carries its underlying type.
   const A = 'class Animal {} class Dog extends Animal {} class Puppy extends Dog {} ';
   expect(outcome(`${A} let a: Animal = new Dog();`)).toBe('ACCEPTED');
   // Transitive, which a one-level check would miss.
@@ -162,9 +164,63 @@ test('a derived getter must refine COVARIANTLY', () => {
   // distinguishes it from the covariant case above, which that rule would not.
   expect(outcome(`${A} class X {} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): X { return new X(); } }`)).toBe('TypeError');
   expect(outcome(`${A} class K { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
-  // A NUMERIC refinement is judged too. Cycle 141 restricted this rule to class
-  // types believing such a pair was legal; one value type never implicitly
+  // A NUMERIC refinement is judged too: one value type never implicitly
   // becomes another, so a differing numeric is a failed refinement like any
-  // other, and the restriction was lifted.
+  // other, and the rule is not restricted to class types.
   expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('TypeError');
+});
+
+// -- readonly accessor -----------------------------------------------------------
+
+/*
+ * `readonly accessor` is LEGAL and means a GETTER-ONLY accessor.
+ *
+ * The alternatives were illegal, and legal-but-unreportable. A modifier that
+ * parses and enforces nothing is worse than one that is refused, because the
+ * declaration reads as a constraint and is not one - so it is both enforced
+ * and reported.
+ */
+
+test('a readonly accessor installs a GETTER ONLY', () => {
+  // Installing only the getter is what makes assignment fail, by the ordinary
+  // rule for a getter-only property rather than by a check written for this.
+  expect(evaluated('class A { readonly accessor a: uint8 = 3; } '
+    + 'String(Object.getOwnPropertyDescriptor(A.prototype, "a").set);')).toBe('undefined');
+  expect(evaluated('class A { readonly accessor a: uint8 = 3; } '
+    + 'String(typeof Object.getOwnPropertyDescriptor(A.prototype, "a").get);')).toBe('function');
+  // A NON-readonly accessor still has both, which says the change was narrowed
+  // to the modifier rather than applied to every accessor.
+  expect(evaluated('class A { accessor a: uint8 = 3; } '
+    + 'String(typeof Object.getOwnPropertyDescriptor(A.prototype, "a").set);')).toBe('function');
+});
+
+test('assignment is refused, and the initializer still reaches the backing', () => {
+  expect(outcome('"use strict"; class A { readonly accessor a: uint8 = 1; } const x = new A(); x.a = 2;')).toBe('TypeError');
+  // Sloppy mode fails silently, as it does for any getter-only property - so
+  // the VALUE is the assertion there, not the throw.
+  expect(evaluated('class A { readonly accessor a: uint8 = 3; } const x = new A(); x.a = 9; String(x.a);')).toBe('3');
+  // The INITIALIZER still works: DefineField writes the Private Name directly
+  // and never goes through the setter, which is why removing the setter costs
+  // nothing.
+  expect(evaluated('class A { readonly accessor a: uint8 = 3; } String(new A().a);')).toBe('3');
+  expect(evaluated('class A { readonly accessor a: uint8; } String(new A().a);')).toBe('0');
+  // A non-readonly accessor is unaffected.
+  expect(evaluated('class A { accessor a: uint8 = 1; } const x = new A(); x.a = 5; String(x.a);')).toBe('5');
+});
+
+test('the context REPORTS `readonly`', () => {
+  expect(evaluated('let r; function f(c) { r = String(c.readonly); } '
+    + 'class A { @f readonly accessor a: uint8 = 1; } r;')).toBe('true');
+  expect(evaluated('let r; function f(c) { r = String(c.readonly); } '
+    + 'class A { @f accessor a: uint8 = 1; } r;')).toBe('false');
+});
+
+test('the LAYOUT is unaffected by the modifier', () => {
+  // "An accessor participates in the memory layout exactly as a field does" -
+  // and a readonly one is still a field's worth of storage, so removing the
+  // setter must not remove the slot.
+  expect(evaluated('class A { readonly accessor a: uint32 = 1; } '
+    + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").byteLength);')).toBe('4');
+  expect(evaluated('class A { x: uint32 = 0; readonly accessor a: uint8 = 1; } '
+    + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").offset);')).toBe('4');
 });

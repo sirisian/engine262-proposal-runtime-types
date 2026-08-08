@@ -2,8 +2,8 @@ import { test } from 'vitest';
 import { expectBuilderTrue, expectBuilderThrows } from '../corpus/type-challenges/harness.mts';
 
 /**
- * Phase 3 - Reflect.makeType and Reflect.isAssignable.
- * Source: proposal spec #sec-reflect-maketype, #sec-reflect-isassignable.
+ * Spec: #sec-reflect-maketype (Reflect.makeType),
+ * #sec-reflect-isassignable (Reflect.isAssignable).
  *
  * isAssignable exposes the checker's IsAssignable judgment unchanged: the
  * conditional types of an erased system are written `Reflect.isAssignable(T, U)
@@ -152,10 +152,9 @@ test('makeType - throws on an invalid node', () => {
 
 // 3312 - Parameters - the parameter list of a function type, as a tuple. The
 // corpus builder reads node.signatures[0].parameters and calls
-// Reflect.makeType({ kind: 'tuple', elements: ... }). Reflection accessors are
-// Phase 3+ (getReflection is not yet in the engine), but the CONSTRUCTION half
-// is now expressible: makeType builds the parameter tuple, which interns with
-// the written tuple type.
+// Reflect.makeType({ kind: 'tuple', elements: ... }). The CONSTRUCTION half is
+// what is asserted here: makeType builds the parameter tuple, which interns
+// with the written tuple type.
 test('challenge 3312 - Parameters (construction via makeType)', () => {
   expectBuilderTrue(`
     const Params = Reflect.makeType({

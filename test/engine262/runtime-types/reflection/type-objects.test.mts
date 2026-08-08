@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, bool, evaluatedFlagOff } from '../harness.mts';
 
 /**
- * Extension coverage - typeobjects.md (Type Objects and Reflection).
+ * Spec: #sec-type-object-opacity (Type Object Opacity), #sec-reflect-typeof.
+ * Design: typeobjects.md.
  *
  * This extension is substantially implemented in the core: type names are
  * first-class interned values, Reflect.typeOf returns the type object, the

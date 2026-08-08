@@ -1,6 +1,14 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
+/**
+ * Spec: #sec-enums (Enums), #sec-interfaces-semantics (Interfaces).
+ *
+ * The runtime side of the two declaration forms: what an enum and an interface
+ * evaluate to, how their members are checked and converted, and the operator
+ * declarations that ride alongside them.
+ */
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
@@ -45,9 +53,9 @@ test('interfaces check structurally', () => {
   // try - which is what a mistyped object literal produced while the checker
   // could not see into a literal's contents. It is an Early Error now, so the
   // try cannot swallow it, and the runtime backstop is asserted beside it
-  // through the `any` path where the checker still cannot decide (F37).
+  // through the `any` path where the checker cannot decide.
   expect(run('interface I { x: string } let p: I = { x: 300 };')).toMatchObject({ Type: 'throw' });
-  // An interface member converts as an object type's does (F87): 300 has a
+  // An interface member converts as an object type's does: 300 has a
   // canonical text and reaches `string` losslessly, so it converts rather than
   // failing - the same rule `let s: string = 300` has always followed.
   expect(evaluated('interface I { x: string } function anyv() { return { x: 300 }; } let p: I = anyv(); p.x + "/" + typeof p.x;')).toBe('300/string');
@@ -56,7 +64,7 @@ test('interfaces check structurally', () => {
 });
 
 test('class operators dispatch on binary expressions', () => {
-  // proposal-runtime-types (spec sec-class-operators): the receiver is the left
+  // #sec-operator-declarations: the receiver is the left
   // operand and the declaration's parameter is the right operand.
   expect(evaluated(`class Vec {
     constructor(x) { this.x = x; }

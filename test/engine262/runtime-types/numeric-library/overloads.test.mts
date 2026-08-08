@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { expectStaticTypeError, evaluated, evaluatedFlagOff, expectThrownKind } from '../harness.mts';
 
 /**
- * Extension coverage - the numeric library, read as generics over the numeric types.
+ * Spec: #sec-overloading-of-the-standard-library (Overloading of the Standard
+ * Library) - the numeric library read as generics over the numeric types.
  *
  * The specification says the functions of the Math object, and the other library
  * functions that take or return a numeric value, are overloaded for the numeric
@@ -101,7 +102,7 @@ test('numeric library: a carried float result is a value of its width', () => {
   expect(evaluated('String(1 / Number(Math.round(((0 - 0.4) := float32))));')).toBe('-Infinity');
 });
 
-// -- RESOLVED (D1): a declared return is a checked boundary ---------------------
+// -- A declared return is a checked boundary -----------------------------------
 test('numeric library: an out-of-range integer result raises rather than wrapping', () => {
   // The operators WRAP: this is the conversion rule, and uint8 arithmetic says so.
   expect(evaluated('String(Number((200 := uint8) + (100 := uint8)));')).toBe('44');
@@ -122,7 +123,7 @@ test('numeric library: an out-of-range integer result raises rather than wrappin
   expect(evaluated('(Math.pow((2 := uint8), (5 := uint8)) is uint8) ? "yes" : "no";')).toBe('yes');
 });
 
-// -- RESOLVED (R2): one type per signature, and literals are ranked --------------
+// -- One type per signature, and literals are ranked ---------------------------
 test('numeric library: a mixed-type call matches no signature', () => {
   // no numeric value type is assignable to another, so two typed arguments of
   // different types are viable at no signature at all

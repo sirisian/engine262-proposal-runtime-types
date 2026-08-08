@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown } from '../harness.mts';
 
 /**
- * Extension coverage - typeprogramming.md.
+ * Spec: #sec-reflect-maketype (Reflect.makeType),
+ * #sec-reflect-getreflection. Design: typeprogramming.md.
  *
  * The design is type BUILDERS: `Reflect.makeType` plus the completed node model,
  * with the standard kit (mapped/conditional types, template literals, and the
@@ -10,7 +11,7 @@ import { evaluated, ok, expectThrown } from '../harness.mts';
  * builder foundation is implemented: makeType builds a type from a reflection
  * node and round-trips with getReflection; the `keyof` and `is` operators work.
  * The `typeof` type operator, indexed-access types, and the higher-level catalog
- * are deferred (capability W).
+ * are not implemented.
  */
 
 // -- Reflect.makeType: the builder foundation ----------------------------------

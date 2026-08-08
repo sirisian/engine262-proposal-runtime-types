@@ -2,9 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * PLAN-accessor.md stage C: layout participation.
+ * Spec: #sec-memory-layout (Memory Layout) - layout participation. Design:
+ * README.md.
  *
- * section 2.1 asked whether an `accessor` occupies a layout slot, because README says
+ * Whether an `accessor` occupies a layout slot is contested, because README says
  * both things twenty lines apart - the backing field "participates in the
  * memory layout", and "a field occupies a slot in the base's memory layout and
  * an accessor doesn't". A third sentence settles it, and it is the one neither
@@ -18,11 +19,11 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * about a `get`/`set` PAIR, which genuinely has no storage, in a section about
  * accessors in general.
  *
- * SO STAGE C IS NOT AN ACCESSOR FEATURE. What it fixed is that a PRIVATE TYPED
- * FIELD had been treated as an untyped one - a single `#x: uint8` gave its whole
- * class no layout, and every offset and byteLength on it threw. The accessor
- * followed for free, which is the same dividend stage B had: the desugaring is
- * real, so the general rule carries it.
+ * SO THIS IS NOT AN ACCESSOR FEATURE. The rule is that a PRIVATE TYPED FIELD
+ * is laid out as a public one is - treating it as untyped gives its whole
+ * class no layout, and every offset and byteLength on it throws. The accessor
+ * follows for free, because the desugaring is real and the general rule
+ * carries it.
  */
 
 test('a private typed field is laid out exactly as a public one', () => {
@@ -58,8 +59,8 @@ test('a private field is laid out and still invisible to reflection', () => {
   expect(evaluated('class B { #x: uint32; } class D extends B { #x: uint32; y: uint8; } String((type D).byteLength);')).toBe('12');
 });
 
-test('an ACCESSOR occupies its slot, which is stage C\'s question', () => {
-  // The discriminating assertion PLAN-accessor.md asked for: an accessor
+test('an ACCESSOR occupies its slot', () => {
+  // The discriminating assertion: an accessor
   // between two fields, and the offset of the one after it.
   const withAccessor = 'class A { a: uint8; accessor b: uint32 = 0; c: uint8; } ';
   expect(evaluated(`${withAccessor} String((type A).byteLength);`)).toBe('12');

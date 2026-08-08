@@ -5,7 +5,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * Enum switch exhaustiveness.
  *
  * When a switch discriminant is an enumerator of an enum, the switch is checked
- * at compile time (README "Control Structures", spec sec-enums): every case label
+ * at compile time (#sec-enums; README "Control Structures"): every case label
  * must be an enumerator of that enum, and a switch with no `default` must list
  * every enumerator. A missing enumerator or a label that is not an enumerator of
  * the enum is a type error, raised as an early error before the program runs. A
@@ -95,9 +95,8 @@ test('an enumeration answers its keys, values, and entries', () => {
 });
 
 test('toString maps an enumerator to its key', () => {
-  // It answered "[object Type]" - the inherited Object.prototype.toString -
-  // which is a silently wrong answer where the design specifies a right one,
-  // and by this project's standard that is worse than a missing feature (F48).
+  // The inherited Object.prototype.toString would answer "[object Type]",
+  // which is a silently wrong answer where the design specifies a right one.
   const e = 'enum Count: uint8 { Zero, One, Two } ';
   expect(evaluated(`${e} Count.toString(Count.Zero);`)).toBe('Zero');
   expect(evaluated(`${e} Count.toString(Count.Two);`)).toBe('Two');

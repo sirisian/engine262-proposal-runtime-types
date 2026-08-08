@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff, expectThrownFlagOff } from '../harness.mts';
 
 /**
- * proposal-runtime-types (spec, sec-numeric-predicates): `isFinite`, `isNaN`, and
+ * Spec: #sec-numeric-predicates (Numeric Predicates): `isFinite`, `isNaN`, and
  * the `Number` statics that ask the same questions are overloaded for the numeric
  * types, each overload taking one value of a numeric type and returning a boolean.
  *
@@ -89,9 +89,9 @@ test('numeric predicates: the Number statics keep the base language answer for a
 test('numeric predicates: the visible cost of the split, pinned where it can be seen', () => {
   // The two halves of the decision meet here: `isFinite` and `Number.isFinite`
   // disagree about a BigInt under the flag. That is the price of declaring a
-  // row only where it displaces an error, and the specification now owns it
-  // (F39). The pair is asserted in ONE program so the divergence cannot be
-  // read as two unrelated answers.
+  // row only where it displaces an error, and the specification owns it. The
+  // pair is asserted in ONE program so the divergence cannot be read as two
+  // unrelated answers.
   expect(evaluated('String(isFinite(1n)) + "," + String(Number.isFinite(1n));')).toBe('true,false');
   // isNaN's two surfaces coincide at *false*, so the split is invisible there.
   expect(evaluated('String(isNaN(1n)) + "," + String(Number.isNaN(1n));')).toBe('false,false');

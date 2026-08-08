@@ -2,11 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectError } from '../harness.mts';
 
 /**
- * PLAN-iteration-types-engine.md phase 1: pin the ground.
+ * Spec: #sec-interfaces-semantics (Interfaces), #sec-object-types.
  *
- * Every behaviour here already works and none of it was asserted anywhere,
- * which is the whole reason the file exists. The iteration types rest on all of
- * it - `Iterator` is a class declaring that it implements `IterableIterator`,
+ * The ground the iteration types rest on, none of it asserted elsewhere:
+ * `Iterator` is a class declaring that it implements `IterableIterator`,
  * and a hand-written `{ next() { ... } }` has to satisfy the interface without
  * declaring anything - so a silent regression in any row below would surface
  * later as a confusing failure in a feature that did not cause it.

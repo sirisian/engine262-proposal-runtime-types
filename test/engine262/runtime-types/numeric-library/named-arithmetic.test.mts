@@ -2,8 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff, expectThrownKind } from '../harness.mts';
 
 /**
- * proposal-runtime-types (spec, checked and saturating arithmetic, and floored
- * division): the named arithmetic forms.
+ * Spec: #sec-checked-and-saturating-arithmetic (Checked and Saturating
+ * Arithmetic), #sec-floored-division (Floored Division).
  *
  * The operators wrap, which is right when a value is a bit pattern and wrong when
  * it is a count. Neither is right always, so the operator takes the case that has
@@ -127,7 +127,7 @@ test('named arithmetic: every form works at every integer width', () => {
 });
 
 test('named arithmetic: one type per signature, and no untyped call', () => {
-  // divFloor and mod are excluded: they have a Number signature, decided in F20.
+  // divFloor and mod are excluded: they have a Number signature.
   const FORMS = ['addChecked', 'addSaturating', 'mulChecked', 'subSaturating'];
   for (const fn of FORMS) {
     // two typed arguments of different types are viable at no signature
@@ -150,10 +150,9 @@ test('named arithmetic: the forms are gated, so flag-off is unchanged', () => {
   }
 });
 
-// -- The two rules the clause now states explicitly (finding F19) --------------
-// Both were ambiguous in the original text and were settled by implementation
-// before being written down. Pinned here because a reader of the table alone
-// could reasonably have concluded either the opposite.
+// -- The two rules the clause states explicitly -------------------------------
+// Both were ambiguous in the original text. Pinned here because a reader of the
+// table alone could reasonably have concluded either the opposite.
 test('named arithmetic: "the exact result" of a division is the operator\'s result', () => {
   // Read as an operation in the rationals, 7 divided by 2 is 3.5 and no integer
   // type represents it, which would make every inexact division a RangeError.
@@ -174,7 +173,7 @@ test('named arithmetic: a saturating form CAN raise, for one reason only', () =>
   expectThrownKind('Math.divChecked((7 := int32), (0 := int32));', 'RangeError');
 });
 
-// -- The floored pair over the Number type (finding F20, decided) --------------
+// -- The floored pair over the Number type ------------------------------------
 // Unlike the eight checked and saturating forms, this pair is not restricted to
 // the integer types: it is about rounding direction rather than overflow, and its
 // motivating use is written in untyped code.

@@ -2,12 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * proposal-runtime-types #sec-reflection-contexts, the `Type` context.
+ * Spec: #sec-reflection (Reflection) - the `Type` context.
  *
  * The table there says of it: "This is the ONE CONTEXT THIS SPECIFICATION
  * DEFINES; the rest are the decorators extension's." So it is the one whose
- * shape is already normative, and stage 0 of PLAN-decorators.md builds it
- * before any decorator context for exactly that reason.
+ * shape is already normative, and it is built before any decorator context
+ * for exactly that reason.
  *
  * decorators.md adds the other half: `Reflect.Type` "is the one reflection
  * target that is not also a decorator context - a bare type expression carries
@@ -67,8 +67,7 @@ test('a type declaration carries no decorator', () => {
   // a decorator context - a bare type expression carries no decorator".
   //
   // MEASURED: the grammar does not admit one at all, so this is a SyntaxError
-  // rather than a type error. That answers PLAN-decorators.md section 7.3, and it is
-  // the stronger of the two answers - a position that cannot be written cannot
-  // be written wrongly.
+  // rather than a type error - the stronger of the two answers, since a
+  // position that cannot be written cannot be written wrongly.
   expectThrown('function f(c: Reflect.Type) {} @f type X = uint8;');
 });

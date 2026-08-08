@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * A fixed extent is part of the type and does not move (spec
+ * A fixed extent is part of the type and does not move (#sec-array-and-tuple-types,
  * sec-array-and-tuple-types).
  *
  * The extent was dropped when the element type was stamped, so nothing enforced
@@ -48,7 +48,7 @@ test('an out-of-bounds READ is a RangeError', () => {
 test('a value generic may be the extent', () => {
   // `f.<4, 2>` binds a `uint32` 4, not a Number 4, and the two are never
   // SameValue - so requiring a plain Number rejected `[N].<T>` with a
-  // value-generic extent, which is the shape sec-bounds-checks is written about.
+  // value-generic extent, which is the shape #sec-check-elision is written about.
   expect(evaluated('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4, 2>(a)));')).toBe('9');
   expect(evaluated('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4>(a)));')).toBe('4');
   // The extent still has to match the argument.

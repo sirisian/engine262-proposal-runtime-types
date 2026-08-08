@@ -2,6 +2,14 @@ import { expect, test } from 'vitest';
 import {  Agent, ManagedRealm, Parser, setSurroundingAgent,
 } from '#self';
 
+/**
+ * Spec: #sec-typed-classes (Typed Classes), #sec-abstract-classes.
+ *
+ * The class declaration under the feature: typed fields and methods, the
+ * `abstract` modifier, and the grammar and evaluation of the forms the design
+ * adds to a class body.
+ */
+
 function makeRealm(runtimeTypes = true) {
   setSurroundingAgent(new Agent(runtimeTypes ? { features: ['runtime-types'] } : {}));
   return new ManagedRealm();
@@ -124,7 +132,7 @@ test('classes with proposal elements still evaluate', () => {
       operator ==(a, b) { return true; }
       m() { return 'ok'; }
     }
-    // An abstract class cannot be instantiated directly (spec sec-abstract-classes),
+    // An abstract class cannot be instantiated directly (#sec-abstract-classes),
     // so a concrete subclass exercises that the proposal elements evaluate.
     class Circle extends Shape {
       area() { return (1 := float64); }

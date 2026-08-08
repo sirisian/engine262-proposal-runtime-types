@@ -1,6 +1,13 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
+/**
+ * Spec: #sec-object-types-semantics (Object Types) - index signatures.
+ *
+ * An index signature types the members a declaration does not name, so a read
+ * through a computed key has a static type and a write through one is checked.
+ */
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();

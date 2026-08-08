@@ -2,9 +2,8 @@ import { test } from 'vitest';
 import { expectBuilderTrue } from '../corpus/type-challenges/harness.mts';
 
 /**
- * Phase 4 enabling primitive - Reflect.getReflection.
- * Source: proposal spec #sec-getreflection (the Reflect.Type context), the
- * node-shape table.
+ * Spec: #sec-reflect-getreflection (Reflect.getReflection) and its node-shape
+ * table.
  *
  * getReflection is the read side of reflection: it builds the node object
  * describing a Type Record, the inverse of makeType's node reader. The spec's

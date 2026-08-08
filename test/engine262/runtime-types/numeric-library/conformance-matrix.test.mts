@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
- * proposal-runtime-types: a CONFORMANCE MATRIX for the numeric library.
+ * Spec: #sec-numeric-library (The Numeric Library),
+ * #table-numeric-library-signatures - a CONFORMANCE MATRIX.
  *
  * The other numeric-library suites test behaviours one at a time, chosen because
  * something interesting happens there. This one is different on purpose: it walks
@@ -84,15 +85,15 @@ function call(fn: string, arity: number, t: string, sample: number = 4): string 
 // - roughly forty functions across each column - so they are legitimately slow
 // rather than wrong, and vitest's default 5s timeout sits right at their
 // runtime under full-suite load. The project's vitest config raises the
-// default for exactly this reason (F61); the note stays here because this is
+// default for exactly this reason; the note stays here because this is
 // the file that made it obvious.
 test('numeric library matrix: the integer column matches the listing', () => {
   for (const row of ROWS) {
     for (const t of INTEGER_TYPES) {
       const expr = call(row.fn, row.arity, t, row.sample);
       if (row.int === 'none') {
-        // no signature at this family: resolution fails, and since Phase 3
-        // it fails statically, before the script runs
+        // no signature at this family: resolution fails, and it fails
+        // statically, before the script runs
         expectStaticTypeError(`${expr};`);
       } else {
         const want = row.int === 'int32' ? 'int32' : t;
@@ -232,21 +233,19 @@ test('a function with no numeric parameter is NOT overloaded, and untyped code i
   // The clause overloads functions that TAKE a value of a numeric type: an
   // argument's type selects the signature, so a call written without one is
   // unchanged. A function that merely RETURNS a number has nothing to select
-  // on, and typing its result would change what every existing call returns
-  // (F64). This was carried as work for many cycles - "apply the rules to
-  // charCodeAt, indexOf, the Date getters" - and applying them is not
+  // on, and typing its result would change what every existing call returns.
+  // Applying the rules to charCodeAt, indexOf, and the Date getters is not
   // mechanical but forbidden.
   expect(evaluated('String("A".charCodeAt(0) === 65);')).toBe('true');
   expect(evaluated('String("abc".indexOf("b") === 1);')).toBe('true');
   expect(evaluated('String("abc".lastIndexOf("b") === 1);')).toBe('true');
   expect(evaluated('String(new Date(0).getFullYear() === 1970);')).toBe('true');
-  // The reason those matter has CHANGED with F74 and the argument is weaker
-  // than it was, which is worth recording rather than quietly repairing. A
-  // literal now adopts the other operand's type, so `x === 65` would survive a
-  // typed `charCodeAt`; what would not survive is the comparison against a
-  // VARIABLE, which adopts nothing, and the arithmetic that silently changes
-  // width. F65 measured both. So these functions stay untyped for the
-  // variable-facing reasons, not for the literal-facing one.
+  // The literal rule weakens part of that argument: a literal adopts the other
+  // operand's type, so `x === 65` would survive a typed `charCodeAt`. What
+  // would not survive is the comparison against a VARIABLE, which adopts
+  // nothing, and the arithmetic that silently changes width. So these
+  // functions stay untyped for the variable-facing reasons, not for the
+  // literal-facing one.
   expect(evaluated('String((65 := uint16) === 65);')).toBe('true');
   expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('false');
   // parseInt and parseFloat are excluded by the same rule, and by name.

@@ -1,6 +1,14 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
+/**
+ * Spec: #sec-typed-classes (Typed Classes) - a class name in a type position.
+ *
+ * A class name resolves to the nominal instance type carrying its declared
+ * members, which is what makes a store to a field, a call to a method, and an
+ * assignment between related classes judgeable.
+ */
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();

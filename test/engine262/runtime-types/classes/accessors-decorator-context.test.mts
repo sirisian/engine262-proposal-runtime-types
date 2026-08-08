@@ -2,12 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-accessor.md stage E: the decorator context, and the `protected` modifier
- * it needed first.
+ * Spec: #sec-decorator-contexts (Decorator Contexts) - `Reflect.ClassAccessor`,
+ * and the `protected` modifier it reports. Design: README.md, decorators.md.
  *
- * `Reflect.ClassAccessor` is the context PLAN-decorators.md section 9 recorded as
- * having no test asserting a decorator ever received it - the last of the class
- * family, and the one that needed a whole declaration form built to reach.
+ * `Reflect.ClassAccessor` is the last of the class family of contexts, and the
+ * one that needs a whole declaration form built to reach.
  */
 
 test('a decorated accessor receives ClassAccessor, once', () => {
@@ -39,15 +38,14 @@ test('the context carries ClassAccessorReflection\'s shape', () => {
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.static);`)).toBe('false');
   expect(evaluated(`${grab} class A { @f protected accessor a: uint32 = 5; } String(c.protected);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.protected);`)).toBe('false');
-  // `readonly` IS reported (PLAN-accessor.md section 2.5, settled in cycle 214):
-  // `readonly accessor` is legal and means GETTER-ONLY, so the modifier has to
-  // be visible to a decorator as well as enforced. An earlier draft of this
-  // test asserted its ABSENCE, on the reading that `ClassAccessorReflection`
-  // omits it - but a modifier that parses and does nothing is worse than one
+  // `readonly` IS reported: `readonly accessor` is legal and means GETTER-ONLY,
+  // so the modifier has to be visible to a decorator as well as enforced.
+  // `ClassAccessorReflection` omits it, which would argue for asserting its
+  // ABSENCE - but a modifier that parses and does nothing is worse than one
   // that is refused, since the declaration reads as a constraint and enforces
   // none.
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(Object.prototype.hasOwnProperty.call(c, "readonly"));`)).toBe('true');
-  // The name is the DECLARED one, not the backing storage: stage B's backing is
+  // The name is the DECLARED one, not the backing storage: the backing is
   // an unnameable Private Name, and a context naming it would describe the
   // desugaring rather than the declaration.
   expect(evaluated(`${grab} class A { @f accessor value: uint32 = 5; } String(c.name);`)).toBe('value');
@@ -82,22 +80,20 @@ test('`readonly` and `protected` are REPORTED, which they had never been', () =>
   // Both were read off an invented cast naming `Readonly` and `Access` - the
   // FIELD RECORD's spellings - where a FieldDefinition node carries `readonly`
   // and `protected`. So both reported FALSE for every field however it was
-  // declared: the same failure as the `Accessor`/`accessor` branch stage 0
-  // removed, and the same cause.
+  // declared: the same failure, and the same cause, as a context branch keyed
+  // on a field name no parser sets.
   const grab = 'let c; function f(x) { c = x; } ';
   expect(evaluated(`${grab} class A { @f readonly a: uint8 = 1; } String(c.readonly);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f protected a: uint8 = 1; } String(c.protected);`)).toBe('true');
   expect(evaluated(`${grab} class A { @f a: uint8 = 1; } String(c.readonly) + "/" + String(c.protected);`)).toBe('false/false');
 });
 
-test('PINNED: what stage E does not do', () => {
-  // `initial` and `metadata` are in ClassAccessorReflection and not in the
-  // context. `metadata` is stage H of the decorators plan, absent from every
-  // context; `initial` is the declared default, which the field context does
-  // not carry either - so it is one change across both rather than an accessor
-  // one.
+test('what the accessor context does and does not carry', () => {
+  // `initial` and `metadata` are in ClassAccessorReflection. `initial` is the
+  // declared default, which the field context carries as well - one derivation
+  // across both rather than an accessor-specific one.
   const grab = 'let c; function f(x) { c = x; } ';
-  // `initial` LANDED on both contexts (PLAN-decorators-remaining.md phase four).
+  // `initial` is on both contexts.
   // decorators.md gives it on `ClassAccessorReflection` as well as
   // `ClassFieldReflection`, and the two describe the same declaration - so ONE
   // derivation serves both rather than two that can drift, which is the shape
@@ -112,7 +108,7 @@ test('PINNED: what stage E does not do', () => {
   expect(evaluated(`${grab} class A { @f a: uint32 = 5; } String(c.initial);`)).toBe('5');
   // The `protected` ACCESS RULE is not enforced: README makes it "an access rule
   // checked where the static type is known", and nothing checks it yet. The
-  // modifier parses, lays out, and reflects - which is what stage E needed.
+  // modifier parses, lays out, and reflects.
   expect(evaluated('class B { protected a: uint8 = 1; } class D extends B { read() { return this.a; } } String(new D().read());')).toBe('1');
   expect(evaluated('class B { protected a: uint8 = 1; } const o = new B(); String(o.a);')).toBe('1');
 });

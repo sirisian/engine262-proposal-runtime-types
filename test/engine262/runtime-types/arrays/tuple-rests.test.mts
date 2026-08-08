@@ -2,7 +2,8 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * PLAN-rest-parameters.md phase 3: tuples get the matcher.
+ * Spec: #sec-array-and-tuple-types (Array and Tuple Types) - tuples and the
+ * rest matcher.
  *
  * A rest parameter's type IS a tuple or array type, so the two forms have to
  * answer the same way about which run belongs to which rest - which is why
@@ -105,8 +106,8 @@ test('a target with several rests relates conservatively', () => {
 });
 
 test('tuple identity is unaffected', () => {
-  // Interning compares the element list, rests included, and phase 3 changed
-  // how tuples are COMPARED without changing what they ARE.
+  // Interning compares the element list, rests included: how tuples are
+  // COMPARED is separate from what they ARE.
   expect(evaluated(`
     type A = [number, ...[].<string>];
     type B = [number, ...[].<string>];
