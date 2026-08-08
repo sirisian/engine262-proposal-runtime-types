@@ -30,9 +30,9 @@ import {
 } from '#self';
 import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import type { OverloadSignature } from '../type-system/overloads.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
+import { SignaturesOf } from '../abstract-ops/runtime-types.mts';
 import { ThreadCluster } from '../host-defined/thread-cluster.mts';
 import {
   AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
@@ -111,8 +111,12 @@ function* FirstParameterAdmits(func: FunctionObject, value: ObjectValue): PlainE
 /** The resolvable declared types of the callee's first parameter, over every signature it has. */
 function* FirstParameterTypes(func: FunctionObject): PlainEvaluator<TypeRecord[]> {
   const types: TypeRecord[] = [];
-  const declared = (func as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
-  if (declared !== undefined) {
+  // An overloaded function's signatures are resolved on first use, so they are
+  // read through SignaturesOf rather than off the slot - #sec-classifythreadarguments
+  // runs before any call has forced them.
+  const overloaded = (func as unknown as { OverloadFunctions?: readonly Value[] }).OverloadFunctions !== undefined;
+  if (overloaded) {
+    const declared = Q(yield* SignaturesOf(func));
     for (const signature of declared) {
       const first = signature.Parameters[0];
       if (first !== undefined && first.Type.Kind !== 'parameter') {

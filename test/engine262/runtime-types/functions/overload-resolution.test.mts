@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
+import {
+  evaluated, expectStaticTypeError, expectThrown, runFlagOff,
+} from '../harness.mts';
 
 /**
  * Function overloading and overload resolution.
@@ -154,4 +156,55 @@ test('with the feature off, the last declaration wins and dispatch is not type-b
   // Both calls run the last declaration; the first is shadowed, not an overload.
   expect(flagOff('function f(a) { return "first"; } function f(a) { return "second"; } f(1);')).toBe('second');
   expect(flagOff('function f(a) { return "first"; } function f(a) { return "second"; } f("x");')).toBe('second');
+});
+
+// -- Signatures naming a user-declared type -------------------------------------
+//
+// A parameter annotation is resolved when the overloaded function is FIRST
+// CALLED, against the environment the declarations were written in, rather than
+// when they were hoisted. Resolving at hoist time reads a `type`, `interface`,
+// or `enum` binding while it is still in its temporal dead zone - hoisting runs
+// before the statement that initializes one - so every user-declared type but a
+// class was unusable in an overloaded signature. A class survived only because
+// its annotation resolves through the class-type table rather than through the
+// binding, which is why nothing noticed.
+test('an overloaded signature may name an enum, an alias, or a class', () => {
+  expect(evaluated('enum C { Zero, One } '
+    + 'function f(x: C): string { return "enum"; } function f(x: string): string { return "str"; } '
+    + 'f(C.One) + "/" + f("q");')).toBe('enum/str');
+  expect(evaluated('type A = uint8; '
+    + 'function f(x: A): string { return "alias"; } function f(x: string): string { return "str"; } '
+    + 'f((1 := uint8)) + "/" + f("q");')).toBe('alias/str');
+  expect(evaluated('class K {} '
+    + 'function f(x: K): string { return "class"; } function f(x: string): string { return "str"; } '
+    + 'f(new K()) + "/" + f("q");')).toBe('class/str');
+  // A structural alias reaches it through the same path.
+  expect(evaluated('type O = { a: uint8 }; '
+    + 'function f(x: O): string { return "obj"; } function f(x: string): string { return "str"; } '
+    + 'f({ a: (1 := uint8) });')).toBe('obj');
+});
+
+test('the declaration may come after the function that annotates with it', () => {
+  // Resolution happens at the call, so the order of the two declarations in the
+  // source does not matter - which is what a hoisted function declaration means
+  // everywhere else in the language.
+  expect(evaluated('function f(x: C): string { return "enum"; } function f(x: string): string { return "str"; } '
+    + 'enum C { Zero, One } f(C.One);')).toBe('enum');
+  // And inside a function body, where the same instantiation runs.
+  expect(evaluated('enum C { Zero, One } '
+    + 'function outer() { function f(x: C): string { return "enum"; } function f(x: string): string { return "str"; } return f(C.One); } '
+    + 'outer();')).toBe('enum');
+});
+
+test('deferring the resolution does not weaken the arity or the ranking', () => {
+  // `length` is the smallest arity among the signatures, and arity is syntactic -
+  // it is read from the parameter nodes without resolving anything.
+  expect(evaluated('function f(x: uint8): string { return "a"; } function f(x: uint8, y: uint8): string { return "b"; } '
+    + 'String(f.length);')).toBe('1');
+  // Two widths still rank as they did.
+  expect(evaluated('function f(x: uint8): string { return "u8"; } function f(x: uint16): string { return "u16"; } '
+    + 'f((1 := uint8)) + "/" + f((1 := uint16));')).toBe('u8/u16');
+  // An argument no signature accepts is still refused, and statically - the
+  // checker reaches it before the script runs, so a try cannot swallow it.
+  expectStaticTypeError('function f(x: uint8): string { return "u"; } function f(x: string): string { return "s"; } f(true);');
 });

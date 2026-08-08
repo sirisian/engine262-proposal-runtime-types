@@ -17,7 +17,7 @@ import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGe
 import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
 } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
@@ -1961,15 +1961,24 @@ export function LookupClassType(ctor: object): Value | undefined {
  * the resolved types are read synchronously at each call). The rest/optional/
  * default arity is read from the parameter nodes.
  */
-export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignature> {
+export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): PlainEvaluator<OverloadSignature> {
   const formals = ((fn as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
   // Resolve each parameter's annotation to a type record up front. describeParameters
   // wants a synchronous typeOf, so pre-resolve into a map keyed by node.
+  //
+  // With _resolveAnnotations_ false the annotations are recorded but NOT
+  // resolved: the caller wants only what the parameter nodes say - arity, rest,
+  // and optional, all syntactic - and resolving reads type bindings that are not
+  // initialized yet. See MakeOverloadedFunction.
   const resolved = new Map<ParseNode, TypeRecord>();
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
     if (ann) {
-      resolved.set(p, Q(yield* TypeNodeToTypeRecord(ann.Type)));
+      if (resolveAnnotations) {
+        resolved.set(p, Q(yield* TypeNodeToTypeRecord(ann.Type)));
+      } else {
+        resolved.set(p, { Kind: 'any' } as TypeRecord);
+      }
     }
   }
   const params = describeParameters(formals, (annotation) => {
@@ -1991,7 +2000,10 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
   // annotation is on the function's PARSE NODE and not on the function object -
   // reading `fn.TypeAnnotation` finds nothing, which is why the first attempt
   // at this produced signatures with no return type at all.
-  const returnAnnotation = returnAnnotationOf(fn as AnnotatedFunction);
+  let returnAnnotation: ReturnType<typeof returnAnnotationOf> | null = null;
+  if (resolveAnnotations) {
+    returnAnnotation = returnAnnotationOf(fn as AnnotatedFunction);
+  }
   let ReturnType: TypeRecord | undefined;
   if (returnAnnotation) {
     // Resolved directly rather than looked up in `resolved`, which is keyed on
@@ -2013,15 +2025,82 @@ export function* OverloadSignatureOf(fn: Value): PlainEvaluator<OverloadSignatur
  * viable or more than one is equally best. Because the result is an ordinary
  * function object, `call`, `apply`, and `bind` route through the same resolution.
  */
+interface DeclaringContext {
+  readonly LexicalEnvironment: unknown;
+  readonly VariableEnvironment: unknown;
+  readonly PrivateEnvironment: unknown;
+  readonly Realm: unknown;
+  readonly ScriptOrModule: unknown;
+}
+
+interface OverloadSlots {
+  OverloadSignatures?: readonly OverloadSignature[];
+  OverloadFunctions?: readonly Value[];
+  OverloadContext?: DeclaringContext;
+}
+
+/**
+ * The signatures of an overloaded function, resolved on FIRST USE and against
+ * the environment the declarations were written in.
+ *
+ * Resolving at hoist time - which is where this used to happen - reads a `type`,
+ * `interface`, or `enum` binding while it is still in the temporal dead zone,
+ * since hoisting runs before any statement that initializes one. Every
+ * user-declared type but a class was therefore unusable in an overloaded
+ * signature, a class surviving only because its annotation resolves through
+ * LookupClassType rather than through the binding.
+ *
+ * Deferring alone is not enough: the dispatcher is a BUILTIN, and a builtin has
+ * no lexical environment for a named type to resolve against - the same thing
+ * F51 recorded for a default constructor's field types. So the declaring
+ * context is captured when the overloaded function is made and pushed around the
+ * resolution, which makes a name resolve exactly as it would have where it was
+ * written, only later. The result is cached: the types a signature names do not
+ * change.
+ */
+export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly OverloadSignature[]> {
+  const slots = overloaded as unknown as OverloadSlots;
+  if (slots.OverloadSignatures) {
+    return slots.OverloadSignatures;
+  }
+  const declaring = slots.OverloadContext;
+  const context = new ExecutionContext();
+  context.Function = Value.null;
+  context.Realm = declaring?.Realm as never;
+  context.ScriptOrModule = declaring?.ScriptOrModule as never;
+  context.LexicalEnvironment = declaring?.LexicalEnvironment as never;
+  context.VariableEnvironment = declaring?.VariableEnvironment as never;
+  context.PrivateEnvironment = declaring?.PrivateEnvironment as never;
+  surroundingAgent.executionContextStack.push(context);
+  try {
+    const built: OverloadSignature[] = [];
+    for (const fn of slots.OverloadFunctions ?? []) {
+      built.push(Q(yield* OverloadSignatureOf(fn)));
+    }
+    slots.OverloadSignatures = built;
+    return built;
+  } finally {
+    surroundingAgent.executionContextStack.pop(context);
+  }
+}
+
 export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly Value[]): ValueEvaluator {
-  const signatures: OverloadSignature[] = [];
-  for (const fn of functions) {
-    signatures.push(Q(yield* OverloadSignatureOf(fn)));
-  }
+  // Only the parameter NODES are read here: `length` is the smallest arity among
+  // the signatures, and arity, rest, and optional are syntactic. The types wait
+  // for SignaturesOf, which resolves them against the context captured below.
   let length = Infinity;
-  for (const sig of signatures) {
-    length = Math.min(length, minimumArity(sig.Parameters));
+  for (const fn of functions) {
+    const shape = Q(yield* OverloadSignatureOf(fn, false));
+    length = Math.min(length, minimumArity(shape.Parameters));
   }
+  const declaringContext = surroundingAgent.runningExecutionContext;
+  const declaring: DeclaringContext = {
+    LexicalEnvironment: declaringContext.LexicalEnvironment,
+    VariableEnvironment: declaringContext.VariableEnvironment,
+    PrivateEnvironment: declaringContext.PrivateEnvironment,
+    Realm: declaringContext.Realm,
+    ScriptOrModule: declaringContext.ScriptOrModule,
+  };
   if (!Number.isFinite(length)) {
     length = 0;
   }
@@ -2030,6 +2109,7 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // left tied. It is read here rather than passed down from the binding,
     // because a binding boundary sees the RESULT - by then the overload has
     // been chosen and the wrong one may already have run.
+    const signatures = Q(yield* SignaturesOf(overloaded));
     const resolution = resolveOverload(signatures, args, currentContextualType());
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
@@ -2043,7 +2123,9 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
   // The signatures are readable from the dispatcher, because a DECORATION binds
   // its context to each candidate's LAST PARAMETER and so has to see them
   // before resolution rather than after (DecoratorArgumentPlacement below).
-  (overloaded as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures = signatures;
+  const slots = overloaded as unknown as OverloadSlots;
+  slots.OverloadFunctions = functions;
+  slots.OverloadContext = declaring;
   return overloaded;
 }
 
@@ -2116,8 +2198,13 @@ export function DecoratorArgumentPlacement(parameters: readonly OverloadParamete
  * so the type rules stay in one place (F53).
  */
 export function* CallDecorator(fn: Value, written: readonly Value[], context: Value): ValueEvaluator {
-  const declared = (fn as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
-  const signatures: readonly OverloadSignature[] = declared ?? [Q(yield* OverloadSignatureOf(fn))];
+  const declared = (fn as unknown as OverloadSlots).OverloadFunctions !== undefined;
+  let signatures: readonly OverloadSignature[];
+  if (declared) {
+    signatures = Q(yield* SignaturesOf(fn));
+  } else {
+    signatures = [Q(yield* OverloadSignatureOf(fn))];
+  }
   const placed: { sig: OverloadSignature, args: Value[], defaulted: number }[] = [];
   for (const sig of signatures) {
     // An untyped signature has nothing to place against and nothing to judge:
@@ -2310,8 +2397,11 @@ function enclosingClassTypeParameters(node: ParseNode | undefined): readonly Par
  * answers null and the inner call reports its own ambiguity.
  */
 export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeRecord | null)[] | null> {
-  const declared = (func as unknown as { OverloadSignatures?: readonly OverloadSignature[] }).OverloadSignatures;
-  if (declared && declared.length !== 1) {
+  // Only the COUNT is wanted here - "sole" means one declaration - and that is
+  // the number of functions the overload group was made from, which is known
+  // without resolving any annotation.
+  const overloadFns = (func as unknown as OverloadSlots).OverloadFunctions;
+  if (overloadFns && overloadFns.length !== 1) {
     return null;
   }
   const formals = ((func as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined);

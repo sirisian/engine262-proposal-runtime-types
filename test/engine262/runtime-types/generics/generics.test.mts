@@ -255,12 +255,22 @@ test('generics: the deferred surface is refused, not silently wrong', () => {
   // measured rather than assumed.
 
   // A specialized overload - a second declaration at a concrete argument - is
-  // refused. The message names T, which is not the clearest way to say
-  // "unsupported", and is worth improving when the feature lands.
+  // refused AT THE CALL. An overloaded signature's annotations are resolved on
+  // first use rather than when the declarations were hoisted, so declaring the
+  // pair is inert and using it is what reports. The message names T, which is
+  // not the clearest way to say "unsupported", and is worth improving when the
+  // feature lands.
   expect(ok(`
     function f<T>(x: T): T { return x; }
     function f<uint8>(x: uint8): uint8 { return x; }
+    f(1);
   `)).toBe(false);
+  // Declaring without using is accepted, which is what "not silently wrong"
+  // means here: nothing has happened yet for the engine to be wrong about.
+  expect(ok(`
+    function f<T>(x: T): T { return x; }
+    function f<uint8>(x: uint8): uint8 { return x; }
+  `)).toBe(true);
 
   // Generic parameters on a decorator do not parse. This is the form that
   // appears in generics.md and in the hooks row of #table-extension-hooks.
