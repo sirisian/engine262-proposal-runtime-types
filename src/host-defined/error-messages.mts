@@ -650,6 +650,7 @@ export interface Throw {
   | '$1 names a lane twice and cannot be assigned to'
   | '$1 needs an element type, as in `new SoA.<T, N>()`'
   | '$1 of a negative value is not defined'
+  | '$1 requires a contextual type'
   | '$1 requires a reflection context as a type argument'
   | '$1 requires an argument'
   | '$1 requires an argument of a sized integer type'

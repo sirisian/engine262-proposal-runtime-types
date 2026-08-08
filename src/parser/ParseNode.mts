@@ -465,6 +465,16 @@ export namespace ParseNode {
   //
   // MemberExpression (partial) :
   //   `new` MemberExpression Arguments
+  /**
+   * proposal-runtime-types sec-new-expressions: `new` `.` Arguments - TARGET-TYPED
+   * CONSTRUCTION, constructing the type its position requires. Told from
+   * `new.target` by the token after the dot.
+   */
+  export interface TargetTypedNew extends BaseParseNode {
+    readonly type: 'TargetTypedNew';
+    readonly Arguments: Arguments;
+  }
+
   export interface NewExpression extends BaseParseNode {
     readonly type: 'NewExpression';
 
@@ -3662,6 +3672,7 @@ export type ParseNode =
   | ParseNode.ImportMeta
   | ParseNode.MemberExpression
   | ParseNode.NewExpression
+  | ParseNode.TargetTypedNew
   | ParseNode.SuperCall
   | ParseNode.ImportCall
   | ParseNode.CallExpression

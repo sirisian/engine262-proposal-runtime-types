@@ -1258,6 +1258,16 @@ export abstract class ExpressionParser extends FunctionParser {
   parseNewExpression(): ParseNode.NewExpressionOrHigher {
     const node = this.startNode<ParseNode.NewTarget | ParseNode.NewExpression>();
     this.expect(Token.NEW);
+    // sec-new-expressions: `new` `.` Arguments constructs the type its POSITION
+    // requires. Checked before `new.target`, whose branch is gated on being
+    // inside a function while this form is legal anywhere; the token after the
+    // dot tells them apart.
+    if (surroundingAgent.feature('runtime-types')
+        && this.test(Token.PERIOD) && this.testAhead(Token.LPAREN)) {
+      this.next();
+      (node as unknown as { Arguments?: ParseNode.Arguments }).Arguments = this.parseArguments().Arguments;
+      return this.finishNode(node as unknown as ParseNode.TargetTypedNew, 'TargetTypedNew') as unknown as ParseNode.NewExpressionOrHigher;
+    }
     if (this.scope.hasNewTarget() && this.eat(Token.PERIOD)) {
       this.expect('target');
       return this.finishNode(node as ParseNode.NewTarget, 'NewTarget');

@@ -2,12 +2,15 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { Q } from '../completion.mts';
+import { TargetTypedNewType } from '../type-system/check.mts';
+import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { NumberValue, ObjectValue, type Value } from '../value.mts';
+import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
+import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { surroundingAgent } from '#self';
 import {
   Assert,
@@ -25,7 +28,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 3. Let ref be the result of evaluating constructExpr.
   const ref = Q(yield* Evaluate(constructExpr));
   // 4. Let constructor be ? GetValue(ref).
-  const constructor = Q(yield* GetValue(ref));
+  const constructor = Q(yield* GetValue(ref as never));
   let argList;
   // 5. If arguments is empty, let argList be a new empty List.
   if (args === undefined) {
@@ -138,4 +141,34 @@ export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEva
     // 1. Return ? EvaluateNew(MemberExpression, Arguments).
     return Q(yield* EvaluateNew(MemberExpression, Arguments, placementArgs));
   }
+}
+
+/**
+ * proposal-runtime-types sec-new-expressions: `new` `.` Arguments - target-typed
+ * construction.
+ *
+ * The checker recorded the position's contextual type against this node, because
+ * only it knows what a position requires. That record is a STATIC description
+ * whose [[Constructor]] is empty - the constructor is installed when the class
+ * definition runs - so the class is reached instead through the binding its
+ * declaration introduces, which is live by the time this evaluates.
+ */
+export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueEvaluator {
+  const t = TargetTypedNewType(node as object);
+  if (!t || t.Kind !== 'nominal') {
+    return Throw.SyntaxError('$1 requires a contextual type', Value('new.()'));
+  }
+  let ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  if (!ctor || !IsConstructor(ctor)) {
+    const name = (t.Declaration as unknown as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name;
+    if (typeof name === 'string') {
+      const ref = Q(yield* ResolveBinding(Value(name), undefined, false));
+      ctor = Q(yield* GetValue(ref as never));
+    }
+  }
+  if (!ctor || !IsConstructor(ctor)) {
+    return Throw.TypeError('$1 is not a constructor', Value(displayType(t)));
+  }
+  const argList = Q(yield* ArgumentListEvaluation(node.Arguments));
+  return Q(yield* Construct(ctor as never, argList as readonly Value[]));
 }

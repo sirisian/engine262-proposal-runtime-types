@@ -124,6 +124,16 @@ const boundsProvenAccesses = new WeakMap<object, Set<object>>();
  * does. Marked here because only the checker knows which binding a name
  * resolves to; consulted at evaluation because that is where the value is made.
  */
+/**
+ * The resolved contextual type of each `new.(...)`, recorded by the checker
+ * because only it knows what a position requires.
+ */
+const targetTypedNewTypes = new WeakMap<object, TypeRecord>();
+
+export function TargetTypedNewType(node: object): TypeRecord | undefined {
+  return targetTypedNewTypes.get(node);
+}
+
 const constLiteralUses = new WeakSet<object>();
 
 export function IsConstLiteralUse(node: object): boolean {
@@ -863,6 +873,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (!node) {
       return null;
+    }
+    // sec-new-expressions: `new.(...)` constructs the type its POSITION requires.
+    // This operation is where a node meets its contextual type, so it is where
+    // the type is recorded for evaluation to read - the runtime has no
+    // contextual type of its own.
+    if (node.type === 'TargetTypedNew') {
+      if (!contextual || contextual.Kind === 'any') {
+        // "a position that requires no type gives nothing to construct" - a
+        // Syntax Error rather than an inference, because inferring the type
+        // would be the binding-type inference this proposal does not perform.
+        errors.push((Throw.SyntaxError('$1 requires a contextual type', Value('new.()')) as ThrowCompletion).Value as ObjectValue);
+        return null;
+      }
+      if (contextual.Kind !== 'nominal') {
+        report(contextual, contextual);
+        return null;
+      }
+      targetTypedNewTypes.set(node as object, contextual);
+      return contextual;
     }
     if (node.type === 'CallExpression') {
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual

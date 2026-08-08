@@ -63,6 +63,7 @@ import {
   Evaluate_EqualityExpression,
   Evaluate_CallExpression,
   Evaluate_NewExpression,
+  Evaluate_TargetTypedNew,
   Evaluate_MemberExpression,
   Evaluate_OptionalExpression,
   Evaluate_TaggedTemplateExpression,
@@ -290,6 +291,8 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     }
     case 'NewExpression':
       return yield* Evaluate_NewExpression(node);
+    case 'TargetTypedNew':
+      return yield* Evaluate_TargetTypedNew(node);
     case 'MemberExpression':
       return yield* Evaluate_MemberExpression(node);
     case 'OptionalExpression':
