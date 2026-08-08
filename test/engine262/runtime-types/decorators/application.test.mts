@@ -450,3 +450,19 @@ test('the Tuple and Record contexts FIRE, on a decorated expression', () => {
   // new path did not swallow the existing one.
   expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const b = @f { a: 1 }; return k; })();')).toBe('Object');
 });
+
+// -- A decoration under the runtime-types feature --------------------------------
+
+test('decorators: a user decorator runs under the runtime-types feature', () => {
+  // A decoration finds its function, is applied in the specified order, and
+  // receives a context; decorators/application.test.mts owns the detail.
+  expect(evaluated('const l = []; function d(c) { l.push(c.kind + ":" + String(c.name)); } @d class A {} l.join(",") + "/" + typeof A;')).toBe('Class:A/function');
+});
+// The unclaimed-key error adjudicates these programs' keys, and none of these
+// tests is ABOUT the metadata protocol, so each waives adjudication through the
+// base-form route: a meta registered against the base speaks for every key of
+// its parameterizations. The interning and carrying assertions are untouched.
+const waive = 'meta float32 { default = {}; subtype(a, b) { return true; } } meta float64 { default = {}; subtype(a, b) { return true; } } ';
+
+
+// -- primitive metadata: parses and interns, does not carry/validate -----------

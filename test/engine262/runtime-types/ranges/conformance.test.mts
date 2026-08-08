@@ -261,8 +261,8 @@ test('sec-ranges: DIVERGENCE - the explicit three-argument spelling is compared 
   // ordinal, so the static comparison skips it and only runtime membership
   // decides.
   //
-  // DIVERGENCE (plan item F1, the last of R2b). The rejection is correct, just
-  // late - and the alias spelling, which ranges.md prefers anyway, is early.
+  // DIVERGENCE: the rejection is correct, just late - and the alias spelling,
+  // which ranges.md prefers anyway, is early.
   expect(evaluated('if (false) { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } "ran";')).toBe('ran');
   expect(evaluated('let k="admitted"; try { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } catch(e){ k="threw"; } k;')).toBe('threw');
 });
@@ -342,7 +342,7 @@ test('sec-ranges: DIVERGENCE - `scale` is present on every range, not only where
   //  scalar multiplication, which an ordering does not imply: a range over
   //  `Temporal.Instant` has an order and no arithmetic, and has no `scale`."
   //
-  // DIVERGENCE (D6): `scale` is unconditional. Vacuous today, because every
+  // DIVERGENCE: `scale` is unconditional. Vacuous today, because every
   // range is over Number (see the element-type test below), and it stops being
   // vacuous the moment an ordering-only element type is admitted.
   expect(evaluated('String(typeof (0..<3).scale);')).toBe('function');
@@ -455,7 +455,7 @@ test('sec-ranges: DIVERGENCE - `Range.of` is declared by the design and absent f
   // ranges.md declares `static of<T, S: Bound, E: Bound>(start, end)`, which is
   // the only way to construct a range in code generic over its bounds.
   //
-  // DIVERGENCE (F5): not implemented. Blocked on `Bound` (D4).
+  // DIVERGENCE: not implemented. Blocked on `Range.Bound`.
   expect(evaluated('String(typeof Range.of);')).toBe('undefined');
 });
 
@@ -464,10 +464,10 @@ test('sec-ranges: DIVERGENCE - `Range.of` is declared by the design and absent f
 // =============================================================================
 
 test('random.md: a range bound is consumed rather than ignored', () => {
-  // Before R1 the single argument fell through to the ordinary `Math.random()`,
-  // which takes none: a written bound was DROPPED and the call answered with a
-  // draw from [0, 1). Silently wrong is worse than unimplemented, which is why
-  // this row exists even though the form is the feature and not the defect.
+  // Falling through to the ordinary `Math.random()`, which takes none, would
+  // DROP a written bound and answer with a draw from [0, 1). Silently wrong is
+  // worse than unimplemented, which is why this row exists even though the form
+  // is the feature and not the defect.
   expect(evaluated('let ok = true; for (let i = 0; i < 400; i += 1) { const v = Number(Math.random.<uint8>(1..=6)); if (v < 1 || v > 6) ok = false; } String(ok);')).toBe('true');
 });
 
@@ -631,7 +631,7 @@ test('ranges.md: DIVERGENCE - the range index operator awaits the view substrate
   //  range form should be the one people write" - and it produces a VIEW, which
   //  is the whole of why it is an operator rather than a method.
   //
-  // DIVERGENCE (plan item F3). Neither `window` nor any view type exists, so the
+  // DIVERGENCE: neither `window` nor any view type exists, so the
   // operator cannot. What it must NOT do meanwhile is what it did: a range
   // coerced to a property key is a string no object has, so `a[1..<3]` answered
   // *undefined* - a quiet non-answer to a question the language will answer.
@@ -947,8 +947,8 @@ test('sec-meta-declarations: a meta default may hold a range, and a pattern', ()
   // range's endpoints are internal slots behind prototype accessors - so a
   // default holding one snapshotted as an EMPTY record and the declaration was
   // rejected. Carried structurally now, in the same markers the metadata value
-  // language uses, which fixes the pattern case the code had already pinned as
-  // failing for the identical reason.
+  // language uses, which is the same fix the pattern case needs, for the
+  // identical reason.
   expect(evaluated('type X = { bounds: RangeBounds }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";')).toBe('ok');
   expect(evaluated('type X = { p: RegExp }; meta X { default = { p: /x/ }; subtype(a,b){return true;} } "ok";')).toBe('ok');
   // primitivemetadata.md's own total default, the one adopted so that no hook
@@ -959,9 +959,8 @@ test('sec-meta-declarations: a meta default may hold a range, and a pattern', ()
 });
 
 test('sec-metadata-narrowing: both hooks the protocol defines are now invoked', () => {
-  // R5 asked the engine to call `narrow` and `rescale`, which it called neither
-  // of. Both are called now, and each is pinned by its own rows: the narrowing
-  // rows above, and the conversion row below.
+  // Both `narrow` and `rescale` have to be called, and each is asserted by its
+  // own rows: the narrowing rows above, and the conversion row below.
   //
   // `rescale` translates a constraint across a unit conversion -
   // sec-metadata-conversion: "`rescale` on the portions that flow, so a bound

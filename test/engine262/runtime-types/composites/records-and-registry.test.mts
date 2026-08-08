@@ -105,13 +105,13 @@ test('CANONICALIZATION: a stored zero is the class representative', () => {
 
 test('what a record composite is not', () => {
   // A TUPLE composite is a separate kind, and the two never collide because
-  // the intern key includes the KIND. composite-tuples.test.mts owns it.
+  // the intern key includes the KIND. tuples.test.mts owns it.
   expect(evaluated('String(Composite([1, 2]) === Composite({ 0: 1, 1: 2 }));')).toBe('false');
   // A shape can be NAMED by a composite TYPE; creating at one is the TYPED
   // CREATION form `Composite.<T>({...})`, which typed-creation.test.mts owns.
   expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
   // The weak-position refusal and the custom matcher are integrations;
-  // composite-integrations.test.mts owns them.
+  // integrations.test.mts owns them.
   expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('TypeError');
   expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('symbol');
 });

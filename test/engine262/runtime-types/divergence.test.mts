@@ -3,7 +3,7 @@ import { Diverges } from '../../../src/type-system/divergence.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * PLAN-do-expressions.md phase 0: divergence, per #sec-divergence.
+ * Spec: #sec-divergence (Divergence).
  *
  * A statement DIVERGES when no path of control through it completes normally.
  * The clause is owed to `switch` and to `match` rather than to do expressions -
@@ -11,10 +11,10 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * README's switch chapter defines it - and nothing in this engine computed it,
  * so CompletionTypeOf had nothing to call.
  *
- * It is tested directly rather than through a script because it has no
- * consumers yet: phase 4 gives it to CompletionTypeOf. That is also the honest
- * way to test it, since what it computes is a property of a Parse Node and not
- * an observable of a program.
+ * It is tested directly at the module rather than through a script, since what
+ * it computes is a property of a Parse Node and not an observable of a program;
+ * CompletionTypeOf is its consumer, and do-expressions.test.mts covers that
+ * side.
  *
  * The analysis is SYNTACTIC, and the tests below are written to pin that: a
  * `while (cond)` does not diverge however plainly the reader can see that
@@ -161,7 +161,7 @@ test('a break targeting the infinite loop stops it diverging', () => {
 
   // A break inside a function expression cannot cross the boundary, so the
   // loop still diverges. (The inner break is a Syntax Error in a real program;
-  // what is pinned is that the walk does not follow it out.)
+  // what is asserted is that the walk does not follow it out.)
   expect(diverges('while (true) { const f = function () { while (c) { break; } }; }')).toBe(true);
 });
 

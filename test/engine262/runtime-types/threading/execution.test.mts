@@ -124,8 +124,8 @@ test('callThread: arguments are forwarded', () => {
   expect(h.evaluate('log.join(",")')).toBe('sum 5');
 });
 
-// -- D1: a reaction runs on the thread that created it --------------------------
-test('D1 scheduling: a reaction created on main runs on main, though a thread settles it', () => {
+// -- A reaction runs on the thread that created it -------------------------------
+test('scheduling: a reaction created on main runs on main, though a thread settles it', () => {
   // This is the decision the whole scheduling clause turns on. The spawned thread
   // settles both promises; neither reaction may run there.
   const h = makeCluster(`
@@ -142,7 +142,7 @@ test('D1 scheduling: a reaction created on main runs on main, though a thread se
   ]);
 });
 
-test('D1 scheduling: the callThread handle is not a special case', () => {
+test('scheduling: the callThread handle is not a special case', () => {
   // The handle settles on the spawning thread for the same reason every other
   // promise does - its reactions were created there - so the clause needs no
   // carve-out for it. Attaching to the same handle from the thread would run
@@ -156,8 +156,8 @@ test('D1 scheduling: the callThread handle is not a special case', () => {
   expect(attributed).toContain('attached on main @ MAIN');
 });
 
-// -- D6: lifetime ---------------------------------------------------------------
-test('D6 lifetime: a thread drains its own microtasks before its result is observed', () => {
+// -- Lifetime --------------------------------------------------------------------
+test('lifetime: a thread drains its own microtasks before its result is observed', () => {
   // #sec-createthread drains the thread's queue before posting the settlement, so
   // everything the thread did - trailing microtasks included - happens-before the
   // spawner observes the result.
@@ -173,7 +173,7 @@ test('D6 lifetime: a thread drains its own microtasks before its result is obser
     .toBeLessThan(attributed.indexOf('spawner observes result @ MAIN'));
 });
 
-test('D6 lifetime: the thread is removed from the cluster when it ends', () => {
+test('lifetime: the thread is removed from the cluster when it ends', () => {
   const h = makeCluster(`
     function body() { return 1; }
     body.callThread();
@@ -183,8 +183,8 @@ test('D6 lifetime: the thread is removed from the cluster when it ends', () => {
   expect(h.cluster.agents.length).toBe(1);
 });
 
-// -- D6: an async thread function -----------------------------------------------
-test('D6 lifetime: an async thread function runs past its first await', () => {
+// -- An async thread function ----------------------------------------------------
+test('lifetime: an async thread function runs past its first await', () => {
   // #sec-createthread adopts a thenable result. Without the adoption the handle
   // settles with the PROMISE the async function returned the moment it suspended,
   // and the thread is removed while still holding work - so the body past the
@@ -197,7 +197,7 @@ test('D6 lifetime: an async thread function runs past its first await', () => {
   expect(h.evaluate('log.join(",")')).toBe('before await,after await,handle 42');
 });
 
-test('D6 lifetime: an async thread function that throws after an await rejects the handle', () => {
+test('lifetime: an async thread function that throws after an await rejects the handle', () => {
   const h = makeCluster(`
     async function body() { await null; throw new TypeError('boom'); }
     body.callThread().catch(e => { log.push('rejected ' + e.message); });
@@ -206,7 +206,7 @@ test('D6 lifetime: an async thread function that throws after an await rejects t
   expect(h.evaluate('log.join(",")')).toBe('rejected boom');
 });
 
-test('D6 lifetime: a plain thenable result is adopted too', () => {
+test('lifetime: a plain thenable result is adopted too', () => {
   // Not only async functions: the clause says a thenable, and a hand-rolled one
   // is a thenable.
   const h = makeCluster(`
@@ -217,7 +217,7 @@ test('D6 lifetime: a plain thenable result is adopted too', () => {
   expect(h.evaluate('log.join(",")')).toBe('got adopted');
 });
 
-test('D6 lifetime: the thread is still removed once an adopted result settles', () => {
+test('lifetime: the thread is still removed once an adopted result settles', () => {
   const h = makeCluster(`
     async function body() { await null; return 1; }
     body.callThread();
@@ -227,7 +227,7 @@ test('D6 lifetime: the thread is still removed once an adopted result settles', 
   expect(h.cluster.agents.length).toBe(1);
 });
 
-test('D2 cancellation: an abort wakes a wait parked inside an async thread', () => {
+test('cancellation: an abort wakes a wait parked inside an async thread', () => {
   // The last checkpoint of #sec-thread-cancellation, and the one that needed both
   // the adoption above (so the thread is still alive to be woken) and the
   // ordering that lets a delivered abort unwind rather than abandoning the
@@ -280,8 +280,8 @@ test('callThread works in a host that configured no cluster', () => {
   expect(evaluate('String(out)')).toBe('resolved 7');
 });
 
-// -- D8: the options bag --------------------------------------------------------
-test('D8 options: an ordinary first argument is forwarded, not read as a bag', () => {
+// -- The options bag -------------------------------------------------------------
+test('options: an ordinary first argument is forwarded, not read as a bag', () => {
   const h = makeCluster(`
     function body(o) { return o.value; }
     body.callThread({ value: 9 }).then(v => { log.push('got ' + v); });
@@ -290,7 +290,7 @@ test('D8 options: an ordinary first argument is forwarded, not read as a bag', (
   expect(h.evaluate('log.join(",")')).toBe('got 9');
 });
 
-test('D8 options: an empty object is taken as an explicit bag', () => {
+test('options: an empty object is taken as an explicit bag', () => {
   const h = makeCluster(`
     function body(...args) { return args.length; }
     body.callThread({}).then(v => { log.push('args ' + v); });
@@ -299,7 +299,7 @@ test('D8 options: an empty object is taken as an explicit bag', () => {
   expect(h.evaluate('log.join(",")')).toBe('args 0');
 });
 
-test('D8 options: a declared first parameter that admits the object wins over the bag rule', () => {
+test('options: a declared first parameter that admits the object wins over the bag rule', () => {
   // #sec-classifythreadarguments step 4, and the distinctive step of the whole
   // rule: the ambiguity untyped JavaScript cannot resolve, a signature resolves.
   const h = makeCluster(`
@@ -310,7 +310,7 @@ test('D8 options: a declared first parameter that admits the object wins over th
   expect(h.evaluate('log.join(",")')).toBe('got 3');
 });
 
-test('D8 options: the signature overrides even the empty-object bag', () => {
+test('options: the signature overrides even the empty-object bag', () => {
   // Step 4 precedes step 5, so a callee that asks for an object gets the empty
   // object as its argument rather than losing it to an explicit empty bag.
   const h = makeCluster(`
@@ -321,7 +321,7 @@ test('D8 options: the signature overrides even the empty-object bag', () => {
   expect(h.evaluate('log.join(",")')).toBe('received-object');
 });
 
-test('D8 options: a declared first parameter that refuses the object leaves it a bag', () => {
+test('options: a declared first parameter that refuses the object leaves it a bag', () => {
   const h = makeCluster(`
     function body(n: uint8 = 0) { return n; }
     body.callThread({}).then(v => { log.push('n=' + v); });
@@ -330,7 +330,7 @@ test('D8 options: a declared first parameter that refuses the object leaves it a
   expect(h.evaluate('log.join(",")')).toBe('n=0');
 });
 
-test('D8 options: any signature of an overloaded callee suffices', () => {
+test('options: any signature of an overloaded callee suffices', () => {
   // "a signature whose first parameter admits first" - one is enough. An
   // overloaded callee that can receive the object in at least one of its shapes
   // is a callee the program meant to hand it to; picking among the shapes is
@@ -344,8 +344,8 @@ test('D8 options: any signature of an overloaded callee suffices', () => {
   expect(h.evaluate('log.join(",")')).toBe('got-object');
 });
 
-// -- D2: cancellation -----------------------------------------------------------
-test('D2 cancellation: an already-aborted signal rejects without spawning a thread', () => {
+// -- Cancellation ----------------------------------------------------------------
+test('cancellation: an already-aborted signal rejects without spawning a thread', () => {
   const h = makeCluster(`
     globalThis.c = new AbortController();
     c.abort('too late');
@@ -358,7 +358,7 @@ test('D2 cancellation: an already-aborted signal rejects without spawning a thre
   expect(h.evaluate('log.join(",")')).toBe('rejected: too late');
 });
 
-test('D2 cancellation: aborting before the thread runs abandons its work and rejects', () => {
+test('cancellation: aborting before the thread runs abandons its work and rejects', () => {
   const h = makeCluster(`
     globalThis.c = new AbortController();
     function body() { log.push('body ran'); }
@@ -370,7 +370,7 @@ test('D2 cancellation: aborting before the thread runs abandons its work and rej
   expect(h.evaluate('log.join(",")')).toBe('rejected: stop');
 });
 
-test('D2 cancellation: a signal that is never aborted changes nothing', () => {
+test('cancellation: a signal that is never aborted changes nothing', () => {
   const h = makeCluster(`
     globalThis.c = new AbortController();
     function body() { log.push('body ran'); return 1; }
@@ -380,7 +380,7 @@ test('D2 cancellation: a signal that is never aborted changes nothing', () => {
   expect(h.evaluate('log.join(",")')).toBe('body ran,resolved 1');
 });
 
-test('D2 cancellation: aborted state is readable from another thread', () => {
+test('cancellation: aborted state is readable from another thread', () => {
   // "A computation with no suspension point is cancelled cooperatively, by reading
   // the signal's aborted state, which crosses threads because the signal is an
   // object of the shared heap." The thread reads the same object main aborted.
@@ -394,7 +394,7 @@ test('D2 cancellation: aborted state is readable from another thread', () => {
   expect(h.evaluate('log.join(",")')).toBe('sees aborted=true,resolved 1');
 });
 
-test('D8/D2: an object whose `signal` is not an AbortSignal is an argument, not a bag', () => {
+test('an object whose `signal` is not an AbortSignal is an argument, not a bag', () => {
   // Step 6 of #sec-classifythreadarguments tests the BRAND, so an object carrying
   // something else under `signal` is not a bag at all. It is forwarded.
   const h = makeCluster(`
@@ -405,7 +405,7 @@ test('D8/D2: an object whose `signal` is not an AbortSignal is an argument, not 
   expect(h.evaluate('log.join(",")')).toBe('arg:object');
 });
 
-test('D2 cancellation: an inherited non-AbortSignal `signal` is a TypeError', () => {
+test('cancellation: an inherited non-AbortSignal `signal` is a TypeError', () => {
   // The one path that reaches callThread's validation step. Classification counts
   // OWN keys, so an object with none is an explicit empty bag; extraction then
   // uses Get, which walks the prototype chain and finds the inherited value. An

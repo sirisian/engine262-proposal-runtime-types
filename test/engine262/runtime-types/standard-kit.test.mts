@@ -2,20 +2,19 @@ import { test } from 'vitest';
 import { expectBuilderTrue } from './corpus/type-challenges/harness.mts';
 
 /**
- * Phase 4 - the std:types builder kit.
- * Source: proposal spec, the standard-kit annex.
+ * Spec: #annex-standard-kit - the std:types builder kit.
  *
  * The spec is explicit that the kit is "roughly two hundred lines of ordinary
  * evaluable code" over the core primitives, ships as source, and "a codebase
  * that cannot assume the module can polyfill it verbatim" - no engine magic. So
  * the kit is not built as engine intrinsics; it is written HERE as source over
- * the primitives now in place (keyof from Phase 2; getReflection, makeType,
- * isAssignable from Phase 3/4), exactly as the spec's own definitions are, e.g.
+ * the core primitives (keyof, getReflection, makeType, isAssignable), exactly
+ * as the specification's own definitions are, e.g.
  *   export function partial(T) { return mapProperties(T, p => ({ ...p, optional: true })); }
  *
- * getReflection was implemented this phase as the enabling primitive: it is the
- * read side (the inverse of makeType), without which mapProperties/arms/keysOf
- * and most of the kit cannot be expressed. The round trip
+ * getReflection is the enabling primitive: it is the read side (the inverse of
+ * makeType), without which mapProperties/arms/keysOf and most of the kit cannot
+ * be expressed. The round trip
  * makeType(getReflection(T)) === T is verified in phase4-reflection below.
  *
  * The kit's obligation, per the spec: "Where the kit and the core describe one

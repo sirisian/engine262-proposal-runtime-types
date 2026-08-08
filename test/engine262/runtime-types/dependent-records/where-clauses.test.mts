@@ -150,3 +150,22 @@ test('functions without where clauses are unaffected', () => {
   // The dependent-record-type form, which already worked, still does.
   expect(evaluated('type R = { a?: uint32, b?: uint32 } where (this.a != null) == (this.b != null); "ok";')).toBe('ok');
 });
+
+// -- A where clause at a boundary, through the alias -----------------------------
+
+test('dependent records: a where clause makes the alias a dependent record type', () => {
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; typeof Pos;')).toBe('object');
+  // A where clause gives the alias declaration identity, so it resolves to a
+  // nominal type (which reflects as 'primitive', as every nominal type does)
+  // rather than the transparent structural object a plain alias resolves to.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('primitive');
+  expect(evaluated('type Plain = { a: uint8 }; Reflect.getReflection(Plain).kind;')).toBe('object');
+});
+
+test('dependent records: the where predicate is enforced at a boundary', () => {
+  // A value satisfying the predicate is accepted; one violating it is rejected.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (5 := uint8) }; String(p.a);')).toBe('5');
+  expectThrown('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (0 := uint8) }; p.a;');
+});
+
+// -- Temporal: not exposed here ------------------------------------------------

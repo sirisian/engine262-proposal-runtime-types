@@ -33,7 +33,7 @@ test('arithmetic and reduction', () => {
   expect(evaluated('const a = float32x4(1, 2, 3, 4); String(a.sum());')).toBe('10');
 });
 
-// -- phase 1: equality comparisons -------------------------------------------
+// -- Equality comparisons --------------------------------------------------------
 /**
  * A comparison between vectors of one shape yields one lane per input lane, and
  * equality is a comparison like any other - Intel's `_mm_cmpeq_epi32` beside
@@ -79,7 +79,7 @@ test('the comparison rules around equality are unchanged', () => {
   expect(evaluated('String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 4));')).toBe('false');
 });
 
-// -- phase 2: mask consumers --------------------------------------------------
+// -- Mask consumers --------------------------------------------------------------
 /**
  * A comparison produces a mask in two shapes: the COMPACT one, a lane per input
  * lane and one bit per lane, and the WIDE one, a lane of the boolean type of
@@ -122,7 +122,7 @@ test('the compact mask and non-masks are unchanged', () => {
   expect(evaluated(`${M}String(m.xyxy.x.all()) + "," + String(m[2].any());`)).toBe('true,false');
 });
 
-// -- phase 3: the remaining comparison result forms ---------------------------
+// -- The remaining comparison result forms ---------------------------------------
 /**
  * Three results are defined: the wide mask, the compact mask (a bit vector of
  * one bit per lane), and the compared vector type itself with its matching
@@ -175,7 +175,7 @@ test('adding the forms did not weaken the selection rules', () => {
   expectThrown(`const m: float64x2 = ${C};`);
 });
 
-// -- phase 4: negation and the lane-wise Math surface -------------------------
+// -- Negation and the lane-wise Math surface -------------------------------------
 test('negation applies lane-wise and keeps the vector type', () => {
   expect(evaluated('const v = -float32x4(1, 2, 3, 4); String(v.x) + "," + String(v.w);')).toBe('-1,-4');
   expect(evaluated('const v = -int32x4(-1, 2, -3, 4); String(v.x) + "," + String(v.y);')).toBe('1,-2');
@@ -219,7 +219,7 @@ test('a scalar beside a vector broadcasts, and shapes must agree', () => {
   expect(evaluated('String(Math.sqrt(16)) + "," + String(Math.min(3, 5)) + "," + String(Math.sin(0));')).toBe('4,3,0');
 });
 
-// -- phase 5: 64-bit lanes ----------------------------------------------------
+// -- 64-bit lanes ----------------------------------------------------------------
 /**
  * A 64-bit lane holds a Number, as `int64` does: BigInt literals keep the `n`
  * suffix and stay `bigint`, and an unsuffixed literal reaches `int64` by
@@ -267,7 +267,7 @@ test('a BigInt is not a 64-bit integer', () => {
   expectThrown('int64x2(1n, 2n);');
 });
 
-// -- phase 6: lane-type conversion --------------------------------------------
+// -- Lane-type conversion --------------------------------------------------------
 /**
  * A vector converts to another vector of the same lane COUNT by converting each
  * lane - the target's `cvtdq2ps` and `f32x4.convert_i32x4_s`.
@@ -305,7 +305,7 @@ test('the mask conversions are unaffected', () => {
     + ' String(m.any());')).toBe('true');
 });
 
-// -- phase 7: masked operations as inputs -------------------------------------
+// -- Masked operations as inputs -------------------------------------------------
 /**
  * Intel's masking is not only a RESULT form: nearly every arithmetic intrinsic
  * has a write-masked variant, whose untaken lanes are blended from a source, and
@@ -358,7 +358,7 @@ test('masked operations compose, and both arms are still evaluated', () => {
     + " m.select(f('set'), f('clear')); log;")).toBe('setclear');
 });
 
-// -- phase 8: the designed-but-unimplemented surface ---------------------------
+// -- The designed-but-unimplemented surface --------------------------------------
 /**
  * `README.md` states the checked and saturating forms are "overloaded for every
  * integer type", and an integer-lane vector is one. The scalar forms worked;
@@ -446,7 +446,7 @@ test('Math.rsqrt at the boundary values', () => {
   expect(evaluated('String(Math.rsqrt(float32x4(4, 16, 64, 256)).x);')).toBe('0.5');
 });
 
-// -- phase 8d: the remaining integer and reduction operations ------------------
+// -- The remaining integer and reduction operations ------------------------------
 /**
  * Each is one instruction on every target and each was absent. `Math.clz` was
  * already here and specified; these are its neighbours, and like it they take

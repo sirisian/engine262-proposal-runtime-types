@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { evaluated as evaluatedWithoutTemporal } from '../harness.mts';
 
 /**
  * Extension coverage - temporal.md, Temporal as a type source.
@@ -141,3 +142,15 @@ test('temporal: with the type system off, a comparison is an ordinary number', (
   expect(c.Type).toBe('normal');
   expect(c.Value.stringValue?.()).toBe('number:-1');
 });
+
+// -- Temporal is behind its own feature ---------------------------------------
+
+test('temporal: Temporal is a type source only where its feature is on', () => {
+  // Everything above runs with `temporal` enabled. With runtime-types alone,
+  // the binding does not exist at all - so a program that names a Temporal type
+  // is not quietly untyped, it does not resolve.
+  expect(evaluated('typeof Temporal;')).toBe('object');
+  expect(evaluatedWithoutTemporal('typeof Temporal;')).toBe('undefined');
+});
+
+// -- structuredClone: base-engine absence --------------------------------------

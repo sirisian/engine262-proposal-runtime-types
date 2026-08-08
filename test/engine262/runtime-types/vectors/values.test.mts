@@ -2,11 +2,11 @@ import { test, expect } from 'vitest';
 import { ok, evaluated, expectThrown } from '../harness.mts';
 
 /**
- * PLAN-simd-engine.md phase 1: vector values.
+ * Spec: #sec-vector-types (Vector Types), #sec-vector-widths. Design: simd.md.
  *
- * Before this the SIMD surface was types without values - `vector.<T, N>` and
- * every shorthand resolved in an annotation and nothing could be built, so no
- * operation could be tested. A vector is a value type whose values are "the
+ * Vector VALUES. Without them the SIMD surface is types alone - `vector.<T, N>`
+ * and every shorthand resolve in an annotation and nothing can be built, so no
+ * operation is testable. A vector is a value type whose values are "the
  * sequences of N values of T" (#sec-vector-types), and it carries the Type
  * Record it was built at, since the lane type and count are not recoverable
  * from the lanes alone: `float32x4(1, 2, 3, 4)` and `int32x4(1, 2, 3, 4)` hold
@@ -27,8 +27,8 @@ test('a vector constructs from its lanes', () => {
   // A non-shorthand width, through a type alias. `vector` itself is not a
   // binding - only the shorthand names are bound - so the long form is written
   // in an annotation or aliased rather than called directly. Binding `vector`
-  // would make it callable as `vector.<float32, 3>(1, 2, 3)` and is phase 2's
-  // to decide, since it is the same question the broadcast cast raises.
+  // would make it callable as `vector.<float32, 3>(1, 2, 3)`, which is the same
+  // question the broadcast cast raises.
   expect(evaluated('type F3 = vector.<float32, 3>; String(F3(1, 2, 3));')).toBe('(1, 2, 3)');
 });
 
@@ -67,7 +67,7 @@ test('typeof a vector is object', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 2: lane access.
+ * Lane access: #sec-vector-lanes.
  *
  * #sec-vector-lanes gives a vector two ways to reach a lane, and they differ in
  * WHEN the lane is chosen. A computed access takes an expression, so no static
@@ -152,8 +152,7 @@ test('a written lane converts to the lane type', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 2, the broadcast: attempted, reverted, and located
- * more precisely than a stack trace would have shown.
+ * The broadcast: attempted, reverted, and located.
  *
  * #sec-vector-lanes says `vector.<T, N>` declares a cast operator from T, so
  * `let b: float32x4 = s` for a `float32` s should broadcast. The CONVERSION is
@@ -269,7 +268,7 @@ test('the bit conversion does not disturb an ordinary broadcast', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 3: permutation, #sec-vector-permutation.
+ * Permutation: #sec-vector-permutation.
  *
  * `swizzle` names a lane of the receiver for each lane of its result;
  * `shuffle` draws from two sources, where an index below N selects the
@@ -328,8 +327,7 @@ test('shuffle requires a source of the receiver type', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 4: component accessors,
- * #sec-vector-component-accessors.
+ * Component accessors: #sec-vector-component-accessors.
  *
  * Five rules decide what an accessor IS - at most four lanes, one to four
  * characters, every character from ONE set, every character's index below the
@@ -337,8 +335,9 @@ test('shuffle requires a source of the receiver type', () => {
  * character and an L-lane vector for L, and an accessor naming no lane twice is
  * assignable while one naming a lane twice is not.
  *
- * They desugar to phase 2 and phase 3: `v.x` is `v.lane.<0>()` and `v.xzzw` is
- * `v.swizzle.<0, 2, 2, 3>()`, which is why this phase follows both.
+ * They desugar to lane access and permutation: `v.x` is `v.lane.<0>()` and
+ * `v.xzzw` is `v.swizzle.<0, 2, 2, 3>()`, which is why this section follows
+ * both.
  */
 
 test('the two name sets reach the same lanes', () => {
@@ -434,8 +433,8 @@ test('`in` and Reflect.get refuse a vector as they refuse a string', () => {
 });
 
 /**
- * PLAN-simd-engine.md phases 4b and 5: lane-wise arithmetic, comparisons, and
- * the operations that consume a mask.
+ * Lane-wise arithmetic, comparisons, and the operations that consume a mask:
+ * #sec-vector-lane-wise-math, #sec-vector-comparisons, #sec-vector-masks.
  *
  * Arithmetic is what the rest of the surface is FOR - the design's own dot
  * product is `(a * b).sum()`, so an engine with swizzle and sum and no `*`
@@ -500,7 +499,7 @@ test('a mask is an ordinary vector', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 6: wrapping, #sec-vector-wrapping.
+ * Wrapping: #sec-vector-wrapping.
  *
  * The clause adds no rule - it states a consequence of the ones for aliases and
  * classes, and is stated because it decides a design question simd.md poses. A
@@ -598,11 +597,11 @@ test('an unannotated comparison is a type error', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 7: the interactions.
+ * The interactions.
  *
- * A vector meets the rest of the language wherever a value type does, and these
- * are the places the plan named. Most needed nothing - the earlier phases gave
- * a vector everything it needs to be an ordinary value - which is the useful
+ * A vector meets the rest of the language wherever a value type does. Most of
+ * these need nothing of their own - the sections above give a vector everything
+ * it needs to be an ordinary value - which is the useful
  * result rather than a disappointing one.
  */
 
@@ -628,15 +627,15 @@ test('a vector is not iterable', () => {
 });
 
 /**
- * PLAN-simd-engine.md phase 6b: simd.md's Instructions table, as a checklist.
+ * simd.md's Instructions table, as a checklist.
  *
  * That table lists eleven expressions against their x86 and AArch64 encodings.
  * It is informative - this engine compiles none of them - but it is the
  * DESIGN'S OWN ENUMERATION of what a vector is for, so every row should run.
  * All eleven do.
  *
- * Reading it as a checklist rather than as prose is what found lane-wise
- * arithmetic missing from the plan entirely, and `v.xxxx` missing from phase 4.
+ * Reading it as a checklist rather than as prose is what finds a missing
+ * operation: lane-wise arithmetic, and `v.xxxx` among the accessors.
  */
 
 test("every expression in the design's instruction table runs", () => {

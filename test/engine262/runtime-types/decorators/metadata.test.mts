@@ -247,13 +247,13 @@ test('what bounds a symbol-keyed metadata member', () => {
   // The interface member walk EVALUATES a
   // computed key instead of dropping it, so a Symbol-keyed member is a REAL
   // member: its presence is required, and a second declaration of it is the
-  // conflict a string-keyed one is. symbol-metadata-keys.test.mts owns those.
+  // conflict a string-keyed one is; the Symbol-keyed section below owns those.
   //
   // The checker judges a symbol-keyed member too, by the
   // minted key of the `const` its computed name resolves to. What bounds BOTH
   // key kinds is the checker's reach - a wrong store it cannot see is accepted
-  // with a string key as much as a symbol one. See symbol-literal-keys.test.mts
-  // and symbol-metadata-keys.test.mts.
+  // with a string key as much as a symbol one. See type-universe/literal-types.test.mts
+  // and the Symbol-keyed section below.
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
   expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');

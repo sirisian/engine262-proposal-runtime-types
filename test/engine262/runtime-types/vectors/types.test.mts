@@ -2,10 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Vector types: vector.<T, N> well-formedness.
+ * Spec: #sec-vector-types (Vector Types) - `vector.<T, N>` well-formedness.
  *
  * `vector.<T, N>` is a core value type whose values are the sequences of exactly N
- * values of the lane type T (spec sec-vector-types). It is well-formed when T is a
+ * values of the lane type T. It is well-formed when T is a
  * lane type, meaning an integer type, a binary floating-point type, or itself a
  * vector type, and N is a positive integer. A vector whose lane type is not a lane
  * type, or whose lane count is not a positive integer, is a type error at the point
@@ -61,3 +61,40 @@ test('with the feature off, vector type syntax is not part of the language', () 
   expect(c.Type).toBe('normal');
   expect(c.Value.stringValue?.()).toBe('5');
 });
+
+// -- The named lane types --------------------------------------------------------
+
+test('simd: the shorthand names abbreviate the register-width vectors', () => {
+  // memorylayout.md's own example: a SIMD vector aligns to its whole width rather
+  // than the capped natural rule, since the register is addressed that way
+  expect(evaluated('type V = float32x4; String(V.byteLength);')).toBe('16');
+  expect(evaluated('type V = float32x4; String(V.alignment);')).toBe('16');
+  // a shorthand is an alias, not a new type
+  expect(evaluated('type A = float32x4; type B = vector.<float32, 4>; (A === B) ? "same" : "diff";')).toBe('same');
+  // the 128 bit and 256 bit families
+  expect(evaluated('type V = int8x16; String(V.byteLength);')).toBe('16');
+  expect(evaluated('type V = uint64x2; String(V.byteLength);')).toBe('16');
+  expect(evaluated('type V = float32x8; String(V.byteLength);')).toBe('32');
+  expect(evaluated('type V = int64x4; String(V.byteLength);')).toBe('32');
+});
+
+test('simd: a bit vector packs its lanes as bits', () => {
+  // eight one-bit lanes in a single byte, which is what makes boolean8 a usable
+  // bitfield rather than a name for a byte
+  expect(evaluated('type V = boolean8; String(V.byteLength);')).toBe('1');
+  expect(evaluated('type V = boolean64; String(V.byteLength);')).toBe('8');
+  // and a vector of those still fills its register
+  expect(evaluated('type V = boolean32x4; String(V.byteLength);')).toBe('16');
+  expect(evaluated('type V = boolean8x16; String(V.byteLength);')).toBe('16');
+});
+
+test('simd: a name exists only where the lanes fill a register', () => {
+  // float32x4 has a name and a three lane float vector does not
+  expectThrown('type V = float32x3; V;');
+  expectThrown('type V = float32x5; V;');
+  expectThrown('type V = uint8x8; V;');
+  // the long form still validates its lane type
+  expectThrown('type V = vector.<string, 4>; V;');
+});
+
+// -- primitive metadata: carrying a metadata parameterization --------------------

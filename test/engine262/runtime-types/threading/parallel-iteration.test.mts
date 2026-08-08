@@ -40,7 +40,7 @@ test('parallelReduce: an empty range is the initial value', () => {
   expect(evaluated('String(Thread.parallelReduce(3, 3, 42, (a, i) => a + i, (a, b) => a + b));')).toBe('42');
 });
 
-test('D7 parallelReduce: the same range and callbacks give the same value', () => {
+test('parallelReduce: the same range and callbacks give the same value', () => {
   // The determinism guarantee. A partition fixed by (begin, end) alone plus
   // combining in ascending slice order is the whole of it, and it holds although
   // floating-point addition - the case the operation exists for - is not
@@ -53,7 +53,7 @@ test('D7 parallelReduce: the same range and callbacks give the same value', () =
   `)).toBe('true');
 });
 
-test('D7 parallelReduce: the partition is visible, so a non-associative combine is not the sequential fold', () => {
+test('parallelReduce: the partition is visible, so a non-associative combine is not the sequential fold', () => {
   // Worth pinning: the answer really is per-slice partials combined, not a
   // left-to-right fold over every element with the parallel API's clothes on. A
   // combine that ignores its left operand exposes the difference.
@@ -64,8 +64,8 @@ test('D7 parallelReduce: the partition is visible, so a non-associative combine 
   `)).toBe('true');
 });
 
-// -- D7: the error policy -------------------------------------------------------
-test('D7 errors: the lowest-numbered failing slice is the one reported', () => {
+// -- The error policy ------------------------------------------------------------
+test('errors: the lowest-numbered failing slice is the one reported', () => {
   // "That is the completion a sequential execution would have produced, since a
   // sequential execution reaches the lowest failing index first and stops there."
   expect(evaluated(`
@@ -76,7 +76,7 @@ test('D7 errors: the lowest-numbered failing slice is the one reported', () => {
   `)).toBe('at 20');
 });
 
-test('D7 errors: slices below the failing one finish, those above are cancelled', () => {
+test('errors: slices below the failing one finish, those above are cancelled', () => {
   expect(evaluated(`
     var ran = 0;
     try { Thread.parallelFor(0, 100, (i) => { ran += 1; if (i === 50) { throw new Error('boom'); } }); }
@@ -85,7 +85,7 @@ test('D7 errors: slices below the failing one finish, those above are cancelled'
   `)).toBe('true/true');
 });
 
-test('D7 errors: parallelReduce follows the same rule', () => {
+test('errors: parallelReduce follows the same rule', () => {
   expect(evaluated(`
     var message = '';
     try { Thread.parallelReduce(0, 100, 0, (acc, i) => { if (i === 80 || i === 10) { throw new Error('at ' + i); } return acc + i; }, (a, b) => a + b); }
@@ -94,12 +94,12 @@ test('D7 errors: parallelReduce follows the same rule', () => {
   `)).toBe('at 10');
 });
 
-test('D7 errors: a throwing combine propagates', () => {
+test('errors: a throwing combine propagates', () => {
   expectThrownKind('Thread.parallelReduce(0, 100, 0, (a, i) => a + i, () => { throw new TypeError("combine"); });', 'TypeError');
 });
 
-// -- D4: it does not block ------------------------------------------------------
-test('D4: parallelFor is callable where a blocking operation would not be', () => {
+// -- It does not block -----------------------------------------------------------
+test('parallelFor is callable where a blocking operation would not be', () => {
   // The calling agent participates rather than parking, so a call never blocks in
   // the sense the synchronization clause uses - which is why it is legal on a
   // host's main thread, where a frame loop lives.
@@ -113,7 +113,7 @@ test('D4: parallelFor is callable where a blocking operation would not be', () =
   `)).toBe('true/45');
 });
 
-test('D4: a nested parallelFor runs rather than deadlocking', () => {
+test('a nested parallelFor runs rather than deadlocking', () => {
   // "a body that itself calls parallelFor cannot deadlock by exhausting the pool,
   // since the inner call participates on the same terms".
   expect(evaluated(`

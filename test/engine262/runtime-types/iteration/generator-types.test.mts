@@ -2,8 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-do-expressions.md phase 1: the generator types, per
- * #sec-generator-types.
+ * Spec: #sec-generator-types (Generator Types).
  *
  * Owed to the generator forms the core already parses rather than to do
  * expressions, and missing from this engine in the same way it was missing from

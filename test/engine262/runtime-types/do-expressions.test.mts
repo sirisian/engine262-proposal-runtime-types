@@ -4,10 +4,10 @@ import {
 } from './harness.mts';
 
 /**
- * PLAN-do-expressions.md phase 2 (the parser) and the plain form's evaluation,
- * per #sec-do-expressions and #sec-do-expression-early-errors.
+ * Spec: #sec-do-expressions (Do Expressions), #sec-do-expression-early-errors.
  *
- * The two landed together because the evaluator's dispatch is exhaustive: a new
+ * The parser and the plain form's evaluation, which cannot be separated: the
+ * evaluator's dispatch is exhaustive, so a new
  * PrimaryExpression that nothing evaluates does not typecheck, so a parser-only
  * commit was not available. The runtime half is small for the reason the plan
  * recorded - Evaluate_StatementList already threads UpdateEmpty exactly as the
@@ -115,7 +115,7 @@ test('async do without a star is not a form', () => {
 });
 
 /**
- * PLAN-do-expressions.md phase 3b: `do *`, per #sec-do-generator-expressions.
+ * `do *`: #sec-do-generator-expressions.
  *
  * A `do *` evaluates to a generator object, and the construction is a generator
  * function's with one difference that is the entire point of the form: the
@@ -166,10 +166,10 @@ test('async do * is an async generator', () => {
 });
 
 /**
- * PLAN-do-expressions.md phase 4: the checker, per #sec-completiontypeof.
+ * The checker: #sec-completiontypeof.
  *
- * The type is a union over the TAILS, with divergence - phase 0's analysis,
- * which until now had no caller - removing the paths that cannot produce one.
+ * The type is a union over the TAILS, with divergence - the analysis of
+ * divergence.test.mts - removing the paths that cannot produce one.
  */
 
 test('the type is the union over the tails', () => {
@@ -243,8 +243,7 @@ test('do * infers its Generator type', () => {
 });
 
 /**
- * PLAN-do-expressions.md phase 5: the decorator contexts, per
- * #sec-do-expression-modifications.
+ * The decorator contexts: #sec-do-expression-modifications.
  *
  * `DoBlock` and `DoGeneratorBlock` are two contexts rather than one with a
  * flag, because what the block IS differs - a block in one case and a generator
@@ -298,7 +297,8 @@ test('a do block decorator fires on every entry', () => {
 });
 
 /**
- * Two things phase 5 does NOT do, recorded rather than left to be discovered.
+ * Two things the decorator contexts do NOT do, recorded rather than left to be
+ * discovered.
  *
  * The RETURN REPLACEMENT is the new capability the design gives these two
  * contexts - a `DoBlock` decorator returning a value of the expression's type,
@@ -411,9 +411,9 @@ test('an unlabelled break may not appear in a do in a loop head', () => {
  */
 
 /**
- * The surfaces PLAN-do-expressions.md section 6.7 asks for, and the compositions section 6.8
- * does. All of these worked as soon as the forms did; none was pinned, which is
- * the difference between a behaviour that holds and one that is known to.
+ * The surfaces a do expression reaches, and the compositions it takes part in.
+ * All of these work as soon as the forms do; asserting them is the difference
+ * between a behaviour that holds and one that is known to.
  */
 
 test('async do * is an AsyncGenerator and is iterable with for await', () => {

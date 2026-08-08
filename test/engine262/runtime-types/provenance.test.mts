@@ -4,8 +4,8 @@ import {
 } from '#self';
 
 /**
- * proposal-runtime-types (spec, Provenance): the declaration sites a type came
- * from, carried beside the interned Type Object and never inside it.
+ * Spec: #sec-provenance (Provenance) - the declaration sites a type came from,
+ * carried beside the interned Type Object and never inside it.
  *
  * This is the channel structural typing makes necessary. `type A = { x: float64 }`
  * and `type B = { x: float64 }` intern to ONE Type Object, which is what lets two

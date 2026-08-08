@@ -219,7 +219,7 @@ test('Runtime.evaluate: the reported callThread example reads back its value', a
   expect(read?.result?.value).toBe(5);
 });
 
-// -- Phase 4: the edges ---------------------------------------------------------
+// -- The edges ---------------------------------------------------------------
 test('Runtime.evaluate: awaitPromise settles a promise result', async () => {
   // Distinct from the async-body settling above: here the body is synchronous
   // and its VALUE is a promise, which the caller has explicitly asked to have

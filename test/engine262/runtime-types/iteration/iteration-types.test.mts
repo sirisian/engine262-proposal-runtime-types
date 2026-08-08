@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { ok, evaluated } from '../harness.mts';
 
 /**
- * PLAN-iteration-types-engine.md phases 2 and 4, per #sec-iteration-types.
+ * Spec: #sec-iteration-types (Iteration Types).
  *
  * The relations below are DECLARED rather than inspected: a library type is an
  * opaque nominal here, its members held in side tables consulted at the
@@ -110,7 +110,7 @@ test('a class instance and a hand-written object both satisfy Iterator', () => {
 });
 
 /**
- * PLAN-iteration-types-engine.md phase 5: the helper surface.
+ * The helper surface.
  *
  * The helpers live on the `Iterator` class at run time and are reached here
  * from whatever the receiver's type is, because the receiver's static type is
@@ -167,7 +167,7 @@ test('the carrier does not displace the interface reading', () => {
 });
 
 /**
- * PLAN-iteration-types-engine.md phase 6: the interactions.
+ * The interactions.
  *
  * A type whose purpose is composition is proven by what it composes with. Each
  * of these worked untyped before; the assertions are that they still work and
@@ -265,9 +265,9 @@ test('an iterator composes with using', () => {
 });
 
 test('applying type arguments to a Type Object is not a no-op', () => {
-  // PLAN-higher-kinded-types.md phase 0. `Iterable.<uint8>` in EXPRESSION
-  // position evaluated to bare `Iterable`, so `Iterable === Iterable.<uint8>`
-  // was true and the arguments were silently discarded.
+  // `Iterable.<uint8>` in EXPRESSION position must not evaluate to bare
+  // `Iterable`: that would make `Iterable === Iterable.<uint8>` true and
+  // discard the arguments silently.
   //
   // The evaluation handled exactly one shape - a generic alias - and returned
   // the unapplied base for everything else. That the one handled shape behaved
@@ -301,7 +301,8 @@ test('applying type arguments to a Type Object is not a no-op', () => {
 });
 
 /**
- * PLAN-higher-kinded-types-engine.md phase 6: the unification.
+ * The unification of `Iterator` and `AsyncIterator`:
+ * #sec-higher-kinded-parameters.
  *
  * `Iterator` and `AsyncIterator` are one declaration differing in the wrapper
  * their results carry - `Iterator<T, R, N, W<_> = Identity>` synchronous,

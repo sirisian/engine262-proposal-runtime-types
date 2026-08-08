@@ -58,6 +58,6 @@ test('a shape must be NAMED at the creation site, not inferred', () => {
   // and code that means anything else should say so at the creation site".
   expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('TypeError');
   // The remedy is the TYPED CREATION form;
-  // composite-typed-creation.test.mts owns the assertions.
+  // typed-creation.test.mts owns the assertions.
   expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('true');
 });

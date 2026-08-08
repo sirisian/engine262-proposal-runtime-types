@@ -54,7 +54,7 @@ test('Lock: hold releases whether the callback returns or throws', () => {
   expect(h.log()).toBe('propagated | reacquired');
 });
 
-test('D3 Lock: acquiring a Lock the agent already holds is a TypeError', () => {
+test('Lock: acquiring a Lock the agent already holds is a TypeError', () => {
   // A blocking self-acquire is a CERTAIN deadlock - the agent that would have to
   // release is the agent now parked - so it throws rather than hanging.
   const h = makeCluster(`
@@ -68,7 +68,7 @@ test('D3 Lock: acquiring a Lock the agent already holds is a TypeError', () => {
 });
 
 // -- Lock: the disposable guard -------------------------------------------------
-test('D3 Lock: acquire returns a guard that using releases', () => {
+test('Lock: acquire returns a guard that using releases', () => {
   const h = makeCluster(`
     var l = new Lock();
     { using g = l.acquire(); log.push('held'); }
@@ -77,7 +77,7 @@ test('D3 Lock: acquire returns a guard that using releases', () => {
   expect(h.log()).toBe('held | free again');
 });
 
-test('D3 Lock: disposing a guard twice is a TypeError', () => {
+test('Lock: disposing a guard twice is a TypeError', () => {
   const h = makeCluster(`
     var l = new Lock();
     var g = l.acquire();
@@ -88,7 +88,7 @@ test('D3 Lock: disposing a guard twice is a TypeError', () => {
 });
 
 // -- Lock: the async form -------------------------------------------------------
-test('D3 Lock: asyncHold queues, and each waiter runs its own critical section', () => {
+test('Lock: asyncHold queues, and each waiter runs its own critical section', () => {
   const h = makeCluster(`
     var l = new Lock();
     (async () => { const rel = await l.asyncHold(); log.push('A holds'); rel(); })();
@@ -98,7 +98,7 @@ test('D3 Lock: asyncHold queues, and each waiter runs its own critical section',
   expect(h.log()).toBe('A holds | B holds');
 });
 
-test('D3 Lock: asyncHold while holding queues rather than throwing', () => {
+test('Lock: asyncHold while holding queues rather than throwing', () => {
   // Not a deadlock: the acquisition queues, and the holder may release from a
   // later job before anything awaits the pending promise.
   const h = makeCluster(`
@@ -117,7 +117,7 @@ test('D3 Lock: asyncHold while holding queues rather than throwing', () => {
   expect(h.log()).toBe('queued while holding | granted later');
 });
 
-test('D3 Lock: a release function may be called once', () => {
+test('Lock: a release function may be called once', () => {
   const h = makeCluster(`
     var l = new Lock();
     globalThis.rel = null;
@@ -169,8 +169,8 @@ test('Condition: notifyAll wakes every waiter', () => {
   expect(h.log()).toContain('woke 2 waiters');
 });
 
-// -- D4: the blocking forms where an agent cannot block --------------------------
-test('D4: the blocking forms throw rather than becoming their async counterparts', () => {
+// -- The blocking forms where an agent cannot block ------------------------------
+test('the blocking forms throw rather than becoming their async counterparts', () => {
   // "an operation returning T on one thread and Promise.<T> on another would have
   // a return type that depends on which thread is running it, which is not a
   // thing a typed language can say".

@@ -665,7 +665,7 @@ test('the borrowing forms are inert with the feature off', () => {
  * decay to the referent at value boundaries, and the two liveness rules. The
  * fuller borrowing surface (location-consuming returns such as `first(a)++`,
  * destructuring `ref` members, and the SoA/typed-buffer substrate) is exercised
- * in extensions/ref-borrowing.test.mts and noted there as deferred.
+ * in extensions/borrowing.test.mts and noted there as deferred.
  */
 
 // -- The ref type at the type level --------------------------------------------

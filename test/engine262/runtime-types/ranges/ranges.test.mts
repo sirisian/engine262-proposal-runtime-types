@@ -2,7 +2,9 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Capability Q (ranges.md) core: range literals as values that iterate.
+ * Spec: #sec-ranges (Ranges). Design: ranges.md.
+ *
+ * Range literals as values that iterate.
  *
  * A range names an interval as a value. Every range that has an end marks whether
  * it includes it -- `a..<b` and `a..=b` -- and marks its start only where the
@@ -23,8 +25,7 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
  * operands imply, which is why intersecting a from-range with a to-range gives a
  * two-endpoint range and negating a from-range gives a to-range.
  *
- * Deferred with the rest of the extension, each needing a facility another part
- * supplies: the bounds in the type (`Range.<T, S, E>` over `Range.Bound.Closed`
+ * Not implemented, each needing a facility another part supplies: the bounds in the type (`Range.<T, S, E>` over `Range.Bound.Closed`
  * and `Range.Bound.Open`) and the literal forms' specialization, the
  * `uint8.<{ bounds: 1..=6 }>` metadata carrier (primitive metadata),
  * `a[start..<end]` slicing to a view (the array view substrate),
@@ -294,8 +295,8 @@ test('interval arithmetic needs two ranges, and leaves the base behaviour alone'
 
 // -- agreement between the operations -----------------------------------------
 //
-// Each operation was pinned against its own rule as it landed. These check the
-// operations against EACH OTHER, which is where an implementation that satisfied
+// Each operation is asserted against its own rule elsewhere. These check the
+// operations against EACH OTHER, which is where an implementation that satisfies
 // every rule separately can still be incoherent.
 
 test('unary minus and scaling by minus one are the same reflection', () => {

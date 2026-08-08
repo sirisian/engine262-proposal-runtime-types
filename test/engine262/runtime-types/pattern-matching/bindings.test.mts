@@ -73,7 +73,7 @@ test('what the checker half does not yet do', () => {
   // EXHAUSTIVENESS extending `check.mts`'s SwitchStatement machinery. A bound
   // name currently types loosely rather than as the pattern established.
   expect(evaluated('String(typeof (1 is 1));')).toBe('boolean');
-  // EXHAUSTIVENESS landed - match-exhaustiveness.test.mts owns it. This pin
+  // EXHAUSTIVENESS landed - exhaustiveness.test.mts owns it. This pin
   // had asserted a fully-covered enum was ACCEPTED, which stayed true for a
   // DIFFERENT reason once the check arrived, so it never noticed: a pin on a
   // case the change does not alter is not a pin at all.

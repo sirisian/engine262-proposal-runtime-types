@@ -168,7 +168,7 @@ test('the library nominals this branch sits in front of are unaffected', () => {
 test('the rest of #sec-decorator-application', () => {
   // Both pieces this file pinned are done, and the pins are kept in flipped
   // form: the argument form is no longer a factory, and selection by context
-  // type happens. decorator-calling-convention.test.mts owns the assertions;
+  // type happens. application-overload-selection.test.mts owns the assertions;
   // what stays here is that a reader of the old pins finds the new answer.
   expect(evaluated('let got = "never"; function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } class A { @f(7) a: uint8; } got;')).toBe('7:a');
   const decls = 'const l = []; function f(c: Reflect.ClassField) { l.push("field"); } function f(c: Reflect.Class) { l.push("class"); } ';

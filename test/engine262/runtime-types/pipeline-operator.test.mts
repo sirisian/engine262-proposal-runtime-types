@@ -4,7 +4,8 @@ import {
 } from './harness.mts';
 
 /**
- * PLAN-pipeline-operator.md phases 1 and 2, per #sec-pipeline-operator.
+ * Spec: #sec-pipeline-operator (The Pipeline Operator),
+ * #sec-pipeline-static-semantics, #sec-pipeline-runtime-semantics.
  *
  * `x |> f(%)` binds the left operand to the topic and evaluates the right with
  * that binding in scope. The topic is a BINDING rather than a substitution, and
@@ -140,8 +141,8 @@ test('the topic goes where any expression goes', () => {
 });
 
 /**
- * Two corpus items from PLAN-pipeline-operator.md section 5.5 are not testable here,
- * and the reason is not the pipeline. Overload declarations
+ * Two of the design's corpus items are not testable here, and the reason is not
+ * the pipeline. Overload declarations
  * (`function f(v: uint32): string;`) and generic function declarations
  * (`function id.<T>(v: T): T`) are not parsed by this engine at all - both fail
  * identically without a pipe. The pipeline's part of each rule, that resolution

@@ -1,10 +1,11 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent, NumberValue, TypedNumberValue, PrimitiveValue } from '#self';
 
-// R6 (Option A) regression floor: TypedNumberValue is a SIBLING of NumberValue
-// under PrimitiveValue, not a subclass. These assertions would fail if the
-// class were reverted to `extends NumberValue`. They pin the sibling structure
-// at the type level (below) and the observable behaviour it produces (via the
+// The engine's value-class hierarchy, which the proposal forced into existence
+// and no specification clause describes: TypedNumberValue is a SIBLING of
+// NumberValue under PrimitiveValue, not a subclass. These assertions fail if
+// the class becomes `extends NumberValue`. They cover the sibling structure at
+// the type level (below) and the observable behaviour it produces (via the
 // engine, above the fold).
 
 function run(source: string) {
@@ -49,9 +50,8 @@ test('the distinct type tag is observable', () => {
 test('identity across the sibling boundary (behavioural, via the engine)', () => {
   // The sibling structure is what makes these correct: a typed number compares
   // distinctly because it is genuinely a different value type.
-  // A LITERAL adopts the typed operand's type since F74, so this is "eq"; the
-  // sibling distinction R1 states is asserted with a variable below, which
-  // adopts nothing.
+  // A LITERAL adopts the typed operand's type, so this is "eq"; the sibling
+  // distinction is asserted with a variable below, which adopts nothing.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
   // A `let`: a `const` of a numeric constant now adopts its context type, so it
   // is no longer the way to write a plain `number`.
@@ -71,10 +71,9 @@ test('arithmetic preserves the value type through the sibling representation', (
   expect(evaluated('(200 := uint8) + (100 := uint8) === (44 := uint8) ? "ok" : "no";')).toBe('ok');
 });
 
-// R6 correctness audit: coercion-boundary cases that crashed or misbehaved
-// before the audit, because the sibling TypedNumberValue lacks NumberValue's
-// methods and several intrinsics did instanceof NumberValue checks. Each is now
-// routed through unwrapToNumber. These pin the fixes.
+// The coercion boundary: a sibling TypedNumberValue lacks NumberValue's
+// methods, and an intrinsic testing `instanceof NumberValue` misbehaves on one.
+// Each of these routes through unwrapToNumber instead.
 
 test('typed + BigInt throws a clean TypeError (not a crash)', () => {
   expect(run('(5 := uint8) + 5n;')).toMatchObject({ Type: 'throw' });
@@ -105,7 +104,7 @@ test('Number.isInteger/isFinite answer for a numeric type, not for a representat
   // SUPERSEDED BY sec-numeric-predicates. This test used to pin the opposite, on
   // the BigInt precedent: these methods return false for any non-Number, and a
   // typed number is not a Number, so false. The precedent is real and is still
-  // what the flag-off engine does (pinned in numeric-predicates.test.mts), but
+  // what the flag-off engine does (asserted in numeric-library/predicates), but
   // the clause judges it the wrong answer HERE: a predicate whose name promises
   // a question about a value should not quietly answer about a representation,
   // and `Number.isInteger` of an int32 saying false is the hazard it names.

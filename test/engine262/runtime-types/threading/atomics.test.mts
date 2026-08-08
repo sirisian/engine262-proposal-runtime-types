@@ -68,7 +68,7 @@ test('Atomics: a non-reference first argument is refused', () => {
   expectThrownKind('let a: uint32 = 1; Atomics.add(a, 1);', 'TypeError');
 });
 
-test('D10: the shared modifier is not consulted', () => {
+test('the shared modifier is not consulted', () => {
   // Marked and unmarked storage are equally valid targets. Requiring the marker
   // would buy no invariant, unmarked storage being reachable from another thread
   // regardless, and would fracture generic code taking `ref uint32`.
@@ -104,14 +104,14 @@ test('Atomics: compareExchange replaces on a match and leaves the slot otherwise
   expect(evaluated('let a: uint32 = 1; String(Atomics.compareExchange(ref a, 2, 5));')).toBe('1');
 });
 
-test('D9 compareExchange: NaN matches NaN, so a claim loop terminates', () => {
+test('compareExchange: NaN matches NaN, so a claim loop terminates', () => {
   // The property the whole choice of predicate turns on. Under strict equality a
   // loop whose observed value is NaN retries against the very value it read,
   // forever, NaN not being strictly equal to itself.
   expect(evaluated('let f: float64 = NaN; Atomics.compareExchange(ref f, NaN, 1.0); String(f);')).toBe('1');
 });
 
-test('D9 compareExchange: -0 matches 0, the forgiving direction for a sentinel', () => {
+test('compareExchange: -0 matches 0, the forgiving direction for a sentinel', () => {
   // SameValue would distinguish them, so a computed -0 would fail to match a 0
   // sentinel and a claim loop would intermittently refuse a slot that is
   // arithmetically zero.
@@ -135,8 +135,8 @@ test('Atomics: an operation preserves the target\'s type, so a second one works'
 });
 
 test('Atomics: repeated operations on a shared binding behave the same', () => {
-  // D10 again, now over more than one operation: the modifier is not consulted,
-  // so marked and unmarked storage accumulate identically.
+  // Again, now over more than one operation: the modifier is not consulted, so
+  // marked and unmarked storage accumulate identically.
   expect(evaluated('let a: shared uint32 = 0; Atomics.add(ref a, 5); Atomics.add(ref a, 5); String(a);')).toBe('10');
 });
 
@@ -174,7 +174,7 @@ test('Atomics: blocking wait throws in this engine', () => {
   expectThrownKind('let a: shared int32 = 0; Atomics.wait(ref a, 0);', 'TypeError');
 });
 
-test('D9 compareExchange: the expected value is converted before comparing', () => {
+test('compareExchange: the expected value is converted before comparing', () => {
   // Without the conversion the comparison is between an unconverted operand and a
   // typed value read from the target. It never succeeds, so every compare-exchange
   // fails SILENTLY and a claim loop spins rather than throwing.

@@ -127,3 +127,25 @@ test('typed json: the type argument may be an indexed-access type', () => {
   // the resolved element type still enforces its range on the parsed value
   expectThrown('JSON.parse.<{ a: uint8 }["a"]>("999");');
 });
+
+// -- The untyped baseline, and structuredClone -----------------------------------
+
+test('serialization: untyped JSON.parse and JSON.stringify work', () => {
+  expect(evaluated('let o = JSON.parse(\'{"a":5}\'); String(o.a);')).toBe('5');
+  expect(evaluated('JSON.stringify({ a: 5 });')).toBe('{"a":5}');
+  // round trip
+  expect(evaluated('JSON.stringify(JSON.parse(\'{"a":5,"b":"x"}\'));')).toBe('{"a":5,"b":"x"}');
+});
+
+test('serialization: JSON.parse.<T> converts leaves and validates', () => {
+  // JSON.parse.<T> now threads T through the parse: a numeric leaf becomes its
+  // target type, and an out-of-range value is rejected with a TypeError.
+  expect(evaluated('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":5}\'); o.a === (5 := uint8) ? "typed" : "untyped";')).toBe('typed');
+  expectThrown('type T = { a: uint8 }; let o = JSON.parse.<T>(\'{"a":300}\'); String(o.a);');
+});
+
+// -- Dependent record types: where clauses are enforced at boundaries ----------
+
+test('serialization: structuredClone is absent from the base engine (documents the gap)', () => {
+  expectThrown('let o = structuredClone({ a: 5 }); o.a;');
+});

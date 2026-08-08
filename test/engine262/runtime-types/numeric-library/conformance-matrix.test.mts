@@ -43,7 +43,7 @@ const ROWS: readonly { fn: string, arity: number, int: 'self' | 'int32' | 'none'
   { fn: 'cbrt', arity: 1, int: 'self', float: 'self' },
   // a smaller sample: the matrix is asserting the RETURN TYPE, and 4 ** 4 would
   // overflow the narrow widths and raise the RangeError the return rule requires,
-  // which is a different property tested in numeric-library.test.mts
+  // which is a different property tested in overloads.test.mts
   { fn: 'pow', arity: 2, int: 'self', float: 'self', sample: 2 },
   // the transcendentals: no integer counterpart, so no integer row
   { fn: 'exp', arity: 1, int: 'none', float: 'self' },
