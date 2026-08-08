@@ -110,11 +110,28 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     };
     let nextAuto = 0;
     let previous: Value | undefined;
+    // The most recently given generator function, which a following enumerator
+    // with no initializer is given the result of calling, "until an initializer
+    // replaces it". An initializer that is not such a function sets its own
+    // value "without disturbing the function for those after it".
+    let generator: Value | undefined;
     for (const member of node.EnumMemberList) {
       let v: Value;
       if (member.Initializer) {
         const ref = Q(yield* Evaluate(member.Initializer));
         v = Q(yield* GetValue(ref));
+        // "An enumerator initialized with a function of two parameters is given
+        // the result of calling that function" - with the enumerator's index
+        // and name, which is the design's
+        // `enum Count: float32 { Zero = (index, name) => index * 100, One, Two }`.
+        // The value was being converted as a function and refused.
+        const arity = IsCallable(v)
+          ? Q(yield* Get(v as ObjectValue, Value('length')))
+          : Value.undefined;
+        if (arity instanceof NumberValue && (R(arity) as number) === 2) {
+          generator = v;
+          v = Q(yield* Call(generator, Value.undefined, [Value(memberValues.length), Value(member.IdentifierName.name)]));
+        }
       } else if (previous === undefined) {
         // #sec-enums: "The first enumerator, when it has no initializer, takes
         // 0, and it is a type error when the underlying type is not numeric,
@@ -123,12 +140,20 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
           return Throw.TypeError('$1 is not assignable to $2', Value('an enumerator with no initializer'), Value('an enum whose underlying type is not numeric; give it a value'));
         }
         v = Value(nextAuto);
+      } else if (generator !== undefined) {
+        v = Q(yield* Call(generator, Value.undefined, [Value(memberValues.length), Value(member.IdentifierName.name)]));
+      } else if (!underlyingIsNumeric) {
+        // "...where the underlying type declares no prefix increment, it takes a
+        // value equal to the previous one." Only the FIRST enumerator of a
+        // non-numeric enum is an error; a later one continues, and a type with
+        // no `operator++` continues by repeating. Refusing every non-numeric
+        // enumerator without an initializer, which this did, made
+        // `enum E: string { A = "x", B }` an error where the clause gives B the
+        // value of A.
+        v = previous;
       } else {
         // "A later enumerator with no initializer takes the result of applying
         // the underlying type's prefix increment operator to the one before."
-        if (!underlyingIsNumeric) {
-          return Throw.TypeError('$1 is not assignable to $2', Value('an enumerator with no initializer'), Value('an enum whose underlying type is not numeric; give it a value'));
-        }
         v = Value(nextAuto);
       }
       // #sec-enums: an enumerator's value is a value of the underlying type, so

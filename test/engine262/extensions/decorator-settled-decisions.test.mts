@@ -376,3 +376,27 @@ test('an enumerator without an initializer continues from the one before', () =>
   // written out - which the counter reset had hidden.
   expectThrownKind('enum E: uint8 { A = 255, B } E.B;', 'RangeError');
 });
+
+test('an enumerator initialized with a function of two parameters is computed', () => {
+  // #sec-enums: such an enumerator "is given the result of calling that function
+  // with the enumerator's index and its name as a String, and a following
+  // enumerator with no initializer is given the result of calling the most
+  // recently given such function with its own index and name, until an
+  // initializer replaces it". The function was being converted as a VALUE and
+  // refused, so the design's own example did not run.
+  expect(evaluated('enum C: float32 { Zero = (index, name) => index * 100, One, Two } String(C.Zero) + "," + String(C.One) + "," + String(C.Two);')).toBe('0,100,200');
+  expect(evaluated('enum N: string { A = (i, name) => name, B } String(N.A) + "," + String(N.B);')).toBe('A,B');
+  // "an initializer that is not such a function sets its enumerator's value
+  // without disturbing the function for those after it"
+  expect(evaluated('enum R { A = (i, n) => i * 10, B, C = 7, D } String(R.A) + "," + String(R.B) + "," + String(R.C) + "," + String(R.D);')).toBe('0,10,7,30');
+});
+
+test('a non-numeric enum continues by repeating where the type has no increment', () => {
+  // #sec-enums: "where the underlying type declares no prefix increment, it
+  // takes a value equal to the previous one". Only the FIRST enumerator of a
+  // non-numeric enum needs an initializer; refusing every one of them made
+  // `enum E: string { A = "x", B }` an error where the clause gives B the value
+  // of A.
+  expect(evaluated('enum E: string { A = "x", B } String(E.B);')).toBe('x');
+  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+});
