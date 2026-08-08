@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrownKind } from '../harness.mts';
+import { expectThrown, expectThrownKind } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -298,4 +298,97 @@ test('the enum rule does not weaken the operand rule or the enum\'s own identity
   expect(evaluated(`${C}String(C.toString(C.One));`)).toBe('One');
   // A switch over an enum still dispatches on the enumerators.
   expect(evaluated(`${C}let r = "x"; switch (C.One) { case C.Zero: r = "z"; break; case C.One: r = "o"; break; } r;`)).toBe('o');
+});
+
+// -- The underlying type may be any type ---------------------------------------
+//
+// #sec-enums: "Any type may be an underlying type, including a function type and
+// `symbol`." The sequence rule is stated over the type rather than over numbers:
+// a later enumerator with no initializer "takes the result of applying the
+// underlying type's prefix increment operator to the previous enumerator's
+// value [...] where the underlying type declares no prefix increment, it takes a
+// value equal to the previous one."
+test('an enum over symbol, and a type with no prefix increment repeats', () => {
+  expect(evaluated('enum S: symbol { A = Symbol("a"), B = Symbol("b") } typeof S.A;')).toBe('symbol');
+  // `symbol` declares no prefix increment, so B equals A rather than erroring.
+  expect(evaluated('enum S: symbol { A = Symbol("a"), B } String(S.B === S.A);')).toBe('true');
+});
+
+test('an enum over a function type holds callable enumerators', () => {
+  const F = 'type F = (float32) => float32; ';
+  expect(evaluated(`${F}enum C: F { Zero = x => 0, One = x => x } typeof C.Zero;`)).toBe('function');
+  expect(evaluated(`${F}enum C: F { Zero = x => 0, One = x => x } String(Number(C.One(5)));`)).toBe('5');
+});
+
+test('an enum over string takes sequential functions, and needs a starting value', () => {
+  // The design document's own example, including the rule that a sequential
+  // function applies to every following enumerator until an initializer replaces
+  // it, and that a non-numeric enumeration must define its starting value.
+  expect(evaluated('enum S: string { Zero = (i, n) => n, One, Two = (i, n) => n.toLowerCase(), Three } '
+    + 'S.Zero + "," + S.One + "," + S.Two + "," + S.Three;')).toBe('Zero,One,two,three');
+  expectThrownKind('enum S: string { A } S.A;', 'TypeError');
+  // `string` has no prefix increment either, so an explicit start repeats.
+  expect(evaluated('enum S: string { A = "x", B } String(S.B === S.A);')).toBe('true');
+});
+
+test('the underlying type\'s range and precision are the enum\'s', () => {
+  // A signed type carries negative enumerators and continues through zero.
+  expect(evaluated('enum N: int8 { Neg = -128, Next } String(N.Next);')).toBe('-127');
+  // Continuing past the type's range is the RangeError writing the value would
+  // be.
+  expectThrownKind('enum U: uint8 { A = 255, B } U.B;', 'RangeError');
+  // A binary float continues by one from a fractional value rather than from
+  // the next integer.
+  expect(evaluated('enum F: float32 { A = 0.5, B } String(F.B);')).toBe('1.5');
+  // And an explicit bigint enumeration holds bigints.
+  expect(evaluated('enum B: bigint { A = 1n, B = 2n } String(B.B);')).toBe('2');
+});
+
+test('two enumerators of one declaration may not share a name', () => {
+  expectThrownKind('enum E { A, A } E.A;', 'TypeError');
+});
+
+// -- Enums against the rest of the language -------------------------------------
+
+test('an enumerator keys a Map and a Set by its own identity', () => {
+  // An enumerator is a value of the enum, so it keys by that - and a raw value
+  // of the underlying type is a different key, which is the one-way rule showing
+  // up where it is easiest to trip over.
+  const C = 'enum C { Zero, One } ';
+  expect(evaluated(`${C}const m = new Map(); m.set(C.One, "x"); m.get(C.One);`)).toBe('x');
+  expect(evaluated(`${C}const m = new Map(); m.set(C.One, "x"); String(m.get(1));`)).toBe('undefined');
+  expect(evaluated(`${C}const s = new Set([C.Zero, C.One, C.Zero]); String(s.size);`)).toBe('2');
+});
+
+test('an enum types a class field, and lays out as its underlying type', () => {
+  expect(evaluated('enum C { Zero, One } class K { c: C = C.One; } String(new K().c === 1);')).toBe('true');
+  // #sec-memory-layout: the field costs what the underlying type costs.
+  expect(evaluated('enum C: uint8 { Zero } class K { c: C; } String((type K).byteLength);')).toBe('1');
+  expect(evaluated('enum C: uint32 { Zero } class K { c: C; } String((type K).byteLength);')).toBe('4');
+});
+
+test('an enum types an array element, and a bare literal does not reach it', () => {
+  const C = 'enum C { Zero, One } ';
+  expect(evaluated(`${C}let a: [].<C> = [C.Zero, C.One]; String(a[1] is C);`)).toBe('true');
+  // The element boundary is the binding boundary: a literal is not of the enum
+  // type, so an array of them is refused rather than silently converted.
+  expectThrown(`${C}let a: [].<C> = [0, 1];`);
+});
+
+test('an enum reaches generics, unions, and narrowing', () => {
+  const C = 'enum C { Zero, One } ';
+  expect(evaluated(`${C}function id<T>(x: T): T { return x; } String(id.<C>(C.One) === C.One);`)).toBe('true');
+  // In a union, `is` narrows to the enum arm.
+  expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f(C.One);`)).toBe('enum');
+  expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f("s");`)).toBe('str');
+  // And an enumerator is a legal match subject and pattern.
+  expect(evaluated(`${C}match (C.One) { when C.One: "one"; default: "other"; }`)).toBe('one');
+});
+
+test('the enumeration surface iterates in declaration order', () => {
+  const C = 'enum C { Zero, One } ';
+  // @@iterator is `entries`, which is what a `for..of` over the enum yields.
+  expect(evaluated(`${C}let out = ""; for (const [k, v] of C) { out += k + "=" + v + ";"; } out;`)).toBe('Zero=0;One=1;');
+  expect(evaluated(`${C}[...C.values()].join("|");`)).toBe('0|1');
+  expect(evaluated(`${C}[...C.keys()].join("|");`)).toBe('Zero|One');
 });
