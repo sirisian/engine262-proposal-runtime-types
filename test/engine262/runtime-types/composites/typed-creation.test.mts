@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * Spec: #sec-composite-typeobject-call - `Composite.<T>(source)`.
  *
- * `sec-composite-typeobject-call`: "Calling the Type Object of a composite type
+ * #sec-composite-typeobject-call: "Calling the Type Object of a composite type
  * over a shape S ... returns the result of CompositeFromShape(S, source). This
  * is the CONSTRUCTION BOUNDARY of the composite types, as calling any
  * parameterized Type Object is its type's." Each supplied value is CONVERTED to

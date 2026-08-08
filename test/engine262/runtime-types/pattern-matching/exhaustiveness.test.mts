@@ -170,7 +170,7 @@ test('a union of fewer than two members has no atoms', () => {
 });
 
 test('a DEPENDENT RECORD TYPE takes the atoms of the union its chain denotes', () => {
-  // The whole plan in one assertion: `sec-match-exhaustiveness` says "for a
+  // The whole plan in one assertion: #sec-match-exhaustiveness says "for a
   // dependent record type whose predicate is a discriminating `where` chain, the
   // atoms of the union that chain denotes", and this is that path end to end -
   // record to declaration to chain to denoted union to atoms.

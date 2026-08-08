@@ -5,7 +5,7 @@ import {
 
 /**
  * A specialization's bindings reach the bodies of its declaration (spec
- * sec-generics: a parameter stands for the type or value an application binds
+ * #sec-generics: a parameter stands for the type or value an application binds
  * "within the body and signatures of its declaration").
  *
  * The frame captured when a function is created is pushed at

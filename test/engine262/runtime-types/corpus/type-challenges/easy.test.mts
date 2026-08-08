@@ -14,7 +14,7 @@ import { expectBuilderTrue, expectBuilderThrows } from './harness.mts';
  * `type 'a'`), Type Record introspection (`reflect(T)`, `.kind`, `.elements`,
  * `.extent`), the construction API (`Reflect.makeType`, `prop`, `literal`,
  * `union`, `arms`, `tupleElements`), `Reflect.isAssignable`, and the `readonly`
- * property modifier. Those are Phase 2/3/4 work.
+ * property modifier.
  *
  * What every easy challenge *establishes* is a type IDENTITY, and identity via
  * interning is already solid. So each challenge below is ported by asserting the
@@ -49,8 +49,8 @@ test('easy 4 - Pick (identity)', () => {
 });
 
 // 7 - Readonly - MyReadonly<T> marks every property readonly. The `readonly`
-// property modifier parses now (Phase 5) and a readonly object interns
-// distinctly from its mutable form, so the identity is expressible.
+// property modifier parses, and a readonly object interns distinctly from its
+// mutable form, so the identity is expressible.
 test('easy 7 - Readonly', () => {
   expectBuilderTrue(`
     type Todo = { title: string, description: string };

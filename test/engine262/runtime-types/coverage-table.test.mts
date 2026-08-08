@@ -29,7 +29,7 @@ test('the parameterized numeric extensions resolve in an annotation', () => {
 
 test('a bare parameterized primitive is not a value, and an applied one is', () => {
   // The convention that makes `vector.preferredLanes` unreachable, which
-  // sec-vector-widths now records as an unsettled spelling. Asserted across the
+  // #sec-vector-widths now records as an unsettled spelling. Asserted across the
   // family so a change to it is deliberate.
   expect(evaluated('String(typeof uint);')).toBe('undefined');
   expect(evaluated('String(typeof int);')).toBe('undefined');

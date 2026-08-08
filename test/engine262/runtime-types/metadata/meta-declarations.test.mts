@@ -99,7 +99,7 @@ test('meta: a base-form meta with no validate admits any metadata of its base', 
 // A meta declaration against
 // a METADATA type reaches nothing where registration keys on that type's own
 // Type Object while IsOfType looked up on the parameterization's base. The
-// claiming rule of sec-primitive-metadata is what connects them, and the hook
+// claiming rule of #sec-primitive-metadata is what connects them, and the hook
 // below is now consulted.
 test('meta: a meta declaration on a META TYPE governs a parameterization', () => {
   expect(evaluated(`
@@ -213,7 +213,7 @@ test('meta: a metadata key no meta type claims is a type error at the parameteri
 });
 
 // -- The metadata value language: nested records and lists --------------------
-// table-metadata-values admits a nested record and a list under a claimed key.
+// #table-metadata-values admits a nested record and a list under a claimed key.
 // They PARSED before this and were then silently dropped, and since interning
 // compares what survives, two parameterizations with different nested metadata
 // reduced to the same empty record and were ONE TYPE.
@@ -249,7 +249,7 @@ test('meta: flat metadata is unchanged', () => {
 });
 
 // -- The pattern form of the metadata value language --------------------------
-// The last form of table-metadata-values, and the one that needed the lexer: a
+// The last form of #table-metadata-values, and the one that needed the lexer: a
 // `/` is division or the start of a pattern depending on what precedes it, and
 // in type position there is no division to be ambiguous with.
 test('meta: a pattern is a metadata value', () => {

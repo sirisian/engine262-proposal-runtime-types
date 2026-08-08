@@ -27,12 +27,12 @@ import {
  * surfaces as a third state rather than being resolved silently in the engine's
  * favour.
  *
- * Clauses covered: sec-range-literals, sec-ranges, sec-matchrange, and the
- * Range row of table-metadata-values in sec-metadata-decomposition.
+ * Clauses covered: #sec-range-literals, #sec-ranges, #sec-matchrange, and the
+ * Range row of #table-metadata-values in #sec-metadata-decomposition.
  */
 
 // =============================================================================
-// sec-range-literals
+// #sec-range-literals
 // =============================================================================
 
 test('sec-range-literals: the four two-endpoint forms produce the four intervals', () => {
@@ -148,7 +148,7 @@ test('sec-range-literals: a parenthesized range is rejected as a relational oper
 });
 
 // =============================================================================
-// sec-ranges - the value and its shapes
+// #sec-ranges - the value and its shapes
 // =============================================================================
 
 test('sec-ranges: the four shapes and `RangeBounds` are named', () => {
@@ -301,7 +301,7 @@ test('sec-ranges: DIVERGENCE - a range is a value, but does not compare as one',
 });
 
 // =============================================================================
-// sec-ranges - the RangeBounds operations
+// #sec-ranges - the RangeBounds operations
 // =============================================================================
 
 test('sec-ranges: `contains` takes either a value or a range', () => {
@@ -360,7 +360,7 @@ test('sec-ranges: a zero factor yields the closed range at zero, and leaves an e
 });
 
 // =============================================================================
-// sec-ranges - the value's members and iteration
+// #sec-ranges - the value's members and iteration
 // =============================================================================
 
 test('sec-ranges: `start` and `end` are the endpoints, absent for an omitted one', () => {
@@ -502,7 +502,7 @@ test('random.md: the no-argument form is unchanged', () => {
 });
 
 // =============================================================================
-// sec-metadata-narrowing
+// #sec-metadata-narrowing
 // =============================================================================
 
 // A meta type that narrows, written as primitivemetadata.md writes it: each
@@ -761,7 +761,7 @@ test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED',
 
 test('ranges.md: a helper that must consume every value refuses a range with no end', () => {
   // `toArray`, `reduce`, and `forEach` each read the WHOLE sequence, so on `0..`
-  // they would not return. Refusing says so, in the way `sec-ranges` already
+  // they would not return. Refusing says so, in the way #sec-ranges already
   // makes a range with no START not iterable - the mirror rule.
   expectThrown('(0..).toArray();');
   expectThrown('(0..).reduce((a, b) => a + b, 0);');
@@ -824,7 +824,7 @@ test('ranges.md: helper chains compose, and keep the element type', () => {
 });
 
 // =============================================================================
-// sec-matchrange
+// #sec-matchrange
 // =============================================================================
 
 test('sec-matchrange: a range pattern matches by containment', () => {
@@ -850,7 +850,7 @@ test('sec-matchrange: a range `case` label matches by containment', () => {
 });
 
 // =============================================================================
-// table-metadata-values - the Range row
+// #table-metadata-values - the Range row
 // =============================================================================
 
 const NB = `
@@ -963,7 +963,7 @@ test('sec-metadata-narrowing: both hooks the protocol defines are now invoked', 
   // own rows: the narrowing rows above, and the conversion row below.
   //
   // `rescale` translates a constraint across a unit conversion -
-  // sec-metadata-conversion: "`rescale` on the portions that flow, so a bound
+  // #sec-metadata-conversion: "`rescale` on the portions that flow, so a bound
   // stated in metres arrives stated in kilometres". Without it a sum of bounds
   // "would have added a metre-space number to a kilometre-space one and
   // produced a bound that means nothing".

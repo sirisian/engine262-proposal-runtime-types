@@ -17,7 +17,7 @@ import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
  * buffer-backed view constructor `[].<T>(buffer)`, `window`, bounds checking,
  * materializing a zero-filled fixed-length array, the delete/push/pop guards, and
  * the `shared` backing - is deferred by the spec to the memory-layout and
- * threading extensions (table-extension-hooks) and is exercised with those
+ * threading extensions (#table-extension-hooks) and is exercised with those
  * documents, not here.
  */
 

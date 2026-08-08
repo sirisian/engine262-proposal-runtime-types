@@ -24,7 +24,7 @@ import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
  */
 
 // -- Auto-sealing: a class with a typed field is sealed ------------------------
-// Spec sec-typed-classes: a class in which at least one instance field is typed
+// #sec-typed-classes: a class in which at least one instance field is typed
 // has PreventExtensions performed on its instances; a field may be written but a
 // property may not be added.
 test('Value/Reference: a class with a typed field seals its instances', () => {

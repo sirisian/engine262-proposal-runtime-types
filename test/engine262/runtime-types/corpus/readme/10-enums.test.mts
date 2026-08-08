@@ -71,8 +71,8 @@ test('enum: the declaration binds a static enum object', () => {
 // -- Documented gaps -----------------------------------------------------------
 // -- Enum construction: Count(n) -----------------------------------------------
 // A call on the enum type returns the enumerator whose underlying value is the
-// argument, and is a TypeError for a value that is not one of them (spec
-// sec-enums).
+// argument, and is a TypeError for a value that is not one of them
+// (#sec-enums).
 test('enum: Count(n) returns the enumerator with that underlying value', () => {
   expect(evaluated('enum Count { Zero, One, Two }; String(Count(1));')).toBe('1');
   // the result is the enumerator itself
@@ -84,10 +84,8 @@ test('enum: Count(n) throws for a value that is not an enumerator', () => {
 });
 
 test('enum: %Enum.prototype% carries the enumeration surface', () => {
-  // GAP CLOSED (F84). This documented the absence of the surface; it is present
-  // now, so the test asserts it rather than its absence.
-  //
-  // One correction to what this test recorded as the target. It expected
+  // One correction to what an earlier reading recorded as the target. It
+  // expected
   // `Count.One.toString()` to answer "One", and that is not what the design
   // says: the signature is `%Enum.prototype%.toString(value)`, a lookup ON THE
   // ENUMERATION taking the value as an argument. An enumerator IS its
@@ -103,7 +101,7 @@ test('enum: %Enum.prototype% carries the enumeration surface', () => {
 });
 
 test('enum: an enumerator holds a plain underlying value; Reflect.typeOf reports the primitive (documents the gap)', () => {
-  // Target (spec sec-enums): Reflect.typeOf(Count.Zero) reports Count (the most
+  // Target (#sec-enums): Reflect.typeOf(Count.Zero) reports Count (the most
   // specific type). Today an enumerator holds its plain underlying value, so
   // Reflect.typeOf reports the underlying primitive rather than the enum type, and
   // the value is not a typed value of the underlying type. The subtype-usability

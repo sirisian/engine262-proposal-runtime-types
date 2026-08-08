@@ -9,15 +9,16 @@ import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
  * Two README/spec reconciliations are recorded:
  *
  *  - An interface is NOMINAL where a class declares it implements one and
- *    STRUCTURAL where a value is checked against it (spec sec-interfaces-
- *    semantics: "an object that has the members satisfies an interface-typed
+ *    STRUCTURAL where a value is checked against it (#sec-interfaces-semantics:
+ *    "an object that has the members satisfies an interface-typed
  *    position whether or not any class declared it"). So `obj instanceof I` is a
  *    structural membership test, while `Reflect.isAssignable(objectType, I)`
  *    follows the nominal hierarchy. Both are verified below and are correct per
  *    spec; they are not the same question.
  *
  *  - `interface B extends A` appears in the README but the NORMATIVE grammar
- *    (spec InterfaceDeclaration) has no heritage clause; interface inheritance is
+ *    (#sec-classes-interfaces-and-enums) has no heritage clause; interface
+ *    inheritance is
  *    expressed by intersection. The extends form does not parse and is noted as a
  *    documented gap superseded by the spec.
  */

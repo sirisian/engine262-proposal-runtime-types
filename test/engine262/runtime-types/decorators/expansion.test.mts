@@ -41,7 +41,7 @@ const ID = '(function (t) { return t; })';
 const MARK = (mark: string) => `(function (t) { return t.concat([{ kind: "identifier", value: "${mark}", span: t[0].span, tokens: undefined }]); })`;
 
 test('a STACK of two replacement decorators runs OUTER first', () => {
-  // `sec-expansion`: an outer decoration receives the ones it encloses
+  // #sec-expansion: an outer decoration receives the ones it encloses
   // UNEXPANDED and may rewrite or remove them. Innermost-first would make an
   // outer decorator unable to delete an inner one, which is what conditional
   // compilation depends on.
@@ -65,7 +65,7 @@ test('EXPANSION IS DETERMINISTIC - expand twice, compare', () => {
 });
 
 test('a macro that emits ITSELF exceeds the DEPTH LIMIT', () => {
-  // `sec-expansion` bounds the fixpoint. A program that expands forever must
+  // #sec-expansion bounds the fixpoint. A program that expands forever must
   // fail loudly rather than hang, and the limit is specified rather than left to
   // each implementation.
   const SELF = '(function (t) { return t; })';
@@ -189,7 +189,7 @@ test('a top-level `@f function` throws in a MODULE, not in a script', () => {
  * What a token stream PRINTS as when it was built rather than read.
  *
  * The direction is (d) - preserve copied RUNS, print only created tokens -
- * because `sec-applyreplacementdecorator` already requires it: "a token the
+ * because #sec-applyreplacementdecorator already requires it: "a token the
  * decorator COPIED from what it was given keeps the Span it arrived with".
  */
 

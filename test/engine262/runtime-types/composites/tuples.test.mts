@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * Spec: #sec-findorcreatetuplecomposite - TUPLE composites.
  *
- * `sec-findorcreatetuplecomposite`. The upstream proposal defers a list form on
+ * #sec-findorcreatetuplecomposite. The upstream proposal defers a list form on
  * prototype and cost grounds; this design keeps it because "the objections are
  * prototype problems and cost problems, and a typed runtime dissolves the first
  * and prices the second".
@@ -56,7 +56,7 @@ test('typed tuple creation converts each position', () => {
 });
 
 test('a tuple composite ITERATES BY KIND, with no Symbol.iterator', () => {
-  // `sec-composite-getiterator`. Its prototype is deliberately *null*, so there
+  // #sec-composite-getiterator. Its prototype is deliberately *null*, so there
   // is nowhere for a `Symbol.iterator` to live - which is one of the three
   // prototype objections the design answers by DISSOLVING rather than
   // accepting: "iteration stops being a prototype lookup".

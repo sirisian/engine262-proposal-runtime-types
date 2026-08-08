@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * Spec: #sec-composite-types (Composite Types).
  *
- * `sec-composite-types`: "A Type Record is a composite type when its [[Kind]] is
+ * #sec-composite-types: "A Type Record is a composite type when its [[Kind]] is
  * ~primitive~ and its [[Name]] is *"Composite"*", with [[Arguments]] the shape.
  * NOT a Type Record kind of its own - which is why no `switch` over kinds
  * needed touching, and why these canonicalize through the ordinary type
@@ -24,7 +24,7 @@ test('Reflect.typeOf returns the INTERNED structural composite type', () => {
 });
 
 test('a field holding an OBJECT records `any`, which keeps shapes stable', () => {
-  // `sec-compositefieldtype`, and the exception easiest to miss: without it two
+  // #sec-compositefieldtype, and the exception easiest to miss: without it two
   // composites holding DIFFERENT objects would claim different shapes, and
   // shapes are what type identity is computed from - so the type of a composite
   // would depend on which objects it happened to hold.

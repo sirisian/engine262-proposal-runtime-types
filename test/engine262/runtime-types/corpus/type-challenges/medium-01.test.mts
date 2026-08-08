@@ -6,9 +6,8 @@ import { expectBuilderTrue } from './harness.mts';
  * Source: ecmascript-types/examples/typechallenges.md
  *
  * This shard ports the medium challenges expressible in their true corpus
- * builder form now that the `type` operator accepts literal operands (Phase 5)
- * and the primitives keyof / getReflection / makeType / isAssignable / kit are
- * in place. Each builder is written close to the corpus, and its assertions run
+ * builder form, over the `type` operator with literal operands and the
+ * primitives keyof / getReflection / makeType / isAssignable and the kit. Each builder is written close to the corpus, and its assertions run
  * with `===` (interning). Where a challenge's corpus form needs the `type`
  * operator on a TUPLE or PARENTHESIZED operand (`type [3,2,1]`, `type ('a'|'b')`)
  * - which the engine cannot spell, since `type[x]`/`type(x)` are member access

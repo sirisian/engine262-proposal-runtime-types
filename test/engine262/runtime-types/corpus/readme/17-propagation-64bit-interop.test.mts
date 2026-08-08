@@ -7,8 +7,8 @@ import { evaluated, ok, expectThrown } from '../../harness.mts';
  * Sections: Type Propagation to Literals, 64-bit Integer Types and Number Interop.
  *
  * Both are substantially implemented. The one gap is the `T(v)` cast-call form
- * (e.g. `number(a)`), which needs callable Type Objects (capability G); the
- * equivalent `:= T` form works and is verified here.
+ * (e.g. `number(a)`), which needs callable Type Objects; the equivalent `:= T`
+ * form works and is verified here.
  */
 
 // -- Type Propagation to Literals ----------------------------------------------
@@ -50,7 +50,7 @@ test('64-bit: typeof reports number for uint64 but it is not assignable to numbe
 });
 
 test('64-bit: an explicit conversion to number succeeds (via the := form)', () => {
-  // number(a) is the callable-type-object form (capability G); the := form works
+  // number(a) is the callable-type-object form; the := form works
   expect(evaluated('let a: uint64 = 100; let d: number = (a := number); typeof d;')).toBe('number');
 });
 

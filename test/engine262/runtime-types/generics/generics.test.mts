@@ -85,7 +85,7 @@ test('generics: a class type parameter reaches a field annotation', () => {
   // generics.md's opening example depends on this, and it failed with "T is
   // not defined": a field is evaluated during class definition, where nothing
   // bound the class's parameters. Each is bound to a ~parameter~ record now -
-  // the kind table-type-record-kinds specifies and the engine lacked.
+  // the kind #table-type-record-kinds specifies and the engine lacked.
   expect(ok('class B<T> { v: T = null; }')).toBe(true);
   // Uninitialized too: a parameter has no default, which is what leaves the
   // field alone rather than checking `undefined` against it.
@@ -225,7 +225,7 @@ test('generics: a user generic is invariant', () => {
  */
 
 test('generics: a type parameter is reachable as a value', () => {
-  // sec-generic-parameters-as-values. A type is a value here, so a parameter
+  // #sec-generic-parameters-as-values. A type is a value here, so a parameter
   // bound to one is readable as one inside the declaration - but it is not a
   // VALUE binding, so ResolveBinding cannot find it and the reference arrives
   // unresolvable. The parameter frames are where it lives.
@@ -249,7 +249,7 @@ test('generics: a type parameter is reachable as a value', () => {
 });
 
 test('generics: the deferred surface is refused, not silently wrong', () => {
-  // table-extension-hooks defers most of generics.md to the generics
+  // #table-extension-hooks defers most of generics.md to the generics
   // extension. These assert what the engine does with the deferred forms today,
   // so a change is visible rather than a surprise - and so the markers are
   // measured rather than assumed.

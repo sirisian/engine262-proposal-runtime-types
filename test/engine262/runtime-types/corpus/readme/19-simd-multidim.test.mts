@@ -62,7 +62,7 @@ test('Index operators: a non-numeric key falls through to ordinary property acce
 // -- Vector types: vector.<T, N> -----------------------------------------------
 // `vector.<T, N>` is a core value type of exactly N lanes of a lane type T. It is
 // well-formed when T is an integer, binary floating-point, or vector type and N is
-// a positive integer; a malformed vector is a type error (spec sec-vector-types).
+// a positive integer; a malformed vector is a type error (#sec-vector-types).
 test('Vectors: vector.<T, N> is a well-formed core type for a lane type and positive count', () => {
   expect(evaluated('type V = vector.<uint32, 4>; typeof V;')).toBe('object');
   expect(evaluated('type V = vector.<float32, 4>; typeof V;')).toBe('object');
@@ -84,9 +84,7 @@ test('SIMD: the named lane types are registered and are the long form', () => {
   expect(evaluated('type A = float32x4; type B = vector.<float32, 4>; (A === B) ? "same" : "diff";')).toBe('same');
   expect(evaluated('type A = uint32x4; String(A.byteLength);')).toBe('16');
   // A vector value exists now, so a shorthand annotation accepts one built at
-  // that type and refuses one built at another. The placeholder that pinned the
-  // unimplemented state is flipped rather than deleted, since the assertion it
-  // was standing in for is the one that matters.
+  // that type and refuses one built at another.
   expect(evaluated('let a: float32x4 = float32x4(1, 2, 3, 4); String(a);')).toBe('(1, 2, 3, 4)');
   expect(evaluated('let a: vector.<float32, 4> = float32x4(1, 2, 3, 4); String(a);')).toBe('(1, 2, 3, 4)');
   expectThrown('let a: int32x4 = float32x4(1, 2, 3, 4);');

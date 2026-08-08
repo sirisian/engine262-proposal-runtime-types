@@ -9,7 +9,7 @@ import { evaluated } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('a composite is refused in EVERY weak position', () => {
-  // `sec-composite-canbeheldweakly`. The specification merges this with the
+  // #sec-composite-canbeheldweakly. The specification merges this with the
   // typed-instance refusal already there, "for the MIRROR-IMAGE reason, an
   // identity that coincides with contents rather than none at all": a typed
   // instance has no identity to observe, and an interned composite's identity IS
@@ -29,7 +29,7 @@ test('a composite is refused in EVERY weak position', () => {
 });
 
 test('Composite[Symbol.customMatcher] tests membership with NO side effect', () => {
-  // `sec-composite-custommatcher`: "Return IsComposite(subject)."
+  // #sec-composite-custommatcher: "Return IsComposite(subject)."
   expect(evaluated('String(typeof Symbol.customMatcher);')).toBe('symbol');
   expect(evaluated('String(typeof Composite[Symbol.customMatcher]);')).toBe('function');
   expect(evaluated('String(Composite[Symbol.customMatcher](Composite({ x: 1 })));')).toBe('true');
@@ -48,7 +48,7 @@ test('Composite[Symbol.customMatcher] tests membership with NO side effect', () 
 });
 
 test('`instanceof` answers membership through hasInstance', () => {
-  // `sec-composite-hasinstance`: "The Composite function has no *\"prototype\"*
+  // #sec-composite-hasinstance: "The Composite function has no *\"prototype\"*
   // property, so without this method `value instanceof Composite` would THROW
   // through OrdinaryHasInstance."
   expect(evaluated('String(Composite({ x: 1 }) instanceof Composite);')).toBe('true');
@@ -58,7 +58,7 @@ test('`instanceof` answers membership through hasInstance', () => {
 });
 
 test('JSON: data on the wire, RE-INTERNED on read', () => {
-  // `sec-composite-json`. Stringify needs no change - a record composite is an
+  // #sec-composite-json. Stringify needs no change - a record composite is an
   // object whose own enumerable properties are its contents, and a tuple
   // composite is an array.
   expect(evaluated('JSON.stringify(Composite({ x: 1, y: 2 }));')).toBe('{"x":1,"y":2}');

@@ -10,9 +10,9 @@ import { evaluated, ok, expectThrown } from '../../harness.mts';
  *    the full `Generator.<Y, R, N>` form parse, and the generator yields and
  *    iterates. The yield/return/next TYPE checking is a static-checker feature.
  *  - Explicit Resource Management (`using` / `await using`) is not in the base
- *    engine262 at all, so the runtime-types annotation on it has nothing to attach
- *    to. Documented as a base-engine dependency (PENDING-CAPABILITIES.md
- *    capability K).
+ *    engine262 at all, so the runtime-types annotation on it has nothing to
+ *    attach to. It is a base-engine dependency rather than a gap in this
+ *    proposal.
  */
 
 // -- Typed Iteration and Generators --------------------------------------------

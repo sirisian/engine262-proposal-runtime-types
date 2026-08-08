@@ -7,7 +7,7 @@ import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
  * Rest Parameters.
  *
  * Function OVERLOADING resolves a call to the signature that best fits the
- * argument types (spec sec-overload-resolution): same-name function declarations
+ * argument types (#sec-overload-resolution): same-name function declarations
  * accumulate as signatures, and a call selects among them by a ranking of each
  * argument against each parameter. Rest parameters and type-based dispatch are
  * verified here.
@@ -60,7 +60,7 @@ test('Function Overloading: a single typed signature enforces its parameters and
 
 // -- Function Overloading: type-based dispatch ---------------------------------
 // A call to an overloaded name selects the signature whose parameters best fit
-// the argument types (spec sec-overload-resolution).
+// the argument types (#sec-overload-resolution).
 test('Function Overloading: type-based dispatch selects the matching signature', () => {
   // f((5 := uint8)) selects the uint8 signature; f("x") selects the string one.
   expect(evaluated('function f(a: uint8): string { return "int"; } function f(a: string): string { return "str"; } f((5 := uint8));')).toBe('int');

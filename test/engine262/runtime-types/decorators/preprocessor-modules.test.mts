@@ -6,7 +6,7 @@ import {
 /**
  * Spec: #sec-preprocessor-modules (Preprocessor Modules) - the evaluability
  * requirement of
- * `sec-preprocessor-modules`.
+ * #sec-preprocessor-modules.
  */
 
 function check(source: string): string {

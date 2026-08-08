@@ -7,9 +7,9 @@ import { expectBuilderTrue } from './harness.mts';
  *
  * Index-signature removal, recursive tuple construction (Pascal, Tower of Hanoi),
  * large tuple construction, literal-kind predicates, and object property
- * extraction. Index signatures already reflect and round-trip through
- * getReflection/makeType (Phase 4), so removing them is dropping the
- * indexSignatures list. Tuple operands are aliases.
+ * extraction. Index signatures reflect and round-trip through
+ * getReflection/makeType, so removing them is dropping the indexSignatures
+ * list. Tuple operands are aliases.
  */
 
 const L = `function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }`;

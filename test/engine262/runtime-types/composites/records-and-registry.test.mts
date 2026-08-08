@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * Spec: #sec-composites (Composites) - record composites and the registry.
  *
- * `sec-composites`: a composite is a frozen, null-prototyped object that is
+ * #sec-composites: a composite is a frozen, null-prototyped object that is
  * INTERNED, so two creations from the same contents are the same object.
  * Equality of contents is therefore identity, and `===`, `Map`, `Set` and
  * `Array.prototype.includes` compare composites structurally with NO CHANGE to
@@ -92,7 +92,7 @@ test('the source supplies values and is never converted', () => {
 });
 
 test('CANONICALIZATION: a stored zero is the class representative', () => {
-  // `sec-canonicalizecompositevalue`. A zero stores as `+0` at every float
+  // #sec-canonicalizecompositevalue. A zero stores as `+0` at every float
   // width, so two sources differing only in the sign of a zero are one object
   // and the stored value does not depend on which created it.
   expect(evaluated('String(Object.is(Composite({ v: -0 }).v, 0));')).toBe('true');

@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * Spec: #sec-reflection-shapes (Reflection Shapes).
  *
- * `sec-decorators` specifies reflection and decoration as ONE facility, so
+ * #sec-decorators specifies reflection and decoration as ONE facility, so
  * every context has a read half as well as a decoration half. The
  * staged order: the whole-class read, and the class-family member reads.
  */
@@ -516,7 +516,7 @@ test('a Tuple or Record reflection is just its type', () => {
   // #sec-reflection-shape-structural: these reflect a
   // composite VALUE where Reflect.Type reflects a type, and their whole shape is
   // `type` - no name, no metadata, the Structural family being one of those
-  // sec-decorator-metadata gives none. They were being built by the object
+  // #sec-decorator-metadata gives none. They were being built by the object
   // member builder and carried all three.
   const grab = 'let c; function f(x) { c = x; } ';
   expect(evaluated(`${grab} const e = @f Composite([0]); Object.keys(c).sort().join(',');`)).toBe('kind,type');

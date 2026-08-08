@@ -12,7 +12,7 @@ import { evaluated, ok, expectThrown, expectThrownKind } from '../../harness.mts
  * form accepts the matching base prefix. Unlike parseInt/parseFloat, no trailing
  * text is consumed and a failed parse throws rather than returning NaN: a
  * malformed string is a SyntaxError, and a well-formed literal out of range is a
- * RangeError (spec sec-parse-for-numeric-types).
+ * RangeError (#sec-parsing).
  */
 
 // -- The parse method exists on numeric types ----------------------------------
@@ -159,8 +159,8 @@ test('tryParse: it is gated with the rest of the feature', () => {
 });
 
 // The two failures must stay distinguishable, which is the property the clause
-// names and the one a kind-blind assertion cannot check. Pinned as a pair so a
-// change that collapsed them into one error would fail here rather than pass.
+// names and the one a kind-blind assertion cannot check. Asserted as a pair, so
+// a change collapsing them into one error fails here rather than passes.
 test('parse: the two failures are reported as different errors', () => {
   expect(evaluated(`
     let syntax = "";

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * The `type` type (spec sec-the-type-type).
+ * The `type` type (spec #sec-the-type-type).
  *
  * "`type` is the type whose values are the Type Objects. It is described by the
  * Type Record { [[Kind]]: ~primitive~, [[Name]]: *"type"*, [[Arguments]]: << >>

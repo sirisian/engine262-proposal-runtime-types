@@ -48,7 +48,7 @@ test('an object rest may state the type of what it collects', () => {
 
 /**
  * A `ref` member of a destructuring ASSIGNMENT pattern (spec
- * sec-typed-destructuring).
+ * #sec-typed-destructuring).
  *
  * The declaration form binds a new `ref`; this re-borrows one that already
  * exists, pointing it at the property's location on the object being

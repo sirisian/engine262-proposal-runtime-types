@@ -70,7 +70,7 @@ test('the TYPE path is unchanged where the two spellings agree', () => {
 });
 
 test('ARRAY patterns match through ITERATION', () => {
-  // `sec-match-array`: "through iteration rather than through an array test,
+  // #sec-match-array: "through iteration rather than through an array test,
   // which is what reaches every array-shaped value of this proposal - a
   // `[N].<T>` need not be an Array exotic object, a tuple composite is iterable
   // by kind rather than by prototype, and a typed view answers no array

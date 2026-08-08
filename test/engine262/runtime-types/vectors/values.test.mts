@@ -534,7 +534,7 @@ test('an alias of a vector type has its accessors and a wrapping class does not'
  *
  * So reaching the operation means either binding all five - a design change
  * nothing asks for - or giving preferredLanes a home that does not need
- * `vector` to be a value. The second is a decision sec-vector-widths has not
+ * `vector` to be a value. The second is a decision #sec-vector-widths has not
  * made, and it is the real blocker.
  */
 
@@ -553,7 +553,7 @@ test('a bare parameterized primitive is not a value', () => {
  * The comparison result forms: one of the clause's three now lands, and the
  * remaining divergence is narrowed to a single case.
  *
- * sec-vector-comparisons gives a comparison three result forms chosen by the
+ * #sec-vector-comparisons gives a comparison three result forms chosen by the
  * expected type: the WIDE MASK, a vector of the boolean type of the compared
  * element's width; the COMPACT MASK, a bit vector of one bit per lane; and the
  * compared vector type itself with matching lanes all-ones.
@@ -568,7 +568,7 @@ test('a bare parameterized primitive is not a value', () => {
  * expression is ambiguous among them and is a type error". A bare `a < b` is
  * accepted here and yields the compact mask. Making it an error needs the
  * selection to be a real overload resolution rather than a conversion, which
- * needs sec-overloading-on-return-type - and `overloads.mts` resolves on
+ * needs #sec-overloading-on-return-type - and `overloads.mts` resolves on
  * ARGUMENT types, so a function overloaded only on its return type does not
  * even parse.
  *
@@ -662,7 +662,7 @@ test("every expression in the design's instruction table runs", () => {
  * this one's is not. Refusing the assignment would leave a lane whose index is
  * computed with no way to be written.
  *
- * sec-vector-lanes records the decision and names what would reopen it: an
+ * #sec-vector-lanes records the decision and names what would reopen it: an
  * operation taking a computed index and returning a new vector would restore
  * the redundancy, and nothing proposes one.
  */

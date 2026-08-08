@@ -101,7 +101,7 @@ test('ToBoolean: a typed zero or NaN is falsy', () => {
 });
 
 test('Number.isInteger/isFinite answer for a numeric type, not for a representation', () => {
-  // SUPERSEDED BY sec-numeric-predicates. This test used to pin the opposite, on
+  // SUPERSEDED BY #sec-numeric-predicates. This test used to pin the opposite, on
   // the BigInt precedent: these methods return false for any non-Number, and a
   // typed number is not a Number, so false. The precedent is real and is still
   // what the flag-off engine does (asserted in numeric-library/predicates), but

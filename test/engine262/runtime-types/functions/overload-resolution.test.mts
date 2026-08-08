@@ -6,11 +6,11 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
  *
  * A name declared by more than one function signature resolves, at each call, to
  * the signature whose parameter list best fits the argument values (spec
- * sec-overload-resolution). Resolution collects the viable signatures, an argument
+ * #sec-overload-resolution). Resolution collects the viable signatures, an argument
  * list satisfying a signature's arity and each argument assignable to its
  * parameter, then ranks them by the worst match of any argument against its
  * parameter: an exact type, then an untyped literal taking the parameter's type
- * (sec-literal-overload-ranking), then an ordinary widening, then an untyped
+ * (#sec-literal-overload-ranking), then an ordinary widening, then an untyped
  * catch-all. Exactly one best signature is called; no viable signature, or more
  * than one equally best, is a type error.
  *
@@ -21,7 +21,7 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
  * function body. A block forbids duplicate function declarations, so no overload
  * arises there.
  *
- * Return-type overloading (sec-overloading-on-return-type) selects by the call's
+ * Return-type overloading (#sec-overloading-on-return-type) selects by the call's
  * contextual type, a separate mechanism from the argument ranking here; where two
  * signatures differ only in their return, a call with no contextual type is
  * ambiguous, which is the error this file checks.
@@ -128,7 +128,7 @@ test('an ambiguous call between equally-ranked signatures is a type error', () =
 });
 
 // Two signatures differing only in their return type are ambiguous where the call
-// has no contextual type to select between them (sec-overloading-on-return-type).
+// has no contextual type to select between them (#sec-overloading-on-return-type).
 test('signatures differing only in return type are ambiguous with no contextual type', () => {
   expectThrown('function f(): uint32 { return (1 := uint32); } function f(): string { return "s"; } f();');
 });

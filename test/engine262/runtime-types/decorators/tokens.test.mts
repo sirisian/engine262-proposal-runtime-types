@@ -7,7 +7,7 @@ import { evaluated } from '../harness.mts';
 
 /**
  * Spec: #sec-token-records (Token Records) and
- * `sec-tokensof`.
+ * #sec-tokensof.
  */
 
 const SOURCE = { URL: 't', Macro: undefined, Generation: 0 };
@@ -74,11 +74,11 @@ test('a REGULAR EXPRESSION does not tokenize as one', () => {
   // differently, and only the enclosing parse knows which applied.
   //
   // **This is the `/` problem the specification predicted, and measuring it here
-  // settles a design question for expansion**: `sec-tokensof` says "the lexical
+  // settles a design question for expansion**: #sec-tokensof says "the lexical
   // goal symbol at each position is the one the enclosing parse used", which a
   // re-lex cannot honour. So the tokens a decorator receives must be THREADED
   // FROM THE PARSE rather than re-derived from source text - which is the same
-  // conclusion `sec-expansion` reaches from the other direction when it says
+  // conclusion #sec-expansion reaches from the other direction when it says
   // nothing is re-lexed.
   expect(show(tokens('const r = /ab+/g;'))).toBe('const r = / ab + / g ;');
   expect(kinds(tokens('const r = /ab+/g;'))).not.toContain('regexp');

@@ -8,7 +8,7 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
  * a constructor of the declaring class; every other assignment is a TypeError,
  * including one from a method the constructor calls, from a subclass, through a
  * reference, or through reflection (README "Readonly Fields", spec
- * sec-typed-classes). `readonly` is shallow: the field binding is fixed, not the
+ * #sec-typed-classes). `readonly` is shallow: the field binding is fixed, not the
  * object it refers to. `Object.freeze` on an instance of a typed class makes every
  * field `readonly`, so a write after freezing is a TypeError in every mode.
  *

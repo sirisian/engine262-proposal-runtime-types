@@ -110,11 +110,11 @@ test('where: with the feature off, a where clause is a syntax error', () => {
 /**
  * Spec: #sec-where-clauses (Where Clauses) on a function declaration: "A
  * function declaration may
- * carry `where` clauses, the WhereClauses of sec-where-clauses, between its
+ * carry `where` clauses, the WhereClauses of #sec-where-clauses, between its
  * return annotation and its body. On an ordinary function they are the
  * compile-time bound over its generic parameters."
  *
- * And sec-where-clauses: "a compile-time-evaluable Boolean expression over its
+ * And #sec-where-clauses: "a compile-time-evaluable Boolean expression over its
  * parameters, checked at each specialization once its parameters are bound.
  * Where the expression is false for an application's bindings, that application
  * is a type error."

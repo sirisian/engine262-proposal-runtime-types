@@ -81,7 +81,7 @@ test('every one of these is reachable BEFORE anything runs', () => {
 
 
 test('a macro that is not COMPILE-TIME EVALUABLE never runs', () => {
-  // `sec-preprocessor-modules` requires a replacement decorator to be evaluable,
+  // #sec-preprocessor-modules requires a replacement decorator to be evaluable,
   // and it is checked BEFORE the call - so a macro that names the clock does not
   // get to run once and be caught afterwards.
   //
@@ -105,7 +105,7 @@ test('a macro that is not COMPILE-TIME EVALUABLE never runs', () => {
 
 /**
  * #sec-static-semantics-replacementdecoratornames:
- * `sec-static-semantics-replacementdecoratornames`.
+ * #sec-static-semantics-replacementdecoratornames.
  */
 
 function names(source: string): string {

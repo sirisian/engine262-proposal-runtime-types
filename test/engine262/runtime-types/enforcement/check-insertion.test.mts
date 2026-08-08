@@ -263,7 +263,7 @@ test('an enum is a subtype of its underlying type, and reflects as an enum', () 
   // it to.
   expect(evaluated('enum C: uint8 { A, B }; String(Reflect.isAssignable(C, uint8));')).toBe('true');
   // An enum declared without a `: Type` has the underlying type `int32`, which
-  // sec-enums names - it defaulted to `number`, so an unannotated enum related
+  // #sec-enums names - it defaulted to `number`, so an unannotated enum related
   // to a type the clause does not give it and not to the one it does. `number`
   // is a value type like the rest and nothing widens to it.
   expect(evaluated('enum D { A, B }; String(Reflect.isAssignable(D, int32));')).toBe('true');
@@ -1091,7 +1091,7 @@ test('a typed collection takes its needle at the element type', () => {
 });
 
 test('a typed array reads its length at uint32, and an untyped one does not', () => {
-  // "`length` is a `uint32`" (sec-array-defaults-and-stores). The STORED length
+  // "`length` is a `uint32`" (#sec-array-defaults-and-stores). The STORED length
   // stays a plain Number - the array exotic object asserts that it is one and
   // ArraySetLength computes with it - so the typing is applied at the read
   // at the read.
@@ -1111,7 +1111,7 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   //
   // The canonical counting loop needs a typed counter, because i declared as
   // let i = 0 is a Number and a Number does not mix with a uint32
-  // (sec-arithmetic-never-promotes). Every statically typed language asks for
+  // (#sec-arithmetic-never-promotes). Every statically typed language asks for
   // this - it is size_t in C - but it is the most common loop in JavaScript,
   // so it is pinned here rather than left to be discovered.
   expect(thrownKind('let a: [].<uint8> = [1,2,3]; for (let i = 0; i < a.length; ++i) { }')).toBe('TypeError');

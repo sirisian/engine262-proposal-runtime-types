@@ -187,8 +187,8 @@ test('the two failures carry different messages', () => {
  * 2. ANSWERED, AND IT IS NOT THIS FEATURE'S. `where` does not parse for ANY
  *    declaration - the token appears nowhere in the parser - so the refusal was
  *    about the clause and not about the kinded parameter, which is what the
- *    question was for. sec-generic-where writes a `where` "with the
- *    WhereClauses of sec-where-clauses where sec-checked-contracts admits
+ *    question was for. #sec-generic-where writes a `where` "with the
+ *    WhereClauses of #sec-where-clauses where #sec-checked-contracts admits
  *    them", and checked contracts is a specified extension the engine has not
  *    implemented. A kinded constraint will work when `where` does, and needs
  *    nothing of its own beyond what application already resolves.
@@ -287,7 +287,7 @@ test('a kinded parameter must be supplied by explicit application', () => {
 test('the refusal explains that inference is not attempted', () => {
   // The message says WHY rather than reporting a missing binding. Recovering W
   // and T from one argument admits two consistent answers, so choosing is a
-  // search - and sec-evaluation-budget meters computation rather than search.
+  // search - and #sec-evaluation-budget meters computation rather than search.
   const completion = run('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);');
   let message = '';
   const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
@@ -363,7 +363,7 @@ test('deep but finite nesting completes', () => {
  *
  * `type R<T> = R.<T>` used to overflow the HOST stack - a RangeError that is
  * not an engine262 completion, so no program could observe it and the
- * diagnostic sec-evaluation-budget requires never appeared. It now reports a
+ * diagnostic #sec-evaluation-budget requires never appeared. It now reports a
  * type error naming the alias, which is what the clause asks for.
  *
  * Two things had to be true and each hid the other. The instantiation had to

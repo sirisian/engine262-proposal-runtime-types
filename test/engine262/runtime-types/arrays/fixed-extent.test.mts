@@ -3,7 +3,7 @@ import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
  * A fixed extent is part of the type and does not move (#sec-array-and-tuple-types,
- * sec-array-and-tuple-types).
+ * #sec-array-and-tuple-types).
  *
  * The extent was dropped when the element type was stamped, so nothing enforced
  * it: a `[4].<float32>` accepted `push`, a `length` assignment, and a store past

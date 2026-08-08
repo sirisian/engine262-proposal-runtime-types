@@ -69,7 +69,7 @@ test('every pattern form works as a clause pattern', () => {
 });
 
 test('THE CACHE COVERS THE TYPE PATH TOO', () => {
-  // `sec-match-expression`: the cache memoizes reads "so that a property is
+  // #sec-match-expression: the cache memoizes reads "so that a property is
   // read at most once HOWEVER MANY PATTERNS LOOK, and every pattern of one
   // `match` sees the same values."
   //

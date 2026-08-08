@@ -8,8 +8,8 @@ import { evaluated, bool, expectThrown, expectErrorFlagOff } from '../../harness
  * if/else truthiness and the ordinary (value-matching) switch are implemented and
  * verified here, as is enum switch exhaustiveness: a switch over an enumerator must
  * cover every enumerator when it has no default, and its labels must be enumerators
- * of that enum (spec sec-enums). The sealed-class switch, whose case labels are type
- * objects compiled to instanceof tests with narrowing (spec sec-narrowing), is a
+ * of that enum (#sec-enums). The sealed-class switch, whose case labels are type
+ * objects compiled to instanceof tests with narrowing (#sec-narrowing), is a
  * deeper static-checker and runtime-dispatch feature and is documented as deferred
  * below. Floating-point discriminants with range case labels are the ranges
  * extension.
@@ -52,8 +52,8 @@ test('switch: an enum-valued discriminant matches enumerator cases', () => {
 // -- Documented gaps -----------------------------------------------------------
 // -- switch: enum exhaustiveness -----------------------------------------------
 // A switch over an enumerator must cover every enumerator when it has no default,
-// and its case labels must be enumerators of that enum (README "Control
-// Structures", spec sec-enums).
+// and its case labels must be enumerators of that enum (#sec-enums; README
+// "Control Structures").
 test('switch: an enum switch missing an enumerator with no default is a type error', () => {
   expectThrown('enum Count { Zero, One, Two }; let a = Count.Two; switch (a) { case Count.Zero: break; case Count.One: break; }');
 });
