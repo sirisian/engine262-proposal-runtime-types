@@ -2,7 +2,7 @@ import { NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue } from '
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
-import { displayType } from './records.mts';
+import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
 import { AbruptCompletion, Throw, type ThrowCompletion } from '#self';
 
@@ -250,8 +250,15 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
  * (F53).
  */
 export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypeRecord | ThrowCompletion {
-  const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
-  const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
+  // UNDERLYING type here, which is what the clause means by "an enum can be used
+  // for arithmetic, indexing, and comparison without a cast" and by `comp / 32`
+  // reading directly. It is also what keeps the RESULT sound: the operands of
+  // `C.One + C.Two` are both of type `C`, and the rule of the enclosing clause
+  // would give the result that type - but an enum's values are exactly its
+  // enumerators, and the sum need not be one of them.
+  const xt = x instanceof TypedNumberValue ? UnderlyingOf((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const yt = y instanceof TypedNumberValue ? UnderlyingOf((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
   // `bigint` is a numeric type like any other here, so a typed value does not
   // mix with one. The arithmetic operators reach the same verdict by a
   // different road - they fall through to the standard path, which raises the
@@ -293,7 +300,9 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
 
 /** Unary minus and bitwise NOT over a typed number. */
 export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue {
-  const t = x.TypeRecord as TypeRecord;
+  // The enum rule of TypedOperandType, at the unary operators: `-C.One` computes
+  // in the underlying type and is a value of it.
+  const t = UnderlyingOf(x.TypeRecord as TypeRecord);
   const math = op === '-' ? -payload(x) : ~payload(x);
   return new TypedNumberValue(wrapToType(math, t), t);
 }

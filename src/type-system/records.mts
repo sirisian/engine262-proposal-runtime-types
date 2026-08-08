@@ -646,6 +646,25 @@ export function orderKey(t: TypeRecord): string {
   }
 }
 
+/**
+ * proposal-runtime-types #sec-enums: "An enum type is a subtype of its
+ * underlying type, so a value of an enum type is usable wherever the underlying
+ * type is required and no conversion is written", and "this does not make the
+ * enumerator anything other than a value the underlying type also accepts ...
+ * no conversion is performed". The rule has no algorithmic home in the clause,
+ * so it is one here: every position that requires a value of a numeric type
+ * reads the enum's UNDERLYING record rather than the enum's own.
+ *
+ * Returns _t_ unchanged for everything that is not an enum, so a caller can
+ * apply it unconditionally.
+ */
+export function UnderlyingOf(t: TypeRecord): TypeRecord {
+  if (t.Kind === 'nominal' && t.EnumMembers !== undefined && t.Underlying !== undefined) {
+    return t.Underlying;
+  }
+  return t;
+}
+
 /** A readable rendering of a Type Record for error messages. */
 export function displayType(t: TypeRecord): string {
   switch (t.Kind) {

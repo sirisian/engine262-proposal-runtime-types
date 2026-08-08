@@ -157,7 +157,16 @@ export abstract class StatementParser extends TypeParser {
           // proposal-runtime-types ClassDeclaration : ClassModifiers? `class` ...
           return this.parseClassDeclaration(null);
         }
-        if (surroundingAgent.feature('runtime-types')) {
+        // proposal-runtime-types: every declaration below is introduced by a
+        // CONTEXTUAL keyword, which lexes as an identifier, so the lookahead is
+        // meaningful only where the current token is one. Reading ahead
+        // unconditionally scans the token AFTER the current one; where the
+        // current token opens a template literal that scan runs the lexer over
+        // the template's body, and the template scanner - which reads raw source
+        // from `this.position` rather than from the token stream - then starts
+        // past its own opening backtick. The other lookaheads here are guarded
+        // by a `this.test(...)` for the same reason.
+        if (surroundingAgent.feature('runtime-types') && this.test(Token.IDENTIFIER)) {
           // Each lookahead pair is a SyntaxError today, so the gates are additive.
           switch (this.peekAhead().type) {
             case Token.IDENTIFIER:

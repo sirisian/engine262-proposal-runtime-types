@@ -233,3 +233,54 @@ test('two enumerators of one declaration may not share a name', () => {
   expect(evaluated('enum E { A, B, C } String(E.C);')).toBe('2');
   expect(evaluated('enum E { A = 1, B = 1 } String(E.B);')).toBe('1');
 });
+
+// -- The one-way subtype rule at a value boundary -------------------------------
+//
+// #sec-enums: "An enum type is a subtype of its underlying type, so a value of
+// an enum type is usable wherever the underlying type is required and no
+// conversion is written [...] it is why an enum can be used for arithmetic,
+// indexing, and comparison without a cast." The rule has no algorithmic home in
+// the clause, so an operand of an enum type is read at its UNDERLYING type
+// wherever a numeric type is required.
+test('an enum operand is read at its underlying type in arithmetic', () => {
+  // The clause's own example: a bitmask index reads directly.
+  expect(evaluated('enum Comp { A = 64, B = 96 } String(Comp.B / 32);')).toBe('3');
+  expect(evaluated('enum C { Zero, One } String(C.One + 1);')).toBe('2');
+  expect(evaluated('enum C { Zero, One } String(C.One * 2);')).toBe('2');
+  expect(evaluated('enum C { Zero, One } String(-C.One);')).toBe('-1');
+  // Against a value of the underlying type, not only against a literal.
+  expect(evaluated('enum C { Zero, One } String(C.One + (1 := int32));')).toBe('2');
+  // Relational too - the clause names "arithmetic, bitwise, shift, or
+  // relational" as one rule.
+  expect(evaluated('enum C { Zero, One, Two } String(C.Two > 1);')).toBe('true');
+  // The underlying type is the enum's, not always int32, and its width rules
+  // apply: a uint8 enum wraps where uint8 wraps.
+  expect(evaluated('enum C: uint8 { Zero, Max = 255 } String(C.Max + (1 := uint8));')).toBe('0');
+  expect(evaluated('enum C: float32 { Zero, One, Two } String(C.Two / 2);')).toBe('1');
+});
+
+test('the result of enum arithmetic is of the UNDERLYING type, not the enum', () => {
+  // An enum's values are exactly its enumerators, so a sum that is not one of
+  // them cannot be of the enum type. Reporting it as the enum makes
+  // Reflect.typeOf and the membership test contradict each other on one value,
+  // and leaves `toString` unable to name what typeOf claims to have.
+  const C = 'enum C { Zero, One, Two } ';
+  expect(evaluated(`${C}String(Reflect.typeOf(C.One + C.Two) === int32);`)).toBe('true');
+  expect(evaluated(`${C}String(Reflect.typeOf(C.One + C.Two) === C);`)).toBe('false');
+  expect(evaluated(`${C}String((C.One + C.Two) is C);`)).toBe('false');
+});
+
+test('the enum rule does not weaken the operand rule or the enum\'s own identity', () => {
+  // #sec-arithmetic-never-promotes still holds of the underlying types: two
+  // different widths do not mix just because one of them came from an enum.
+  expectThrownKind('enum C: uint8 { Zero, One } C.One + (1 := uint16);', 'TypeError');
+  // And an enumerator is still a value of its enum: the decay is a reading at a
+  // value boundary, not a change to what the value IS.
+  const C = 'enum C { Zero, One } ';
+  expect(evaluated(`${C}String(Reflect.typeOf(C.One) === C);`)).toBe('true');
+  expect(evaluated(`${C}String(C.One is C);`)).toBe('true');
+  expect(evaluated(`${C}String(C.One is int32);`)).toBe('true');
+  expect(evaluated(`${C}String(C.toString(C.One));`)).toBe('One');
+  // A switch over an enum still dispatches on the enumerators.
+  expect(evaluated(`${C}let r = "x"; switch (C.One) { case C.Zero: r = "z"; break; case C.One: r = "o"; break; } r;`)).toBe('o');
+});
