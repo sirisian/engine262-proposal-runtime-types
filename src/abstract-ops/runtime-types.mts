@@ -2029,7 +2029,18 @@ export function withValueTypeReturn(steps: NativeSteps, typeName: string): Nativ
  * rule `Reflect.typeOf` would have no single answer for a doubly-claimed value,
  * which #sec-value-types requires it to have.
  */
-const enumeratorClaims = new WeakMap<object, TypeRecord>();
+/**
+ * The table lives on the AGENT - see Agent.enumeratorClaims for the scope and
+ * why it is that one. It was a module-level table here, which made it per
+ * PROCESS: a claim on a value the engine shares across realms, a well-known
+ * symbol being the reachable case, refused the same declaration in every other
+ * realm and agent, so two unrelated embeddings interfered.
+ */
+function claimTable(): WeakMap<object, unknown> | undefined {
+  // RuntimeTypeOf is reachable from host code, where there may be no agent yet.
+  // "Unclaimed" is the answer then, rather than a throw.
+  return surroundingAgent?.enumeratorClaims;
+}
 
 /**
  * Records _t_ as the enum of _value_, and returns the enum that already claimed
@@ -2038,12 +2049,16 @@ const enumeratorClaims = new WeakMap<object, TypeRecord>();
  * underlying type.
  */
 export function ClaimEnumerator(value: Value, t: TypeRecord): TypeRecord | undefined {
-  const key = value as unknown as object;
-  const existing = enumeratorClaims.get(key);
-  if (existing !== undefined) {
-    return existing;
+  const table = claimTable();
+  if (table === undefined) {
+    return undefined;
   }
-  enumeratorClaims.set(key, t);
+  const key = value as unknown as object;
+  const existing = table.get(key);
+  if (existing !== undefined) {
+    return existing as TypeRecord;
+  }
+  table.set(key, t);
   return undefined;
 }
 
@@ -2052,7 +2067,8 @@ export function RegisteredEnumOf(value: Value): TypeRecord | undefined {
   if (value === null || typeof value !== 'object') {
     return undefined;
   }
-  return enumeratorClaims.get(value as unknown as object);
+  const table = claimTable();
+  return table?.get(value as unknown as object) as TypeRecord | undefined;
 }
 
 const classTypeObjects = new WeakMap<object, Value>();

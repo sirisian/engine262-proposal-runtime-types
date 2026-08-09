@@ -74,6 +74,23 @@ export class Agent {
 
   readonly finalizationRegistryScheduledForCleanup = new Set<FinalizationRegistryObject>();
 
+  /**
+   * proposal-runtime-types #sec-enums: the enum each identity-compared value has
+   * been claimed by, as its enumerator - a symbol, a class instance, or a
+   * function, whose values carry their own identity and so have nowhere to hold
+   * the enum themselves.
+   *
+   * Per AGENT. A value two realms of one agent can both name - a well-known
+   * symbol is the reachable case - must have ONE answer from RuntimeTypeOf, so
+   * the claim reaches across the realms of an agent. It must not reach further:
+   * two agents share no value a program can observe, and a module-level table
+   * made a claim in one of them refuse a declaration in the other.
+   *
+   * Typed `unknown` rather than TypeRecord because this file sits below the type
+   * system; the accessors in abstract-ops/runtime-types.mts hold the type.
+   */
+  readonly enumeratorClaims = new WeakMap<object, unknown>();
+
   hostDefinedOptions: AgentHostDefined;
 
   constructor(options: AgentHostDefined = {}) {

@@ -503,6 +503,70 @@ test('a value may be an enumerator of at most one enum', () => {
   expect(evaluated(`${K}const k = new K(1); enum A: K { X = k, Y = k } String(A.X === A.Y);`)).toBe('true');
 });
 
+test('a claim reaches the realms of its agent, and no further', () => {
+  // The claim is held on the AGENT. A value two realms of one agent can both
+  // name - a well-known symbol is the reachable case - must have one answer from
+  // Reflect.typeOf, so the claim reaches across them. It must not reach further:
+  // two agents share no value a program can observe, and holding the table at
+  // module scope made a claim in one of them refuse the declaration in the other,
+  // so two unrelated embeddings interfered.
+  //
+  // Each `evaluated` call runs in its own Agent, which is what makes the first
+  // two lines a test at all.
+  expect(evaluated('enum A: symbol { X = Symbol.iterator } "ok";')).toBe('ok');
+  expect(evaluated('enum B: symbol { Y = Symbol.iterator } "ok";')).toBe('ok');
+  // A fresh symbol is distinct per realm and was never affected - the control.
+  expect(evaluated('const s = Symbol("s"); enum A: symbol { X = s } "ok";')).toBe('ok');
+  expect(evaluated('const s = Symbol("s"); enum B: symbol { Y = s } "ok";')).toBe('ok');
+
+  // Within ONE agent, two realms may not both claim one value. Written against
+  // the Agent directly, since the helper above makes a fresh agent per call.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const first = new ManagedRealm();
+  expect(first.evaluateScriptSkipDebugger('enum C: symbol { X = Symbol.iterator } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+  const second = new ManagedRealm();
+  expect(second.evaluateScriptSkipDebugger('enum D: symbol { Y = Symbol.iterator } "ok";'))
+    .toMatchObject({ Type: 'throw' });
+});
+
+// -- What a declaration may claim -----------------------------------------------
+//
+// These pin a DECISION rather than a law. The rule is stated over values, not
+// over the form of an initializer: an initializer that constructs its value
+// cannot conflict, but one that calls a factory to construct it is equally
+// sound, and no syntactic test separates the two. So a declaration may claim a
+// value the program obtained elsewhere, including a shared or built-in one. If
+// the clause is ever narrowed to restrict that, these are the tests that change.
+test('a declaration may claim a value the program obtained elsewhere', () => {
+  expect(evaluated('enum A: any { X = Math } String(Reflect.typeOf(Math) === A);')).toBe('true');
+  expect(evaluated('enum A: any { X = uint8 } String(Reflect.typeOf(uint8) === A);')).toBe('true');
+  expect(evaluated('enum A: symbol { X = Symbol.iterator } '
+    + 'String(Reflect.typeOf(Symbol.iterator) === A);')).toBe('true');
+  expect(evaluated('class K {} enum A: any { X = K } String(Reflect.typeOf(K) === A);')).toBe('true');
+});
+
+test('claiming a value changes nothing but the type reported for it', () => {
+  // Bounded by the subtype rule rather than by luck: an enum is a subtype of its
+  // underlying type, so a claimed value stays assignable everywhere it was.
+  // Overload resolution is the case most likely to break, since it types its
+  // arguments through RuntimeTypeOf.
+  const K = 'class K { constructor(v) { this.v = v; } } const k = new K(1); ';
+  const OV = 'function f(x: K): string { return "K"; } function f(x: string): string { return "s"; } ';
+  expect(evaluated(`${K}${OV}f(k);`)).toBe('K');
+  expect(evaluated(`${K}enum A: K { X = k } ${OV}f(k);`)).toBe('K');
+  // Iteration still works once Symbol.iterator is an enumerator.
+  expect(evaluated('enum A: symbol { X = Symbol.iterator } const a = [1, 2]; String([...a].length);')).toBe('2');
+  // A claimed Type Object still annotates, still interns, and still reflects -
+  // getReflection reads the Type Object's own record rather than RuntimeTypeOf.
+  expect(evaluated('enum A: any { X = uint8 } let v: uint8 = 1; String(v);')).toBe('1');
+  expect(evaluated('enum A: any { X = uint8 } String(uint8 === (type uint8));')).toBe('true');
+  expect(evaluated('enum A: any { X = uint8 } Reflect.getReflection(uint8).kind;')).toBe('primitive');
+  // And a claimed object still satisfies a structural parameter.
+  expect(evaluated('const o = { a: (1 := uint8) }; enum A: any { X = o } type O = { a: uint8 }; '
+    + 'function g(x: O): string { return "O"; } g(o);')).toBe('O');
+});
+
 test('an identity-compared enumerator reports its enum, and stays itself', () => {
   const K = 'class K { constructor(v) { this.v = v; } } const k = new K(7); enum A: K { X = k } ';
   expect(evaluated(`${K}String(Reflect.typeOf(A.X) === A);`)).toBe('true');
