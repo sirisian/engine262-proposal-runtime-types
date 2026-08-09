@@ -525,6 +525,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  /**
+   * Whether _target_ is a class declaring `operator T(value: S)` for its own
+   * type - the third declaring form of sec-user-defined-conversions, "the form a
+   * type declares when its constructor is already spoken for". Declared on the
+   * TARGET like a converting constructor, but taking a parameter, and running
+   * with no receiver.
+   */
+  const declaresInboundConversion = (target: TypeRecord, source: TypeRecord): boolean => {
+    if (target.Kind !== 'nominal') {
+      return false;
+    }
+    const decl = (target as unknown as { Declaration?: ParseNode }).Declaration;
+    const body = (decl as unknown as {
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+    } | undefined)?.ClassTail?.ClassBody;
+    if (!body) {
+      return false;
+    }
+    for (const member of body) {
+      const m = member as unknown as {
+        type?: string,
+        OperatorName?: string | null,
+        Type?: ParseNode.Type | null,
+        FormalParameters?: readonly ParseNode[] | null,
+      };
+      if (m.type !== 'OperatorDefinition' || m.OperatorName || !m.Type) {
+        continue;
+      }
+      const params = m.FormalParameters ?? [];
+      if (params.length !== 1) {
+        continue;
+      }
+      const to = resolveType(m.Type);
+      if (!to || !SameType(to, target)) {
+        continue;
+      }
+      const ann = (params[0] as unknown as { TypeAnnotation?: { Type: ParseNode.Type } | null }).TypeAnnotation;
+      if (!ann) {
+        return true;
+      }
+      const want = resolveType(ann.Type);
+      if (want && (IsAssignable(source, want) || literalFitsNumericType(source, want))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
@@ -672,7 +720,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // already fits is never routed through a user conversion, so declaring a
       // constructor cannot change which overload an existing call selects.
       if (convertingConstructorAccepts(erasedTarget, erasedSource)
-        || declaresConversionTo(erasedSource, erasedTarget)) {
+        || declaresConversionTo(erasedSource, erasedTarget)
+        || declaresInboundConversion(erasedTarget, erasedSource)) {
         return;
       }
       report(erasedSource, erasedTarget);

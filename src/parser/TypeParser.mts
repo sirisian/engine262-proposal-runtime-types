@@ -920,12 +920,30 @@ export abstract class TypeParser extends ExpressionParser {
         break;
       }
       default: {
-        // conversion form: `operator` Type `(` `)`
+        // conversion form: `operator` Type `(` `)`, and the one-parameter form
+        // `operator` T `(` value `:` S `)` of sec-user-defined-conversions.
+        const conversionCheckpoint = this.getLexerCheckpoint();
+        const conversionEarlyErrors = new Set(this.earlyErrors);
         node.Type = this.parseType();
         // The trailing `(` `)` reads as an empty ComputedType inside the Type;
         // reclaim it for the conversion form.
         if (node.Type.type === 'ComputedType' && node.Type.Arguments.length === 0) {
           node.Type = node.Type.Callee;
+        } else if (node.Type.type === 'ComputedType') {
+          // NON-EMPTY arguments means a parameter list was folded into the type:
+          // `parseType` ends by consuming a following `(` ... `)` through
+          // `parseArguments`, which reads its contents as EXPRESSIONS. It does
+          // not throw - it returns a ComputedType - and the `expect(LPAREN)`
+          // below then failed on parens already eaten, which is why
+          // `operator A(value: float32)` was a Syntax Error.
+          //
+          // So rewind and read it as what it is: the target type, then a formal
+          // parameter list. Deterministic rather than speculative, because the
+          // shape of the result says which form this is.
+          this.restoreLexerCheckpoint(conversionCheckpoint);
+          this.earlyErrors = conversionEarlyErrors;
+          node.Type = this.parseTypeReference();
+          node.FormalParameters = this.parseFormalParameters();
         } else {
           this.expect(Token.LPAREN);
           this.expect(Token.RPAREN);

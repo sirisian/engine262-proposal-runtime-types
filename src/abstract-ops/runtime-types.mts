@@ -85,6 +85,11 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
     if (viaOperator !== undefined) {
       return viaOperator;
     }
+    // Form 3, declared on the TARGET and taking the value as a parameter.
+    const viaInbound = Q(yield* ConvertThroughInboundOperator(value, t));
+    if (viaInbound !== undefined) {
+      return viaInbound;
+    }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   return value;
@@ -449,6 +454,37 @@ function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): Pl
  * ClassDefinitionEvaluation derives the same way from the declaration's type
  * node, so both sides agree without sharing a record.
  */
+/**
+ * sec-user-defined-conversions, form 3: `operator T(value: S)` declared on the
+ * TARGET, "the form a type declares when its constructor is already spoken for".
+ * Reached from the target's prototype rather than the source value's, because
+ * that is where the declaration lives.
+ */
+function* ConvertThroughInboundOperator(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  if (t.Kind !== 'nominal') {
+    return undefined;
+  }
+  // A nominal's [[Constructor]] is absent for a type with no class behind it -
+  // an intrinsic interface such as `ClassMetadata` - and `Get` asserts on a
+  // non-object, so the guard is the object test and not merely presence.
+  const ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  if (!(ctor instanceof ObjectValue)) {
+    return undefined;
+  }
+  const proto = Q(yield* Get(ctor, Value('prototype')));
+  if (!(proto instanceof ObjectValue)) {
+    return undefined;
+  }
+  // The table directly, not LookupClassOperator: that walks from a VALUE's
+  // prototype, so handing it the prototype itself would start one link too high
+  // and miss the class that declares the conversion.
+  const fn = classOperatorTables.get(proto as object)?.get('convert-from');
+  if (!fn || !IsCallable(fn)) {
+    return undefined;
+  }
+  return Q(yield* Call(fn, Value.undefined, [value]));
+}
+
 function* ConvertThroughDeclaredOperator(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
   const fn = LookupClassOperator(value, `convert ${displayType(t)}`);
   if (!fn || !IsCallable(fn)) {

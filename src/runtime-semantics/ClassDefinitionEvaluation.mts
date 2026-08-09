@@ -992,6 +992,18 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // from the annotation's resolved record, so both sides agree without
         // sharing one.
         const conversionType = (e as unknown as { Type?: ParseNode.Type }).Type;
+        // Form 3, `operator T(value: S)`: declared on the TARGET and taking a
+        // parameter, so it registers under a fixed key on the target's prototype
+        // rather than under the target's display - the boundary reaches it from
+        // the target type, not from the source value.
+        if (e.type === 'OperatorDefinition' && !e.OperatorName && conversionType
+          && e.FunctionBody && (e.FormalParameters?.length ?? 0) === 1) {
+          const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+          const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+          const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters as never, e.FunctionBody, 'non-lexical-this', env, privEnv);
+          RegisterClassOperator(e.static ? F : proto, 'convert-from', opFn);
+          continue;
+        }
         if (e.type === 'OperatorDefinition' && !e.OperatorName && conversionType && e.FunctionBody) {
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;

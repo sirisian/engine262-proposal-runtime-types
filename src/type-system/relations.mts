@@ -518,7 +518,13 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // - `f(x: I)` passed `new C()` because a class-typed parameter resolved to
       // ~any~, and `let x: I = new C()` was refused. The two disagreed, which is
       // how the gap stayed hidden.
-      if ((tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
+      // Narrowed to a CLASS source. Interface-to-interface stays nominal, or a
+      // reflection context whose members are a superset of another's would
+      // satisfy it - `Reflect.ClassField` passing where `Reflect.Class` is
+      // wanted - and the design distinguishes those by kind, not by shape.
+      if ((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
+        && s.LibraryName === undefined
+        && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
         const sStructure = (s as { Structure?: TypeRecord }).Structure;
         const tStructure = (tn as { Structure?: TypeRecord }).Structure;
         if (sStructure && tStructure) {
