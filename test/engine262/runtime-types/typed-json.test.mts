@@ -169,4 +169,9 @@ test('a typed parse reads an enum member back as its enumerator', () => {
     + `let o = JSON.parse.<T>('{"u":20}'); String(o.u === U.B);`)).toBe('true');
   // And an enum is a type argument like any other, so it reads at the top level.
   expect(evaluated(`enum C { Zero, One } String(JSON.parse.<C>('1') === C.One);`)).toBe('true');
+  // What comes back is the ENUMERATOR, not the bare value it matched, so it
+  // reports the enum - which is what makes a parsed value usable where the enum
+  // is required.
+  expect(evaluated(`${C}let o = JSON.parse.<T>('{"c":1}'); String(Reflect.typeOf(o.c) === C);`)).toBe('true');
+  expect(evaluated(`${S}let o = JSON.parse.<T>('{"s":"y"}'); String(Reflect.typeOf(o.s) === S);`)).toBe('true');
 });

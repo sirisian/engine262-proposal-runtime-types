@@ -530,6 +530,30 @@ test('a claim reaches the realms of its agent, and no further', () => {
     .toMatchObject({ Type: 'throw' });
 });
 
+test('the reverse conversion is by value, for every underlying type', () => {
+  // #sec-enums: "calling the enum type with a value of the underlying type
+  // returns the enumerator whose value it is, and throws a TypeError when it is
+  // not one of them". That is deliberately BY VALUE, and it has to keep working
+  // now that an enumerator carries its enum or is claimed by it - the call
+  // compares what the values hold, and returns the MEMBER, so the result carries
+  // the enum rather than being the bare argument.
+  expect(evaluated('enum N { Zero, One } String(N(1) === N.One);')).toBe('true');
+  expect(evaluated('enum S: string { A = "x" } String(S("x") === S.A);')).toBe('true');
+  expect(evaluated('enum B: bigint { A = 1n } String(B(1n) === B.A);')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D(decimal64("1.0")) === D.A);')).toBe('true');
+  expect(evaluated('const s = Symbol("s"); enum Y: symbol { A = s } String(Y(s) === Y.A);')).toBe('true');
+  expect(evaluated('class K {} const k = new K(); enum A: K { X = k } String(A(k) === A.X);')).toBe('true');
+  expect(evaluated('type F = (uint8) => uint8; const g = (x) => x; enum A: F { X = g } '
+    + 'String(A(g) === A.X);')).toBe('true');
+  // The result is the enumerator, so it reports the enum.
+  expect(evaluated('enum S: string { A = "x" } String(Reflect.typeOf(S("x")) === S);')).toBe('true');
+  // A value matching no enumerator is a TypeError, per family.
+  expectThrownKind('enum N { Zero } N(5);', 'TypeError');
+  expectThrownKind('enum S: string { A = "x" } S("z");', 'TypeError');
+  expectThrownKind('const s = Symbol("s"); enum Y: symbol { A = s } Y(Symbol("t"));', 'TypeError');
+  expectThrownKind('class K {} enum A: K { X = new K() } A(new K());', 'TypeError');
+});
+
 // -- What a declaration may claim -----------------------------------------------
 //
 // These pin a DECISION rather than a law. The rule is stated over values, not
