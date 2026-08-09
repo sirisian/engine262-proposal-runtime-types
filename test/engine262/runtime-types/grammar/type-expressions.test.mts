@@ -67,6 +67,25 @@ test('keyof, shared, and ref prefixes', () => {
   expect(parseType('keyof')).toMatchObject({ type: 'TypeReference' });
 });
 
+test('a prefix takes a `typeof` operand, which is a PrimaryType like any other', () => {
+  // The lookahead that decides whether `keyof` is an operator or an ordinary
+  // type reference did not list `typeof`, so `keyof typeof E` read `keyof` as a
+  // NAME and the `typeof` after it was unexpected - while `keyof (typeof E)` and
+  // a two-step alias both parsed. It is the spelling an enum's enumerator names
+  // are reached by, and the one a reader coming from TypeScript writes.
+  expect(parseType('keyof typeof E')).toMatchObject({
+    type: 'KeyOfType', Type: { type: 'TypeQueryType' },
+  });
+  expect(parseType('shared typeof v')).toMatchObject({
+    type: 'SharedType', Type: { type: 'TypeQueryType' },
+  });
+  expect(parseType('ref typeof v')).toMatchObject({
+    type: 'ReferenceType', Type: { type: 'TypeQueryType' },
+  });
+  // The grouping the parenthesized form already had is unchanged.
+  expect(parseType('keyof (typeof E)')).toMatchObject({ type: 'KeyOfType' });
+});
+
 test('predefined and literal types', () => {
   expect(parseType('void')).toMatchObject({ type: 'PredefinedType', keyword: 'void' });
   expect(parseType('null')).toMatchObject({ type: 'PredefinedType', keyword: 'null' });

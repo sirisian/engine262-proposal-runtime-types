@@ -212,6 +212,13 @@ export abstract class TypeParser extends ExpressionParser {
       case Token.LBRACK:
       case Token.LBRACE:
       case Token.LPAREN:
+      // `typeof T` is a PrimaryType (TypeQueryType), so it may follow `keyof`,
+      // `shared`, or `ref` like any other. Omitting it here left `keyof typeof E`
+      // unparsed - `keyof` was read as a type NAME and the `typeof` after it was
+      // unexpected - while `keyof (typeof E)` and a two-step alias both worked.
+      // It is the spelling the enumerator names of an enum are reached by, and
+      // the one a reader coming from TypeScript writes.
+      case Token.TYPEOF:
         return true;
       default:
         return false;

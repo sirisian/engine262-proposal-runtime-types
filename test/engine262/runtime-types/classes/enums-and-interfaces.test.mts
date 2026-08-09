@@ -400,6 +400,21 @@ test('two enumerators of one declaration may not share a name', () => {
 
 // -- Enums against the rest of the language -------------------------------------
 
+test('an enum\'s enumerator NAMES are reached through `keyof typeof`', () => {
+  // `keyof T` is the key set of a VALUE of T, and a value of an enum type is a
+  // value of the underlying type, which has no keys - so `keyof C` is the error
+  // `keyof uint8` is, and enums are not singled out. The member names are
+  // properties of the enum OBJECT, and `typeof` names that object's type. This
+  // is the line TypeScript draws, where `keyof Color` gives a number's methods
+  // and `keyof typeof Color` gives the names.
+  const C = 'enum C { Zero, One } ';
+  expect(evaluated(`${C}type K = keyof typeof C; String(("Zero" is K) && ("One" is K));`)).toBe('true');
+  expect(evaluated(`${C}type K = keyof typeof C; String("Nope" is K);`)).toBe('false');
+  // The parenthesized and two-step spellings agree with it.
+  expect(evaluated(`${C}type K = keyof (typeof C); String("Zero" is K);`)).toBe('true');
+  expect(evaluated(`${C}type T = typeof C; type K = keyof T; String("Zero" is K);`)).toBe('true');
+});
+
 test('an enumerator keys a Map and a Set by its own identity', () => {
   // An enumerator is a value of the enum, so it keys by that - and a raw value
   // of the underlying type is a different key, which is the one-way rule showing
