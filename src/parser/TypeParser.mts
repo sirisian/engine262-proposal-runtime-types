@@ -857,7 +857,11 @@ export abstract class TypeParser extends ExpressionParser {
     // overloadable. `operator[]` names the index accessor; the `[` `]` pair is the
     // operator name, followed by the parameter list (one or more index
     // parameters). A `get`/`set` prefix is handled by the class-element parser.
-    if (this.test(Token.LBRACK)) {
+    // Only an EMPTY bracket pair names the index accessor. A `[` that opens a
+    // type - `operator [number, number, string]()`, the tuple conversion target
+    // of README's own example - is a conversion, and claiming every `[` for the
+    // index operator made that a Syntax Error at `number`.
+    if (this.test(Token.LBRACK) && this.testAhead(Token.RBRACK)) {
       this.expect(Token.LBRACK);
       this.expect(Token.RBRACK);
       node.OperatorName = '[]';

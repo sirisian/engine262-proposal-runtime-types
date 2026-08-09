@@ -59,3 +59,22 @@ test('form 3 parses beside the other operator forms', () => {
   expect(evaluated('class V { constructor(x){this.x=x;} operator +(o: V) { return new V(this.x + o.x); } } const s = new V(1) + new V(2); String(s.x);')).toBe('3');
   expect(evaluated('class M { constructor(){ this.d=[1,2]; } operator [](i: uint32) { return this.d[Number(i)]; } } const m = new M(); String(m[1]);')).toBe('2');
 });
+
+// The TUPLE conversion target, README's own example. `operator [number, number,
+// string]()` was a Syntax Error: the operator parser claimed every `[` for the
+// index accessor `operator[]`, so the `[` opening a tuple type was consumed as
+// the operator name and `expect(RBRACK)` then failed at `number`. Only an EMPTY
+// bracket pair names the index accessor.
+
+test('a conversion may target a tuple type', () => {
+  const decl = 'class A { x = 1; y = 2; z = "s"; operator [number, number, string]() { return [this.x, this.y, this.z]; } } ';
+  expect(evaluated(`${decl}const a = new A(); let t: [number, number, string] = a; String(t[0]);`)).toBe('1');
+  expect(evaluated(`${decl}function f(t: [number, number, string]) { return t[0]; } String(f(new A()));`)).toBe('1');
+  // And an array-typed target parses too.
+  expect(evaluated('class B { operator [].<number>() { return [1]; } } "ok";')).toBe('ok');
+});
+
+test('the index accessor is untouched by that disambiguation', () => {
+  expect(evaluated('class M { constructor() { this.d = [1, 2]; } operator [](i: uint32) { return this.d[Number(i)]; } } const m = new M(); String(m[1]);')).toBe('2');
+  expect(evaluated('class M { constructor() { this.d = [0, 0]; } operator [](i: uint32) { return this.d[Number(i)]; } set operator [](i: uint32, v) { this.d[Number(i)] = v; } } const m = new M(); m[0] = 9; String(m[0]);')).toBe('9');
+});
