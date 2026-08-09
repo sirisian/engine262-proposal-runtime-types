@@ -1,5 +1,8 @@
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
 import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
+import {
+  CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
+} from '../intrinsics/Decimal.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -165,6 +168,16 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         } else {
           v = previous;
         }
+      } else if (isDecimalObject(previous)) {
+        // A decimal declares a prefix increment like any other numeric type, but
+        // the value it produces cannot be reached through a Number: a decimal
+        // carries a cohort member - `1.0` is 10 x 10^-1 where `1.00` is
+        // 100 x 10^-2 - and converting a double to one is refused for exactly
+        // that reason. So the step is taken IN the type, by adding the decimal
+        // one at the previous enumerator's own width.
+        const one = CreateDecimalValue(1n, 0, previous.DecimalWidth, surroundingAgent.currentRealmRecord);
+        const sum = decimalAdd(previous, one as DecimalObject);
+        v = CreateDecimalValue(sum.parts.significand, sum.parts.exponent, sum.width, surroundingAgent.currentRealmRecord);
       } else {
         // "A later enumerator with no initializer takes the result of applying
         // the underlying type's prefix increment operator to the one before."

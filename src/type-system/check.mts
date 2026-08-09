@@ -4176,6 +4176,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         frames[frames.length - 1].enums.set(n.BindingIdentifier.name, { names });
         // The NODE as well as the names, so the enum can be resolved as a type.
         enumNodes.set(n.BindingIdentifier.name, n);
+        // #sec-enums: an enumerator's value "is a value of the underlying type",
+        // so its initializer stands in a position of that type and a literal
+        // there takes it - the rule #sec-literal-propagation gives an annotated
+        // binding. Nothing gave the initializers a contextual type, so the marks
+        // the checker leaves for evaluation were never set: a decimal
+        // enumeration could not be written at all, since a decimal reads its
+        // cohort member from the SOURCE TEXT and by evaluation time the literal
+        // is a double, and `1.0` and `1.00` are one double and two decimals.
+        //
+        // The type is only APPLIED here, not enforced: an enumerator may also be
+        // initialized with a two-parameter function, which the clause calls
+        // rather than stores, so it is not assignable to the underlying type and
+        // requiring that would reject the design's own sequential form. The
+        // conversion at declaration time is what checks the value.
+        if (n.TypeAnnotation) {
+          const underlying = resolveType(n.TypeAnnotation.Type);
+          if (underlying) {
+            n.EnumMemberList.forEach((m) => {
+              if (m.Initializer) {
+                staticTypeIn(m.Initializer as ParseNode, underlying);
+              }
+            });
+          }
+        }
         return;
       }
       case 'MatchExpression': {

@@ -360,6 +360,40 @@ test('the underlying type\'s range and precision are the enum\'s', () => {
   expect(evaluated('enum B: bigint { A = 1n, B = 2n } String(B.B);')).toBe('2');
 });
 
+test('an enumerator initializer meets the underlying type, as an annotated binding does', () => {
+  // #sec-enums: an enumerator's value is a value of the underlying type, so its
+  // initializer stands in a position of that type and a literal there takes it -
+  // #sec-literal-propagation's rule, which nothing applied here because the
+  // checker never gave the initializers a contextual type.
+  //
+  // A decimal is where it shows: the type "reads its cohort member from the
+  // SOURCE TEXT rather than from the mathematical value, since 1.0 and 1.00 have
+  // the same mathematical value", and by evaluation time a literal is a double,
+  // so a decimal enumeration could not be written at all.
+  expect(evaluated('enum D: decimal64 { A = 1.5 } String(D.A);')).toBe('1.5');
+  expect(evaluated('enum D: decimal32 { A = 2.5 } String(D.A);')).toBe('2.5');
+  expect(evaluated('enum D: decimal64 { A = 1 } String(D.A);')).toBe('1');
+  // The cohort member survives, which is the whole reason the literal has to be
+  // read at the type rather than converted to it.
+  expect(evaluated('enum D: decimal64 { A = 1.00 } String(D.A);')).toBe('1.00');
+  // A bigint enumerator takes a plain integer literal for the same reason a
+  // `let x: bigint = 65` does: "where a type is written it carries no
+  // information the annotation does not".
+  expect(evaluated('enum B: bigint { A = 1, B = 2 } String(B.B);')).toBe('2');
+});
+
+test('the sequence step is taken IN the underlying type, not through a Number', () => {
+  // A decimal declares a prefix increment, but the value it produces cannot be
+  // reached through a double - converting one to a decimal is refused for the
+  // cohort reason above. So the step adds the decimal one at the previous
+  // enumerator's own width, and the cohort carries through the sequence.
+  expect(evaluated('enum D: decimal64 { A = 1.0, B, C } String(D.C);')).toBe('3.0');
+  expect(evaluated('enum D: decimal64 { A = 1.00, B } String(D.B);')).toBe('2.00');
+  expect(evaluated('enum D: decimal32 { A = 2.5, B } String(D.B);')).toBe('3.5');
+  // The result is a value of the underlying type, and the enum call finds it.
+  expect(evaluated('enum D: decimal64 { A = 1.0, B } String(D.B is decimal64);')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0, B } String(D(D.B) === D.B);')).toBe('true');
+});
 test('two enumerators of one declaration may not share a name', () => {
   expectThrownKind('enum E { A, A } E.A;', 'TypeError');
 });
