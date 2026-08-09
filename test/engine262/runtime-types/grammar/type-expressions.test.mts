@@ -67,6 +67,15 @@ test('keyof, shared, and ref prefixes', () => {
   expect(parseType('keyof')).toMatchObject({ type: 'TypeReference' });
 });
 
+/** Evaluates a script under the feature and returns its completion value as a string. */
+function evaluated(source: string): string {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  const completion = realm.evaluateScriptSkipDebugger(source);
+  expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
+  return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
+}
+
 test('a prefix takes a `typeof` operand, which is a PrimaryType like any other', () => {
   // The lookahead that decides whether `keyof` is an operator or an ordinary
   // type reference did not list `typeof`, so `keyof typeof E` read `keyof` as a
@@ -254,4 +263,53 @@ test('rejected forms', () => {
   expectTypeError('{ a }'); // type members need an annotation or method signature
   expectTypeError('[1, 2].<uint8>'); // an extent is a single expression
   expectTypeError('.<uint8>'); // type arguments need a reference
+});
+
+// -- What `keyof` answers where there is nothing to answer with -----------------
+test('keyof a type with no keys is the empty type, not an error', () => {
+  // A type with no keys has an empty key set - a definite answer, not an unknown
+  // one. An empty object type already answered that way, so `keyof {}` and
+  // `keyof uint8` disagreed for no reason a reader could give.
+  expect(evaluated('type A = keyof uint8; type B = keyof { }; String(A === B);')).toBe('true');
+  expect(evaluated('type K = keyof string; String("a" is K);')).toBe('false');
+  expect(evaluated('enum C { Zero } type K = keyof C; String("Zero" is K);')).toBe('false');
+  // The enumerator NAMES are reached through the enum object's type, which is a
+  // different question and still answers.
+  expect(evaluated('enum C { Zero } type K = keyof typeof C; String("Zero" is K);')).toBe('true');
+});
+
+test('a keyless member of an intersection contributes nothing, rather than voiding it', () => {
+  // A behaviour CHANGE, not a simplification: while a sentinel stood for "no
+  // keys", one keyless member made the whole intersection keyless. An
+  // intersection has every key its members have, so `keyof (A & uint8)` is
+  // `keyof A`.
+  expect(evaluated('type A = { a: uint8 }; type X = keyof (A & uint8); type Y = keyof A; '
+    + 'String(X === Y);')).toBe('true');
+  // A union is the other way round - its keys are those COMMON to every member -
+  // so a keyless member empties it, which needs no special case either.
+  expect(evaluated('type A = { a: uint8 }; type K = keyof (A | uint8); String("a" is K);')).toBe('false');
+  expect(evaluated('type A = { a: uint8, b: string }; type B = { a: uint8 }; type K = keyof (A | B); '
+    + 'String(("a" is K) && !("b" is K));')).toBe('true');
+});
+
+// -- keyof over a class ---------------------------------------------------------
+test('a class type answers with its declared instance members', () => {
+  // An interface answered already, because its Type Record carries a structure
+  // this operation reads; a class type carries none, so `keyof C` reported a type
+  // with no keys while `keyof I` for the same shape answered. The keys are
+  // derived from the declaration rather than by giving a class a structure -
+  // that structure is what makes an INTERFACE parameter structural in overload
+  // resolution, and a class must stay nominal by declaration.
+  const C = 'class C { a: uint8 = 1; b: string = "x"; m(): void {} static s = 1; #p = 2; } ';
+  expect(evaluated(`${C}type K = keyof C; String(("a" is K) && ("b" is K));`)).toBe('true');
+  // Methods are keys, as they are for an interface.
+  expect(evaluated(`${C}type K = keyof C; String("m" is K);`)).toBe('true');
+  // A static belongs to the constructor, reached through `keyof typeof C`.
+  expect(evaluated(`${C}type K = keyof C; String("s" is K);`)).toBe('false');
+  // A private name is not a property key and cannot be written as one.
+  expect(evaluated(`${C}type K = keyof C; String("p" is K);`)).toBe('false');
+  // A class and an interface of one shape agree, which is the comparison that
+  // made the old behaviour hard to defend.
+  expect(evaluated('interface I { a: uint8, m(): void } class D { a: uint8 = 1; m(): void {} } '
+    + 'type KI = keyof I; type KD = keyof D; String(KI === KD);')).toBe('true');
 });

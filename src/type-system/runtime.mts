@@ -2069,14 +2069,16 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
     }
     case 'KeyOfType': {
       // proposal-runtime-types #sec-keyof: keyof denotes GetTypeObject of the
-      // Type Record KeyTypesOf returns for the operand. It is a type error when
-      // KeyTypesOf is empty (the operand has no keys).
+      // Type Record KeyTypesOf returns for the operand.
+      //
+      // A type with no keys answers with the EMPTY type rather than throwing. It
+      // is not an unknown answer - a type with no keys has an empty key set - and
+      // an empty object type already answered that way, so `keyof {}` and
+      // `keyof uint8` disagreed for no reason a reader could give. It also
+      // composes: a helper written over `keyof T` works for a T that happens to
+      // have nothing to map, where a throw made every caller special-case it.
       const operand = Q(yield* TypeNodeToTypeRecord(node.Type));
-      const keys = KeyTypesOf(operand);
-      if (keys === KEY_TYPES_EMPTY) {
-        return Throw.TypeError('$1 is not supported yet', Value('keyof of a type with no keys'));
-      }
-      return keys;
+      return KeyTypesOf(operand);
     }
     case 'TypeQueryType': {
       // proposal-runtime-types (typeprogramming.md 4.1): `typeof x` is the type of
@@ -2156,8 +2158,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
  * Record; it is a type error when this returns empty. These are also the rules
  * of the kit's `keysOf`, so operator and helper cannot drift.
  */
-const KEY_TYPES_EMPTY = Symbol('empty');
-export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
+export function KeyTypesOf(t: TypeRecord): TypeRecord {
   if (t.Kind === 'object') {
     const keys: TypeRecord[] = [];
     for (const p of t.Properties) {
@@ -2171,14 +2172,50 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
     }
     return CanonicalizeType({ Kind: 'union', Members: keys });
   }
+  // proposal-runtime-types: a CLASS type's keys are its declared instance
+  // members. An interface answers already, because its Type Record carries a
+  // [[Structure]] that this operation reads; a class type carries none - it is
+  // { Kind: nominal, Declaration, Constructor } - so `keyof C` reported a type
+  // with no keys while `keyof I` for an interface of the same shape answered.
+  //
+  // Derived from the declaration rather than by giving a class a [[Structure]]:
+  // the structure is read by overload viability to decide that an INTERFACE
+  // parameter is structural, and a class must stay nominal by declaration.
+  if (t.Kind === 'nominal' && t.Structure === undefined && t.Declaration !== undefined
+      && ((t.Declaration as { type?: string }).type === 'ClassDeclaration'
+        || (t.Declaration as { type?: string }).type === 'ClassExpression')) {
+    const body = (t.Declaration as unknown as {
+      ClassTail?: { ClassBody?: readonly unknown[] },
+    }).ClassTail?.ClassBody ?? [];
+    const keys: TypeRecord[] = [];
+    for (const element of body) {
+      const el = element as {
+        static?: boolean,
+        ClassElementName?: { type?: string, name?: string },
+      };
+      // A static belongs to the constructor, reached through `keyof typeof C`.
+      // A private name is not a property key and cannot be written as one. A
+      // computed name is not known here, so it contributes nothing rather than
+      // a guess.
+      if (el.static || el.ClassElementName?.type !== 'IdentifierName') {
+        continue;
+      }
+      const name = el.ClassElementName.name;
+      if (typeof name !== 'string') {
+        continue;
+      }
+      keys.push({ Kind: 'literal', Value: Value(name), Base: makePrimitive('string') });
+    }
+    return CanonicalizeType({ Kind: 'union', Members: keys });
+  }
   if (t.Kind === 'intersection') {
+    // An intersection has every key its members have, so a member with none
+    // contributes none rather than voiding the whole: `keyof (A & uint8)` is
+    // `keyof A`. It answered with no keys at all while the sentinel existed,
+    // which is a behaviour CHANGE rather than a simplification.
     const keys: TypeRecord[] = [];
     for (const m of t.Members) {
-      const k = KeyTypesOf(m);
-      if (k === KEY_TYPES_EMPTY) {
-        return KEY_TYPES_EMPTY;
-      }
-      keys.push(k);
+      keys.push(KeyTypesOf(m));
     }
     return CanonicalizeType({ Kind: 'union', Members: keys });
   }
@@ -2187,20 +2224,15 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
       return t;
     }
     const first = KeyTypesOf(t.Members[0]);
-    if (first === KEY_TYPES_EMPTY) {
-      return KEY_TYPES_EMPTY;
-    }
     // A union's keys are the keys common to every member: start from the first
     // member's keys and keep only those assignable to each subsequent member's.
+    // A member with no keys needs no special case - nothing is assignable to the
+    // empty type, so the intersection empties, which is the right answer.
     let kept: TypeRecord[] = first.Kind === 'union'
       ? [...(first as { Members: readonly TypeRecord[] }).Members]
       : [first];
     for (let i = 1; i < t.Members.length; i += 1) {
-      const k = KeyTypesOf(t.Members[i]);
-      if (k === KEY_TYPES_EMPTY) {
-        return KEY_TYPES_EMPTY;
-      }
-      kept = kept.filter((e) => IsAssignable(e, k));
+      kept = kept.filter((e) => IsAssignable(e, KeyTypesOf(t.Members[i])));
     }
     return CanonicalizeType({ Kind: 'union', Members: kept });
   }
@@ -2214,7 +2246,9 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord | typeof KEY_TYPES_EMPTY {
   if (t.Kind === 'nominal' && t.Structure) {
     return KeyTypesOf(t.Structure);
   }
-  return KEY_TYPES_EMPTY;
+  // Anything else has no keys, which is a definite answer - the empty type -
+  // rather than an unknown one.
+  return CanonicalizeType({ Kind: 'union', Members: [] });
 }
 
 /** Whether a mathematical value fits a numeric value type. */
