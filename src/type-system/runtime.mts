@@ -3,10 +3,11 @@ import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from 
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
-  TypedNumberValue, TypedStringValue, ReferenceValue, isTypedNumber, unwrapToNumber,
+  TypedNumberValue, TypedStringValue, TypedBigIntValue, ReferenceValue, isTypedNumber, unwrapToNumber,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
@@ -400,6 +401,35 @@ function elementLiteralTypeOf(value: Value): TypeRecord {
  * proposal-runtime-types: the run-time type of a value. Until the numeric
  * value types exist as distinct values, a Number's type is `number`.
  */
+/**
+ * proposal-runtime-types: the Type Record a VALUE carries, or undefined where it
+ * carries none.
+ *
+ * Several value forms record the type they were produced at - a typed number, a
+ * typed string, a typed bigint, a vector, and a decimal that is an enumerator -
+ * and both RuntimeTypeOf and the enum membership test have to read the same set.
+ * Reading them in two places is what let the two answers drift apart: an
+ * enumerator of a numeric enum reported its enum while every other kind reported
+ * its underlying type, and membership fell back to comparing CONTENT, so one
+ * declaration's value satisfied another's enum.
+ *
+ * The carriers are named rather than duck-typed on the [[TypeRecord]] slot. A
+ * TYPE OBJECT carries that slot too - it is how a Type Object holds the type it
+ * denotes - so a slot test makes `Reflect.typeOf` of a Type Object answer with
+ * the type it denotes instead of with Type. That is the same trap that made a
+ * qualified `Color.Red` resolve to the whole enum, and it is worth stating twice.
+ */
+export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
+  if (value instanceof TypedNumberValue || value instanceof TypedStringValue
+      || value instanceof TypedBigIntValue || (value as Value)?.type === 'Vector') {
+    return (value as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
+  }
+  if (isDecimalObject(value as Value)) {
+    return (value as unknown as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
+  }
+  return undefined;
+}
+
 export function RuntimeTypeOf(value: Value): TypeRecord {
   // proposal-runtime-types #sec-vector-types: a vector carries the Type Record
   // it was built at, so its runtime type is read rather than inferred - the
@@ -435,6 +465,15 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     // proposal-runtime-types (references extension): a reference value never
     // reaches a type query; every read that could carry one dereferences first.
     throw OutOfRange.nonExhaustive(value);
+  }
+  // proposal-runtime-types: every value form that RECORDS the type it was
+  // produced at is read through one accessor, so this and the enum membership
+  // test cannot answer differently. Reading them separately is what let an
+  // enumerator of a numeric enum report its enum while every other kind
+  // reported its underlying type.
+  const carried = CarriedTypeRecordOf(value);
+  if (carried !== undefined) {
+    return carried;
   }
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;
@@ -1085,7 +1124,22 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     }
     case 'nominal': {
       if (t.EnumMembers) {
-        return t.EnumMembers.some((m) => SameValue(value, m));
+        // #sec-enums: an enum is "a ~nominal~ type whose values are its
+        // enumerators", so a value is of this enum only where THIS declaration
+        // produced it - which is what the carried Type Record records. Comparing
+        // CONTENT against the member list cannot tell one declaration's "s" from
+        // another's, so a value of one enum satisfied an unrelated enum, passed
+        // its parameters, and selected its case labels.
+        const carriedByValue = CarriedTypeRecordOf(value);
+        if (carriedByValue !== undefined) {
+          return SameType(carriedByValue, t);
+        }
+        // A value carrying nothing can only be an enumerator of an enum whose
+        // members carry nothing either. Without this guard a bare "x" matches a
+        // tagged enumerator by content and `"x" is S` stays true - the answer
+        // the one-way rule already refuses for a numeric enum, where `0 is N` is
+        // false and `N(0)` is the way in.
+        return t.EnumMembers.some((m) => CarriedTypeRecordOf(m) === undefined && SameValue(value, m));
       }
       if (t.Structure) {
         const structurallyMatches = Q(yield* IsOfType(value, t.Structure));

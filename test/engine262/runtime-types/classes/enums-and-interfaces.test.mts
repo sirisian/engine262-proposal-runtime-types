@@ -415,6 +415,74 @@ test('an enum\'s enumerator NAMES are reached through `keyof typeof`', () => {
   expect(evaluated(`${C}type T = typeof C; type K = keyof T; String("Zero" is K);`)).toBe('true');
 });
 
+// -- An enumerator belongs to ITS enum ------------------------------------------
+//
+// #sec-enums: an enum is "a ~nominal~ type whose values are its enumerators",
+// and "Reflect.typeOf(Count.Zero) reports Count". Both are claims about the
+// VALUE, and only a Number-family enumerator carried its enum: every other kind
+// was stored as the bare underlying value, so membership compared CONTENT and
+// could not tell one declaration's value from another's.
+test('two enums over one underlying type do not share their values', () => {
+  const pairs = [
+    ['enum A: string { X = "s" } enum B: string { Y = "s" } ', 'string'],
+    ['enum A: bigint { X = 1n } enum B: bigint { Y = 1n } ', 'bigint'],
+    ['enum A: decimal64 { X = 1.0 } enum B: decimal64 { Y = 1.0 } ', 'decimal64'],
+    ['enum A { X } enum B { Y } ', 'int32 (the control - correct before this)'],
+  ];
+  for (const [decl, what] of pairs) {
+    expect(evaluated(`${decl}String(A.X is B);`), what).toBe('false');
+    expect(evaluated(`${decl}String(A.X is A);`), what).toBe('true');
+  }
+});
+
+test('the three consequences of sharing, each refused', () => {
+  const S = 'enum A: string { X = "s" } enum B: string { Y = "s" } ';
+  // A B-typed parameter took an A value.
+  expectThrown(`${S}function f(v: B) { return "took"; } f(A.X);`);
+  // A switch over B selected on one.
+  expect(evaluated(`${S}function f(b: B) { switch (b) { case B.Y: return "y"; } return "none"; } `
+    + 'let r = "no"; try { r = f(A.X); } catch (e) { r = "refused"; } r;')).toBe('refused');
+  // And its runtime type was the underlying one rather than the enum.
+  expect(evaluated(`${S}String(Reflect.typeOf(A.X) === A);`)).toBe('true');
+});
+
+test('an enumerator reports its enum whatever the underlying type', () => {
+  expect(evaluated('enum S: string { A = "x" } String(Reflect.typeOf(S.A) === S);')).toBe('true');
+  expect(evaluated('enum B: bigint { A = 1n } String(Reflect.typeOf(B.A) === B);')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0 } String(Reflect.typeOf(D.A) === D);')).toBe('true');
+  expect(evaluated('enum N { Zero } String(Reflect.typeOf(N.Zero) === N);')).toBe('true');
+  // And membership in the underlying type still follows from the subtype
+  // relation rather than from a second runtime type.
+  expect(evaluated('enum B: bigint { A = 1n } String(B.A is bigint);')).toBe('true');
+});
+
+test('the one-way rule now holds for every underlying type', () => {
+  // #sec-enums makes the reverse direction explicit, and it was only ever
+  // enforced for the Number family: a bare "x" was of the enum type, where a
+  // bare 0 was not.
+  expect(evaluated('enum S: string { A = "x" } String("x" is S);')).toBe('false');
+  expect(evaluated('enum B: bigint { A = 1n } String(1n is B);')).toBe('false');
+  expect(evaluated('enum N { Zero } String(0 is N);')).toBe('false');
+  // The enum call remains the way in, for each of them.
+  expect(evaluated('enum S: string { A = "x" } String(S("x") === S.A);')).toBe('true');
+  expect(evaluated('enum B: bigint { A = 1n } String(B(1n) === B.A);')).toBe('true');
+});
+
+test('carrying the enum leaves the value usable as its underlying type', () => {
+  // Each carrier is a SUBCLASS or a fresh instance rather than a wrapper, so the
+  // one-way subtype rule is untouched: the value compares, keys, interpolates,
+  // and serializes as what it is.
+  expect(evaluated('enum S: string { A = "x" } String(S.A === "x");')).toBe('true');
+  expect(evaluated('enum B: bigint { A = 1n } String(B.A === 1n);')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D.A === decimal64("1.0"));')).toBe('true');
+  expect(evaluated('enum S: string { A = "k" } const o = {}; o[S.A] = 1; String(o.k);')).toBe('1');
+  expect(evaluated('enum S: string { A = "x" } S.toString(S.A);')).toBe('A');
+  expect(evaluated('enum S: string { A = "x" } type T = { s: S }; '
+    + 'let o = JSON.parse.<T>(\'{"s":"x"}\'); String(o.s === S.A);')).toBe('true');
+  expect(evaluated('enum S: string { A = "x", B = "y" } let r = "no"; '
+    + 'switch (S.B) { case S.A: r = "a"; break; case S.B: r = "b"; break; } r;')).toBe('b');
+});
+
 test('an enumerator keys a Map and a Set by its own identity', () => {
   // An enumerator is a value of the enum, so it keys by that - and a raw value
   // of the underlying type is a different key, which is the one-way rule showing

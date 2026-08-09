@@ -351,12 +351,20 @@ export function DoubleFromDecimal(d: DecimalObject): number {
 }
 
 /** The decimal `significand x 10^exponent`, as an object of the given width. */
-export function CreateDecimalValue(significand: bigint, exponent: number, width: 32 | 64 | 128, realmRec: Realm): DecimalObject {
+export function CreateDecimalValue(significand: bigint, exponent: number, width: 32 | 64 | 128, realmRec: Realm, typeRecord?: unknown): DecimalObject {
   const proto = realmRec.Intrinsics['%decimal.prototype%'];
-  const obj = OrdinaryObjectCreate(proto, ['DecimalSignificand', 'DecimalExponent', 'DecimalWidth']) as Mutable<DecimalObject>;
+  const obj = OrdinaryObjectCreate(proto, ['DecimalSignificand', 'DecimalExponent', 'DecimalWidth', 'TypeRecord']) as Mutable<DecimalObject>;
   obj.DecimalSignificand = significand;
   obj.DecimalExponent = exponent;
   obj.DecimalWidth = width;
+  // proposal-runtime-types #sec-enums: an enumerator of a decimal-underlying
+  // enum carries that enum here, so `Reflect.typeOf` reports it and membership
+  // can tell one declaration's `1.0` from another's. The tag is set on a fresh
+  // decimal rather than on the value the program wrote - a decimal may be
+  // written from a shared binding, and tagging that would claim someone else's
+  // object. A decimal is compared by content (decimalSameValue), so the copy is
+  // SameValue-equal to the original and nothing observable changes.
+  (obj as Mutable<DecimalObject> & { TypeRecord?: unknown }).TypeRecord = typeRecord;
   return obj;
 }
 

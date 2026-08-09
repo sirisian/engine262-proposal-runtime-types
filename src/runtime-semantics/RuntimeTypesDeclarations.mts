@@ -3,6 +3,7 @@ import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtim
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
+import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -196,8 +197,34 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // report `uint8` where the clause says it reports the enum, and
         // membership in the underlying type follows from the subtype relation
         // rather than from a second runtime type.
+        // #sec-enums: "Reflect.typeOf(Count.Zero) reports Count." An enumerator
+        // carries its enum, which is also what lets membership tell one
+        // declaration's value from another's - without it a value of one enum
+        // satisfied an unrelated enum over the same underlying type.
+        //
+        // Each family takes the carrier its representation allows, and each is a
+        // SUBCLASS or a fresh instance rather than a wrapper, so the value stays
+        // usable as its underlying type: `S.A === "x"`, `1n === B.A`, and a
+        // decimal's own equality all hold. Only TypedNumberValue is a sibling of
+        // its base, which is the numeric family's own rule.
         if (v instanceof TypedNumberValue) {
           v = new TypedNumberValue((v as TypedNumberValue).value, enumRecord);
+        } else if (v instanceof JSStringValue) {
+          v = TypedString((v as JSStringValue).stringValue(), enumRecord);
+        } else if (v instanceof BigIntValue) {
+          v = TypedBigInt(R(v as BigIntValue) as bigint, enumRecord);
+        } else if (isDecimalObject(v)) {
+          // A fresh decimal rather than a slot on the one the program wrote: an
+          // enumerator may be written from a shared binding, and tagging that
+          // would claim someone else's object. A decimal is compared by content,
+          // so the copy is SameValue-equal to the original.
+          v = CreateDecimalValue(
+            v.DecimalSignificand,
+            v.DecimalExponent,
+            v.DecimalWidth,
+            surroundingAgent.currentRealmRecord,
+            enumRecord,
+          );
         }
       }
       // #sec-enums: "A later enumerator with no initializer takes the result of

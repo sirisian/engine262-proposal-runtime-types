@@ -44,6 +44,7 @@ let createStringValue: (value: string) => JSStringValue; // set by static block 
 let createTypedStringValue: (value: string, typeRecord: unknown) => JSStringValue;
 let createNumberValue: (value: number) => NumberValue; // set by static block in NumberValue for privileged access to constructor
 let createBigIntValue: (value: bigint) => BigIntValue; // set by static block in BigIntValue for privileged access to constructor
+let createTypedBigIntValue: (value: bigint, typeRecord: unknown) => BigIntValue;
 
 abstract class BaseValue {
   static declare readonly null: NullValue; // defined in static block of NullValue
@@ -637,7 +638,11 @@ export class BigIntValue extends PrimitiveValue {
 
   readonly value: bigint;
 
-  private constructor(value: bigint) {
+  // proposal-runtime-types #sec-enums: protected (was private) so the
+  // transparent TypedBigIntValue subclass can extend it, exactly as
+  // JSStringValue was for TypedStringValue. External construction is still
+  // blocked; bigints are created through the Value factory / createBigIntValue.
+  protected constructor(value: bigint) {
     super();
     this.value = value;
   }
@@ -800,9 +805,39 @@ export class BigIntValue extends PrimitiveValue {
   static {
     Object.defineProperty(this.prototype, 'type', { value: 'BigInt' });
     createBigIntValue = (value) => new BigIntValue(value);
+    createTypedBigIntValue = (value, typeRecord) => {
+      const b = new BigIntValue(value) as TypedBigIntValue;
+      Object.defineProperty(b, 'TypeRecord', { value: typeRecord, enumerable: false });
+      Object.setPrototypeOf(b, TypedBigIntValue.prototype);
+      return b;
+    };
   }
 
   declare static [Symbol.hasInstance]: (value: unknown) => value is BigIntValue;
+}
+
+/**
+ * proposal-runtime-types #sec-enums: a bigint value carrying the Type Record of
+ * the enum whose enumerator it is, so `Reflect.typeOf` reports that enum and
+ * membership can tell one declaration's `1n` from another's.
+ *
+ * A SUBCLASS of BigIntValue, as TypedStringValue is of JSStringValue - not a
+ * sibling like TypedNumberValue. A bigint is compared by content, so a subclass
+ * instance stays SameValue-equal to the plain value and `1n === B.A`, Map
+ * keying, and arithmetic are all untouched. The sibling shape is the numeric
+ * family's alone and is load-bearing for the identity rules pinned there.
+ */
+export class TypedBigIntValue extends BigIntValue {
+  declare readonly type: 'BigInt';
+
+  declare readonly TypeRecord: unknown;
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is TypedBigIntValue;
+}
+
+/** Construct a BigInt value carrying the given interned Type Record. */
+export function TypedBigInt(value: bigint, typeRecord: unknown): BigIntValue {
+  return createTypedBigIntValue(value, typeRecord);
 }
 
 /** https://tc39.es/ecma262/#sec-bigintbitwiseop */
