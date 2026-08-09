@@ -42,6 +42,19 @@ export abstract class TypeParser extends ExpressionParser {
   //   IntersectionType
   //   UnionType `|` IntersectionType
   parseUnionType(): ParseNode.Type {
+    // sec-type-expressions: `|`? IntersectionType. A LEADING separator, so that a
+    // type written across several lines can align its members:
+    //
+    //   type Response =
+    //     | uint32
+    //     | null;
+    //
+    // It carries no meaning - `| T` is the type T, union or not - and eating it
+    // here rather than in the loop below is what limits it to one occurrence
+    // before the first member, so `A | | B` still has no parse.
+    if (this.test(Token.BIT_OR)) {
+      this.next();
+    }
     return this.parseUnionTypeRest(this.parseIntersectionType());
   }
 
@@ -62,6 +75,11 @@ export abstract class TypeParser extends ExpressionParser {
   //   PostfixType
   //   IntersectionType `&` PostfixType
   private parseIntersectionType(): ParseNode.Type {
+    // sec-type-expressions: `&`? PrimaryType, the intersection's leading
+    // separator, for the same reason and with the same one-occurrence limit.
+    if (this.test(Token.BIT_AND)) {
+      this.next();
+    }
     return this.parseIntersectionTypeRest(this.parsePostfixType());
   }
 
