@@ -1,6 +1,7 @@
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { displayType } from '../type-system/records.mts';
 import { CallDecorator } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -977,6 +978,27 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
           RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
+        }
+        // sec-user-defined-conversions form 2: `operator` T `()`, a parameterless
+        // member declaring a conversion FROM this class to T.
+        //
+        // The guard above requires [[OperatorName]], which a conversion leaves
+        // null - the parser puts the target in [[Type]] instead - so every
+        // conversion was parsed and never registered, and the declaration was
+        // inert. Note there are THREE loops over class members in this file; this
+        // is the one class bodies actually take.
+        //
+        // Keyed by the target's DISPLAY, which the boundary derives the same way
+        // from the annotation's resolved record, so both sides agree without
+        // sharing one.
+        const conversionType = (e as unknown as { Type?: ParseNode.Type }).Type;
+        if (e.type === 'OperatorDefinition' && !e.OperatorName && conversionType && e.FunctionBody) {
+          const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+          const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+          const resolved = Q(yield* TypeNodeToTypeRecord(conversionType));
+          const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', (e.FormalParameters ?? []) as never, e.FunctionBody, 'non-lexical-this', env, privEnv);
+          ((globalThis as unknown as { __z?: string[] }).__z ??= []).push('REG=' + `convert ${displayType(resolved as never)}`);
+          RegisterClassOperator(e.static ? F : proto, `convert ${displayType(resolved as never)}`, opFn);
         }
         // proposal-runtime-types decorators.md "Order": a declaration's
         // sub-targets apply before the declaration itself. An OperatorDefinition

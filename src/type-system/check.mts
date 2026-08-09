@@ -491,6 +491,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  /**
+   * Whether _source_ is a class declaring `operator T()` for _target_ - the
+   * second declaring form of sec-user-defined-conversions, converting the
+   * receiver. The mirror of the converting constructor: that one is declared on
+   * the TARGET, this one on the SOURCE.
+   */
+  const declaresConversionTo = (source: TypeRecord, target: TypeRecord): boolean => {
+    if (source.Kind !== 'nominal') {
+      return false;
+    }
+    const decl = (source as unknown as { Declaration?: ParseNode }).Declaration;
+    const body = (decl as unknown as {
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+    } | undefined)?.ClassTail?.ClassBody;
+    if (!body) {
+      return false;
+    }
+    for (const member of body) {
+      const m = member as unknown as {
+        type?: string,
+        OperatorName?: string | null,
+        Type?: ParseNode.Type | null,
+      };
+      if (m.type !== 'OperatorDefinition' || m.OperatorName || !m.Type) {
+        continue;
+      }
+      const to = resolveType(m.Type);
+      if (to && SameType(to, target)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
@@ -637,7 +671,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // is both the clause's ordering and the ranking it needs - a value that
       // already fits is never routed through a user conversion, so declaring a
       // constructor cannot change which overload an existing call selects.
-      if (convertingConstructorAccepts(erasedTarget, erasedSource)) {
+      if (convertingConstructorAccepts(erasedTarget, erasedSource)
+        || declaresConversionTo(erasedSource, erasedTarget)) {
         return;
       }
       report(erasedSource, erasedTarget);

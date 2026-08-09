@@ -2,7 +2,7 @@ import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsConstructor } from './all.mts';
+import { Construct, IsCallable, IsConstructor } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -75,6 +75,15 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
     const constructed = Q(yield* ConstructThroughConvertingConstructor(value, t));
     if (constructed !== undefined) {
       return constructed;
+    }
+    // sec-user-defined-conversions form 2: `operator` T `()` declared on the
+    // SOURCE class, converting the receiver. The same fallback position as the
+    // converting constructor above and for the same reason - the value is not a
+    // MEMBER of the target, it converts to one - so the two forms are two
+    // candidate sources at one boundary rather than two boundaries.
+    const viaOperator = Q(yield* ConvertThroughDeclaredOperator(value, t));
+    if (viaOperator !== undefined) {
+      return viaOperator;
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
@@ -435,7 +444,34 @@ function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): Pl
   return Q(yield* Construct(ctor as never, [value]));
 }
 
+/**
+ * sec-user-defined-conversions, form 2. Keyed by the target's display, which
+ * ClassDefinitionEvaluation derives the same way from the declaration's type
+ * node, so both sides agree without sharing a record.
+ */
+function* ConvertThroughDeclaredOperator(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  const fn = LookupClassOperator(value, `convert ${displayType(t)}`);
+  if (!fn || !IsCallable(fn)) {
+    return undefined;
+  }
+  return Q(yield* Call(fn, value, []));
+}
+
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // sec-user-defined-conversions form 2, tried FIRST because the paths below
+  // fork by target kind: a primitive target reaches its own switch and refuses
+  // an object there, never arriving at the membership fallback where the
+  // converting constructor sits. Hoisting the lookup covers every target kind at
+  // one site.
+  //
+  // Precise despite being first: the table is consulted for `convert <target>`
+  // on the SOURCE value's own class, so it can only fire where that class
+  // declared exactly this conversion, and a value that already fits never gets
+  // here because the caller checks membership before converting.
+  const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
+  if (declared !== undefined) {
+    return declared;
+  }
   // proposal-runtime-types #sec-threading-shared-modifier: "The modifier is
   // therefore not observable in the value; it is observable in where the value is
   // kept and in what may be assumed about it between two reads." So a boundary
