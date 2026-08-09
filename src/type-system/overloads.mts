@@ -242,6 +242,27 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   if (isNumericValueType(argType) && isNumericValueType(paramType)) {
     return Tier.Literal;
   }
+  // proposal-runtime-types #sec-interfaces-semantics: an interface is NOMINAL
+  // where a class declares it implements one and STRUCTURAL where a value is
+  // checked against it - "an object that has the members satisfies an
+  // interface-typed position whether or not any class declared it". IsAssignable
+  // identifies a nominal target by its declaration, which is the right reading
+  // for a class and for a dependent record type, whose `where` predicates a
+  // structural comparison cannot judge. For an interface it left an
+  // interface-typed parameter viable for NO argument at all, while the same
+  // shape written as a structural alias resolved.
+  //
+  // Judged here rather than in the subtype relation: resolution is the caller
+  // that needs the structural reading, and widening the relation would change
+  // narrowing and dead-branch analysis with it. This is the same shape as the
+  // numeric arm above - a single declaration accepts the argument, so a
+  // signature must not be discarded for a reason the single form does not
+  // apply. It ranks as an ordinary widening, below an exact match.
+  if (paramType.Kind === 'nominal' && paramType.Structure !== undefined
+      && (paramType.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
+      && IsAssignable(argType, paramType.Structure)) {
+    return Tier.Assignable;
+  }
   if (argType.Kind === 'primitive' && argType.Name === 'bigint'
       && paramType.Kind === 'primitive' && (paramType.Name === 'int' || paramType.Name === 'uint')) {
     return Tier.Literal;

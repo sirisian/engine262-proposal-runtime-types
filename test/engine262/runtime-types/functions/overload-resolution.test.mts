@@ -208,3 +208,37 @@ test('deferring the resolution does not weaken the arity or the ranking', () => 
   // checker reaches it before the script runs, so a try cannot swallow it.
   expectStaticTypeError('function f(x: uint8): string { return "u"; } function f(x: string): string { return "s"; } f(true);');
 });
+
+// -- An interface-typed parameter -----------------------------------------------
+test('an interface-typed signature is viable for the shape it declares', () => {
+  // #sec-interfaces-semantics: an interface is NOMINAL where a class declares it
+  // implements one and STRUCTURAL where a value is checked against it - "an
+  // object that has the members satisfies an interface-typed position whether or
+  // not any class declared it". A single declaration takes that reading, since
+  // it checks a VALUE; resolution judges over TYPES, and identified the nominal
+  // by its declaration, so an interface-typed parameter was viable for no
+  // argument at all while the same shape written as a structural alias resolved.
+  const I = 'interface I { a: uint8 } ';
+  const OV = 'function f(x: I): string { return "iface"; } function f(x: string): string { return "str"; } ';
+  expect(evaluated(`${I}${OV}f({ a: (1 := uint8) });`)).toBe('iface');
+  expect(evaluated(`${I}${OV}let v: I = { a: 1 }; f(v);`)).toBe('iface');
+  expect(evaluated(`${I}${OV}f("q");`)).toBe('str');
+  // A shape the interface does not declare is still no match.
+  expectStaticTypeError(`${I}${OV}f({ b: (1 := uint8) });`);
+  // It ranks as an ordinary widening, so an exactly matching signature wins.
+  expect(evaluated(`${I}type O = { a: uint8 }; `
+    + 'function f(x: I): string { return "iface"; } function f(x: O): string { return "exact"; } '
+    + 'f({ a: (1 := uint8) });')).toBe('exact');
+});
+
+test('the structural reading is the interface\'s alone', () => {
+  // A dependent record type carries `where` predicates a structural comparison
+  // cannot judge, so it keeps identity by declaration and the string signature
+  // is the one that resolves.
+  expect(evaluated('type P = { a: uint8 } where this.a > 0; '
+    + 'function f(x: P): string { return "dep"; } function f(x: string): string { return "str"; } '
+    + 'f("q");')).toBe('str');
+  // And an interface is still a nominal type: two declarations of the same shape
+  // are two types.
+  expect(evaluated('interface I { a: uint8 } interface J { a: uint8 } String(I === J);')).toBe('false');
+});
