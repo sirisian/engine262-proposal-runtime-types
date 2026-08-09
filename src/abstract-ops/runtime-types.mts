@@ -712,6 +712,28 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
+  // sec-type-membership: "A value belongs to an intersection if it belongs to
+  // EVERY member" - the opposite quantifier to the union above, which is why the
+  // two cannot share a loop.
+  //
+  // There was no branch at all, so an intersection record fell past every case to
+  // the terminal refusal below and NO value could satisfy one:
+  // `type C = A & B; let c: C = { a: 1, b: 2 }` was a TypeError.
+  //
+  // Threading the result through each member is safe because conversion to an
+  // object type coerces IN PLACE and returns the same object - measured:
+  // `let x: A = raw` gives `x === raw` with `x.a` now a `uint8`. So each member
+  // contributes its own coercion and the value's identity is preserved, which is
+  // what an intersection of object types should mean. A member that refuses
+  // makes the whole intersection refuse, carrying that member's error rather
+  // than a generic one, since it says which half was not satisfied.
+  if (t.Kind === 'intersection') {
+    let current = value;
+    for (const m of t.Members) {
+      current = Q(yield* CheckedConvertValue(current, m));
+    }
+    return current;
+  }
   if (t.Kind === 'primitive') {
     switch (t.Name) {
       case 'string':
