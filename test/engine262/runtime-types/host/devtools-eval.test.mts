@@ -284,3 +284,95 @@ test('devtools eval: a well-typed program is untouched', () => {
   expect(r.thrown).toBe(false);
   expect(c.stringOf(r.value)).toBe('s');
 });
+
+// -- The console is one session, not a sequence of programs ---------------------
+//
+// The checks this proposal inserts are STATIC, and a lexical binding has no
+// run-time typed-storage boundary to catch what they miss - which is why the
+// console runs the checker at all. Checking each entry in ISOLATION left the
+// other half of the same hole: a console forgot every declared type at the entry
+// boundary, so a session was an untyped dialect for anything spanning more than
+// one line, while the same text in one entry was refused.
+function makeSession() {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  return (source: string): string => {
+    const completion = EnsureCompletion(skipDebugger(performDevtoolsEval(source, realm, false, true)));
+    if (completion instanceof AbruptCompletion) {
+      return 'refused';
+    }
+    const value = completion.Value as unknown as { stringValue?(): string };
+    return value?.stringValue?.() ?? 'ok';
+  };
+}
+
+test('a declaration in one entry is checked against in the next', () => {
+  const enumSwitch = makeSession();
+  expect(enumSwitch('enum A { X, Y } let a: A = A.X; "d";')).toBe('d');
+  // The reported case: with the entries separated, the discriminant had no enum
+  // type and the exhaustiveness rule never applied.
+  expect(enumSwitch('switch (a) { case A.X: "x"; break; }')).toBe('refused');
+
+  const enumAssign = makeSession();
+  expect(enumAssign('enum A { X, Y } let a: A = A.X; "d";')).toBe('d');
+  expect(enumAssign('a = 5;')).toBe('refused');
+
+  const width = makeSession();
+  expect(width('let n: uint8 = 1; "d";')).toBe('d');
+  expect(width('n = 300;')).toBe('refused');
+});
+
+test('what was already correct stays correct', () => {
+  const ok = makeSession();
+  expect(ok('let n: uint8 = 1; "d";')).toBe('d');
+  expect(ok('n = 2; String(n);')).toBe('2');
+
+  // A complete switch, and one with a default, are both accepted.
+  const complete = makeSession();
+  expect(complete('enum A { X, Y } let a: A = A.X; "d";')).toBe('d');
+  expect(complete('switch (a) { case A.X: "x"; break; case A.Y: "y"; break; }')).toBe('x');
+  const defaulted = makeSession();
+  expect(defaulted('enum A { X, Y } let a: A = A.X; "d";')).toBe('d');
+  expect(defaulted('switch (a) { case A.X: "x"; break; default: "o"; }')).toBe('x');
+
+  // A `const` bound to a numeric constant is still one in a later entry, which
+  // is what carrying constLiterals and declaredNames is for.
+  const constant = makeSession();
+  expect(constant('const K = 5; "k";')).toBe('k');
+  expect(constant('let x: uint8 = K; String(x);')).toBe('5');
+});
+
+test('a console permits redeclaration, and the later type wins', () => {
+  const c = makeSession();
+  expect(c('let a = 1; "one";')).toBe('one');
+  expect(c('let a = 2; "two";')).toBe('two');
+  // Re-declaring at a different type replaces the recorded one.
+  const retyped = makeSession();
+  expect(retyped('let b: uint8 = 1; "one";')).toBe('one');
+  expect(retyped('let b: string = "x"; "two";')).toBe('two');
+  expect(retyped('b = 5;')).toBe('refused');
+});
+
+test('a rejected entry leaves nothing behind', () => {
+  const c = makeSession();
+  // Refused, so `n` is never declared and the session must not record it.
+  expect(c('let n: uint8 = 300;')).toBe('refused');
+  // An assignment to an undeclared name is an ordinary implicit global, not a
+  // check against a type the rejected entry would have introduced.
+  expect(c('n = 1; String(n);')).toBe('1');
+});
+
+test('two realms of one agent are two consoles', () => {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const first = new ManagedRealm();
+  const second = new ManagedRealm();
+  const run = (realm: ManagedRealm, source: string) => {
+    const completion = EnsureCompletion(skipDebugger(performDevtoolsEval(source, realm, false, true)));
+    return completion instanceof AbruptCompletion ? 'refused' : 'ok';
+  };
+  // The same name at different types in each.
+  expect(run(first, 'let n: uint8 = 1; "d";')).toBe('ok');
+  expect(run(second, 'let n = 1; "d";')).toBe('ok');
+  expect(run(first, 'n = 300;')).toBe('refused');
+  expect(run(second, 'n = 300;')).toBe('ok');
+});

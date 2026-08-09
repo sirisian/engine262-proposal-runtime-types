@@ -275,6 +275,41 @@ interface Frame {
 }
 
 
+function emptyFrame(): Frame {
+  return {
+    bindings: new Map(),
+    constLiterals: new Set<string>(),
+    letConstants: new Set<string>(),
+    declaredNames: new Set<string>(),
+    aliases: new Map(),
+    enums: new Map(),
+    enumBindings: new Map(),
+  };
+}
+
+/**
+ * A copy of _frame_, so that checking an entry that is then REJECTED leaves the
+ * session as it was.
+ *
+ * Every field is carried, including the three that look like they describe only
+ * the current entry. `constLiterals`, `letConstants`, and `declaredNames` are
+ * what isNumericConstantExpression reads: without them a `const K = 5;` in an
+ * earlier entry stops being a numeric constant in a later one. `narrowed` is
+ * not carried - a narrowing is established by control flow within an entry and
+ * does not survive one.
+ */
+function cloneFrame(frame: Frame): Frame {
+  return {
+    bindings: new Map(frame.bindings),
+    constLiterals: new Set(frame.constLiterals),
+    letConstants: new Set(frame.letConstants),
+    declaredNames: new Set(frame.declaredNames),
+    aliases: new Map(frame.aliases),
+    enums: new Map(frame.enums),
+    enumBindings: new Map(frame.enumBindings),
+  };
+}
+
 function widen(t: TypeRecord): TypeRecord {
   return t.Kind === 'literal' ? t.Base : t;
 }
@@ -382,6 +417,45 @@ export function IsCheckElided(annotation: object): boolean {
   return elidableAnnotations.has(annotation);
 }
 
+/**
+ * proposal-runtime-types: the static knowledge one console entry leaves for the
+ * next.
+ *
+ * The checks this proposal inserts are STATIC (#table-check-sites), and a
+ * lexical binding has no run-time typed-storage boundary to catch what they
+ * miss - the note in performDevtoolsEval says as much. So a console that
+ * evaluates each entry as its own script forgets every declared type at the
+ * entry boundary: `let n: uint8 = 1;` then `n = 300;` was accepted, and a
+ * `switch` over an enum-typed binding declared earlier was not checked for
+ * exhaustiveness, while the same text in ONE entry is refused.
+ *
+ * A session carries the top-level frame between entries, which is exactly that
+ * knowledge. It is deliberately NOT a concatenation of the session's source: a
+ * console permits `let a = 1;` twice, and concatenating two accepted entries
+ * produces "Identifier a already declared" from the parser.
+ */
+export interface CheckSession {
+  frame: Frame;
+  enumNodes: Map<string, ParseNode>;
+}
+
+export function CreateCheckSession(): CheckSession {
+  return { frame: emptyFrame(), enumNodes: new Map() };
+}
+
+/**
+ * Checks _script_ as the next entry of _session_, and returns the state to
+ * carry forward beside the errors.
+ *
+ * The caller commits `next` only if it accepts the entry - a rejected entry must
+ * leave no declarations behind - which is why the session is not mutated here.
+ */
+export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
+  const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
+  const errors = CheckStatementList(script.ScriptBody?.StatementList ?? null, script, next);
+  return { errors, next };
+}
+
 export function CheckScript(script: ParseNode.Script): ObjectValue[] {
   return CheckStatementList(script.ScriptBody?.StatementList ?? null, script);
 }
@@ -392,11 +466,15 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module);
 }
 
-function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode): ObjectValue[] {
+function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
   const unclaimed: UnclaimedKeyCheck[] = [];
-  const frames: Frame[] = [{ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() }];
+  // The outermost frame is the session's where there is one, so a console entry
+  // sees what earlier entries declared. It is already a copy (see
+  // CheckScriptInSession), so checking writes the next state into it and the
+  // caller decides whether to keep it.
+  const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
 
   const report = (source: TypeRecord, target: TypeRecord) => {
@@ -1289,7 +1367,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * record per declaration, and an enum resolved freshly on each mention would
    * give the checker two records for one enum where the runtime has one.
    */
-  const enumNodes = new Map<string, ParseNode>();
+  // Carried across entries as well, and for the reason stated where it is
+  // declared: an enum resolved freshly on each mention would give the checker two
+  // records for one enum. Across entries the same holds - without this a later
+  // entry resolves an enum name declared earlier to nothing.
+  const enumNodes = session ? session.enumNodes : new Map<string, ParseNode>();
   const enumTypeMemo = new Map<ParseNode, Known>();
   const enumTypeOf = (name: string): Known => {
     const node = enumNodes.get(name);

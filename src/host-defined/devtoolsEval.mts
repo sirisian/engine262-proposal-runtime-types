@@ -11,7 +11,9 @@ import {
   ExecutionContext,
   FunctionEnvironmentRecord, GetThisEnvironment, IsStrict, ManagedRealm, NewPromiseCapability, NormalCompletion, surroundingAgent, Throw, ThrowCompletion, X, Value, setNodeParent, wrappedParse, type PlainCompletion, type ValueCompletion, type ValueEvaluator,
 } from '#self';
-import { CheckScript } from '../type-system/check.mts';
+import {
+  CheckScriptInSession, CreateCheckSession, type CheckSession,
+} from '../type-system/check.mts';
 
 const cascadeStack = new WeakMap<EnvironmentRecord, EnvironmentRecord>();
 // This is modified based on PerformEval, used internally for devtools console.
@@ -30,12 +32,23 @@ export interface DevtoolsEvalReport {
   isAsync: boolean;
 }
 
+/**
+ * The check session of each realm - a console per realm, since two realms of one
+ * agent are two consoles. Keyed by the realm itself, so nothing is shared
+ * between them and the entry disappears with the realm.
+ */
+const checkSessions = new WeakMap<ManagedRealm, CheckSession>();
+
 export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, strictCaller: boolean, doNotTrack: boolean, report?: DevtoolsEvalReport): ValueEvaluator {
   let inFunction = false;
   let inMethod = false;
   let inDerivedConstructor = false;
   let inClassFieldInitializer = false;
 
+  // The state to carry forward if this entry is accepted AND evaluated. An entry
+  // that type-checks but then throws still created its bindings, so what decides
+  // is having got past the checker, not what the entry answered.
+  let pendingSession: CheckSession | undefined;
   let scriptContext: ExecutionContext | undefined;
   if (!surroundingAgent.runningExecutionContext?.LexicalEnvironment) {
     // top level devtools eval
@@ -116,14 +129,31 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
   // stored without complaint. A lexical binding has no run-time typed-storage
   // boundary to catch it afterwards, so skipping the checker did not soften the
   // diagnosis - it removed it.
+  //
+  // Checked as the next entry of the REALM'S SESSION, not in isolation. The
+  // checks are static, and a lexical binding has no run-time typed-storage
+  // boundary, so a console that forgets the previous entry's declarations
+  // forgets their types entirely: `let n: uint8 = 1;` then `n = 300;` was
+  // accepted, and a `switch` over an enum-typed binding declared in an earlier
+  // entry was not checked for exhaustiveness - while the same text in one entry
+  // is refused. The session is per realm because two realms of one agent are two
+  // consoles.
+  let session: CheckSession | undefined;
   if (surroundingAgent.feature('runtime-types')) {
-    const typeErrors = CheckScript(script);
+    session = checkSessions.get(evalRealm);
+    if (session === undefined) {
+      session = CreateCheckSession();
+      checkSessions.set(evalRealm, session);
+    }
+    const { errors: typeErrors, next } = CheckScriptInSession(script, session);
     if (typeErrors.length > 0) {
       if (scriptContext) {
         surroundingAgent.executionContextStack.pop(scriptContext);
       }
+      // Rejected, so nothing this entry declared is carried: `next` is dropped.
       return ThrowCompletion(typeErrors[0]);
     }
+    pendingSession = next;
   }
 
   const body = script.ScriptBody;
@@ -204,6 +234,11 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
   result = EnsureCompletion(result);
   if (result.Type === 'normal' && result.Value === undefined) {
     result = NormalCompletion(Value.undefined);
+  }
+  // Committed here rather than beside the check, so a rejected entry leaves the
+  // session as it was.
+  if (pendingSession !== undefined) {
+    checkSessions.set(evalRealm, pendingSession);
   }
   surroundingAgent.executionContextStack.pop(evalContext);
   if (scriptContext) {
