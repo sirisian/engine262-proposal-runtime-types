@@ -258,6 +258,83 @@ function* TypeProto_alignmentGetter(_args: Arguments, { thisValue }: FunctionCal
   return layoutOfThis(thisValue, 'alignment');
 }
 
+/**
+ * proposal-runtime-types #sec-memory-layout: the least and greatest value a type
+ * admits, answering the question a range check asks and a saturating operation
+ * obeys - both of which the engine already computes and neither of which a
+ * program could read.
+ *
+ * The `bounds` metadata case comes first in the specification and is not
+ * implemented here, the `bounds` meta type belonging to the ranges extension.
+ * What follows is the width case, the floating-point case, and the refusal.
+ */
+function boundOfThis(thisValue: Value, which: 'min' | 'max') {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const record = thisValue.TypeRecord;
+  if (record.Kind === 'primitive' && (record.Name === 'uint' || record.Name === 'int')) {
+    const bits = Number(record.Arguments[0]);
+    const unsigned = record.Name === 'uint';
+    const low = unsigned ? 0n : -(1n << BigInt(bits - 1));
+    const high = unsigned ? (1n << BigInt(bits)) - 1n : (1n << BigInt(bits - 1)) - 1n;
+    const value = which === 'min' ? low : high;
+    // A width past 53 bits has values no Number holds exactly, so it answers in
+    // BigInt rather than in a Number that would silently round.
+    return bits > 53 ? Value(value) : Value(Number(value));
+  }
+  const floatExtremes: Record<string, number> = {
+    float16: 65504,
+    float32: 3.4028234663852886e38,
+    float64: Number.MAX_VALUE,
+  };
+  if (record.Kind === 'primitive' && floatExtremes[record.Name] !== undefined) {
+    const extreme = floatExtremes[record.Name]!;
+    // `min` is the MOST NEGATIVE finite value, not the smallest positive one -
+    // the reading `Number.MIN_VALUE` would suggest and the reason these members
+    // are not spelled that way.
+    return Value(which === 'min' ? -extreme : extreme);
+  }
+  return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
+}
+
+/** The least positive value a binary floating-point format represents. */
+function floatOnlyOfThis(thisValue: Value, which: 'minPositive' | 'epsilon') {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const record = thisValue.TypeRecord;
+  if (record.Kind !== 'primitive') {
+    return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
+  }
+  const table: Record<string, { minPositive: number, epsilon: number }> = {
+    float16: { minPositive: 5.960464477539063e-8, epsilon: 0.0009765625 },
+    float32: { minPositive: 1.401298464324817e-45, epsilon: 1.1920928955078125e-7 },
+    float64: { minPositive: Number.MIN_VALUE, epsilon: Number.EPSILON },
+  };
+  const entry = table[record.Name];
+  if (entry === undefined) {
+    return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
+  }
+  return Value(entry[which]);
+}
+
+function* TypeProto_minGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return boundOfThis(thisValue, 'min');
+}
+
+function* TypeProto_maxGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return boundOfThis(thisValue, 'max');
+}
+
+function* TypeProto_minPositiveGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return floatOnlyOfThis(thisValue, 'minPositive');
+}
+
+function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return floatOnlyOfThis(thisValue, 'epsilon');
+}
+
 export function bootstrapTypePrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [
     [wellKnownSymbols.hasInstance, TypeProto_hasInstance, 1],
@@ -267,6 +344,10 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['elementByteLength', [TypeProto_elementByteLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
+    ['min', [TypeProto_minGetter]],
+    ['max', [TypeProto_maxGetter]],
+    ['minPositive', [TypeProto_minPositiveGetter]],
+    ['epsilon', [TypeProto_epsilonGetter]],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Type');
   realmRec.Intrinsics['%Type.prototype%'] = proto;
 }
