@@ -578,6 +578,7 @@ export interface Throw {
   | '$1 is a typed element and cannot be deleted'
   | '$1 is a typed property and cannot be deleted'
   | '$1 is already an enumerator of this enum'
+  | '$1 is already an enumerator of $2, and a value may be an enumerator of at most one enum'
   | '$1 is already claimed by another meta type'
   | '$1 is already declared'
   | '$1 is already declared on this interface'

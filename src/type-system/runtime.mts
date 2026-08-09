@@ -15,7 +15,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
@@ -474,6 +474,14 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   const carried = CarriedTypeRecordOf(value);
   if (carried !== undefined) {
     return carried;
+  }
+  // #sec-enums: a value of an identity-compared underlying type carries its enum
+  // OUTSIDE itself, since the enumerator is the value the program wrote. Read
+  // after the reflection-context and composite arms above - a reflection object
+  // is not an enumerator - and before the ordinary object type below.
+  const claimed = RegisteredEnumOf(value);
+  if (claimed !== undefined) {
+    return claimed;
   }
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;
@@ -1134,12 +1142,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         if (carriedByValue !== undefined) {
           return SameType(carriedByValue, t);
         }
+        // An identity-compared value carries its enum outside itself.
+        const claimedByValue = RegisteredEnumOf(value);
+        if (claimedByValue !== undefined) {
+          return SameType(claimedByValue, t);
+        }
         // A value carrying nothing can only be an enumerator of an enum whose
         // members carry nothing either. Without this guard a bare "x" matches a
         // tagged enumerator by content and `"x" is S` stays true - the answer
         // the one-way rule already refuses for a numeric enum, where `0 is N` is
         // false and `N(0)` is the way in.
-        return t.EnumMembers.some((m) => CarriedTypeRecordOf(m) === undefined && SameValue(value, m));
+        return t.EnumMembers.some((m) => CarriedTypeRecordOf(m) === undefined
+          && RegisteredEnumOf(m) === undefined
+          && SameValue(value, m));
       }
       if (t.Structure) {
         const structurallyMatches = Q(yield* IsOfType(value, t.Structure));

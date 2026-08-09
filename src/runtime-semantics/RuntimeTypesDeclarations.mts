@@ -4,6 +4,8 @@ import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
+import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
+import { SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -225,6 +227,25 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
             surroundingAgent.currentRealmRecord,
             enumRecord,
           );
+        } else if (v instanceof SymbolValue || v instanceof ObjectValue) {
+          // A symbol, a class instance, and a function are compared by IDENTITY,
+          // so the enumerator IS the value the program wrote - which is what
+          // keeps `A.X === k`, `A.X.v`, and `A.X instanceof K` true. There is
+          // nowhere on such a value to put an enum that belongs to one of
+          // possibly several, so the claim is recorded outside it.
+          //
+          // #sec-enums: a value may be an enumerator of at most one enum. Without
+          // that rule two enums share the value, and then `A.X is B` is true, a
+          // B-typed parameter takes an A value, and `Reflect.typeOf` has no
+          // single answer to give.
+          const claimedBy = ClaimEnumerator(v, enumRecord);
+          if (claimedBy !== undefined && !SameType(claimedBy, enumRecord)) {
+            return Throw.TypeError(
+              '$1 is already an enumerator of $2, and a value may be an enumerator of at most one enum',
+              Value(member.IdentifierName.name),
+              Value(displayType(claimedBy)),
+            );
+          }
         }
       }
       // #sec-enums: "A later enumerator with no initializer takes the result of

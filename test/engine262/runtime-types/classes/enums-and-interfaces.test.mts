@@ -483,6 +483,55 @@ test('carrying the enum leaves the value usable as its underlying type', () => {
     + 'switch (S.B) { case S.A: r = "a"; break; case S.B: r = "b"; break; } r;')).toBe('b');
 });
 
+// -- An underlying type whose values carry their own identity -------------------
+//
+// A symbol, a class instance, and a function are compared by IDENTITY, so an
+// enumerator of an enum over one of them IS the value the program wrote. That is
+// what keeps `A.X === k`, `A.X.v`, and `A.X instanceof K` true - and it is also
+// why the enum cannot be carried on the value: one object, two enums, one slot.
+// The claim is recorded outside the value, and a value may be claimed once.
+test('a value may be an enumerator of at most one enum', () => {
+  const K = 'class K { constructor(v) { this.v = v; } } ';
+  expectThrownKind(`${K}const k = new K(1); enum A: K { X = k } enum B: K { Y = k } "ran";`, 'TypeError');
+  expectThrownKind('const s = Symbol("s"); enum A: symbol { X = s } enum B: symbol { Y = s } "ran";', 'TypeError');
+  expectThrownKind('type F = (uint8) => uint8; const g = (x) => x; '
+    + 'enum A: F { X = g } enum B: F { Y = g } "ran";', 'TypeError');
+  // A distinct value per enum is the ordinary way to write it, and is unaffected.
+  expect(evaluated(`${K}enum A: K { X = new K(1) } enum B: K { Y = new K(1) } String(A.X is B);`)).toBe('false');
+  // Two enumerators of ONE declaration may share a value, as they may for any
+  // other underlying type.
+  expect(evaluated(`${K}const k = new K(1); enum A: K { X = k, Y = k } String(A.X === A.Y);`)).toBe('true');
+});
+
+test('an identity-compared enumerator reports its enum, and stays itself', () => {
+  const K = 'class K { constructor(v) { this.v = v; } } const k = new K(7); enum A: K { X = k } ';
+  expect(evaluated(`${K}String(Reflect.typeOf(A.X) === A);`)).toBe('true');
+  expect(evaluated(`${K}String(A.X is A);`)).toBe('true');
+  // The reason the claim is held outside the value rather than on it: a wrapper
+  // would cost all three of these.
+  expect(evaluated(`${K}String(A.X === k);`)).toBe('true');
+  expect(evaluated(`${K}String(A.X.v);`)).toBe('7');
+  expect(evaluated(`${K}String(A.X instanceof K);`)).toBe('true');
+  // A symbol and a function keep their identity for the same reason.
+  expect(evaluated('const s = Symbol("s"); enum Y: symbol { A = s } String(Y.A === s);')).toBe('true');
+  expect(evaluated('type F = (uint8) => uint8; const g = (x) => x; enum A: F { X = g } '
+    + 'String(Number(A.X(5)));')).toBe('5');
+  // And the reverse conversion still finds it.
+  expect(evaluated(`${K}String(A(k) === A.X);`)).toBe('true');
+});
+
+test('claiming a value changes what the ORIGINAL binding reports', () => {
+  // The surprising consequence, asserted rather than left to be discovered.
+  // Because the enumerator IS `k`, declaring the enum makes `k` an enumerator of
+  // it - so #sec-runtimetypeof's "the most specific type of which it is a value"
+  // answers with the enum for the binding the program already had. Nothing was
+  // copied or replaced; the same value simply has a more specific type than it
+  // did on the line above.
+  const K = 'class K { constructor(v) { this.v = v; } } const k = new K(1); ';
+  expect(evaluated(`${K}String(Reflect.typeOf(k) === (type K));`)).toBe('true');
+  expect(evaluated(`${K}enum A: K { X = k } String(Reflect.typeOf(k) === A);`)).toBe('true');
+});
+
 test('an enumerator keys a Map and a Set by its own identity', () => {
   // An enumerator is a value of the enum, so it keys by that - and a raw value
   // of the underlying type is a different key, which is the one-way rule showing

@@ -2014,6 +2014,47 @@ export function withValueTypeReturn(steps: NativeSteps, typeName: string): Nativ
 // associated at definition with the interned nominal Type Object of its class
 // type; a type reference to the class name resolves to it, and membership uses
 // the stored constructor directly.
+/**
+ * proposal-runtime-types #sec-enums: the enum an identity-compared value has
+ * been claimed by, as its enumerator.
+ *
+ * A symbol, a class instance, and a function are compared by IDENTITY, so an
+ * enumerator of an enum over one of them IS the value the program wrote - which
+ * is what keeps `A.X === k`, `A.X.v`, and `A.X instanceof K` true, and is also
+ * why the enum cannot be carried ON the value: one object, two enums, one slot.
+ * Wrapping would carry it at the cost of every one of those three.
+ *
+ * So the claim is recorded here instead, outside the value, and a value may be
+ * claimed by at most one enum - see the refusal at the declaration. Without that
+ * rule `Reflect.typeOf` would have no single answer for a doubly-claimed value,
+ * which #sec-value-types requires it to have.
+ */
+const enumeratorClaims = new WeakMap<object, TypeRecord>();
+
+/**
+ * Records _t_ as the enum of _value_, and returns the enum that already claimed
+ * it, if any. Re-claiming for the SAME enum is not a conflict: two enumerators
+ * of one declaration may share a value, as they already may for any other
+ * underlying type.
+ */
+export function ClaimEnumerator(value: Value, t: TypeRecord): TypeRecord | undefined {
+  const key = value as unknown as object;
+  const existing = enumeratorClaims.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  enumeratorClaims.set(key, t);
+  return undefined;
+}
+
+/** The enum that claimed _value_ as an enumerator, or undefined. */
+export function RegisteredEnumOf(value: Value): TypeRecord | undefined {
+  if (value === null || typeof value !== 'object') {
+    return undefined;
+  }
+  return enumeratorClaims.get(value as unknown as object);
+}
+
 const classTypeObjects = new WeakMap<object, Value>();
 
 export function AssociateClassType(ctor: object, typeObject: Value): void {
