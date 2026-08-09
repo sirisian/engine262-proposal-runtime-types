@@ -510,6 +510,21 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // walks a prototype chain and the checker had nothing to walk. Carried
       // the way an enum carries its underlying type (F62), for the same reason:
       // a relation the record does not hold cannot be decided.
+      // An INTERFACE names a shape rather than an identity, so the declaration
+      // comparison above can never admit a class that implements one: the two
+      // declarations are different by construction. Compare structures instead.
+      //
+      // Without this a class satisfied an interface only where nothing checked
+      // - `f(x: I)` passed `new C()` because a class-typed parameter resolved to
+      // ~any~, and `let x: I = new C()` was refused. The two disagreed, which is
+      // how the gap stayed hidden.
+      if ((tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
+        const sStructure = (s as { Structure?: TypeRecord }).Structure;
+        const tStructure = (tn as { Structure?: TypeRecord }).Structure;
+        if (sStructure && tStructure) {
+          return IsSubtype(sStructure, tStructure, next);
+        }
+      }
       const base = (s as { Base?: TypeRecord }).Base;
       if (base) {
         return IsSubtype(base, t, next);

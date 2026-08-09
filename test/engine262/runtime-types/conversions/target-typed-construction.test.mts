@@ -40,10 +40,13 @@ test('the forms sharing this production are unchanged', () => {
   expect(evaluated('function F() { return new.target !== undefined; } String(new F() instanceof F);')).toBe('true');
 });
 
-test.fails('KNOWN GAP: an argument position carries no contextual type yet', () => {
-  // sec-contextual-types lists "an argument of a call whose callee has a single
-  // applicable signature", but the checker does not consult staticTypeIn there,
-  // so this reports "requires a contextual type". The refusal is safe - nothing
-  // is mis-constructed - but the position should work.
+test('an argument position carries a contextual type', () => {
+  // This was pinned as an expected failure. The cause was not in this feature at
+  // all: `declareFunctionSignatures` resolved parameter annotations before any
+  // class name was collected, so a class-typed parameter fell back to `any` -
+  // and a contextual type of `any` is indistinguishable from none. Collecting
+  // class names first fixed this and gave class-typed parameters compile-time
+  // checking at their call sites, which they had never had.
   expect(evaluated('class A { constructor(x, y) { this.v = x + y; } } function f(p: A) { return p.v; } String(f(new.(1, 2)));')).toBe('3');
+  expect(evaluated('class A { constructor(x) { this.v = x; } } function f(p: A) { return p.v; } String(f(new.(7)));')).toBe('7');
 });

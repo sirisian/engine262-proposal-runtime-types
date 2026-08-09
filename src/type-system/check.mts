@@ -3164,6 +3164,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // time, until the checker learns to rank signatures.
     const collected = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     const rejected = new Set<string>();
+    // A class name must be in `classNodes` BEFORE any signature resolves its
+    // parameter annotations, or `resolveType` finds nothing and the parameter
+    // falls back to `any` - which is why `function f(p: A)` was not checked at
+    // its call site while `function g(q: uint8)` was, and why declaration order
+    // made no difference: the collection below runs after every signature in the
+    // list, not after every statement.
+    //
+    // Names only. The instance type is still built lazily and memoised by
+    // `instanceTypeOf`, so nothing is resolved earlier than before - only found.
+    for (const n of list) {
+      if (n.type === 'ClassDeclaration') {
+        const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (className && !classNodes.has(className)) {
+          classNodes.set(className, n);
+        }
+      } else if (n.type === 'InterfaceDeclaration') {
+        // Interfaces too, and for a sharper reason than symmetry: resolving a
+        // class annotation here BUILDS that class's instance type, which is
+        // memoised. A class with `implements I` would be built before `I` was
+        // known and would memoise without the members it inherits, so a name
+        // pre-pass that collected only classes silently un-checked
+        // `class C implements I { }`.
+        const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (interfaceName && !interfaceNodes.has(interfaceName)) {
+          interfaceNodes.set(interfaceName, n);
+        }
+      }
+    }
     for (const n of list) {
       // PLAN-do-expressions.md phase 1, #sec-generator-types. A generator
       // declaration was skipped entirely, so a call of one had no type at all.
