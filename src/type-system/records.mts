@@ -738,6 +738,40 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')}>` : '';
       return name ? `${name}${args}` : `nominal${args}`;
     }
+    // These four rendered as their KIND NAME, because the default below returns
+    // it and they had no case. `let a: { x: int32 } = { y: 1 }` reported "is not
+    // assignable to \"object\"", naming neither the type nor what was wrong with
+    // the value - and every other case here renders SOURCE SYNTAX, so the
+    // convention was already set.
+    case 'object': {
+      const parts = t.Properties.map((p) => {
+        // A symbol key must render its DESCRIPTION. Interpolating the value
+        // gives "[object Symbol]", which is the same class of bug one layer
+        // down from the one being fixed.
+        const key = typeof p.key === 'string'
+          ? p.key
+          : `[${(p.key.Description as JSStringValue | undefined)?.stringValue?.() ?? 'symbol'}]`;
+        return `${key}${p.optional ? '?' : ''}: ${displayType(p.type)}`;
+      });
+      // An index signature is held apart from the properties, so a type with one
+      // and no properties would otherwise render as `{ }`.
+      for (const s of t.IndexSignatures) {
+        parts.push(`[${displayType(s.Key)}]: ${displayType(s.Value)}`);
+      }
+      return parts.length === 0 ? '{}' : `{ ${parts.join(', ')} }`;
+    }
+    case 'function': {
+      const signature = (s: SignatureRecord): string => {
+        const params = s.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`);
+        // A null Return is representable and must not print as `null`.
+        return `(${params.join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
+      };
+      // Overloads join with `&`, which is how an overloaded function type is
+      // written, and matches the intersection case above.
+      return t.Signatures.length === 0 ? 'function' : t.Signatures.map(signature).join(' & ');
+    }
+    case 'reference': return `ref ${displayType(t.Target)}`;
+    case 'parameter': return t.Constraint ? `${t.Name}: ${displayType(t.Constraint)}` : t.Name;
     default: return t.Kind;
   }
 }
