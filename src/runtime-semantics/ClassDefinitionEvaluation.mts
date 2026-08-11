@@ -742,6 +742,42 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   } else { // 20. Else, let elements be NonConstructorElements of ClassBody.
     elements = NonConstructorElements(ClassBody);
   }
+  // proposal-runtime-types #table-reflection-contexts: "A constructor is a
+  // `ClassMethod` whose name is *"constructor"*, and its parameters are that
+  // method's, so a construct signature needs no context of its own."
+  //
+  // Members are recorded from ClassElementEvaluation, which runs over
+  // NonConstructorElements - the static semantics whose whole purpose is to
+  // exclude the constructor, the base specification evaluating it separately.
+  // So the constructor was never recorded and `getReflection` reported it as
+  // not a member, though the class always has one. It is recorded here, beside
+  // the elements, from the node the surrounding code already resolved.
+  if (surroundingAgent.feature('runtime-types')) {
+    const ctorNode = constructor as ParseNode | undefined;
+    const parameters: MemberParameterDeclaration[] = [];
+    const formals = (ctorNode as { UniqueFormalParameters?: readonly ParseNode[] } | undefined)?.UniqueFormalParameters ?? [];
+    formals.forEach((parameter, index) => {
+      const pp = parameter as { BindingIdentifier?: { name?: string }, Initializer?: unknown };
+      parameters.push({
+        name: pp.BindingIdentifier?.name ?? '',
+        index,
+        hasDefault: pp.Initializer !== undefined && pp.Initializer !== null,
+      });
+    });
+    // A class that writes no constructor still has one - the default, which is
+    // what `new` calls - so it is recorded with no parameters rather than left
+    // absent. A derived class that writes none finds its base's by the same
+    // chain walk that finds an inherited method.
+    RecordMemberDeclaration(F, 'constructor', {
+      parameters,
+      type: undefined,
+      kind: 'ClassMethod',
+      static: false,
+      private: false,
+      protected: (ctorNode as { protected?: boolean } | undefined)?.protected === true,
+      abstract: false,
+    } as MemberDeclaration);
+  }
   if (surroundingAgent.feature('decorators')) {
     const instanceElements: ClassElementDefinitionRecord[] = [];
     // 24. Let staticElements be a new empty List.
@@ -1892,6 +1928,8 @@ export interface MemberParameterDeclaration {
 }
 export interface MemberDeclaration {
   readonly kind: string;
+  /** The member's name AS DECLARED, the storage key carrying a static qualifier. */
+  readonly name?: string;
   readonly static: boolean;
   readonly private: boolean;
   readonly protected: boolean;
@@ -1916,13 +1954,30 @@ export interface MemberDeclaration {
 }
 const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
 
+/**
+ * proposal-runtime-types: the key a member is stored and looked up under.
+ *
+ * A name alone does not identify a member, because `static constructor() {}` is
+ * a legal static method of that name and a class may declare it BESIDE its
+ * constructor. Both reach the same owner - a static member's home object is the
+ * constructor, and an instance member's is the prototype, whose `constructor`
+ * names that same object - so keying by name alone let one silently displace
+ * the other.
+ *
+ * Staticness is already a field of every declaration, so the key states a fact
+ * the record already holds.
+ */
+function memberKey(member: string, isStatic: boolean): string {
+  return isStatic ? `static ${member}` : member;
+}
+
 export function RecordMemberDeclaration(owner: Value, member: string, declaration: MemberDeclaration): void {
   let byMember = memberDeclarations.get(owner);
   if (!byMember) {
     byMember = new Map();
     memberDeclarations.set(owner, byMember);
   }
-  byMember.set(member, declaration);
+  byMember.set(memberKey(member, declaration.static === true), { ...declaration, name: member });
 }
 
 /**
@@ -1945,9 +2000,12 @@ export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean
   while (current !== undefined && current !== Value.null) {
     const byMember = memberDeclarations.get(current);
     if (byMember) {
-      for (const [name, declaration] of byMember) {
-        if (declaration.kind === kind && !collected.has(name)) {
-          collected.set(name, declaration);
+      for (const [key, declaration] of byMember) {
+        // The stored key distinguishes a static member from an instance one of
+        // the same name; what a reflection reports is the name as declared, so
+        // the qualifier is stripped on the way out.
+        if (declaration.kind === kind && !collected.has(key)) {
+          collected.set(key, declaration);
         }
       }
     }
@@ -1962,10 +2020,16 @@ export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean
   return collected;
 }
 
-export function MemberDeclarationOf(owner: Value, member: string): MemberDeclaration | undefined {
+export function MemberDeclarationOf(owner: Value, member: string, isStatic?: boolean): MemberDeclaration | undefined {
   let current: Value | undefined = owner;
   while (current !== undefined && current !== Value.null) {
-    const found = memberDeclarations.get(current)?.get(member);
+    const byMember = memberDeclarations.get(current);
+    // Where the caller does not say, an instance member answers first: that is
+    // what a bare name has always meant, and `constructor` unqualified is the
+    // class's constructor rather than a static method sharing its name.
+    const found = isStatic === undefined
+      ? byMember?.get(memberKey(member, false)) ?? byMember?.get(memberKey(member, true))
+      : byMember?.get(memberKey(member, isStatic));
     if (found) {
       return found;
     }

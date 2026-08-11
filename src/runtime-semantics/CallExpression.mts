@@ -283,7 +283,10 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           const realm = surroundingAgent.currentRealmRecord;
           const collection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
           const base0 = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
-          for (const [name, declaration] of all) {
+          for (const [key, declaration] of all) {
+            // The collected key distinguishes a static member from an instance
+            // one of the same name; the reflection reports the declared name.
+            const name = (declaration as { name?: string }).name ?? key;
             const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
             X(CreateDataProperty(one, Value('kind'), Value(declaration.kind)));
             X(CreateDataProperty(one, Value('name'), Value(name)));

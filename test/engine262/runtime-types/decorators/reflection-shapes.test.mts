@@ -70,13 +70,17 @@ test('an ACCESSOR reads back too', () => {
 test('the ENUMERATING forms, and `{ own: true }`', () => {
   // decorators.md's signature returns "{ [name]: Reflection }" - an object
   // keyed by member name, not a list.
-  expect(evaluated('class A { m() {} n() {} } Object.keys(Reflect.getReflection.<Reflect.ClassMethod, A>()).sort().join(",");')).toBe('m,n');
+  //
+  // `constructor` is among them: a constructor is a `ClassMethod` of that name
+  // (#table-reflection-contexts), and a class always has one, the default being
+  // what `new` calls where none is written.
+  expect(evaluated('class A { m() {} n() {} } Object.keys(Reflect.getReflection.<Reflect.ClassMethod, A>()).sort().join(",");')).toBe('constructor,m,n');
   // "Reflection includes inherited members BY DEFAULT."
   expect(evaluated('class B { base() {} } class D extends B { own() {} } '
-    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).sort().join(",");')).toBe('base,own');
+    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).sort().join(",");')).toBe('base,constructor,own');
   // "To query only the members a class declares itself, pass `{ own: true }`."
   expect(evaluated('class B { base() {} } class D extends B { own() {} } '
-    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>({ own: true })).join(",");')).toBe('own');
+    + 'Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>({ own: true })).sort().join(",");')).toBe('constructor,own');
   // The CONTEXT filters the kind, so a getter is not among the methods.
   expect(evaluated('class A { m() {} get v(): uint8 { return 1; } } '
     + 'Object.keys(Reflect.getReflection.<Reflect.ClassGetter, A>()).join(",");')).toBe('v');
@@ -84,8 +88,11 @@ test('the ENUMERATING forms, and `{ own: true }`', () => {
   // derived class outward and a name already seen is not replaced, which is the
   // same direction the metadata prototype chain resolves in. Counting is what
   // catches the other order - both would contain `m`.
+  // Counted over `m` alone, `constructor` being present for every class and so
+  // not what this is measuring.
   expect(evaluated('class B { m() {} } class D extends B { m() {} } '
-    + 'String(Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>()).length);')).toBe('1');
+    + 'String(Object.keys(Reflect.getReflection.<Reflect.ClassMethod, D>())'
+    + '.filter((k) => k === "m").length);')).toBe('1');
 });
 
 test('the two FIELD paths are merged into one read', () => {
