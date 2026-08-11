@@ -37,6 +37,37 @@ import {
 } from '#self';
 import { GetTypeObject } from '../type-system/intern.mts';
 
+/**
+ * proposal-runtime-types: the reflection of one PART of a member - a parameter,
+ * or a return. Shared by `getReflection` and `getReflectionByIndex` so the two
+ * cannot report a parameter differently.
+ *
+ * decorators.md ~330 governs the default: "`initial` captures CONSTANT values
+ * only: a non-constant initializer reports *undefined*, because evaluating it
+ * would run user code at class definition rather than per call. `initializer`
+ * carries the same declaration as a `TokenStream` ... The pair is a value and
+ * the expression that produced it, not two spellings of one thing."
+ *
+ * That restriction is what answers the objection this code previously recorded
+ * against reporting a value at all: the constant branch runs nothing, and the
+ * non-constant branch reports no value. `hasDefault` is not carried, being
+ * `initializer !== undefined` in every case.
+ */
+function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: ObjectValueClass } }, kindName: string, parameter: { name: string, index: number, initial?: Value, initializer?: Value } | undefined): ValueEvaluator {
+  const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  X(CreateDataProperty(one, Value('kind'), Value(kindName)));
+  if (parameter !== undefined) {
+    X(CreateDataProperty(one, Value('name'), Value(parameter.name)));
+    X(CreateDataProperty(one, Value('index'), Value(parameter.index)));
+    // The value where the default is compile-time evaluable, and *undefined*
+    // otherwise - which is also what a parameter with no default reports, the
+    // two being told apart by `initializer`.
+    X(CreateDataProperty(one, Value('initial'), parameter.initial ?? Value.undefined));
+    X(CreateDataProperty(one, Value('initializer'), parameter.initializer ?? Value.undefined));
+  }
+  return one;
+}
+
 /** https://tc39.es/ecma262/#sec-function-calls-runtime-semantics-evaluation */
 // CallExpression :
 //   CoverCallExpressionAndAsyncArrowHead
@@ -257,10 +288,26 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // context decides the reflection's TYPE and the name decides which
       // member, exactly as `getMetadata` does. Inherited members are included,
       // which decorators.md makes the default, by walking the base chain.
+      // A context naming a class MEMBER routes here. The list was literal and
+      // named six contexts, so the parameter and return ones fell through to
+      // the TYPE path, which reads its first argument as a type - and a member
+      // name is a string, hence `"m" is not a type`, which was the fall-through
+      // speaking rather than a diagnosis.
+      //
+      // The suffix test is the one `getReflectionByIndex` already applies for
+      // its own routing, so the two paths agree by construction instead of by
+      // two lists being kept in step.
+      const libraryName = typeof (contextRecord as { LibraryName?: unknown }).LibraryName === 'string' ? (contextRecord as { LibraryName: string }).LibraryName : '';
       const memberRead = contextRecord.Kind === 'nominal'
-        && typeof contextRecord.LibraryName === 'string'
-        && ['Reflect.ClassField', 'Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
-          'Reflect.ClassAccessor', 'Reflect.ClassOperator'].includes(contextRecord.LibraryName);
+        && (['Reflect.ClassField', 'Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
+          'Reflect.ClassAccessor', 'Reflect.ClassOperator'].includes(libraryName)
+          || (libraryName.startsWith('Reflect.Class')
+            && (libraryName.endsWith('Parameter') || libraryName.endsWith('Return'))));
+      // A parameter or return context reads a member's PARTS rather than the
+      // member, so it takes the member's name first and then, for a parameter,
+      // an optional name or position.
+      const partRead = memberRead && libraryName.startsWith('Reflect.Class')
+        && (libraryName.endsWith('Parameter') || libraryName.endsWith('Return'));
       if (memberRead) {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const constructor = (classRecord as { Constructor?: Value }).Constructor;
@@ -269,6 +316,45 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         const argList = Q(yield* ArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
+        // A PARAMETER or RETURN context reads the parts of a member, so its
+        // first argument is the member's name. decorators.md gives a parameter
+        // context two arities: with the member alone it returns every parameter
+        // "{ [name: string | uint32]: Reflection }", keyed by BOTH name and
+        // position; with a second argument it selects one, by either.
+        if (partRead) {
+          const memberName = Q(yield* ToString(nameValue));
+          const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
+          if (declaration === undefined) {
+            return ThrowError.TypeError('$1 is not a member of this type', nameValue);
+          }
+          const realm = surroundingAgent.currentRealmRecord;
+          const kindName = libraryName.slice('Reflect.'.length);
+          if (libraryName.endsWith('Return')) {
+            // A return names exactly one thing, so there is no enumerating form.
+            return Q(yield* ReflectionForMemberPart(realm as never, kindName, undefined));
+          }
+          const parameters = declaration.parameters ?? [];
+          if (argList.length > 1) {
+            const selector = argList[1]!;
+            const wanted = selector instanceof JSStringValue
+              ? parameters.find((parameter) => parameter.name === selector.stringValue())
+              : parameters[Number(Q(yield* ToString(selector)).stringValue())];
+            if (wanted === undefined) {
+              return ThrowError.TypeError('$1 is not a member of this type', selector);
+            }
+            return Q(yield* ReflectionForMemberPart(realm as never, kindName, wanted));
+          }
+          const collection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          for (const parameter of parameters) {
+            const reflection = Q(yield* ReflectionForMemberPart(realm as never, kindName, parameter));
+            // Keyed by name AND by position, which is what
+            // "[name: string | uint32]" asks for: `r.first` and `r[0]` are one
+            // reflection reached two ways.
+            X(CreateDataProperty(collection, Value(parameter.name), reflection));
+            X(CreateDataProperty(collection, Value(String(parameter.index)), reflection));
+          }
+          return collection;
+        }
         // THE ENUMERATING FORM: no name, or `{ own: true }`. It returns
         // "{ [name]: Reflection }" - an object keyed by member name, which is
         // the shape decorators.md's signature gives - and includes inherited
