@@ -113,6 +113,37 @@ test('the type operator', () => {
   });
 });
 
+test('the type operator: `(` is refined by the token after the `)`', () => {
+  // #sec-types-in-expression-position: "`type (uint8) => uint8` is a type
+  // operator applied to a function type, while `type (x)` is a call of a
+  // function named `type`, and the two agree until the token after the closing
+  // parenthesis." The operand is parsed speculatively and kept only where it
+  // came out a function type - that is, where a `=>` followed the `)`.
+  for (const source of ['type (uint8) => uint8;', 'type (x: uint8) => uint8;', 'type () => void;']) {
+    expect(statements(source)[0]).toMatchObject({
+      Expression: { type: 'TypeOperatorExpression', Type: { type: 'FunctionType' } },
+    });
+  }
+  // Everything the refinement declines stays a call, including the two that a
+  // naive `(`-takes-the-operand rule would have broken: a named-argument call,
+  // and a call whose argument is an arrow function.
+  expect(statements('type(1);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
+  expect(statements('type (uint8);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
+  expect(statements('type (x: uint8);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
+  expect(statements('type ((x) => x);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
+  // A parenthesized non-function type is not one of the two refinements, so it
+  // is a call too - the union spelling that needs no parentheses is the one the
+  // operand reaches, `type A | B` being the union.
+  expect(statements('type (uint8 | string);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
+  // In an EXPRESSION position: at statement start `type` followed by an
+  // identifier is claimed by the declaration form, which is a separate lookahead.
+  expect(statements('const u = type uint8 | string;')[0]).toMatchObject({
+    BindingList: [{ Initializer: { type: 'TypeOperatorExpression', Type: { type: 'UnionType' } } }],
+  });
+  // The refinement runs only where the operator could apply at all: the
+  // enclosing [no LineTerminator here] check is tested with `-` above.
+});
+
 test('the type operator: `-` is the other class 3 token', () => {
   // `-` was already decided in the operator's favour - `LiteralType : `-`
   // NumericLiteral` requires it - but nothing pinned that, which is how the

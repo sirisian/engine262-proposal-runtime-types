@@ -959,6 +959,19 @@ export abstract class ExpressionParser extends FunctionParser {
             node.Type = this.parseType();
             return this.finishNode(node, 'TypeOperatorExpression');
           }
+          case Token.LPAREN: {
+            // Class 2: ambiguous, but the readings diverge at the token after
+            // the closing parenthesis, which is what the cover grammar of
+            // #sec-types-in-expression-position refines on. Taking `(` outright
+            // would break every call of a function named `type`, so the operand
+            // is parsed speculatively and kept only where it turned out to be a
+            // function type - i.e. where a `=>` followed the `)`.
+            const covered = this.tryParseTypeOperatorFunctionType();
+            if (covered) {
+              return covered;
+            }
+            break;
+          }
           default:
             break;
         }
@@ -2293,6 +2306,52 @@ export abstract class ExpressionParser extends FunctionParser {
    * `MatchClauses` requires AT LEAST ONE CLAUSE, which is what keeps
    * `match(x) {}` a call followed by a block.
    */
+  /**
+   * proposal-runtime-types #sec-types-in-expression-position: "`type (uint8) =>
+   * uint8` is a type operator applied to a function type, while `type (x)` is a
+   * call of a function named `type`, and the two agree until the token after the
+   * closing parenthesis. This specification resolves it with a cover grammar ...
+   * the parenthesized text is parsed under a cover production and refined to a
+   * function-type operand or a call argument list once the token after the
+   * closing parenthesis is known."
+   *
+   * The refinement is done here by parsing the operand speculatively and keeping
+   * it only where it came out a |FunctionType|, which is exactly the case where a
+   * `=>` followed the `)`. Everything else - `type (x)`, `type (x: uint8)` (a
+   * call with a named argument), `type ((x) => x)` (a call taking an arrow
+   * function) - is a live program that must stay a call, so the checkpoint is
+   * restored and the caller falls through to the call form.
+   *
+   * A parenthesized NON-function type is deliberately not covered: the clause
+   * refines to "a function-type operand or a call argument list", and `type
+   * (uint8)` is a valid call. The union spelling needs no parentheses, since the
+   * operand extends as far as one reaches - `type A | B` is the union.
+   */
+  tryParseTypeOperatorFunctionType(): ParseNode.TypeOperatorExpression | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const scopeDepth = this.scope.depth;
+    const node = this.startNode<ParseNode.TypeOperatorExpression>();
+    this.next();
+    try {
+      const Type = this.parseType();
+      if (Type.type === 'FunctionType') {
+        node.Type = Type;
+        return this.finishNode(node, 'TypeOperatorExpression');
+      }
+    } catch (e) {
+      // A scope left unbalanced cannot be unwound by restoring the lexer, so
+      // that failure is not one this may swallow. The same guard the arrow
+      // return-type annotation uses.
+      if (this.scope.depth !== scopeDepth) {
+        throw e;
+      }
+    }
+    this.restoreLexerCheckpoint(checkpoint);
+    this.earlyErrors = savedEarlyErrors;
+    return null;
+  }
+
   tryParseMatchExpression(): ParseNode.MatchExpression | null {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();

@@ -8,14 +8,15 @@ import { expectBuilderTrue } from './harness.mts';
  * This shard ports the medium challenges expressible in their true corpus
  * builder form, over the `type` operator with literal operands and the
  * primitives keyof / getReflection / makeType / isAssignable and the kit. Each builder is written close to the corpus, and its assertions run
- * with `===` (interning). A TUPLE operand (`type [3,2,1]`) is now spellable:
- * #sec-types-in-expression-position leaves `(` as the only cover-grammar case,
- * so `[` belongs to the operator. Where a challenge's corpus form needs a
- * PARENTHESIZED operand (`type ('a'|'b')`, `type (uint8) => uint8`) the operand
- * is provided as a type alias instead, and this is noted - `type(x)` is still a
- * call on a variable named `type`, pending that cover grammar. Remaining medium
- * challenges are in later shards; ones blocked on an unbuilt primitive are
- * named there.
+ * with `===` (interning). Both operands the corpus reaches for are spellable
+ * now: a TUPLE (`type [3,2,1]`), since #sec-types-in-expression-position leaves
+ * `(` as the only cover-grammar case and so `[` belongs to the operator, and a
+ * FUNCTION TYPE (`type (uint8) => uint8`), refined out of that cover at the
+ * token after the `)`. A PARENTHESIZED non-function operand (`type ('a'|'b')`)
+ * is neither refinement and stays a call, so a union operand is written
+ * unparenthesized - `type 'a' | 'b'`, the operand reaching as far as it can.
+ * Remaining medium challenges are in later shards; ones blocked on an unbuilt
+ * primitive are named there.
  *
  * The kit source (over the primitives) prepended where a builder uses it.
  */

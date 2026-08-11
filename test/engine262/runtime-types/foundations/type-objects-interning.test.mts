@@ -166,3 +166,37 @@ test('the class 3 escape hatches keep their value reading', () => {
   // A literal type operand, which is the reading `-` already had.
   expect(evaluated('type N = -1; (type -1) === N ? "same" : "different";')).toBe('same');
 });
+
+// -- The `type` operator's function-type operand -------------------------------
+//
+// #sec-types-in-expression-position resolves `type (uint8) => uint8` against
+// `type (x)` with a cover grammar, refined at the token after the `)`.
+
+test('a function-type operand interns like any other type', () => {
+  expect(evaluated('type F = (uint8) => uint8;'
+    + ' (type (uint8) => uint8) === F ? "same" : "different";')).toBe('same');
+  expect(evaluated('type F = (x: uint8) => uint8;'
+    + ' (type (x: uint8) => uint8) === F ? "same" : "different";')).toBe('same');
+  expect(evaluated('type F = () => void; (type () => void) === F ? "same" : "different";')).toBe('same');
+  // Parameter names are not part of a function type's identity, so the operand
+  // form and the unnamed alias meet.
+  expect(evaluated('type F = (uint8) => uint8;'
+    + ' (type (x: uint8) => uint8) === F ? "same" : "different";')).toBe('same');
+  // The operand is a full Type, so a curried result and a union parameter are
+  // reached without parentheses.
+  expect(evaluated('type C = (uint8) => (uint8) => uint8;'
+    + ' (type (uint8) => (uint8) => uint8) === C ? "same" : "different";')).toBe('same');
+  expect(evaluated('type U = (uint8 | string) => void;'
+    + ' (type (uint8 | string) => void) === U ? "same" : "different";')).toBe('same');
+});
+
+test('what the refinement declines stays a call', () => {
+  // Each of these is a live program that the operator must not capture: a
+  // plain call, a call with a NAMED argument, and a call whose argument is an
+  // arrow function.
+  expect(evaluated('function type(x) { return x === uint8 ? "call" : "other"; } type (uint8);')).toBe('call');
+  expect(evaluated('function type(x) { return x === uint8 ? "call" : "other"; } type (x: uint8);')).toBe('call');
+  expect(evaluated('function type(f) { return typeof f; } type ((x) => x);')).toBe('function');
+  // A parenthesized non-function type is not one of the two refinements.
+  expect(evaluated('function type(x) { return x === uint8 ? "call" : "other"; } type (uint8);')).toBe('call');
+});
