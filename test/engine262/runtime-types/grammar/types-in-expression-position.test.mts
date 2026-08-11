@@ -81,9 +81,52 @@ test('the type operator', () => {
   expect(statements('const t = type Point.<uint8>;')[0]).toMatchObject({
     BindingList: [{ Initializer: { type: 'TypeOperatorExpression', Type: { TypeArguments: { type: 'TypeArguments' } } } }],
   });
-  // Calls and member accesses on an identifier named `type` keep working.
+  // `(` is class 2 - ambiguous but resolvable by the token after `)` - and is
+  // left to the call form until the cover grammar of
+  // #sec-types-in-expression-position is built, so a call on an identifier
+  // named `type` keeps working.
   expect(statements('type(1);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
-  expect(statements('type[0];')[0]).toMatchObject({ Expression: { type: 'MemberExpression' } });
+  // `[` is class 3: ambiguous with NO lookahead that separates the readings,
+  // since `type [0]` is a complete tuple type and a complete member access that
+  // end at the same token. The clause says "the only covered case is an operand
+  // that begins with `(`", so `[` is not covered and belongs to the operator.
+  expect(statements('type[0];')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'TupleType' } },
+  });
+  // The escape hatch for the value reading, which is what a program indexing a
+  // binding named `type` writes.
+  expect(statements('(type)[0];')[0]).toMatchObject({ Expression: { type: 'MemberExpression' } });
+  // The operand forms `[` unlocks: tuple, dynamic array, fixed extent, empty.
+  expect(statements('type [uint8];')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'TupleType' } },
+  });
+  expect(statements('type [].<uint8>;')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
+  });
+  expect(statements('type [4].<uint8>;')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
+  });
+  // An empty bracket pair is the ARRAY form (`ArrayOrTupleType : [ ] TypeArguments?`)
+  // rather than an empty tuple, so this pins what it is rather than assuming.
+  expect(statements('type [];')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
+  });
+});
+
+test('the type operator: `-` is the other class 3 token', () => {
+  // `-` was already decided in the operator's favour - `LiteralType : `-`
+  // NumericLiteral` requires it - but nothing pinned that, which is how the
+  // engine came to answer the two class 3 tokens differently. Both directions
+  // are recorded here so the rule is visible rather than accidental.
+  expect(statements('type -1;')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'LiteralType' } },
+  });
+  // The value reading, through the escape hatch and through a property access,
+  // which never reaches the operator at all.
+  expect(statements('(type) - 1;')[0]).toMatchObject({ Expression: { type: 'AdditiveExpression' } });
+  expect(statements('o.type - 1;')[0]).toMatchObject({ Expression: { type: 'AdditiveExpression' } });
+  // A line terminator ends the operand's reach, so this stays subtraction.
+  expect(statements('type\n- 1;')[0]).toMatchObject({ Expression: { type: 'AdditiveExpression' } });
 });
 
 test('type arguments on calls and members', () => {

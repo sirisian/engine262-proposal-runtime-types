@@ -124,3 +124,45 @@ test('a type member may have a computed name', () => {
   // write.
   expect(evaluated('function t() { try { eval("type S = { [{}]: number };"); return "no"; } catch (e) { return "caught"; } } t();')).toBe('caught');
 });
+
+// -- The `type` operator's tuple and array operands ----------------------------
+//
+// #sec-types-in-expression-position: "The type forms whose syntax collides with
+// the expression grammar cannot [be written directly]. The `type` operator
+// resolves the collision by parsing its operand as a type." A tuple written
+// bare is an array literal, so it needs the operator, and the operator's
+// operand is a full Type.
+
+test('a tuple operand interns like any other type', () => {
+  // The point of the whole change: the operand form and the alias form are one
+  // Type Object, so a builder's result can be compared against the spelling a
+  // reader would write.
+  expect(evaluated('type T = [uint8, uint8];'
+    + ' (type [uint8, uint8]) === T ? "same" : "different";')).toBe('same');
+  expect(evaluated('function pairOf(T) {'
+    + ' return Reflect.makeType({ kind: "tuple", elements: [{ type: T, rest: false }, { type: T, rest: false }] }); }'
+    + ' pairOf(uint8) === type [uint8, uint8] ? "same" : "different";')).toBe('same');
+});
+
+test('a tuple operand is a Type Object, and comparisons over it are not vacuous', () => {
+  // Both halves matter. The operand used to evaluate to undefined, which made
+  // `(type [uint8]) === (type [uint8])` true for the wrong reason - so a suite
+  // that only asserted equality would have passed on undefined.
+  expect(evaluated('typeof (type [uint8]);')).toBe('object');
+  expect(evaluated('(type [uint8]) === (type [uint16]) ? "same" : "different";')).toBe('different');
+});
+
+test('array and fixed-extent operands intern too', () => {
+  expect(evaluated('type A = [].<uint8>; (type [].<uint8>) === A ? "same" : "different";')).toBe('same');
+  expect(evaluated('type F = [4].<uint8>; (type [4].<uint8>) === F ? "same" : "different";')).toBe('same');
+});
+
+test('the class 3 escape hatches keep their value reading', () => {
+  // `[` and `-` belong to the operator, so a program that means the VALUE
+  // parenthesizes the name. Nothing here reaches the operator.
+  expect(evaluated('const type = ["a", "b"]; (type)[0];')).toBe('a');
+  expect(evaluated('const type = 5; String((type) - 1);')).toBe('4');
+  expect(evaluated('const o = { type: 5 }; String(o.type - 1);')).toBe('4');
+  // A literal type operand, which is the reading `-` already had.
+  expect(evaluated('type N = -1; (type -1) === N ? "same" : "different";')).toBe('same');
+});

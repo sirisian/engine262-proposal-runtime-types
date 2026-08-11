@@ -8,12 +8,14 @@ import { expectBuilderTrue } from './harness.mts';
  * This shard ports the medium challenges expressible in their true corpus
  * builder form, over the `type` operator with literal operands and the
  * primitives keyof / getReflection / makeType / isAssignable and the kit. Each builder is written close to the corpus, and its assertions run
- * with `===` (interning). Where a challenge's corpus form needs the `type`
- * operator on a TUPLE or PARENTHESIZED operand (`type [3,2,1]`, `type ('a'|'b')`)
- * - which the engine cannot spell, since `type[x]`/`type(x)` are member access
- * and call on a variable named `type` - the tuple/union operand is provided as a
- * type alias instead, and this is noted. Remaining medium challenges are in
- * later shards; ones blocked on an unbuilt primitive are named there.
+ * with `===` (interning). A TUPLE operand (`type [3,2,1]`) is now spellable:
+ * #sec-types-in-expression-position leaves `(` as the only cover-grammar case,
+ * so `[` belongs to the operator. Where a challenge's corpus form needs a
+ * PARENTHESIZED operand (`type ('a'|'b')`, `type (uint8) => uint8`) the operand
+ * is provided as a type alias instead, and this is noted - `type(x)` is still a
+ * call on a variable named `type`, pending that cover grammar. Remaining medium
+ * challenges are in later shards; ones blocked on an unbuilt primitive are
+ * named there.
  *
  * The kit source (over the primitives) prepended where a builder uses it.
  */
@@ -128,18 +130,16 @@ test('medium 298 - Length of String', () => {
   `));
 });
 
-// 15 - Last of Array - the last element type, or never for empty. The corpus
-// writes `last(type [3,2,1])`; the tuple operand is an alias here (see header).
+// 15 - Last of Array - the last element type, or never for empty. Written in
+// the corpus's own form, `last(type [3,2,1])`, now that a tuple operand parses.
 test('medium 15 - Last of Array', () => {
   expectBuilderTrue(kit(`
     function last(T) { const els = elementTypes(T); return els.length ? els[els.length - 1] : never; }
-    type T = [3, 2, 1];
-    String(last(T) === type 1);
+    String(last(type [3, 2, 1]) === type 1);
   `));
   expectBuilderTrue(kit(`
     function last(T) { const els = elementTypes(T); return els.length ? els[els.length - 1] : never; }
-    type T = [2];
-    String(last(T) === type 2);
+    String(last(type [2]) === type 2);
   `));
 });
 
@@ -160,7 +160,7 @@ test('medium 16 - Pop', () => {
 });
 
 // 949 - AnyOf - true when any tuple element is a truthy-typed value. The corpus
-// tests literal falsy/truthy element types; the tuple operand is an alias here.
+// tests literal falsy/truthy element types, in its own tuple-operand spelling.
 test('medium 949 - AnyOf', () => {
   // a tuple with a truthy element (1) is true
   expectBuilderTrue(kit(`
@@ -171,8 +171,7 @@ test('medium 949 - AnyOf', () => {
         return n.kind === 'literal' ? !falsy.has(n.value) : true;
       }) ? type true : type false;
     }
-    type T = [0, '', false, 1];
-    String(anyOf(T) === type true);
+    String(anyOf(type [0, '', false, 1]) === type true);
   `));
   // all falsy is false
   expectBuilderTrue(kit(`

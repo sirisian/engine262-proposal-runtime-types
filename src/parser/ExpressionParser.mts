@@ -916,17 +916,36 @@ export abstract class ExpressionParser extends FunctionParser {
         return this.parseAwaitExpression();
       }
       // proposal-runtime-types TypeOperatorExpression : `type` [no LT] Type
-      // `type(x)` stays a call and `type[x]` a member access, so an operand
-      // beginning with `(` or `[` is left to those forms; every other Type-start
-      // token is unambiguous after `type` and begins a type operand. Literal
-      // types (`type 'a'`, `type true`, `type 42`, `type null`) and object types
-      // (`type { x: T }`) are the common forms the corpus uses.
+      //
+      // `type` is a contextual keyword AND a live binding (the type type), so
+      // every operand-start token has two readings. They fall in three classes.
+      //
+      // 1. Unambiguous: an identifier, `{`, a literal, `void`, `keyof`, `ref`.
+      //    Each is a SyntaxError today (`type foo` is two identifiers, `type {`
+      //    fails ASI), so the operator takes them without changing the meaning
+      //    of any existing program.
+      // 2. Ambiguous, resolvable by lookahead: `(`. `type (uint8) => uint8` is
+      //    a function-type operand and `type (x)` is a call, and they diverge
+      //    at the token after `)`. #sec-types-in-expression-position resolves
+      //    that with a cover grammar. Until it is built, `(` is left to the
+      //    call form, so function-type operands are not yet writable.
+      // 3. Ambiguous with NO possible lookahead: `[` and `-`. `type [0]` is the
+      //    tuple type of literal 0 or member access; `type -1` is the literal
+      //    type -1 or subtraction. Both readings are complete and end at the
+      //    same token, which is why the clause says "the only covered case is
+      //    an operand that begins with `(`" - a cover grammar does not apply,
+      //    so class 3 is decided by fiat. It is decided HERE in the operator's
+      //    favour, as `LiteralType : `-` NumericLiteral` already required for
+      //    `-`, and as ECMAScript itself decided for `let [` at statement
+      //    start. A program that means the value writes `(type)[0]` or
+      //    `(type) - 1`; a property access like `o.type[0]` never reaches here.
       if (surroundingAgent.feature('runtime-types') && this.test('type') && !this.peekAhead().hadLineTerminatorBefore) {
         switch (this.peekAhead().type) {
           case Token.IDENTIFIER:
           case Token.YIELD:
           case Token.AWAIT:
           case Token.LBRACE:
+          case Token.LBRACK:
           case Token.STRING:
           case Token.NUMBER:
           case Token.BIGINT:
