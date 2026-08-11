@@ -7,7 +7,8 @@ import {
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
-import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
+import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
@@ -707,7 +708,51 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if (name === 'bigint') {
  return Value(0n); 
 }
-      // symbol has no meaningful zero
+      // #sec-defaultvalueof step 2 is "if _t_ is a numeric type, return the
+      // value of _t_ representing 0", and the numeric types are broader than
+      // the widths above: "Each integer, binary floating-point, DECIMAL
+      // floating-point, rational, complex, and VECTOR type is a numeric type in
+      // that sense."
+      if (name === 'decimal32' || name === 'decimal64' || name === 'decimal128') {
+        // Significand 0 at exponent 0, which is the cohort member `0` rather
+        // than `0.00`: #sec-decimal-floating-point-types remembers precision, so
+        // the zero has to be a particular member and the natural one is the
+        // shortest. The record is carried so the value is of THIS width rather
+        // than of a bare decimal.
+        const width = name === 'decimal32' ? 32 : name === 'decimal64' ? 64 : 128;
+        return CreateDecimalValue(0n, 0, width, surroundingAgent.currentRealmRecord, t);
+      }
+      if (name === 'vector') {
+        // "an array or an aggregate whose storage is zero-filled" - a vector's
+        // storage is its lanes, so its zero is the zero of the lane type in
+        // every lane. The bit-vector masks need no separate branch: `boolean8`
+        // is a vector of `uint.<1>` with eight lanes, so the lane zero is the
+        // integer zero and the result is the all-false mask `boolean8(0)`
+        // builds.
+        const laneType = t.Arguments[0] as TypeRecord | undefined;
+        const laneCount = t.Arguments[1];
+        if (!laneType || typeof laneCount !== 'number') {
+          return undefined;
+        }
+        const lanes: Value[] = [];
+        for (let i = 0; i < laneCount; i += 1) {
+          // A lane is a value type and could be shared, but this is written as
+          // the array and tuple cases above are so that a reader does not have
+          // to work out why one aggregate differs.
+          const lane = Q(yield* DefaultValueOf(laneType));
+          if (lane === undefined) {
+            return undefined;
+          }
+          lanes.push(lane);
+        }
+        return new VectorValue(lanes, t);
+      }
+      // `symbol` has no meaningful zero. Nor, in this engine, do `float128` and
+      // the complex family - not because the clause exempts them, but because
+      // neither has a value representation at all: every route in, a literal, a
+      // `:=` cast and a conversion call, is refused. That is a completeness gap
+      // of its own and is recorded in KNOWN-DIVERGENCES.md rather than papered
+      // over with a zero this engine cannot build.
       return undefined;
     }
     case 'literal':
@@ -815,6 +860,13 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return holds ? d : undefined;
     }
     case 'nominal': {
+      // #sec-rational-types is a numeric type too, but it resolves through the
+      // library type names rather than as a ~primitive~ record, so its zero is
+      // answered here rather than beside the decimals. Zero is 0/1, which is
+      // what canonicalization gives any zero numerator.
+      if ((t as { LibraryName?: string }).LibraryName === 'rational') {
+        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
+      }
       // #sec-defaultvalueof: "If _t_ denotes a value type class, return the
       // instance of _t_ each of whose fields holds the default of the field's
       // type, or ~none~ if any field's type has no default."

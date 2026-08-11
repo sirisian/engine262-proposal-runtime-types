@@ -181,3 +181,63 @@ test('a brand has no default, since its base zero is not a value of it', () => {
   const brand = 'type M = { m: number }; meta M { default = { m: 0 }; subtype(a, b) { return true; } }';
   expect(value(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter; String(d);`)).toBe('undefined');
 });
+
+// -- Numeric-family defaults (#sec-defaultvalueof step 2) ----------------------
+//
+// "If _t_ is a numeric type, return the value of _t_ representing 0", where the
+// numeric types are "Each integer, binary floating-point, decimal
+// floating-point, rational, complex, and vector type".
+
+test('the decimal families default to a decimal zero', () => {
+  expect(value('let d: decimal128; d.toString();')).toBe('0');
+  expect(value('let d: decimal64; d.toString();')).toBe('0');
+  expect(value('let d: decimal32; d.toString();')).toBe('0');
+  // The zero is the SHORTEST cohort member, not `0.00`: a decimal remembers
+  // precision, so which member it is is observable.
+  expect(value('let d: decimal128; String(d.toString() === "0");')).toBe('true');
+  // And it carries its own width rather than a bare decimal's.
+  expect(value('let d: decimal64; String(d is decimal64);')).toBe('true');
+});
+
+test('a vector defaults to its lane zero in every lane', () => {
+  expect(value('let v: float32x4; `${v.x}:${v.y}:${v.z}:${v.w}`;')).toBe('0:0:0:0');
+  expect(value('let v: int32x4; String(v.x is int32);')).toBe('true');
+  // The same value the constructor's broadcast builds.
+  expect(value('let v: float32x4; String(String(v.x) === String(float32x4(0).x));')).toBe('true');
+});
+
+test('a bit-vector mask defaults to all false', () => {
+  // `boolean8` is a vector of `uint.<1>` with eight lanes, so it needs no
+  // separate rule: the lane zero is the integer zero.
+  expect(value('let m: boolean8; `${m.any()}:${m.all()}`;')).toBe('false:false');
+  expect(value('let m: boolean32x4; String(m.any());')).toBe('false');
+});
+
+test('rational defaults to zero', () => {
+  // A numeric type that resolves as a LIBRARY type rather than a primitive, so
+  // its zero is answered beside the nominals.
+  expect(value('let q: rational; q.toString();')).toBe('0');
+  expect(value('let q: rational; String(q is rational);')).toBe('true');
+});
+
+test('a class field of these types takes the default', () => {
+  // This threw - "undefined is not assignable to decimal128" - so a value type
+  // class holding a decimal or a vector field could not be instantiated.
+  expect(value('class H { d: decimal128; v: float32x4; }'
+    + ' const h = new H(); `${h.d.toString()}:${h.v.x}`;')).toBe('0:0');
+});
+
+test('a typed property descriptor of decimal type takes the default', () => {
+  expect(value('const o = {};'
+    + ' Object.defineProperty(o, "d", { type: decimal128, writable: true });'
+    + ' o.d.toString();')).toBe('0');
+});
+
+test('a type with no value representation still has no default', () => {
+  // `float128` is a type this engine has no values for at all - a literal, a
+  // `:=` cast and a conversion call are each refused - so it has no zero to
+  // return. This pins that rather than the clause, and is recorded in
+  // KNOWN-DIVERGENCES.md; `symbol` is the case that is correctly ~none~.
+  expect(value('let f: float128; String(f);')).toBe('undefined');
+  expect(value('let s: symbol; String(s);')).toBe('undefined');
+});
