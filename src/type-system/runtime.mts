@@ -15,7 +15,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, CheckedConvertValue, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
@@ -678,7 +678,7 @@ function classInstanceType(value: ObjectValue): TypeRecord | null {
  * array/tuple -> filled with element defaults; otherwise none (symbol, object,
  * function, non-nullable unions, and value-type classes without a field default).
  */
-export function DefaultValueOf(t: TypeRecord): Value | undefined {
+export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined> {
   switch (t.Kind) {
     case 'parameter':
       // A generic parameter has no default, because nothing is known about what
@@ -744,20 +744,75 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
       if (typeof t.Extent !== 'number') {
         return undefined;
       }
-      const element = DefaultValueOf(t.Element);
+      const element = Q(yield* DefaultValueOf(t.Element));
       if (element === undefined) {
         return undefined;
       }
       for (let i = 0; i < t.Extent; i += 1) {
         // Each element is its own instance, not the same one shared: a class
         // default is an object, and `d[0].a = 1` must not be visible at `d[1]`.
-        const each = DefaultValueOf(t.Element);
+        const each = Q(yield* DefaultValueOf(t.Element));
         if (each === undefined) {
           return undefined;
         }
         X(CreateDataPropertyOrThrow(out, Value(String(i)), each));
       }
       return out;
+    }
+    case 'tuple': {
+      // #sec-defaultvalueof: "For each element _e_ of _t_.[[Elements]], do: if
+      // _e_.[[Rest]] is *false* and _e_.[[Initial]] is ~none~ and
+      // DefaultValueOf(_e_.[[Type]]) is ~none~, return ~none~. Return a new
+      // tuple of the type _t_ whose elements are, for each element ... whose
+      // [[Rest]] is *false* and in order, its [[Initial]] where that is not
+      // ~none~ and the default value of its [[Type]] otherwise."
+      //
+      // A rest position contributes nothing: it is empty by default, which is
+      // why the clause walks only the [[Rest]]-false elements.
+      const positions = t.Elements.filter((e) => !e.Rest);
+      const out = X(ArrayCreate(positions.length));
+      for (let i = 0; i < positions.length; i += 1) {
+        const e = positions[i]!;
+        // Each position is allocated on its own rather than sharing one
+        // instance, for the reason the fixed-extent array above gives: a class
+        // default is an object, and `d[0].a = 1` must not be visible at `d[1]`.
+        let value;
+        if (e.Initial === 'none') {
+          value = Q(yield* DefaultValueOf(e.Type));
+        } else {
+          // The [[Initial]] is the initializer's value as written, not yet of
+          // the position's type, so it is converted here exactly as the
+          // boundary of #sec-array-defaults-and-stores converts a supplied one.
+          value = Q(yield* CheckedConvertValue(e.Initial, e.Type));
+        }
+        if (value === undefined) {
+          // A position with neither an initial nor a defaulting type: the
+          // tuple has no default, and the refusal is the whole tuple's.
+          return undefined;
+        }
+        X(CreateDataPropertyOrThrow(out, Value(String(i)), value));
+      }
+      return out;
+    }
+    case 'parameterized': {
+      // #sec-defaultvalueof: "Let _d_ be DefaultValueOf(_t_.[[Base]]) ... If the
+      // metadata's meta type defines a validation judgment and that judgment
+      // does not hold of _d_ and _t_.[[Metadata]], return ~none~. Return _d_."
+      //
+      // The membership test is used rather than the validation judgment alone,
+      // because the operation's own signature is "either a value of the type
+      // _t_ or ~none~" and the judgment is not enough to secure that. Where a
+      // governing meta type constrains and defines no `validate` - a brand -
+      // the base's zero is NOT a value of the parameterization, and returning
+      // it would both break that contract and hand the binding a value its own
+      // annotation then refuses. IsOfType's ~parameterized~ branch is the
+      // judgment plus that brand rule, so it subsumes the clause's step.
+      const d = Q(yield* DefaultValueOf(t.Base));
+      if (d === undefined) {
+        return undefined;
+      }
+      const holds = Q(yield* IsOfType(d, t));
+      return holds ? d : undefined;
     }
     case 'nominal': {
       // #sec-defaultvalueof: "If _t_ denotes a value type class, return the
@@ -792,7 +847,7 @@ export function DefaultValueOf(t: TypeRecord): Value | undefined {
           // An untyped field has no declared default to fill.
           return undefined;
         }
-        const value = DefaultValueOf(record);
+        const value = Q(yield* DefaultValueOf(record));
         if (value === undefined) {
           return undefined;
         }

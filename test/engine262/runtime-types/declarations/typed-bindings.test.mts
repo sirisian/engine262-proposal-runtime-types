@@ -106,3 +106,78 @@ test('module goal is checked too', () => {
 test('unmodelled remains any: silence', () => {
   expectOk('let f = (x) => x; let n: uint8 = f(5); let s: string = f("s");');
 });
+
+// -- Tuple and parameterized defaults (#sec-defaultvalueof) --------------------
+//
+// "Return a new tuple of the type _t_ whose elements are, for each element ...
+// whose [[Rest]] is *false* and in order, its [[Initial]] where that is not
+// ~none~ and the default value of its [[Type]] otherwise."
+
+/** The completion value of _source_, as a string. */
+function value(source: string): string {
+  const completion = run(source) as unknown as { Type: string, Value: { stringValue(): string } };
+  if (completion.Type !== 'normal') {
+    throw new Error(`expected a normal completion, got ${completion.Type}`);
+  }
+  return completion.Value.stringValue();
+}
+
+test('a tuple binding takes an element-wise default', () => {
+  expect(value('let t: [uint8, uint8]; `${t.length}:${t[0]}:${t[1]}`;')).toBe('2:0:0');
+  expect(value('let t: [uint8, uint8]; String(t[0] is uint8);')).toBe('true');
+  // Mixed element types each take their own zero.
+  expect(value('let t: [uint8, string]; `${t[0]}:${JSON.stringify(t[1])}`;')).toBe('0:""');
+  // Nested tuples recurse.
+  expect(value('let t: [uint8, [uint8, uint8]]; `${t[1].length}:${t[1][0]}`;')).toBe('2:0');
+});
+
+test('a declared initial is used where a position has one', () => {
+  // The [[Initial]] is the initializer's value as written, so it is converted
+  // to the position's type on the way in - this reads 5, typed.
+  expect(value('let t: [uint8, uint8 = 5]; `${t[0]}:${t[1]}`;')).toBe('0:5');
+  expect(value('let t: [uint8, uint8 = 5]; String(t[1] is uint8);')).toBe('true');
+});
+
+test('a rest position contributes nothing to the default', () => {
+  expect(value('let t: [uint8, ...uint8]; String(t.length);')).toBe('1');
+});
+
+test('a position with no default leaves the tuple without one', () => {
+  // `symbol` has no zero, so the whole tuple answers ~none~. #sec-defaultvalueof
+  // makes such a declaration a type error; the engine leaves the binding
+  // undefined instead, which is recorded in KNOWN-DIVERGENCES.md - this pins
+  // what it does today rather than what the clause asks for.
+  expect(value('let t: [uint8, symbol]; String(t);')).toBe('undefined');
+});
+
+test('each position is its own instance', () => {
+  // The fixed-extent array case gives the reason: a class default is an object,
+  // and a write through one position must not show at another.
+  expect(value('class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
+});
+
+test('a class field of tuple type takes the default', () => {
+  // This threw - "undefined is not assignable" - so a value type class holding
+  // a tuple field could not be instantiated at all.
+  expect(value('class C { t: [uint8, uint8]; } const c = new C(); `${c.t.length}:${c.t[0]}`;')).toBe('2:0');
+});
+
+test('a typed property descriptor of tuple type takes the default', () => {
+  expect(value('const o = {};'
+    + ' Object.defineProperty(o, "t", { type: type [uint8, uint8], writable: true });'
+    + ' `${o.t.length}:${o.t[0]}`;')).toBe('2:0');
+});
+
+test('a parameterization defaults to its base zero where that is a value of it', () => {
+  const meta = 'type M = { m: number };'
+    + ' meta M { default = { m: 0 }; subtype(a, b) { return true; } validate(v, c) { return true; } }';
+  expect(value(`${meta} type Meter = float64.<{ m: 1 }>; let d: Meter; \`\${d}:\${d is Meter}\`;`)).toBe('0:true');
+});
+
+test('a brand has no default, since its base zero is not a value of it', () => {
+  // A governing meta type that constrains and defines no `validate` admits no
+  // bare value of the base. DefaultValueOf answers "a value of the type _t_ or
+  // ~none~", so it must answer ~none~ here rather than the base's zero.
+  const brand = 'type M = { m: number }; meta M { default = { m: 0 }; subtype(a, b) { return true; } }';
+  expect(value(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter; String(d);`)).toBe('undefined');
+});

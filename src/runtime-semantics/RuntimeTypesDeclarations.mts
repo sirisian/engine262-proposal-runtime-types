@@ -1243,7 +1243,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     const array = X(ArrayCreate(length)) as ObjectValue & { TypedElement?: unknown };
     // A fixed extent is populated, since its elements exist from the start.
     if (extent !== 'dynamic') {
-      const dflt = (DefaultValueOf(element as never) ?? Value.undefined) as Value;
+      const dflt = (Q(yield* DefaultValueOf(element as never)) ?? Value.undefined) as Value;
       for (let i = 0; i < length; i += 1) {
         X(CreateDataProperty(array, Value(String(i)), dflt));
       }

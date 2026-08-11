@@ -1758,7 +1758,7 @@ export function* DeclaredInitialOf(decl: ParseNode.FieldDefinition): ValueEvalua
     // is what the class will actually give the instance.
     const t = EnsureCompletion(yield* TypeNodeToTypeRecord(decl.TypeAnnotation.Type as never));
     if (t.Type === 'normal') {
-      return DefaultValueOf(t.Value as unknown as TypeRecord) ?? Value.undefined;
+      return (Q(yield* DefaultValueOf(t.Value as unknown as TypeRecord))) ?? Value.undefined;
     }
   }
   return Value.undefined;

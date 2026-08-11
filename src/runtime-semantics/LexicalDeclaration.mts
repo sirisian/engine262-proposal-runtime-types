@@ -142,7 +142,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       // #sec-default-values (numeric 0, '', false, and so on).
       let dflt = LookupTypeDefault(GetTypeObject(record));
       if (dflt === undefined) {
-        dflt = DefaultValueOf(record);
+        dflt = Q(yield* DefaultValueOf(record));
       }
       if (dflt !== undefined) {
         // The default crosses the same conversion boundary as an initializer.

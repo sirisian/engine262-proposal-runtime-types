@@ -310,7 +310,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     const record = (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord;
     let dflt = LookupTypeDefault(fieldTypeObject!);
     if (dflt === undefined) {
-      dflt = DefaultValueOf(record);
+      dflt = Q(yield* DefaultValueOf(record));
     }
     if (dflt === undefined) {
       initValue = Value.undefined;

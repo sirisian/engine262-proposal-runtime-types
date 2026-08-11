@@ -607,7 +607,7 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
           const coerced = Q(yield* CoerceJSON(pv, p.type, `${path}.${p.key}`));
           X(CreateDataPropertyOrThrow(result, key, coerced));
         } else if (p.optional) {
-          const def = DefaultValueOf(p.type);
+          const def = Q(yield* DefaultValueOf(p.type));
           if (def !== undefined) {
             X(CreateDataPropertyOrThrow(result, key, def));
           }

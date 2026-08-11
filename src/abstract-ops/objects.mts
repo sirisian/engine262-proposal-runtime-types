@@ -156,7 +156,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     } else {
       let dflt = LookupTypeDefault(typeObject);
       if (dflt === undefined) {
-        dflt = DefaultValueOf(record);
+        dflt = Q(yield* DefaultValueOf(record));
       }
       applied = Descriptor({ ...Desc, Value: dflt ?? Value.undefined });
     }
