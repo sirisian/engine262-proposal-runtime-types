@@ -29,47 +29,76 @@ export function isTypeObject(value: unknown): value is TypeObject {
 }
 
 /** #sec-canonicalizetype */
-export function CanonicalizeType(t: TypeRecord): TypeRecord {
+/**
+ * #sec-canonicalizetype.
+ *
+ * #sec-type-alias-declarations admits a self-referential alias, so the record
+ * handed here may be cyclic. The canonical form of a cyclic record is itself
+ * cyclic, which means the copy has to be published to the walk BEFORE its
+ * members are canonicalized, so that a member re-entering it lands on the copy
+ * rather than starting a second one. `copies` carries the in-progress mapping;
+ * each branch that builds a new record for a compound kind allocates it empty,
+ * records it, then fills it.
+ */
+export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeRecord> = new Map()): TypeRecord {
+  const started = copies.get(t);
+  if (started !== undefined) {
+    return started;
+  }
   if (t.Kind === 'union' || t.Kind === 'intersection') {
-    let members: TypeRecord[] = [];
+    // Each member is carried as the canonical record plus the record it came
+    // from. The canonical form is what the union is built out of; the source is
+    // what it is ordered by, because where a member is part of a cycle its
+    // canonical copy is still being filled at this point - the walk is inside
+    // it - so keying the copy would order this union by an empty record, and a
+    // union canonicalized from a different entry point (where the same member
+    // happens to be complete) could then order it differently and intern as a
+    // second type. The sources are always complete here, cycles included.
+    let members: { canonical: TypeRecord, source: TypeRecord }[] = [];
     for (const m of t.Members) {
-      const c = CanonicalizeType(m);
+      const c = CanonicalizeType(m, copies);
       if (c.Kind === t.Kind) {
-        members.push(...(c as { Members: readonly TypeRecord[] }).Members);
+        // A nested union was ordered when it was canonicalized, so its members
+        // are their own sources.
+        for (const nested of (c as { Members: readonly TypeRecord[] }).Members) {
+          members.push({ canonical: nested, source: nested });
+        }
       } else {
-        members.push(c);
+        members.push({ canonical: c, source: m });
       }
     }
-    members = members.filter((m, i) => !members.slice(0, i).some((earlier) => SameType(earlier, m)));
-    if (t.Kind === 'intersection' && members.some((m) => m.Kind === 'union' && m.Members.length === 0)) {
+    members = members.filter((m, i) => !members.slice(0, i).some((earlier) => SameType(earlier.canonical, m.canonical)));
+    if (t.Kind === 'intersection' && members.some((m) => m.canonical.Kind === 'union' && m.canonical.Members.length === 0)) {
       return neverType;
     }
     if (members.length === 1) {
-      return members[0];
+      return members[0].canonical;
     }
-    members.sort((a, b) => (orderKey(a) < orderKey(b) ? -1 : 1));
-    return { Kind: t.Kind, Members: members };
+    const keys = new Map(members.map((m) => [m, orderKey(m.source)]));
+    members.sort((a, b) => ((keys.get(a) ?? '') < (keys.get(b) ?? '') ? -1 : 1));
+    return { Kind: t.Kind, Members: members.map((m) => m.canonical) };
   }
+
   if (t.Kind === 'tuple') {
-    return { Kind: 'tuple', Elements: t.Elements.map((e) => ({ Type: CanonicalizeType(e.Type), Rest: e.Rest, Initial: e.Initial })) };
+    return { Kind: 'tuple', Elements: t.Elements.map((e) => ({ Type: CanonicalizeType(e.Type, copies), Rest: e.Rest, Initial: e.Initial })) };
   }
   if (t.Kind === 'array') {
-    return { Kind: 'array', Element: CanonicalizeType(t.Element), Extent: t.Extent };
+    return { Kind: 'array', Element: CanonicalizeType(t.Element, copies), Extent: t.Extent };
   }
   if (t.Kind === 'reference') {
-    return { Kind: 'reference', Target: CanonicalizeType(t.Target) };
+    return { Kind: 'reference', Target: CanonicalizeType(t.Target, copies) };
   }
   if (t.Kind === 'shared') {
-    return { Kind: 'shared', Target: CanonicalizeType(t.Target) };
+    return { Kind: 'shared', Target: CanonicalizeType(t.Target, copies) };
   }
   if (t.Kind === 'literal') {
-    return { Kind: 'literal', Value: t.Value, Base: CanonicalizeType(t.Base) };
+    return { Kind: 'literal', Value: t.Value, Base: CanonicalizeType(t.Base, copies) };
   }
   if (t.Kind === 'parameterized') {
-    return { Kind: 'parameterized', Base: CanonicalizeType(t.Base), Metadata: t.Metadata };
+    return { Kind: 'parameterized', Base: CanonicalizeType(t.Base, copies), Metadata: t.Metadata };
   }
   if (t.Kind === 'primitive') {
-    return { Kind: 'primitive', Name: t.Name, Arguments: t.Arguments.map((a) => (typeof a === 'number' ? a : CanonicalizeType(a))) };
+    return { Kind: 'primitive', Name: t.Name, Arguments: t.Arguments.map((a) => (typeof a === 'number' ? a : CanonicalizeType(a, copies))) };
   }
   // proposal-runtime-types: an object's property and index-signature types are
   // themselves canonicalized, so a union or intersection nested in a property is
@@ -78,11 +107,20 @@ export function CanonicalizeType(t: TypeRecord): TypeRecord {
   // carry their members in different orders and, because SameType compares union
   // members position-wise over the canonical form, intern as distinct types.
   if (t.Kind === 'object') {
-    return {
+    // Published empty and filled after, so a property whose type reaches this
+    // record again - which #sec-type-alias-declarations allows through a
+    // reference position - lands on THIS copy rather than starting a second
+    // walk that would never end. The result is a canonical form that is cyclic
+    // exactly where the record it came from was.
+    const copy = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as {
       Kind: 'object',
-      Properties: t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type), optional: p.optional, readonly: p.readonly })),
-      IndexSignatures: t.IndexSignatures.map((ix) => ({ Key: CanonicalizeType(ix.Key), Value: CanonicalizeType(ix.Value) })),
+      Properties: unknown[],
+      IndexSignatures: unknown[],
     };
+    copies.set(t, copy as unknown as TypeRecord);
+    copy.Properties = t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type, copies), optional: p.optional, readonly: p.readonly }));
+    copy.IndexSignatures = t.IndexSignatures.map((ix) => ({ Key: CanonicalizeType(ix.Key, copies), Value: CanonicalizeType(ix.Value, copies) }));
+    return copy as unknown as TypeRecord;
   }
   // A function's parameter, return, and this types are canonicalized for the same
   // reason. [[ThisType]] is preserved as ~none~ (null) where absent.
@@ -90,9 +128,9 @@ export function CanonicalizeType(t: TypeRecord): TypeRecord {
     return {
       Kind: 'function',
       Signatures: t.Signatures.map((g) => ({
-        Parameters: g.Parameters.map((p) => ({ ...p, Type: CanonicalizeType(p.Type) })),
-        Return: g.Return === null ? null : CanonicalizeType(g.Return),
-        ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType),
+        Parameters: g.Parameters.map((p) => ({ ...p, Type: CanonicalizeType(p.Type, copies) })),
+        Return: g.Return === null ? null : CanonicalizeType(g.Return, copies),
+        ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType, copies),
       })),
     };
   }

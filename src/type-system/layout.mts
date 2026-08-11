@@ -464,3 +464,99 @@ export function IsSharableValueType(t: TypeRecord): boolean {
   }
   return LayoutOf(t) !== null;
 }
+
+/**
+ * #sec-type-alias-declarations: "An alias may refer to itself, directly or
+ * through other aliases, provided every cycle passes through a position that
+ * holds a reference rather than an inline layout: a member written `T | null`,
+ * the element of a dynamic array, or a field of a sealed class. It is a type
+ * error if a cycle never does, since the type would demand an infinite inline
+ * layout, which is the same rule #sec-typed-classes applies to a value type
+ * class containing itself."
+ *
+ * Returns the member name through which the first such cycle closes, or *null*
+ * where every cycle passes through a reference position and the type therefore
+ * has a finite layout.
+ *
+ * This is a walk of its own rather than part of ComputeClassLayout: an object
+ * type has no layout at all - `type P = { x: uint8 }` answers no `byteLength` -
+ * so an alias never reaches that computation, while the rule still applies to
+ * it. What the two share is what counts as a reference position, which is the
+ * nullable-union arm of LayoutOf above.
+ *
+ * _crossed_ is the stack depth at which the walk last passed through a
+ * reference position. A cycle back to the record at depth _i_ is admissible
+ * exactly when that happened deeper than _i_, since only then does the cycle
+ * itself contain the reference.
+ */
+export function FirstInlineCycle(t: TypeRecord): string | null {
+  const walk = (
+    record: TypeRecord,
+    stack: readonly TypeRecord[],
+    crossed: number,
+    memberName: string,
+  ): string | null => {
+    const revisited = stack.indexOf(record);
+    if (revisited !== -1) {
+      return crossed > revisited ? null : memberName;
+    }
+    const within = [...stack, record];
+    const here = within.length;
+    switch (record.Kind) {
+      case 'object': {
+        for (const p of record.Properties) {
+          // A member written `T | null` holds a reference, so the recursion
+          // stops there rather than descending - which is what makes a linked
+          // list expressible.
+          const nullable = p.type.Kind === 'union'
+            && p.type.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void');
+          const found = walk(p.type, within, nullable ? here : crossed, typeof p.key === 'string' ? p.key : String(p.key));
+          if (found !== null) {
+            return found;
+          }
+        }
+        for (const ix of record.IndexSignatures) {
+          const found = walk(ix.Value, within, crossed, memberName);
+          if (found !== null) {
+            return found;
+          }
+        }
+        return null;
+      }
+      case 'union':
+      case 'intersection': {
+        const nullable = record.Kind === 'union'
+          && record.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void');
+        for (const m of record.Members) {
+          const found = walk(m, within, nullable ? here : crossed, memberName);
+          if (found !== null) {
+            return found;
+          }
+        }
+        return null;
+      }
+      case 'array':
+        // A dynamic array holds its elements out of line; a fixed extent lays
+        // them inline and so keeps the cycle inline with it.
+        return walk(record.Element, within, record.Extent === 'dynamic' ? here : crossed, memberName);
+      case 'tuple': {
+        for (const e of record.Elements) {
+          const found = walk(e.Type, within, crossed, memberName);
+          if (found !== null) {
+            return found;
+          }
+        }
+        return null;
+      }
+      case 'reference':
+      case 'shared':
+        return walk(record.Target, within, here, memberName);
+      default:
+        // Everything else is either a leaf or, like a nominal, a type whose own
+        // declaration owns this rule (#sec-typed-classes) and which is not
+        // descended into from here.
+        return null;
+    }
+  };
+  return walk(t, [], 0, '');
+}

@@ -30,6 +30,7 @@ import {
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
+import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
 import { SameType } from './relations.mts';
@@ -1755,6 +1756,50 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       let declared;
       if (resolved.Type === 'throw') {
         const declaration = declarationNamed(node, name);
+        // #sec-type-alias-declarations: an alias may refer to itself. Its
+        // binding is in its dead zone for the whole of its own initializer, so
+        // the reference resolves to the record the declaration published before
+        // it started resolving, which that declaration fills in place once the
+        // Type is known. Returning the record directly is right here where it
+        // is wrong for a class below: an alias is transparent, so the reference
+        // denotes the expansion itself rather than a type named by a
+        // declaration, and a Type Object over it would both intern an
+        // unfinished record and give the alias a nominal identity the clause
+        // says it does not have.
+        if (declaration && (declaration as { type?: string }).type === 'TypeAliasDeclaration') {
+          const inProgress = resolvingAlias(declaration);
+          if (inProgress !== undefined) {
+            return inProgress;
+          }
+          // #sec-type-alias-declarations: the cycle may run "through other
+          // aliases", so `type A = { b: B | null }; type B = { a: A | null };`
+          // has to work in both orders. B's own declaration has not run yet
+          // when A names it, so it is resolved here on demand - publishing B's
+          // placeholder first, which is what A's reference from inside B then
+          // lands on. B's declaration resolves its Type again when it is
+          // reached; that produces a structurally identical record, which
+          // interns to the same Type Object, and it is what initializes B's
+          // binding. Nothing is marked pre-evaluated, so B's dead zone in
+          // EXPRESSION position is untouched: only type positions read
+          // declarations this way.
+          const aliasDeclaration = declaration as ParseNode.TypeAliasDeclaration;
+          if (!aliasDeclaration.TypeParameters) {
+            const placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
+            beginResolvingAlias(aliasDeclaration, placeholder);
+            let forward;
+            try {
+              forward = Q(yield* TypeNodeToTypeRecord(aliasDeclaration.Type));
+            } finally {
+              endResolvingAlias(aliasDeclaration);
+            }
+            if (forward !== placeholder) {
+              tieAliasKnot(placeholder, forward);
+              return aliasDeclaration.WhereClauses && aliasDeclaration.WhereClauses.length > 0
+                ? { Kind: 'nominal', Declaration: aliasDeclaration, Arguments: [], Structure: placeholder }
+                : placeholder;
+            }
+          }
+        }
         if (declaration && (declaration as { type?: string }).type === 'ClassDeclaration') {
           // A Type Object over the declaration, so the resolution continues
           // down the SAME path an initialized binding takes - including the

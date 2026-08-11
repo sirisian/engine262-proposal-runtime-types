@@ -622,7 +622,31 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
  * A stable structural key giving the total order that CanonicalizeType sorts
  * union and intersection members by. Any deterministic order serves.
  */
+/**
+ * A canonical ordering key for a Type Record, used to sort union and
+ * intersection members (#sec-canonicalizetype) and to key the composite
+ * registry.
+ *
+ * #sec-type-alias-declarations admits a self-referential alias, so a record
+ * reached from here may be part of a cycle. Re-entering a record already on
+ * the walk emits a back reference to it instead of descending forever. The
+ * token counts BACK from the current position rather than naming the record,
+ * so that two separately declared but structurally identical recursive types -
+ * `type L1 = { next: L1 | null }` and `type L2 = { next: L2 | null }` - produce
+ * the same key and therefore intern as one type, which is what
+ * #sec-structural-identity requires of them.
+ */
 export function orderKey(t: TypeRecord): string {
+  return orderKeyWithin(t, []);
+}
+
+function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
+  const revisited = seen.indexOf(t);
+  if (revisited !== -1) {
+    return `#${seen.length - revisited}`;
+  }
+  const within = [...seen, t];
+  const orderKey = (x: TypeRecord): string => orderKeyWithin(x, within);
   switch (t.Kind) {
     case 'any': return 'any';
     case 'void': return 'void';
@@ -666,7 +690,16 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
 }
 
 /** A readable rendering of a Type Record for error messages. */
-export function displayType(t: TypeRecord): string {
+export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): string {
+  // #sec-type-alias-declarations admits a self-referential alias, so a record
+  // rendered into a diagnostic may be cyclic. A name in an error message does
+  // not have to be reconstructible, only recognisable, so a record already on
+  // the walk renders as an ellipsis rather than descending forever.
+  if (seen.includes(t)) {
+    return '...';
+  }
+  const within = [...seen, t];
+  const displayType = (x: TypeRecord): string => displayTypeWithin(x, within);
   switch (t.Kind) {
     case 'any': return 'any';
     case 'void': return 'void';
@@ -707,6 +740,11 @@ export function displayType(t: TypeRecord): string {
     }
     default: return t.Kind;
   }
+}
+
+/** displayType, continuing an in-progress walk. */
+function displayTypeWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
+  return displayType(t, seen);
 }
 
 function displayMetadataValue(m: unknown): string {

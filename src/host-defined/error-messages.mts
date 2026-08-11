@@ -582,6 +582,7 @@ export interface Throw {
   | '$1 is already declared'
   | '$1 is already declared on this interface'
   | '$1 is an abstract class and cannot be instantiated'
+  | '$1 is defined as itself, so it denotes no type'
   | '$1 is missing from this composite'
   | '$1 is not a Promise constructor'
   | '$1 is not a RegExp object'

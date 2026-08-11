@@ -1273,8 +1273,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (memo !== undefined) {
       return memo;
     }
-    const decl = node as unknown as { InterfaceMemberList?: readonly ParseNode[] | null };
+    // #sec-type-alias-declarations lets a type refer to itself, and an
+    // interface may do the same. The memo is published BEFORE the members are
+    // walked so that a member naming this interface lands on it; publishing it
+    // afterwards meant `interface I { next: I | null }` re-entered here for
+    // every member and exhausted the host stack, which - since this runs at
+    // check time - took the process down before any of the program ran.
+    // Identity is by [[Declaration]], so the record handed out here is the
+    // same type the completed one denotes; only its members are filled in
+    // later, and they are filled into the array this record already holds.
     const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    const inProgress = {
+      Kind: 'nominal',
+      Declaration: node,
+      Arguments: [],
+      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+    } as unknown as Known;
+    interfaceTypeMemo.set(node, inProgress);
+    const decl = node as unknown as { InterfaceMemberList?: readonly ParseNode[] | null };
     for (const member of decl.InterfaceMemberList ?? []) {
       if (member.type !== 'TypeMember') {
         continue;
@@ -1339,14 +1355,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Properties.push({ key, type: t, optional: tm.Optional === true });
       }
     }
-    const built = {
-      Kind: 'nominal',
-      Declaration: node,
-      Arguments: [],
-      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
-    } as unknown as Known;
-    interfaceTypeMemo.set(node, built);
-    return built;
+    // `Properties` is the array inside the record published above, filled in
+    // place by the loop, so the published record is already the finished one.
+    return inProgress;
   };
   const classTypeMemo = new Map<ParseNode, Known>();
   const classTypesInProgress = new Set<ParseNode>();
@@ -4283,7 +4294,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         return;
       case 'TypeAliasDeclaration': {
+        // #sec-type-alias-declarations: the Type may name the alias itself.
+        // The name is registered against an empty record BEFORE the Type is
+        // resolved, so a self-reference resolves to it rather than to nothing,
+        // and that same record is filled in place once the Type is known. The
+        // runtime does the same thing at its own declaration evaluation; if
+        // only one of the two did, a recursive alias would resolve on one side
+        // and be silently unchecked on the other.
+        const placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
+        const isPlainAlias = !(n as unknown as { TypeParameters?: unknown }).TypeParameters;
+        const aliasScope = frames[frames.length - 1].aliases;
+        const hadAlias = aliasScope.has(n.BindingIdentifier.name);
+        const previousAlias = aliasScope.get(n.BindingIdentifier.name);
+        if (isPlainAlias) {
+          aliasScope.set(n.BindingIdentifier.name, placeholder);
+        }
         const resolved = resolveType(n.Type);
+        if (isPlainAlias && !resolved) {
+          // The Type did not resolve - an indexed access with a non-literal
+          // key, say, which the checker does not model. The placeholder must
+          // not be left standing in that case: the alias would resolve to an
+          // EMPTY object type and every annotation naming it would be checked
+          // against that, turning an unmodelled type into a spurious error.
+          // Nothing was registered for such an alias before, so nothing is now.
+          if (hadAlias) {
+            aliasScope.set(n.BindingIdentifier.name, previousAlias as TypeRecord);
+          } else {
+            aliasScope.delete(n.BindingIdentifier.name);
+          }
+        }
+        if (isPlainAlias && resolved && resolved !== placeholder) {
+          const target = placeholder as unknown as Record<string, unknown>;
+          for (const key of Object.keys(target)) {
+            delete target[key];
+          }
+          Object.assign(target, resolved);
+        }
         if (resolved) {
           // proposal-runtime-types `sec-dependent-record-types`: an alias
           // carrying `where` clauses keeps its NOMINAL identity, wrapping the
@@ -4301,7 +4347,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? ({
               Kind: 'nominal', Declaration: n, Arguments: [], Structure: resolved,
             } as unknown as TypeRecord)
-            : resolved;
+            : (isPlainAlias ? placeholder : resolved);
           frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, aliasType);
         } else if ((n as unknown as { TypeParameters?: unknown }).TypeParameters) {
           // proposal-runtime-types: capture the prelude's `Identity` so the

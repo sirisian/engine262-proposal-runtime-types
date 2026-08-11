@@ -149,3 +149,94 @@ test('feature off: every declaration form stays an error', () => {
   // And the identifier readings still work.
   expect(statements('type = 5;', false)[0]).toMatchObject({ type: 'ExpressionStatement' });
 });
+
+// -- Self-reference (#sec-type-alias-declarations) ------------------------------
+//
+// "An alias may refer to itself, directly or through other aliases, provided
+// every cycle passes through a position that holds a reference rather than an
+// inline layout: a member written `T | null`, the element of a dynamic array,
+// or a field of a sealed class. It is a type error if a cycle never does."
+
+/** The completion value of _source_, as a string. */
+function evaluated(source: string): string {
+  const realm = makeRealm();
+  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as {
+    Type: string, Value: { stringValue(): string },
+  };
+  if (completion.Type !== 'normal') {
+    throw new Error(`expected a normal completion, got ${completion.Type}`);
+  }
+  return completion.Value.stringValue();
+}
+
+/** The constructor name of the error _source_ throws, and its message. */
+function thrown(source: string): string {
+  const realm = makeRealm();
+  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string };
+  expect(completion.Type).toBe('throw');
+  return evaluated(`try { ${source} "no error"; } catch (e) { e.constructor.name + ": " + e.message; }`);
+}
+
+test('a recursive alias resolves and its values flow', () => {
+  expect(evaluated('type L = { value: uint8, next: L | null };'
+    + ' const n: L = { value: 1, next: { value: 2, next: null } };'
+    + ' String(n.next.value);')).toBe('2');
+});
+
+test('a cycle may run through other aliases', () => {
+  expect(evaluated('type A = { b: B | null }; type B = { a: A | null };'
+    + ' const v: A = { b: { a: null } }; String(v.b.a);')).toBe('null');
+});
+
+test('a cycle may run through a dynamic array element', () => {
+  expect(evaluated('type Arr = { items: [].<Arr> };'
+    + ' const t: Arr = { items: [] }; String(t.items.length);')).toBe('0');
+});
+
+test('two identical recursive aliases are one type', () => {
+  // #sec-structural-identity over a cycle: the intern key has to describe the
+  // SHAPE of the recursion rather than the declaration it came from, or these
+  // two would be different types.
+  expect(evaluated('type L1 = { next: L1 | null }; type L2 = { next: L2 | null };'
+    + ' String(L1 === L2);')).toBe('true');
+});
+
+test('an alias is still transparent', () => {
+  // The recursive case must not have made aliases nominal.
+  expect(evaluated('type P = { x: uint8 }; String(P === type { x: uint8 });')).toBe('true');
+});
+
+test('a recursive alias survives the reflection round trip', () => {
+  expect(evaluated('type L = { next: L | null };'
+    + ' String(Reflect.makeType(Reflect.getReflection(L)) === L);')).toBe('true');
+});
+
+test('a cycle through no reference position is a type error', () => {
+  expect(thrown('type Bad = { self: Bad };'))
+    .toBe('TypeError: "Bad" contains itself through field "self", so it has no finite layout');
+});
+
+test('a fixed extent lays its elements inline, so it closes a cycle', () => {
+  // The dynamic array above holds its elements out of line; `[2].<Fixed>` does
+  // not, which is the distinction #sec-layout-finiteness draws.
+  expect(thrown('type Fixed = { items: [2].<Fixed> };'))
+    .toBe('TypeError: "Fixed" contains itself through field "items", so it has no finite layout');
+});
+
+test('an alias defined as itself denotes no type', () => {
+  expect(thrown('type L = L;'))
+    .toBe('TypeError: "L" is defined as itself, so it denotes no type');
+});
+
+test('a recursive alias is checked, not merely resolved', () => {
+  const realm = makeRealm();
+  const completion = realm.evaluateScriptSkipDebugger('type L = { next: L | null }; let x: L = 5;');
+  expect(completion).toMatchObject({ Type: 'throw' });
+});
+
+test('a self-referential interface resolves rather than exhausting the stack', () => {
+  // This ran at CHECK time, so the recursion took the host process down before
+  // any of the program ran.
+  expect(evaluated('interface I { value: uint8, next: I | null }'
+    + ' const n: I = { value: 1, next: null }; String(n.value);')).toBe('1');
+});

@@ -17,6 +17,8 @@ import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { beginResolvingAlias, endResolvingAlias, tieAliasKnot } from '../type-system/resolving-aliases.mts';
+import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import {
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
@@ -74,7 +76,38 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       value = GetTypeObject({ Kind: 'nominal', Declaration: node, Arguments: [] });
     } else {
       // #sec-gettypeobject: the alias binds the interned Type Object of its Type.
-      const record = Q(yield* TypeNodeToTypeRecord(node.Type));
+      //
+      // #sec-type-alias-declarations lets the Type refer to the alias itself.
+      // The binding is in its dead zone throughout, and the record does not
+      // exist yet, so an empty placeholder is published for the declaration and
+      // a self-reference resolves to it (TypeNodeToTypeRecord). Once the Type is
+      // resolved that same object is filled in place, which ties the knot, and
+      // only THEN is anything canonicalized or interned: a union type node is
+      // built uncanonicalized, so the one canonicalization that matters is the
+      // GetTypeObject below, and by then the placeholder is the finished record.
+      const placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
+      beginResolvingAlias(node, placeholder);
+      let record;
+      try {
+        record = Q(yield* TypeNodeToTypeRecord(node.Type));
+      } finally {
+        endResolvingAlias(node);
+      }
+      if (record === placeholder) {
+        // `type L = L;` - the alias's Type is the alias, so there is no
+        // structure to be recursive THROUGH. It is not the finite-layout case
+        // (there is no field closing a cycle) and it never denotes a type.
+        return Throw.TypeError('$1 is defined as itself, so it denotes no type', Value(name.stringValue()));
+      }
+      tieAliasKnot(placeholder, record);
+      // #sec-type-alias-declarations: "It is a type error if a cycle never
+      // does, since the type would demand an infinite inline layout, which is
+      // the same rule sec-typed-classes applies to a value type class
+      // containing itself."
+      const cycle = FirstInlineCycle(record);
+      if (cycle !== null) {
+        return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', Value(name.stringValue()), Value(cycle));
+      }
       if (node.WhereClauses && node.WhereClauses.length > 0) {
         // proposal-runtime-types (dependentrecordtypes.md): a `where` clause
         // makes this a dependent record type. Its identity is the declaration's
