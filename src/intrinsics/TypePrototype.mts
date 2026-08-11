@@ -2,6 +2,7 @@ import { EnsureCompletion, Q } from '../completion.mts';
 import { Value, JSStringValue, NumberValue, TypedNumberValue, type Arguments, type FunctionCallContext } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -268,6 +269,69 @@ function* TypeProto_alignmentGetter(_args: Arguments, { thisValue }: FunctionCal
  * implemented here, the `bounds` meta type belonging to the ranges extension.
  * What follows is the width case, the floating-point case, and the refusal.
  */
+/**
+ * proposal-runtime-types #table-type-families: the family a type belongs to, as
+ * a String. #table-family-operations already decides what an operator does by
+ * this concept; `family` is how a program asks the same question, which it
+ * previously could not - a reflective consumer had to keep a list of the float
+ * types of its own, and be wrong the day a family gained a width.
+ */
+export function familyOfRecord(record: TypeRecord): string {
+  switch (record.Kind) {
+    case 'any': return 'any';
+    case 'void': return 'void';
+    // `never` is the empty union and carries no kind of its own, so it is
+    // reported from the union case below rather than here.
+    // An enum is a nominal type carrying its enumerators, and reports as itself
+    // rather than as the class family it shares a record kind with.
+    case 'nominal': return (record as { EnumMembers?: unknown }).EnumMembers !== undefined ? 'enum' : 'class';
+    // A parameterization refines the type it parameterizes rather than
+    // replacing it, so it reports the family of its base: `float32.<{ m: 1 }>`
+    // is a float. Reporting otherwise would put `family` at odds with
+    // `instanceof`, with the operator table, and with `bitLength` beside it.
+    case 'parameterized': return familyOfRecord(record.Base as TypeRecord);
+    case 'literal': return familyOfRecord(record.Base as TypeRecord);
+    default: break;
+  }
+  if (record.Kind === 'union') {
+    return (record.Members as readonly unknown[]).length === 0 ? 'never' : 'union';
+  }
+  if (record.Kind !== 'primitive') {
+    return record.Kind;
+  }
+  const name = record.Name;
+  if (name === 'uint' || name === 'int') {
+    return 'integer';
+  }
+  if (/^float(16|32|64|128)$/.test(name)) {
+    return 'float';
+  }
+  if (/^decimal(32|64|128)$/.test(name)) {
+    return 'decimal';
+  }
+  if (name === 'vector') {
+    // `boolean8` is `vector.<boolean1, 8>`, a bit vector and so a vector; only
+    // `boolean1` itself is the one-bit integer.
+    return 'vector';
+  }
+  if (name === 'rational' || name === 'complex' || name === 'bigint'
+      || name === 'string' || name === 'boolean' || name === 'type') {
+    return name;
+  }
+  return name;
+}
+
+function familyOfThis(thisValue: Value) {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  return Value(familyOfRecord(thisValue.TypeRecord));
+}
+
+function* TypeProto_familyGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return familyOfThis(thisValue);
+}
+
 function boundOfThis(thisValue: Value, which: 'min' | 'max') {
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
@@ -344,6 +408,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['elementByteLength', [TypeProto_elementByteLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
+    ['family', [TypeProto_familyGetter]],
     ['min', [TypeProto_minGetter]],
     ['max', [TypeProto_maxGetter]],
     ['minPositive', [TypeProto_minPositiveGetter]],
