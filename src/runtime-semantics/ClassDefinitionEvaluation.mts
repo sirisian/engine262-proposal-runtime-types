@@ -756,14 +756,15 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     const ctorNode = constructor as ParseNode | undefined;
     const parameters: MemberParameterDeclaration[] = [];
     const formals = (ctorNode as { UniqueFormalParameters?: readonly ParseNode[] } | undefined)?.UniqueFormalParameters ?? [];
-    formals.forEach((parameter, index) => {
+    for (const [index, parameter] of formals.entries()) {
       const pp = parameter as { BindingIdentifier?: { name?: string }, Initializer?: unknown };
       parameters.push({
         name: pp.BindingIdentifier?.name ?? '',
         index,
-        hasDefault: pp.Initializer !== undefined && pp.Initializer !== null,
+        initial: Q(yield* DeclaredInitialOf(parameter as never)),
+        initializer: InitializerTokensOf(parameter),
       });
-    });
+    }
     // A class that writes no constructor still has one - the default, which is
     // what `new` calls - so it is recorded with no parameters rather than left
     // absent. A derived class that writes none finds its base's by the same
@@ -1924,7 +1925,19 @@ const classMetadata = new WeakMap<Value, Map<string, ObjectValue>>();
 export interface MemberParameterDeclaration {
   readonly name: string;
   readonly index: number;
-  readonly hasDefault: boolean;
+  /**
+   * decorators.md: "`initial` captures CONSTANT values only ... `initializer`
+   * carries the same declaration as a `TokenStream` ... The pair is a value and
+   * the expression that produced it, not two spellings of one thing."
+   *
+   * The pair is what a field and an accessor already carry, and the same two
+   * helpers build it, so a parameter's default is reported the way every other
+   * declared default is. A `hasDefault` Boolean stood here before the pair did;
+   * it is `initializer !== undefined` in every case, so it was a third field
+   * reporting what a second implies.
+   */
+  readonly initial?: Value;
+  readonly initializer?: Value;
 }
 export interface MemberDeclaration {
   readonly kind: string;
@@ -2180,14 +2193,15 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
   };
   const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
   const parameters: MemberParameterDeclaration[] = [];
-  formals.forEach((parameter, index) => {
+  for (const [index, parameter] of formals.entries()) {
     const p = parameter as { BindingIdentifier?: { name?: string }, Initializer?: unknown };
     parameters.push({
       name: p.BindingIdentifier?.name ?? '',
       index,
-      hasDefault: p.Initializer !== undefined && p.Initializer !== null,
+      initial: Q(yield* DeclaredInitialOf(parameter as never)),
+      initializer: InitializerTokensOf(parameter),
     });
-  });
+  }
   const declaredType = Q(yield* MemberFunctionTypeRecord(node));
   RecordMemberDeclaration(owner, key.stringValue(), {
     parameters,

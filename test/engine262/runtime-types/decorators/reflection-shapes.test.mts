@@ -123,13 +123,22 @@ test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
   expect(evaluated(`${m} const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); `
     + 'String(p.length) + "/" + p[0].name + "/" + p[1].name;')).toBe('2/a/b');
   expect(evaluated(`${m} String(Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m")[1].index);`)).toBe('1');
-  // `hasDefault` rather than a value: a parameter's default is an expression
-  // evaluated PER CALL, so what can be reported at reflection time is whether
-  // one was written - the same reason a field's `initial` is the declared
-  // default rather than a per-instance one.
+  // `initial` and `initializer`, the pair a field and an accessor already
+  // carry. `initial` is "a typed field's zero value, or a constant
+  // initializer", so an annotated parameter with no default reports the zero of
+  // its type rather than *undefined* - which is why the presence of a default
+  // is read from `initializer` and not from `initial` being absent. A `hasDefault` Boolean stood here on the reasoning that a default is
+  // "an expression evaluated PER CALL, so what can be reported is whether one
+  // was written" - true of a NON-CONSTANT default, and decorators.md ~330 adds
+  // the branch it leaves out: `initial` captures constant values only, and
+  // `initializer` carries the declaration either way. `hasDefault` was then
+  // `initializer !== undefined`, a third field reporting what a second implies.
   expect(evaluated('class A { m(a: uint8, b: uint8 = 2) {} } '
     + 'const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); '
-    + 'String(p[0].hasDefault) + "/" + String(p[1].hasDefault);')).toBe('false/true');
+    + 'String(p[0].initial) + "/" + String(p[1].initial);')).toBe('0/2');
+  expect(evaluated('class A { m(a: uint8, b: uint8 = 2) {} } '
+    + 'const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); '
+    + 'String(p[0].initializer !== undefined) + "/" + String(p[1].initializer !== undefined);')).toBe('false/true');
   // A member with no parameters answers with an empty list, not a rejection.
   expect(evaluated('class A { m() {} } String(Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m").length);')).toBe('0');
   // A SETTER's single parameter comes from a different formals list on the

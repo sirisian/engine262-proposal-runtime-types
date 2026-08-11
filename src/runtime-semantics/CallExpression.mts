@@ -50,8 +50,9 @@ import { GetTypeObject } from '../type-system/intern.mts';
  *
  * That restriction is what answers the objection this code previously recorded
  * against reporting a value at all: the constant branch runs nothing, and the
- * non-constant branch reports no value. `hasDefault` is not carried, being
- * `initializer !== undefined` in every case.
+ * non-constant branch reports no value. No `hasDefault` is carried: it is
+ * `initializer !== undefined` in every case, so it would be a third field
+ * reporting what a second already implies.
  */
 function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: ObjectValueClass } }, kindName: string, parameter: { name: string, index: number, initial?: Value, initializer?: Value } | undefined): ValueEvaluator {
   const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -452,15 +453,13 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const list = Q(ArrayCreate(0));
       const base1 = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
       for (const parameter of declaration.parameters) {
-        const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-        X(CreateDataProperty(one, Value('kind'), Value(contextRecord.LibraryName.slice('Reflect.'.length))));
-        X(CreateDataProperty(one, Value('name'), Value(parameter.name)));
-        X(CreateDataProperty(one, Value('index'), Value(parameter.index)));
-        // `initial` is the DECLARED default, and a parameter's default is an
-        // expression evaluated per call - so what is reported is whether one
-        // was written, not a value. Same reason a field's `initial` is the
-        // declared default rather than a per-instance one.
-        X(CreateDataProperty(one, Value('hasDefault'), parameter.hasDefault ? Value.true : Value.false));
+        // The same builder the named form uses, so the ORDERED and the KEYED
+        // readings of one parameter cannot report it differently.
+        const one = Q(yield* ReflectionForMemberPart(
+          realm as never,
+          contextRecord.LibraryName.slice('Reflect.'.length),
+          parameter,
+        )) as ObjectValueClass;
         X(CreateDataProperty(one, Value('metadata'),
           MetadataObjectFor(constructor, base1, `${memberName.stringValue()}:${parameter.index}`)));
         X(CreateDataProperty(list, Value(String(parameter.index)), one));
