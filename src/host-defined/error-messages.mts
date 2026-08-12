@@ -871,6 +871,7 @@ export interface Throw {
   | '$1 does not admit converting $2 to $3'
   | '$1 is not a function. (In "$2", it is $3)'
   | '$1 is not a generic declaration; $2 expects one taking $3 type arguments'
+  | '$1 is not assignable to $2: it does not satisfy $3'
   | '$1 takes $2 type arguments; $3 expects one taking $4'
   | '$1-$2-$3 is not a valid date'
   | 'Duration($1, $2, $3, $4) is not a valid duration'

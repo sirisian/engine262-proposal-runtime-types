@@ -730,7 +730,20 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (t.Kind === 'intersection') {
     let current = value;
     for (const m of t.Members) {
-      current = Q(yield* CheckedConvertValue(current, m));
+      // Q would propagate the MEMBER's own error, which names the member and
+      // not the intersection it came from - so `A & B` reported only that the
+      // value did not fit `B`, leaving the reader to work out where `B` came
+      // from. The loop knows which member rejected, so it says both.
+      const attempt = EnsureCompletion(yield* CheckedConvertValue(current, m));
+      if (attempt.Type !== 'normal') {
+        return Throw.TypeError(
+          '$1 is not assignable to $2: it does not satisfy $3',
+          value,
+          Value(displayType(t)),
+          Value(displayType(m)),
+        );
+      }
+      current = attempt.Value;
     }
     return current;
   }

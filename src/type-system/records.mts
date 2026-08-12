@@ -772,7 +772,25 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     }
     case 'reference': return `ref ${displayType(t.Target)}`;
     case 'parameter': return t.Constraint ? `${t.Name}: ${displayType(t.Constraint)}` : t.Name;
-    default: return t.Kind;
+    // `pattern` and `range` had no case either - found by the exhaustiveness
+    // check below rather than by inspection, which is the argument for it.
+    case 'pattern': return `/${t.Source}/${t.Flags}`;
+    case 'range': {
+      const endpoint = (v: Value | undefined): string => (v === undefined ? '' : String((v as { numberValue?: () => unknown }).numberValue?.() ?? (v as { stringValue?: () => string }).stringValue?.() ?? ''));
+      // The spelling of #sec-range-types: `..` closed-open, `..=` closed-closed,
+      // and a leading `<` where the start is open.
+      const open = t.StartBound === 'open' ? '<' : '';
+      const close = t.EndBound === 'closed' ? '=' : '';
+      return `${endpoint(t.Start)}.${open}.${close}${endpoint(t.End)}`;
+    }
+    // A kind with no case above renders as its KIND NAME, which is what
+    // produced `is not assignable to "object"` for four kinds at once. The
+    // exhaustiveness check makes a NEW kind a compile error here rather than a
+    // diagnostic that silently degrades, which is how those four survived.
+    default: {
+      const unhandled: never = t;
+      return (unhandled as { Kind: string }).Kind;
+    }
   }
 }
 

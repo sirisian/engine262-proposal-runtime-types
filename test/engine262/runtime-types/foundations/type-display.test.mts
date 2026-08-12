@@ -67,3 +67,26 @@ test('the display is not an identity', () => {
   const c = run('type A = { x: int32 }; type B = { x: float64 }; type C = A & B; const r = Reflect.getReflection(C); String(r.kind);') as { Value?: { stringValue?: () => string } };
   expect(c.Value?.stringValue?.()).toBe('intersection');
 });
+
+test('an intersection refusal names the intersection AND the member', () => {
+  // The member's own error names the member and not the intersection it came
+  // from, so `A & B` reported only that the value did not fit `B` and left the
+  // reader to work out where `B` came from. The loop knows which member
+  // rejected, so it says both.
+  const conflict = message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B; let c: C = { x: 1 };');
+  expect(conflict).toContain('{ x: float64 } & { x: int.<32> }');
+  expect(conflict).toContain('does not satisfy');
+
+  // The member NAMED is the one that rejected, in either direction - not a
+  // fixed one that happens to look right in the common case.
+  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1 };')).toContain('does not satisfy "{ y: int.<32> }"');
+  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { y: 1 };')).toContain('does not satisfy "{ x: int.<32> }"');
+});
+
+test('an inhabitable intersection is unaffected', () => {
+  // The improvement is about DISPLAY, not about detecting conflicts: a value
+  // satisfying every member still passes, and a wrong value against an
+  // inhabitable intersection gets the same improved message.
+  const c = run('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1, y: 2 }; String(Number(c.x));') as { Value?: { stringValue?: () => string } };
+  expect(c.Value?.stringValue?.()).toBe('1');
+});
