@@ -20,6 +20,7 @@ import {
 } from '../completion.mts';
 import { Parser, setNodeParent, wrappedParse } from '../parse.mts';
 import { CheckScript } from '../type-system/check.mts';
+import { FirstReplacementEarlyError } from '../static-semantics/ReplacementEarlyErrors.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { JSStringSet } from '../utils/container.mts';
@@ -132,6 +133,16 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   // checker reads the shape a node sits in.
   if (surroundingAgent.feature('runtime-types')) {
     setNodeParent(script, undefined);
+    // A decoration on a STATEMENT is legal only where it names a replacement
+    // decorator, and eval'd source has no preprocessor import - so any decorated
+    // statement here is a runtime decoration of one, which has nothing to run
+    // at. Same reason the checker above runs here: eval takes its own parse path.
+    const decorated = FirstReplacementEarlyError(script);
+    if (decorated?.kind === 'runtime-on-statement') {
+      const completion = Throw.SyntaxError('$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at', Value(decorated.name)) as ThrowCompletion;
+      Parser.decorateSyntaxErrorWithScriptId(completion.Value as Parameters<typeof Parser.decorateSyntaxErrorWithScriptId>[0], scriptId);
+      return completion;
+    }
     const typeErrors = CheckScript(script);
     if (typeErrors.length > 0) {
       Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);

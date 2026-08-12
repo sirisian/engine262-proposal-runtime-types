@@ -120,9 +120,16 @@ export abstract class LanguageParser extends ModuleParser {
             }
             moduleItemList.push(exports);
           } else {
-            // ModuleItem : DecoratorList ClassDeclaration
-            const classDecl = this.parseClassDeclaration(decorators);
-            moduleItemList.push(classDecl);
+            // ModuleItem : DecoratorList StatementListItem
+            //
+            // This called parseClassDeclaration unconditionally, so at module
+            // TOP LEVEL only a class could be decorated - while the same
+            // decoration nested inside a function worked for a function, a
+            // `let`, a `const`, an enum and a block. `sec-syntax-replacement`
+            // says every decorable position may be syntax-replaced, and the
+            // statement path already implements that, so it is shared rather
+            // than duplicated.
+            moduleItemList.push(this.parseDecoratedStatementListItem(decorators ?? undefined));
           }
           break;
         }

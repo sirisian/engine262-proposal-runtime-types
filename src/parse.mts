@@ -148,6 +148,17 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
   // join the early-error list, as TypeError objects rather than SyntaxError
   // objects, which is the specification's deliberate divergence.
   if (surroundingAgent.feature('runtime-types')) {
+    // A decoration on a STATEMENT is legal only where it names a replacement
+    // decorator, and a Script has no preprocessor import - so any decorated
+    // statement here is a runtime decoration of one, which has nothing to run
+    // at. Checked in both parse paths because `eval` reaches this one.
+    const decorated = FirstReplacementEarlyError(body);
+    if (decorated?.kind === 'runtime-on-statement') {
+      const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
+      const completion = Throw.SyntaxError('$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at', Value(decorated.name)) as ThrowCompletion;
+      Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
+      return [completion.Value as ObjectValue];
+    }
     const typeErrors = CheckScript(body);
     // A3.3: where the walk RECORDED a narrowing request it ran without the
     // narrowing, so it both over-reports and under-reports and must not speak.
@@ -215,13 +226,22 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // `sec-replacement-decorators`, Static Semantics: Early Errors. Both are
   // computed from the module's own text and depend on nothing expansion
   // produces, so they are raised BEFORE the phase rather than inside it.
-  if (replacementNames.length > 0) {
+  // Run unconditionally: the statement rule applies to a module with NO
+  // preprocessor import at all, where every decorated statement is a runtime
+  // decoration of one.
+  if (surroundingAgent.feature('runtime-types')) {
     const early = FirstReplacementEarlyError(body);
     if (early) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
-      const completion = (early.kind === 'shadowed'
-        ? Throw.SyntaxError('$1 is a replacement decorator and cannot be shadowed', Value(early.name))
-        : Throw.SyntaxError('$1 is a replacement decorator and must be written outermost', Value(early.name))) as ThrowCompletion;
+      let completion;
+      if (early.kind === 'shadowed') {
+        completion = Throw.SyntaxError('$1 is a replacement decorator and cannot be shadowed', Value(early.name));
+      } else if (early.kind === 'runtime-on-statement') {
+        completion = Throw.SyntaxError('$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at', Value(early.name));
+      } else {
+        completion = Throw.SyntaxError('$1 is a replacement decorator and must be written outermost', Value(early.name));
+      }
+      completion = completion as ThrowCompletion;
       Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
       return [completion.Value as ObjectValue];
     }

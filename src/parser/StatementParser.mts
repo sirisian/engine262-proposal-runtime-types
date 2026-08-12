@@ -84,41 +84,7 @@ export abstract class StatementParser extends TypeParser {
         if (!surroundingAgent.feature('runtime-types')) {
           return this.parseClassDeclaration(null);
         }
-        const decorators = this.parseDecorators();
-        switch (this.peek().type) {
-          case Token.FUNCTION: {
-            const fn = this.parseHoistableDeclaration();
-            (fn as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
-            return fn;
-          }
-          case Token.CONST: {
-            const decl = this.parseLexicalDeclaration();
-            (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
-            return decl;
-          }
-          case Token.ENUM: {
-            // proposal-runtime-types decorators.md: `@f enum Count { ... }`.
-            const decl = this.parseEnumDeclaration();
-            (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
-            return decl;
-          }
-          case Token.LBRACE: {
-            // A decorated BLOCK. The decorators were consumed above, so the
-            // block is parsed directly and given them here rather than through
-            // parseBlock's own list.
-            const block = this.parseBlockInner();
-            (block as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
-            return block;
-          }
-          default: {
-            if (this.test('let')) {
-              const decl = this.parseLexicalDeclaration();
-              (decl as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
-              return decl;
-            }
-            return this.parseClassDeclaration(decorators);
-          }
-        }
+        return this.parseDecoratedStatementListItem();
       }
       case Token.CLASS:
         return this.parseClassDeclaration(null);
@@ -777,6 +743,66 @@ export abstract class StatementParser extends TypeParser {
   // FunctionDeclaration
   parseFunctionDeclaration(kind: FunctionKind): ParseNode.FunctionDeclarationLike {
     return this.parseFunction(false, kind) as ParseNode.FunctionDeclarationLike;
+  }
+
+  /**
+   * A decoration and whatever it decorates.
+   *
+   * proposal-runtime-types decorators.md: `@` no longer implies a class. Shared
+   * by the statement path and the MODULE ITEM path - the latter parsed the list
+   * and then called parseClassDeclaration unconditionally, so at module top
+   * level only a class could be decorated. `sec-syntax-replacement` says every
+   * decorable position may be syntax-replaced, and a component macro sits
+   * exactly there, so the two paths have to agree.
+   */
+  parseDecoratedStatementListItem(alreadyParsed?: readonly ParseNode.Decorator[]): ParseNode.StatementListItem {
+    // The module-item path consumes the list before it knows whether an `export`
+    // follows, so it passes what it already has rather than parsing twice.
+    const decorators = alreadyParsed ?? this.parseDecorators();
+    const give = <T,>(node: T): T => {
+      (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+      return node;
+    };
+    switch (this.peek().type) {
+      case Token.FUNCTION:
+        return give(this.parseHoistableDeclaration());
+      case Token.CONST:
+        return give(this.parseLexicalDeclaration());
+      case Token.ENUM:
+        // proposal-runtime-types decorators.md: `@f enum Count { ... }`.
+        return give(this.parseEnumDeclaration());
+      case Token.LBRACE:
+        // A decorated BLOCK. The decorators were consumed above, so the block is
+        // parsed directly and given them here rather than through parseBlock's
+        // own list.
+        return give(this.parseBlockInner());
+      case Token.CLASS:
+        return this.parseClassDeclaration(decorators);
+      default: {
+        if (this.test('let')) {
+          return give(this.parseLexicalDeclaration());
+        }
+        if (this.test(Token.CLASS)) {
+          return this.parseClassDeclaration(decorators);
+        }
+        // Any other STATEMENT is admitted here and judged by the static
+        // semantics, because whether it is legal depends on the decoration's
+        // KIND and the grammar does not know that.
+        //
+        // decoratorreplacement.md 7.7, "two tables, not one": syntax replacement
+        // is constrained by GRAMMAR and value replacement by TYPE. A statement
+        // has syntax, so a REPLACEMENT decorator may rewrite one - which is what
+        // a cfg-style macro over `@m return 1;` needs. A RUNTIME decorator may
+        // not: it runs when the declaration it decorates is evaluated, and a
+        // statement declares nothing to run at.
+        //
+        // The marker records that the fallback was taken, so the early error
+        // need not re-derive which forms are declarations.
+        const stmt = give(this.parseStatement());
+        (stmt as { DecoratedStatement?: boolean }).DecoratedStatement = true;
+        return stmt;
+      }
+    }
   }
 
   // Statement :

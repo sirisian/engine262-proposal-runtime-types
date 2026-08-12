@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * The NEGATIVE matrix: "A decoration in a position
@@ -48,6 +49,12 @@ test('positions that admit no decorator are SYNTAX errors', () => {
   expect(rejectionKind('function f(c){} @f var v = 1;')).toBe('SyntaxError');
   // Statements are not declarations. A decorator runs when the declaration it
   // decorates is evaluated, and these declare nothing.
+  //
+  // The rule is about the decoration's KIND rather than the position, which is
+  // decoratorreplacement.md 7.7's "two tables, not one": syntax replacement is
+  // constrained by GRAMMAR and value replacement by TYPE. A REPLACEMENT
+  // decorator MAY rewrite a statement - see the tests below - so what is refused
+  // here is a RUNTIME decoration of one, which is what `f` is.
   expect(rejectionKind('function f(c){} @f return 1;')).toBe('SyntaxError');
   expect(rejectionKind('function f(c){} @f 1 + 1;')).toBe('SyntaxError');
   expect(rejectionKind('function f(c){} @f import x from "y";')).toBe('SyntaxError');
@@ -154,4 +161,50 @@ test('a decoration is refused with the feature off', () => {
   // decorators from being mistaken for the TC39 ones: the two share the
   // spelling and nothing else.
   expect(evaluatedFlagOff('try { eval("class A { @f a; }"); "NO-THROW"; } catch (e) { e.constructor.name; }')).toBe('SyntaxError');
+});
+
+// -- The other table: a replacement decorator MAY rewrite a statement -----------
+//
+// decoratorreplacement.md 7.7 keeps the two axes apart, and sec-syntax-replacement
+// says "every decorable position may be syntax-replaced, including the positions
+// that do not admit value replacement". A statement produces no value but has
+// syntax, so a `#[cfg]`-shaped macro over `@m return 1;` is exactly the case the
+// clause has in mind.
+//
+// The grammar cannot tell the two apart - the kind comes from the preprocessor
+// imports - so the parser admits the statement and an early error judges it.
+const NL = String.fromCharCode(10);
+const MODE_PRE = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
+
+function moduleOutcome(source: string): string {
+  const macro: { current?: unknown } = {};
+  setSurroundingAgent(new Agent({
+    features: ['runtime-types'],
+    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
+  } as never));
+  const realm = new ManagedRealm();
+  macro.current = (realm.evaluateScriptSkipDebugger('(function (t) { return t; })') as { Value?: unknown }).Value;
+  const compiled = realm.compileModule(source) as { Type: string };
+  return compiled.Type === 'normal' ? 'ACCEPTED' : 'REFUSED';
+}
+
+test('a replacement decorator may decorate a statement', () => {
+  expect(moduleOutcome(`${MODE_PRE}@m if (1) { }`)).toBe('ACCEPTED');
+  expect(moduleOutcome(`${MODE_PRE}@m foo();`)).toBe('ACCEPTED');
+  expect(moduleOutcome(`${MODE_PRE}@m var v = 1;`)).toBe('ACCEPTED');
+  expect(moduleOutcome(`${MODE_PRE}function o() { @m return 1; }`)).toBe('ACCEPTED');
+});
+
+test('a runtime decorator may not, in a module as in a script', () => {
+  // The same forms, decorated by a name no preprocessor import introduced. The
+  // rule has to hold in every parse path - a Module, a Script, and eval, which
+  // takes its own - so it is checked in all three and tested through two of them
+  // here and through `rejectionKind` (an eval) above.
+  expect(moduleOutcome('function f(c) {} @f if (1) { }')).toBe('REFUSED');
+  expect(moduleOutcome('function f(c) {} @f foo();')).toBe('REFUSED');
+  expect(moduleOutcome('function f(c) {} function o() { @f return 1; }')).toBe('REFUSED');
+  // And the declarations it MAY decorate are unaffected.
+  expect(moduleOutcome('function f(c) {} @f class C {}')).toBe('ACCEPTED');
+  expect(moduleOutcome('function f(c) {} @f function g() {}')).toBe('ACCEPTED');
+  expect(moduleOutcome('function f(c) {} @f { let a = 1; }')).toBe('ACCEPTED');
 });

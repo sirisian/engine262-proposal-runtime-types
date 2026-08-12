@@ -11,7 +11,7 @@ import { ReplacementDecoratorNames } from './ReplacementDecoratorNames.mts';
  */
 
 export interface ReplacementEarlyError {
-  readonly kind: 'shadowed' | 'misplaced';
+  readonly kind: 'shadowed' | 'misplaced' | 'runtime-on-statement';
   readonly name: string;
   readonly node: ParseNode;
 }
@@ -41,9 +41,11 @@ function decorationName(decorator: ParseNode): string | undefined {
  */
 export function FirstReplacementEarlyError(module: ParseNode): ReplacementEarlyError | undefined {
   const names = ReplacementDecoratorNames(module as ParseNode.Module);
-  if (names.length === 0) {
-    return undefined;
-  }
+  // NOT short-circuited on an empty name set. With no preprocessor import there
+  // are no replacement decorators, so every decorated statement is a RUNTIME
+  // decoration of one - exactly the case the statement rule below refuses. The
+  // shadowing and placement rules below need a non-empty set and simply find
+  // nothing when it is empty.
   const wanted = new Set(names);
   let found: ReplacementEarlyError | undefined;
   const seen = new Set<object>();
@@ -67,6 +69,21 @@ export function FirstReplacementEarlyError(module: ParseNode): ReplacementEarlyE
     if (!insideImport && n.type === 'BindingIdentifier' && typeof n.name === 'string' && wanted.has(n.name)) {
       found = { kind: 'shadowed', name: n.name, node: n };
       return;
+    }
+    // A decoration on a STATEMENT - one that declares nothing - is legal only
+    // where it names a replacement decorator. `sec-syntax-replacement` admits
+    // every decorable position, and a statement has syntax; but a runtime
+    // decorator runs when the declaration it decorates is EVALUATED, and there
+    // is no declaration here to run at. The parser marks the case rather than
+    // this walk re-deriving which forms are declarations.
+    if ((n as { DecoratedStatement?: boolean }).DecoratedStatement && Array.isArray(n.Decorators)) {
+      for (const d of n.Decorators) {
+        const name = decorationName(d);
+        if (name === undefined || !wanted.has(name)) {
+          found = { kind: 'runtime-on-statement', name: name ?? '', node: d };
+          return;
+        }
+      }
     }
     // Within one stack, source order is outermost-first, so a replacement that
     // appears AFTER a non-replacement is closer to the declaration than it.

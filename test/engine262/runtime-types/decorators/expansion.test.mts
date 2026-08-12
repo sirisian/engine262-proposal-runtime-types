@@ -174,13 +174,24 @@ test('the decorator is not CALLED yet', () => {
   expect(probe(`${PHASE_PRE}@derive class C {}`).expanded).toBe(1);
 });
 
-test('a top-level `@f function` throws in a MODULE, not in a script', () => {
-  // Pre-existing and independent of the expansion phase - measured both ways so a
-  // failure is not later blamed on expansion. `@f class` is fine in both.
+test('a top-level decoration takes the same forms a nested one does', () => {
+  // This asserted the opposite - that `@f function` throws in a module - and it
+  // was a defect rather than a rule. The module-item path parsed the decorator
+  // list and then called parseClassDeclaration unconditionally, so at module TOP
+  // LEVEL only a class could be decorated, while the same decoration nested in a
+  // function worked for a function, a `let`, a `const`, an enum and a block.
+  //
+  // `sec-syntax-replacement` says every decorable position may be
+  // syntax-replaced, and a component macro - `@jsx export function App()` - sits
+  // exactly at module top level, so the two paths now share one dispatch.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.compileModule('function f(c) {} @f function g() {}').Type).toBe('throw');
+  expect(realm.compileModule('function f(c) {} @f function g() {}').Type).toBe('normal');
   expect(realm.compileModule('function f(c) {} @f class C {}').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f let v = 1;').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f const w = 1;').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f enum E { A }').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f { let a = 1; }').Type).toBe('normal');
 });
 
 // -- What an expanded stream prints as -------------------------------------------
