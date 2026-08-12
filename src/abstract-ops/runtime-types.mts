@@ -957,6 +957,26 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       const converted = declared === undefined ? el : Q(yield* CheckedConvertValue(el, declared));
       X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
     }
+    // #sec-array-defaults-and-stores: "A store to an element of an array of
+    // element type _t_ checks the value against _t_." A tuple has a type PER
+    // POSITION rather than one element type, and nothing recorded them, so a
+    // tuple's positions were checked when it was built and never again:
+    // `let t: [uint8, string] = [1, 's']; t[0] = 'wrong';` was accepted.
+    //
+    // The record travels with the ARRAY, as an array's [[TypedElement]] does,
+    // which is what makes the store check independent of the view a write
+    // arrives through. That matters because #sec-issubtype makes a tuple
+    // covariant position-wise, so a narrow tuple may be seen as a wider one and
+    // the boundary between them may be ELIDED (#sec-check-elision) - the two
+    // views are then the same object, and only a mark on the object itself can
+    // refuse a store that the narrow view forbids.
+    // The positions are resolved here rather than at the store: value.mts holds
+    // the store check and has no business unwrapping a rest element's collected
+    // type, and resolving once per boundary is cheaper than once per write.
+    (out as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
+      Positions: elements.filter((e) => !e.Rest).map((e) => e.Type),
+      Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
+    };
     return out;
   }
   if (t.Kind === 'array') {

@@ -860,6 +860,7 @@ export interface Throw {
   | 'The return value ($1) of the return() on an iterator ($2) must be an object'
   | 'The return value ($1) of the throw() on an iterator ($2) must be an object'
   | 'a $1 annotation is not a $2'
+  | 'a tuple of $1 positions has no position at index $2'
   | 'a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them'
   | 'getter ($1) in a property descriptor $2 must be a function'
   | 'lane $1 is out of range for a vector of $2 lanes'

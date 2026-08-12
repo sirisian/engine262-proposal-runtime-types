@@ -1135,6 +1135,29 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       // An element store on an array carrying an element type: the same
       // boundary and the same operation as a typed property, keyed on the
       // array rather than on a property name.
+      // #sec-array-defaults-and-stores, for a tuple: a position's type is the
+      // type of what may be stored there, so the store is checked against THAT
+      // position rather than against one element type. Recorded on the array by
+      // the tuple boundary, so the check answers the array's own type whichever
+      // view the write arrives through - which is what closes the covariance of
+      // #sec-issubtype: a `[uint8]` seen as a `[uint8 | string]` is the same
+      // object, and a String written through the wider view would otherwise land
+      // in a slot declared `uint8`.
+      const tuple = (Receiver as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple;
+      if (tuple !== undefined && isArrayIndex(P)) {
+        const index = Number((P as JSStringValue).stringValue());
+        if (index < tuple.Positions.length) {
+          V = Q(yield* RequireType(V, tuple.Positions[index]!));
+        } else if (tuple.Rest !== undefined) {
+          // A position the rest collects takes the rest's element type.
+          V = Q(yield* RequireType(V, tuple.Rest));
+        } else {
+          // A tuple's arity is part of its type, so there is no position here to
+          // store into, and growing it would leave the array outside the type it
+          // is declared to have.
+          return Throw.TypeError('a tuple of $1 positions has no position at index $2', Value(String(tuple.Positions.length)), P);
+        }
+      }
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));

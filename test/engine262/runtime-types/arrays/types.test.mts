@@ -227,3 +227,57 @@ test('the design\'s grid shape composes with the index accessor forms', () => {
 test('an array type in expression position is inert with the feature off', () => {
   expectThrownFlagOff('new [4].<uint8>();');
 });
+
+// -- Stores to a tuple position (#sec-array-defaults-and-stores) ---------------
+//
+// "A store to an element of an array of element type _t_ checks the value
+// against _t_." A tuple has a type PER POSITION rather than one element type,
+// and its positions were checked when it was built and never again.
+
+test('a store to a tuple position is checked against THAT position', () => {
+  expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t[0] = "wrong";');
+  // A store into a `string` position CONVERTS a numeric rather than refusing it,
+  // which is what the array element store does too - RequireType converts, and
+  // #sec-the-conversion-rule says a primitive is assignable only to itself and
+  // `any`. Pinned here as the tuple's, and recorded against the shared cause in
+  // KNOWN-DIVERGENCES.md rather than fixed by this rule.
+  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"];'
+    + ' t[1] = (1 := uint8); `${t[1]}:${typeof t[1]}`;')).toBe('1:string');
+  // The legitimate stores still work, each at its own type.
+  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"];'
+    + ' t[0] = (9 := uint8); t[1] = "ok"; `${t[0]}:${t[1]}`;')).toBe('9:ok');
+});
+
+test('a tuple keeps its arity', () => {
+  // The arity is part of the type, so there is no position to grow into.
+  expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.push(99);');
+  expectThrown('type T = [uint8]; let t: T = [1]; t[1] = (2 := uint8);');
+  // Unless a rest element admits the position, which is what a rest is for.
+  expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
+    + ' r[2] = "c"; r.push("d"); `${r.length}:${r[3]}`;')).toBe('4:d');
+  // Same conversion as above; what matters here is that the REST position's type
+  // is the one consulted.
+  expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
+    + ' r[2] = (5 := uint8); typeof r[2];')).toBe('string');
+});
+
+test('the covariance of a tuple is closed at the store', () => {
+  // #sec-issubtype makes a tuple covariant position-wise, so a narrow tuple may
+  // be seen as a wider one - and the boundary between them may be elided, which
+  // leaves the two views as ONE object. Only a mark on the object can refuse a
+  // store the narrow view forbids, and this is that store: before this rule, the
+  // String landed in a slot declared uint8 and was readable through `narrow`.
+  expectThrown('type TupN = [uint8]; type TupW = [uint8 | string];'
+    + ' let narrow: TupN = [1]; let wide: TupW = narrow; wide[0] = "a string";');
+  // And the check answers the array's own type however the write arrives.
+  expectThrown('type T = [uint8]; let t: T = [1]; let loose: any = t; loose[0] = "a string";');
+});
+
+test('the rule reaches a tuple wherever it is held', () => {
+  expectThrown('class H { t: [uint8, string] = [1, "s"]; } const h = new H(); h.t[0] = "wrong";');
+  expectThrown('type O = { t: [uint8, string] }; let o: O = { t: [1, "s"] }; o.t[0] = "wrong";');
+});
+
+test('a defaulted trailing position is unaffected', () => {
+  expect(evaluated('type D = [uint8, uint8 = 5]; let d: D = [1]; `${d.length}:${d[1]}`;')).toBe('2:5');
+});
