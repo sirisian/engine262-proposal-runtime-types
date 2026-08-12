@@ -6,7 +6,7 @@ import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
-import { neverType, orderKey } from './records.mts';
+import { neverType, orderKey, propertiesInKeyOrder } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
@@ -118,8 +118,31 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
       IndexSignatures: unknown[],
     };
     copies.set(t, copy as unknown as TypeRecord);
-    copy.Properties = t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type, copies), optional: p.optional, readonly: p.readonly }));
-    copy.IndexSignatures = t.IndexSignatures.map((ix) => ({ Key: CanonicalizeType(ix.Key, copies), Value: CanonicalizeType(ix.Value, copies) }));
+    // #sec-sameobjecttype: "Canonicalization orders the [[Properties]] of an
+    // ~object~ Type Record by key, which is what allows the interning of
+    // #sec-gettypeobject to give them one Type Object, and orders the
+    // [[IndexSignatures]] by the fixed total order on their [[KeyType]]s."
+    //
+    // Sorted as the properties are ASSIGNED rather than by reordering the
+    // published copy afterwards: the copy is published empty so that a member
+    // reaching this record again lands on it, and a cyclic member must not be
+    // able to observe a half-sorted list.
+    //
+    // What a program sees change is reflection, and the clause settles that
+    // deliberately: "interning merges every spelling of a type into one object,
+    // so a non-canonical order would be the first spelling's, an accident of
+    // module load order ... A reflected object type lists its properties in key
+    // order whatever order the source wrote."
+    copy.Properties = propertiesInKeyOrder(
+      t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type, copies), optional: p.optional, readonly: p.readonly })),
+    );
+    copy.IndexSignatures = t.IndexSignatures
+      .map((ix) => ({ Key: CanonicalizeType(ix.Key, copies), Value: CanonicalizeType(ix.Value, copies) }))
+      .sort((a, b) => {
+        const ka = orderKey(a.Key);
+        const kb = orderKey(b.Key);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
     return copy as unknown as TypeRecord;
   }
   // A function's parameter, return, and this types are canonicalized for the same

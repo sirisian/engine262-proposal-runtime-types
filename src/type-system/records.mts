@@ -623,6 +623,56 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
  * union and intersection members by. Any deterministic order serves.
  */
 /**
+ * proposal-runtime-types #sec-sameobjecttype: "Members are matched by key rather
+ * than by position, so the order in which an object type lists them is not part
+ * of its identity ... Canonicalization orders the [[Properties]] of an ~object~
+ * Type Record by key."
+ *
+ * The order is the one #sec-canonical-total-order fixes: a String "by code
+ * units", a Symbol "by the order in which each is first interned into a Type
+ * Record within the surrounding Agent", and where a field holds two language
+ * types they order String before Symbol.
+ *
+ * Symbol order is per-Agent first-intern order, recorded here as each symbol key
+ * is first compared, which is the first point at which one enters a canonical
+ * form. Two symbols are otherwise incomparable, and leaving them in source order
+ * would make a type's identity depend on the order its members were written -
+ * exactly what this rule removes for string keys.
+ */
+const symbolFirstInternOrder = new WeakMap<SymbolValue, number>();
+let nextSymbolInternIndex = 0;
+
+function symbolInternIndex(key: SymbolValue): number {
+  let index = symbolFirstInternOrder.get(key);
+  if (index === undefined) {
+    index = nextSymbolInternIndex;
+    nextSymbolInternIndex += 1;
+    symbolFirstInternOrder.set(key, index);
+  }
+  return index;
+}
+
+/** Compares two property keys by the canonical total order. */
+export function comparePropertyKeys(a: string | SymbolValue, b: string | SymbolValue): number {
+  const aIsString = typeof a === 'string';
+  const bIsString = typeof b === 'string';
+  if (aIsString !== bIsString) {
+    // "they order by type, in the order String, Number, BigInt, Boolean, Symbol".
+    return aIsString ? -1 : 1;
+  }
+  if (aIsString && bIsString) {
+    // "a String by code units".
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  return symbolInternIndex(a as SymbolValue) - symbolInternIndex(b as SymbolValue);
+}
+
+/** The properties of an ~object~ Type Record in canonical key order. */
+export function propertiesInKeyOrder<T extends { key: string | SymbolValue }>(properties: readonly T[]): T[] {
+  return [...properties].sort((x, y) => comparePropertyKeys(x.key, y.key));
+}
+
+/**
  * A canonical ordering key for a Type Record, used to sort union and
  * intersection members (#sec-canonicalizetype) and to key the composite
  * registry.
@@ -660,7 +710,17 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     case 'array': return `array:${orderKey(t.Element)}:${t.Extent}`;
     case 'reference': return `reference:${orderKey(t.Target)}`;
     case 'shared': return `shared:${orderKey(t.Target)}`;
-    case 'object': return `object:${t.Properties.map((p) => `${p.readonly ? 'readonly ' : ''}${p.key}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
+    case 'object':
+      // The key sorts the properties rather than reading them in record order,
+      // because a union keys its members by the record as it ARRIVED rather than
+      // by its canonical copy - a member in a cycle has a copy still being
+      // filled when the union sorts. Once canonicalization reorders properties,
+      // an arm built by Reflect.makeType (already canonical) and one written as
+      // a type literal (in source order) would otherwise key differently and
+      // sort the same union two ways, giving it two Type Objects. Sorting here
+      // makes the key what #sec-sameobjecttype says identity is: independent of
+      // the order the members were written in.
+      return `object:${propertiesInKeyOrder(t.Properties).map((p) => `${p.readonly ? 'readonly ' : ''}${String(p.key)}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
     // PLAN-rest-parameters.md phase 0: a parameter's Rest and Optional flags are
     // part of a signature's identity, so they belong in the canonical order key.
     // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`

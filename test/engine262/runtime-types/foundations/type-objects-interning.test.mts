@@ -200,3 +200,81 @@ test('what the refinement declines stays a call', () => {
   // A parenthesized non-function type is not one of the two refinements.
   expect(evaluated('function type(x) { return x === uint8 ? "call" : "other"; } type (uint8);')).toBe('call');
 });
+
+// -- Object type identity ignores member order (#sec-sameobjecttype) -----------
+//
+// "Members are matched by key rather than by position, so the order in which an
+// object type lists them is not part of its identity ... Canonicalization orders
+// the [[Properties]] of an ~object~ Type Record by key, which is what allows the
+// interning of #sec-gettypeobject to give them one Type Object."
+
+test('two spellings of one object type are one Type Object', () => {
+  expect(evaluated('type A = { x: float32, y: float32 }; type B = { y: float32, x: float32 };'
+    + ' A === B ? "same" : "different";')).toBe('same');
+  // The clause's own example uses one type for both members; this one differs
+  // them, so the sort cannot be passing by accident.
+  expect(evaluated('type A = { x: uint8, y: string }; type B = { y: string, x: uint8 };'
+    + ' A === B ? "same" : "different";')).toBe('same');
+});
+
+test('the order-insensitivity reaches every position an object type sits in', () => {
+  expect(evaluated('type N1 = { a: { x: uint8, y: string } }; type N2 = { a: { y: string, x: uint8 } };'
+    + ' N1 === N2 ? "same" : "different";')).toBe('same');
+  expect(evaluated('type F1 = (p: { x: uint8, y: string }) => void; type F2 = (p: { y: string, x: uint8 }) => void;'
+    + ' F1 === F2 ? "same" : "different";')).toBe('same');
+});
+
+test('what identity still separates', () => {
+  // Only ORDER stops mattering. The flags and the member types are identity.
+  expect(evaluated('type C = { x: uint8 }; type D = { x?: uint8 }; C === D ? "same" : "different";')).toBe('different');
+  expect(evaluated('type C = { x: uint8 }; type R = { readonly x: uint8 }; C === R ? "same" : "different";')).toBe('different');
+  expect(evaluated('type C = { x: uint8 }; type W = { x: uint16 }; C === W ? "same" : "different";')).toBe('different');
+  expect(evaluated('type C = { x: uint8 }; type E = { x: uint8, y: uint8 }; C === E ? "same" : "different";')).toBe('different');
+});
+
+test('a reflected object type lists its properties in key order', () => {
+  // The observable half of the change, and the clause requires it: the
+  // alternative is the FIRST spelling's order, "an accident of module load
+  // order", since interning merges every spelling into one object.
+  expect(evaluated('type B = { y: string, x: uint8 };'
+    + ' Reflect.getReflection(B).properties.map(p => p.name).join(",");')).toBe('x,y');
+  expect(evaluated('type B = { b: uint8, a: uint8, c: uint8 };'
+    + ' Reflect.getReflection(B).properties.map(p => p.name).join(",");')).toBe('a,b,c');
+});
+
+test('the round trip is idempotent under the sort', () => {
+  expect(evaluated('type B = { y: string, x: uint8 };'
+    + ' Reflect.makeType(Reflect.getReflection(B)) === B ? "same" : "different";')).toBe('same');
+});
+
+test('a symbol-keyed member has a place in the order', () => {
+  // Two symbols are otherwise incomparable; the total order gives them
+  // first-intern order, and a String sorts before a Symbol.
+  expect(evaluated('const s = Symbol("s");'
+    + ' type A = { [s]: uint8, x: uint8 }; type B = { x: uint8, [s]: uint8 };'
+    + ' A === B ? "same" : "different";')).toBe('same');
+  expect(evaluated('const s = Symbol("s"); type A = { [s]: uint8, x: uint8 };'
+    + ' String(Reflect.getReflection(A).properties[0].name);')).toBe('x');
+});
+
+test('a union of object arms is one type however its arms were built', () => {
+  // The interaction this change had to be built to find. A union sorts its
+  // members by the record as it ARRIVED, so arms built through makeType (already
+  // canonical) and arms written as a type literal (in source order) must key the
+  // same - which is why orderKey sorts an object's properties too. The corpus's
+  // ReplaceKeys challenge is the only other test that catches this.
+  expect(evaluated(`
+    function rebuild(u) {
+      const arms = Reflect.getReflection(u).arms.map(a => {
+        const props = Reflect.getReflection(a).properties.map(p => (p.name === 'a' ? { ...p, name: 'x' } : p));
+        return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] });
+      });
+      return Reflect.makeType({ kind: 'union', arms });
+    }
+    type A = { a: uint32, b: string };
+    type B = { a: boolean, c: string };
+    type U = A | B;
+    type Expected = { x: uint32, b: string } | { x: boolean, c: string };
+    rebuild(U) === Expected ? "same" : "different";
+  `)).toBe('same');
+});
