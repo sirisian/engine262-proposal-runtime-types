@@ -769,16 +769,19 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // what `new` calls - so it is recorded with no parameters rather than left
     // absent. A derived class that writes none finds its base's by the same
     // chain walk that finds an inherited method.
-    // #table-reflection-contexts says a constructor's `signatures` "has exactly
-    // one entry". Recording a synthetic one-arm function type here is what
-    // would supply it; a first attempt built one whose parameters carried no
-    // Type and GetTypeObject read `Kind` off undefined, so the arm must be
-    // built from the same MemberFunctionTypeRecord the other members use rather
-    // than assembled by hand. Left undefined until then: the reflection has no
-    // `signatures` for a constructor, which is a gap and not a design.
+    // #table-reflection-contexts: a constructor's `signatures` "has exactly one
+    // entry", a constructor being the one method that may not be overloaded.
+    // The record passed no type at all, so the reflection had no `signatures`
+    // where the shape table gives every `ClassMethod` one. It is built by the
+    // same operation every other member's is - assembling an arm by hand here
+    // produced parameters carrying no Type, and GetTypeObject read `Kind` off
+    // undefined.
+    const constructorType = ctorNode === undefined
+      ? undefined
+      : Q(yield* MemberFunctionTypeRecord(ctorNode));
     RecordMemberDeclaration(F, 'constructor', {
       parameters,
-      type: undefined,
+      type: constructorType,
       kind: 'ClassMethod',
       static: false,
       private: false,

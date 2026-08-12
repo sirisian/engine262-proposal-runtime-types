@@ -82,3 +82,41 @@ test('overloads: a constructor may not be overloaded', () => {
   // have to agree on the instance they initialise, and `super` binds to one
   expectThrown('class A { constructor(a: uint8) {} constructor(a: string) {} }');
 });
+
+test('overloads: a constructor carries the one entry the table gives it', () => {
+  // #table-reflection-contexts: a constructor "may not be overloaded, so its
+  // `signatures` has exactly one entry". The record passed no type at all, so
+  // the reflection had none of the field every `ClassMethod` is given - a gap
+  // the caveat above made visible.
+  const R = (cls: string) => `class A ${cls}`
+    + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor'); ";
+  expect(evaluated(`${R('{ constructor(a: uint8) {} }')}String(r.signatures.length);`)).toBe('1');
+  expect(evaluated(`${R('{ constructor(a: uint8, b: string) {} }')}String(r.signatures[0].parameters.length);`)).toBe('2');
+  expect(evaluated(`${R('{ constructor(a: uint8) {} }')}String(r.signatures[0].parameters[0].type === uint8);`)).toBe('true');
+  expect(evaluated(`${R('{ constructor(first: uint8) {} }')}String(r.signatures[0].parameters[0].name);`)).toBe('first');
+  // the arm is built by the operation every other member's is, so a
+  // constructor's type is a function type like a method's
+  expect(evaluated(`${R('{ constructor(a: uint8) {} }')}String(r.type !== undefined);`)).toBe('true');
+  // and the rest of the reflection is unchanged
+  expect(evaluated(`${R('{ constructor(a: uint8) {} }')}String(r.kind + ',' + r.name + ',' + r.static);`))
+    .toBe('ClassMethod,constructor,false');
+  expect(evaluated("class A { constructor(a: uint8) {} }"
+    + " String(Reflect.getReflection.<Reflect.ClassMethodParameter, A>('constructor', 0).name);")).toBe('a');
+});
+
+test('overloads: an UNANNOTATED member has no signatures, constructor or not', () => {
+  // A SEPARATE gap, and not a constructor one: MemberFunctionTypeRecord answers
+  // *undefined* where nothing is annotated, so an unannotated method has no
+  // `signatures` either. The shape table's "length 1 where the method is not
+  // overloaded" says both are wrong; whether an unannotated member has a
+  // one-arm signature of untyped parameters is a question for every member
+  // kind, so it is pinned here rather than decided by a constructor fix.
+  const has = (decl: string, member: string) => `class A { ${decl} }`
+    + ` const r = Reflect.getReflection.<Reflect.ClassMethod, A>('${member}');`
+    + " String(r.signatures === undefined ? 'absent' : r.signatures.length);";
+  expect(evaluated(has('m(a) {}', 'm'))).toBe('absent');
+  expect(evaluated(has('constructor(a) {}', 'constructor'))).toBe('absent');
+  // annotated, both answer
+  expect(evaluated(has('m(a: uint8) {}', 'm'))).toBe('1');
+  expect(evaluated(has('constructor(a: uint8) {}', 'constructor'))).toBe('1');
+});
