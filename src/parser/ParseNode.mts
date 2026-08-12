@@ -103,6 +103,12 @@ export namespace ParseNode {
      * the only place that value still exists (F67).
      */
     readonly SourceText?: string;
+    /**
+     * proposal-runtime-types #sec-imaginary-literals: set where the literal
+     * carried the `i` suffix. [[value]] is then the magnitude on the imaginary
+     * axis rather than a real value, so `4i` denotes `complex(0, 4)`.
+     */
+    readonly Imaginary?: boolean;
   }
 
   // StringLiteral ::

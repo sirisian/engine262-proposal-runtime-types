@@ -165,6 +165,10 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%decimal64%': ObjectValue;
   '%decimal128%': ObjectValue;
   '%rational%': FunctionObject;
+  // proposal-runtime-types #sec-complex-numbers: the pair type and its
+  // constructor, `complex(re, im)`, which the clause writes its own example with.
+  '%complex.prototype%': ObjectValue;
+  '%complex%': FunctionObject;
   '%RangeIteratorPrototype%': ObjectValue;
   '%Set.prototype%': ObjectValue;
   '%ShadowRealm%': FunctionObject;

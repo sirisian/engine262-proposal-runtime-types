@@ -2,6 +2,7 @@ import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { surroundingAgent } from '#self';
 
 /**
@@ -13,6 +14,13 @@ import { surroundingAgent } from '#self';
  * (F67). Every other literal is unaffected and answers exactly as before.
  */
 export function NumericValue(node: ParseNode.NumericLiteral) {
+  // proposal-runtime-types #sec-complex-numbers: "An imaginary literal has the
+  // type `complex`, with the literal's value as its imaginary component and zero
+  // as its real one, so `4i` is `complex(0, 4)`." The lexer scanned the
+  // magnitude; the axis is what the suffix said.
+  if ((node as { Imaginary?: boolean }).Imaginary) {
+    return CreateComplexValue(0, Number(node.value), undefined, surroundingAgent.currentRealmRecord);
+  }
   if (typeof node.value === 'number' && typeof node.SourceText === 'string' && IsBigIntContextLiteral(node)) {
     return Value(BigInt(node.SourceText.replace(/_/g, '')));
   }

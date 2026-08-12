@@ -30,6 +30,7 @@ import { bootstrapFinalizationRegistryPrototype } from '../intrinsics/Finalizati
 import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorPrototype.mts';
 import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
 import { bootstrapRational, bootstrapRationalPrototype } from '../intrinsics/Rational.mts';
+import { bootstrapComplex, bootstrapComplexPrototype } from '../intrinsics/Complex.mts';
 import { bootstrapDecimal, bootstrapDecimalPrototype } from '../intrinsics/Decimal.mts';
 import { bootstrapTokenStream, bootstrapTokenStreamPrototype } from '../intrinsics/TokenStream.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
@@ -334,6 +335,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // proposal-runtime-types (rational.md): the rational value type and its global.
     bootstrapRationalPrototype(realmRec);
     bootstrapRational(realmRec);
+    bootstrapComplexPrototype(realmRec);
+    bootstrapComplex(realmRec);
     bootstrapDecimalPrototype(realmRec);
     bootstrapDecimal(realmRec);
     bootstrapTokenStreamPrototype(realmRec);
@@ -346,6 +349,15 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     })));
     X(global.DefineOwnProperty(Value('rational'), Descriptor({
       Value: realmRec.Intrinsics['%rational%'],
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
+    // proposal-runtime-types #sec-complex-numbers: `complex(re, im)` is how the
+    // clause writes its own example - "`4i` is `complex(0, 4)`" - so the name is
+    // bound beside the other numeric constructors.
+    X(global.DefineOwnProperty(Value('complex'), Descriptor({
+      Value: realmRec.Intrinsics['%complex%'],
       Writable: Value.true,
       Enumerable: Value.false,
       Configurable: Value.true,

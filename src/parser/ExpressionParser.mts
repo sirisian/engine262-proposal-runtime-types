@@ -1501,6 +1501,12 @@ export abstract class ExpressionParser extends FunctionParser {
       }
       case Token.NUMBER:
       case Token.BIGINT:
+      // proposal-runtime-types #sec-imaginary-literals: `DecimalImaginaryLiteral ::
+      // DecimalLiteral ImaginaryLiteralSuffix`. The lexer already scans it - and
+      // already refuses `4if`, since "the source character following a numeric
+      // literal must not be an identifier start" - so what was missing was an
+      // expression production to take the token.
+      case Token.IMAGINARY:
         return this.parseNumericLiteral();
       case Token.STRING:
         return this.parseStringLiteral();
@@ -1583,11 +1589,19 @@ export abstract class ExpressionParser extends FunctionParser {
   // NumericLiteral
   parseNumericLiteral(): ParseNode.NumericLiteral {
     const node = this.startNode<ParseNode.NumericLiteral>();
-    if (!this.test(Token.NUMBER) && !this.test(Token.BIGINT)) {
+    const imaginary = this.test(Token.IMAGINARY);
+    if (!this.test(Token.NUMBER) && !this.test(Token.BIGINT) && !imaginary) {
       this.unexpected();
     }
     const token = this.next();
     node.value = token.valueAsNumeric();
+    if (imaginary) {
+      // The suffix is what makes the literal imaginary, and the value scanned is
+      // the magnitude on that axis: "an imaginary literal has the type `complex`,
+      // with the literal's value as its imaginary component and zero as its real
+      // one, so `4i` is `complex(0, 4)`".
+      (node as { Imaginary?: boolean }).Imaginary = true;
+    }
     // The token's own extent, so numeric separators and a radix prefix are
     // carried as written; BigInt() reads both, and a `n` suffix is dropped
     // because the text is used only where the target is already known.

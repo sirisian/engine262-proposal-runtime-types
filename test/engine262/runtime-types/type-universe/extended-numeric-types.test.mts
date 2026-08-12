@@ -60,18 +60,29 @@ test('numeric types: a DECIMAL literal converts; float128 still does not', () =>
   expectThrown('let a: float128 = 1.5;');
 });
 
-test('numeric types: rational is a registered value type; complex remains deferred', () => {
-  // rational.md is implemented as a value type: `rational` is a global and a
-  // usable type name. complex.md is its deferred sibling.
+test('numeric types: rational and complex are both registered value types', () => {
   expect(evaluated('typeof rational;')).toBe('function');
   expect(evaluated('let r: rational = rational(1, 2); typeof r;')).toBe('object');
-  expect(evaluated('typeof complex;')).toBe('undefined');
+  // #sec-complex-numbers: `complex(re, im)` is how the clause writes its own
+  // example, `4i` being `complex(0, 4)`.
+  expect(evaluated('typeof complex;')).toBe('function');
+  expect(evaluated('const z = complex(3, 4); `${z.real}:${z.imaginary}`;')).toBe('3:4');
 });
 
-test('numeric types: the imaginary literal does not parse (documents the gap)', () => {
-  // Target: `4i`, `2.5i`, `1e3i` are imaginary literals typed by the complex
-  // extension. The suffix does not lex.
-  expectThrown('let a = 3i; typeof a;');
+test('numeric types: an imaginary literal is a complex value', () => {
+  // #sec-imaginary-literals: `DecimalImaginaryLiteral :: DecimalLiteral
+  // ImaginaryLiteralSuffix`, and the suffix "attaches to any DecimalLiteral, so
+  // `4i`, `2.5i`, and `1e3i` are all imaginary literals".
+  expect(evaluated('const z = 4i; `${z.real}:${z.imaginary}`;')).toBe('0:4');
+  expect(evaluated('(2.5i).toString();')).toBe('2.5i');
+  expect(evaluated('(1e3i).toString();')).toBe('1000i');
+  // "The rule that the source character following a numeric literal must not be
+  // an identifier start continues to apply, so `4if` remains a syntax error."
+  expectThrown('let a = 4if;');
+  // The text reads back as the literal reads: a pure imaginary prints its
+  // suffix, and a pair prints both parts.
+  expect(evaluated('complex(3, 4).toString();')).toBe('3+4i');
+  expect(evaluated('complex(3, -4).toString();')).toBe('3-4i');
 });
 
 test('numeric types: a plain integer literal takes the bigint type from its context', () => {
