@@ -257,16 +257,23 @@ test('`signatures` is present, and length 1', () => {
  * `{ parameters, return }`.
  */
 
-test('a method reports ONE signature', () => {
-  // "Length 1 when not overloaded" - and a CLASS METHOD is never overloaded in
-  // this engine: a second declaration of one name REPLACES the first. A
-  // FUNCTION declaration does form an overload group, which is what makes this
-  // a property of the position rather than of the language.
+test('a method reports one signature per overload arm', () => {
+  // "Length 1 when not overloaded". This once read that a class method is NEVER
+  // overloaded, a second declaration REPLACING the first - which described a
+  // defect rather than a rule: the same two declarations dispatched correctly
+  // as functions, so the divergence was "a property of the position" only
+  // because a class body discarded the earlier arm before resolution saw it.
   expect(evaluated(`${GRAB} class A { @g m(): uint8 { return uint8(1); } } String(ctx.signatures.length);`)).toBe('1');
+  // a method now dispatches over its arms, as the function beneath it always did
   expect(evaluated('class A { m(x: uint8) { return 1; } m(x: string) { return 2; } } '
-    + 'const a = new A(); String(a.m(uint8(1)));')).toBe('2');
+    + 'const a = new A(); String(a.m(uint8(1)));')).toBe('1');
+  expect(evaluated('class A { m(x: uint8) { return 1; } m(x: string) { return 2; } } '
+    + "const a = new A(); String(a.m('s'));")).toBe('2');
   expect(evaluated('function f(x: uint8) { return 1; } function f(x: string) { return 2; } '
     + 'String(f(uint8(1)));')).toBe('1');
+  // and its reflection reports both arms
+  expect(evaluated('class A { m(x: uint8) { return 1; } m(x: string) { return 2; } } '
+    + "String(Reflect.getReflection.<Reflect.ClassMethod, A>('m').signatures.length);")).toBe('2');
 });
 
 test('a signature carries its PARAMETERS, each fully described', () => {

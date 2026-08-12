@@ -54,6 +54,38 @@ import { GetTypeObject } from '../type-system/intern.mts';
  * `initializer !== undefined` in every case, so it would be a third field
  * reporting what a second already implies.
  */
+/**
+ * The `signatures` of a member reflection: one entry per overload arm, each
+ * `{ parameters, return }` - the shape a FUNCTION TYPE's reflection already
+ * uses, so a reader learns one shape for both.
+ */
+function* SignatureListReflection(signatures: readonly unknown[]): ValueEvaluator {
+  const realm = surroundingAgent.currentRealmRecord;
+  const list = Q(ArrayCreate(0));
+  for (const [index, signature] of signatures.entries()) {
+    const sig = signature as { Parameters?: readonly { Name?: string, Type?: TypeRecord }[], Return?: TypeRecord };
+    const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+    const parameters = Q(ArrayCreate(0));
+    (sig.Parameters ?? []).forEach((parameter, position) => {
+      const entry = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+      X(CreateDataProperty(entry, Value('name'), Value(parameter.Name ?? '')));
+      X(CreateDataProperty(entry, Value('index'), Value(position)));
+      if (parameter.Type) {
+        X(CreateDataProperty(entry, Value('type'), GetTypeObject(parameter.Type, realm) as Value));
+      }
+      X(CreateDataProperty(parameters, Value(String(position)), entry));
+    });
+    X(CreateDataProperty(parameters, Value('length'), Value((sig.Parameters ?? []).length)));
+    X(CreateDataProperty(one, Value('parameters'), parameters));
+    if (sig.Return) {
+      X(CreateDataProperty(one, Value('return'), GetTypeObject(sig.Return, realm) as Value));
+    }
+    X(CreateDataProperty(list, Value(String(index)), one));
+  }
+  X(CreateDataProperty(list, Value('length'), Value(signatures.length)));
+  return list;
+}
+
 function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: ObjectValueClass } }, kindName: string, parameter: { name: string, index: number, initial?: Value, initializer?: Value } | undefined): ValueEvaluator {
   const one = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(one, Value('kind'), Value(kindName)));
@@ -328,6 +360,15 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           if (declaration === undefined) {
             return ThrowError.TypeError('$1 is not a member of this type', nameValue);
           }
+          // #sec-retrieval-overloaded-targets: "A parameter of an overloaded
+          // function or method cannot be reached by name or by position, since
+          // neither says which signature it belongs to." Answering one arm's
+          // parameter would answer a question the caller did not ask, and
+          // answering all of them would not be a parameter reflection.
+          const arms = (declaration.type as { Signatures?: readonly unknown[] } | undefined)?.Signatures;
+          if (arms !== undefined && arms.length > 1) {
+            return ThrowError.TypeError('$1 is overloaded; read its parameters through its signatures', nameValue);
+          }
           const realm = surroundingAgent.currentRealmRecord;
           const kindName = libraryName.slice('Reflect.'.length);
           if (libraryName.endsWith('Return')) {
@@ -405,6 +446,20 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // disagreed. Both now read the same recorded type.
         if (declaration.type) {
           X(CreateDataProperty(reflection, Value('type'), GetTypeObject(declaration.type, surroundingAgent.currentRealmRecord) as Value));
+          // proposal-runtime-types #sec-retrieval-overloaded-targets: an
+          // overloaded member's parameters "are read through the `signatures` of
+          // the declaration's own reflection, each entry of which carries its
+          // own parameter and return reflections."
+          //
+          // The recorded type is the function type and already holds the arms,
+          // so this reports them rather than deriving them a second way. A
+          // member with no overloads reports ONE entry: the no-overload case is
+          // the one-arm case, which is what spares a consumer a branch.
+          const signatures = (declaration.type as { Signatures?: readonly unknown[] }).Signatures;
+          if (signatures !== undefined) {
+            X(CreateDataProperty(reflection, Value('signatures'),
+              Q(yield* SignatureListReflection(signatures))));
+          }
         }
         const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base, memberName.stringValue())));
@@ -448,6 +503,12 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
       if (declaration === undefined) {
         return ThrowError.TypeError('$1 is not a member of this type', memberName);
+      }
+      // The same refusal the named form makes: an overloaded target's
+      // parameters are read through its `signatures`.
+      const armsByIndex = (declaration.type as { Signatures?: readonly unknown[] } | undefined)?.Signatures;
+      if (armsByIndex !== undefined && armsByIndex.length > 1) {
+        return ThrowError.TypeError('$1 is overloaded; read its parameters through its signatures', memberName);
       }
       const realm = surroundingAgent.currentRealmRecord;
       const list = Q(ArrayCreate(0));

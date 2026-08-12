@@ -1,5 +1,5 @@
 import {
-  Value, Descriptor, PrivateName, UndefinedValue, type PropertyKeyValue, ObjectValue, BooleanValue,
+  Value, Descriptor, PrivateName, UndefinedValue, JSStringValue, type PropertyKeyValue, ObjectValue, BooleanValue,
 } from '../value.mts';
 import {
   Q, X,
@@ -13,6 +13,8 @@ import {
   OrdinaryObjectCreate,
   OrdinaryFunctionCreate,
   DefinePropertyOrThrow,
+  IsCallable,
+  MakeOverloadedFunction,
   SetFunctionName,
   MakeMethod,
   sourceTextMatchedBy,
@@ -64,9 +66,35 @@ function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: 
       Value: closure,
     });
   } else { // 2. Else,
+    // proposal-runtime-types: a class body that declares a name TWICE declares
+    // its overloads, as a function scope does - FunctionDeclarationInstantiation
+    // groups repeated function declarations and binds one overloaded function.
+    // Here the second declaration simply redefined the property, so the first
+    // arm was gone before resolution could see it: `m(a: uint8)` beside
+    // `m(a: string)` answered the second for every argument, where the same two
+    // functions dispatched correctly.
+    //
+    // The arms are merged as they are found, so a third declaration joins the
+    // two already there rather than replacing them.
+    let value: FunctionObject = closure;
+    if (surroundingAgent.feature('runtime-types')) {
+      // The OWN property only. A method a base class declared is not an overload
+      // of one a subclass declares - an override replaces, which is what the
+      // prototype chain means - so an inherited method must not be merged in.
+      // Reading through the chain did exactly that, and `class D extends B`
+      // redeclaring `m` reported the call as ambiguous between the two.
+      const own = homeObject.properties?.get(key as PropertyKeyValue);
+      const existing = own?.Value ?? Value.undefined;
+      if (existing !== Value.undefined && existing !== closure && IsCallable(existing)) {
+        value = Q(yield* MakeOverloadedFunction(
+          key instanceof JSStringValue ? key : Value(String(key)),
+          [existing as Value, closure as Value],
+        )) as FunctionObject;
+      }
+    }
     // a. Let desc be the PropertyDescriptor { [[Value]]: closure, [[Writable]]: true, [[Enumerable]]: enumerable, [[Configurable]]: true }.
     const desc = Descriptor({
-      Value: closure,
+      Value: value,
       Writable: Value.true,
       Enumerable: enumerable,
       Configurable: Value.true,

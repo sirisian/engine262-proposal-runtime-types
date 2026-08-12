@@ -2033,6 +2033,11 @@ export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean
   return collected;
 }
 
+/** The declaration recorded on `owner` itself, without walking the base chain. */
+export function OwnMemberDeclarationOf(owner: Value, member: string, isStatic: boolean): MemberDeclaration | undefined {
+  return memberDeclarations.get(owner)?.get(memberKey(member, isStatic));
+}
+
 export function MemberDeclarationOf(owner: Value, member: string, isStatic?: boolean): MemberDeclaration | undefined {
   let current: Value | undefined = owner;
   while (current !== undefined && current !== Value.null) {
@@ -2202,7 +2207,26 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
       initializer: InitializerTokensOf(parameter),
     });
   }
-  const declaredType = Q(yield* MemberFunctionTypeRecord(node));
+  let declaredType = Q(yield* MemberFunctionTypeRecord(node));
+  // proposal-runtime-types #sec-retrieval-overloaded-targets: an overloaded
+  // member is reflected through the `signatures` of its declaration, so the
+  // record has to hold every arm. The value side merges arms in
+  // DefineMethodProperty; without the same merge here the RECORD held only the
+  // last declaration, and a method that dispatched over two arms reflected one.
+  // The OWN record only. A base class's method is not an overload of one a
+  // subclass declares - an override replaces - and MemberDeclarationOf walks the
+  // prototype chain, so reading through it merged an override's arms with the
+  // base's and the derived type stopped being its own declaration's.
+  const previous = OwnMemberDeclarationOf(owner, key.stringValue(), n.static === true);
+  const previousType = previous?.type as { Kind?: string, Signatures?: readonly unknown[] } | undefined;
+  const nextType = declaredType as { Kind?: string, Signatures?: readonly unknown[] } | undefined;
+  if (previousType?.Kind === 'function' && nextType?.Kind === 'function'
+      && previous?.kind === kind && previous.static === (n.static === true)) {
+    declaredType = {
+      ...nextType,
+      Signatures: [...(previousType.Signatures ?? []), ...(nextType.Signatures ?? [])],
+    } as never;
+  }
   RecordMemberDeclaration(owner, key.stringValue(), {
     parameters,
     type: declaredType,

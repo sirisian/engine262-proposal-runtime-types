@@ -597,6 +597,7 @@ export interface Throw {
   | '$1 is not a generic type'
   | '$1 is not a list'
   | '$1 is not a member of this type'
+  | '$1 is overloaded; read its parameters through its signatures'
   | '$1 is not a member of this vector'
   | '$1 is not a number'
   | '$1 is not a parameter'
