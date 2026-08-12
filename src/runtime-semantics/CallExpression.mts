@@ -403,11 +403,25 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // members unless `own` says otherwise.
         if (nameValue === Value.undefined || nameValue instanceof ObjectValueClass) {
           let own = false;
+          // proposal-runtime-types: `{ static: true }` answers the class's STATIC
+          // members, as `{ own: true }` answers the ones it declares itself. A
+          // name alone does not identify a member - `m()` and `static m()` are
+          // both legal in one body and both reach the same owner - so keying the
+          // result by name let one displace the other, and the static member had
+          // no route at all.
+          //
+          // A bare enumeration answers INSTANCE members: that is what a bare
+          // name means at a named lookup, and what a consumer asking what an
+          // instance has wants without passing anything. The two results are
+          // disjoint and are merged by VALUE, each entry carrying its own `name`
+          // and `static`; spreading them by key collides again.
+          let wantStatic = false;
           if (nameValue instanceof ObjectValueClass) {
             own = Q(yield* Get(nameValue, Value('own'))) === Value.true;
+            wantStatic = Q(yield* Get(nameValue, Value('static'))) === Value.true;
           }
           const kindName = (contextRecord.LibraryName as string).slice('Reflect.'.length);
-          const all = AllMemberDeclarationsOf(constructor, kindName, own);
+          const all = AllMemberDeclarationsOf(constructor, kindName, own, wantStatic);
           const realm = surroundingAgent.currentRealmRecord;
           const collection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
           const base0 = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;

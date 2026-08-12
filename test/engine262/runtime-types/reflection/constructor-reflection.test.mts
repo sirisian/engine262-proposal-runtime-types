@@ -56,9 +56,16 @@ test('constructor reflection: enumeration includes it, and names stay declared n
   // the storage key qualifies a static member; what is reported is the name as
   // written. The default constructor is enumerated too, a class always having
   // one, which is the observable change this fix makes to the enumerate form.
+  // An enumeration answers ONE staticness: a bare call the instance members,
+  // `{ static: true }` the static ones. This asserted both in one result, which
+  // was the collision itself - a result keyed by name can hold only one member
+  // per name, so `m()` beside `static m()` lost one silently.
   expect(evaluated('class A { m() {} static s() {} }'
     + ' const r = Reflect.getReflection.<Reflect.ClassMethod, A>();'
-    + ' String(Object.keys(r).sort().join(","));')).toBe('constructor,m,s');
+    + ' String(Object.keys(r).sort().join(","));')).toBe('constructor,m');
+  expect(evaluated('class A { m() {} static s() {} }'
+    + ' const r = Reflect.getReflection.<Reflect.ClassMethod, A>({ static: true });'
+    + ' String(Object.keys(r).join(","));')).toBe('s');
   expect(evaluated("class A { static s() {} }"
     + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('s');"
     + " String(r.name + ',' + r.static);")).toBe('s,true');

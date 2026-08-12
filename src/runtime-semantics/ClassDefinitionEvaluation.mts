@@ -2017,16 +2017,23 @@ export function RecordMemberDeclaration(owner: Value, member: string, declaratio
  * replaced, so a redeclaration SHADOWS the base's rather than the base
  * overwriting it - the same direction the metadata prototype chain resolves in.
  */
-export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean): Map<string, MemberDeclaration> {
+export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean, wantStatic = false): Map<string, MemberDeclaration> {
   const collected = new Map<string, MemberDeclaration>();
   let current: Value | undefined = owner;
   while (current !== undefined && current !== Value.null) {
     const byMember = memberDeclarations.get(current);
     if (byMember) {
       for (const [key, declaration] of byMember) {
-        // The stored key distinguishes a static member from an instance one of
-        // the same name; what a reflection reports is the name as declared, so
-        // the qualifier is stripped on the way out.
+        // One staticness per enumeration. A name alone does not identify a
+        // member - `m()` and `static m()` are both legal in one body - so a
+        // result keyed by name can hold only one of them, and answering both
+        // here let the later one displace the earlier. The caller asks for the
+        // set it wants; the two sets are disjoint.
+        if (declaration.static === true !== wantStatic) {
+          continue;
+        }
+        // The stored key carries the static qualifier; what a reflection
+        // reports is the name as declared, so it is stripped on the way out.
         if (declaration.kind === kind && !collected.has(key)) {
           collected.set(key, declaration);
         }
