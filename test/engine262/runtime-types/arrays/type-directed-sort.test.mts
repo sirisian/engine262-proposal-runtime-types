@@ -64,6 +64,18 @@ test('a numeric enum sorts by its ordinal', () => {
   expect(evaluated('let a: [].<uint8> = [2, 10, 1]; a.sort(); a.join(",");')).toBe('1,2,10');
 });
 
+test('a 64-bit integral type compares at its own precision', () => {
+  // `int64` holds values a double cannot tell apart: 9007199254740993 and
+  // ...992 are the same Number. `numberValue()` narrows to that double - which
+  // is exactly the information being lost - so the comparison reads the record's
+  // exact value instead, the same one `String(x)` prints.
+  expect(evaluated('let a: [].<int64> = [9007199254740993, 9007199254740992]; a.sort(); a.join(",");')).toBe('9007199254740992,9007199254740993');
+  expect(evaluated('let a: [].<uint64> = [9007199254740993, 9007199254740992]; a.sort(); a.join(",");')).toBe('9007199254740992,9007199254740993');
+  // Ordinary magnitudes are unaffected, as are the narrower widths.
+  expect(evaluated('let a: [].<int64> = [2, 10, 1]; a.sort(); a.join(",");')).toBe('1,2,10');
+  expect(evaluated('let a: [].<int32> = [2, 10, 1]; a.sort(); a.join(",");')).toBe('1,2,10');
+});
+
 test('the types that already sorted correctly still do', () => {
   expect(evaluated('let a: [].<string> = ["b", "a", "c"]; a.sort(); a.join(",");')).toBe('a,b,c');
   expect(evaluated('let a: [].<boolean> = [true, false]; a.sort(); a.join(",");')).toBe('false,true');

@@ -232,12 +232,43 @@ export function* IsConcatSpreadable(O: Value): ValueEvaluator<BooleanValue> {
  * "less, equal, or greater" from a user's `operator <` would call it twice per
  * comparison to no purpose.
  */
+/**
+ * Whether a typed number's declared type is a 64-bit integral one, whose values
+ * a double cannot tell apart above 2**53.
+ */
+function isWideIntegral(v: Value): boolean {
+  if (!isTypedNumber(v)) {
+    return false;
+  }
+  const t = (v as { TypeRecord?: { Kind?: string, Name?: string, Arguments?: readonly unknown[] } }).TypeRecord;
+  if (!t || t.Kind !== 'primitive' || (t.Name !== 'int' && t.Name !== 'uint')) {
+    return false;
+  }
+  return t.Arguments?.[0] === 64;
+}
+
 function OrderedComparison(x: Value, y: Value): number | undefined {
   // Both must be typed, and to the SAME type: comparing a `uint8` against a
   // string has no order of its own and belongs on the String path.
   if (isTypedNumber(x) && isTypedNumber(y)) {
     const a = x.numberValue();
     const b = y.numberValue();
+    // A 64-bit integral type holds values a double cannot distinguish:
+    // `9007199254740993` and `...992` are exact in the record and equal as
+    // Numbers, so comparing as Numbers left them in their original order. The
+    // type carries more precision than a Number comparison respects, so ask the
+    // TYPE rather than the JavaScript representation.
+    if (isWideIntegral(x) || isWideIntegral(y)) {
+      // `numberValue()` narrows to a double, which is exactly the information
+      // being lost - `9007199254740993` and `...992` are the same double. The
+      // record's own `value` keeps the exact magnitude, which is why `String(x)`
+      // prints it correctly, so compare from there.
+      const ra = (x as { value?: number | bigint }).value ?? a;
+      const rb = (y as { value?: number | bigint }).value ?? b;
+      const ba = typeof ra === 'bigint' ? ra : BigInt(Math.trunc(Number(ra)));
+      const bb = typeof rb === 'bigint' ? rb : BigInt(Math.trunc(Number(rb)));
+      return ba < bb ? -1 : (ba > bb ? 1 : 0);
+    }
     if (typeof a === 'bigint' || typeof b === 'bigint') {
       // Compared AS BigInts. Converting to Number to compare would change the
       // ORDER above 2**53, not merely lose precision.
