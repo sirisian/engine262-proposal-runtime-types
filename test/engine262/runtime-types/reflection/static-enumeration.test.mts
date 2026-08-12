@@ -49,6 +49,12 @@ test('static enumeration: every member kind, since one builder serves all', () =
   expect(evaluated(pair('get v(): uint8 { return 1; } static get v(): uint8 { return 2; }',
     'ClassGetter', 'v'))).toBe('false,true');
   expect(evaluated(pair('m() {} static m() {}', 'ClassMethod', 'm'))).toBe('false,true');
+  // setters and accessors collide the same way and are served by the same
+  // collector - this said "every member kind" while testing three of five
+  expect(evaluated(pair('set v(x: uint8) {} static set v(x: uint8) {}',
+    'ClassSetter', 'v'))).toBe('false,true');
+  expect(evaluated(pair('accessor a: uint8 = 1; static accessor a: uint8 = 2;',
+    'ClassAccessor', 'a'))).toBe('false,true');
 });
 
 test('static enumeration: it composes with own, and constructor is included', () => {
