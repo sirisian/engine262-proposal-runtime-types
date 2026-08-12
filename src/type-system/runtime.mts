@@ -8,6 +8,7 @@ import {
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
+import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
@@ -799,6 +800,15 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         const width = name === 'decimal32' ? 32 : name === 'decimal64' ? 64 : 128;
         return CreateDecimalValue(0n, 0, width, surroundingAgent.currentRealmRecord, t);
       }
+      if (name === 'complex') {
+        // #sec-defaultvalueof: "If _t_ is a numeric type, return the value of
+        // _t_ representing 0", and a complex type is a numeric type
+        // (#sec-numeric-types-of-this-proposal names the complex family). Its
+        // zero is the pair of its component's zeros - the row D20 had to leave
+        // open, since the type objects did not exist to default.
+        const component = (t.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number');
+        return CreateComplexValue(0, 0, component, surroundingAgent.currentRealmRecord);
+      }
       if (name === 'vector') {
         // "an array or an aggregate whose storage is zero-filled" - a vector's
         // storage is its lanes, so its zero is the zero of the lane type in
@@ -1545,6 +1555,20 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
   // what the value is rather than what it names.
   if (name === 'type') {
     return isTypeObject(value);
+  }
+  // proposal-runtime-types #sec-complex-types: the values of `complex.<T>` are
+  // "the ordered pairs of a real part and an imaginary part, each a value of
+  // _T_", so membership is being such a pair over the same component type. A
+  // pair carries the component its constructor gave it; one built by the bare
+  // `complex(re, im)` constructor carries none and is a `complex.<number>`,
+  // since "the bare name `complex` is `complex.<number>`".
+  if (name === 'complex') {
+    if (!isComplexObject(value)) {
+      return false;
+    }
+    const component = (args[0] as TypeRecord | undefined) ?? makePrimitive('number');
+    const carried = ((value as { ComplexComponent?: TypeRecord }).ComplexComponent) ?? makePrimitive('number');
+    return SameType(carried, component);
   }
   switch (name) {
     case 'uint':

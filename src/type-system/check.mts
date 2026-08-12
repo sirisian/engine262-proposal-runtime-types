@@ -2082,6 +2082,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the base wrong, `let x: bigint = 65n` failed as "a literal type of
         // number is not assignable to bigint", so the `bigint` type could not
         // be used with an annotation AT ALL (F66).
+        // proposal-runtime-types #sec-complex-numbers: "An imaginary literal has
+        // the type `complex`", so it is not a literal type of `number` - its
+        // value is a pair rather than one of the values a literal type can name.
+        // Literal propagation still applies "as it does to any numeric literal",
+        // which is what puts a `4i` in a `complex64` position at `complex64`.
+        if ((node as { Imaginary?: boolean }).Imaginary) {
+          return builtinTypeRecord('complex', []);
+        }
         const v = (node as { value: number | bigint }).value;
         return typeof v === 'bigint'
           ? { Kind: 'literal', Value: Value(v), Base: makePrimitive('bigint') }

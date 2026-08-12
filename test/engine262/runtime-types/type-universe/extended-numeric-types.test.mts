@@ -601,3 +601,41 @@ test('a wide value reads the same however it is looked at', () => {
   expect(evaluated('const x = int64.parse("9007199254740993");'
     + ' `${String(x)}:${`${x}`}`;')).toBe('9007199254740993:9007199254740993');
 });
+
+test('numeric types: the complex type names', () => {
+  // #sec-type-names: the width-named shorthands "count total bits rather than
+  // component bits, following the convention of NumPy and Go, so `complex64` is
+  // a pair of `float32` and not a pair of `float64`".
+  expect(evaluated('String((type complex64) === (type complex.<float32>));')).toBe('true');
+  expect(evaluated('String((type complex128) === (type complex.<float64>));')).toBe('true');
+  // "the bare name `complex` is `complex.<number>`" - so unlike its neighbours
+  // among the parameterized primitives, the bare name IS an application and
+  // denotes a type.
+  expect(evaluated('String((type complex) === (type complex.<number>));')).toBe('true');
+  // And that default is what keeps the two apart: "`complex` expands through
+  // `number` rather than `float64`, so `complex` and `complex128` are distinct
+  // types, as `number` and `float64` are".
+  expect(evaluated('String((type complex) === (type complex128));')).toBe('false');
+  // The neighbours are unaffected: a bare parameterized primitive with no
+  // default still denotes a type only when applied.
+  expect(() => evaluated('type U = uint; "ok";')).toThrow();
+});
+
+test('numeric types: a complex value belongs to its own component type', () => {
+  // The values are "the ordered pairs of a real part and an imaginary part, each
+  // a value of _T_", so the component type is part of membership.
+  expect(evaluated('type C = complex; String(complex(1, 2) is C);')).toBe('true');
+  expect(evaluated('type C64 = complex64; String(complex(1, 2) is C64);')).toBe('false');
+  expect(evaluated('type C = complex; let z: C = complex(1, 2); z.toString();')).toBe('1+2i');
+  // Literal propagation applies "as it does to any numeric literal".
+  expect(evaluated('type C = complex; let z: C = 4i; z.toString();')).toBe('4i');
+});
+
+test('numeric types: a complex type has a zero', () => {
+  // #sec-defaultvalueof: "If _t_ is a numeric type, return the value of _t_
+  // representing 0", and the complex family is a numeric one. This is the row
+  // that could not be closed while the type objects were absent.
+  expect(evaluated('type C = complex; let z: C; z.toString();')).toBe('0i');
+  expect(evaluated('type C64 = complex64; let z: C64; z.toString();')).toBe('0i');
+  expect(evaluated('type C = complex; let z: C; `${z.real}:${z.imaginary}`;')).toBe('0:0');
+});

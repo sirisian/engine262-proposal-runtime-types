@@ -584,7 +584,22 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'decimal32': case 'decimal64': case 'decimal128':
     case 'number': case 'string': case 'boolean': case 'bigint': case 'symbol':
       return makePrimitive(name);
-    case 'int': case 'uint': case 'rational': case 'complex': case 'vector':
+    // proposal-runtime-types #sec-complex-numbers: "the bare name `complex` is
+    // `complex.<number>`", so unlike its neighbours here the bare name IS an
+    // application and denotes a type. That default is also what makes `complex`
+    // and `complex128` DISTINCT types - "`complex` expands through `number`
+    // rather than `float64`, as `number` and `float64` are" - and what lets an
+    // imaginary literal have the type `complex` at all.
+    case 'complex':
+      return makePrimitive('complex', args.length > 0 ? args : [makePrimitive('number')]);
+    // The width-named shorthands "count total bits rather than component bits,
+    // following the convention of NumPy and Go, so `complex64` is a pair of
+    // `float32` and not a pair of `float64`".
+    case 'complex32': return makePrimitive('complex', [makePrimitive('float16')]);
+    case 'complex64': return makePrimitive('complex', [makePrimitive('float32')]);
+    case 'complex128': return makePrimitive('complex', [makePrimitive('float64')]);
+    case 'complex256': return makePrimitive('complex', [makePrimitive('float128')]);
+    case 'int': case 'uint': case 'rational': case 'vector':
       return args.length > 0 ? makePrimitive(name, args) : null;
     default:
       break;
