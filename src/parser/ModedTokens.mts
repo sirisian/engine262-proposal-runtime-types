@@ -33,8 +33,16 @@ function isSpace(c: string): boolean {
  * static parts are already whole.
  */
 function tokenizeJSX(text: string, source: SourceRefRecord, offset: number): TokenRecord[] {
+  // Whitespace at the REGION's edges is formatting around the expression rather
+  // than child content - the region's delimiters are not an element - so it is
+  // dropped once, here. Everything after that is emitted RAW, because whitespace
+  // BETWEEN children is content: `<p>Hi {name}!</p>` renders a space that no
+  // macro could recover if the scanner discarded it.
+  const lead = text.length - text.trimStart().length;
+  const region = text.trim();
+  const base = offset + lead;
   const out: TokenRecord[] = [];
-  const span = (start: number, end: number) => ({ Source: source, Start: offset + start, End: offset + end });
+  const span = (start: number, end: number) => ({ Source: source, Start: base + start, End: base + end });
   const push = (Kind: TokenRecord['Kind'], Value: string, start: number, end: number, Tokens?: readonly TokenRecord[]) => {
     out.push({
       Kind, Value, Span: span(start, end), Tokens, LineTerminatorBefore: false,
@@ -42,20 +50,20 @@ function tokenizeJSX(text: string, source: SourceRefRecord, offset: number): Tok
   };
   let i = 0;
   let inTag = false;
-  while (i < text.length) {
-    const c = text[i];
+  while (i < region.length) {
+    const c = region[i];
     // A `{ ... }` substitution holds ECMAScript, wherever it appears - as an
     // attribute value or as a child - so its contents are tokenized as such and
     // handed over as a group, exactly like any other delimited run.
     if (c === '{') {
-      const run = ScanBalancedRun(text, i);
+      const run = ScanBalancedRun(region, i);
       if (run === undefined) {
         push('punctuator', '{', i, i + 1);
         i += 1;
         continue;
       }
-      const inner = text.slice(i + 1, run.end - 1);
-      push('group', '{', i, run.end, tokenizeText(inner, source, offset + i + 1));
+      const inner = region.slice(i + 1, run.end - 1);
+      push('group', '{', i, run.end, tokenizeText(inner, source, base + i + 1));
       i = run.end;
       continue;
     }
@@ -72,22 +80,24 @@ function tokenizeJSX(text: string, source: SourceRefRecord, offset: number): Tok
     }
     if (c === '"' || c === "'") {
       let j = i + 1;
-      while (j < text.length && text[j] !== c) {
-        j += j + 1 < text.length && text[j] === '\\' ? 2 : 1;
+      while (j < region.length && region[j] !== c) {
+        j += j + 1 < region.length && region[j] === '\\' ? 2 : 1;
       }
-      j = Math.min(j + 1, text.length);
-      push('string', text.slice(i, j), i, j);
+      j = Math.min(j + 1, region.length);
+      push('string', region.slice(i, j), i, j);
       i = j;
       continue;
     }
-    if (isSpace(c)) {
+    if (inTag && isSpace(c)) {
+      // Insignificant only between a tag's parts. In child position it is
+      // content, and falls through to the text branch below.
       i += 1;
       continue;
     }
     if (inTag) {
       // A tag or attribute name.
       let j = i;
-      while (j < text.length && isNamePart(text[j])) {
+      while (j < region.length && isNamePart(region[j])) {
         j += 1;
       }
       if (j === i) {
@@ -95,19 +105,25 @@ function tokenizeJSX(text: string, source: SourceRefRecord, offset: number): Tok
         i += 1;
         continue;
       }
-      push('identifier', text.slice(i, j), i, j);
+      push('identifier', region.slice(i, j), i, j);
       i = j;
       continue;
     }
-    // Child text, up to the next tag or substitution. Kept whole, and trailing
-    // whitespace trimmed the way a JSX transform does.
+    // Child text, up to the next tag or substitution, emitted whole and
+    // UNTRIMMED - including a run that is only whitespace.
+    //
+    // Trimming here was lossy in a way nothing downstream could repair:
+    // `{a} {b}` and `{a}{b}` produced identical streams, and `<p>Hi {name}!</p>`
+    // lost the space after `Hi`, so a macro rendered `Hiname!` and could not do
+    // otherwise. Which whitespace is significant is JSX's rule rather than the
+    // scanner's - a mode says what the tokens ARE, and a macro says what they
+    // MEAN - so the rule is applied by whoever consumes them.
     let j = i;
-    while (j < text.length && text[j] !== '<' && text[j] !== '{') {
+    while (j < region.length && region[j] !== '<' && region[j] !== '{') {
       j += 1;
     }
-    const raw = text.slice(i, j);
-    if (raw.trim() !== '') {
-      push('string', JSON.stringify(raw.trim()), i, j);
+    if (j > i) {
+      push('string', JSON.stringify(region.slice(i, j)), i, j);
     }
     i = j;
   }

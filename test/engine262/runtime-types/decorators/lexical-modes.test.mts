@@ -159,3 +159,33 @@ test('declaring a mode does not require every use to take a region', () => {
   expect(jsx('@jsx class C { x = 1; }', '(function (t) { return t; })')).toBe('class C { x = 1; }');
   expect(jsx('@jsx function f() { return 1; }', '(function (t) { return t; })')).toBe('function f() { return 1; }');
 });
+
+test('whitespace between children is content, and survives', () => {
+  // Trimming child text was lossy in a way nothing downstream could repair.
+  // `<p>Hi {name}!</p>` is an ordinary line of JSX, and losing the space after
+  // `Hi` made a macro render `Hiname!` with no way to do otherwise.
+  expect(jsx('@jsx { <p>Hi {name}!</p> }', KINDS))
+    .toBe('"G(p:< i:p p:> s:\\"Hi \\" G(i:name) s:\\"!\\" p:< p:/ i:p p:>)"');
+  // A whitespace-only run between two substitutions is content too: these two
+  // render differently, so they must not tokenize identically.
+  expect(jsx('@jsx { <p>{a} {b}</p> }', KINDS))
+    .toBe('"G(p:< i:p p:> G(i:a) s:\\" \\" G(i:b) p:< p:/ i:p p:>)"');
+  expect(jsx('@jsx { <p>{a}{b}</p> }', KINDS))
+    .toBe('"G(p:< i:p p:> G(i:a) G(i:b) p:< p:/ i:p p:>)"');
+  // Text is emitted exactly as written, newlines and indentation included.
+  // WHICH whitespace is significant is JSX's rule, not the scanner's: a mode
+  // says what the tokens are and a macro says what they mean.
+  expect(jsx(`@jsx { <p>one${NL}  two</p> }`, KINDS))
+    .toBe('"G(p:< i:p p:> s:\\"one\\\\n  two\\" p:< p:/ i:p p:>)"');
+});
+
+test('whitespace at the region\'s own edges is formatting, not content', () => {
+  // The region's delimiters are not an element, so the space inside `{ ... }` is
+  // formatting around the expression - the same way it is around a parenthesized
+  // one - and is dropped once rather than reaching the macro as a text token.
+  expect(jsx('@jsx { <div/> }', KINDS)).toBe('"G(p:< i:div p:/ p:>)"');
+  expect(jsx('@jsx {<div/>}', KINDS)).toBe('"G(p:< i:div p:/ p:>)"');
+  // Whitespace INSIDE a tag separates its parts and is not content either.
+  expect(jsx('@jsx { <a  href="/x"  id={y}/> }', KINDS))
+    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:/ p:>)"');
+});
