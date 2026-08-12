@@ -60,9 +60,14 @@ test('Variable Declaration: typed let without initializer takes the default; con
   // Per the normative spec, a `const` without an initializer remains a Syntax
   // Error whether or not it is typed (the README prose is superseded here).
   expectError('const d: uint32; d;');
-  // A type with no meaningful zero (symbol) has no default; a let of it without
-  // an initializer stays undefined rather than inventing a value.
-  expect(evaluated('let sy: symbol; String(sy === undefined);')).toBe('true');
+  // A type with no meaningful zero (symbol) has no default. The engine used to
+  // leave such a binding undefined; #sec-defaultvalueof refuses the declaration
+  // instead - "it is a type error to declare a binding or a field with a type
+  // _t_ and no initializer when DefaultValueOf(_t_) is ~none~" - so the
+  // operation reports the absence rather than the binding inventing a value.
+  expectError('let sy: symbol;');
+  // With an initializer it is an ordinary declaration.
+  expect(evaluated('let sy: symbol = Symbol("s"); typeof sy;')).toBe('symbol');
 });
 
 // -- typeof Operator -----------------------------------------------------------

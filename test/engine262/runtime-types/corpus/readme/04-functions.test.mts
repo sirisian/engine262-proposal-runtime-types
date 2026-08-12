@@ -100,6 +100,11 @@ test('Function values: a typed function is an instance of its signature and of F
 // -- Function type has no default ----------------------------------------------
 // A function type is among the types with no meaningful zero, so a typed binding
 // of a function type without an initializer holds undefined (DefaultValueOf none).
-test('Function types: a binding of a function type without an initializer has no default', () => {
-  expect(bool('let a: (int32, string) => string; String(a === undefined);')).toBe(true);
+test('Function types: a binding of a function type without an initializer is refused', () => {
+  // A function type has no zero, and #sec-defaultvalueof makes a declaration
+  // with no initializer a type error where the type has no default - so this
+  // reports the absence rather than leaving the binding undefined.
+  expect(ok('let a: (int32, string) => string;')).toBe(false);
+  // With an initializer it is ordinary.
+  expect(bool('let a: (int32, string) => string = (n, s) => s; String(typeof a === "function");')).toBe(true);
 });

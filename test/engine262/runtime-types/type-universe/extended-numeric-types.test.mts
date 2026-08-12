@@ -33,7 +33,11 @@ test('numeric types: the decimal types are registered type names', () => {
 });
 
 test('numeric types: float128 and decimal are usable in annotation position', () => {
-  expect(evaluated('let a: float128; typeof float128;')).toBe('object');
+  // An alias: `float128` has no values at all in this engine, so after
+  // #sec-defaultvalueof's refusal there is no way to write a binding of it -
+  // neither a default nor an initializer exists. Recorded in
+  // KNOWN-DIVERGENCES.md.
+  expect(evaluated('type A = float128; typeof float128;')).toBe('object');
   expect(evaluated('let a: decimal128; typeof decimal128;')).toBe('object');
 });
 

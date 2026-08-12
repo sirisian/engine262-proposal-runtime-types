@@ -109,7 +109,8 @@ test('what a record composite is not', () => {
   expect(evaluated('String(Composite([1, 2]) === Composite({ 0: 1, 1: 2 }));')).toBe('false');
   // A shape can be NAMED by a composite TYPE; creating at one is the TYPED
   // CREATION form `Composite.<T>({...})`, which typed-creation.test.mts owns.
-  expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
+  // An alias, since a binding of a type with no default is now refused.
+  expect(outcome('type K = { x: uint8 }; type C = Composite.<K>;')).toBe('ACCEPTED');
   // The weak-position refusal and the custom matcher are integrations;
   // integrations.test.mts owns them.
   expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('TypeError');

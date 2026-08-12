@@ -16,7 +16,9 @@ test('soa: SoA is a type name, and its layout is the column rule', () => {
   // provided by the engine". A type name, and unlike the library names beside it
   // in the table NOT a global constructor whose prototype chain decides
   // membership.
-  expect(evaluated('class T { x: float32; } let s: SoA.<T, 4>; "ok";')).toBe('ok');
+  // An alias: a binding of a type with no default is refused, and `SoA` is a
+  // library nominal rather than a value type class.
+  expect(evaluated('class T { x: float32; } type S = SoA.<T, 4>; "ok";')).toBe('ok');
 
   // The layout table's row: "each field of `T` is a COLUMN of _N_ elements,
   // PADDED AND ALIGNED ON ITS OWN, and the size is the sum of the columns. An

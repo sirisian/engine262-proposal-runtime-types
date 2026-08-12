@@ -40,7 +40,9 @@ test('`Composite` resolves in type position, and refuses a non-composite', () =>
   expect(outcome('let c: Composite = { x: 1 };')).toBe('TypeError');
   expect(outcome('let c: Composite = 1;')).toBe('TypeError');
   // `Composite.<T>` is an ordinary parameterized spelling of the same family.
-  expect(outcome('type K = { x: uint8 }; let c: Composite.<K>;')).toBe('ACCEPTED');
+  // #sec-defaultvalueof refuses a binding of a type with no default, and a
+  // library nominal has none, so resolution is proved with an alias.
+  expect(outcome('type K = { x: uint8 }; type C = Composite.<K>;')).toBe('ACCEPTED');
 });
 
 test('the TOP composite type is the type of every composite', () => {

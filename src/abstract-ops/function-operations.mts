@@ -28,6 +28,7 @@ import {
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
+import { displayType } from '../type-system/records.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
@@ -313,6 +314,12 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
       dflt = Q(yield* DefaultValueOf(record));
     }
     if (dflt === undefined) {
+      if (record.Kind !== 'parameter') {
+        // The same rule as a binding's, and reporting it here replaces the
+        // "undefined is not assignable" the RequireType below used to raise -
+        // which named the symptom rather than the reason.
+        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(record)));
+      }
       initValue = Value.undefined;
     } else {
       // Against the RESOLVED record, not the annotation node. EnforceAnnotation

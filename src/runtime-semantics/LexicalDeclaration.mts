@@ -13,6 +13,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
+import { displayType } from '../type-system/records.mts';
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
@@ -147,6 +148,28 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       if (dflt !== undefined) {
         // The default crosses the same conversion boundary as an initializer.
         initial = Q(yield* EnforceAnnotation(TypeAnnotation, dflt));
+      } else if (record.Kind !== 'parameter') {
+      // #sec-defaultvalueof: "It is a type error to declare a binding or a field
+      // with a type _t_ and no initializer when DefaultValueOf(_t_) is ~none~."
+      // The engine held *undefined* instead, which is not a value of the type,
+      // so the binding's own invariant was broken from the start.
+      //
+      // Checked HERE rather than in the checking pass, though the clause calls
+      // it a type error. A registered meta `default` supplies a default for a
+      // type that has no structural one, and those register when a
+      // MetaDeclaration EVALUATES - check.mts says so where it defers the
+      // unclaimed-key adjudication for the same reason, since a parameterization
+      // written above its meta type is legal. A checking-pass test would
+      // therefore refuse `type T = uint8 | string; meta T { default = "d"; }
+      // let s: T;`, a program that works. Testing after both lookups have failed
+      // makes the condition exactly the clause's, at the cost of not reaching a
+      // declaration that never executes.
+      //
+      // A ~parameter~ is exempt: nothing is known about what an application will
+      // bind, so a generic's field is checked at its specialization - which this
+      // engine does not reach, since a specialized field's type is not
+      // substituted at all (recorded in KNOWN-DIVERGENCES.md).
+        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(record)));
       }
     }
     // 2. Return InitializeReferencedBinding(lhs, undefined).

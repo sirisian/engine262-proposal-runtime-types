@@ -570,6 +570,7 @@ export interface Throw {
   | "$1 does not match the pattern's length"
   | '$1 has no custom matcher'
   | '$1 has no decimal value'
+  | '$1 has no default value, so a declaration of it needs an initializer'
   | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a replacement decorator and cannot be shadowed'

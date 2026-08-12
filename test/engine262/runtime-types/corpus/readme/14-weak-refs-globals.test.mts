@@ -57,5 +57,7 @@ test('Global Objects: global constructors are usable as type names', () => {
   // membership is by the prototype chain, so a subtype relation holds
   expect(bool('let e = new TypeError("x"); String(e instanceof Error);')).toBe(true);
   // Promise remains registered with its dedicated typed-promise support
-  expect(evaluated('let p: Promise; typeof Promise;')).toBe('function');
+  // An alias rather than a binding: a global constructor is a nominal type
+  // whose values are its instances, and it has no default to take.
+  expect(evaluated('type P = Promise; typeof Promise;')).toBe('function');
 });

@@ -143,11 +143,12 @@ test('a rest position contributes nothing to the default', () => {
 });
 
 test('a position with no default leaves the tuple without one', () => {
-  // `symbol` has no zero, so the whole tuple answers ~none~. #sec-defaultvalueof
-  // makes such a declaration a type error; the engine leaves the binding
-  // undefined instead, which is recorded in KNOWN-DIVERGENCES.md - this pins
-  // what it does today rather than what the clause asks for.
-  expect(value('let t: [uint8, symbol]; String(t);')).toBe('undefined');
+  // `symbol` has no zero, so the whole tuple answers ~none~ - and a declaration
+  // of a type with no default is refused rather than left undefined.
+  expectTypeError('let t: [uint8, symbol];');
+  // The refusal is the tuple's, not the position's: with an initializer the
+  // same type is an ordinary declaration.
+  expectOk('let t: [uint8, symbol] = [1, Symbol("s")];');
 });
 
 test('each position is its own instance', () => {
@@ -179,7 +180,7 @@ test('a brand has no default, since its base zero is not a value of it', () => {
   // bare value of the base. DefaultValueOf answers "a value of the type _t_ or
   // ~none~", so it must answer ~none~ here rather than the base's zero.
   const brand = 'type M = { m: number }; meta M { default = { m: 0 }; subtype(a, b) { return true; } }';
-  expect(value(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter; String(d);`)).toBe('undefined');
+  expectTypeError(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter;`);
 });
 
 // -- Numeric-family defaults (#sec-defaultvalueof step 2) ----------------------
@@ -238,6 +239,86 @@ test('a type with no value representation still has no default', () => {
   // `:=` cast and a conversion call are each refused - so it has no zero to
   // return. This pins that rather than the clause, and is recorded in
   // KNOWN-DIVERGENCES.md; `symbol` is the case that is correctly ~none~.
-  expect(value('let f: float128; String(f);')).toBe('undefined');
-  expect(value('let s: symbol; String(s);')).toBe('undefined');
+  // And a declaration of such a type is refused rather than left undefined.
+  // For `float128` that refusal is unescapable: it has no values at all, so no
+  // initializer can be written either (KNOWN-DIVERGENCES.md).
+  expectTypeError('let f: float128;');
+  expectTypeError('let s: symbol;');
+  expectOk('let s: symbol = Symbol("s");');
+});
+
+// -- A type with no default cannot be declared bare (#sec-defaultvalueof) ------
+//
+// "It is a type error to declare a binding or a field with a type _t_ and no
+// initializer when DefaultValueOf(_t_) is ~none~." The engine used to hold
+// *undefined* instead - a value not of the declared type, so the binding's own
+// invariant was broken before anything touched it.
+
+test('a binding whose type has no default is refused', () => {
+  expectTypeError('let x: uint8 | string;');
+  expectTypeError('let s: symbol;');
+  expectTypeError('let n: never;');
+  expectTypeError('let f: (x: uint8) => uint8;');
+  expectTypeError('let o: { x: uint8 };');
+  // `var` is out of scope, and not because the clause exempts it: a `var`
+  // declaration does not take its type's DEFAULT either - `var v: uint8;` is
+  // undefined where `let v: uint8;` is 0 - so it never reaches the lookup this
+  // rule follows. Recorded in KNOWN-DIVERGENCES.md; this pins today's
+  // behaviour so the asymmetry is visible rather than assumed.
+  expectOk('var v: uint8 | string;');
+  expect(value('var v: uint8; String(v);')).toBe('undefined');
+});
+
+test('an initializer is what the refusal asks for', () => {
+  expectOk('let x: uint8 | string = "given";');
+  expectOk('let s: symbol = Symbol("s");');
+  expectOk('let o: { x: uint8 } = { x: 1 };');
+});
+
+test('a type WITH a default is unaffected', () => {
+  // The nullable union and `any` default to null and undefined respectively,
+  // which are values of their types rather than the absence of one.
+  expectOk('let u: uint8 | null;');
+  expectOk('let a: any;');
+  expectOk('let d: uint8;');
+  expectOk('let arr: [].<uint8>;');
+});
+
+test('a class with methods is not read as having undefaultable members', () => {
+  // A class record carries its methods and accessors alongside its fields, and
+  // their function types have no default. Reading them as fields would refuse
+  // this ordinary program, so the rule consults the FIELDS.
+  expectOk('class P { a: uint8; m() { return 1; } get g(): uint8 { return 2; } } let p: P;');
+  expect(value('class P { a: uint8; m() { return 1; } } let p: P; String(p.a);')).toBe('0');
+});
+
+test('a field of a type with no default is refused, at the declaration it names', () => {
+  // This threw before too, but from RequireType inside the constructor and
+  // saying "undefined is not assignable to symbol" - the symptom rather than
+  // the reason.
+  expectTypeError('class C { s: symbol; } new C();');
+  expectOk('class C { s: symbol = Symbol("x"); } new C();');
+});
+
+test('a generic parameter is exempt', () => {
+  // Nothing is known about what an application will bind, so the declaration
+  // stands; the check belongs at the specialization, which this engine does not
+  // reach (see KNOWN-DIVERGENCES.md).
+  expectOk('class Box<T> { value: T; }');
+  expectOk('class Box<T> { value: T; } const b = new Box.<uint8>();');
+});
+
+test('a registered meta default satisfies the rule', () => {
+  // A `meta` default supplies a default for a type with no structural one, and
+  // it registers when the MetaDeclaration EVALUATES - which is why this rule is
+  // applied after that lookup rather than in the checking pass.
+  expectOk('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T;');
+  expect(value('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T; s;')).toBe('d');
+});
+
+test('a function parameter is not a declaration with no initializer', () => {
+  // A parameter takes an argument rather than a default, so a parameter of a
+  // type with no default is ordinary.
+  expectOk('function f(x: symbol) { return typeof x; } f(Symbol("s"));');
+  expectOk('const g = (o: { x: uint8 }) => o.x; g({ x: 1 });');
 });

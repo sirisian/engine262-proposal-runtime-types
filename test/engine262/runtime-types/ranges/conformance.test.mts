@@ -156,7 +156,9 @@ test('sec-ranges: the four shapes and `RangeBounds` are named', () => {
   //  `RangeTo.<T, E>` ... and `RangeFull.<T>` ... Each implements
   //  `RangeBounds.<T>`, which is the interface a consumer of an arbitrary range
   //  is written against."
-  expect(evaluated('let a: Range; let b: RangeFrom; let c: RangeTo; let d: RangeFull; let e: RangeBounds; "ok";')).toBe('ok');
+  // Aliases rather than bindings: #sec-defaultvalueof refuses a binding whose
+  // type has no default, and a library nominal has none.
+  expect(evaluated('type A = Range; type B = RangeFrom; type C = RangeTo; type D = RangeFull; type E = RangeBounds; "ok";')).toBe('ok');
   expect(evaluated('let r: Range = 0..<10; typeof r;')).toBe('object');
 });
 
@@ -934,7 +936,7 @@ test('table-metadata-values: the closure reaches a metadata record, not a type a
   // parser tells them apart - an inline record is an `ObjectType` and a name a
   // `TypeReference` - and closing over both refused `Composite.<K>`, which is
   // not metadata at all.
-  expect(evaluated('type K = { x: uint8 }; let c: Composite.<K>; "ok";')).toBe('ok');
+  expect(evaluated('type K = { x: uint8 }; type C = Composite.<K>; "ok";')).toBe('ok');
   expect(evaluated('let c: Composite = Composite({ x: 1 }); "ok";')).toBe('ok');
 });
 
