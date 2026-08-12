@@ -37,6 +37,7 @@ import {
   isArrayIndex,
 } from '#self';
 import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
+import { isRationalObject } from '../intrinsics/Rational.mts';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `delete` UnaryExpression
@@ -184,6 +185,32 @@ function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpr
   const unaryOp = findUnaryClassOperator(rawValue, '+');
   if (unaryOp !== null) {
     return Q(yield* Call(unaryOp, rawValue, []));
+  }
+  // proposal-runtime-types #sec-unary-operators-for-typed-values: "Unary `+`
+  // returns its operand unchanged when the operand is a value of a numeric type
+  // of this proposal. It continues to throw a *TypeError* for a BigInt, and
+  // continues to apply ToNumber otherwise."
+  //
+  // Unchanged means unchanged - there is nothing to compute, which is why this
+  // is one guard over the four families rather than the four branches unary
+  // minus needs to negate each of them. Reaching ToNumber instead stripped an
+  // integer or float to a plain Number, answered NaN for a rational, and threw
+  // for a decimal or a vector with a message about arithmetic this operator
+  // does not perform.
+  //
+  // The clause records that this is a DECISION and that it splits from BigInt,
+  // whose `+x` throws precisely because `+x` is the coercion idiom: "The same
+  // argument applies to a `uint8`, and would say `+x` should throw for every
+  // type this proposal adds. Against it: `operator+()` is an overloadable unary
+  // operator on a class in the design, so unary `+` already means more than
+  // ToNumber ... This clause follows the design. If the committee prefers
+  // consistency with BigInt, the change is to this step alone." That change is
+  // this one guard throwing rather than returning, which is why the four
+  // families share it.
+  if (surroundingAgent.feature('runtime-types')
+      && (rawValue instanceof TypedNumberValue || rawValue instanceof VectorValue
+        || isDecimalObject(rawValue) || isRationalObject(rawValue))) {
+    return rawValue;
   }
   // 2. Return ? ToNumber(? GetValue(expr)).
   return Q(yield* ToNumber(rawValue));

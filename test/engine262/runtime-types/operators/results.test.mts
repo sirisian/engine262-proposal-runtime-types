@@ -90,3 +90,66 @@ test('a range-constrained type is its underlying type for operators', () => {
   expect(evaluated('const a: uint8.<1, 5> = 3; String(a);')).toBe('3');
   expect(evaluated('const a: uint8.<1, 5> = 3; const b: uint8.<1, 5> = 1; String((a + b) is uint8);')).toBe('true');
 });
+
+// -- Unary operators (#sec-unary-operators-for-typed-values) -------------------
+//
+// "Unary `+` returns its operand unchanged when the operand is a value of a
+// numeric type of this proposal. It continues to throw a *TypeError* for a
+// BigInt, and continues to apply ToNumber otherwise."
+
+test('unary + returns a typed operand unchanged', () => {
+  expect(evaluated('const a = (7 := uint8); String(Reflect.typeOf(+a) === uint8);')).toBe('true');
+  expect(evaluated('const a = (7 := uint8); String(+a);')).toBe('7');
+  expect(evaluated('const a = (1.5 := float32); String(Reflect.typeOf(+a) === float32);')).toBe('true');
+  // A signed type, and a negative operand, since `+` must not be reading the
+  // sign the way `-` does.
+  expect(evaluated('const a = ((0 - 5) := int8); `${Reflect.typeOf(+a) === int8}:${+a}`;')).toBe('true:-5');
+});
+
+test('unary + returns the other numeric families unchanged', () => {
+  // Each of these took a different wrong path before: a rational answered NaN
+  // silently, and a decimal and a vector threw with a message about an
+  // arithmetic this operator does not perform.
+  expect(evaluated('String(+rational(1, 2));')).toBe('1/2');
+  // The decimal keeps its COHORT MEMBER, which is the sharpest test that the
+  // operand came back untouched: `1.50` is not `1.5`.
+  expect(evaluated('let d: decimal128 = 1.50; (+d).toString();')).toBe('1.50');
+  expect(evaluated('const v = float32x4(1, 2, 3, 4); `${(+v).x}:${(+v).w}`;')).toBe('1:4');
+  expect(evaluated('const m = boolean8(0); String((+m).any());')).toBe('false');
+});
+
+test('unary + composes, because the result keeps its type', () => {
+  // This was refused as "different numeric types and do not mix", since `+a`
+  // handed back a plain Number.
+  expect(evaluated('let a: uint8 = 7; String((+a) + a);')).toBe('14');
+  expect(evaluated('let a: uint8 = 7; String(Reflect.typeOf((+a) + a) === uint8);')).toBe('true');
+});
+
+test('unary + is unchanged for everything else', () => {
+  // The BigInt TypeError is the reason the clause calls this a decision: `+x`
+  // is the coercion idiom, and BigInt refuses it rather than defeating it.
+  expectThrown('+1n;');
+  expect(evaluated('String(+5);')).toBe('5');
+  expect(evaluated('`${+"3"}:${typeof +"3"}`;')).toBe('3:number');
+  expect(evaluated('String(+true);')).toBe('1');
+  // A class unary-plus overload still wins, and is dispatched before this rule.
+  expect(evaluated('class P { constructor(x) { this.x = x; } operator+() { return this.x; } }'
+    + ' let p = new P(42); String(+p);')).toBe('42');
+});
+
+test('Number is how a program asks for the untyped Number', () => {
+  // `+a` no longer serves as the coercion for a typed value - it returns the
+  // value - so this records the replacement idiom beside the change.
+  expect(evaluated('let a: uint8 = 7; const n = Number(a); `${n}:${typeof n}`;')).toBe('7:number');
+  expect(evaluated('let a: uint8 = 7; let n: number = Number(a); String(n === 7);')).toBe('true');
+});
+
+test('the other unary operators were already right', () => {
+  // Recorded so the next reader does not have to re-derive which of them the
+  // entry was about.
+  expect(evaluated('const a = (7 := uint8); `${Reflect.typeOf(-a) === uint8}:${-a}`;')).toBe('true:249');
+  expect(evaluated('const a = (7 := uint8); `${Reflect.typeOf(~a) === uint8}:${~a}`;')).toBe('true:248');
+  expect(evaluated('const a = (7 := uint8); `${typeof !a}:${typeof a}`;')).toBe('boolean:number');
+  expect(evaluated('let a: uint8 = 7; a++; ++a; `${a}:${Reflect.typeOf(a) === uint8}`;')).toBe('9:true');
+  expect(evaluated('let b: uint8 = 0; b--; String(b);')).toBe('255');
+});
