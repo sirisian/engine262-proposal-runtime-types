@@ -3,20 +3,31 @@ import {
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
+import { LookupClassOperator } from '../abstract-ops/runtime-types.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToIntegerOrInfinity } from '#self';
+import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToBoolean, ToIntegerOrInfinity } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
 import {
   rangeContainsRange, rangeIntersect, rangeScale, scaleFactor,
 } from '../type-system/range-ops.mts';
 import {
+
   OrdinaryObjectCreate,
   CreateIteratorResultObject,
   F, R,
   type OrdinaryObject,
   Realm,
 } from '#self';
+
+/**
+ * What a range endpoint may be. proposal-runtime-types #sec-ranges makes a range
+ * "a value type class over an ORDERED element type", which ranges.md constrains
+ * as `RangeBounds<T: Ordered.<T>>` - an interface of one operator. So an
+ * endpoint is a number, a bigint, or a value of a type declaring `operator<`.
+ */
+export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | ObjectValue;
 
 /**
  * proposal-runtime-types (ranges.md "Types", #sec-ranges): the Range value and
@@ -47,8 +58,8 @@ import {
 export type RangeBound = 'closed' | 'open';
 
 export interface RangeObject extends OrdinaryObject {
-  RangeStart: NumberValue | BigIntValue | TypedNumberValue | undefined;
-  RangeEnd: NumberValue | BigIntValue | TypedNumberValue | undefined;
+  RangeStart: RangeEndpoint | undefined;
+  RangeEnd: RangeEndpoint | undefined;
   RangeStartBound: RangeBound | undefined;
   RangeEndBound: RangeBound | undefined;
 }
@@ -57,7 +68,7 @@ export function isRangeObject(value: Value): value is RangeObject {
   return value instanceof ObjectValue && 'RangeStartBound' in value;
 }
 
-export function CreateRangeObject(start: NumberValue | BigIntValue | TypedNumberValue | undefined, end: NumberValue | BigIntValue | TypedNumberValue | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
+export function CreateRangeObject(start: RangeEndpoint | undefined, end: RangeEndpoint | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
   const proto = realmRec.Intrinsics['%Range.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound']) as Mutable<RangeObject>;
   obj.RangeStart = start;
@@ -250,17 +261,25 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
  * here rather than at each operation is what keeps `contains`, `isEmpty`,
  * `intersect`, and the arithmetic from each having to remember it.
  */
-export function endpointOf(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | bigint | undefined {
+export function endpointOf(v: RangeEndpoint | undefined): number | bigint | undefined {
   if (v === undefined) {
     return undefined;
   }
   if (isTypedNumber(v)) {
     return Number(v.numberValue());
   }
+  // An endpoint of a user-declared ordered type has no mathematical value: it is
+  // compared through `operator<` rather than converted. Every caller here wants
+  // a number - `length`, `scale`, the numeric comparisons - and each is
+  // arithmetic that `Ordered` does not carry, which is the same reason `scale`
+  // lives on the `Scalable` instantiations only.
+  if (v instanceof ObjectValue) {
+    return undefined;
+  }
   return R(v);
 }
 
-function numericEndpoint(v: NumberValue | BigIntValue | TypedNumberValue | undefined): number | undefined {
+function numericEndpoint(v: RangeEndpoint | undefined): number | undefined {
   if (v === undefined) {
     return undefined;
   }
@@ -311,6 +330,31 @@ function* RangeProto_intervalGetter(_args: Arguments, { thisValue }: FunctionCal
   return intervalValue(closedEnd ? 'OpenClosed' : 'Open');
 }
 
+/**
+ * `a < b` through the element type's own operator. `Ordered` declares exactly
+ * this one, and it is a TOTAL order, so every comparison a range needs derives
+ * from it.
+ */
+function* orderedLessThan(a: Value, b: Value): PlainEvaluator<boolean> {
+  const compare = LookupClassOperator(a, '<');
+  if (compare === null) {
+    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
+  }
+  const result = Q(yield* Call(compare, a, [b]));
+  return ToBoolean(result) === Value.true;
+}
+
+/**
+ * `a <= b`, as `!(b < a)`. Deriving rather than calling `<=` is what keeps a
+ * range clear of an UNDECLARED `<=`, which falls through to the base language:
+ * `{} <= {}` is *true*, both operands coercing to NaN and `<=` meaning "not
+ * greater than", so a range built on it would report every value as contained.
+ */
+function* orderedAtMost(a: Value, b: Value): PlainEvaluator<boolean> {
+  const greater = Q(yield* orderedLessThan(b, a));
+  return !greater;
+}
+
 function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -330,6 +374,35 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   // #sec-matchrange admits "a value of a type ORDERED WITH the element type", so
   // a typed number counts - and so does a bigint, over a bigint range. `R`
   // yields each one's mathematical value and JS compares across them.
+  // An element type of its own: compare through `operator<`, which is the whole
+  // of what `Ordered` requires. `Q(yield* …)` may not appear in a ternary - the
+  // build's Babel pass rewrites Q and cannot place the result there - so each
+  // branch is a statement.
+  if (value instanceof ObjectValue && !isRangeObject(value)) {
+    if (self.RangeStart !== undefined) {
+      let within;
+      if (self.RangeStartBound === 'open') {
+        within = Q(yield* orderedLessThan(self.RangeStart as Value, value));
+      } else {
+        within = Q(yield* orderedAtMost(self.RangeStart as Value, value));
+      }
+      if (!within) {
+        return Value.false;
+      }
+    }
+    if (self.RangeEnd !== undefined) {
+      let within;
+      if (self.RangeEndBound === 'closed') {
+        within = Q(yield* orderedAtMost(value, self.RangeEnd as Value));
+      } else {
+        within = Q(yield* orderedLessThan(value, self.RangeEnd as Value));
+      }
+      if (!within) {
+        return Value.false;
+      }
+    }
+    return Value.true;
+  }
   const numeric: number | bigint | undefined = value instanceof NumberValue ? R(value)
     : (value instanceof BigIntValue ? R(value)
       : (isTypedNumber(value) ? Number(value.numberValue()) : undefined));

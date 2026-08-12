@@ -37,16 +37,42 @@ test('range elements: a bigint range, and no mixing', () => {
   expectThrown('1n..=6;');
 });
 
-test('range elements: a non-numeric endpoint is refused TODAY', () => {
-  // NOT a rule of the proposal. The design requires only that the element type
-  // implement `Ordered`, and each of these is ordered in the ordinary sense;
-  // the engine tests the value rather than the constraint. When the constraint
-  // lands these become the cases that must WORK.
+const P = 'class P { constructor(v) { this.v = v; } operator<(o) { return this.v < o.v; } } ';
+
+test('range elements: a type declaring operator< is an element type', () => {
+  // The constraint the design states - `RangeBounds<T: Ordered.<T>>` - rather
+  // than the numeric check that stood in for it. `Temporal.Instant` is the
+  // design's own motivating case and is not in this engine, so a class
+  // declaring the one operator `Ordered` requires is the vehicle.
+  expect(evaluated(`${P}const r = new P(1)..=new P(5); String(typeof r);`)).toBe('object');
+  expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(3)));`)).toBe('true');
+  expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(9)));`)).toBe('false');
+});
+
+test('range elements: every comparison derives from operator< alone', () => {
+  // `Ordered` declares `<` and nothing else, so `a <= b` is `!(b < a)` under the
+  // total order it requires. A closed bound includes its endpoint and an open
+  // one excludes it, which is exactly where the derived comparison shows.
+  //
+  // Deriving rather than calling `<=` also keeps a range clear of an UNDECLARED
+  // `<=`: that falls through to the base language, where `{} <= {}` is true, so
+  // a range built on it would report every value as contained.
+  expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(1)));`)).toBe('true');
+  expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(5)));`)).toBe('true');
+  expect(evaluated(`${P}String((new P(1)..<new P(5)).contains(new P(5)));`)).toBe('false');
+  expect(evaluated(`${P}String((new P(1)..<new P(5)).contains(new P(4)));`)).toBe('true');
+});
+
+test('range elements: what is still not an element type', () => {
+  // A type declaring no `operator<` does not satisfy `Ordered`, and the message
+  // names the constraint rather than saying "must be a number".
+  expectThrown('class Q { constructor(v) { this.v = v; } } new Q(1)..=new Q(5);');
+  // A string and a Date declare no `operator<` of their own, so they are refused
+  // for that reason rather than for being non-numeric.
   expectThrown("'a'..='z';");
   expectThrown('new Date(0)..=new Date(1000);');
-  // including a type that satisfies the design's stated requirement exactly
-  expectThrown('class P { constructor(v) { this.v = v; } operator<(o) { return this.v < o.v; } }'
-    + ' new P(1)..=new P(5);');
+  // Both endpoints are of ONE element type.
+  expectThrown(`${P}new P(1)..=5;`);
 });
 
 test('range elements: NaN is refused for a reason that will survive', () => {

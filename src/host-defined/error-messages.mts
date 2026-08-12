@@ -437,6 +437,7 @@ export interface Throw {
   | 'a pipeline step must use the topic'
   | 'a placement allocation needs a type with a layout'
   | 'a range endpoint must be a number'
+  | 'a range endpoint must be ordered: a number, a bigint, or a type declaring operator<'
   | 'a range endpoint must be ordered, and NaN is not'
   | 'a range index needs the view substrate, which is not implemented'
   | 'a range is not an ordered value and cannot be compared'

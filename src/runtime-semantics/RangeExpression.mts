@@ -1,5 +1,7 @@
-import { NumberValue, BigIntValue, TypedNumberValue, isTypedNumber } from '../value.mts';
+import { NumberValue, BigIntValue, ObjectValue, isTypedNumber } from '../value.mts';
 import { R } from '../abstract-ops/all.mts';
+import { LookupClassOperator } from '../abstract-ops/runtime-types.mts';
+import { type RangeEndpoint } from '../intrinsics/Range.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
@@ -35,7 +37,7 @@ export function* Evaluate_RangeExpression({
   // value that claims inhabitants it cannot produce. Refusing it here, at the
   // one place an endpoint enters, is what keeps every ordering operation
   // downstream coherent without any of them testing for it.
-  const endpoint = function* endpoint(node: never): PlainEvaluator<NumberValue | BigIntValue | TypedNumberValue> {
+  const endpoint = function* endpoint(node: never): PlainEvaluator<RangeEndpoint> {
     const value = Q(yield* GetValue(Q(yield* Evaluate(node))));
     if (value instanceof BigIntValue) {
       return value;
@@ -47,19 +49,32 @@ export function* Evaluate_RangeExpression({
       }
       return value;
     }
-    return Throw.TypeError('a range endpoint must be a number');
+    // #sec-ranges: "a value type class over an ORDERED element type", which
+    // ranges.md constrains as `RangeBounds<T: Ordered.<T>>`. The check tested
+    // the VALUE rather than the constraint, so a type meeting the design's
+    // stated requirement exactly was refused as "not a number".
+    if (value instanceof ObjectValue && LookupClassOperator(value, '<') !== null) {
+      return value as RangeEndpoint;
+    }
+    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
   };
-  let start: NumberValue | BigIntValue | TypedNumberValue | undefined;
+  let start: RangeEndpoint | undefined;
   if (RangeStart !== null) {
     start = Q(yield* endpoint(RangeStart as never));
   }
-  let end: NumberValue | BigIntValue | TypedNumberValue | undefined;
+  let end: RangeEndpoint | undefined;
   if (RangeEnd !== null) {
     end = Q(yield* endpoint(RangeEnd as never));
   }
   if (start !== undefined && end !== undefined
       && (start instanceof BigIntValue) !== (end instanceof BigIntValue)) {
-    return Throw.TypeError('a range endpoint must be a number');
+    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
+  }
+  // Both endpoints of ONE element type: comparing across two would ask
+  // `operator<` a question its declaration does not answer.
+  if (start !== undefined && end !== undefined
+      && (start instanceof ObjectValue) !== (end instanceof ObjectValue)) {
+    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
   }
   // The parser's bound pair passes straight through: the node and the value model
   // carry the same shape-independent endpoint view.

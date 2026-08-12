@@ -1,4 +1,4 @@
-import { Value, NumberValue, type TypedNumberValue } from '../value.mts';
+import { Value, NumberValue, ObjectValue, type TypedNumberValue } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import {
@@ -49,10 +49,22 @@ function edgeOf(v: NumberValue | BigIntValue | TypedNumberValue): number {
   return typeof n === 'bigint' ? Number(n) : n;
 }
 
+/**
+ * The interval arithmetic here is over Numbers, so an endpoint of a
+ * user-declared ordered type has no edge: `Ordered` gives comparison and not
+ * arithmetic.
+ */
+function numericEdge(v: Value | undefined): number | undefined {
+  if (v === undefined || v instanceof ObjectValue) {
+    return undefined;
+  }
+  return edgeOf(v as NumberValue | TypedNumberValue);
+}
+
 function toInterval(r: RangeObject): Interval {
   return {
-    lo: { v: r.RangeStart === undefined ? undefined : edgeOf(r.RangeStart), open: r.RangeStartBound === 'open' },
-    hi: { v: r.RangeEnd === undefined ? undefined : edgeOf(r.RangeEnd), open: r.RangeEndBound === 'open' },
+    lo: { v: numericEdge(r.RangeStart), open: r.RangeStartBound === 'open' },
+    hi: { v: numericEdge(r.RangeEnd), open: r.RangeEndBound === 'open' },
   };
 }
 
