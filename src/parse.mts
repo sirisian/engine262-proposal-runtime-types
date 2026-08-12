@@ -22,6 +22,7 @@ import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyErrors.mts';
+import { FirstUnknownMode } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstEvaluabilityViolation } from './static-semantics/PreprocessorEvaluability.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
@@ -231,6 +232,15 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // preprocessor import at all, where every decorated statement is a runtime
   // decoration of one.
   if (surroundingAgent.feature('runtime-types')) {
+    // `sec-preprocessor-modules`: an unknown mode is a Syntax Error at the
+    // IMPORT. Reported here rather than where a region is scanned, so a
+    // misspelled mode says so instead of failing later at the `<` of a region
+    // the author believed was moded.
+    const unknown = FirstUnknownMode(body);
+    if (unknown !== undefined) {
+      const completion = Throw.SyntaxError('$1 does not name a lexical mode this implementation provides', Value(unknown.mode)) as ThrowCompletion;
+      return [completion.Value as ObjectValue];
+    }
     const early = FirstReplacementEarlyError(body);
     if (early) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);

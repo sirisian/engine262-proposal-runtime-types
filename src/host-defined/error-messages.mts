@@ -571,6 +571,7 @@ export interface Throw {
   | '$1 does not look like a TemporalTimeLike object'
   | "$1 does not match the pattern's length"
   | '$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at'
+  | '$1 does not name a lexical mode this implementation provides'
   | '$1 has no custom matcher'
   | '$1 has no decimal value'
   | '$1 has no default value, so a declaration of it needs an initializer'

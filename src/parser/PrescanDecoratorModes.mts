@@ -12,6 +12,17 @@
 // and it stops at the first item that is not an import - the modes it is looking
 // for cannot appear after one.
 
+/**
+ * The lexical modes this implementation provides.
+ *
+ * An unknown mode is NOT registered here. `sec-preprocessor-modules` makes it a
+ * Syntax Error at the import, and that error is raised from the parsed tree -
+ * so registering the mode anyway would have the parser try to scan a region for
+ * it first, and a decoration whose target is not a region would fail with an
+ * unexpected token before the mode itself could be reported.
+ */
+const KNOWN_MODES = new Set(['jsx']);
+
 /** Matches `import { a, b as c } from "..." with { ... }` and captures the pieces. */
 const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*(?:'[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
 
@@ -56,7 +67,7 @@ export function PrescanDecoratorModes(source: string): ReadonlyMap<string, strin
       }
       attribute = ATTRIBUTE.exec(withClause);
     }
-    if (isPreprocessor && mode !== undefined) {
+    if (isPreprocessor && mode !== undefined && KNOWN_MODES.has(mode)) {
       for (const specifier of namedImports.split(',')) {
         // `a` binds `a`; `a as b` binds `b`, which is the name a decoration is
         // spelled with and therefore the name a mode is keyed by.

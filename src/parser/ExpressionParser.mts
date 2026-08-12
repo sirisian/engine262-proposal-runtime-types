@@ -304,10 +304,17 @@ export abstract class ExpressionParser extends FunctionParser {
     }
     const start = this.peek().startIndex;
     if (this.source[start] !== '{') {
-      return this.unexpected() as never;
+      // A moded decoration whose target is not a region decorates it the
+      // ordinary way - `@jsx class C {}` is a decoration on a class, not an
+      // error. Declaring a mode says how a REGION is scanned, not that every
+      // use of the name must take one.
+      return undefined;
     }
     const run = ScanBalancedRun(this.source, start);
     if (run === undefined) {
+      // The delimiters do not balance. Reported at the region rather than at the
+      // end of the file, which is where an unbalanced run would otherwise
+      // surface.
       return this.unexpected() as never;
     }
     (node as { Mode?: string }).Mode = mode;

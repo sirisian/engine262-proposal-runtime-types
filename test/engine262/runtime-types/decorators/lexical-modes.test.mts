@@ -132,3 +132,30 @@ test('what the macro returns is ordinary ECMAScript', () => {
   // about modes.
   expect(jsx('const v = @jsx do { <div/> }; v;')).toBe('const v = _jsx ("div", {}); v;');
 });
+
+test('an unknown mode is refused at the import', () => {
+  // sec-preprocessor-modules: "It is a Syntax Error if the value does not name a
+  // mode the implementation provides, reported at the import declaration."
+  // Falling back to scanning as ECMAScript instead fails later, at the `<` of a
+  // region the author believed was moded, with a message about an unexpected
+  // token rather than about the mode they misspelled.
+  const bad = 'import { q } from "./x.js" with { preprocessor: "true", mode: "nope" };' + NL;
+  expect(expandWith('q', `${bad}@q class C {}`, JSX_MACRO)).toBe('REFUSED');
+  // Reported at the IMPORT, so it does not depend on the mode being used.
+  expect(expandWith('q', `${bad}const a = 1;`, JSX_MACRO)).toBe('REFUSED');
+  // A near miss is refused for the same reason - this is the case the rule is
+  // worth having for.
+  const typo = 'import { q } from "./x.js" with { preprocessor: "true", mode: "jsxx" };' + NL;
+  expect(expandWith('q', `${typo}@q class C {}`, JSX_MACRO)).toBe('REFUSED');
+  // `mode` without `preprocessor` declares nothing, so it is not this rule's
+  // business and the module is ordinary.
+  expect(expandWith('q', 'import { q } from "./x.js" with { mode: "nope" };' + NL + 'const a = 1;',
+    '(function (t) { return t; })')).toBe('const a = 1;');
+});
+
+test('declaring a mode does not require every use to take a region', () => {
+  // A mode says how a REGION is scanned, not that the name may only decorate
+  // one. `@jsx class C {}` is an ordinary decoration on a class.
+  expect(jsx('@jsx class C { x = 1; }', '(function (t) { return t; })')).toBe('class C { x = 1; }');
+  expect(jsx('@jsx function f() { return 1; }', '(function (t) { return t; })')).toBe('function f() { return 1; }');
+});

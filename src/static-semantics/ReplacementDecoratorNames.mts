@@ -85,9 +85,51 @@ export function ImportAttributeValue(node: ParseNode, wantedKey: string): string
  * completion inside the region, so an implementation must not treat the
  * attribute list as closed.
  */
+/**
+ * The lexical modes an implementation provides.
+ *
+ * A mode is host-provided rather than userland: a userland scanner would have to
+ * run BEFORE parsing, and the compile-time evaluability gate cannot police it -
+ * that gate analyses a function the engine has already parsed. Arbitrary code
+ * running before the parse is the capability a CSP-conscious host refuses.
+ */
+const KNOWN_MODES = new Set(['jsx']);
+
+/**
+ * The first import declaring a mode this implementation does not provide, or
+ * *undefined*.
+ *
+ * `sec-preprocessor-modules`: "It is a Syntax Error if the value does not name a
+ * mode the implementation provides, reported at the import declaration." Falling
+ * back to scanning as ECMAScript instead would fail later, at the `<` of a
+ * region the author believed was moded, with a message about an unexpected token
+ * rather than about the mode they misspelled.
+ */
+export function FirstUnknownMode(module: ParseNode): { mode: string, node: ParseNode } | undefined {
+  // A |Module| holds its items under [[ModuleBody]]; a |ModuleBody| holds them
+  // directly. Reading only the latter silently found NOTHING for a Module,
+  // which is the shape ParseModule passes - so the rule below never fired.
+  const body = (module as { ModuleBody?: ParseNode } | undefined)?.ModuleBody ?? module;
+  const items = (body as { ModuleItemList?: readonly ParseNode[] } | undefined)?.ModuleItemList ?? [];
+  for (const item of items) {
+    if (!IsPreprocessorImport(item)) {
+      continue;
+    }
+    const mode = ImportAttributeValue(item, 'mode');
+    if (mode !== undefined && !KNOWN_MODES.has(mode)) {
+      return { mode, node: item };
+    }
+  }
+  return undefined;
+}
+
 export function ReplacementDecoratorModes(module: ParseNode): Map<string, string> {
   const modes = new Map<string, string>();
-  const items = (module as { ModuleItemList?: readonly ParseNode[] }).ModuleItemList ?? [];
+  // A |Module| holds its items under [[ModuleBody]]; a |ModuleBody| holds them
+  // directly. Reading only the latter silently found NOTHING for a Module,
+  // which is the shape ParseModule passes - so the rule below never fired.
+  const body = (module as { ModuleBody?: ParseNode } | undefined)?.ModuleBody ?? module;
+  const items = (body as { ModuleItemList?: readonly ParseNode[] } | undefined)?.ModuleItemList ?? [];
   for (const item of items) {
     if (!IsPreprocessorImport(item)) {
       continue;
