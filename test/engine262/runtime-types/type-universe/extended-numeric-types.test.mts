@@ -439,3 +439,59 @@ test('memory layout: a fixed array and a value type class hold zero-filled defau
   // An untyped array is untouched.
   expect(evaluated('const plain = [1, 2]; String(plain.byteLength);')).toBe('undefined');
 });
+
+// -- The representation of a wide integer type (#sec-integer-types) -----------
+//
+// "`int.<N>` is a value type whose values are the integers from -2**(N-1)
+// through 2**(N-1) - 1 inclusive ... Each has exactly 2**N values", for _N_ up
+// to 2**16. A double holds those exactly only to 53 bits, so a value of a wider
+// type has to be carried as a BigInt.
+//
+// This stage widens the carrier without constructing anything wide, so these
+// pin what must not change while the rest of the work lands, and what is still
+// wrong so the gap is recorded rather than assumed. See KNOWN-DIVERGENCES.md.
+
+test('a narrow integer type is unchanged', () => {
+  expect(evaluated('let a: uint8 = 200; `${a}:${typeof a}`;')).toBe('200:number');
+  expect(evaluated('String((255 := uint8) + (1 := uint8));')).toBe('0');
+  expect(evaluated('`${Math.clz((1 := uint8))}:${Math.clz((1 := uint32))}`;')).toBe('7:31');
+  expect(evaluated('String(uint32.parse("4294967295"));')).toBe('4294967295');
+});
+
+test('a wide integer type still works for values inside the exact range', () => {
+  // Everything below 2**53 is exact in a double, so these are the cases that
+  // must keep working through the representation change.
+  expect(evaluated('String((1000000 := uint64) / (3 := uint64));')).toBe('333333');
+  expect(evaluated('String(Math.mod((1000000 := uint64), (3 := uint64)));')).toBe('1');
+  expect(evaluated('String((12 := uint64) & (10 := uint64));')).toBe('8');
+  expect(evaluated('String(Math.addSaturating((1 := uint64), (1 := uint64)));')).toBe('2');
+  expect(evaluated('`${(2 := uint64) < (3 := uint64)}:${(2 := uint64) === (2 := uint64)}`;')).toBe('true:true');
+  expect(evaluated('let a: [].<uint64> = [1]; a[0] = (3 := uint64); String(a[0]);')).toBe('3');
+  expect(evaluated('let x: uint64 = 5; String(Atomics.compareExchange(ref x, 5, 9)) + ":" + String(x);')).toBe('5:9');
+  expect(evaluated('String(uint8((300 := uint64)));')).toBe('44');
+  expect(evaluated('`${uint64.byteLength}:${uint128.byteLength}`;')).toBe('8:16');
+});
+
+test('the exactness gap above 2**53 is recorded, not fixed here', () => {
+  // Each of these is wrong, and each is what the remaining stages close.
+  expect(evaluated('String((1152921504606846976 := int64) === (1152921504606846977 := int64));')).toBe('true');
+  expect(evaluated('String(int64.parse("1152921504606846976"));')).toBe('1152921504606847000');
+  // A type cannot parse its own maximum, because the range check rounds first.
+  expect(() => evaluated('int64.parse("9223372036854775807");')).toThrow();
+  expect(() => evaluated('uint64.parse("18446744073709551615");')).toThrow();
+  // And the wrap is computed after the rounding, so 2**54 - 1 reduces to zero.
+  expect(evaluated('String((18014398509481983 := uint.<54>));')).toBe('0');
+  // No route admits an exact wide value: not a cast, not a conversion call.
+  expect(() => evaluated('9007199254740993n := int64;')).toThrow();
+  expect(() => evaluated('int64(9007199254740993n);')).toThrow();
+});
+
+test('clz and the shifts are wrong at width, and differently', () => {
+  // clz fails exactly above 53 bits, which is this entry's boundary.
+  expect(evaluated('`${Math.clz((1 := uint.<40>))}:${Math.clz((1 := uint64))}`;')).toBe('39:64');
+  // The shifts fail above THIRTY-TWO, including at widths a double holds
+  // exactly - 2**32 is exact - so they are the operator's defect rather than
+  // the carrier's, and are recorded separately.
+  expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('1');
+  expect(evaluated('String((1 := uint64) << (40 := uint64));')).toBe('256');
+});

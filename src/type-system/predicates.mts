@@ -81,7 +81,15 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
         case 'isNaN': return false;
         case 'isFinite': return true;
         case 'isInteger': return true;
-        case 'isSafeInteger': return Number.isFinite(n) && Math.abs(n) <= MAX_SAFE;
+        case 'isSafeInteger':
+          // The comment above is the reason this reads the payload exactly
+          // rather than as a Number: safety "asks about the mathematical
+          // value", and a wide type carries that as a BigInt, which rounding
+          // to a Number would destroy at precisely the magnitudes the question
+          // is about.
+          return typeof n === 'bigint'
+            ? n <= BigInt(MAX_SAFE) && n >= -BigInt(MAX_SAFE)
+            : Number.isFinite(n) && Math.abs(n) <= MAX_SAFE;
         default: return undefined;
       }
     }

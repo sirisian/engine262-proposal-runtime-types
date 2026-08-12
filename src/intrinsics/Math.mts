@@ -798,7 +798,7 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
           const error = Throw.TypeError('$1 has no signature taking values of two numeric types', Value('Math.sumPrecise'));
           return Q(yield* IteratorClose(iteratorRecord, error));
         }
-        element = F(element.value);
+        element = F(element.numberValue());
       }
       if (!(element instanceof NumberValue)) {
         const error = Throw.TypeError('$1 is not a number', element);
@@ -1157,13 +1157,16 @@ function* evaluateIntegerRow(
     // the argument's own. Both check their count at the return.
     const bits = functionName === 'clz32' ? 32 : width;
     const value = isTypedNumber(first)
-      ? first.value
+      ? first.numberValue()
       : (R(Q(yield* ToNumber(first))) as number);
+    // Reading the payload as a Number is why `Math.clz` answers the WIDTH rather
+    // than width - 1 for a wide type: the count is taken over a rounded value.
+    // Stage 2 of the D9 plan reads the exact value here.
     const count = countLeadingZeros(Math.trunc(value), bits);
     return checkedIntegerResult(count, t);
   }
   if (row === 'root') {
-    const value = isTypedNumber(first) ? first.value : 0;
+    const value = isTypedNumber(first) ? first.numberValue() : 0;
     const result = functionName === 'sqrt' ? integerSqrt(value) : integerCbrt(value);
     return checkedIntegerResult(result, t);
   }

@@ -1705,7 +1705,9 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   }
   let converted = value;
   if (factor !== 1 && (converted instanceof NumberValue || isTypedNumber(converted))) {
-    const scaled = (isTypedNumber(converted) ? converted.value : (R(converted as NumberValue) as number)) * factor;
+    // A conversion factor is a ratio and the scaling is floating by nature, so
+    // the payload is read as a Number here even for a wide integer type.
+    const scaled = (isTypedNumber(converted) ? converted.numberValue() : (R(converted as NumberValue) as number)) * factor;
     converted = new TypedNumberValue(wrapToType(scaled, to.Base), to.Base);
   }
   for (const metaType of quantizing) {

@@ -589,7 +589,19 @@ export class VectorValue extends PrimitiveValue {
 export class TypedNumberValue extends PrimitiveValue {
   declare readonly type: 'TypedNumber'; // defined on prototype by static block
 
-  readonly value: number;
+  /**
+   * proposal-runtime-types #sec-integer-types: "`int.<N>` is a value type whose
+   * values are the integers from -2**(N-1) through 2**(N-1) - 1 inclusive ...
+   * Each has exactly 2**N values", for _N_ up to 2**16. A double holds those
+   * exactly only to 53 bits, so a value of a WIDER integer type is carried as a
+   * BigInt and everything narrower stays a Number.
+   *
+   * This stage widens the field and constructs nothing wide yet, so the reads
+   * that assume a Number are what it exists to find. `numberValue()` is the one
+   * that must not be reached for a wide value once wide values exist - see the
+   * note on it.
+   */
+  readonly value: number | bigint;
 
   readonly TypeRecord: unknown;
 
@@ -598,14 +610,24 @@ export class TypedNumberValue extends PrimitiveValue {
   // constructor is public. The class is already nominally distinct via its
   // distinct type tag and TypeRecord field, and public construction keeps the
   // feature-gated call sites (arithmetic, conversion, update) simple.
-  constructor(value: number, typeRecord: unknown) {
+  constructor(value: number | bigint, typeRecord: unknown) {
     super();
     this.value = value;
     this.TypeRecord = typeRecord;
   }
 
-  numberValue() {
-    return this.value;
+  /**
+   * The value as a Number. Exact for every type narrower than 54 bits, which is
+   * every type carrying one; a wide value would be ROUNDED here, so a caller
+   * that may see one must ask for the exact value instead.
+   */
+  numberValue(): number {
+    return typeof this.value === 'bigint' ? Number(this.value) : this.value;
+  }
+
+  /** The value as a mathematical integer, exact whichever representation it has. */
+  bigintValue(): bigint {
+    return typeof this.value === 'bigint' ? this.value : BigInt(this.value);
   }
 
   static {
