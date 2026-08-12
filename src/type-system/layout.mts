@@ -191,6 +191,27 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     case 'decimal32': return fromBits(32);
     case 'decimal64': return fromBits(64);
     case 'decimal128': return fromBits(128);
+    // proposal-runtime-types #sec-complex-types: a complex value is a pair of
+    // components, so it lays out as two of them - which is what the width-named
+    // shorthands already say, since they "count total bits rather than component
+    // bits", making `complex64` a pair of `float32` at 8 bytes. Being a value
+    // type it "lies inline, so a `[].<complex128>` is the interleaved buffer an
+    // FFT expects".
+    case 'complex': {
+      const component = t.Arguments[0] as TypeRecord | undefined;
+      const inner = component ? LayoutOf(component) : null;
+      if (!inner) {
+        return null;
+      }
+      // The pair aligns as its component does rather than as its whole width:
+      // the parts are addressed individually, which is what makes the buffer
+      // interleaved rather than a sequence of padded records.
+      return {
+        bitLength: inner.bitLength * 2,
+        byteLength: inner.byteLength * 2,
+        alignment: inner.alignment,
+      };
+    }
     case 'boolean': return fromBits(8);
     // `number` is the type an untyped program computes with rather than a width
     // asked for by name, but its values are those of float64 and it lays out as one.

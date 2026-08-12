@@ -639,3 +639,30 @@ test('numeric types: a complex type has a zero', () => {
   expect(evaluated('type C64 = complex64; let z: C64; z.toString();')).toBe('0i');
   expect(evaluated('type C = complex; let z: C; `${z.real}:${z.imaginary}`;')).toBe('0:0');
 });
+
+test('numeric types: the complex conversions are componentwise', () => {
+  // #sec-complex-numbers: "`complex64` and `complex128` convert to and from
+  // `complex` explicitly and not implicitly, exactly as `float32` and `float64`
+  // convert to and from `number`, and the treatment of a value outside the
+  // component type's range is [the same]'s as it is for that component."
+  expect(evaluated('complex64(complex(1.5, 2.5)).toString();')).toBe('1.5+2.5i');
+  expect(evaluated('type C64 = complex64; String(complex64(complex(1, 2)) is C64);')).toBe('true');
+  // Each part crosses the boundary of the COMPONENT type, so a float32 part
+  // rounds as a float32 does rather than by a rule of its own.
+  expect(evaluated('String(complex64(complex(0.1, 0)).real);')).toBe('0.10000000149011612');
+  expect(evaluated('String(complex128(complex(0.1, 0)).real);')).toBe('0.1');
+  // The result belongs to the type converted to, and not to the other.
+  expect(evaluated('type C = complex; String(complex64(complex(1, 2)) is C);')).toBe('false');
+});
+
+test('numeric types: a complex lays out as two components', () => {
+  // The width-named shorthands "count total bits rather than component bits",
+  // which is the same statement as the layout: a `complex64` is a pair of
+  // `float32` and so is 8 bytes, not 16.
+  expect(evaluated('`${(type complex64).byteLength}:${(type complex128).byteLength}`;')).toBe('8:16');
+  expect(evaluated('String((type complex).byteLength);')).toBe('16');
+  // It aligns as its COMPONENT does rather than as its whole width, which is
+  // what makes `[].<complex128>` "the interleaved buffer an FFT expects" rather
+  // than a sequence of padded records.
+  expect(evaluated('String((type complex128).alignment);')).toBe('8');
+});

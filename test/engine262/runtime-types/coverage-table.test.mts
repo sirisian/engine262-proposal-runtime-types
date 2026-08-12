@@ -34,9 +34,20 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
   expect(evaluated('String(typeof uint);')).toBe('undefined');
   expect(evaluated('String(typeof int);')).toBe('undefined');
   expect(evaluated('String(typeof vector);')).toBe('undefined');
-  expect(evaluated('String(typeof complex64);')).toBe('undefined');
+  // An APPLIED name is a value, and a width shorthand is an application:
+  // `uint8` is `uint.<8>` and `complex64` is `complex.<float32>`, so it belongs
+  // in this group rather than beside the bare names above. It read as undefined
+  // only while the name did not exist at all.
   expect(evaluated('String(typeof uint8);')).toBe('object');
   expect(evaluated('String(typeof float32x4);')).toBe('object');
+  expect(evaluated('String(typeof complex64);')).toBe('object');
+  // Bare `complex` is the exception among the parameterized primitives, and
+  // #sec-complex-numbers is why: it has a DEFAULT argument - "the bare name
+  // `complex` is `complex.<number>`" - so the bare name is already an
+  // application. The binding is the pair constructor the clause writes its own
+  // example with, `complex(0, 4)`.
+  expect(evaluated('String(typeof complex);')).toBe('function');
+  expect(evaluated('String((type complex) === (type complex.<number>));')).toBe('true');
 });
 
 test('the extensions this session did not touch still construct', () => {

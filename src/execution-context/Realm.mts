@@ -392,6 +392,14 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       'uint8', 'uint16', 'uint32', 'uint64', 'uint128',
       'float16', 'float32', 'float64', 'float128',
       'decimal32', 'decimal64', 'decimal128',
+      // proposal-runtime-types #sec-complex-numbers: the width-named complex
+      // shorthands bind like the other numeric type names, so `complex64(z)`
+      // names something to call - "`complex64` and `complex128` convert to and
+      // from `complex` explicitly and not implicitly, exactly as `float32` and
+      // `float64` convert to and from `number`". Bare `complex` is NOT here: it
+      // is bound as the pair constructor `complex(re, im)`, which the clause
+      // writes its own example with.
+      'complex32', 'complex64', 'complex128', 'complex256',
       // proposal-runtime-types #sec-vector-types: the SIMD shorthands, so
       // `float32x4(1, 2, 3, 4)` names something to call. They are GENERATED
       // rather than listed because builtinTypeRecord decides which exist by

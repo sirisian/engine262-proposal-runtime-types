@@ -21,6 +21,7 @@ import {
 } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
+import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -302,6 +303,26 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   if (t.Kind === 'primitive') {
+    // proposal-runtime-types #sec-complex-numbers: "`complex64` and
+    // `complex128` convert to and from `complex` explicitly and not
+    // implicitly, exactly as `float32` and `float64` convert to and from
+    // `number`, and the treatment of a value outside the component type's
+    // range is [the same clause]'s as it is for that component."
+    //
+    // So the conversion is componentwise and delegates: each part crosses
+    // the boundary of the COMPONENT type, which is what makes a complex64's
+    // parts float32s and gives an out-of-range part the float rule rather
+    // than a rule of its own.
+    if (t.Name === 'complex' && isComplexObject(value)) {
+      const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
+      const re = Q(yield* CheckedConvertValue(Value(value.ComplexReal), component));
+      const im = Q(yield* CheckedConvertValue(Value(value.ComplexImaginary), component));
+      // The converted part is a value OF the component type, so a float32
+      // component comes back as a typed number rather than a plain one; both
+      // read as Numbers here, which is how the pair carries its parts.
+      const partOf = (v: Value) => (isTypedNumber(v) ? v.numberValue() : Number(R(v as NumberValue)));
+      return CreateComplexValue(partOf(re), partOf(im), component, surroundingAgent.currentRealmRecord);
+    }
     switch (t.Name) {
       case 'string':
         // Split by source rather than by primitiveness: a Number, a BigInt, and a
