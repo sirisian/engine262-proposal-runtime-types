@@ -34,6 +34,22 @@ test('an object type renders its structure', () => {
   expect(message('type O = { }; let o: O = 5;')).toContain('{}');
 });
 
+test('a symbol-keyed property renders its description', () => {
+  // Interpolating a SymbolValue gives "[object Symbol]", which is the same class
+  // of bug one layer down from the one being fixed.
+  expect(message('const s = Symbol("tag"); type O = { [s]: uint8 }; let o: O = 5;')).toContain('{ [tag]: uint.<8> }');
+});
+
+test('a reference type renders its target', () => {
+  expect(message('let r: ref uint8 = 5;')).toContain('ref uint.<8>');
+});
+
+test('a generic parameter renders its name and constraint', () => {
+  // An unconstrained parameter is used where its own type is the target, so it
+  // reaches the display through a constrained specialization being refused.
+  expect(message('function f<T: uint8>(x: T): T { return x; } f.<string>("s");')).toContain('uint.<8>');
+});
+
 test('a function type renders its signature', () => {
   expect(message('let f: (x: uint8) => uint8 = 5;')).toContain('(x: uint.<8>) => uint.<8>');
   // A `void` return, which must not print as `null`.
@@ -48,6 +64,15 @@ test('the display nests through other kinds', () => {
   expect(message('let a: [].<{ x: int32 }> = 5;')).toContain('[].<{ x: int.<32> }>');
   expect(message('type A = { x: int32 }; type B = { y: float64 }; type C = A & B; let c: C = 5;')).toContain('{ x: int.<32> } & { y: float64 }');
   expect(message('type A = { x: int32 }; type B = { y: float64 }; type C = A | B; let c: C = 5;')).toContain('{ x: int.<32> } | { y: float64 }');
+});
+
+test('the two kinds the exhaustiveness check found', () => {
+  // `pattern` and `range` also had no case, and were found by making the
+  // default a `never` assignment rather than by reading the switch - the plan's
+  // own survey counted four falling-through kinds and there were six.
+  expect(message('let p: /ab+c/ = 5;')).toContain('/ab+c/');
+  expect(message('let r: 0..<10 = "s";')).toContain('0..10');
+  expect(message('let r: 0..=10 = "s";')).toContain('0..=10');
 });
 
 test('the kinds that already rendered are unchanged', () => {
