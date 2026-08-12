@@ -1,5 +1,6 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
+import { SignaturesOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
@@ -214,6 +215,51 @@ function* Reflect_setPrototypeOf([target = Value.undefined, proto = Value.undefi
 
 /** https://sirisian.github.io/ecmascript-types/#sec-reflect.typeof */
 function* Reflect_typeOf([value = Value.undefined]: Arguments) {
+  // proposal-runtime-types #sec-runtimetypeof: "If _value_ is callable and has
+  // declared signatures, return the ~function~ Type Record whose [[Signatures]]
+  // are those signatures."
+  //
+  // A callable reached the object step and reported an ~object~ Type Record, so
+  // `Reflect.typeOf(f)` was unrelated to the function type `f is F` already
+  // answered true for - two mechanisms disagreeing about one value. The step is
+  // taken here rather than in RuntimeTypeOf because deriving a signature
+  // resolves parameter annotations, which needs an evaluator, and RuntimeTypeOf
+  // is synchronous; every other caller of it ranks types that are already built.
+  //
+  // A callable that declares NO signature falls through unchanged: an
+  // unannotated declaration stays unannotated, and synthesising all-`any`
+  // parameters would be inference the program did not ask for.
+  if (surroundingAgent.feature('runtime-types') && IsCallable(value)) {
+    // SignaturesOf serves an OVERLOADED function, reading the arms it was built
+    // from; a singly-declared function has no such slot, so its one signature is
+    // derived directly.
+    const overloaded = (value as { OverloadFunctions?: unknown }).OverloadFunctions !== undefined
+      || (value as { OverloadSignatures?: unknown }).OverloadSignatures !== undefined;
+    let overloads;
+    if (overloaded) {
+      overloads = Q(yield* SignaturesOf(value));
+    } else {
+      // `Q(yield* …)` may not appear inside an array literal - the build's Babel
+      // pass rewrites Q and cannot place the result there.
+      const one = Q(yield* OverloadSignatureOf(value));
+      overloads = [one];
+    }
+    // An OverloadSignature carries `ReturnType` and the implementing function; a
+    // SignatureRecord carries `Return` and nothing else. The parameter model is
+    // already shared, so only the return field is mapped.
+    // "has declared signatures" means a type was WRITTEN, not that parameters
+    // exist: `g(a)` has a parameter and declares nothing, and reporting a
+    // function type for it would synthesise the all-`any` signature the
+    // unannotated rule refuses. A parameter with no annotation resolves to
+    // `any`, so a signature counts as declared where some parameter is not
+    // `any` or a return type was written.
+    const declared = overloads.filter((o) => o.ReturnType !== undefined
+      || o.Parameters.some((parameter) => (parameter.Type as { Kind?: string } | undefined)?.Kind !== 'any'));
+    if (declared.length > 0) {
+      const Signatures = declared.map((o) => ({ Parameters: o.Parameters, Return: o.ReturnType ?? null }));
+      return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
+    }
+  }
   // proposal-runtime-types: the interned Type Object of the value's run-time type.
   return GetTypeObject(RuntimeTypeOf(value));
 }
