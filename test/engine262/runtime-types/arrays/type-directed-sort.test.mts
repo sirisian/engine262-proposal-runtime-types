@@ -51,6 +51,19 @@ test('float NaN and -0 follow %TypedArray%.prototype.sort', () => {
   expect(evaluated('let a: [].<float64> = [0, -0]; a.sort(); a.map(v => Object.is(Number(v), -0) ? "-0" : "0").join(",");')).toBe('-0,0');
 });
 
+test('a numeric enum sorts by its ordinal', () => {
+  // An enum whose underlying type is numeric holds typed numbers, so it reaches
+  // the same comparison the numeric types do.
+  //
+  // The ordinals here are 2, 10, 1 - numeric order 1,2,10 against string order
+  // 1,10,2. An input of 10, 1, 0 would pass under EITHER rule and prove nothing,
+  // which is the trap this file's header warns about.
+  const E = 'enum L: uint8 { A,B,C,D,E,F,G,H,I,J,K } ';
+  expect(evaluated(`${E}let a: [].<L> = [L.C, L.K, L.B]; a.sort(); a.join(",");`)).toBe('1,2,10');
+  // Identical to the plain numeric array of the same values.
+  expect(evaluated('let a: [].<uint8> = [2, 10, 1]; a.sort(); a.join(",");')).toBe('1,2,10');
+});
+
 test('the types that already sorted correctly still do', () => {
   expect(evaluated('let a: [].<string> = ["b", "a", "c"]; a.sort(); a.join(",");')).toBe('a,b,c');
   expect(evaluated('let a: [].<boolean> = [true, false]; a.sort(); a.join(",");')).toBe('false,true');
