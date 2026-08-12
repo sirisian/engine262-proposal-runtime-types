@@ -769,6 +769,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // what `new` calls - so it is recorded with no parameters rather than left
     // absent. A derived class that writes none finds its base's by the same
     // chain walk that finds an inherited method.
+    // #table-reflection-contexts says a constructor's `signatures` "has exactly
+    // one entry". Recording a synthetic one-arm function type here is what
+    // would supply it; a first attempt built one whose parameters carried no
+    // Type and GetTypeObject read `Kind` off undefined, so the arm must be
+    // built from the same MemberFunctionTypeRecord the other members use rather
+    // than assembled by hand. Left undefined until then: the reflection has no
+    // `signatures` for a constructor, which is a gap and not a design.
     RecordMemberDeclaration(F, 'constructor', {
       parameters,
       type: undefined,
