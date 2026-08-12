@@ -104,6 +104,30 @@ test('overloads: a constructor carries the one entry the table gives it', () => 
     + " String(Reflect.getReflection.<Reflect.ClassMethodParameter, A>('constructor', 0).name);")).toBe('a');
 });
 
+test('overloads: annotating nothing is not annotating as any', () => {
+  // The distinction the absence protects, and the reason `signatures` is absent
+  // rather than synthesised as all-`any`: `m(a)` and `m(a: any)` mean different
+  // things, and a reflection that reported one arm for both would delete the
+  // difference. #sec-typed-declarations puts it generally - "an unannotated
+  // binding remaining `any` is what keeps an untyped program untyped" - and
+  // this is that rule at a member.
+  const sigs = (decl: string) => `class A { ${decl} }`
+    + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('m');"
+    + " String(r.signatures === undefined ? 'absent' : r.signatures.length);";
+  expect(evaluated(sigs('m(a) {}'))).toBe('absent');
+  expect(evaluated(sigs('m(a: any) {}'))).toBe('1');
+  // and `type` draws the same line
+  expect(evaluated("class A { m(a) {} }"
+    + " String(Reflect.getReflection.<Reflect.ClassMethod, A>('m').type === undefined);")).toBe('true');
+  expect(evaluated("class A { m(a: any) {} }"
+    + " String(Reflect.getReflection.<Reflect.ClassMethod, A>('m').type === undefined);")).toBe('false');
+  // one annotation anywhere is enough, and the parameters with none fill as `any`
+  expect(evaluated(sigs('m(a: uint8, b) {}'))).toBe('1');
+  expect(evaluated('class A { m(a: uint8, b) {} }'
+    + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('m');"
+    + ' String(r.signatures[0].parameters[1].type === any);')).toBe('true');
+});
+
 test('overloads: an UNANNOTATED member has no signatures, constructor or not', () => {
   // A SEPARATE gap, and not a constructor one: MemberFunctionTypeRecord answers
   // *undefined* where nothing is annotated, so an unannotated method has no
