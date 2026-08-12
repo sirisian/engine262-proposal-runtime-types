@@ -486,12 +486,27 @@ test('the exactness gap above 2**53 is recorded, not fixed here', () => {
   expect(() => evaluated('int64(9007199254740993n);')).toThrow();
 });
 
-test('clz and the shifts are wrong at width, and differently', () => {
-  // clz fails exactly above 53 bits, which is this entry's boundary.
-  expect(evaluated('`${Math.clz((1 := uint.<40>))}:${Math.clz((1 := uint64))}`;')).toBe('39:64');
-  // The shifts fail above THIRTY-TWO, including at widths a double holds
-  // exactly - 2**32 is exact - so they are the operator's defect rather than
-  // the carrier's, and are recorded separately.
+test('a wide operation is exact', () => {
+  // The arithmetic computes in the exact integers for a type a double cannot
+  // hold, and the wrap is the reduction modulo 2**N at the type's own width.
+  expect(evaluated('const a = int64.parse("4611686018427387904"); String(a + a);')).toBe('-9223372036854775808');
+  expect(evaluated('String((0 := uint64) - (1 := uint64));')).toBe('18446744073709551615');
+  expect(evaluated('String((1 := uint64) << (60 := uint64));')).toBe('1152921504606846976');
+  // The shift is performed at the TYPE'S width with the distance taken modulo
+  // that width, so a wide shift no longer inherits JavaScript's 32-bit rule.
+  expect(evaluated('String((1 := uint64) << (40 := uint64));')).toBe('1099511627776');
+});
+
+test('the shifts are still wrong at a width a double holds', () => {
+  // KNOWN-DIVERGENCES.md D30 is the operator's defect rather than the carrier's,
+  // so a width above 32 and below 54 keeps the 32-bit behaviour: the exact path
+  // does not run there, and 2**32 is exactly representable in a double.
   expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('1');
-  expect(evaluated('String((1 := uint64) << (40 := uint64));')).toBe('256');
+});
+
+test('clz is still wrong at a wide width', () => {
+  // Folded into a later stage: Math.clz reads its payload as a Number, so the
+  // count is taken over a rounded value and answers the WIDTH rather than
+  // width - 1.
+  expect(evaluated('`${Math.clz((1 := uint.<40>))}:${Math.clz((1 := uint64))}`;')).toBe('39:64');
 });

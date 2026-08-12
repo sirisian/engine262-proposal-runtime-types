@@ -47,7 +47,23 @@ function roundToFloat16(math: number): number {
   return decodeFloat16(encodeFloat16(math));
 }
 
-export function wrapToType(math: number, t: TypeRecord): number {
+export function wrapToType(math: number | bigint, t: TypeRecord): number | bigint {
+  if (typeof math === 'bigint') {
+    // The exact path. A wide type keeps the BigInt, which is the whole point:
+    // #sec-integer-operations wraps modulo 2**N, and asIntN/asUintN ARE that
+    // reduction at the type's width.
+    if (t.Kind !== 'primitive') {
+      return math;
+    }
+    const wideBits = widthOf(t);
+    if (wideBits === null) {
+      return math;
+    }
+    const wrapped = t.Name === 'int' ? BigInt.asIntN(wideBits, math) : BigInt.asUintN(wideBits, math);
+    // A type a double still holds exactly keeps its Number representation, so
+    // only the wide types carry a BigInt and nothing narrower changes shape.
+    return wideBits > 53 ? wrapped : Number(wrapped);
+  }
   if (t.Kind !== 'primitive') {
     return math;
   }
@@ -78,11 +94,14 @@ export function wrapToType(math: number, t: TypeRecord): number {
   // Above 53 bits the reduction is done in BigInt, which is exact, and the
   // two's-complement step is what BigInt.asIntN and asUintN already are.
   if (bits > 53) {
+    // Reached where the operands were Numbers but the TYPE is wide - a literal
+    // adopted into a wide type, say. The reduction was already exact; what was
+    // lost was returning it as a Number, which put the answer back into the
+    // representation that cannot hold it.
     const truncated = BigInt(Math.trunc(math));
-    const wrapped = t.Name === 'int'
+    return t.Name === 'int'
       ? BigInt.asIntN(bits, truncated)
       : BigInt.asUintN(bits, truncated);
-    return Number(wrapped);
   }
   const modulus = 2 ** bits;
   // Truncate toward zero, then reduce modulo 2**bits into [0, modulus).
@@ -135,11 +154,65 @@ function mathOp(op: BinOp, x: number, y: number): number {
   }
 }
 
+/**
+ * proposal-runtime-types #sec-integer-types: an integer type's values are the
+ * integers of its width, and a double distinguishes those only to 53 bits. A
+ * type wider than that computes in BigInt, which is what makes the operation
+ * answer the type's own values rather than the nearest doubles to them.
+ */
+export function isWideIntegerType(t: TypeRecord): boolean {
+  if (t.Kind !== 'primitive' || (t.Name !== 'int' && t.Name !== 'uint')) {
+    return false;
+  }
+  const bits = widthOf(t);
+  return bits !== null && bits > 53;
+}
+
+/** mathOp over the exact integers, for a type a double cannot hold. */
+function mathOpExact(op: BinOp, x: bigint, y: bigint, bits: number, signed: boolean): bigint | undefined {
+  switch (op) {
+    case '+': return x + y;
+    case '-': return x - y;
+    case '*': return x * y;
+    // Integer division truncates toward zero, which is what BigInt division
+    // already does; `/` on an integer type is the truncating one and divFloor
+    // is the other (#sec-floored-division).
+    case '/': return y === 0n ? undefined : x / y;
+    case '%': return y === 0n ? undefined : x % y;
+    case '**': return y < 0n ? undefined : x ** y;
+    // The shifts are performed at the TYPE'S width rather than at 32, and the
+    // distance is taken modulo that width. Doing this in the Number path is
+    // what KNOWN-DIVERGENCES.md D30 is about; here the exact path gets it right
+    // from the start rather than inheriting the same defect.
+    case '<<': return x << (((y % BigInt(bits)) + BigInt(bits)) % BigInt(bits));
+    case '>>': return x >> (((y % BigInt(bits)) + BigInt(bits)) % BigInt(bits));
+    case '>>>': {
+      const distance = ((y % BigInt(bits)) + BigInt(bits)) % BigInt(bits);
+      // An unsigned shift reads the operand as its two's-complement bit pattern
+      // at the width, which is what BigInt.asUintN gives.
+      return BigInt.asUintN(bits, x) >> distance;
+    }
+    case '&': return x & y;
+    case '^': return x ^ y;
+    case '|': return x | y;
+    default: return undefined;
+  }
+  void signed;
+}
+
 function payload(v: Value): number {
   // proposal-runtime-types R6: read the numeric payload directly. Both
   // NumberValue and TypedNumberValue expose numberValue(); R would assert
   // instanceof NumberValue, which a typed number no longer satisfies.
   return (v as NumberValue | TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value
+}
+
+/** The payload as an exact integer, for the wide path. */
+function payloadExact(v: Value): bigint {
+  if (v instanceof TypedNumberValue) {
+    return (v as TypedNumberValue).bigintValue();
+  }
+  return BigInt(Math.trunc(payload(v)));
 }
 
 /** True when at least one operand is a typed number. */
@@ -196,6 +269,15 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
   if ((target.Kind === 'primitive' && /^float(16|32|64|128)$/.test(target.Name))
       && (op === '<<' || op === '>>' || op === '>>>' || op === '&' || op === '|' || op === '^')) {
     return Throw.TypeError('this operator is not defined for a binary floating-point type') as ThrowCompletion;
+  }
+  if (isWideIntegerType(target)) {
+    const bits = widthOf(target) as number;
+    const exact = mathOpExact(op, payloadExact(x), payloadExact(y), bits, (target as { Name: string }).Name === 'int');
+    if (exact !== undefined) {
+      return new TypedNumberValue(wrapToType(exact, target), target);
+    }
+    // A division by zero has no integer answer; fall through to the Number
+    // path, which reports it the way it always has.
   }
   const math = mathOp(op, payload(x), payload(y));
   return new TypedNumberValue(wrapToType(math, target), target);

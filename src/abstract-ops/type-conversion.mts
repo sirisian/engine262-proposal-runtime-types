@@ -426,6 +426,15 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
   } else if (isTypedNumber(argument)) {
     // proposal-runtime-types R6: a typed number stringifies as its underlying
     // decimal, with no type tag (String(5 := uint8) is "5").
+    //
+    // A value of a type wider than 53 bits carries a BigInt, and routing it
+    // through a Number here would undo the exactness the value has: the whole
+    // point of #sec-integer-types' "each has exactly 2**N values" is that
+    // `uint64.parse("18446744073709551615")` reads back as itself rather than
+    // as the nearest double.
+    if (typeof (argument as { value: number | bigint }).value === 'bigint') {
+      return Value(((argument as { value: bigint }).value).toString(10));
+    }
     return X(NumberValue.toString(unwrapToNumber(argument), 10));
   } else if (argument instanceof NumberValue) {
     // Return ! Number::toString(argument).

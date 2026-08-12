@@ -832,7 +832,10 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // declared return applies float arithmetic's own rule and does overflow
         // to an infinity, which is the same checked-versus-cheap split the
         // operators have.)
-        if (Number.isFinite(math) && !Number.isFinite(converted)) {
+        // A BigInt result is the exact value of a wide integer type and is
+        // finite by construction; `Number.isFinite` answers *false* for one, so
+        // testing it without this read a successful conversion as an overflow.
+        if (typeof converted !== 'bigint' && Number.isFinite(math) && !Number.isFinite(converted)) {
           return sourceIsNumeric
             ? Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)))
             : Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
