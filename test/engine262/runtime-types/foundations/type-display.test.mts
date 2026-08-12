@@ -75,6 +75,18 @@ test('the two kinds the exhaustiveness check found', () => {
   expect(message('let r: 0..=10 = "s";')).toContain('0..=10');
 });
 
+test('a shared type renders its target', () => {
+  // `shared` had a case already, but reaching it takes care: a DIRECT binding of
+  // a wrong value goes down the conversion-source path -
+  // "a string is not a conversion source for ..." - which never consults the
+  // display. It renders when the shared type is nested inside another, which is
+  // where a reader most needs it.
+  expect(message('let a: [].<shared uint32> = "s";')).toContain('[].<shared uint.<32>>');
+  expect(message('type O = { s: shared uint32 }; let o: O = 5;')).toContain('{ s: shared uint.<32> }');
+  expect(message('type U = shared uint32 | null; let u: U = "s";')).toContain('shared uint.<32>');
+  expect(message('type A = { a: uint8 }; type C = A & shared uint32; let c: C = 5;')).toContain('{ a: uint.<8> } & shared uint.<32>');
+});
+
 test('the kinds that already rendered are unchanged', () => {
   // Asserted through the same mechanism so this change cannot quietly alter
   // them. `displayType` feeds every diagnostic in the engine.
@@ -83,6 +95,11 @@ test('the kinds that already rendered are unchanged', () => {
   expect(message('let x: [3].<uint8> = 5;')).toContain('[3].<uint.<8>>');
   expect(message('let x: never = 5;')).toContain('never');
   expect(message('class K { } class L { } type C = K & L; let c: C = new K();')).toContain('K & L');
+  // `literal` and `any`. The literal form appears on the SOURCE side of almost
+  // every message, and `any` renders where it is nested inside another type.
+  expect(message('type L = 5; let x: L = 6;')).toContain('a literal type of number');
+  expect(message('type O = { a: any }; let o: O = 5;')).toContain('{ a: any }');
+  expect(message('let a: [].<any> = 5;')).toContain('[].<any>');
 });
 
 test('the display is not an identity', () => {
