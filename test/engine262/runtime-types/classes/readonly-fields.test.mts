@@ -91,3 +91,61 @@ test('with the feature off, readonly is not a field modifier', () => {
   const c = runFlagOff('class A { readonly x = 5; } new A();') as { Type: string };
   expect(c.Type).toBe('throw');
 });
+
+// -- readonly on an OBJECT TYPE member (#sec-isobjectsubtype) ------------------
+//
+// "It is subtyped in depth only through a `readonly` member. A `readonly` member
+// is covariant, since a value read from it and never written through it need
+// only be of the required type." This is where "never written through it"
+// becomes true for an object type, as the rules above make it true for a field.
+
+test('a write through a readonly object-type member is refused', () => {
+  expectThrown('type R = { readonly x: uint8 }; let v: R = { x: 1 }; v.x = (2 := uint8);');
+  // Every assignment operator writes, and so does an update.
+  expectThrown('type R = { readonly x: uint8 }; let v: R = { x: 1 }; v.x += (1 := uint8);');
+  expectThrown('type R = { readonly x: uint8 }; let v: R = { x: 1 }; v.x++;');
+  expectThrown('type R = { readonly x: uint8 }; let v: R = { x: 1 }; ++v.x;');
+});
+
+test('an interface member carries the flag too', () => {
+  // An interface's structural form IS an object type, so it reaches the same
+  // rule. The flag was dropped where the interface's structure is built, which
+  // is why the inline spelling refused the write and this one did not.
+  expectThrown('interface I { readonly x: uint8 } let v: I = { x: 1 }; v.x = (2 := uint8);');
+});
+
+test('a writable member is unaffected', () => {
+  expect(evaluated('type W = { x: uint8 }; let v: W = { x: 1 };'
+    + ' v.x = (2 := uint8); v.x += (1 := uint8); v.x++; String(v.x);')).toBe('4');
+});
+
+test('readonly is a property of the VIEW, not of the object', () => {
+  // The reason this is checked in the checking pass rather than at the store:
+  // one object can be viewed through both a readonly and a writable type, and
+  // the boundary hands back the same object. A mark on the object could not
+  // tell the two writes apart, and which one won would be the order the
+  // bindings happened to be declared in - so it is asserted both ways round.
+  expect(evaluated('type RO = { readonly x: uint8 }; type RW = { x: uint8 };'
+    + ' let o = { x: 1 }; let a: RW = o; let b: RO = o;'
+    + ' a.x = (2 := uint8); `${a === b}:${b.x}`;')).toBe('true:2');
+  expect(evaluated('type RO = { readonly x: uint8 }; type RW = { x: uint8 };'
+    + ' let o = { x: 1 }; let b: RO = o; let a: RW = o;'
+    + ' a.x = (2 := uint8); String(a.x);')).toBe('2');
+});
+
+test('reading is unaffected, and readonly is shallow', () => {
+  expect(evaluated('type R = { readonly x: uint8 }; let v: R = { x: 7 }; String(v.x);')).toBe('7');
+  // "it fixes the binding, not the object the field refers to", so an object
+  // HELD by a readonly member may still be mutated.
+  expect(evaluated('type Inner = { y: uint8 }; type R = { readonly o: Inner };'
+    + ' let v: R = { o: { y: 1 } }; v.o.y = (5 := uint8); String(v.o.y);')).toBe('5');
+});
+
+test('the limit: a write through an any-typed reference is not refused', () => {
+  // The view exists only in the checking pass, so a value whose static type is
+  // not known there cannot be checked. A class field's guarantee is stronger
+  // because it belongs to the object. Pinned so the limit is recorded rather
+  // than assumed.
+  expect(evaluated('type R = { readonly x: uint8 }; let v: R = { x: 1 };'
+    + ' let loose: any = v; loose.x = (2 := uint8); String(v.x);')).toBe('2');
+});

@@ -573,6 +573,7 @@ export interface Throw {
   | '$1 has no default value, so a declaration of it needs an initializer'
   | '$1 has no signature taking values of two numeric types'
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
+  | '$1 is a readonly member and cannot be assigned'
   | '$1 is a replacement decorator and cannot be shadowed'
   | '$1 is a replacement decorator and must be written outermost'
   | '$1 is a typed class and cannot be proxied'

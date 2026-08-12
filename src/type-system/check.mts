@@ -651,6 +651,65 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  /**
+   * proposal-runtime-types #sec-isobjectsubtype: an object type "is subtyped in
+   * depth only through a `readonly` member. A `readonly` member is covariant,
+   * since a value read from it and never written through it need only be of the
+   * required type." The "never written through it" is what makes that sound, and
+   * this is where it is made true for an object type.
+   *
+   * Checked here rather than at the store, which is where a class's `readonly`
+   * field is checked, because the two are not the same kind of fact. A class's
+   * `readonly` belongs to the OBJECT - the declaring class says so and the
+   * instance carries it - while an object type's belongs to the REFERENCE. One
+   * object can be viewed through both a readonly and a writable type, and the
+   * boundary hands back the same object rather than a copy:
+   *
+   *   type RO = { readonly x: uint8 };  type RW = { x: uint8 };
+   *   let o = { x: 1 };  let a: RW = o;  let b: RO = o;   // a === b === o
+   *
+   * A mark on the object could not tell `a.x = 2` from `b.x = 2`, and which one
+   * won would be the order the two bindings were declared in. The view exists
+   * only in this pass, so the check does too.
+   *
+   * The consequence, which is narrower than a class field's guarantee: a write
+   * through a value whose static type is not known here - an `any` - is not
+   * refused, and cannot be without per-reference tracking.
+   */
+  const requireWritableMember = (lhs: ParseNode | null | undefined) => {
+    if (!lhs || lhs.type !== 'MemberExpression') {
+      return;
+    }
+    const m = lhs as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
+    const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
+    if (!objType || objType.Kind !== 'object') {
+      return;
+    }
+    let key: string | SymbolValue | undefined;
+    if (m.IdentifierName) {
+      key = m.IdentifierName.name;
+    } else if (m.Expression) {
+      // A symbol-keyed store, `v[s] = ...`, resolved the way the assignability
+      // check below resolves it: the computed expression names a symbol `const`,
+      // which carries the key minted for its declaration.
+      const computed = m.Expression as { type?: string, name?: string };
+      const declaration = computed.type === 'IdentifierReference' && typeof computed.name === 'string'
+        ? symbolConsts.get(computed.name)
+        : undefined;
+      if (declaration) {
+        key = symbolKeyFor(declaration) as unknown as string;
+      }
+    }
+    if (key === undefined) {
+      return;
+    }
+    const prop = objType.Properties.find((candidate) => candidate.key === key);
+    if (prop && (prop as { readonly?: boolean }).readonly) {
+      const completion = Throw.TypeError('$1 is a readonly member and cannot be assigned', typeof key === 'string' ? Value(key) : key) as ThrowCompletion;
+      errors.push(completion.Value as ObjectValue);
+    }
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
@@ -1282,7 +1341,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Identity is by [[Declaration]], so the record handed out here is the
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
-    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
     const inProgress = {
       Kind: 'nominal',
       Declaration: node,
@@ -1300,6 +1359,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Optional?: boolean,
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
         MethodSignature?: { FunctionTypeParameterList?: readonly ParseNode[] | null, TypeAnnotation?: ParseNode.TypeAnnotation | null } | null,
+        Readonly?: boolean,
       };
       const key = memberKeyOf(tm.PropertyName);
       if (key !== undefined && typeof key !== 'string') {
@@ -1308,7 +1368,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // on, which is what lets a use site be compared against it.
         const memberType = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
         if (memberType) {
-          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional });
+          // The `readonly` flag rides along: an interface's structural form is
+          // an ~object~ Type Record (#sec-object-types), so a member declared
+          // readonly must reach the same rules an inline object type's does -
+          // identity, depth covariance, and the write refusal. Dropping it here
+          // made `interface I { readonly x: uint8 }` accept a write that the
+          // inline spelling refused.
+          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional, readonly: !!(tm as { Readonly?: boolean }).Readonly });
         }
         continue;
       }
@@ -1352,7 +1418,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
       if (t) {
-        Properties.push({ key, type: t, optional: tm.Optional === true });
+        Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly });
       }
     }
     // `Properties` is the array inside the record published above, filled in
@@ -4891,6 +4957,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // deferral rule of #sec-type-errors - imprecise rather than wrong.
         const u = n as unknown as { LeftHandSideExpression?: ParseNode | null, UnaryExpression?: ParseNode | null };
         const operand = u.LeftHandSideExpression ?? u.UnaryExpression;
+        // `v.x++` and `++v.x` read and then write, so a readonly member refuses
+        // them for the same reason it refuses an assignment.
+        requireWritableMember(operand);
         if (operand && operand.type === 'CallExpression'
             && (operand as { LocationConsuming?: boolean }).LocationConsuming === true) {
           const produced = staticType(operand);
@@ -4907,6 +4976,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'AssignmentExpression': {
         const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
+        // Every assignment operator writes, so this sits outside the `=` guards
+        // below: `v.x += 1` and `v.x ??= 1` are writes as much as `v.x = 1`.
+        requireWritableMember(a.LeftHandSideExpression);
         // proposal-runtime-types #sec-location-consuming-contexts: an
         // assignment whose target is a call stores through the location the
         // call returned, so the callee must return one. This is the `++`/`--`
