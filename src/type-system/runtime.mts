@@ -174,6 +174,83 @@ export function lookupTypeParameter(name: string): TypeRecord | null {
   return null;
 }
 
+/**
+ * Orders type arguments by the parameters they name.
+ *
+ * sec-type-expressions: "Each parameter takes, in order: its positional argument
+ * where one was supplied, otherwise the named argument bearing its name,
+ * otherwise its TypeParameterDefault."
+ *
+ * Returns a list in PARAMETER order with a hole where nothing was supplied, so
+ * the existing default-filling loop below sees exactly the shape it already
+ * handles - a shorter list, filled from the left. An application with no named
+ * argument returns the list unchanged and takes the same path it does today,
+ * which is the point: the cost of the feature falls only on those using it.
+ */
+function* OrderNamedTypeArguments(
+  params: readonly ParseNode.TypeParameter[],
+  argRecords: readonly TypeRecord[],
+  argNames: readonly (string | undefined)[],
+  typeName: string,
+): PlainEvaluator<readonly TypeRecord[]> {
+  if (!argNames.some((n) => n !== undefined)) {
+    return argRecords;
+  }
+  // Positional arguments are exactly the leading ones; a positional after a
+  // named one is refused, so a positional argument's meaning never depends on
+  // the names used after it.
+  const firstNamed = argNames.findIndex((n) => n !== undefined);
+  for (let i = firstNamed; i < argNames.length; i += 1) {
+    if (argNames[i] === undefined) {
+      return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value(typeName));
+    }
+  }
+  const filled: (TypeRecord | undefined)[] = params.map((_, i) => (i < firstNamed ? argRecords[i] : undefined));
+  for (let i = firstNamed; i < argNames.length; i += 1) {
+    const name = argNames[i]!;
+    const at = params.findIndex((p) => p.BindingIdentifier?.name === name);
+    if (at === -1) {
+      // Refused rather than ignored: a name matching nothing would otherwise be
+      // discarded and the parameter would take its default, so a misspelling
+      // would change what the program means without a diagnostic. This also
+      // carries the array forms, which take type arguments and declare no
+      // parameters at all, so there is no name for one to match.
+      return Throw.TypeError('$1 does not name a type parameter of $2', Value(name), Value(typeName));
+    }
+    if (filled[at] !== undefined) {
+      return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(name), Value(typeName));
+    }
+    filled[at] = argRecords[i];
+  }
+  // Trim to the last supplied parameter: the loop below fills the rest from
+  // their defaults, and a hole before a supplied one is a parameter with no
+  // argument and no default, which that loop already reports.
+  let last = -1;
+  for (let i = 0; i < filled.length; i += 1) {
+    if (filled[i] !== undefined) {
+      last = i;
+    }
+  }
+  const ordered: TypeRecord[] = [];
+  for (let i = 0; i <= last; i += 1) {
+    const r = filled[i];
+    if (r === undefined) {
+      const missing = params[i]?.BindingIdentifier?.name ?? String(i);
+      if (!(params[i] as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault) {
+        return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(missing), Value(typeName));
+      }
+      // A default is a TypeParameterDefault node whose type may sit under `Type`
+      // or be the node itself, depending on the production - reaching for the
+      // wrong one throws before the type is ever resolved.
+      const def = (params[i] as unknown as { TypeParameterDefault?: { Type?: ParseNode.Type } }).TypeParameterDefault!;
+      ordered.push(Q(yield* TypeNodeToTypeRecord((def.Type ?? def) as ParseNode.Type)));
+      continue;
+    }
+    ordered.push(r);
+  }
+  return ordered;
+}
+
 export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // #sec-generics: a trailing parameter with a DEFAULT may be omitted, so an
@@ -1698,14 +1775,22 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         const boundDecl = lookupTypeParameter(appliedName);
         if (boundDecl && boundDecl.Kind !== 'parameter') {
           const argRecords: TypeRecord[] = [];
+          const argNames: (string | undefined)[] = [];
           for (const argNode of node.TypeArguments.TypeArgumentList) {
+            argNames.push((argNode as { ArgumentName?: string }).ArgumentName);
             argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
           }
           if (boundDecl.Kind === 'nominal' && boundDecl.Declaration?.type === 'TypeAliasDeclaration'
               && (boundDecl.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
+            const aliasDecl = boundDecl.Declaration as ParseNode.TypeAliasDeclaration;
             return Q(yield* InstantiateGenericAlias(
-              boundDecl.Declaration as ParseNode.TypeAliasDeclaration,
-              argRecords,
+              aliasDecl,
+              Q(yield* OrderNamedTypeArguments(
+                aliasDecl.TypeParameters?.TypeParameterList ?? [],
+                argRecords,
+                argNames,
+                aliasDecl.BindingIdentifier.name,
+              )),
             ));
           }
           if (boundDecl.Kind === 'nominal') {
@@ -1771,8 +1856,10 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         }
       }
       const argRecords: TypeRecord[] = [];
+      const argNames2: (string | undefined)[] = [];
       if (node.TypeArguments) {
         for (const argNode of node.TypeArguments.TypeArgumentList) {
+          argNames2.push((argNode as { ArgumentName?: string }).ArgumentName);
           // proposal-runtime-types #sec-higher-kinded-parameters: an argument
           // binding a higher-kinded parameter is a DECLARATION, not a type, and
           // resolving it as a type reports that a bare generic alias "is not a
@@ -1928,7 +2015,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (isTypeObject(value)) {
         const record = value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
-          return Q(yield* InstantiateGenericAlias(record.Declaration as ParseNode.TypeAliasDeclaration, argRecords));
+          const decl2 = record.Declaration as ParseNode.TypeAliasDeclaration;
+          return Q(yield* InstantiateGenericAlias(decl2, Q(yield* OrderNamedTypeArguments(
+            decl2.TypeParameters?.TypeParameterList ?? [],
+            argRecords,
+            argNames2,
+            decl2.BindingIdentifier.name,
+          ))));
         }
         baseRecord = record;
       } else if (value instanceof ObjectValue) {
@@ -2028,6 +2121,16 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return { Kind: 'intersection', Members };
     }
     case 'ArrayType': {
+      // sec-type-expressions: a named type argument must name a declared
+      // parameter. An array type takes TypeArguments and declares NONE - the
+      // grammar names neither its extent nor its element - so a name here can
+      // match nothing and is refused rather than silently ignored.
+      for (const argNode of node.TypeArguments?.TypeArgumentList ?? []) {
+        const named = (argNode as { ArgumentName?: string }).ArgumentName;
+        if (named !== undefined) {
+          return Throw.TypeError('$1 does not name a type parameter of $2', Value(named), Value('an array type'));
+        }
+      }
       const Element = node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 0
         ? Q(yield* TypeNodeToTypeRecord(node.TypeArguments.TypeArgumentList[0]))
         : anyType;

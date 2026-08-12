@@ -597,7 +597,6 @@ export interface Throw {
   | '$1 is not a generic type'
   | '$1 is not a list'
   | '$1 is not a member of this type'
-  | '$1 is overloaded; read its parameters through its signatures'
   | '$1 is not a member of this vector'
   | '$1 is not a number'
   | '$1 is not a parameter'
@@ -767,6 +766,7 @@ export interface Throw {
   | 'a do expression may not end in $1'
   | 'a match arm may not end in $1'
   | 'a meta declaration requires a $1 hook'
+  | 'a positional type argument cannot follow a named one in $1'
   | 'a string is not a conversion source for $1; use its parse or tryParse'
   | 'a using declaration cannot be typed $1, whose values carry no disposal method'
   | 'addInitializer must be called with a function, but $1 was passed'
@@ -827,6 +827,7 @@ export interface Throw {
   | '$1 contains itself through field $2, so it has no finite layout'
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'
+  | '$1 does not name a type parameter of $2'
   | '$1 has no signature taking a value of type $2'
   | '$1 is a required on object $2'
   | '$1 is already an enumerator of $2, and a value may be an enumerator of at most one enum'
@@ -867,6 +868,8 @@ export interface Throw {
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'
   | 'the replacement decorator $1 is not compile-time evaluable: it names $2'
+  | 'the type parameter $1 of $2 has no argument and no default'
+  | 'the type parameter $1 of $2 is supplied twice'
   , $1: Formattable, $2: Formattable): ThrowCompletion;
   (m:
 '"roundingMode" on object $1 is not valid ($2), only $3 are accepted'
