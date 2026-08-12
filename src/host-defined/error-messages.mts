@@ -98,7 +98,9 @@ export function format(arg: Formattable): string {
     case arg instanceof VectorValue:
       return `(${(arg as VectorValue).lanes.map((lane: unknown) => format(lane as never)).join(', ')})`;
     case arg instanceof TypedNumberValue:
-      return `${(arg as TypedNumberValue).numberValue()} (typed)`; // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+      // Read as carried, so a diagnostic about a wide value names the value the
+      // program wrote rather than the nearest double to it.
+      return `${(arg as TypedNumberValue).value} (typed)`;
     case arg instanceof BigIntValue:
       return `${String(R(arg))}n`;
     case arg instanceof SymbolValue:

@@ -87,7 +87,11 @@ const INSPECTORS = {
   },
   // proposal-runtime-types R6: a typed number prints its value with a typed
   // marker so it is distinguishable from a plain Number in debug output.
-  TypedNumber: (v: TypedNumberValue) => `${v.numberValue()} (typed)`, // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+  // The payload is read as it is CARRIED: a value of a type wider than 53 bits
+  // holds a BigInt, and rendering it through a Number would show a different
+  // number from the one `String()` gives - the inspector is where a program
+  // usually LOOKS at a value, so it would report the exactness as absent.
+  TypedNumber: (v: TypedNumberValue) => `${v.value} (typed)`,
   // proposal-runtime-types #sec-vector-types: the lanes, parenthesized, which is how the design writes a vector literal.
   Vector: (v: VectorValue, _ctx: InspectContext, i: (v: Value) => string) => `(${v.lanes.map((lane) => i(lane)).join(', ')})`,
   Reference: () => '[reference]',

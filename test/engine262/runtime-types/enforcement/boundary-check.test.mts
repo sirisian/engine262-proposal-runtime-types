@@ -113,11 +113,17 @@ test('the checked boundary admits no bare value into a parameterization: the cas
 test('a BigInt is a conversion source for the float families', () => {
   // The lossy cast rounds to the width; the checked boundary admits exactly
   // where the width represents the value exactly, and RangeErrors where it
-  // rounds. An integer target stays refused: exactness at the wide widths is
-  // the pinned prerequisite.
+  // rounds.
   expect(evaluated('String((3n := float64));')).toBe('3');
   expect(evaluated('String(float64(3n));')).toBe('3');
   expect(evaluated('let f: float64 = 3n; String(f);')).toBe('3');
   expectThrown('let f: float64 = (2n ** 70n) + 1n; "admitted";');
-  expectThrown('(3n := uint8); "admitted";');
+  // An integer target was refused while "exactness at the wide widths" was the
+  // pinned prerequisite. It has landed - a type wider than 53 bits carries its
+  // value exactly - so an integer target takes a BigInt on the same terms the
+  // float families do: exactly where the width admits the value, and a
+  // RangeError where it does not.
+  expect(evaluated('String((3n := uint8));')).toBe('3');
+  expect(evaluated('String(int64(9007199254740993n));')).toBe('9007199254740993');
+  expectThrown('(300n := uint8); "admitted";');
 });

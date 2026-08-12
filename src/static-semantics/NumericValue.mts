@@ -1,6 +1,6 @@
-import { Value } from '../value.mts';
+import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, DecimalContextLiteralWidth } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { surroundingAgent } from '#self';
 
@@ -21,6 +21,18 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   // not merely imprecise here, it cannot represent the answer at all. `1.0` and
   // `1.00` are ONE double and TWO decimals, so the cohort member exists only in
   // the text.
+  // A literal the checker read at a WIDE INTEGER type evaluates to the exact
+  // integer its source text denotes. #sec-integer-types gives such a type
+  // "exactly 2**N values" and a double distinguishes them only to 53 bits, so
+  // `let x: int64 = 9007199254740993;` was the double ...992 before the type was
+  // ever consulted. The checker carries the value AND the type here, so the
+  // literal becomes a value of that type directly rather than a BigInt that the
+  // boundary would have to convert - a boundary the checker is entitled to
+  // elide, which would leave the BigInt as the binding's value.
+  const wide = WideIntegerContextLiteral(node);
+  if (wide !== undefined) {
+    return new TypedNumberValue(wide.value, wide.type);
+  }
   const source = typeof node.SourceText === 'string' ? node.SourceText : undefined;
   const width = source !== undefined ? DecimalContextLiteralWidth(node) : undefined;
   if (width !== undefined && source !== undefined) {

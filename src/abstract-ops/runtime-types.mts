@@ -12,7 +12,7 @@ import { IsCheckElided } from '../type-system/check.mts';
 import { anyType, displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
-import { isFloatTypeName } from '../type-system/numeric-signatures.mts';
+import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
 import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
@@ -344,6 +344,26 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // `uint8(300)` is 44. The conversion table is keyed on numeric families,
         // so a non-numeric source (a String, an object) is not a family the wrap
         // covers and takes the checked path, which throws when it cannot fit.
+        // #sec-requiretype: "If _t_ is a numeric type and RuntimeTypeOf(_value_)
+        // is a numeric type", convert, "except that a conversion that would
+        // wrap, truncate toward zero, or round a finite value to an infinity
+        // instead yields ~unrepresentable~" and throws a RangeError. A BigInt is
+        // a numeric type - #sec-numeric-types defines Number and BigInt that way
+        // and this proposal's families join them - so it converts to an integer
+        // type, exactly where the width admits the value.
+        //
+        // This is the only spelling that expresses a wide value in an UNTYPED
+        // position, which is the position the `n` suffix exists for.
+        if (value instanceof BigIntValue && isIntegerTypeName(t.Name)) {
+          const exact = R(value) as bigint;
+          if (!fitsNumericType(exact, t.Name, t.Arguments)) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          const bits = typeof t.Arguments[0] === 'number' ? t.Arguments[0] : 0;
+          // Narrower than 54 bits keeps the Number representation, so the two
+          // carriers stay exactly where the rest of the engine expects them.
+          return new TypedNumberValue(bits > 53 ? exact : Number(exact), t);
+        }
         if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
           // #sec-conversions: a BigInt is a numeric family, and the float rule
           // is the one that has an answer for it — round to the width, overflow
@@ -766,6 +786,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       case 'boolean':
         return ToBoolean(value);
       case 'bigint': {
+        // The other direction of the same rule: an integer type's values ARE
+        // mathematical integers, so every one of them is a BigInt exactly, and
+        // #sec-requiretype converts between two numeric types. A wide type
+        // carries its value as a BigInt already; a narrow one carries a Number
+        // that is an integer by construction.
+        if (isTypedNumber(value)) {
+          const record = value.TypeRecord as TypeRecord;
+          if (record.Kind === 'primitive' && isIntegerTypeName(record.Name)) {
+            return Value(value.bigintValue());
+          }
+        }
         // The checked rule for the same source: exact where the Number is an
         // integer, a RangeError where it is not, since a BigInt has no
         // fraction to round into (F66).

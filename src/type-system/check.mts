@@ -21,6 +21,7 @@ import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
+import { isWideIntegerType } from './arithmetic.mts';
 import { resolveOverloadByTypes } from './overloads.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
@@ -411,6 +412,24 @@ const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
 
 export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
   return decimalLiterals.get(node);
+}
+
+/**
+ * Numeric literals the checker read at a WIDE INTEGER type, with the exact value
+ * to build them from - consulted by NumericValue, exactly as the two marks above
+ * are.
+ *
+ * #sec-integer-types gives `int.<N>` "exactly 2**N values", and a double
+ * distinguishes those only to 53 bits, so `let x: int64 = 9007199254740993;`
+ * was the double ...992 before anything could consult the type.
+ * #sec-literalvalueintype takes "the mathematical value denoted by the literal,
+ * as defined by the numeric literal grammar, BEFORE ANY ROUNDING", and the
+ * source text is where that value still exists.
+ */
+const wideIntegerLiterals = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+
+export function WideIntegerContextLiteral(node: object): { value: bigint, type: TypeRecord } | undefined {
+  return wideIntegerLiterals.get(node);
 }
 
 export function IsCheckElided(annotation: object): boolean {
@@ -1222,6 +1241,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (exact !== null) {
         bigintLiterals.add(node);
         return { Kind: 'literal', Value: Value(exact), Base: makePrimitive('bigint') };
+      }
+    }
+    // The same reading at a WIDE INTEGER position, and for the same reason the
+    // decimal case gives: the double cannot represent the answer. `int64` has
+    // values a double does not distinguish, so the literal's mathematical value
+    // has to come from the text before the lexer rounded it.
+    if (node.type === 'NumericLiteral' && contextual && isWideIntegerType(contextual as TypeRecord)) {
+      const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
+      if (exact !== null) {
+        const prim = contextual as TypeRecord & { Kind: 'primitive' };
+        if (fitsNumericType(exact, prim.Name, prim.Arguments)) {
+          // The TYPE is carried with the value so the literal evaluates straight
+          // to a value OF it. Returning a BigInt and converting at the boundary
+          // would be the tidier-looking route and is wrong: the checker may
+          // ELIDE an annotation it has proved, and the raw BigInt would then be
+          // the binding's value.
+          wideIntegerLiterals.set(node, { value: exact, type: contextual as TypeRecord });
+          return contextual;
+        }
       }
     }
     return staticType(node);
@@ -4318,8 +4356,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'TypedConversionExpression': {
         const tc = n as ParseNode.TypedConversionExpression;
+        const target = resolveType(tc.Type);
+        // A cast is a contextual position FOR A LITERAL, and only for one.
+        // #sec-literalvalueintype is about "a literal in a position whose type
+        // is known", and a conversion's target is as known as an annotation, so
+        // `(9007199254740993 := int64)` must read its digits exactly rather than
+        // taking the double the lexer made.
+        //
+        // Offering the target to an arbitrary operand would be a different and
+        // wrong thing: a contextual type also RANKS OVERLOADS, and the numeric
+        // library's listing turns on the difference between converting the
+        // result and converting the operand - `(Math.sqrt((10 := uint8)) := float64)`
+        // keeps the integer row's exact root, where `Math.sqrt((10 := float64))`
+        // selects the float row's approximation. Reading the call through the
+        // target collapsed the two.
+        if ((tc.Expression as ParseNode).type === 'NumericLiteral') {
+          staticTypeIn(tc.Expression as ParseNode, target);
+        }
         walk(tc.Expression as ParseNode);
-        resolveType(tc.Type);
         return;
       }
       case 'RelationalExpression': {

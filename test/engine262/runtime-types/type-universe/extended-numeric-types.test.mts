@@ -247,16 +247,21 @@ test('numeric types: ToBigInt refuses a numeric value rather than crashing', () 
   // A typed value took NO branch of ToBigInt and fell through to the
   // non-exhaustive throw, which is a host crash rather than a language error:
   // `BigInt(3 := uint32)` killed the host. The rule it takes now is the one
-  // already written for a Number on the line above it, since this proposal has
-  // no conversion from a sized integer to a bigint at all.
+  // already written for a Number on the line above it.
   expectThrownKind('BigInt((3 := uint32));', 'TypeError');
   expectThrownKind('BigInt((1.5 := float64));', 'TypeError');
   expectThrownKind('BigInt.asIntN(64, (3 := uint32));', 'TypeError');
-  // The asymmetry is deliberate: the BigInt CONSTRUCTOR has its own Number
-  // step, so a plain 3 converts where a typed 3 does not. If those are ever to
-  // converge the lever is the cast, which refuses today for the same reason.
+  // The asymmetry is deliberate and is between two different operations. The
+  // BigInt CONSTRUCTOR is ECMAScript's own, has its own Number step, and takes
+  // no typed value - a plain 3 converts where a typed 3 does not.
   expect(evaluated('String(BigInt(3));')).toBe('3');
-  expectThrownKind('bigint((3 := uint32));', 'TypeError');
+  // The `bigint` CONVERSION is this proposal's, and #sec-requiretype converts
+  // between two numeric types: an integer type's values are mathematical
+  // integers, so each is a BigInt exactly.
+  expect(evaluated('String(bigint((3 := uint32)));')).toBe('3');
+  // A float is refused for the reason the line above it gives - it has a
+  // fraction to lose, and a BigInt has nowhere to put one.
+  expectThrownKind('bigint((1.5 := float64));', 'TypeError');
 });
 
 test('numeric types: a literal at `bigint` is read from its source text', () => {
@@ -518,4 +523,70 @@ test('the shifts are still wrong at a width a double holds', () => {
   expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('1');
 });
 
+test('a literal reaches a wide type exactly', () => {
+  // #sec-literalvalueintype takes "the mathematical value denoted by the
+  // literal, as defined by the numeric literal grammar, BEFORE ANY ROUNDING",
+  // and the lexer has already produced a double by then - so the value comes
+  // from the literal's source text, as it already did for a decimal and a
+  // BigInt contextual position.
+  expect(evaluated('let x: int64 = 9007199254740993; String(x);')).toBe('9007199254740993');
+  expect(evaluated('let y: uint64 = 18446744073709551615; String(y);')).toBe('18446744073709551615');
+  // A cast is a contextual position for a literal too.
+  expect(evaluated('String((1152921504606846977 := int64));')).toBe('1152921504606846977');
+  // And the literal is a value OF the type, not a BigInt that happened to
+  // arrive - which matters because the checker may elide the annotation it has
+  // just proved.
+  expect(evaluated('let x: int64 = 9007199254740993; `${typeof x}:${x is int64}`;')).toBe('number:true');
+});
 
+test('a literal outside a wide position is unaffected', () => {
+  // The same digits at `number` still round, because that is what a Number is.
+  expect(evaluated('let n: number = 9007199254740993; String(n);')).toBe('9007199254740992');
+  expect(evaluated('let s: uint8 = 200; String(s);')).toBe('200');
+  // A literal a wide type cannot hold is still refused rather than wrapped.
+  expect(() => evaluated('let x: uint64 = 18446744073709551616;')).toThrow();
+});
+
+test('a cast does not offer its target as a contextual type to anything else', () => {
+  // A contextual type also RANKS OVERLOADS, so offering the target to an
+  // arbitrary operand would collapse the numeric library's distinction between
+  // converting the result and converting the operand.
+  expect(evaluated('String((Math.sqrt((10 := uint8)) := float64));')).toBe('3');
+  expect(evaluated('String(Math.sqrt((10 := float64)));')).toBe('3.1622776601683795');
+});
+
+test('a BigInt converts to an integer type, and back', () => {
+  // #sec-requiretype: "If _t_ is a numeric type and RuntimeTypeOf(_value_) is a
+  // numeric type", convert. A BigInt is a numeric type - #sec-numeric-types
+  // defines Number and BigInt that way - so both directions are conversions,
+  // and this is the only spelling that expresses a wide value in an UNTYPED
+  // position, which is what the `n` suffix is for.
+  expect(evaluated('String(int64(9007199254740993n));')).toBe('9007199254740993');
+  expect(evaluated('String(9007199254740993n := int64);')).toBe('9007199254740993');
+  expect(evaluated('String(uint64(18446744073709551615n));')).toBe('18446744073709551615');
+  // A narrow type takes one too, and keeps its Number carrier.
+  expect(evaluated('`${uint8(5n)}:${typeof uint8(5n)}`;')).toBe('5:number');
+  // And back, at both carriers - written as the EXPLICIT conversion, because
+  // #sec-the-conversion-rule makes a primitive assignable only to itself and
+  // `any`, so an annotation is refused where the checker knows the type. The
+  // conversion is the spelling that asks for it.
+  expect(evaluated('const b = bigint(int64.parse("9007199254740993")); `${b}:${typeof b}`;'))
+    .toBe('9007199254740993:bigint');
+  expect(evaluated('const b = bigint((5 := uint8)); `${b}:${typeof b}`;')).toBe('5:bigint');
+});
+
+test('a BigInt the width cannot hold is refused rather than wrapped', () => {
+  // "except that a conversion that would wrap, truncate toward zero, or round a
+  // finite value to an infinity instead yields ~unrepresentable~".
+  expect(() => evaluated('uint8(300n);')).toThrow();
+  expect(() => evaluated('uint8(-1n);')).toThrow();
+  expect(() => evaluated('uint64(18446744073709551616n);')).toThrow();
+});
+
+test('a wide value reads the same however it is looked at', () => {
+  // String, a template, and the INSPECTOR agree. The inspector is where a
+  // program usually looks at a value, so rendering it through a Number would
+  // report the exactness as absent even though it is there.
+  expect(evaluated('const x = int64.parse("9007199254740993");'
+    + ' `${String(x)}:${`${x}`}`;')).toBe('9007199254740993:9007199254740993');
+});
