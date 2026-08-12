@@ -414,16 +414,46 @@ export abstract class TypeParser extends ExpressionParser {
 
   // TypeArguments :
   //   `.<` TypeArgumentList `,`? `>`
+  /**
+   * TypeArgument : Type
+   *              : BindingIdentifier `:` Type
+   *
+   * The named form supplies a parameter by NAME, so an application can skip a
+   * parameter that has a default rather than repeat it - `Grid.<Cols: 8>` where
+   * `Grid.<float64, 4, 8>` repeats what does not differ.
+   *
+   * The name rides on the type node rather than wrapping it, so every consumer
+   * of a TypeArgumentList keeps working unchanged and only resolution, which
+   * looks for the name, sees a difference.
+   *
+   * ONE function serves six call sites - type references, both array forms, and
+   * MemberExpression/CallExpression - so `[4].<Element: uint8>` parses here too.
+   * It is refused during resolution, where the absence of a declared parameter
+   * to match is what makes it an error.
+   */
+  parseTypeArgument(): ParseNode.Type {
+    // An identifier followed by `:` has no other reading in this position: a
+    // named argument is told from a type by the colon alone.
+    if (this.test(Token.IDENTIFIER) && this.testAhead(Token.COLON)) {
+      const name = this.parseIdentifierName().name;
+      this.expect(Token.COLON);
+      const type = this.parseType();
+      (type as { ArgumentName?: string }).ArgumentName = name;
+      return type;
+    }
+    return this.parseType();
+  }
+
   parseTypeArguments(): ParseNode.TypeArguments {
     const node = this.startNode<ParseNode.TypeArguments>();
     this.expect(Token.PERIOD_LT);
     this.noFuseGT += 1;
-    const TypeArgumentList: ParseNode.Type[] = [this.parseType()];
+    const TypeArgumentList: ParseNode.Type[] = [this.parseTypeArgument()];
     while (this.eat(Token.COMMA)) {
       if (this.test(Token.GT)) {
         break;
       }
-      TypeArgumentList.push(this.parseType());
+      TypeArgumentList.push(this.parseTypeArgument());
     }
     this.expect(Token.GT);
     this.noFuseGT -= 1;
