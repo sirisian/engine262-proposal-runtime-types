@@ -4,6 +4,7 @@ import type {
   ParseNodesByType,
 } from './ParseNode.mts';
 import { Scope } from './Scope.mts';
+import { PrescanDecoratorModes } from './PrescanDecoratorModes.mts';
 import { surroundingAgent, type Feature } from '#self';
 
 export interface ParserOptions {
@@ -30,6 +31,19 @@ export class Parser extends LanguageParser {
 
   protected readonly decoratingSource?: string;
 
+  /**
+   * proposal-runtime-types: the lexical MODE each replacement decorator's region
+   * is scanned in, keyed by the decoration's name.
+   *
+   * Collected by a PRE-SCAN of the preprocessor imports rather than from the
+   * parsed tree, because it has to be known before the region is scanned and
+   * expansion runs on an already-parsed tree - so there is no later point at
+   * which to learn it. An import declaration is at the top of a module and lexes
+   * as ordinary ECMAScript, so the pre-scan is cheap and cannot itself need a
+   * mode.
+   */
+  readonly decoratorModes: ReadonlyMap<string, string>;
+
   constructor({
     source, specifier, json = false, allowAllPrivateNames = false, decoratingSource,
   }: ParserOptions) {
@@ -37,6 +51,9 @@ export class Parser extends LanguageParser {
     this.source = source;
     this.specifier = specifier;
     this.decoratingSource = decoratingSource;
+    this.decoratorModes = surroundingAgent?.feature?.('runtime-types')
+      ? PrescanDecoratorModes(source)
+      : new Map();
     this.state = {
       hasTopLevelAwait: false,
       strict: false,

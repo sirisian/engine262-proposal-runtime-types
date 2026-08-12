@@ -29,6 +29,12 @@ export interface ExpansionSite {
   readonly distance: number;
   /** The source range of the decoration's own arguments, where it has any. */
   readonly args?: { start: number, end: number };
+  /**
+   * The lexical mode its region was scanned in, where the decoration declared
+   * one. The region's tokens are produced in that mode rather than as
+   * ECMAScript, which is the whole point of declaring it.
+   */
+  readonly mode?: string;
 }
 
 /**
@@ -119,6 +125,8 @@ export function ExpansionSites(root: ParseNode, names: readonly string[]): reado
             name: spelled.name,
             distance: decorators.length - 1 - i,
             args: spelled.args,
+            // A ModedRegion carries the mode the parser scanned it in.
+            mode: (n as { Mode?: string }).Mode,
           });
         }
       });
@@ -176,7 +184,7 @@ export function ExpandSource(
   root: ParseNode,
   names: readonly string[],
   resolve: (name: string) => unknown,
-  tokensOfRange: (from: number, to: number) => unknown,
+  tokensOfRange: (from: number, to: number, mode?: string) => unknown,
   checkEvaluable: (fn: unknown) => string | undefined,
   call: (fn: unknown, tokens: unknown, args?: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
@@ -239,7 +247,9 @@ export function ExpandSource(
     const argTokens = site.args === undefined
       ? undefined
       : tokensOfRange(site.args.start, site.args.end);
-    const returned = call(fn, tokensOfRange(decoratorEnd, end), argTokens);
+    // The region's own mode, not the arguments' - a decoration's arguments are
+    // always ECMAScript however its region is scanned.
+    const returned = call(fn, tokensOfRange(decoratorEnd, end, site.mode), argTokens);
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own

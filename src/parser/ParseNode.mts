@@ -1194,6 +1194,30 @@ export namespace ParseNode {
   export type BlockStatement =
     | Block;
 
+  /**
+   * proposal-runtime-types: a region scanned in a lexical MODE that is not
+   * ECMAScript, awaiting the macro that decorates it.
+   *
+   * It is never evaluated. It exists so that a decoration can be attached to it,
+   * FOUND by ExpansionSites - which walks a parse tree - and have its source
+   * range spliced, which is how expansion replaces anything. Without a node
+   * there is nothing to find and nothing to measure, which is why a mode cannot
+   * be a purely lexical affair.
+   *
+   * After expansion the region is gone, replaced by the ordinary ECMAScript the
+   * macro returned, and the re-parse sees nothing unusual.
+   */
+  export interface ModedRegion extends BaseParseNode {
+    readonly type: 'ModedRegion';
+    readonly Decorators?: readonly Decorator[] | null;
+    /** The mode its import declared, e.g. `"jsx"`. */
+    readonly Mode: string;
+    /** The region's source text, delimiters included. */
+    readonly RegionText: string;
+    /** Whether it stands where a value is wanted, as `@jsx do { ... }` does. */
+    readonly IsExpression: boolean;
+  }
+
   // Block :
   //   `{` StatementList `}`
   export interface Block extends BaseParseNode {
@@ -3620,6 +3644,7 @@ export namespace ParseNode.RegExp {
 }
 
 export type ParseNode =
+  | ParseNode.ModedRegion
   | ParseNode.PipelineExpression
   | ParseNode.TopicReference
   | ParseNode.DoExpression

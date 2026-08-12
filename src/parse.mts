@@ -29,6 +29,7 @@ import { Call } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText } from './parser/TokensOf.mts';
+import { tokenizeModedText } from './parser/ModedTokens.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
@@ -258,11 +259,18 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       body,
       replacementNames,
       (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
-      (from, to) => {
+      (from, to, mode) => {
         const slice = sourceText.slice(from, to);
-        return CreateTokenStream(tokenizeText(slice, {
+        const source = {
           URL: hostDefined.specifier, Macro: undefined, Generation: 0, Text: slice,
-        }), realm);
+        };
+        // A moded region is NOT ECMAScript, so tokenizing it as such is what
+        // failed before a mode could be declared - `<div/>` reaches `<` where an
+        // expression is wanted and the scan stops. The mode's own scanner
+        // produces its tokens instead.
+        return CreateTokenStream(mode === undefined
+          ? tokenizeText(slice, source)
+          : tokenizeModedText(slice, mode, source), realm);
       },
       (fn) => {
         // The macro's own source is on the function object, so evaluability is

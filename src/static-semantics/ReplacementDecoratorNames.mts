@@ -46,6 +46,67 @@ export function ReplacementDecoratorNames(module: ParseNode.Module | ParseNode.M
   return names;
 }
 
+/**
+ * The value of an import attribute, or undefined where the declaration carries
+ * no such key.
+ */
+export function ImportAttributeValue(node: ParseNode, wantedKey: string): string | undefined {
+  const entries = (node as {
+    WithClause?: { WithEntries?: readonly ParseNode[] };
+  }).WithClause?.WithEntries ?? [];
+  for (const entry of entries) {
+    const e = entry as { AttributeKey?: ParseNode, AttributeValue?: { value?: unknown } };
+    if (!e.AttributeKey) {
+      continue;
+    }
+    const key = StringValue(e.AttributeKey as Parameters<typeof StringValue>[0]).stringValue();
+    if (key === wantedKey) {
+      return String(e.AttributeValue?.value);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * proposal-runtime-types: the lexical MODE each replacement decorator's region
+ * is scanned in, where its import declares one.
+ *
+ * A region a macro decorates is scanned as ECMAScript, which is why a DSL that
+ * is not ECMAScript - JSX being the motivating one - cannot reach a macro at
+ * all: `<` cannot begin an expression, so the parse fails before the macro is
+ * ever consulted.
+ *
+ * The mode is declared on the IMPORT and keyed by the decoration's NAME, which
+ * is what lets a highlighter recognise a region without resolving imports - a
+ * TextMate grammar cannot follow one, and keying on the literal name is how
+ * `lit-html` and `graphql-tag` are highlighted today.
+ *
+ * `mode` is one key of an OPEN set: a later key may carry a type contract for
+ * completion inside the region, so an implementation must not treat the
+ * attribute list as closed.
+ */
+export function ReplacementDecoratorModes(module: ParseNode): Map<string, string> {
+  const modes = new Map<string, string>();
+  const items = (module as { ModuleItemList?: readonly ParseNode[] }).ModuleItemList ?? [];
+  for (const item of items) {
+    if (!IsPreprocessorImport(item)) {
+      continue;
+    }
+    const mode = ImportAttributeValue(item, 'mode');
+    if (mode === undefined) {
+      continue;
+    }
+    const clause = (item as { ImportClause?: { NamedImports?: { ImportsList?: readonly ParseNode[] } } }).ImportClause;
+    for (const spec of clause?.NamedImports?.ImportsList ?? []) {
+      const binding = (spec as { ImportedBinding?: ParseNode }).ImportedBinding;
+      if (binding) {
+        modes.set(StringValue(binding as Parameters<typeof StringValue>[0]).stringValue(), mode);
+      }
+    }
+  }
+  return modes;
+}
+
 /** Whether an |ImportDeclaration| carries `preprocessor` set to `"true"`. */
 export function IsPreprocessorImport(node: ParseNode): boolean {
   const entries = (node as {

@@ -6,6 +6,7 @@ import {
   ContainsArguments,
 } from '../static-semantics/all.mts';
 import type { Mutable } from '../utils/language.mts';
+import { ScanBalancedRun } from './ScanBalancedRun.mts';
 import {
   Token,
   isPropertyOrCall,
@@ -264,6 +265,68 @@ export abstract class ExpressionParser extends FunctionParser {
     node.location.end.line = this.currentToken.line;
     node.location.end.column = this.currentToken.column;
     return node;
+  }
+
+  /**
+   * The region a moded decoration takes, or undefined where the decoration
+   * declares no mode.
+   *
+   * `@jsx do { <div/> }` and `@jsx { <div/> }`: the region begins at the `{` and
+   * ends at its match, found by ScanBalancedRun rather than by the tokenizer,
+   * because its contents are not ECMAScript.
+   */
+  parseModedRegion(decorators: readonly ParseNode.Decorator[] | null): ParseNode.ModedRegion | undefined {
+    if (!decorators || decorators.length === 0) {
+      return undefined;
+    }
+    let mode;
+    for (const d of decorators) {
+      const spelled = (d as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
+      if (spelled?.type === 'IdentifierReference' && typeof spelled.name === 'string') {
+        const declared = (this as unknown as { decoratorModes: ReadonlyMap<string, string> }).decoratorModes?.get(spelled.name);
+        if (declared !== undefined) {
+          mode = declared;
+        }
+      }
+    }
+    if (mode === undefined) {
+      return undefined;
+    }
+    // The node begins where the region does, INCLUDING a `do`. Expansion splices
+    // the node's source range, so starting after the `do` would leave it behind
+    // for the re-parse to trip on.
+    const node = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
+    // `do` is the expression carrier - it yields a value, which is what an
+    // element expression is - and a bare block is the statement one.
+    const isExpression = this.test(Token.DO);
+    if (isExpression) {
+      this.next();
+    }
+    const start = this.peek().startIndex;
+    if (this.source[start] !== '{') {
+      return this.unexpected() as never;
+    }
+    const run = ScanBalancedRun(this.source, start);
+    if (run === undefined) {
+      return this.unexpected() as never;
+    }
+    (node as { Mode?: string }).Mode = mode;
+    (node as { RegionText?: string }).RegionText = this.source.slice(start, run.end);
+    (node as { IsExpression?: boolean }).IsExpression = isExpression;
+    (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
+    // The tokenizer skipped nothing yet, so it is repositioned past the region -
+    // the node carries the text, and expansion replaces the range.
+    this.resumeLexingAt(run.end);
+    const finished = this.finishNode(node as ParseNode.Unfinished<ParseNode>, 'ModedRegion' as ParseNode['type']) as unknown as ParseNode.ModedRegion;
+    // markLocationEnd reads the last TOKEN's end, and no token was read for the
+    // region - it was scanned by delimiter. Expansion splices the target's source
+    // RANGE, so an end left at the `{` would replace only the opening brace and
+    // leave the region's text behind, which the re-parse then fails on. Set it
+    // from the scan.
+    if (finished.location) {
+      (finished.location as { endIndex: number }).endIndex = run.end;
+    }
+    return finished;
   }
 
   private isParsingArrowParameterCandidate() {
@@ -1533,6 +1596,15 @@ export abstract class ExpressionParser extends FunctionParser {
         // class here either - the same dispatch the statement position needed.
         if (surroundingAgent.feature('runtime-types')) {
           const decorators = this.parseDecorators();
+          // A decoration whose name declared a lexical MODE takes its region
+          // whole. Needed HERE as well as in the statement path, because
+          // `const v = @jsx do { ... }` is an expression and never reaches that
+          // one - which is also the position `do` exists for, since it is the
+          // carrier that yields a value.
+          const moded = this.parseModedRegion(decorators);
+          if (moded !== undefined) {
+            return moded as unknown as ParseNode.PrimaryExpression;
+          }
           if (this.test(Token.LBRACE)) {
             const literal = this.parseObjectLiteral();
             (literal as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;

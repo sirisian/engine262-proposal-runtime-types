@@ -387,6 +387,56 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
     };
   }
 
+  /**
+   * proposal-runtime-types: resume lexing at _index_, discarding any token
+   * already read ahead.
+   *
+   * A moded region is found by delimiter rather than by tokenizing - its
+   * contents are not ECMAScript - so once its end is known the lexer has to be
+   * placed past it. Line and column are recomputed from the source so that a
+   * diagnostic after the region still reports where the developer wrote it.
+   */
+  protected resumeLexingAt(index: number) {
+    this.position = index;
+    this.peekAheadToken = undefined!;
+    this.lineTerminatorBeforeNextToken = false;
+    let line = 1;
+    let lastBreak = -1;
+    for (let i = 0; i < index; i += 1) {
+      if (this.source[i] === '\n') {
+        line += 1;
+        lastBreak = i;
+      }
+    }
+    this.line = line;
+    this.columnOffset = lastBreak + 1;
+    this.positionForNextToken = index;
+    this.lineForNextToken = line;
+    this.columnForNextToken = index - lastBreak;
+    // The region consumed no tokens, so currentToken still describes whatever
+    // preceded it and peekToken describes the region's opening delimiter. Both
+    // are made to describe the region's END instead: `next()` copies peekToken
+    // into currentToken, and `markLocationEnd` reads currentToken.endIndex - so
+    // leaving either stale gives the ENCLOSING node a range that stops inside
+    // the region, which the re-parse after expansion then fails on. In a
+    // statement position nothing enclosing asked; in an expression position the
+    // binding element did, and reported an undefined token far from the cause.
+    const atEnd = {
+      ...(this.peekToken ?? this.currentToken),
+      startIndex: index,
+      endIndex: index,
+      line,
+      column: index - lastBreak,
+      hadLineTerminatorBefore: false,
+    } as typeof this.peekToken;
+    this.currentToken = atEnd;
+    // peekToken must hold the REAL next token rather than be cleared. `peek()`
+    // delegates to `next()`, and `next()` copies peekToken into currentToken -
+    // so leaving it undefined destroys the priming above at the first peek, and
+    // the enclosing node's `markLocationEnd` then reads an undefined token.
+    this.peekToken = this.advance();
+  }
+
   protected restoreLexerCheckpoint(cp: ReturnType<Lexer['getLexerCheckpoint']>) {
     this.position = cp.position;
     this.line = cp.line;

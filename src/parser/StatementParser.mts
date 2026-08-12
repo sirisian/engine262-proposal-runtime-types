@@ -759,6 +759,14 @@ export abstract class StatementParser extends TypeParser {
     // The module-item path consumes the list before it knows whether an `export`
     // follows, so it passes what it already has rather than parsing twice.
     const decorators = alreadyParsed ?? this.parseDecorators();
+    // A decoration whose name declared a lexical MODE takes its region whole,
+    // scanned by delimiter rather than tokenized as ECMAScript. This has to
+    // happen before the ordinary dispatch below, because the region's contents
+    // are exactly what that dispatch cannot parse.
+    const moded = this.parseModedRegion(decorators);
+    if (moded !== undefined) {
+      return moded as unknown as ParseNode.StatementListItem;
+    }
     const give = <T,>(node: T): T => {
       (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
       return node;
