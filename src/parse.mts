@@ -259,10 +259,17 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         const violation = FirstEvaluabilityViolation(parsed);
         return violation ? `${violation.name} (${violation.why})` : undefined;
       },
-      (fn, tokens) => {
+      (fn, tokens, args) => {
         // `skipDebugger` drives the evaluator synchronously: expansion happens
         // before anything is running, so there is no context to suspend into.
-        const result = EnsureCompletion(skipDebugger(Call(fn as ObjectValue, Value.undefined, [tokens as Value])));
+        //
+        // A decoration's own arguments arrive as a second argument, and only
+        // when it has any - so a macro written for `@m` is called with one
+        // argument exactly as before.
+        const callArgs = args === undefined
+          ? [tokens as Value]
+          : [tokens as Value, args as Value];
+        const result = EnsureCompletion(skipDebugger(Call(fn as ObjectValue, Value.undefined, callArgs)));
         return result.Type === 'normal' ? result.Value : undefined;
       },
       (tokens) => {

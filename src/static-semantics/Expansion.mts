@@ -27,15 +27,55 @@ export interface ExpansionSite {
   readonly name: string;
   /** How far from the decorated declaration it sits; 0 is closest. */
   readonly distance: number;
+  /** The source range of the decoration's own arguments, where it has any. */
+  readonly args?: { start: number, end: number };
 }
 
-/** The identifier a decoration spells, where it spells a bare one. */
-function decoratedName(decorator: ParseNode): string | undefined {
+/**
+ * The identifier a decoration spells, and the source range of its arguments.
+ *
+ * `@m` parses with [[MemberExpression]] an |IdentifierReference|; `@m(X)` parses
+ * as a |CallExpression| whose own MemberExpression is that identifier. Reading
+ * only the first form meant an argumented decoration was never collected as a
+ * site - so the macro was never called AND the decoration survived into the
+ * output, where it later means something else entirely. It was silent, not an
+ * error.
+ *
+ * decoratorreplacement.md 4.2 describes the arguments as tokens the macro
+ * receives, so the range is carried here and tokenized alongside the decorated
+ * construct.
+ */
+function decoratedName(decorator: ParseNode): { name: string, args?: { start: number, end: number } } | undefined {
   const d = decorator as {
     MemberExpression?: { type?: string, name?: string },
+    CallExpression?: {
+      type?: string,
+      CallExpression?: { type?: string, name?: string, location?: { endIndex?: number } },
+      location?: { startIndex?: number, endIndex?: number },
+    },
   };
-  const m = d.MemberExpression;
-  return m?.type === 'IdentifierReference' ? m.name : undefined;
+  const bare = d.MemberExpression;
+  if (bare?.type === 'IdentifierReference') {
+    return typeof bare.name === 'string' ? { name: bare.name } : undefined;
+  }
+  // Measured rather than assumed: `@m(X)` puts a |CallExpression| in the
+  // decoration's own [[CallExpression]] field - NOT a CallExpression inside
+  // [[MemberExpression]], which is empty for this form. Reading the latter is
+  // why an argumented decoration was never collected.
+  const call = d.CallExpression;
+  const callee = call?.CallExpression;
+  if (callee?.type !== 'IdentifierReference' || typeof callee.name !== 'string') {
+    return undefined;
+  }
+  // The arguments' own range, so the macro receives them as tokens rather than
+  // as an evaluated value - `@derive(Serialize)` passes the identifier token
+  // `Serialize`, never a binding lookup.
+  const calleeEnd = callee.location?.endIndex;
+  const callEnd = call?.location?.endIndex;
+  const args = calleeEnd !== undefined && callEnd !== undefined
+    ? { start: calleeEnd, end: callEnd }
+    : undefined;
+  return { name: callee.name, args };
 }
 
 /**
@@ -71,10 +111,14 @@ export function ExpansionSites(root: ParseNode, names: readonly string[]): reado
       // decorators` requires replacement decorators to sit OUTERMOST, so source
       // order is already expansion order within one target.
       decorators.forEach((d, i) => {
-        const name = decoratedName(d);
-        if (name !== undefined && wanted.has(name)) {
+        const spelled = decoratedName(d);
+        if (spelled !== undefined && wanted.has(spelled.name)) {
           sites.push({
-            decorator: d, target: n, name, distance: decorators.length - 1 - i,
+            decorator: d,
+            target: n,
+            name: spelled.name,
+            distance: decorators.length - 1 - i,
+            args: spelled.args,
           });
         }
       });
@@ -134,7 +178,7 @@ export function ExpandSource(
   resolve: (name: string) => unknown,
   tokensOfRange: (from: number, to: number) => unknown,
   checkEvaluable: (fn: unknown) => string | undefined,
-  call: (fn: unknown, tokens: unknown) => unknown,
+  call: (fn: unknown, tokens: unknown, args?: unknown) => unknown,
   textOf: (tokens: unknown) => string | undefined,
 ): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] } {
   // `sec-expansion` expands ONE site per pass - "let _d_ be the outermost such
@@ -190,7 +234,12 @@ export function ExpandSource(
     // class, so `@r` is inside the range being replaced. Handing over only the
     // class would drop it silently, which contradicts the rule that a
     // replacement encloses the runtime decorations and may rewrite them.
-    const returned = call(fn, tokensOfRange(decoratorEnd, end));
+    // The decoration's own arguments, as tokens, beside the construct. A macro
+    // that takes none is called with one argument, exactly as before.
+    const argTokens = site.args === undefined
+      ? undefined
+      : tokensOfRange(site.args.start, site.args.end);
+    const returned = call(fn, tokensOfRange(decoratorEnd, end), argTokens);
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own

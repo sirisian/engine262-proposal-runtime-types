@@ -256,3 +256,69 @@ test('a GROUP prints its delimiters around its contents', () => {
   // token, so it cannot be lost.
   expect(expandPrinted('@m class C { x = 2; }', IDENTITY)).toBe('class C { x = 2; }');
 });
+
+// -- A decoration's own arguments ------------------------------------------------
+//
+// decoratorreplacement.md 4.2: "The trailing arguments are the decorator's own,
+// and they are tokens like everything else - `@derive(Serialize)` passes the
+// identifier token `Serialize`, never an eval."
+//
+// An argumented decoration was never collected as an expansion site at all, so
+// the macro was not called AND the decoration survived into the output, where it
+// later means something else. It was silent rather than an error. The cause was
+// reading [[MemberExpression]]: `@m` puts an IdentifierReference there, but
+// `@m(X)` puts a CallExpression in the decoration's own [[CallExpression]] field
+// and leaves [[MemberExpression]] empty.
+/**
+ * Like expandPrinted, but answers the whole expanded body. The helper above
+ * slices from `class`, which suits a macro that returns one; these macros report
+ * what they RECEIVED, so there is nothing to slice to.
+ */
+function expandedBody(body: string, macroSource: string): string {
+  const macro: { current?: unknown } = {};
+  setSurroundingAgent(new Agent({
+    features: ['runtime-types'],
+    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
+  } as never));
+  const realm = new ManagedRealm();
+  macro.current = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
+  const compiled = realm.compileModule(PRINT_PRE + body) as {
+    Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
+  };
+  if (compiled.Type !== 'normal') {
+    return 'THROW';
+  }
+  const text = compiled.Value?.ECMAScriptCode?.sourceText ?? '';
+  return text.slice(text.indexOf(NL) + 1).trim();
+}
+
+const ARGS = '(function (t, a) { var s = t[0].span;'
+  + ' var txt = "n" + arguments.length + ":" + (a ? a.map(function (x) { return x.kind; }).join(",") : "none");'
+  + ' return [{ kind: "string", value: JSON.stringify(txt), span: s }]; })';
+
+test('an argumented decoration expands, and a bare one still takes one argument', () => {
+  // The bare form is unchanged: a macro written for `@m` is called with exactly
+  // one argument, so nothing existing observes the new channel.
+  expect(expandedBody('@m class C { x = 1; }', ARGS)).toBe('"n1:none"');
+  // And an argumented one now runs at all, which is the defect.
+  expect(expandedBody('@m(Serialize) class C { x = 1; }', ARGS)).toBe('"n2:group"');
+});
+
+test('the arguments arrive as tokens, not as an evaluated value', () => {
+  // A `group` token whose contents are the argument list - the parenthesized run,
+  // which is how every delimited run reaches a macro. `Serialize` is never
+  // looked up: expansion runs before anything is evaluated, so a binding of that
+  // name need not exist.
+  expect(expandedBody('@m(Serialize) class C {}', ARGS)).toBe('"n2:group"');
+  expect(expandedBody('@m(A, B) class C {}', ARGS)).toBe('"n2:group"');
+  expect(expandedBody('@m("literal") class C {}', ARGS)).toBe('"n2:group"');
+  // An empty argument list is still an argument list - `@m()` is not `@m`.
+  expect(expandedBody('@m() class C {}', ARGS)).toBe('"n2:group"');
+});
+
+test('an argumented decoration is replaced along with what it decorates', () => {
+  // The whole point of the defect: the decoration must not survive into the
+  // output. `@m(X)` and its class are both gone, replaced by what the macro
+  // returned.
+  expect(expandPrinted('@m(X) class C { x = 1; }', IDENTITY)).toBe('class C { x = 1; }');
+});
