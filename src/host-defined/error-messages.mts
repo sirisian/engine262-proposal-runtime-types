@@ -568,6 +568,7 @@ export interface Throw {
   | '$1 could not be appended'
   | '$1 does not look like a TemporalTimeLike object'
   | "$1 does not match the pattern's length"
+  | '$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at'
   | '$1 has no custom matcher'
   | '$1 has no decimal value'
   | '$1 has no default value, so a declaration of it needs an initializer'
@@ -575,7 +576,6 @@ export interface Throw {
   | '$1 is a readonly field and can only be assigned in the declaring class constructor'
   | '$1 is a readonly member and cannot be assigned'
   | '$1 is a replacement decorator and cannot be shadowed'
-  | '$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at'
   | '$1 is a replacement decorator and must be written outermost'
   | '$1 is a typed class and cannot be proxied'
   | '$1 is a typed element and cannot be deleted'

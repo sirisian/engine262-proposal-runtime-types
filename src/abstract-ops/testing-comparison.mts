@@ -176,6 +176,16 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
   if (!SameTypeRecord((x as TypedNumberValue).TypeRecord as TypeRecord, (y as TypedNumberValue).TypeRecord as TypeRecord)) {
     return false;
   }
+  // A value of a type wider than 53 bits carries its payload exactly, and
+  // #sec-integer-types gives such a type "exactly 2**N values" - so comparing
+  // through a Number would make adjacent values equal, which is the identity
+  // half of what a double backing costs. Both carry the same representation
+  // here, since the type records already matched above.
+  const xv = (x as TypedNumberValue).value;
+  const yv = (y as TypedNumberValue).value;
+  if (typeof xv === 'bigint' || typeof yv === 'bigint') {
+    return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
+  }
   // proposal-runtime-types R6: unwrap both to plain Numbers before the payload
   // comparison. A typed number is no longer a NumberValue, so it lacks the
   // isNaN/isFinite helpers Number::sameValue calls; unwrapToNumber gives a real
@@ -554,6 +564,15 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
     }
     if (!SameTypeRecord((x as TypedNumberValue).TypeRecord as TypeRecord, (y as TypedNumberValue).TypeRecord as TypeRecord)) {
       return false;
+    }
+    // A wide type's values are exact, so the comparison is too - through a
+    // Number, `int64.parse("1152921504606846976")` and its successor would be
+    // equal, which is the identity half of what a double backing costs. The
+    // type records already matched, so both carry the same representation.
+    const xv = (x as TypedNumberValue).value;
+    const yv = (y as TypedNumberValue).value;
+    if (typeof xv === 'bigint' || typeof yv === 'bigint') {
+      return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
     }
     // proposal-runtime-types R6: unwrap both to plain Numbers; a typed number
     // lacks the helpers Number::equal relies on.

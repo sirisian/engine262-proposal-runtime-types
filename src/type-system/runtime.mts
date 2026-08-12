@@ -2507,12 +2507,32 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord {
 }
 
 /** Whether a mathematical value fits a numeric value type. */
-export function fitsNumericType(v: number, name: string, args: readonly (TypeRecord | number)[]): boolean {
+export function fitsNumericType(v: number | bigint, name: string, args: readonly (TypeRecord | number)[]): boolean {
   if (name === 'uint' || name === 'int') {
+    const bits = typeof args[0] === 'number' ? args[0] : 0;
+    // #sec-integer-types: the values are "the integers from -2**(N-1) through
+    // 2**(N-1) - 1" and from "0 through 2**N - 1", and both bounds are exact
+    // integers. Comparing them as doubles is why a type could not admit its own
+    // MAXIMUM: 2**63 - 1 and 2**64 - 1 round up when converted, so the value
+    // tested as though it were one past the end.
+    if (typeof v === 'bigint') {
+      const width = BigInt(bits);
+      return name === 'uint'
+        ? v >= 0n && v < 2n ** width
+        : v >= -(2n ** (width - 1n)) && v < 2n ** (width - 1n);
+    }
     if (!Number.isInteger(v)) {
       return false;
     }
-    const bits = typeof args[0] === 'number' ? args[0] : 0;
+    if (bits > 53) {
+      // A Number reaching a wide type is exact only to 53 bits, so the bound is
+      // compared in the exact integers too rather than at the type's edge.
+      const exact = BigInt(v);
+      const width = BigInt(bits);
+      return name === 'uint'
+        ? exact >= 0n && exact < 2n ** width
+        : exact >= -(2n ** (width - 1n)) && exact < 2n ** (width - 1n);
+    }
     return name === 'uint' ? v >= 0 && v < 2 ** bits : v >= -(2 ** (bits - 1)) && v < 2 ** (bits - 1);
   }
   if (name === 'bigint') {

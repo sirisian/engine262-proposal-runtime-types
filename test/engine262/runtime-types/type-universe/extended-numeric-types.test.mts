@@ -472,18 +472,32 @@ test('a wide integer type still works for values inside the exact range', () => 
   expect(evaluated('`${uint64.byteLength}:${uint128.byteLength}`;')).toBe('8:16');
 });
 
-test('the exactness gap above 2**53 is recorded, not fixed here', () => {
-  // Each of these is wrong, and each is what the remaining stages close.
-  expect(evaluated('String((1152921504606846976 := int64) === (1152921504606846977 := int64));')).toBe('true');
-  expect(evaluated('String(int64.parse("1152921504606846976"));')).toBe('1152921504606847000');
-  // A type cannot parse its own maximum, because the range check rounds first.
-  expect(() => evaluated('int64.parse("9223372036854775807");')).toThrow();
-  expect(() => evaluated('uint64.parse("18446744073709551615");')).toThrow();
-  // And the wrap is computed after the rounding, so 2**54 - 1 reduces to zero.
-  expect(evaluated('String((18014398509481983 := uint.<54>));')).toBe('0');
-  // No route admits an exact wide value: not a cast, not a conversion call.
-  expect(() => evaluated('9007199254740993n := int64;')).toThrow();
-  expect(() => evaluated('int64(9007199254740993n);')).toThrow();
+test('a wide type reaches its own values', () => {
+  // Each of these was wrong, and each is what the exactness work closes.
+  // Adjacent values are distinct - the entry's headline symptom.
+  expect(evaluated('String(int64.parse("1152921504606846976") === int64.parse("1152921504606846977"));')).toBe('false');
+  expect(evaluated('String(int64.parse("1152921504606846976"));')).toBe('1152921504606846976');
+  // A type can parse its own maximum and minimum, which the rounded range
+  // check refused as one past the end.
+  expect(evaluated('String(int64.parse("9223372036854775807"));')).toBe('9223372036854775807');
+  expect(evaluated('String(int64.parse("-9223372036854775808"));')).toBe('-9223372036854775808');
+  expect(evaluated('String(uint64.parse("18446744073709551615"));')).toBe('18446744073709551615');
+  expect(evaluated('String(uint128.parse("340282366920938463463374607431768211455"));'))
+    .toBe('340282366920938463463374607431768211455');
+  // In another base, and one past the end is still refused.
+  expect(evaluated('String(uint64.parse("0xFFFFFFFFFFFFFFFF", 16));')).toBe('18446744073709551615');
+  expect(() => evaluated('uint64.parse("18446744073709551616");')).toThrow();
+  // Identity follows the value, so a wide value serves as a Map key by value.
+  expect(evaluated('const a = int64.parse("1152921504606846976");'
+    + ' const b = int64.parse("1152921504606846977");'
+    + ' const m = new Map(); m.set(a, "A"); `${Object.is(a, b)}:${m.get(b)}`;')).toBe('false:undefined');
+});
+
+test('clz counts over the exact bit pattern', () => {
+  // Reading the payload as a Number rounded it, and the rounded value's bit
+  // length came out as the width - which is the answer clz gives for zero.
+  expect(evaluated('`${Math.clz((1 := uint8))}:${Math.clz((1 := uint.<40>))}`;')).toBe('7:39');
+  expect(evaluated('`${Math.clz((1 := uint64))}:${Math.clz((1 := uint128))}`;')).toBe('63:127');
 });
 
 test('a wide operation is exact', () => {
@@ -504,9 +518,4 @@ test('the shifts are still wrong at a width a double holds', () => {
   expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('1');
 });
 
-test('clz is still wrong at a wide width', () => {
-  // Folded into a later stage: Math.clz reads its payload as a Number, so the
-  // count is taken over a rounded value and answers the WIDTH rather than
-  // width - 1.
-  expect(evaluated('`${Math.clz((1 := uint.<40>))}:${Math.clz((1 := uint64))}`;')).toBe('39:64');
-});
+

@@ -1000,12 +1000,16 @@ function integerCbrt(n: number): number {
  * the value taken modulo 2**width, so a negative value counts in its two's
  * complement encoding.
  */
-function countLeadingZeros(value: number, bits: number): number {
-  const modulus = 2 ** bits;
-  let v = ((value % modulus) + modulus) % modulus;
+function countLeadingZeros(value: number | bigint, bits: number): number {
+  // The count is over the value's BIT PATTERN at the width, so for a type a
+  // double cannot hold it has to be taken over the exact integer: reading a
+  // wide payload as a Number rounded it, and the rounded value's bit length
+  // came out as the width, which is the answer `clz` gives for zero.
+  const modulus = 2n ** BigInt(bits);
+  let v = ((BigInt(typeof value === 'bigint' ? value : Math.trunc(value)) % modulus) + modulus) % modulus;
   let length = 0;
-  while (v >= 1) {
-    v = Math.floor(v / 2);
+  while (v >= 1n) {
+    v >>= 1n;
     length += 1;
   }
   return bits - length;
@@ -1156,13 +1160,10 @@ function* evaluateIntegerRow(
     // clz32 counts in a 32-bit field whatever the argument's width; clz counts in
     // the argument's own. Both check their count at the return.
     const bits = functionName === 'clz32' ? 32 : width;
-    const value = isTypedNumber(first)
-      ? first.numberValue()
+    const value: number | bigint = isTypedNumber(first)
+      ? (first as { value: number | bigint }).value
       : (R(Q(yield* ToNumber(first))) as number);
-    // Reading the payload as a Number is why `Math.clz` answers the WIDTH rather
-    // than width - 1 for a wide type: the count is taken over a rounded value.
-    // Stage 2 of the D9 plan reads the exact value here.
-    const count = countLeadingZeros(Math.trunc(value), bits);
+    const count = countLeadingZeros(value, bits);
     return checkedIntegerResult(count, t);
   }
   if (row === 'root') {

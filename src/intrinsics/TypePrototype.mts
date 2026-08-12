@@ -90,19 +90,62 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     return Throw.SyntaxError('$1 is not a valid literal', S);
   }
   const cleaned = text.replace(/_/g, '');
-  let value: number;
+  let value: number | bigint;
   if (isInteger) {
     value = parseIntegerLiteral(cleaned, base);
+    // #sec-integer-types: a type wider than 53 bits has values a double cannot
+    // distinguish, so the digits are read as an exact integer rather than
+    // through a Number - which is what let `int64.parse` round its own argument
+    // and then refuse the type's own maximum for being one past the end.
+    const bits = typeof t.Arguments[0] === 'number' ? t.Arguments[0] : 0;
+    if (bits > 53 && !Number.isNaN(value)) {
+      const exact = exactIntegerLiteral(cleaned, base);
+      if (exact !== null) {
+        value = exact;
+      }
+    }
   } else {
     value = parseFloatLiteral(cleaned);
   }
-  if (Number.isNaN(value)) {
+  if (typeof value === 'number' && Number.isNaN(value)) {
     return Throw.SyntaxError('$1 is not a valid literal', S);
   }
   if (!fitsNumericType(value, t.Name, t.Arguments)) {
     return Throw.RangeError('$1 is out of range for the type', S);
   }
   return new TypedNumberValue(value, t);
+}
+
+/**
+ * The same literal as an EXACT integer, for a type a double cannot hold. Returns
+ * *null* where the text is not an integer literal of the base, leaving the
+ * Number reader's own diagnosis to stand.
+ */
+function exactIntegerLiteral(text: string, base: number): bigint | null {
+  let s = text;
+  let sign = 1n;
+  if (s.startsWith('+')) {
+    s = s.slice(1);
+  } else if (s.startsWith('-')) {
+    sign = -1n;
+    s = s.slice(1);
+  }
+  const prefixes: Record<number, RegExp> = { 16: /^0[xX]/, 8: /^0[oO]/, 2: /^0[bB]/ };
+  const prefix = prefixes[base];
+  if (prefix && prefix.test(s)) {
+    s = s.slice(2);
+  }
+  const digits: Record<number, RegExp> = { 16: /^[0-9a-fA-F]+$/, 10: /^[0-9]+$/, 8: /^[0-7]+$/, 2: /^[01]+$/ };
+  const pattern = digits[base];
+  if (!pattern || !pattern.test(s)) {
+    return null;
+  }
+  const markers: Record<number, string> = { 16: '0x', 8: '0o', 2: '0b', 10: '' };
+  try {
+    return sign * BigInt(`${markers[base]}${s}`);
+  } catch {
+    return null;
+  }
 }
 
 /**
