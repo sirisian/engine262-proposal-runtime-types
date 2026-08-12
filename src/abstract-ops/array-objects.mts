@@ -2,6 +2,8 @@ import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
   NumberValue, UndefinedValue,
   BooleanValue,
+  BigIntValue,
+  isTypedNumber,
   Q, X, type ValueCompletion, type ValueEvaluator,
   type Mutable, type YieldEvaluator,
   IsLessThan,
@@ -221,6 +223,65 @@ export function* IsConcatSpreadable(O: Value): ValueEvaluator<BooleanValue> {
 }
 
 /** https://tc39.es/ecma262/#sec-comparearrayelements */
+/**
+ * The order two values carry by their own type, or ~undefined~ where they carry
+ * none and the caller should fall back to the String comparison.
+ *
+ * A two-way question asked twice rather than a three-way comparison: a sort only
+ * needs to know which of two elements precedes the other, and deriving
+ * "less, equal, or greater" from a user's `operator <` would call it twice per
+ * comparison to no purpose.
+ */
+function OrderedComparison(x: Value, y: Value): number | undefined {
+  // Both must be typed, and to the SAME type: comparing a `uint8` against a
+  // string has no order of its own and belongs on the String path.
+  if (isTypedNumber(x) && isTypedNumber(y)) {
+    const a = x.numberValue();
+    const b = y.numberValue();
+    if (typeof a === 'bigint' || typeof b === 'bigint') {
+      // Compared AS BigInts. Converting to Number to compare would change the
+      // ORDER above 2**53, not merely lose precision.
+      const ba = BigInt(a);
+      const bb = BigInt(b);
+      return ba < bb ? -1 : (ba > bb ? 1 : 0);
+    }
+    const na = Number(a);
+    const nb = Number(b);
+    // NaN last and -0 before +0, matching %TypedArray%.prototype.sort so that an
+    // array and the corresponding TypedArray agree.
+    if (Number.isNaN(na)) {
+      return Number.isNaN(nb) ? 0 : 1;
+    }
+    if (Number.isNaN(nb)) {
+      return -1;
+    }
+    if (na < nb) {
+      return -1;
+    }
+    if (na > nb) {
+      return 1;
+    }
+    if (Object.is(na, -0) && Object.is(nb, 0)) {
+      return -1;
+    }
+    if (Object.is(na, 0) && Object.is(nb, -0)) {
+      return 1;
+    }
+    return 0;
+  }
+  if (x instanceof BigIntValue && y instanceof BigIntValue) {
+    const a = x.bigintValue();
+    const bv = y.bigintValue();
+    return a < bv ? -1 : (a > bv ? 1 : 0);
+  }
+  if (x instanceof BooleanValue && y instanceof BooleanValue) {
+    const a = x.booleanValue() ? 1 : 0;
+    const bv = y.booleanValue() ? 1 : 0;
+    return a - bv;
+  }
+  return undefined;
+}
+
 export function* CompareArrayElements(x: Value, y: Value, comparefn: FunctionObject | UndefinedValue): ValueEvaluator<NumberValue> {
   // 1. If x and y are both undefined, return +0𝔽.
   if (x === Value.undefined && y === Value.undefined) {
@@ -244,6 +305,22 @@ export function* CompareArrayElements(x: Value, y: Value, comparefn: FunctionObj
     }
     // c. Return v.
     return v;
+  }
+  // proposal-runtime-types sec-ordered-element-types: where the elements carry a
+  // type that has an order of its own, that order is used rather than the String
+  // comparison below - so `[].<uint8>` sorts as `Uint8Array` does instead of as
+  // text, where `[10, 9, 1]` gave `1,10,9`.
+  //
+  // Sited HERE rather than in `sort` because `sort` and `toSorted` both route
+  // through this operation, so one change covers both and a third entry point
+  // would inherit it.
+  //
+  // The values are inspected rather than the array's element type: a comparison
+  // receives two elements and nothing else, and a typed element carries its type
+  // with it. That also means a mixed or untyped array falls through untouched.
+  const ordered = OrderedComparison(x, y);
+  if (ordered !== undefined) {
+    return F(ordered);
   }
   // 5. Let xString be ? ToString(x).
   const xString = Q(yield* ToString(x));
