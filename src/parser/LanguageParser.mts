@@ -104,14 +104,41 @@ export abstract class LanguageParser extends ModuleParser {
         case Token.AT: {
           const decorators = this.parseDecorators();
           if (this.peek().type === Token.EXPORT) {
+            // A decoration on EACH side of `export` is refused: it is not clear
+            // which list decorates the declaration.
+            //
+            // Checked HERE, while `peek()` is still `export` and `peekAhead()`
+            // is the token after it. The rule further down cannot carry this on
+            // its own - it reads [[ClassDeclaration]], which is not populated
+            // for `@f export @f class C {}`, so the early error removed below
+            // was the only thing refusing that shape. Measured against the
+            // previous behaviour rather than assumed.
+            if (decorators?.length && this.peekAhead().type === Token.AT) {
+              this.addEarlyError(Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), decorators[0]);
+            }
             // ModuleItem: DecoratorList `export` Declaration
             const exports = this.parseExportDeclaration(decorators);
-            // TODO(decorator):
-            // ExportDeclaration : DecoratorList? `export` Declaration
-            //   It is a Syntax Error if DecoratorList is present and Declaration is not ClassDeclaration.
-            if (!exports.ClassDeclaration) {
-              this.addEarlyError(Throw.SyntaxError('Decorators can only be used to decorate classes'), exports.AssignmentExpression || exports.Declaration || exports.ExportFromClause || exports.FromClause || exports.HoistableDeclaration || exports.VariableStatement || exports.WithClause || exports);
-            }
+            // `sec-syntax-replacement`: "Every decorable position may be
+            // syntax-replaced, including the positions that do not admit value
+            // replacement." A DECLARATION is one, whether or not it is
+            // exported - so this refused nothing the proposal forbids.
+            //
+            // It refused a great deal the proposal wants. `@jsx export function
+            // View() {...}` is the shape a component macro is written in, and
+            // it is the only shape from which a macro can emit a constant BESIDE
+            // what it replaces: a decoration inside the export
+            // (`export @jsx function`) has its replacement range inside the
+            // export, so a constant emitted there would join the export and stop
+            // exporting the function.
+            //
+            // A decoration on EACH side of `export` is still refused, because
+            // then it is not clear which list decorates the declaration. The
+            // rule below cannot carry that on its own: it reads
+            // [[ClassDeclaration]], which is not populated for this shape, so
+            // the check removed above was the only thing refusing it. Tested
+            // lexically instead, which does not depend on where the inner
+            // declaration lands.
+
             //   It is a Syntax Error if DecoratorList is present, Declaration is a ClassDeclaration, and the DecoratorList of that ClassDeclaration is present.
             // ExportDeclaration : DecoratorList? export default ClassDeclaration
             //   It is a Syntax Error if DecoratorList is present and the DecoratorList of ClassDeclaration is present.

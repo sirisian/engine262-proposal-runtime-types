@@ -57,11 +57,23 @@ test('evaluation is lazy, so an untaken branch costs nothing', () => {
   expectThrown('const q = constant { null.x; };');
 });
 
-test('an abrupt completion is not recorded, so a later evaluation retries', () => {
-  // Nothing was produced, and a failure cannot be told from a value once stored.
-  expect(evaluated('let n = 0; function f() { n += 1; return constant { if (n < 2) { null.x; } ({ n }); }; } '
-    + 'let first = "none"; try { f(); } catch (e) { first = "threw"; } '
-    + 'const second = f(); first + ":" + String(second.n);')).toBe('threw:2');
+test('a block that reads anything outside itself is refused', () => {
+  // The rule the identity guarantee needs: a CLOSED block, whose value is a
+  // property of the site and of nothing else. Reading a parameter is the hazard
+  // it exists for - the first call's argument would be cached and answered for
+  // every later one.
+  expectThrown('function f(x) { return constant { x + 1; }; }');
+  expectThrown('function f() { const y = 1; return constant { y; }; }');
+  // It subsumes the non-determinism blocklist a replacement decorator is held
+  // to, since an ambient name is a free reference too - one rule rather than two.
+  expectThrown('const q = constant { globalThis; };');
+  expectThrown('const q = constant { Date.now(); };');
+  // What it admits is construction that depends on nothing: local bindings,
+  // local functions, and the shared references an object literal cannot express.
+  expect(evaluated('String(constant { const a = 2; a * 3; });')).toBe('6');
+  expect(evaluated('String(constant { const f = (n) => n + 1; f(1); });')).toBe('2');
+  expect(evaluated('const t = constant { const e = { c: [] }; e.c.push({ s: 0 }); ({ root: e, targets: [e] }); }; '
+    + 'String(t.root === t.targets[0]);')).toBe('true');
 });
 
 test('`constant` remains an ordinary identifier', () => {

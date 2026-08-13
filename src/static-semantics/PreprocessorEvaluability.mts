@@ -66,6 +66,89 @@ export interface EvaluabilityViolation {
  * because a module that reads the network while evaluating closes over what it
  * read and its decorators are impure however pure their bodies look.
  */
+/**
+ * The first name a `constant` Block reads from OUTSIDE itself, or *undefined*.
+ *
+ * A different question from FirstEvaluabilityViolation below, and reusing that
+ * one here was wrong in both directions.
+ *
+ * It tests NON-DETERMINISM, by a blocklist of names whose use would make an
+ * expansion irreproducible across builds. A `constant` Block needs something
+ * else: its value is computed once per site and reused, so what must be
+ * impossible is DEPENDING ON ANYTHING THAT VARIES BETWEEN EVALUATIONS. Measured,
+ * the blocklist is
+ *
+ *   - too lax: `function f(x) { return constant { x + 1 }; }` passes it, and
+ *     that is the exact hazard - the first call's `x` is cached and answered
+ *     for every later one;
+ *   - too strict: `constant { Math.max(1, 2) }` fails it, because `Math` is
+ *     listed for `Math.random`, though `Math.max` cannot observe how many times
+ *     it ran.
+ *
+ * The sound rule is that the Block is CLOSED: it reads nothing from outside
+ * itself. Then its value is a property of the site and of nothing else, which is
+ * exactly what "evaluated once" needs to be unobservable. It also subsumes the
+ * blocklist, since `globalThis` and `Date` are free references too - one rule
+ * instead of two.
+ *
+ * The cost is real and worth stating: `constant { buildTable() }` calling a
+ * module-scope helper is refused. Admitting a reference to a module-scope
+ * `const` would relax it soundly and needs scope resolution this walk does not
+ * have; it is a later decision, not a gap in this one.
+ */
+export function FirstFreeReference(root: ParseNode): EvaluabilityViolation | undefined {
+  let found: EvaluabilityViolation | undefined;
+  const bound = new Set<string>();
+
+  // Two passes: a binding may be used before its declaration is walked - a
+  // function declaration is hoisted, and `const a = 1; a;` reads in source order
+  // but `f(); function f() {}` does not.
+  const collect = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(collect);
+      return;
+    }
+    const n = node as ParseNode & { type?: string, name?: string };
+    if (n.type === 'BindingIdentifier' && typeof n.name === 'string') {
+      bound.add(n.name);
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'location' || key === 'sourceText' || key === 'strict' || key === 'parent') {
+        continue;
+      }
+      collect((n as unknown as Record<string, unknown>)[key]);
+    }
+  };
+
+  const visit = (node: unknown): void => {
+    if (found || node === null || typeof node !== 'object') {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    const n = node as ParseNode & { type?: string, name?: string };
+    if (n.type === 'IdentifierReference' && typeof n.name === 'string' && !bound.has(n.name)) {
+      found = { name: n.name, why: 'a binding outside the block', node: n };
+      return;
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'location' || key === 'sourceText' || key === 'strict' || key === 'parent') {
+        continue;
+      }
+      visit((n as unknown as Record<string, unknown>)[key]);
+    }
+  };
+
+  collect(root);
+  visit(root);
+  return found;
+}
+
 export function FirstEvaluabilityViolation(root: ParseNode): EvaluabilityViolation | undefined {
   let found: EvaluabilityViolation | undefined;
   const shadowed = new Set<string>();

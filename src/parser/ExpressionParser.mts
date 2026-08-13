@@ -6,6 +6,7 @@ import {
   ContainsArguments,
 } from '../static-semantics/all.mts';
 import type { Mutable } from '../utils/language.mts';
+import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
 import { ScanBalancedRun } from './ScanBalancedRun.mts';
 import {
   Token,
@@ -1468,6 +1469,26 @@ export abstract class ExpressionParser extends FunctionParser {
     // context are the ones `do` already defines, rather than a second set that
     // could drift from them.
     (node.Block as { BlockKind?: string }).BlockKind = 'DoBlock';
+    // The Block must be COMPILE-TIME EVALUABLE, and this is not decoration.
+    // Without it,
+    //
+    //     function f(x) { return constant { x + 1 }; }
+    //
+    // caches the first call's value and answers with it for every later `x` -
+    // a surprise with no defence. A Block that cannot read anything that varies
+    // cannot tell how many times it ran, except through the identity of what it
+    // returns, which is the point of the form.
+    //
+    // The same analysis a replacement decorator's body is held to, reused rather
+    // than restated, so the two cannot drift into disagreeing about what
+    // "evaluable" means.
+    const violation = FirstFreeReference(node.Block);
+    if (violation !== undefined) {
+      this.addEarlyError(
+        Throw.SyntaxError('a constant expression may not read $1 from outside itself', Value(violation.name)),
+        violation.node,
+      );
+    }
     return this.finishNode(node, 'ConstantExpression');
   }
 

@@ -874,6 +874,7 @@ export interface Throw {
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'
   | 'the replacement decorator $1 is not compile-time evaluable: it names $2'
+  | 'a constant expression may not read $1 from outside itself'
   | 'the type parameter $1 of $2 has no argument and no default'
   | 'the type parameter $1 of $2 is supplied twice'
   , $1: Formattable, $2: Formattable): ThrowCompletion;

@@ -389,3 +389,52 @@ test('a token handed back unchanged is still sliced, comments and all', () => {
   expect(expandedBody('@m class C { /* kept */ x = 1; }', IDENTITY))
     .toBe('class C { /* kept */ x = 1; }');
 });
+
+// -- A decoration may cover an EXPORTED declaration ----------------------------
+//
+// `sec-syntax-replacement`: "Every decorable position may be syntax-replaced,
+// including the positions that do not admit value replacement." A declaration is
+// one whether or not it is exported, and a stale early error - a TODO predating
+// the proposal - refused every exported form.
+//
+// It matters beyond tidiness. `@jsx export function View() {...}` is the shape a
+// component macro is written in, and it is the only one from which a macro can
+// emit a constant BESIDE what it replaces: a decoration INSIDE the export has
+// its replacement range inside the export, so a constant emitted there would
+// join the export and stop exporting the function.
+test('a decoration may precede an export', () => {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  expect(realm.compileModule('function f(c) {} @f export function g() {}').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f export class C {}').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f export const a = 1;').Type).toBe('normal');
+  expect(realm.compileModule('function f(c) {} @f export default function g() {}').Type).toBe('normal');
+  // The decoration inside the export is unaffected.
+  expect(realm.compileModule('function f(c) {} export @f class C {}').Type).toBe('normal');
+});
+
+test('a decoration on each side of `export` is still refused', () => {
+  // It is not clear which list decorates the declaration.
+  //
+  // This is checked while `peek()` is still `export`, because the rule that
+  // reads [[ClassDeclaration]] cannot carry it: that slot is not populated for
+  // `@f export @f class C {}`, so the stale error removed above was the only
+  // thing refusing the shape. Measured against the previous behaviour rather
+  // than assumed, and this test is what stops it being lost again.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  expect(realm.compileModule('function f(c) {} @f export @f class C {}').Type).toBe('throw');
+});
+
+test('a macro may emit a constant beside an exported declaration', () => {
+  // The shape the whole compile-time-template design rests on: the macro's
+  // output is two statements, and the constant lands at MODULE scope because
+  // that is where the decoration sat.
+  const emitted = expandedBody('@m export function View() { return 1; }',
+    '(function (t) { var s = t[0].span;'
+    + ' function k(kind, v) { return { kind: kind, value: v, span: s }; }'
+    + ' function g(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }'
+    + ' return [k("identifier","const"), k("identifier","$t"), k("punctuator","="),'
+    + '  g("[", [k("string","\\"<div>\\"")]), k("punctuator",";")].concat(t); })');
+  expect(emitted).toBe('const $t = ["<div>"] ;export function View() { return 1; }');
+});
