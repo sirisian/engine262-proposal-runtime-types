@@ -5,7 +5,7 @@ import {
   BigIntValue,
   TypedStringValue,
   isTypedNumber,
-  Q, X, type ValueCompletion, type ValueEvaluator,
+  Q, X, type ValueCompletion, type ValueEvaluator, type PlainEvaluator,
   type Mutable, type YieldEvaluator,
   IsLessThan,
   Assert,
@@ -24,6 +24,7 @@ import {
   MakeBasicObject,
   SameValue,
   ToBoolean,
+  LookupClassOperator,
   ToNumber,
   ToString,
   ToUint32,
@@ -248,7 +249,7 @@ function isWideIntegral(v: Value): boolean {
   return t.Arguments?.[0] === 64;
 }
 
-function OrderedComparison(x: Value, y: Value): number | undefined {
+function* OrderedComparison(x: Value, y: Value): PlainEvaluator<number | undefined> {
   // Both must be typed, and to the SAME type: comparing a `uint8` against a
   // string has no order of its own and belongs on the String path.
   if (isTypedNumber(x) && isTypedNumber(y)) {
@@ -329,6 +330,30 @@ function OrderedComparison(x: Value, y: Value): number | undefined {
     const bv = y.booleanValue() ? 1 : 0;
     return a - bv;
   }
+  // sec-ordered-element-types: a class declaring `operator <` orders by it. The
+  // operator is a USER function, so this arm is why the helper is a generator -
+  // an earlier note claimed the comparison could not yield, which was wrong:
+  // `CompareArrayElements` is itself a generator and already calls the
+  // caller-supplied comparator the same way.
+  //
+  // Asked twice, `x < y` then `y < x`, because a sort needs to distinguish
+  // less from equal and `<` answers only one bit. Two calls per comparison is
+  // the cost of ordering by a declared `<`, and it is what the author asked for
+  // by declaring it.
+  if (x instanceof ObjectValue && y instanceof ObjectValue) {
+    const lessFn = LookupClassOperator(x, '<');
+    if (!lessFn || LookupClassOperator(y, '<') !== lessFn) {
+      // Both operands must reach the SAME declared operator: two unrelated
+      // classes have no shared order to consult.
+      return undefined;
+    }
+    const xLessY = ToBoolean(Q(yield* Call(lessFn as Value, x, [y]))) === Value.true;
+    if (xLessY) {
+      return -1;
+    }
+    const yLessX = ToBoolean(Q(yield* Call(lessFn as Value, y, [x]))) === Value.true;
+    return yLessX ? 1 : 0;
+  }
   return undefined;
 }
 
@@ -368,7 +393,7 @@ export function* CompareArrayElements(x: Value, y: Value, comparefn: FunctionObj
   // The values are inspected rather than the array's element type: a comparison
   // receives two elements and nothing else, and a typed element carries its type
   // with it. That also means a mixed or untyped array falls through untouched.
-  const ordered = OrderedComparison(x, y);
+  const ordered = Q(yield* OrderedComparison(x, y));
   if (ordered !== undefined) {
     return F(ordered);
   }

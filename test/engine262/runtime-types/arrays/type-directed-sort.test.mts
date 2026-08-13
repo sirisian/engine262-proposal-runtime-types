@@ -92,6 +92,43 @@ test('a string enum sorts by declaration position', () => {
   expect(evaluated('let a: [].<string> = ["z", "a"]; a.sort(); a.join(",");')).toBe('a,z');
 });
 
+test('a class sorts by its declared operator <', () => {
+  // The last ordered kind. An earlier note claimed the comparison could not
+  // reach a user function because it "cannot yield" - that was wrong:
+  // `CompareArrayElements` is itself a generator and already calls the
+  // caller-supplied comparator. Only the local helper was non-generator, which
+  // was a choice rather than a constraint.
+  //
+  // Values 2, 10, 1: correct order 1,2,10 against string order 1,10,2.
+  const M = 'class M { constructor(v) { this.v = v; } operator <(o: M) { return this.v < o.v; } } ';
+  expect(evaluated(`${M}let a: [].<M> = [new M(2), new M(10), new M(1)]; a.sort(); a.map(m => m.v).join(",");`)).toBe('1,2,10');
+  expect(evaluated(`${M}let a: [].<M> = [new M(2), new M(10), new M(1)]; a.toSorted().map(m => m.v).join(",");`)).toBe('1,2,10');
+  // Equal elements compare equal rather than being ordered arbitrarily.
+  expect(evaluated(`${M}let a: [].<M> = [new M(5), new M(5)]; a.sort(); a.map(m => m.v).join(",");`)).toBe('5,5');
+  // A class declaring nothing keeps the String comparison.
+  expect(evaluated('class N { constructor(v) { this.v = v; } } let a: [].<N> = [new N(2), new N(1)]; a.sort(); a.map(n => n.v).join(",");')).toBe('2,1');
+  // An explicit comparator still wins.
+  expect(evaluated(`${M}let a: [].<M> = [new M(1), new M(2)]; a.sort((x, y) => y.v - x.v); a.map(m => m.v).join(",");`)).toBe('2,1');
+});
+
+test('the class comparison asks `<` once, or twice only when it must', () => {
+  // `<` answers one bit where a sort needs three outcomes, so the operator may
+  // be asked in both directions - but only when the first answer does not
+  // settle it. `x < y` being true IS the answer, and the second call is skipped.
+  //
+  // Two elements is one comparison. Ordered so the first call answers:
+  const settled = 'let n = 0; class M { constructor(v) { this.v = v; } operator <(o: M) { n = n + 1; return this.v < o.v; } } '
+    + 'let a: [].<M> = [new M(2), new M(1)]; a.sort(); String(n);';
+  expect(evaluated(settled)).toBe('1');
+  // Ordered so the first call returns false and the direction must be checked:
+  const unsettled = 'let n = 0; class M { constructor(v) { this.v = v; } operator <(o: M) { n = n + 1; return this.v < o.v; } } '
+    + 'let a: [].<M> = [new M(1), new M(2)]; a.sort(); String(n);';
+  expect(evaluated(unsettled)).toBe('2');
+  // So the worst case is two calls per comparison and the common case is fewer.
+  // A three-way operator would make it always one, which is the concrete
+  // argument for adding one - not the halving of sort cost claimed earlier.
+});
+
 test('the types that already sorted correctly still do', () => {
   expect(evaluated('let a: [].<string> = ["b", "a", "c"]; a.sort(); a.join(",");')).toBe('a,b,c');
   expect(evaluated('let a: [].<boolean> = [true, false]; a.sort(); a.join(",");')).toBe('false,true');
