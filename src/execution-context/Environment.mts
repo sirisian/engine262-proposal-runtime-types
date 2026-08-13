@@ -19,6 +19,7 @@ import { JSStringMap } from '../utils/container.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { RequireArrayBorrowLive } from '../abstract-ops/reference-operations.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -71,6 +72,16 @@ export abstract class EnvironmentRecord {
 }
 
 interface DeclarativeEnvironmentBinding {
+  /**
+   * proposal-runtime-types #sec-typed-bindings: a binding's annotation is
+   * "checked against its initializer and against every later assignment", so
+   * the declared type has to outlive the declaration. A field, an object member
+   * and an array element each carry their declared type on the object and check
+   * a store against it; an environment binding had nowhere to put one, which is
+   * why an assignment neither converted a propagated literal nor refused a
+   * value the annotation forbids.
+   */
+  declaredType?: unknown;
   readonly indirect: boolean;
   initialized: boolean;
   readonly mutable?: boolean;
@@ -302,6 +313,15 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     // 4. If the binding for N in envRec has not yet been initialized, throw a ReferenceError exception.
     if (binding.initialized === false) {
       return Throw.ReferenceError('$1 cannot be used before initialization', N);
+    }
+    // #sec-typed-bindings: the annotation is checked "against every later
+    // assignment", and #sec-literal-propagation makes the literal in `v = 2`
+    // take the binding's type, so the write crosses the same boundary the
+    // initializer crossed. Without this an assignment stored the raw value: a
+    // propagated literal lost its type, and an `any` could put a value the
+    // annotation forbids into the binding, which no other storage kind permits.
+    if (binding.declaredType !== undefined) {
+      V = Q(yield* RequireType(V, binding.declaredType as never));
     }
     // proposal-runtime-types (references extension): a write to a mutable ref
     // binding writes through to the storage location it aliases. The binding

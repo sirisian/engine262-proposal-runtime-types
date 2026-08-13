@@ -322,3 +322,66 @@ test('a function parameter is not a declaration with no initializer', () => {
   expectOk('function f(x: symbol) { return typeof x; } f(Symbol("s"));');
   expectOk('const g = (o: { x: uint8 }) => o.x; g({ x: 1 });');
 });
+
+// -- The annotation holds at every assignment (#sec-typed-bindings) -----------
+//
+// "checked against its initializer AND AGAINST EVERY LATER ASSIGNMENT". The
+// initializer crossed the boundary and the assignment did not, so an annotated
+// binding was enforced when it was created and not when it was written.
+
+test('an assignment converts the way the initializer does', () => {
+  // #sec-literal-propagation: the literal takes the type its position requires,
+  // and an annotated binding is such a position.
+  expect(value('let v: uint8 = 1; v = 2; `${v}:${v is uint8}`;')).toBe('2:true');
+  // `var` is NOT covered, and not by oversight: its storage at the top level is
+  // a property of the global object rather than an environment binding, so
+  // there is nowhere on it to record a declared type. That is the same
+  // structural difference KNOWN-DIVERGENCES.md D25 records for its default -
+  // the var path never consults its annotation - and this pins the state rather
+  // than assuming it.
+  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('false');
+  // An already-typed value still round-trips rather than being reconverted.
+  expect(value('let v: uint8 = 1; v = (3 := uint8); `${v}:${v is uint8}`;')).toBe('3:true');
+});
+
+test('an assignment refuses what the annotation forbids', () => {
+  // The severe half: an `any` reaches the binding with nothing the checker can
+  // see, and the value it carried was STORED - a uint8 binding holding 300,
+  // which no other storage kind permits.
+  expectTypeError('let v: uint8 = 1; let a: any = 300; v = a;');
+  // And an in-range one converts rather than arriving untyped.
+  expect(value('let v: uint8 = 1; let a: any = 2; v = a; `${v}:${v is uint8}`;')).toBe('2:true');
+});
+
+test('the static refusals stay static', () => {
+  // The checker already refused these, and it must go on refusing them rather
+  // than deferring to the new store check: no output means it never ran.
+  expectTypeError('console.log("never runs"); let v: uint8 = 1; v = "s";');
+  expectTypeError('console.log("never runs"); let v: uint8 = 1; v = 300;');
+});
+
+test('a write through a ref inherits the binding it aliases', () => {
+  // The entry's own repro. The ref was a symptom: it made the corruption
+  // visible by checking the referent again on the NEXT call, so the error named
+  // the ref rather than the assignment that caused it.
+  expect(value('function f(ref x: uint8) { x = 2; } let v: uint8 = 1; f(ref v); `${v}:${v is uint8}`;')).toBe('2:true');
+  expectOk('function f(ref x: uint8) { x = 2; } let v: uint8 = 1; f(ref v); f(ref v);');
+  // A local alias writes through the same binding.
+  expect(value('let v: uint8 = 1; let ref b = v; b = 3; `${v}:${v is uint8}`;')).toBe('3:true');
+  // An update reads and writes the referent, and was already correct.
+  expect(value('function f(ref x: uint8) { x++; } let v: uint8 = 1; f(ref v); String(v is uint8);')).toBe('true');
+});
+
+test('the storage kinds that already worked are unchanged', () => {
+  // Each carries its declared type on the object and checked its store, which
+  // is what an environment binding now does too.
+  expect(value('class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = 3; String(p.x is uint8);')).toBe('true');
+  expect(value('type O = { x: uint8 }; let o: O = { x: 1 }; o.x = 3; String(o.x is uint8);')).toBe('true');
+  expect(value('let a: [].<uint8> = [1]; a[0] = 3; String(a[0] is uint8);')).toBe('true');
+  expectTypeError('let a: any = 300; class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = a;');
+});
+
+test('a binding whose type needs no conversion is untouched', () => {
+  expect(value('let s: string = "a"; s = "b"; `${s}:${typeof s}`;')).toBe('b:string');
+  expect(value('let b: boolean = true; b = false; String(b);')).toBe('false');
+});

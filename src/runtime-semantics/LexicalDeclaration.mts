@@ -129,7 +129,11 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     // proposal-runtime-types: the annotation check at the binding boundary.
     value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
     // 5. Return InitializeReferencedBinding(lhs, value).
-    return yield* InitializeReferencedBinding(lhs, value);
+    const initialized = Q(yield* InitializeReferencedBinding(lhs, value));
+    if (TypeAnnotation) {
+      recordDeclaredType(lhs, Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type)));
+    }
+    return initialized;
   } else {
     // 1. Let lhs be ResolveBinding(StringValue of BindingIdentifier).
     const lhs = yield* ResolveBinding(StringValue(BindingIdentifier!), undefined, strict);
@@ -173,7 +177,46 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       }
     }
     // 2. Return InitializeReferencedBinding(lhs, undefined).
-    return yield* InitializeReferencedBinding(lhs, initial);
+    const initialized = Q(yield* InitializeReferencedBinding(lhs, initial));
+    if (TypeAnnotation) {
+      recordDeclaredType(lhs, Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type)));
+    }
+    return initialized;
+  }
+}
+
+/**
+ * proposal-runtime-types #sec-typed-bindings: the annotation is "checked
+ * against its initializer and against every later assignment", so the declared
+ * type is recorded on the binding rather than discarded once the initializer
+ * has crossed it. The store consults it, which is what a field, an object
+ * member and an array element already do through the type recorded on the
+ * object.
+ *
+ * A `const` records it too. Nothing can assign to one, so it changes no
+ * behaviour there - but a binding's type is a property of the binding, and
+ * making the record conditional on mutability would be a second rule to keep in
+ * step with the first.
+ */
+function recordDeclaredType(lhs: unknown, record: unknown): void {
+  // ResolveBinding hands back a Reference Record, sometimes still inside a
+  // normal completion, so both shapes are unwrapped here rather than at the two
+  // call sites.
+  const wrapped = lhs as { Value?: unknown, Base?: unknown, ReferencedName?: unknown };
+  const reference = (wrapped.Base !== undefined ? wrapped : wrapped.Value) as {
+    Base?: unknown, ReferencedName?: unknown,
+  } | undefined;
+  type BindingHolder = { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } };
+  const resolved = reference?.Base as (BindingHolder & { DeclarativeRecord?: BindingHolder }) | undefined;
+  // A `let` at the top level of a script resolves against the GLOBAL record,
+  // which is a pair: the lexical declarations live in its inner declarative
+  // record, and only the var-scoped names reach its object record. So the
+  // binding is looked for there as well as directly - a function-scoped `let`
+  // finds it on the first try.
+  const binding = resolved?.bindings?.get(reference?.ReferencedName)
+    ?? resolved?.DeclarativeRecord?.bindings?.get(reference?.ReferencedName);
+  if (binding) {
+    binding.declaredType = record;
   }
 }
 
