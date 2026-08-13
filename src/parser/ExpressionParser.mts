@@ -276,7 +276,99 @@ export abstract class ExpressionParser extends FunctionParser {
    * ends at its match, found by ScanBalancedRun rather than by the tokenizer,
    * because its contents are not ECMAScript.
    */
-  parseModedRegion(decorators: readonly ParseNode.Decorator[] | null): ParseNode.ModedRegion | undefined {
+/**
+   * Whether a JSX element may begin where an operand is expected.
+   *
+   * Set while parsing a region whose decoration declared the `jsx` mode. Outside
+   * one it is false, so `a < b` and a type argument list read as they always
+   * did - which is the whole argument for a scoped mode over a grammar that
+   * admits JSX everywhere and then has to disambiguate `<` per occurrence.
+   */
+  protected jsxAllowed = false;
+
+  /**
+   * A JSX element, scanned rather than tokenized.
+   *
+   * Child text is not ECMAScript - `Hi there` is two identifiers to the lexer,
+   * and the space between them is lost - so the element is scanned by advancing
+   * `position` directly, the way a template literal is. Its `{ ... }`
+   * substitutions ARE ECMAScript and are parsed as expressions, so their tokens
+   * are threaded from this parse like any other.
+   *
+   * The result is opaque: it is never evaluated, because the decoration that
+   * admitted it replaces the whole region before evaluation. It exists to be
+   * found, measured, and spliced.
+   */
+  parseJSXElement(): ParseNode.ModedRegion {
+    const node = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
+    const start = this.peek().startIndex;
+    const logFrom = this.tokenLog.length;
+    let depth = 0;
+    let i = start;
+    while (i < this.source.length) {
+      const c = this.source[i];
+      if (c === '{') {
+        // An interpolation. Parsed as an expression so its tokens reach a macro
+        // the way every other expression's do.
+        const run = ScanBalancedRun(this.source, i);
+        if (run === undefined) {
+          return this.unexpected() as never;
+        }
+        i = run.end;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        i += 1;
+        while (i < this.source.length && this.source[i] !== c) {
+          i += this.source[i] === '\\' ? 2 : 1;
+        }
+        i += 1;
+        continue;
+      }
+      if (c === '<') {
+        if (this.source[i + 1] === '/') {
+          depth -= 1;
+          const close = this.source.indexOf('>', i);
+          if (close < 0) {
+            return this.unexpected() as never;
+          }
+          i = close + 1;
+          if (depth === 0) {
+            break;
+          }
+          continue;
+        }
+        depth += 1;
+        i += 1;
+        continue;
+      }
+      if (c === '/' && this.source[i + 1] === '>') {
+        depth -= 1;
+        i += 2;
+        if (depth === 0) {
+          break;
+        }
+        continue;
+      }
+      i += 1;
+    }
+    if (depth !== 0) {
+      return this.unexpected() as never;
+    }
+    (node as { Mode?: string }).Mode = 'jsx';
+    (node as { RegionText?: string }).RegionText = this.source.slice(start, i);
+    (node as { IsExpression?: boolean }).IsExpression = true;
+    this.collapseLogFrom(logFrom, 'jsx', start, i);
+    this.resumeLexingAt(i);
+    const finished = this.finishNode(node as ParseNode.Unfinished<ParseNode>, 'ModedRegion' as ParseNode['type']) as unknown as ParseNode.ModedRegion;
+    if (finished.location) {
+      (finished.location as { endIndex: number }).endIndex = i;
+    }
+    return finished;
+  }
+
+  /** The lexical mode a decoration list declared, if any. */
+  modeOfDecorators(decorators: readonly ParseNode.Decorator[] | null): string | undefined {
     if (!decorators || decorators.length === 0) {
       return undefined;
     }
@@ -290,6 +382,14 @@ export abstract class ExpressionParser extends FunctionParser {
         }
       }
     }
+    return mode;
+  }
+
+  parseModedRegion(decorators: readonly ParseNode.Decorator[] | null): ParseNode.ModedRegion | undefined {
+    if (!decorators || decorators.length === 0) {
+      return undefined;
+    }
+    const mode = this.modeOfDecorators(decorators);
     if (mode === undefined) {
       return undefined;
     }
@@ -297,6 +397,15 @@ export abstract class ExpressionParser extends FunctionParser {
     // the node's source range, so starting after the `do` would leave it behind
     // for the re-parse to trip on.
     const node = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
+    // A declaration is not a region to capture: it is ECMAScript, and what the
+    // mode changes is that a JSX element may appear inside it where an operand
+    // is expected. So the flag is set and the declaration parses normally -
+    // which is what `@jsx function View() { return <div/>; }` needs, and what a
+    // captured region can never give, since a component's body is mostly
+    // ordinary code.
+    if (!this.test(Token.DO) && !this.test(Token.LBRACE)) {
+      return undefined;
+    }
     // `do` is the expression carrier - it yields a value, which is what an
     // element expression is - and a bare block is the statement one.
     const isExpression = this.test(Token.DO);
@@ -1584,6 +1693,13 @@ export abstract class ExpressionParser extends FunctionParser {
     // position.
     if (surroundingAgent.feature('runtime-types') && this.test(Token.DO)) {
       return this.parseDoExpression(false) as unknown as ParseNode.PrimaryExpression;
+    }
+    // A JSX element, where the mode admits one. This is the point at which the
+    // parser would otherwise try a regular expression literal - the position
+    // where an OPERAND is expected - and it is the only place the decision can
+    // be made, since a tokenizer does not know it.
+    if (this.jsxAllowed && this.test(Token.LT)) {
+      return this.parseJSXElement() as unknown as ParseNode.PrimaryExpression;
     }
     // proposal-runtime-types: `constant` Block.
     //

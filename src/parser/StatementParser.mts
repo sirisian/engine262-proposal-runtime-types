@@ -767,6 +767,24 @@ export abstract class StatementParser extends TypeParser {
     if (moded !== undefined) {
       return moded as unknown as ParseNode.StatementListItem;
     }
+    // A decoration that declared a mode but whose target is a DECLARATION rather
+    // than a region: the declaration is ECMAScript, and the mode's effect is
+    // that a JSX element may appear within it. `@jsx export function View()` is
+    // the shape a component macro is written in, and it is the only one from
+    // which a macro can emit a constant beside what it replaces.
+    // Guarded on the flag, not only on the mode: without it this re-enters
+    // itself with the same decorators and recurses until the stack gives out.
+    // The flag being set already means the region has been entered.
+    const declaredMode = this.jsxAllowed ? undefined : this.modeOfDecorators(decorators);
+    if (declaredMode === 'jsx') {
+      const outer = this.jsxAllowed;
+      this.jsxAllowed = true;
+      try {
+        return this.parseDecoratedStatementListItem(decorators ?? undefined);
+      } finally {
+        this.jsxAllowed = outer;
+      }
+    }
     const give = <T,>(node: T): T => {
       (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
       return node;

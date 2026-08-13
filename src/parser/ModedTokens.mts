@@ -1,4 +1,6 @@
-import { tokenizeText, type SourceRefRecord, type TokenRecord } from './TokensOf.mts';
+import {
+  tokenizeText, SetJSXExpander, type SourceRefRecord, type TokenRecord,
+} from './TokensOf.mts';
 import { ScanBalancedRun } from './ScanBalancedRun.mts';
 
 // proposal-runtime-types: producing a moded region's tokens.
@@ -169,3 +171,8 @@ export function tokenizeModedText(text: string, mode: string, source: SourceRefR
   });
   return out;
 }
+
+// The parse records a JSX element as one span, because its child text is not
+// ECMAScript and cannot be tokenized as such. This is how that span becomes the
+// element's structure for a macro.
+SetJSXExpander((text, source, offset) => tokenizeJSX(text, source, offset));

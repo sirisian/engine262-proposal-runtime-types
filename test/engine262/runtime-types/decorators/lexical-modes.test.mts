@@ -189,3 +189,54 @@ test('whitespace at the region\'s own edges is formatting, not content', () => {
   expect(jsx('@jsx { <a  href="/x"  id={y}/> }', KINDS))
     .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:/ p:>)"');
 });
+
+// -- The mixed mode: ECMAScript with JSX admitted where an operand is expected --
+//
+// A pure-JSX region works because it never has to decide: the whole region is
+// JSX by declaration. A component's body is mostly ordinary code, so the
+// decision comes back - and it is the parser's, not a scanner's. The parser
+// admits a JSX element at exactly the position it would otherwise try a regular
+// expression literal, which is the only place the question can be answered.
+const jsxDecl = (body: string, macroSource = KINDS) => expandWith('jsx', JSX_IMPORT + body, macroSource);
+
+test('a decorated declaration may contain JSX in expression position', () => {
+  // The shape a component macro is written in, and the one that could not be
+  // written at all before: `@jsx function View()` took no region, so its body
+  // lexed as ordinary ECMAScript and the `<` stopped it.
+  expect(jsxDecl('@jsx function View() { return <div/>; }'))
+    .toBe('"i:function i:View G() G(i:return G(p:< i:div p:/ p:>) p:;)"');
+  // JavaScript and JSX in one body, which a captured region cannot express - a
+  // statement beside JSX in a pure region becomes TEXT.
+  expect(jsxDecl('@jsx function V() { const q = 1; return <div/>; }'))
+    .toBe('"i:function i:V G() G(i:const i:q p:= n:1 p:; i:return G(p:< i:div p:/ p:>) p:;)"');
+});
+
+test('the element arrives as structure, not as an opaque run', () => {
+  expect(jsxDecl('@jsx function V() { return <a href="/x">t</a>; }'))
+    .toBe('"i:function i:V G() G(i:return G(p:< i:a i:href p:= s:\\"/x\\" p:> s:\\"t\\" p:< p:/ i:a p:>) p:;)"');
+});
+
+test('JSX nested inside an interpolation is scanned as JSX', () => {
+  // The commonest idiom in JSX, and the one that degraded quietly: an
+  // interpolation is handed to the ECMAScript tokenizer, so `<li>` arrived as
+  // punctuation and identifiers with its text fidelity already gone. The parser
+  // re-enters at any depth, so it does not.
+  expect(jsxDecl('@jsx function V() { return <ul>{xs.map(x => <li/>)}</ul>; }'))
+    .toBe('"i:function i:V G() G(i:return G(p:< i:ul p:> G(i:xs p:. i:map G(i:x p:=> p:< i:li p:/ p:>)) p:< p:/ i:ul p:>) p:;)"');
+});
+
+test('an exported declaration takes the mode too', () => {
+  // Set on the module-item path as well as the statement one: they reach the
+  // declaration by different routes, and this is the shape that lets a macro
+  // emit a constant beside what it replaces.
+  expect(jsxDecl('@jsx export function View() { return <p/>; }'))
+    .toBe('"i:export i:function i:View G() G(i:return G(p:< i:p p:/ p:>) p:;)"');
+});
+
+test('the mode changes nothing outside a decorated declaration', () => {
+  // The whole argument for a scoped mode over a grammar that admits JSX
+  // everywhere and disambiguates `<` per occurrence.
+  expect(jsxDecl('const z = 1 < 2;', '(function (t) { return t; })')).toBe('const z = 1 < 2;');
+  expect(jsxDecl('function g(x) { return x; } const w = g.<uint8>(1);', '(function (t) { return t; })'))
+    .toBe('function g(x) { return x; } const w = g.<uint8>(1);');
+});
