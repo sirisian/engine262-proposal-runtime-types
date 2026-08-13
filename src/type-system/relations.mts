@@ -223,6 +223,18 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           // present are compared as types (spec SameSignature).
           && ((g.ThisType ?? null) === null) === ((tf.Signatures[i].ThisType ?? null) === null)
           && (!g.ThisType || SameTypeWithAssumptions(g.ThisType, tf.Signatures[i].ThisType!, next))
+          // [[Narrows]] likewise: #sec-declared-narrowing makes a signature's
+          // narrowings part of what it establishes, so two signatures that
+          // establish different things are different types. Interning compares
+          // types with THIS operation rather than by the order key, so a field
+          // omitted here makes the two collapse into one interned record - which
+          // is what happened before: a constructed guard and a plain predicate
+          // of the same shape were the same object.
+          && (g.Narrows?.length ?? 0) === (tf.Signatures[i].Narrows?.length ?? 0)
+          && (g.Narrows ?? []).every((nw, j) => {
+            const other = tf.Signatures[i].Narrows![j]!;
+            return nw.Target === other.Target && SameTypeWithAssumptions(nw.Type, other.Type, next);
+          })
           && (g.Return === null) === (tf.Signatures[i].Return === null)
           && (!g.Return || SameTypeWithAssumptions(g.Return, tf.Signatures[i].Return!, next)));
     }

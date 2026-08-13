@@ -93,3 +93,45 @@ test('none is an absence rather than a wildcard', () => {
   expect(evaluated(`String(Reflect.isAssignable(${mkThis('')}, ${mkThis('')}));`)).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type (x: uint8) => boolean, type (x: uint8) => boolean));')).toBe('true');
 });
+
+// -- A signature's [[Narrows]] (#sec-declared-narrowing) -----------------------
+//
+// "A Narrowing Record has a [[Target]], a String naming a parameter of the
+// signature or "this", and a [[Type]], a Type Record. A signature's [[Narrows]]
+// is a List of them, and it says what a call establishes."
+
+const guard = 'Reflect.makeType({ kind: "function", signatures: [{ parameters: [{ name: "v", type: any }],'
+  + ' return: { type: boolean }, narrows: [{ target: "v", type: uint8 }] }] })';
+const plain = 'Reflect.makeType({ kind: "function", signatures: [{ parameters: [{ name: "v", type: any }],'
+  + ' return: { type: boolean } }] })';
+
+test('a signature carries and reflects its declared narrowings', () => {
+  expect(evaluated(`const G = ${guard};`
+    + ' Object.keys(Reflect.getReflection(G).signatures[0]).join(",");')).toBe('parameters,return,narrows');
+  expect(evaluated(`const G = ${guard};`
+    + ' const n = Reflect.getReflection(G).signatures[0].narrows;'
+    + ' `${n.length}:${n[0].target}`;')).toBe('1:v');
+});
+
+test('what a signature establishes is part of what it is', () => {
+  // Two signatures that establish different things are different types, so a
+  // program selects the behaviour by annotating with the one it wants. The
+  // interning compares types with SameType rather than by the order key, so
+  // both had to learn the field or the two collapsed into one record.
+  expect(evaluated(`String(${guard} !== ${plain});`)).toBe('true');
+  expect(evaluated(`String(${guard} === ${guard});`)).toBe('true');
+});
+
+test('a narrowing is refused where nothing could consume it', () => {
+  // "Where the [[Return]] is any other type, a non-empty [[Narrows]] is a type
+  // error: nothing would consume it." Only `boolean` and ~void~ have a reading.
+  expect(evaluated('let m = "accepted";'
+    + ' try { Reflect.makeType({ kind: "function", signatures: [{ parameters: [{ name: "v", type: any }],'
+    + ' return: { type: uint8 }, narrows: [{ target: "v", type: uint8 }] }] }); }'
+    + ' catch (e) { m = e.constructor.name; } m;')).toBe('TypeError');
+  // A ~void~ return is the other admitted form: "the call establishes its
+  // narrowings by returning at all".
+  expect(evaluated('const A = Reflect.makeType({ kind: "function", signatures: [{ parameters: [{ name: "v", type: any }],'
+    + ' narrows: [{ target: "v", type: uint8 }] }] });'
+    + ' String(Reflect.getReflection(A).signatures[0].narrows.length);')).toBe('1');
+});

@@ -154,6 +154,13 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         Parameters: g.Parameters.map((p) => ({ ...p, Type: CanonicalizeType(p.Type, copies) })),
         Return: g.Return === null ? null : CanonicalizeType(g.Return, copies),
         ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType, copies),
+        // #sec-declared-narrowing: a signature's [[Narrows]] is part of what it
+        // IS, so it survives canonicalization as [[ThisType]] does. This rebuild
+        // is field by field, so a field omitted here is silently dropped from
+        // every interned type - which is what happened to a constructed
+        // signature's narrowings: they were built, and then canonicalization
+        // returned a copy without them.
+        Narrows: g.Narrows === undefined ? undefined : g.Narrows.map((nw) => ({ Target: nw.Target, Type: CanonicalizeType(nw.Type, copies) })),
       })),
     };
   }

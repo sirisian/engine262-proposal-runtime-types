@@ -629,6 +629,7 @@ export interface Throw {
   | '$1 is not a valid property name'
   | '$1 is not a valid radix'
   | '$1 is not a valid type'
+  | '$1 is not a valid type node'
   | '$1 is not a value of this enum'
   | '$1 is not an SoA'
   | '$1 is not an array'

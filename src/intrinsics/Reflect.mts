@@ -7,7 +7,7 @@ import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
-import { neverType, propertyKeyValue, parameter, type ParameterRecord } from '../type-system/records.mts';
+import { neverType, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -452,7 +452,41 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         if (thisV instanceof ObjectValue) {
           ThisType = Q(yield* nodeToTypeRecord(thisV));
         }
-        Signatures.push({ Parameters, Return, ThisType });
+        // #sec-declared-narrowing: an optional `narrows` list, each entry a
+        // { target, type } naming a parameter of the signature or "this".
+        // Neither this nor `this` has a source spelling - "a signature acquires
+        // them by construction" - so this is the only route by which either
+        // reaches a signature.
+        const narrowsV = Q(yield* Get(sig, Value('narrows')));
+        let Narrows: NarrowingRecord[] | undefined;
+        if (narrowsV instanceof ObjectValue) {
+          Narrows = [];
+          const n = Q(yield* LengthOfArrayLike(narrowsV));
+          for (let i = 0; i < n; i += 1) {
+            const entry = Q(yield* Get(narrowsV, Value(String(i))));
+            if (!(entry instanceof ObjectValue)) {
+              continue;
+            }
+            const targetV = Q(yield* Get(entry, Value('target')));
+            if (!(targetV instanceof JSStringValue)) {
+              continue;
+            }
+            const type = Q(yield* nodeToTypeRecord(Q(yield* Get(entry, Value('type')))));
+            Narrows.push({ Target: targetV.stringValue(), Type: type });
+          }
+        }
+        // "Where the [[Return]] is any other type, a non-empty [[Narrows]] is a
+        // type error: nothing would consume it." Only `boolean` and ~void~ have
+        // a reading, so a signature that would establish something nothing can
+        // observe is refused where it is built.
+        if (Narrows !== undefined && Narrows.length > 0) {
+          const returnsBoolean = Return !== null && Return.Kind === 'primitive' && Return.Name === 'boolean';
+          const returnsVoid = Return === null;
+          if (!returnsBoolean && !returnsVoid) {
+            return Throw.TypeError('$1 is not a valid type node', Value('a signature that narrows must return boolean or void'));
+          }
+        }
+        Signatures.push({ Parameters, Return, ThisType, Narrows });
       }
       return { Kind: 'function', Signatures };
     }
@@ -612,6 +646,15 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         // to [[ThisType]] null).
         if (sig.ThisType) {
           X(CreateDataProperty(sr, Value('this'), recordToNode(sig.ThisType, realm)));
+        }
+        if (sig.Narrows?.length) {
+          const entries = sig.Narrows.map((nw) => {
+            const e = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+            X(CreateDataProperty(e, Value('target'), Value(nw.Target)));
+            X(CreateDataProperty(e, Value('type'), recordToNode(nw.Type, realm)));
+            return e as Value;
+          });
+          X(CreateDataProperty(sr, Value('narrows'), X(CreateArrayFromList(entries))));
         }
         return sr as Value;
       });

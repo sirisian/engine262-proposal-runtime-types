@@ -223,6 +223,27 @@ export interface SignatureRecord {
   // declared (the spec's [[ThisType]], a Type Record or ~none~). Part of the
   // signature's identity, compared as a type.
   readonly ThisType?: TypeRecord | null;
+  /**
+   * proposal-runtime-types #sec-declared-narrowing: what a call of this
+   * signature establishes about its arguments. A List of Narrowing Records, or
+   * absent where the signature declares none.
+   *
+   * Part of the signature's identity, as [[ThisType]] is: two signatures that
+   * establish different things are different types, and a program selects the
+   * behaviour by annotating with the one it wants.
+   */
+  readonly Narrows?: readonly NarrowingRecord[];
+}
+
+/**
+ * #sec-declared-narrowing: "A Narrowing Record has a [[Target]], a String naming
+ * a parameter of the signature or *"this"*, and a [[Type]], a Type Record ... it
+ * says what a call establishes: that the argument passed at [[Target]] is of
+ * [[Type]]."
+ */
+export interface NarrowingRecord {
+  readonly Target: string;
+  readonly Type: TypeRecord;
 }
 
 export interface IndexSignatureRecord {
@@ -740,7 +761,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     // part of a signature's identity, so they belong in the canonical order key.
     // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`
     // produce the same key and intern as ONE Type Object.
-    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}(${g.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Optional ? '?' : ''}${orderKey(p.Type)}`).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
+    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}${g.Narrows?.length ? `narrows:${g.Narrows.map((nw) => `${nw.Target}=${orderKey(nw.Type)}`).join('+')};` : ''}(${g.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Optional ? '?' : ''}${orderKey(p.Type)}`).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
     default: return 'unknown';
   }
 }
