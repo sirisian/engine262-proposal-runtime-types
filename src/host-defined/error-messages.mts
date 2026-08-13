@@ -843,6 +843,7 @@ export interface Throw {
   | '$1 is not a value of $2'
   | '$1 is not assignable to $2'
   | '$1 is not claimed by any meta type, in $2'
+  | '$1 is not declared by $2'
   | '$1 is not in the range of $2'
   | '$1 is out of range for $2'
   | '$1 lanes were supplied where $2 are wanted'

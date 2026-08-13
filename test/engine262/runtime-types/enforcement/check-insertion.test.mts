@@ -1176,3 +1176,74 @@ test('a typed field survives a round trip, which is what the gap destroyed', () 
   expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); c.x = 300; let y: uint8 = c.x;')).toBe('RangeError');
   expect(evaluated('class C { x: uint8 = 1; } const c = new C(); c.x = 200; let y: uint8 = c.x; String(y);')).toBe('200');
 });
+
+// -- Literal freshness (#sec-literal-freshness) -------------------------------
+//
+// "An object literal checked against an expected object type is checked
+// freshly: an own property the expected type neither declares nor admits
+// through an index signature is a type error, reported against the property."
+
+test('a fresh literal may not carry an undeclared property', () => {
+  // An EARLY error: the program is rejected before anything runs, which is
+  // where a rule about the literal's syntax belongs.
+  expectStatic('type E = { x: uint8 }; let bad: E = { x: 1, extra: 2 };');
+  expectStatic('function f(p: { x: uint8 }) { return "took it"; } f({ x: 1, extra: 9 });');
+  // Written INLINE, because an ALIAS-typed parameter receives no contextual
+  // type at a call at all - so no rule that depends on one reaches it. That is
+  // a gap of its own, recorded in KNOWN-DIVERGENCES.md, and it is visible
+  // without freshness: `type U = uint8; function f(p: U) {} f(300)` reports a
+  // RangeError from inside `f` where the inline spelling is an early error.
+  expect(evaluated('type E = { x: uint8 }; function f(p: E) { return "took it"; }'
+    + ' f({ x: 1, extra: 9 });')).toBe('took it');
+  // "reported against the property", so the message names the key rather than
+  // only the type it offended.
+  expect(thrownMessage('type E = { x: uint8 }; let bad: E = { x: 1, extra: 2 };'))
+    .toContain('extra');
+});
+
+test('freshness belongs to the literal and is lost through a binding', () => {
+  // "Freshness is a property of the literal and not of its type, so it is lost
+  // the moment the value is bound to a name and read back: `f({ a: 1, b: 2 })`
+  // is checked freshly against `f`'s parameter, and `f(o)` is not."
+  expect(evaluated('type E = { x: uint8 }; const src = { x: 1, extra: 2 };'
+    + ' let ok: E = src; String(ok.x);')).toBe('1');
+  expect(evaluated('type E = { x: uint8 }; function f(p: E) { return "took it"; }'
+    + ' const src = { x: 1, extra: 2 }; f(src);')).toBe('took it');
+});
+
+test('an index signature admits the property AND types it', () => {
+  // The other half of the same sentence. The boundary converted only the
+  // DECLARED members, so a property an index signature admits arrived
+  // unconverted and then failed the membership test - refusing a literal the
+  // clause admits. Index signatures have no source syntax, so this is built.
+  const idx = 'const Idx = Reflect.makeType({ kind: "object", properties: [{ name: "x", type: uint8 }],'
+    + ' indexSignatures: [{ key: string, value: uint8 }] }); type I = Idx; ';
+  expect(evaluated(`${idx} let v: I = { x: 1, other: 2 }; String(v.other);`)).toBe('2');
+  // Converted, not merely admitted.
+  expect(evaluated(`${idx} let v: I = { x: 1, other: 2 }; String(v.other is uint8);`)).toBe('true');
+});
+
+test('an optional member is not an extra property', () => {
+  expect(evaluated('type E = { x: uint8, y?: uint8 }; let v: E = { x: 1 }; String(v.x);')).toBe('1');
+  expect(evaluated('type E = { x: uint8, y?: uint8 }; let v: E = { x: 1, y: 2 }; String(v.y);')).toBe('2');
+});
+
+test('a nested literal is checked freshly too', () => {
+  expectStatic('type E = { inner: { x: uint8 } }; let v: E = { inner: { x: 1, extra: 2 } };');
+  expect(evaluated('type E = { inner: { x: uint8 } }; let v: E = { inner: { x: 1 } }; String(v.inner.x);')).toBe('1');
+});
+
+test('the limits of the rule, recorded rather than assumed', () => {
+  // `object` is the record `{ Kind: "object", Properties: [], IndexSignatures:
+  // [] }`, indistinguishable from the empty shape `{}`, so freshness is
+  // withheld where a shape declares nothing - refusing every property of a
+  // literal at `object` would be far worse than not refusing one at `{}`.
+  expect(evaluated('{ let r: object = { x: 7 }; String(r.x); }')).toBe('7');
+  // An INTERFACE's structure here does not carry what a `partial interface`
+  // contributes, so a member a partial declares would read as undeclared.
+  expect(evaluated('interface I { a: uint8; } partial interface I { b: string; }'
+    + ' let v: I = { a: 1, b: "x" }; String(v.b);')).toBe('x');
+  // A `where` clause admits members the base shape does not list.
+  expect(evaluated("type A = { s: string, c: 'US'|'CA' } where if (this.c == 'US') { this is { p: string } }"
+    + " else { this is { p: string } }; const a: A = { s: 'x', c: 'US', p: 'M' }; String(a.p);")).toBe('M');
+});

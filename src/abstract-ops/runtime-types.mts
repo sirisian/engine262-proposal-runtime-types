@@ -961,6 +961,41 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         Q(yield* SetProperty(value, key, converted, Value.true));
       }
     }
+    // A property the type admits through an INDEX SIGNATURE crosses the same
+    // boundary as a declared one. #sec-literal-freshness speaks of a property
+    // the expected type "neither declares nor admits through an index
+    // signature", so an admitted one is as much a member of the shape as a
+    // declared one - and it needs converting for the same reason the declared
+    // ones do: the loop above stopped at the DECLARED members, so a literal
+    // `{ x: 1, other: 2 }` at `{ x: uint8, [string]: uint8 }` left `other` a
+    // plain Number and then failed the membership test that follows, refusing a
+    // literal the clause admits.
+    if (objectShape.IndexSignatures.length > 0) {
+      const declared = new Set(objectShape.Properties.map((prop) => {
+        const k = propertyKeyValue(prop.key);
+        return k instanceof JSStringValue ? k.stringValue() : k;
+      }));
+      for (const own of Q(yield* value.OwnPropertyKeys())) {
+        if (!(own instanceof JSStringValue) || declared.has(own.stringValue())) {
+          continue;
+        }
+        let signature;
+        for (const ix of objectShape.IndexSignatures) {
+          if (Q(yield* IsOfType(own, ix.Key))) {
+            signature = ix;
+            break;
+          }
+        }
+        if (signature === undefined) {
+          continue;
+        }
+        const current = Q(yield* Get(value, own));
+        const converted = Q(yield* CheckedConvertValue(current, signature.Value));
+        if (converted !== current) {
+          Q(yield* SetProperty(value, own, converted, Value.true));
+        }
+      }
+    }
     // #table-check-sites, row "a value stored to a property or field of
     // declared type t": the store check reads the type off the object, so the
     // object must carry it. Without this the members were converted once at the

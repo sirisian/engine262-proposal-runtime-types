@@ -1067,7 +1067,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * different one from this - it belongs with the rule that states it, not
    * bolted onto the member check.
    */
-  const checkObjectLiteralAgainst = (node: ParseNode.ObjectLiteral, target: TypeRecord & { Kind: 'object' }) => {
+  /**
+   * Whether an index signature's KEY type admits this property name. A `string`
+   * signature admits every string key; a literal or union key type admits the
+   * names it names. Written against the key TYPE rather than testing a value,
+   * since this pass has a name and not a value to test.
+   */
+  const keyAdmittedBy = (key: string | SymbolValue, keyType: TypeRecord): boolean => {
+    if (typeof key !== 'string') {
+      return keyType.Kind === 'primitive' && keyType.Name === 'symbol';
+    }
+    if (keyType.Kind === 'primitive') {
+      return keyType.Name === 'string';
+    }
+    if (keyType.Kind === 'literal') {
+      const v = keyType.Value as { stringValue?(): string };
+      return typeof v?.stringValue === 'function' && v.stringValue() === key;
+    }
+    if (keyType.Kind === 'union') {
+      return keyType.Members.some((m) => keyAdmittedBy(key, m));
+    }
+    return false;
+  };
+
+  const checkObjectLiteralAgainst = (node: ParseNode.ObjectLiteral, target: TypeRecord & { Kind: 'object' }, fresh: boolean) => {
     for (const member of node.PropertyDefinitionList ?? []) {
       if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
         walk(member as ParseNode);
@@ -1083,6 +1106,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : target.Properties.find((prop) => prop.key === key);
       if (declared && def.AssignmentExpression) {
         requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type);
+      }
+      // #sec-literal-freshness: "an own property the expected type neither
+      // declares nor admits through an index signature is a type error,
+      // reported against the property". Checked HERE and not at the boundary,
+      // because "freshness is a property of the literal and not of its type, so
+      // it is lost the moment the value is bound to a name and read back" - the
+      // literal is a fact about the syntax, and this is the only pass that sees
+      // it. `f({ a: 1, b: 2 })` is checked freshly and `f(o)` is not.
+      //
+      // Without it "an all-optional shape is a supertype of nearly everything,
+      // and width subtyping admits any literal against it, which is correct for
+      // a value that reached the position through a binding and useless for one
+      // written at the position".
+      if (fresh && declared === undefined && key !== undefined
+          && !target.IndexSignatures.some((ix) => keyAdmittedBy(key, ix.Key))) {
+        const shown = typeof key === 'string' ? Value(key) : key;
+        const completion = Throw.TypeError('$1 is not declared by $2', shown, Value(displayType(target))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
       }
       if (def.AssignmentExpression) {
         walk(def.AssignmentExpression);
@@ -1208,7 +1249,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'ObjectLiteral' && contextual) {
       const shape = structureOf(contextual);
       if (shape && shape.Kind === 'object') {
-        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape);
+        // Freshness applies to a STRUCTURAL type written at the position, and
+        // is withheld in three places where the shape this pass can see is not
+        // the whole of what the position admits:
+        //
+        // - `object`, which is the record `{ Kind: 'object', Properties: [],
+        //   IndexSignatures: [] }` - indistinguishable from the empty shape
+        //   `{}`, and refusing every property of a literal at `object` is far
+        //   worse than not refusing one at `{}`;
+        // - an INTERFACE, whose structure here does not carry what a `partial
+        //   interface` contributes, so a member a partial declares reads as
+        //   undeclared;
+        // - a type carrying dependent refinements, where a `where` clause
+        //   admits members the base shape does not list.
+        //
+        // Each is an incompleteness of the shape rather than of the rule, and
+        // each is pinned by a test so the limit is recorded rather than assumed.
+        const structural = contextual.Kind === 'object'
+          && (shape.Properties.length > 0 || shape.IndexSignatures.length > 0)
+          && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
+        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural);
         return contextual;
       }
     }
