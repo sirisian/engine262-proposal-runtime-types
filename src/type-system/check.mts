@@ -59,6 +59,9 @@ export interface DeferredMetadataCheck {
 }
 const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
 
+/** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
+const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
+
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
 }
@@ -1509,7 +1512,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
         Properties.push({
           key,
-          type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false }] } as unknown as TypeRecord,
+          type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
           optional: tm.Optional === true,
         });
         continue;
@@ -2460,6 +2463,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * proposal-runtime-types #sec-this-adoption: the `this` a METHOD expects.
+   *
+   * "A method extracted from its class and called free of it is the case this
+   * decides: its `this` is not of the type its body assumes, and the extraction
+   * is a type error at the boundary that took it rather than a *TypeError*
+   * inside it." So a method's signature has to say that it expects one.
+   *
+   * WHICH type it expects is the question, and the answer is not the class. A
+   * method is always invoked on the object it was found on, so its `this` is
+   * the RECEIVER, whatever the receiver's declared type - it is a self type
+   * rather than a fixed one. Giving a class's method the class itself was
+   * tried and refuses `class C implements I`: the class's method would expect a
+   * `C` where the interface's expects an `I`, and `C` is the narrower of the
+   * two, which contravariance rejects. That refusal is wrong, and it is wrong
+   * because the premise is: the interface's method is reached only through an
+   * object that HAS it, so the receiver is a `C` at every call either way.
+   *
+   * Every method therefore carries the same marker. Two methods agree on it, so
+   * a class satisfies an interface declaring the same method; a method and a
+   * FREE function do not, which is the extraction. An explicit [[ThisType]] -
+   * the one `withThisType` writes - stays an ordinary type and is compared
+   * contravariantly against another explicit one.
+   */
+  const selfThisType = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
+
   const classInstanceType = (n: ParseNode): Known => {
     const cls = n as unknown as {
       BindingIdentifier?: { name: string } | null,
@@ -2599,7 +2628,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (unusable.has(key) || Properties.some((p) => p.key === key)) {
         continue;
       }
-      Properties.push({ key, type: { Kind: 'function', Signatures } as unknown as TypeRecord, optional: false });
+      const selfSignatures = Signatures.map((sig) => ({ ...sig, ThisType: selfThisType }));
+      Properties.push({ key, type: { Kind: 'function', Signatures: selfSignatures } as unknown as TypeRecord, optional: false });
     }
     // #sec-typed-classes: a subclass's instances have their superclass's
     // members too, so the inherited shape is merged UNDER the class's own

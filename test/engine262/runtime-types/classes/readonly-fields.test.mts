@@ -149,3 +149,31 @@ test('the limit: a write through an any-typed reference is not refused', () => {
   expect(evaluated('type R = { readonly x: uint8 }; let v: R = { x: 1 };'
     + ' let loose: any = v; loose.x = (2 := uint8); String(v.x);')).toBe('2');
 });
+
+// -- A method's expected `this` (#sec-this-adoption) --------------------------
+
+test('a method may not be extracted from the object it belongs to', () => {
+  // "A method extracted from its class and called free of it is the case this
+  // decides ... the extraction is a type error at the boundary that took it
+  // rather than a TypeError inside it." It used to fail INSIDE the body, with
+  // "Cannot convert undefined to object" when it read a typed field off
+  // undefined.
+  expectThrown('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+    + ' type Free = () => uint8; let f: Free = (new C()).read;');
+  // Calling it through the object is untouched.
+  expect(evaluated('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+    + ' const c = new C(); String(c.read());')).toBe('5');
+});
+
+test('a method still satisfies an interface and an object type', () => {
+  // The reason a method's `this` is a SELF type rather than the class: a method
+  // is reached only through an object that has it, so the receiver is a `C` at
+  // every call whether the reference is typed `C` or `I`. Giving the class's
+  // method a `C` and the interface's an `I` would make the class's the
+  // narrower, which contravariance rejects - refusing a program that is sound.
+  expect(evaluated('interface I { read(): uint8 }'
+    + ' class C implements I { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+    + ' let i: I = new C(); String(i.read());')).toBe('5');
+  expect(evaluated('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+    + ' type Shape = { read(): uint8 }; let o: Shape = new C(); String(o.read());')).toBe('5');
+});
