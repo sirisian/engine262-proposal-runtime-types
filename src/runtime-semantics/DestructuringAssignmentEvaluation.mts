@@ -33,6 +33,7 @@ import {
   ToPropertyKey,
   CreateDataPropertyOrThrow,
   GetIterator,
+  ApplyTupleConversionForDestructuring,
   GetV,
   GetValue,
   IteratorClose,
@@ -201,8 +202,12 @@ function* KeyedDestructuringAssignmentEvaluation({
 //   `[` AssignmentElementList `]`
 //   `[` AssignmentElementList `,` AssignmentRestElement? `]`
 function* DestructuringAssignmentEvaluation_ArrayAssignmentPattern({ AssignmentElementList, AssignmentRestElement }: ParseNode.ArrayAssignmentPattern, value: Value) {
+  // The assignment form of the same rule the binding form applies: see
+  // BindingInitialization. Both must agree, or `const [x] = a` and `[x] = a`
+  // would destructure the same value differently.
+  const destructured = Q(yield* ApplyTupleConversionForDestructuring(value));
   // 1. Let iteratorRecord be ? GetIterator(value).
-  const iteratorRecord = Q(yield* GetIterator(value, 'sync'));
+  const iteratorRecord = Q(yield* GetIterator(destructured, 'sync'));
   // 2. Let status be IteratorDestructuringAssignmentEvaluation of AssignmentElementList with argument iteratorRecord.
   let status = EnsureCompletion(yield* IteratorDestructuringAssignmentEvaluation(AssignmentElementList, iteratorRecord));
   // 3. If status is an abrupt completion, then
