@@ -74,6 +74,7 @@ import {
   Evaluate_ImportCall,
   Evaluate_AwaitExpression,
   Evaluate_YieldExpression,
+  Evaluate_ConstantExpression,
   Evaluate_DoExpression,
   Evaluate_PipelineExpression,
   Evaluate_TopicReference,
@@ -236,6 +237,8 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return yield* Evaluate_TemplateLiteral(node);
     case 'ParenthesizedExpression':
       return yield* Evaluate_ParenthesizedExpression(node);
+    case 'ConstantExpression':
+      return yield* Evaluate_ConstantExpression(node);
     case 'DoExpression':
       return yield* Evaluate_DoExpression(node);
     case 'PipelineExpression':

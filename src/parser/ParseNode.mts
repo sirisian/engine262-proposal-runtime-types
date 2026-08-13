@@ -1057,6 +1057,19 @@ export namespace ParseNode {
     readonly type: 'TopicReference';
   }
 
+  /**
+   * proposal-runtime-types: an expression whose value belongs to its SITE.
+   *
+   * `constant { ... }` is evaluated at most once per site per realm; every later
+   * evaluation reaching it answers with the stored value. That is the rule
+   * ECMA-262 applies to a tagged template's strings array, generalized from a
+   * frozen List of Strings to the value of a Block.
+   */
+  export interface ConstantExpression extends BaseParseNode {
+    readonly type: 'ConstantExpression';
+    readonly Block: Block;
+  }
+
   export interface DoExpression extends BaseParseNode {
     readonly type: 'DoExpression';
     readonly Block?: Block;
@@ -3644,6 +3657,7 @@ export namespace ParseNode.RegExp {
 }
 
 export type ParseNode =
+  | ParseNode.ConstantExpression
   | ParseNode.ModedRegion
   | ParseNode.PipelineExpression
   | ParseNode.TopicReference

@@ -1453,6 +1453,24 @@ export abstract class ExpressionParser extends FunctionParser {
    * FUNCTION BOUNDARY: `yield` becomes the do-generator's own and `return` sets
    * its return value.
    */
+  /**
+   * ConstantExpression : `constant` [no LineTerminator here] Block
+   *
+   * The Block carries the enclosing permissions and reports its completion value
+   * the way a `do` Block does, so the two share their body semantics. What
+   * differs is when it runs: at most once per site per realm.
+   */
+  parseConstantExpression(): ParseNode.ConstantExpression {
+    const node = this.startNode<ParseNode.ConstantExpression>();
+    this.next();
+    node.Block = this.parseBlock();
+    // Reported as a DoBlock so the completion-value semantics and the decorator
+    // context are the ones `do` already defines, rather than a second set that
+    // could drift from them.
+    (node.Block as { BlockKind?: string }).BlockKind = 'DoBlock';
+    return this.finishNode(node, 'ConstantExpression');
+  }
+
   parseDoExpression(isAsync: boolean): ParseNode.DoExpression {
     const node = this.startNode<ParseNode.DoExpression>();
     if (isAsync) {
@@ -1545,6 +1563,21 @@ export abstract class ExpressionParser extends FunctionParser {
     // position.
     if (surroundingAgent.feature('runtime-types') && this.test(Token.DO)) {
       return this.parseDoExpression(false) as unknown as ParseNode.PrimaryExpression;
+    }
+    // proposal-runtime-types: `constant` Block.
+    //
+    // Unlike `do`, `constant` is NOT a reserved word - `const constant = 5`,
+    // `{ constant: 7 }` and `function constant() {}` are all legal today - so it
+    // is contextual and must not be recognised where an ordinary identifier was
+    // meant. Two things keep that safe: it is only the keyword when a `{`
+    // follows, since an identifier followed by a block continues as nothing
+    // valid; and a LineTerminator between them forbids the form, because
+    // `constant` alone on a line followed by a block is an ExpressionStatement
+    // and a Block under ASI.
+    if (surroundingAgent.feature('runtime-types')
+        && this.test(Token.IDENTIFIER) && this.peek().value === 'constant'
+        && this.testAhead(Token.LBRACE) && !this.peekAhead().hadLineTerminatorBefore) {
+      return this.parseConstantExpression() as unknown as ParseNode.PrimaryExpression;
     }
     // `async do *`. The lookahead restriction is what keeps `async` contextual:
     // `async` on one line and `do *` on the next must remain an identifier

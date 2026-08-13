@@ -128,6 +128,17 @@ export abstract class Realm {
 
   abstract readonly TemplateMap: { Site: ParseNode.TemplateLiteral; Array: ObjectValue; }[];
 
+  /**
+   * proposal-runtime-types: the value each |ConstantExpression| site has been
+   * evaluated to, in this realm.
+   *
+   * The same shape as [[TemplateMap]] and for the same reason: a construct
+   * whose value belongs to its SITE rather than to an evaluation of it. A
+   * tagged template's strings array is one; `constant { }` generalizes it from
+   * a frozen List of Strings to the value of a Block.
+   */
+  abstract readonly ConstantMap: { Site: ParseNode; Value: Value; }[];
+
   readonly LoadedModules: LoadedModuleRequestRecord[] = [];
 
   abstract readonly HostDefined: ManagedRealmHostDefined;

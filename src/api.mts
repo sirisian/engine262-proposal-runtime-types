@@ -186,6 +186,8 @@ export interface ManagedRealmHostDefined {
 export class ManagedRealm extends Realm {
   override TemplateMap: { Site: ParseNode.TemplateLiteral; Array: ObjectValue; }[];
 
+  override ConstantMap: { Site: ParseNode; Value: Value; }[];
+
   override AgentSignifier: unknown;
 
   override Intrinsics: Intrinsics;
@@ -219,6 +221,7 @@ export class ManagedRealm extends Realm {
     this.Intrinsics = CreateIntrinsics(this);
     this.AgentSignifier = AgentSignifier();
     this.TemplateMap = [];
+    this.ConstantMap = [];
     let [global, thisValue] = customizations?.(this) || [];
     if (!global) {
       global = OrdinaryObjectCreate(this.Intrinsics['%Object.prototype%']);
