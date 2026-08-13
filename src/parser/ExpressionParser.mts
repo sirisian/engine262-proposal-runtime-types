@@ -408,7 +408,10 @@ export abstract class ExpressionParser extends FunctionParser {
     return callee?.type === 'IdentifierReference' && typeof callee.name === 'string' ? callee.name : undefined;
   }
 
-  parseModedRegion(decorators: readonly ParseNode.Decorator[] | null): ParseNode.ModedRegion | undefined {
+  parseModedRegion(
+    decorators: readonly ParseNode.Decorator[] | null,
+    inExpressionPosition = false,
+  ): ParseNode.ModedRegion | undefined {
     if (!decorators || decorators.length === 0) {
       return undefined;
     }
@@ -429,10 +432,17 @@ export abstract class ExpressionParser extends FunctionParser {
     if (!this.test(Token.DO) && !this.test(Token.LBRACE)) {
       return undefined;
     }
-    // `do` is the expression carrier - it yields a value, which is what an
-    // element expression is - and a bare block is the statement one.
-    const isExpression = this.test(Token.DO);
-    if (isExpression) {
+    // `do` may precede the region in either position and means nothing to the
+    // macro - it is consumed and dropped.
+    //
+    // What the node records is the POSITION, which comes from the CALLER: a
+    // region parsed from a primary expression is in expression position, and one
+    // parsed from the statement dispatch is not. Recording `do`'s presence
+    // instead - which this did - conflated the spelling with the position, so a
+    // bare region in expression position looked like a statement and a `do`
+    // region in statement position looked like an expression. Both spellings are
+    // legal in both positions, so the two are independent.
+    if (this.test(Token.DO)) {
       this.next();
     }
     const start = this.peek().startIndex;
@@ -452,7 +462,7 @@ export abstract class ExpressionParser extends FunctionParser {
     }
     (node as { Mode?: string }).Mode = mode;
     (node as { RegionText?: string }).RegionText = this.source.slice(start, run.end);
-    (node as { IsExpression?: boolean }).IsExpression = isExpression;
+    (node as { IsExpression?: boolean }).IsExpression = inExpressionPosition;
     (node as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = decorators;
     // The tokenizer skipped nothing yet, so it is repositioned past the region -
     // the node carries the text, and expansion replaces the range.
@@ -1801,7 +1811,7 @@ export abstract class ExpressionParser extends FunctionParser {
           // `const v = @jsx do { ... }` is an expression and never reaches that
           // one - which is also the position `do` exists for, since it is the
           // carrier that yields a value.
-          const moded = this.parseModedRegion(decorators);
+          const moded = this.parseModedRegion(decorators, true);
           if (moded !== undefined) {
             return moded as unknown as ParseNode.PrimaryExpression;
           }

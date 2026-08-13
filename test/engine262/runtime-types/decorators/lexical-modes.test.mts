@@ -60,7 +60,7 @@ const jsx = (body: string, macroSource = JSX_MACRO) => expandWith('jsx', JSX_IMP
 
 test('a mode lets a region reach a macro that ECMAScript could not scan', () => {
   // Without a mode this is `Unexpected token` at the `<`, before any macro runs.
-  expect(jsx('@jsx { <div/> }')).toBe('_jsx ("div" , {})');
+  expect(jsx('@jsx { <div/> }')).toBe('_jsx ("div" , {});');
   expect(jsx('const v = @jsx do { <span/> }; v;')).toBe('const v = _jsx ("span" , {}); v;');
 });
 
@@ -69,11 +69,11 @@ test('the region arrives as tokens of its mode', () => {
   // macro able to pass an interpolated expression through untouched - a `{ ... }`
   // substitution as a GROUP whose contents are ordinary ECMAScript tokens.
   expect(jsx('@jsx { <a href="/x" id={y}>t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:> s:\\"t\\" p:< p:/ i:a p:>)"');
+    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:> s:\\"t\\" p:< p:/ i:a p:>)";');
   // Text between tags is one string rather than a run of identifiers, which is
   // what makes a Deno-style static/dynamic split expressible.
   expect(jsx('@jsx { <div>hi there</div> }', KINDS))
-    .toBe('"G(p:< i:div p:> s:\\"hi there\\" p:< p:/ i:div p:>)"');
+    .toBe('"G(p:< i:div p:> s:\\"hi there\\" p:< p:/ i:div p:>)";');
 });
 
 test('`do` carries a region wherever a value is wanted', () => {
@@ -121,9 +121,9 @@ test('a region ends where its delimiters balance, not at the first brace', () =>
   // count would stop at the first `}` and splice the wrong range, which surfaces
   // much later as a parse failure on the re-parse.
   expect(jsx('@jsx { <a title="}">t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:title p:= s:\\"}\\" p:> s:\\"t\\" p:< p:/ i:a p:>)"');
+    .toBe('"G(p:< i:a i:title p:= s:\\"}\\" p:> s:\\"t\\" p:< p:/ i:a p:>)";');
   expect(jsx('@jsx { <a id={ { k: 1 } }>t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:id p:= G(G(i:k p:: n:1)) p:> s:\\"t\\" p:< p:/ i:a p:>)"');
+    .toBe('"G(p:< i:a i:id p:= G(G(i:k p:: n:1)) p:> s:\\"t\\" p:< p:/ i:a p:>)";');
 });
 
 test('what the macro returns is ordinary ECMAScript', () => {
@@ -165,29 +165,29 @@ test('whitespace between children is content, and survives', () => {
   // `<p>Hi {name}!</p>` is an ordinary line of JSX, and losing the space after
   // `Hi` made a macro render `Hiname!` with no way to do otherwise.
   expect(jsx('@jsx { <p>Hi {name}!</p> }', KINDS))
-    .toBe('"G(p:< i:p p:> s:\\"Hi \\" G(i:name) s:\\"!\\" p:< p:/ i:p p:>)"');
+    .toBe('"G(p:< i:p p:> s:\\"Hi \\" G(i:name) s:\\"!\\" p:< p:/ i:p p:>)";');
   // A whitespace-only run between two substitutions is content too: these two
   // render differently, so they must not tokenize identically.
   expect(jsx('@jsx { <p>{a} {b}</p> }', KINDS))
-    .toBe('"G(p:< i:p p:> G(i:a) s:\\" \\" G(i:b) p:< p:/ i:p p:>)"');
+    .toBe('"G(p:< i:p p:> G(i:a) s:\\" \\" G(i:b) p:< p:/ i:p p:>)";');
   expect(jsx('@jsx { <p>{a}{b}</p> }', KINDS))
-    .toBe('"G(p:< i:p p:> G(i:a) G(i:b) p:< p:/ i:p p:>)"');
+    .toBe('"G(p:< i:p p:> G(i:a) G(i:b) p:< p:/ i:p p:>)";');
   // Text is emitted exactly as written, newlines and indentation included.
   // WHICH whitespace is significant is JSX's rule, not the scanner's: a mode
   // says what the tokens are and a macro says what they mean.
   expect(jsx(`@jsx { <p>one${NL}  two</p> }`, KINDS))
-    .toBe('"G(p:< i:p p:> s:\\"one\\\\n  two\\" p:< p:/ i:p p:>)"');
+    .toBe('"G(p:< i:p p:> s:\\"one\\\\n  two\\" p:< p:/ i:p p:>)";');
 });
 
 test('whitespace at the region\'s own edges is formatting, not content', () => {
   // The region's delimiters are not an element, so the space inside `{ ... }` is
   // formatting around the expression - the same way it is around a parenthesized
   // one - and is dropped once rather than reaching the macro as a text token.
-  expect(jsx('@jsx { <div/> }', KINDS)).toBe('"G(p:< i:div p:/ p:>)"');
-  expect(jsx('@jsx {<div/>}', KINDS)).toBe('"G(p:< i:div p:/ p:>)"');
+  expect(jsx('@jsx { <div/> }', KINDS)).toBe('"G(p:< i:div p:/ p:>)";');
+  expect(jsx('@jsx {<div/>}', KINDS)).toBe('"G(p:< i:div p:/ p:>)";');
   // Whitespace INSIDE a tag separates its parts and is not content either.
   expect(jsx('@jsx { <a  href="/x"  id={y}/> }', KINDS))
-    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:/ p:>)"');
+    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:/ p:>)";');
 });
 
 // -- The mixed mode: ECMAScript with JSX admitted where an operand is expected --
@@ -288,10 +288,72 @@ test('arguments work in every spelling and position', () => {
   // one, a declaration and an exported declaration - the argument run is
   // orthogonal to all of it.
   expect(both('const v = @jsx(1) do { <div/> };'))
-    .toBe('const v = "T[i:do G(p:< i:div p:/ p:>)] A[G(n:1)]";');
-  expect(both('@jsx(1) { <div/> }')).toBe('"T[G(p:< i:div p:/ p:>)] A[G(n:1)]"');
+    .toBe('const v = "T[G(p:< i:div p:/ p:>)] A[G(n:1)]";');
+  expect(both('@jsx(1) { <div/> }')).toBe('"T[G(p:< i:div p:/ p:>)] A[G(n:1)]";');
   expect(both('@jsx(1) function V() { return <div/>; }'))
     .toBe('"T[i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
   expect(both('@jsx(1) export function V() { return <div/>; }'))
     .toBe('"T[i:export i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
+});
+
+// -- The two spellings are interchangeable --------------------------------------
+//
+// `@jsx { ... }` and `@jsx do { ... }` deliver the SAME tokens, in every
+// position, and expand to the same text. Two changes make that true rather than
+// nearly true.
+//
+// `do` no longer reaches the macro. It carried nothing a macro needs and cost
+// every one of them a skip, so the region is now the first token of the stream
+// either way - the macro below reads `t[0]` rather than hunting for a group.
+//
+// And a region in STATEMENT position is terminated. A macro emits an expression,
+// which is what expression position requires; without a terminator the splice
+// sits against whatever follows and `jsxTemplate("div") const after = 1;` does
+// not parse. The position is taken from the CALLER - a region parsed from a
+// primary expression is in expression position - because `do`'s presence records
+// the SPELLING, and conflating the two made a bare region in expression position
+// look like a statement.
+const FIRST_TOKEN = '(function (t) {'
+  + ' var g = t[0], s = g.span;'
+  + ' function k(kind, v) { return { kind: kind, value: v, span: s }; }'
+  + ' function grp(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }'
+  + ' return [k("identifier", "jsxTemplate"), grp("(", ['
+  + '   k("string", JSON.stringify(String(g.tokens && g.tokens[1] ? g.tokens[1].value : "?")))])]; })';
+
+test('either spelling expands identically, in every position', () => {
+  const both = (bare: string, withDo: string, expected: string) => {
+    expect(expandWith('jsx', JSX_IMPORT + bare, FIRST_TOKEN)).toBe(expected);
+    expect(expandWith('jsx', JSX_IMPORT + withDo, FIRST_TOKEN)).toBe(expected);
+  };
+  both('const v = @jsx { <div/> }; const w = 2;',
+    'const v = @jsx do { <div/> }; const w = 2;',
+    'const v = jsxTemplate ("div"); const w = 2;');
+  both('f(@jsx { <br/> });', 'f(@jsx do { <br/> });', 'f(jsxTemplate ("br"));');
+  both('function A() { return @jsx { <p/> }; }', 'function A() { return @jsx do { <p/> }; }',
+    'function A() { return jsxTemplate ("p"); }');
+  both('const f = () => @jsx { <b/> };', 'const f = () => @jsx do { <b/> };',
+    'const f = () => jsxTemplate ("b");');
+  both('const a = [@jsx { <i/> }];', 'const a = [@jsx do { <i/> }];',
+    'const a = [jsxTemplate ("i")];');
+  both('const v = @jsx(1) { <div/> }; const w = 2;', 'const v = @jsx(1) do { <div/> }; const w = 2;',
+    'const v = jsxTemplate ("div"); const w = 2;');
+});
+
+test('a region in statement position composes with what follows it', () => {
+  // The case that exposed all of this: without a terminator the expansion sits
+  // against the next statement, and no LineTerminator means ASI cannot help.
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> } const after = 1;`, FIRST_TOKEN))
+    .toBe('jsxTemplate ("div"); const after = 1;');
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx do { <div/> } const after = 1;`, FIRST_TOKEN))
+    .toBe('jsxTemplate ("div"); const after = 1;');
+});
+
+test('a terminator is not added where the macro already ended one', () => {
+  // A construct ending in a block, or output that already terminates, is left
+  // alone - the repair is for an expression standing as a statement.
+  const emitsBlock = '(function (t) { var s = t[0].span;'
+    + ' function k(kind, v) { return { kind: kind, value: v, span: s }; }'
+    + ' function grp(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }'
+    + ' return [k("identifier", "function"), k("identifier", "g"), grp("(", []), grp("{", [])]; })';
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> }`, emitsBlock)).toBe('function g () {}');
 });

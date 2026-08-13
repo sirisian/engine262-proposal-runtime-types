@@ -249,7 +249,17 @@ export function ExpandSource(
       : tokensOfRange(site.args.start, site.args.end);
     // The region's own mode, not the arguments' - a decoration's arguments are
     // always ECMAScript however its region is scanned.
-    const returned = call(fn, tokensOfRange(decoratorEnd, end, site.mode), argTokens);
+    //
+    // A moded region's stream begins at the REGION, so `do` does not reach the
+    // macro. It carried no information a macro needs and cost every one of them
+    // a skip: `@jsx do { ... }` delivered `do` then the region where
+    // `@jsx { ... }` delivered the region alone, so a macro had to hunt for its
+    // first group rather than read the first token. The two spellings are now
+    // the same stream, which is what makes them interchangeable rather than
+    // merely both accepted.
+    const regionText = (site.target as { RegionText?: string }).RegionText;
+    const streamStart = regionText === undefined ? decoratorEnd : end - regionText.length;
+    const returned = call(fn, tokensOfRange(streamStart, end, site.mode), argTokens);
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own
@@ -258,7 +268,25 @@ export function ExpandSource(
       failures.push({ kind: 'threw', name: site.name });
       continue;
     }
-    const produced = textOf(returned);
+    let produced = textOf(returned);
+    // A replacement in STATEMENT position must be a statement. A macro emitting
+    // an expression - which is what a macro naturally emits, and what it must
+    // emit in expression position - leaves the splice adjacent to whatever
+    // follows: `jsxTemplate("div") const after = 1;` does not parse, and with no
+    // LineTerminator between them ASI cannot help.
+    //
+    // Terminated HERE rather than by a rule about how the output is read,
+    // because expansion splices TEXT and re-parses it: the adjacency is textual,
+    // so the repair has to be. A macro that already emitted a terminator, or a
+    // construct ending in a block, is left alone.
+    const inStatementPosition = regionText !== undefined
+      && (site.target as { IsExpression?: boolean }).IsExpression === false;
+    if (inStatementPosition && produced !== undefined) {
+      const tail = produced.trimEnd();
+      if (tail !== '' && !tail.endsWith(';') && !tail.endsWith('}')) {
+        produced = `${produced};`;
+      }
+    }
     if (produced === undefined) {
       // The return was not a List of Token Records. Distinguished from throwing,
       // because a macro that returned the wrong SHAPE made a different mistake
