@@ -52,3 +52,44 @@ test('function runtime type: the cases the step sits between are unaffected', ()
   expect(evaluated('String(Reflect.getReflection(Reflect.typeOf([1, 2])).kind);')).toBe('array');
   expect(evaluated('String(Reflect.getReflection(Reflect.typeOf({ a: 1 })).kind);')).toBe('object');
 });
+
+// -- A signature's [[ThisType]] (#sec-this-adoption) ---------------------------
+//
+// "It is contravariant, as a parameter is, so a signature with a [[ThisType]] is
+// usable where one requiring a NARROWER `this` is required and never the
+// reverse. A signature with none supplies no `this` rather than accepting any."
+//
+// The field was already constructible and reflected - the entry that reported it
+// absent measured a SOURCE-written type, which has no spelling for it - so what
+// this covers is the rule that gives it meaning.
+
+const mkThis = (t: string) => `Reflect.makeType({ kind: "function", signatures: [{ parameters: [], return: { type: uint8 }${t ? `, this: ${t}` : ''} }] })`;
+
+test('a signature carries and reflects its expected this type', () => {
+  expect(evaluated(`type S = { x: uint8 }; const F = ${mkThis('S')};`
+    + ' Object.keys(Reflect.getReflection(F).signatures[0]).join(",");')).toBe('parameters,return,this');
+  // Part of identity: the same signature with and without one are two types.
+  expect(evaluated(`type S = { x: uint8 }; String(${mkThis('S')} !== ${mkThis('')});`)).toBe('true');
+});
+
+test('the expected this type is contravariant', () => {
+  const setup = 'type Narrow = { x: uint8, y: uint8 }; type Wide = { x: uint8 }; ';
+  // A body demanding LESS than the position promises is usable; one demanding
+  // more is not.
+  expect(evaluated(`${setup} String(Reflect.isAssignable(${mkThis('Wide')}, ${mkThis('Narrow')}));`)).toBe('true');
+  expect(evaluated(`${setup} String(Reflect.isAssignable(${mkThis('Narrow')}, ${mkThis('Wide')}));`)).toBe('false');
+});
+
+test('none is an absence rather than a wildcard', () => {
+  const setup = 'type S = { x: uint8 }; ';
+  // "usable nowhere a `this` is required at all"
+  expect(evaluated(`${setup} String(Reflect.isAssignable(${mkThis('')}, ${mkThis('S')}));`)).toBe('false');
+  // And the other half, which is the EXTRACTION case: a signature that has one
+  // is usable nowhere a `this` is absent, so taking a method out of its class
+  // and putting it where a free function is expected is refused at the boundary
+  // that took it rather than failing inside the body.
+  expect(evaluated(`${setup} String(Reflect.isAssignable(${mkThis('S')}, ${mkThis('')}));`)).toBe('false');
+  // Where NEITHER has one - every ordinary function - nothing changes.
+  expect(evaluated(`String(Reflect.isAssignable(${mkThis('')}, ${mkThis('')}));`)).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type (x: uint8) => boolean, type (x: uint8) => boolean));')).toBe('true');
+});

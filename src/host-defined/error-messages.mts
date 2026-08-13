@@ -273,7 +273,6 @@ export interface Throw {
   | 'Critical calendar annotation failed.'
   | 'DataView cannot be invoked without new'
   | 'DateTime outside of range'
-  | 'Decorators can only be used to decorate classes'
   | 'Decorators cannot appear on both sides of the export keyword'
   | 'Default export already declared'
   | 'Derived TypedArray constructor created an array which was too small'
@@ -767,6 +766,7 @@ export interface Throw {
   | 'a $1 clause is not satisfied by this application'
   | 'a call assigned to must return a ref, and $1 does not'
   | 'a call in a ++ or -- operand must return a ref, and $1 does not'
+  | 'a constant expression may not read $1 from outside itself'
   | 'a decimal is constructed from a string of digits; the conversion from $1 is not yet defined'
   | 'a do expression may not end in $1'
   | 'a match arm may not end in $1'
@@ -875,7 +875,6 @@ export interface Throw {
   | 'setter ($1) in a property descriptor $2 must be a function'
   | 'switch over enum $1 is missing $2 and has no default'
   | 'the replacement decorator $1 is not compile-time evaluable: it names $2'
-  | 'a constant expression may not read $1 from outside itself'
   | 'the type parameter $1 of $2 has no argument and no default'
   | 'the type parameter $1 of $2 is supplied twice'
   , $1: Formattable, $2: Formattable): ThrowCompletion;

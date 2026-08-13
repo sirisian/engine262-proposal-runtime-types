@@ -587,6 +587,28 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
  */
 function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extract<TypeRecord, { Kind: 'function' }>, assumptions: readonly Assumption[]): boolean {
   return t.Signatures.every((tg) => s.Signatures.some((sg) => {
+    // proposal-runtime-types #sec-this-adoption: a signature's [[ThisType]] "is
+    // contravariant, as a parameter is", so the SOURCE's `this` must be the
+    // wider one - a body demanding more than the position promises would be
+    // handed a value it cannot use.
+    //
+    // "A signature with none supplies no `this` rather than accepting any", so
+    // the two absent cases are not a wildcard at either end: a signature with
+    // none is usable nowhere a `this` is required, and one that HAS a
+    // [[ThisType]] is usable nowhere a `this` is absent. That second half is
+    // what makes a method extracted from its class an error at the boundary
+    // that took it rather than a TypeError inside its body, which the clause
+    // names as the case this rule decides.
+    //
+    // Where neither side has one - every ordinary function - nothing changes.
+    const sThis = sg.ThisType ?? null;
+    const tThis = tg.ThisType ?? null;
+    if ((sThis === null) !== (tThis === null)) {
+      return false;
+    }
+    if (sThis !== null && tThis !== null && !IsSubtype(tThis, sThis, assumptions)) {
+      return false;
+    }
     if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
       return false;
     }
