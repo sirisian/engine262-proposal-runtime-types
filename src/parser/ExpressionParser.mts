@@ -374,15 +374,38 @@ export abstract class ExpressionParser extends FunctionParser {
     }
     let mode;
     for (const d of decorators) {
-      const spelled = (d as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
-      if (spelled?.type === 'IdentifierReference' && typeof spelled.name === 'string') {
-        const declared = (this as unknown as { decoratorModes: ReadonlyMap<string, string> }).decoratorModes?.get(spelled.name);
+      const spelled = this.decorationName(d);
+      if (spelled !== undefined) {
+        const declared = (this as unknown as { decoratorModes: ReadonlyMap<string, string> }).decoratorModes?.get(spelled);
         if (declared !== undefined) {
           mode = declared;
         }
       }
     }
     return mode;
+  }
+
+  /**
+   * The name a decoration is spelled with, argumented or not.
+   *
+   * `@m` puts the identifier in [[MemberExpression]]; `@m(X)` puts it in
+   * [[CallExpression]].[[CallExpression]] and leaves [[MemberExpression]] empty.
+   * Reading only the first is why an argumented decoration was never collected
+   * for expansion, and - measured - why `@jsx(1) { <div/> }` did not find its
+   * mode and fell through to being lexed as ECMAScript. The same shape, twice;
+   * `decoratedName` in Expansion.mts already resolves it this way.
+   */
+  decorationName(decorator: ParseNode.Decorator): string | undefined {
+    const d = decorator as unknown as {
+      MemberExpression?: { type?: string, name?: string },
+      CallExpression?: { CallExpression?: { type?: string, name?: string } },
+    };
+    const bare = d.MemberExpression;
+    if (bare?.type === 'IdentifierReference' && typeof bare.name === 'string') {
+      return bare.name;
+    }
+    const callee = d.CallExpression?.CallExpression;
+    return callee?.type === 'IdentifierReference' && typeof callee.name === 'string' ? callee.name : undefined;
   }
 
   parseModedRegion(decorators: readonly ParseNode.Decorator[] | null): ParseNode.ModedRegion | undefined {

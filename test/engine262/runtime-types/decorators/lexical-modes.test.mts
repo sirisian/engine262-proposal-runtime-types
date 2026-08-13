@@ -240,3 +240,58 @@ test('the mode changes nothing outside a decorated declaration', () => {
   expect(jsxDecl('function g(x) { return x; } const w = g.<uint8>(1);', '(function (t) { return t; })'))
     .toBe('function g(x) { return x; } const w = g.<uint8>(1);');
 });
+
+// -- An ARGUMENTED moded decoration ---------------------------------------------
+//
+// `@jsx(...)` resolves its name through a different node than `@jsx` does:
+// decoratorreplacement.md's argumented form puts the identifier in
+// [[CallExpression]].[[CallExpression]] and leaves [[MemberExpression]] empty.
+// Reading only the latter is why an argumented decoration was once never
+// collected for expansion at all - and, measured, why every argumented MODED
+// decoration failed to find its mode and fell through to being lexed as
+// ECMAScript, so `@jsx(1) { <div/> }` stopped at the `<`.
+//
+// The same shape twice, in two places, years apart. These tests exist so it is
+// not three.
+const both = (source: string) => expandWith('jsx', JSX_IMPORT + source,
+  '(function (t, a) {'
+  + ' var s = t[0] ? t[0].span : undefined;'
+  + ' function walk(ts) { return (ts || []).map(function (x) {'
+  + '   return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }'
+  + ' return [{ kind: "string", value: JSON.stringify("T[" + walk(t) + "] A[" + walk(a) + "]"), span: s }]; })');
+
+test('a moded decoration may carry arguments', () => {
+  const region = 'T[G(p:< i:div p:/ p:>)]';
+  // The region is unaffected by the arguments, and the arguments arrive whole.
+  expect(both('const v = @jsx { <div/> };')).toBe(`const v = "${region} A[]";`);
+  expect(both('const v = @jsx() { <div/> };')).toBe(`const v = "${region} A[G()]";`);
+  expect(both('const v = @jsx(1) { <div/> };')).toBe(`const v = "${region} A[G(n:1)]";`);
+});
+
+test('the arguments may be anything an expression may be', () => {
+  const region = 'T[G(p:< i:div p:/ p:>)]';
+  // Several, so a macro overloading on arity sees the shape it expects.
+  expect(both('const v = @jsx(a, b) { <div/> };'))
+    .toBe(`const v = "${region} A[G(i:a p:, i:b)]";`);
+  // An object literal, which is the shape an options bag takes - and note it is
+  // read as ECMAScript here even though the REGION is read as JSX.
+  expect(both('const v = @jsx({ pretty: true }) { <div/> };'))
+    .toBe(`const v = "${region} A[G(G(i:pretty p:: i:true))]";`);
+  // A call, a template and a nested group, so nothing about the argument run is
+  // A call, a string and a nested group, so nothing about the argument run is
+  expect(both('const v = @jsx(f(1), "s", [2]) { <div/> };'))
+    .toBe(`const v = "${region} A[G(i:f G(n:1) p:, s:\\"s\\" p:, G(n:2))]";`);
+});
+
+test('arguments work in every spelling and position', () => {
+  // The bare block and the `do` block, an expression position and a statement
+  // one, a declaration and an exported declaration - the argument run is
+  // orthogonal to all of it.
+  expect(both('const v = @jsx(1) do { <div/> };'))
+    .toBe('const v = "T[i:do G(p:< i:div p:/ p:>)] A[G(n:1)]";');
+  expect(both('@jsx(1) { <div/> }')).toBe('"T[G(p:< i:div p:/ p:>)] A[G(n:1)]"');
+  expect(both('@jsx(1) function V() { return <div/>; }'))
+    .toBe('"T[i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
+  expect(both('@jsx(1) export function V() { return <div/>; }'))
+    .toBe('"T[i:export i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
+});
