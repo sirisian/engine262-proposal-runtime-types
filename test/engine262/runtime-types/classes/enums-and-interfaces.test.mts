@@ -662,3 +662,35 @@ test('the enumeration surface iterates in declaration order', () => {
   expect(evaluated(`${C}[...C.values()].join("|");`)).toBe('0|1');
   expect(evaluated(`${C}[...C.keys()].join("|");`)).toBe('Zero|One');
 });
+
+// sec-enums: an enum whose underlying type is ordered is itself ordered,
+// "everywhere ordering applies". A `string` underlying type orders by
+// DECLARATION POSITION, "because a sequence of named steps like time units or
+// severities is meant to compare in the order it's written, not alphabetically".
+//
+// It compared alphabetically, inverting the rule. The type comes from the
+// enumerator being a TypedStringValue carrying its record - NOT from the enum
+// registry, which is keyed on object identity and does not hold string
+// enumerators; an attempt through it found nothing and failed silently.
+
+test('a string enum compares by declaration position', () => {
+  // "z" before "a" by declaration, which is the reverse of alphabetical - an
+  // enum whose values happened to be alphabetical would prove nothing.
+  const S = 'enum S: string { Alpha = "z", Beta = "a" } ';
+  expect(evaluated(`${S}String(S.Alpha < S.Beta);`)).toBe('true');
+  expect(evaluated(`${S}String(S.Beta < S.Alpha);`)).toBe('false');
+  expect(evaluated(`${S}String(S.Beta > S.Alpha);`)).toBe('true');
+  expect(evaluated(`${S}String(S.Alpha <= S.Alpha);`)).toBe('true');
+  // A numeric enum was already correct and is untouched.
+  expect(evaluated('enum L: uint8 { Low, High } String(L.Low < L.High);')).toBe('true');
+});
+
+test('the ordering reaches only enumerators of one enum', () => {
+  const S = 'enum S: string { Alpha = "z", Beta = "a" } ';
+  // Bare strings keep the ordinary comparison.
+  expect(evaluated('String("a" < "z");')).toBe('true');
+  // An enumerator against a bare string has no single declaration order.
+  expect(evaluated(`${S}String(S.Alpha < "zz");`)).toBe('true');
+  // Two different enums likewise.
+  expect(evaluated('enum A: string { X = "b" } enum B: string { Y = "a" } String(A.X < B.Y);')).toBe('false');
+});

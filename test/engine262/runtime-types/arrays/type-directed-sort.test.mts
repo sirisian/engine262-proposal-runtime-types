@@ -76,6 +76,22 @@ test('a 64-bit integral type compares at its own precision', () => {
   expect(evaluated('let a: [].<int32> = [2, 10, 1]; a.sort(); a.join(",");')).toBe('1,2,10');
 });
 
+test('a string enum sorts by declaration position', () => {
+  // The design's own motivating case: "a sequence of named steps like time
+  // units or severities is meant to compare in the order it's written, not
+  // alphabetically". Sorting it alphabetically inverted the rule the design
+  // promises, which makes this the strongest case for type-directed ordering -
+  // the type does not merely know a faster order, it knows a DIFFERENT one.
+  const T = 'enum T: string { Low = "low", Medium = "medium", High = "high" } ';
+  expect(evaluated(`${T}let a: [].<T> = [T.High, T.Low, T.Medium]; a.sort(); a.join(",");`)).toBe('low,medium,high');
+  // Values chosen so declaration order is the REVERSE of alphabetical.
+  const S = 'enum S: string { Alpha = "z", Beta = "a" } ';
+  expect(evaluated(`${S}let a: [].<S> = [S.Beta, S.Alpha]; a.sort(); a.join(",");`)).toBe('z,a');
+  expect(evaluated(`${S}let a: [].<S> = [S.Beta, S.Alpha]; a.toSorted().join(",");`)).toBe('z,a');
+  // Bare strings are unaffected, so the rule reaches only enumerators.
+  expect(evaluated('let a: [].<string> = ["z", "a"]; a.sort(); a.join(",");')).toBe('a,z');
+});
+
 test('the types that already sorted correctly still do', () => {
   expect(evaluated('let a: [].<string> = ["b", "a", "c"]; a.sort(); a.join(",");')).toBe('a,b,c');
   expect(evaluated('let a: [].<boolean> = [true, false]; a.sort(); a.join(",");')).toBe('false,true');

@@ -2,6 +2,7 @@ import { vectorComparison } from '../type-system/vector-ops.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import {
+  TypedStringValue,
   ObjectValue,
   Value,
   wellKnownSymbols,
@@ -16,6 +17,7 @@ import { TypedOperandType } from '../type-system/arithmetic.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   IsLessThan,
+  SameValue,
   Call,
   GetMethod,
   GetValue,
@@ -86,6 +88,31 @@ export function* Evaluate_RelationalExpression_PrivateIdentifier({ PrivateIdenti
 //     RelationalExpression `instanceof` ShiftExpression
 //     RelationalExpression `in` ShiftExpression
 //     PrivateIdentifier `in` ShiftExpression
+/**
+ * The declaration positions of two values that are enumerators of ONE enum, or
+ * ~undefined~ where they are not.
+ *
+ * Both must belong to the SAME enum: comparing across two enums, or an
+ * enumerator against a bare string of equal value, has no single declaration
+ * order to consult and keeps the ordinary comparison.
+ */
+function StringEnumOrdinals(lval: Value, rval: Value): [number, number] | undefined {
+  if (!(lval instanceof TypedStringValue) || !(rval instanceof TypedStringValue)) {
+    return undefined;
+  }
+  const lt = lval.TypeRecord as { EnumMembers?: readonly Value[] } | undefined;
+  const rt = rval.TypeRecord as unknown;
+  if (!lt || lt !== rt || !lt.EnumMembers) {
+    return undefined;
+  }
+  const li = lt.EnumMembers.findIndex((m) => SameValue(m, lval));
+  const ri = lt.EnumMembers.findIndex((m) => SameValue(m, rval));
+  if (li < 0 || ri < 0) {
+    return undefined;
+  }
+  return [li, ri];
+}
+
 export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpression) {
   if (expr.PrivateIdentifier) {
     return yield* Evaluate_RelationalExpression_PrivateIdentifier(expr);
@@ -166,6 +193,28 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // parenthesized forms: `(a..) < b`, `(0..<3) < 5`. It is a runtime rejection
   // until ranges carry types the checker can reject by, at which point the same
   // rule moves to check time and this branch becomes the backstop.
+  // sec-enums: an enum whose underlying type is `string` orders by DECLARATION
+  // POSITION - "a sequence of named steps like time units or severities is meant
+  // to compare in the order it's written, not alphabetically". The enumerator IS
+  // the string the program wrote, so the comparison below saw two ordinary
+  // strings and ordered them alphabetically, inverting the design's rule.
+  //
+  // The type comes from the value being a TypedStringValue carrying its record -
+  // NOT from `RegisteredEnumOf`, a WeakMap on object identity that does not hold
+  // string enumerators. A first attempt used it and silently found nothing.
+  if (surroundingAgent.feature('runtime-types')
+      && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')) {
+    const ordinals = StringEnumOrdinals(lval, rval);
+    if (ordinals !== undefined) {
+      const [li, ri] = ordinals;
+      switch (operator) {
+        case '<': return li < ri ? Value.true : Value.false;
+        case '>': return li > ri ? Value.true : Value.false;
+        case '<=': return li <= ri ? Value.true : Value.false;
+        default: return li >= ri ? Value.true : Value.false;
+      }
+    }
+  }
   if (surroundingAgent.feature('runtime-types')
       && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
       && (isRangeObject(lval) || isRangeObject(rval))) {

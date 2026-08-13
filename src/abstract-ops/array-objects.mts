@@ -3,6 +3,7 @@ import {
   NumberValue, UndefinedValue,
   BooleanValue,
   BigIntValue,
+  TypedStringValue,
   isTypedNumber,
   Q, X, type ValueCompletion, type ValueEvaluator,
   type Mutable, type YieldEvaluator,
@@ -304,6 +305,24 @@ function OrderedComparison(x: Value, y: Value): number | undefined {
     const a = x.bigintValue();
     const bv = y.bigintValue();
     return a < bv ? -1 : (a > bv ? 1 : 0);
+  }
+  // sec-ordered-element-types: an enum orders by the rule its underlying type
+  // carries - a `string` underlying type by DECLARATION POSITION rather than
+  // alphabetically. The enumerator is a TypedStringValue holding its record, so
+  // the ordinal is its position in [[EnumMembers]].
+  //
+  // Both must be enumerators of the SAME enum: two enums, or an enumerator
+  // against a bare string, have no single declaration order to consult.
+  if (x instanceof TypedStringValue && y instanceof TypedStringValue) {
+    const t = x.TypeRecord as { EnumMembers?: readonly Value[] } | undefined;
+    if (t && t === (y.TypeRecord as unknown) && t.EnumMembers) {
+      const xi = t.EnumMembers.findIndex((m) => SameValue(m, x));
+      const yi = t.EnumMembers.findIndex((m) => SameValue(m, y));
+      if (xi >= 0 && yi >= 0) {
+        return xi - yi;
+      }
+    }
+    return undefined;
   }
   if (x instanceof BooleanValue && y instanceof BooleanValue) {
     const a = x.booleanValue() ? 1 : 0;
