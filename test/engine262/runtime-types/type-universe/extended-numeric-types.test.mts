@@ -46,7 +46,7 @@ test('numeric types: the type names are shadowable', () => {
 });
 
 // -- Documented gaps: the value level ------------------------------------------
-test('numeric types: a DECIMAL literal converts; float128 still does not', () => {
+test('numeric types: a decimal literal converts, and so does a float128', () => {
   // Target (decimal.md): `let a: decimal128 = 1.5` gives a decimal128 value.
   // The value-level conversion/arithmetic is deferred.
   // A DECIMAL literal converts: it is read from its
@@ -57,7 +57,9 @@ test('numeric types: a DECIMAL literal converts; float128 still does not', () =>
   expect(evaluated('let a: decimal128 = 1.5; let b: decimal128 = 1.50; String(Object.is(a, b));')).toBe('false');
   // `float128` still has no value level, for the same representational
   // reason decimals once had: it does not fit a double either.
-  expectThrown('let a: float128 = 1.5;');
+  // float128 takes one too, and holds the double EXACTLY - the conformance
+  // file checks that digit for digit against the double's own bit pattern.
+  expect(evaluated('let a: float128 = 1.5; a.toString();')).toBe('1.5');
 });
 
 test('numeric types: rational and complex are both registered value types', () => {

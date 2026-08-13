@@ -73,6 +73,13 @@ export function isIntegerTypeName(name: string): boolean {
   return name === 'int' || name === 'uint';
 }
 
+/**
+ * proposal-runtime-types #sec-binary-floating-point-types names FOUR binary
+ * floating-point types - float16, float32, float64 and float128 - and
+ * #table-binary-float-types gives each its width and precision. float128 was
+ * left out here while the engine had no values for it, which made a literal at
+ * a float128 position unassignable and every conversion into one refuse.
+ */
 export function isFloatTypeName(name: string): boolean {
-  return name === 'float16' || name === 'float32' || name === 'float64';
+  return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
 }

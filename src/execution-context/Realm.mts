@@ -31,6 +31,7 @@ import { bootstrapForInIteratorPrototype } from '../intrinsics/ForInIteratorProt
 import { bootstrapRangePrototype, bootstrapRangeIteratorPrototype } from '../intrinsics/Range.mts';
 import { bootstrapRational, bootstrapRationalPrototype } from '../intrinsics/Rational.mts';
 import { bootstrapComplex, bootstrapComplexPrototype } from '../intrinsics/Complex.mts';
+import { bootstrapFloat128, bootstrapFloat128Prototype } from '../intrinsics/Float128.mts';
 import { bootstrapDecimal, bootstrapDecimalPrototype } from '../intrinsics/Decimal.mts';
 import { bootstrapTokenStream, bootstrapTokenStreamPrototype } from '../intrinsics/TokenStream.mts';
 import { bootstrapFunction } from '../intrinsics/Function.mts';
@@ -348,6 +349,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     bootstrapRational(realmRec);
     bootstrapComplexPrototype(realmRec);
     bootstrapComplex(realmRec);
+    bootstrapFloat128Prototype(realmRec);
+    bootstrapFloat128(realmRec);
     bootstrapDecimalPrototype(realmRec);
     bootstrapDecimal(realmRec);
     bootstrapTokenStreamPrototype(realmRec);

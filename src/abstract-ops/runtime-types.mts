@@ -23,6 +23,7 @@ import {
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
+import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -304,6 +305,23 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   if (t.Kind === 'primitive') {
+    // proposal-runtime-types #sec-binary-floating-point-types: a float128's
+    // values are the format's, and every binary64 value is one of them - the
+    // format is strictly wider in both significand and exponent - so a Number
+    // converts into it EXACTLY and needs no rounding mode. The reverse rounds,
+    // which is what makes float128 the wider type rather than a relabelling of
+    // a double.
+    if (t.Name === 'float128') {
+      if (isFloat128Object(value)) {
+        return value;
+      }
+      if (value instanceof NumberValue) {
+        return Float128FromNumber(R(value) as number, surroundingAgent.currentRealmRecord);
+      }
+      if (isTypedNumber(value)) {
+        return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+      }
+    }
     // proposal-runtime-types #sec-complex-numbers: "`complex64` and
     // `complex128` convert to and from `complex` explicitly and not
     // implicitly, exactly as `float32` and `float64` convert to and from
@@ -811,6 +829,23 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   }
   if (t.Kind === 'primitive') {
     switch (t.Name) {
+      // proposal-runtime-types #sec-binary-floating-point-types: every binary64
+      // value is exactly a binary128 value - the format is strictly wider in
+      // both significand and exponent - so a Number crosses this boundary
+      // WITHOUT ROUNDING, and a float128 arriving at its own type is already
+      // one. What rounds is the other direction.
+      case 'float128': {
+        if (isFloat128Object(value)) {
+          return value;
+        }
+        if (value instanceof NumberValue) {
+          return Float128FromNumber(R(value) as number, surroundingAgent.currentRealmRecord);
+        }
+        if (isTypedNumber(value)) {
+          return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+        }
+        return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+      }
       case 'string':
         // Split by source rather than by primitiveness: a Number, a BigInt, and a
         // Boolean each have one canonical text and lose nothing, while *undefined*,

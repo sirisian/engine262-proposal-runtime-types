@@ -160,10 +160,11 @@ test('numeric library: an untyped call keeps its ordinary meaning', () => {
 });
 
 // -- The types the library does not reach at all --------------------------------
-test('numeric library: float128 has no values to overload over', () => {
-  // `float128` is a named type this engine has no values for by any route, so
-  // the overloading question does not arise for it (KNOWN-DIVERGENCES.md).
-  expect(evaluated('let m = ""; try { (5 := float128); } catch (e) { m = "refused"; } m;')).toBe('refused');
+test('numeric library: float128 takes a value like the other binary floats', () => {
+  // It HAS values now - #sec-binary-floating-point-types gives it the IEEE 754
+  // binary128 format and this engine implements it in software - so it joins
+  // its family rather than standing outside it.
+  expect(evaluated('String(5 := float128);')).toBe('5');
   // The decimals are NOT in that position and no longer share the line: they
   // have values, take defaults, and a literal converts into one. A cast used to
   // refuse them only because it did not offer its target as a contextual type

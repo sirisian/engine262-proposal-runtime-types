@@ -234,15 +234,12 @@ test('a typed property descriptor of decimal type takes the default', () => {
     + ' o.d.toString();')).toBe('0');
 });
 
-test('a type with no value representation still has no default', () => {
-  // `float128` is a type this engine has no values for at all - a literal, a
-  // `:=` cast and a conversion call are each refused - so it has no zero to
-  // return. This pins that rather than the clause, and is recorded in
-  // KNOWN-DIVERGENCES.md; `symbol` is the case that is correctly ~none~.
-  // And a declaration of such a type is refused rather than left undefined.
-  // For `float128` that refusal is unescapable: it has no values at all, so no
-  // initializer can be written either (KNOWN-DIVERGENCES.md).
-  expectTypeError('let f: float128;');
+test('a type with no default cannot be declared bare', () => {
+  // `symbol` is the case that is correctly ~none~: it has values, and no zero
+  // among them. float128 is NO LONGER such a case - it has values now, and
+  // #sec-defaultvalueof gives every numeric type the value representing 0.
+  expectOk('let f: float128;');
+  expect(value('let f: float128; f.toString();')).toBe('0');
   expectTypeError('let s: symbol;');
   expectOk('let s: symbol = Symbol("s");');
 });

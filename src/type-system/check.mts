@@ -510,7 +510,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // space is genuinely distinct, and this is how a plain literal enters it.
   const literalFitsNumericType = (source: TypeRecord, target: TypeRecord): boolean => {
     if (source.Kind === 'literal' && target.Kind === 'primitive'
-        && ['uint', 'int', 'float16', 'float32', 'float64', 'bigint'].includes(target.Name)
+        && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint'].includes(target.Name)
         && source.Value instanceof NumberValue
         && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {
       return true;

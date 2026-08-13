@@ -167,6 +167,11 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%rational%': FunctionObject;
   // proposal-runtime-types #sec-complex-numbers: the pair type and its
   // constructor, `complex(re, im)`, which the clause writes its own example with.
+  // proposal-runtime-types #sec-binary-floating-point-types: float128 has no
+  // host representation, so its values are software - a signed BigInt
+  // significand and a binary exponent.
+  '%float128.prototype%': ObjectValue;
+  '%float128%': FunctionObject;
   '%complex.prototype%': ObjectValue;
   '%complex%': FunctionObject;
   '%RangeIteratorPrototype%': ObjectValue;

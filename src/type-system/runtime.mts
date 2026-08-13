@@ -9,6 +9,7 @@ import {
 import { VectorValue } from '../value.mts';
 import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
+import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
@@ -834,12 +835,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         }
         return new VectorValue(lanes, t);
       }
-      // `symbol` has no meaningful zero. Nor, in this engine, do `float128` and
-      // the complex family - not because the clause exempts them, but because
-      // neither has a value representation at all: every route in, a literal, a
-      // `:=` cast and a conversion call, is refused. That is a completeness gap
-      // of its own and is recorded in KNOWN-DIVERGENCES.md rather than papered
-      // over with a zero this engine cannot build.
+      // #sec-defaultvalueof: "If _t_ is a numeric type, return the value of _t_
+      // representing 0." float128 has values now, so it has a zero like every
+      // other numeric type.
+      if (name === 'float128') {
+        return CreateFloat128Value(0n, 0, surroundingAgent.currentRealmRecord);
+      }
+      // `symbol` has no meaningful zero, which is a fact about the type rather
+      // than about this engine.
       return undefined;
     }
     case 'literal':
@@ -1563,6 +1566,11 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
   // pair carries the component its constructor gave it; one built by the bare
   // `complex(re, im)` constructor carries none and is a `complex.<number>`,
   // since "the bare name `complex` is `complex.<number>`".
+  // #sec-binary-floating-point-types: a float128's values are the format's, and
+  // this engine carries them as software pairs, so membership is being one.
+  if (name === 'float128') {
+    return isFloat128Object(value);
+  }
   if (name === 'complex') {
     if (!isComplexObject(value)) {
       return false;
@@ -2586,7 +2594,10 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
     // exists, so admitting it would report a value the source never wrote.
     return Number.isSafeInteger(v);
   }
-  return name === 'float16' || name === 'float32' || name === 'float64';
+  // Every finite Number is a float128 value: the format is strictly wider than
+  // binary64 in both significand and exponent, so nothing a double can hold
+  // falls outside it.
+  return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
 }
 
 function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null): PlainEvaluator<TypeRecord> {
