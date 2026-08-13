@@ -1,6 +1,7 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
+import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
 import { Q } from '../completion.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
 import { displayType } from '../type-system/records.mts';
@@ -63,6 +64,18 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
           : record);
       }
       SetPendingSoATypeArguments(soaArgs);
+    }
+    // proposal-runtime-types #sec-threadlocal-objects: `ThreadLocal.<T>` needs
+    // its T for the same reason - "an agent that has not written the storage
+    // reads DefaultValueOf(_T_)", and the constructor cannot ask for a default
+    // of a type it was never given. The intercept above already has the name in
+    // hand, so this is a second branch rather than a second interception.
+    if (baseName === 'ThreadLocal') {
+      const tlArgs: TypeRecord[] = [];
+      for (const argNode of spec.TypeArguments.TypeArgumentList) {
+        tlArgs.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+      }
+      SetPendingThreadLocalTypeArguments(tlArgs);
     }
   }
   // The placement is VALIDATED before the constructor runs: the extent depends

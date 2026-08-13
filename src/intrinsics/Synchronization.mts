@@ -1,3 +1,7 @@
+import { DefaultValueOf } from '../type-system/runtime.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { displayType } from '../type-system/records.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
   Call,
@@ -6,6 +10,7 @@ import {
   NewPromiseCapability,
   ObjectValue,
   OrdinaryObjectCreate,
+  Q,
   Throw,
   Value,
   X,
@@ -357,10 +362,31 @@ function* Condition_notifyAll(_args: Arguments, { thisValue }: FunctionCallConte
 interface ThreadLocalObject extends ObjectValue {
   ThreadLocalStorage: WeakMap<Agent, Value>;
   ThreadLocalDefault: Value;
+  /**
+   * proposal-runtime-types #sec-threadlocal-objects: the _T_ of
+   * `ThreadLocal.<`_T_`>`, kept so a write can be checked against it and an
+   * unwritten read can answer DefaultValueOf(_T_). Absent for the untyped
+   * `new ThreadLocal()` form, which has no _T_ to keep.
+   */
+  ThreadLocalType?: TypeRecord;
+  /**
+   * Whether [[ThreadLocalDefault]] is a value the TYPE gave, as against the
+   * absence of one. `undefined` is a legitimate stored value and also what a
+   * type with no default leaves behind, so the two cases cannot be told apart
+   * by the default alone - and they answer an unwritten read differently.
+   */
+  ThreadLocalHasDefault?: boolean;
 }
 
 function isThreadLocal(value: Value): value is ThreadLocalObject {
   return value instanceof ObjectValue && 'ThreadLocalStorage' in value;
+}
+
+/** The type arguments a construction supplied, set by the NewExpression intercept. */
+let pendingThreadLocalTypeArguments: readonly TypeRecord[] | undefined;
+
+export function SetPendingThreadLocalTypeArguments(args: readonly TypeRecord[] | undefined): void {
+  pendingThreadLocalTypeArguments = args;
 }
 
 function* ThreadLocalConstructor(args: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
@@ -368,12 +394,32 @@ function* ThreadLocalConstructor(args: Arguments, { NewTarget }: FunctionCallCon
     return Throw.TypeError('$1 requires new', Value('ThreadLocal'));
   }
   const realm = surroundingAgent.currentRealmRecord;
-  const tl = OrdinaryObjectCreate(realm.Intrinsics['%ThreadLocal.prototype%'], ['ThreadLocalStorage', 'ThreadLocalDefault']) as unknown as ThreadLocalObject;
+  // Taken and CLEARED first, as SoA's constructor does with its own: the channel
+  // is module-level, so a construction that threw between the intercept setting
+  // it and this reading it would otherwise leave a stale type for the next one.
+  const typeArgs = pendingThreadLocalTypeArguments;
+  pendingThreadLocalTypeArguments = undefined;
+  const tl = OrdinaryObjectCreate(realm.Intrinsics['%ThreadLocal.prototype%'], ['ThreadLocalStorage', 'ThreadLocalDefault', 'ThreadLocalType']) as unknown as ThreadLocalObject;
   tl.ThreadLocalStorage = new WeakMap();
-  // The clause reads the default from DefaultValueOf(T) of the generic argument.
-  // Until ThreadLocal.<T> is parameterized here, an explicit initial value serves
-  // the same purpose and an absent one is undefined; recorded in the test file.
-  tl.ThreadLocalDefault = args[0] ?? Value.undefined;
+  tl.ThreadLocalType = typeArgs?.[0];
+  // #sec-threadlocal-objects: "An agent that has not written the storage reads
+  // DefaultValueOf(_T_)." An explicit initial value still wins where one is
+  // given, which is what the untyped `new ThreadLocal(7)` form has always meant
+  // and what the clause leaves alone.
+  if (args[0] !== undefined) {
+    tl.ThreadLocalDefault = args[0];
+  } else if (tl.ThreadLocalType !== undefined) {
+    const fromType = Q(yield* DefaultValueOf(tl.ThreadLocalType));
+    // A type with NO default reads as `none` here. The declaration of such a
+    // type is refused (#sec-defaultvalueof, and the rule that a declaration of
+    // it needs an initializer), but the CONSTRUCTION is not the read: an agent
+    // that writes before it reads uses the storage exactly as intended, so the
+    // error belongs to the unwritten read rather than to this line.
+    tl.ThreadLocalDefault = fromType === undefined ? Value.undefined : fromType as Value;
+    tl.ThreadLocalHasDefault = fromType !== undefined;
+  } else {
+    tl.ThreadLocalDefault = Value.undefined;
+  }
   return tl;
 }
 
@@ -405,12 +451,31 @@ export function bootstrapSynchronization(realmRec: Realm) {
       }
       // "reading its value reads the storage of the surrounding agent"
       const stored = thisValue.ThreadLocalStorage.get(surroundingAgent);
-      return stored ?? thisValue.ThreadLocalDefault;
+      if (stored !== undefined) {
+        return stored;
+      }
+      // "An agent that has not written the storage reads DefaultValueOf(_T_)."
+      // Where _T_ HAS no default there is nothing to hand back, and the read is
+      // the error rather than the construction: an agent that writes before it
+      // reads uses the storage exactly as intended, so refusing `new` would
+      // refuse a program the clause permits.
+      if (thisValue.ThreadLocalType !== undefined && thisValue.ThreadLocalHasDefault === false) {
+        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(thisValue.ThreadLocalType)));
+      }
+      return thisValue.ThreadLocalDefault;
     } as never, function* setValue(a: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
       if (!isThreadLocal(thisValue)) {
         return Throw.TypeError('$1 is not assignable to $2', thisValue, Value('a ThreadLocal'));
       }
-      thisValue.ThreadLocalStorage.set(surroundingAgent, a[0] ?? Value.undefined);
+      // The storage has a type, so a write crosses it: a propagated literal
+      // converts and a value the type forbids is refused, exactly as a write to
+      // a typed binding or an array element does. Without this a
+      // `ThreadLocal.<uint32>` handed back a plain Number for what it stored.
+      let written = a[0] ?? Value.undefined;
+      if (thisValue.ThreadLocalType !== undefined) {
+        written = Q(yield* RequireType(written, thisValue.ThreadLocalType));
+      }
+      thisValue.ThreadLocalStorage.set(surroundingAgent, written);
       return Value.undefined;
     } as never]],
   ]);

@@ -14,8 +14,6 @@ import {
  * clause. The uncontended fast paths of hold and acquire do run, since they never
  * wait, and the async forms run in full.
  *
- * NOT IMPLEMENTED: ThreadLocal.<T> is not parameterized here, so its default is
- * an explicit constructor argument rather than DefaultValueOf(T).
  */
 
 function makeCluster(setup: string) {
@@ -188,6 +186,43 @@ test('the blocking forms throw rather than becoming their async counterparts', (
 test('ThreadLocal: reads the default until written, then the agent\'s own value', () => {
   const h = makeCluster('var t = new ThreadLocal(7); log.push(t.value); t.value = 9; log.push(t.value);');
   expect(h.log()).toBe('7 | 9');
+});
+
+test('ThreadLocal: the default comes from T', () => {
+  // #sec-threadlocal-objects: "An agent that has not written the storage reads
+  // DefaultValueOf(_T_)." Written through the type rather than an explicit
+  // initial value, which is what this file's header used to say was impossible.
+  const h = makeCluster('var t = new ThreadLocal.<uint32>(); log.push(t.value); log.push(t.value is uint32);');
+  expect(h.log()).toBe('0 | true');
+  // Not only the numerics: the default is DefaultValueOf(T) for every T, so it
+  // has to go through that operation rather than write a zero.
+  expect(makeCluster('log.push(JSON.stringify(new ThreadLocal.<string>().value));').log()).toBe('""');
+  expect(makeCluster('log.push(new ThreadLocal.<boolean>().value);').log()).toBe('false');
+});
+
+test('ThreadLocal: a write crosses the storage\'s type', () => {
+  // The storage has a type, so a write is checked against it as a write to any
+  // other typed storage is - a propagated literal converts, and a value the
+  // type forbids is refused.
+  const h = makeCluster('var t = new ThreadLocal.<uint32>(); t.value = 5; log.push(t.value is uint32);');
+  expect(h.log()).toBe('true');
+  const bad = makeCluster('var t = new ThreadLocal.<uint32>(); try { t.value = "s"; log.push("accepted"); } catch (e) { log.push(e.constructor.name); }');
+  expect(bad.log()).toBe('TypeError');
+});
+
+test('ThreadLocal: a type with no default constructs, and the unwritten READ is the error', () => {
+  // The clause says only what an unwritten agent reads. An agent that writes
+  // before it reads uses the storage exactly as intended, so refusing the
+  // construction would refuse a program the clause permits.
+  const ok = makeCluster('var t = new ThreadLocal.<() => uint8>(); t.value = () => (1 := uint8); log.push(t.value());');
+  expect(ok.log()).toBe('1');
+  const unwritten = makeCluster('var t = new ThreadLocal.<() => uint8>(); try { log.push(t.value); } catch (e) { log.push(e.constructor.name); }');
+  expect(unwritten.log()).toBe('TypeError');
+});
+
+test('ThreadLocal: the untyped form is unchanged', () => {
+  expect(makeCluster('log.push(new ThreadLocal(7).value); log.push(String(new ThreadLocal().value));').log())
+    .toBe('7 | undefined');
 });
 
 test('ThreadLocal: two threads do not see one another\'s value', () => {
