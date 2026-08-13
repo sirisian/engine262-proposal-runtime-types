@@ -2947,7 +2947,29 @@ export abstract class ExpressionParser extends FunctionParser {
     return this.parseClass(null, true) as ParseNode.ClassExpression;
   }
 
+  /** Where the template literal most recently parsed closed. See the backtick case. */
+  protected lastTemplateEndIndex = 0;
+
   parseTemplateLiteral(tagged = false): ParseNode.TemplateLiteral {
+    // A template is several tokens to the lexer and ONE to a macro, and its
+    // parts are scanned under the parser's direction rather than through
+    // `next()` - so the log is corrected once the literal is complete, as it is
+    // for a regular expression. Without it `` `a${x}b` `` reached a macro as a
+    // backtick, the identifier `a$` - a token that exists in no source - a
+    // GROUP for the substitution, and a backtick.
+    const templateLogFrom = this.tokenLog.length;
+    const templateStart = this.peek().startIndex;
+    const literal = this.parseTemplateLiteralInner(tagged);
+    // The end is the LAST TOKEN the literal consumed, not `this.position` and
+    // not the node's location. The scan position has already looked ahead past
+    // the literal, so it covers the token after it; the node's end is set from
+    // whatever token was current when it finished, which for a template is a
+    // part rather than the whole. `currentToken` is the closing part.
+    this.collapseLogFrom(templateLogFrom, 'template', templateStart, this.lastTemplateEndIndex);
+    return literal;
+  }
+
+  private parseTemplateLiteralInner(tagged = false): ParseNode.TemplateLiteral {
     const node = this.startNode<ParseNode.TemplateLiteral>();
     const TemplateSpanList: string[] = [];
     const ExpressionList: ParseNode.Expression[] = [];
@@ -2960,6 +2982,12 @@ export abstract class ExpressionParser extends FunctionParser {
       switch (c) {
         case '`':
           this.position += 1;
+          // The literal ends HERE, at the closing backtick, and this is the only
+          // moment at which that is knowable: the parts are scanned by advancing
+          // `position` directly rather than through `next()`, so afterwards the
+          // scan position has moved on to the following token, and neither the
+          // node's location nor `currentToken` marks the close.
+          this.lastTemplateEndIndex = this.position;
           TemplateSpanList.push(buffer);
           this.next();
           if (!tagged) {
@@ -3015,6 +3043,11 @@ export abstract class ExpressionParser extends FunctionParser {
   //   `/` RegularExpressionBody `/` RegularExpressionFlags
   parseRegularExpressionLiteral(): ParseNode.RegularExpressionLiteral {
     const node = this.startNode<ParseNode.RegularExpressionLiteral>();
+    // The `/` was already logged as a punctuator by the peek that got here, and
+    // the body and flags are scanned outside `next()` - so the log is corrected
+    // once the literal is complete. This is the parse resolving the goal symbol,
+    // which is the only place it CAN be resolved.
+    const logFrom = this.tokenLog.length;
     this.scanRegularExpressionBody();
     const body = this.scannedValue as string; // NOTE: unsound cast
     node.RegularExpressionBody = body;
@@ -3024,6 +3057,7 @@ export abstract class ExpressionParser extends FunctionParser {
     if (node.RegularExpressionFlags.includes('v') && node.RegularExpressionFlags.includes('u')) {
       this.raise(Throw.SyntaxError('u and v cannot be used together'), flagPosition);
     }
+    this.collapseLogFrom(logFrom, 'regexp', node.location.startIndex, this.position);
     const parse = (flags: RegExpParserContext) => {
       const p = new RegExpParser(body, (error, position) => {
         this.decorateSyntaxError(error, node.location.startIndex + position + 1);

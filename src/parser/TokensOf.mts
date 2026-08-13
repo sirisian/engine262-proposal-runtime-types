@@ -179,6 +179,26 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
     flat.push({ data: t, text: text.slice(t.startIndex, t.endIndex) });
   }
 
+  return groupRuns(flat, source, offset);
+}
+
+/** An entry the grouping step can consume, from a fresh lex or from the parse log. */
+interface FlatToken {
+  readonly data: { type: Token, startIndex: number, endIndex: number, hadLineTerminatorBefore?: boolean };
+  readonly text: string;
+  readonly kind?: TokenKind;
+}
+
+/**
+ * The Token Records of _flat_, with delimited runs grouped.
+ *
+ * Shared by the two ways tokens are produced. `tokenizeText` re-lexes a source
+ * slice, which is right for a MODED region - it has no parse to draw on.
+ * `TokensFromParse` reads what the parse consumed, which is right for
+ * everything else: `sec-tokensof` says "the lexical goal symbol at each position
+ * is the one the enclosing parse used", and a re-lex cannot honour that.
+ */
+function groupRuns(flat: readonly FlatToken[], source: SourceRefRecord, offset: number): readonly TokenRecord[] {
   let index = 0;
   const build = (closer: string | undefined): TokenRecord[] => {
     const out: TokenRecord[] = [];
@@ -210,7 +230,7 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
       }
       index += 1;
       out.push({
-        Kind: kindOf(data.type),
+        Kind: flat[index - 1].kind ?? kindOf(data.type),
         Value: raw,
         Span: span,
         Tokens: undefined,
@@ -220,4 +240,36 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
     return out;
   };
   return build(undefined);
+}
+
+/**
+ * The Token Records of the source range [_from_, _to_), taken from what the
+ * PARSE consumed rather than re-lexed.
+ *
+ * A regular expression and a template literal are each one token here, because
+ * the parse decided they were. Re-lexing the same text cannot: the lexical
+ * grammar is not context-free, so `/ab/g` comes back as `/`, `ab`, `/`, `g` -
+ * indistinguishable from a division - and `` `a${x}b` `` as a backtick, the
+ * identifier `a$` and a group.
+ */
+export function TokensFromParse(
+  log: readonly { type: Token, startIndex: number, endIndex: number, kind?: string }[],
+  text: string,
+  source: SourceRefRecord,
+  from: number,
+  to: number,
+): readonly TokenRecord[] {
+  const flat: FlatToken[] = [];
+  for (const entry of log) {
+    if (entry.startIndex >= from && entry.endIndex <= to) {
+      flat.push({
+        data: {
+          type: entry.type, startIndex: entry.startIndex - from, endIndex: entry.endIndex - from,
+        },
+        text: text.slice(entry.startIndex, entry.endIndex),
+        kind: entry.kind as TokenKind | undefined,
+      });
+    }
+  }
+  return groupRuns(flat, source, 0);
 }

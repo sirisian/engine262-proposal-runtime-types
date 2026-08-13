@@ -369,8 +369,47 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
    * later arrow return annotations). Restoring is only valid when no
    * scope was pushed in between; TypeParser guards that with Scope#depth.
    */
+  /**
+   * proposal-runtime-types: every token this parse consumed, in order.
+   *
+   * `sec-tokensof`: "The lexical goal symbol at each position is the one the
+   * enclosing parse used, so `/` is already resolved to ~punctuator~ or
+   * ~regexp~ and no ambiguity reaches the caller." A macro's token stream was
+   * instead RE-LEXED from a source slice, which cannot honour that - the
+   * lexical grammar is not context-free, and only the parse knows which goal
+   * symbol applied. So a regular expression reached a macro shredded into `/`,
+   * `ab`, `/`, `g`, indistinguishable from a division, and a template literal
+   * as a backtick, an identifier and a backtick - with `a${x}` yielding the
+   * token `a$`, which exists in no source.
+   *
+   * Recording what the parse actually consumed is the only way to answer the
+   * question, because the answer is the parse's.
+   */
+  readonly tokenLog: { type: Token, startIndex: number, endIndex: number, kind?: string }[] = [];
+
+  /**
+   * Replace the log's tail from _from_ with one record.
+   *
+   * A regular expression is scanned by `scanRegularExpressionBody` outside
+   * `next()`, and a template literal is several tokens; each is one token as far
+   * as a macro is concerned. The parser calls this when it has decided which it
+   * had, which is the point rather than an inconvenience - the goal symbol is
+   * the parser's decision, so the parser is what records it.
+   */
+  protected collapseLogFrom(from: number, kind: string, startIndex: number, endIndex: number) {
+    this.tokenLog.length = Math.max(0, from);
+    this.tokenLog.push({
+      type: Token.EOS, startIndex, endIndex, kind,
+    });
+  }
+
   protected getLexerCheckpoint() {
     return {
+      // Backtracking must leave NO residue: a cover-grammar attempt that is
+      // abandoned would otherwise contribute its tokens to the log. There are
+      // 42 checkpoint sites, most of them arrow-parameter disambiguation, so
+      // this is the common path rather than an edge.
+      tokenLogLength: this.tokenLog.length,
       position: this.position,
       line: this.line,
       columnOffset: this.columnOffset,
@@ -438,6 +477,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
   }
 
   protected restoreLexerCheckpoint(cp: ReturnType<Lexer['getLexerCheckpoint']>) {
+    this.tokenLog.length = cp.tokenLogLength;
     this.position = cp.position;
     this.line = cp.line;
     this.columnOffset = cp.columnOffset;
@@ -471,6 +511,20 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
   }
 
   next() {
+    // EOS is not a token a macro can receive, so it is not logged.
+    //
+    // Nor is a token already COVERED by a logged span. After a regular
+    // expression or a template literal is scanned, the peeked token from before
+    // the scan is stale - it sits inside what was just collapsed - and promoting
+    // it would log a `/` after the very regular expression it opened.
+    const covered = this.tokenLog.length > 0
+      && this.peekToken !== undefined
+      && this.peekToken.startIndex < this.tokenLog[this.tokenLog.length - 1].endIndex;
+    if (this.peekToken !== undefined && this.peekToken.type !== Token.EOS && !covered) {
+      this.tokenLog.push({
+        type: this.peekToken.type, startIndex: this.peekToken.startIndex, endIndex: this.peekToken.endIndex,
+      });
+    }
     this.currentToken = this.peekToken;
     if (this.peekAheadToken !== undefined) {
       this.peekToken = this.peekAheadToken;

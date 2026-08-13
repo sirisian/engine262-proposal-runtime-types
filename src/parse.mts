@@ -29,7 +29,7 @@ import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsi
 import { Call } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
-import { tokenizeText } from './parser/TokensOf.mts';
+import { tokenizeText, TokensFromParse } from './parser/TokensOf.mts';
 import { tokenizeModedText } from './parser/ModedTokens.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
@@ -51,6 +51,13 @@ export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T) {
     }
     if (errors.length > 0) {
       return errors;
+    }
+    // The parse's own token log travels with what it produced, so expansion can
+    // give a macro the tokens the PARSE consumed rather than re-lexing the
+    // source. `sec-tokensof`: "the lexical goal symbol at each position is the
+    // one the enclosing parse used", which only the parse knows.
+    if (r !== null && typeof r === 'object') {
+      (r as { tokenLog?: unknown }).tokenLog = p.tokenLog;
     }
     return r;
   } catch (e) {
@@ -274,6 +281,14 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         const source = {
           URL: hostDefined.specifier, Macro: undefined, Generation: 0, Text: slice,
         };
+        // Outside a moded region the tokens come from the PARSE, where `/` and a
+        // template literal are already resolved. Re-lexing the slice cannot tell
+        // a regular expression from a division, and shreds a template into a
+        // backtick, an identifier that exists in no source, and a group.
+        const log = (body as { tokenLog?: readonly { type: number, startIndex: number, endIndex: number, kind?: string }[] }).tokenLog;
+        if (mode === undefined && log !== undefined) {
+          return CreateTokenStream(TokensFromParse(log as never, sourceText, source, from, to), realm);
+        }
         // A moded region is NOT ECMAScript, so tokenizing it as such is what
         // failed before a mode could be declared - `<div/>` reaches `<` where an
         // expression is wanted and the scan stops. The mode's own scanner

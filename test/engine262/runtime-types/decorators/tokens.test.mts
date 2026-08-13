@@ -69,19 +69,24 @@ test('type annotations tokenize, which is what a derive needs', () => {
   expect(kinds(tokens('x: uint8 = 3'))).toEqual(['identifier', 'punctuator', 'identifier', 'punctuator', 'numeric']);
 });
 
-test('a REGULAR EXPRESSION does not tokenize as one', () => {
+test('a RE-LEX cannot tokenize a regular expression as one', () => {
   // `/ab+/g` becomes six tokens rather than one `regexp`, because this
   // tokenizer RE-LEXES text that has no parse context, and the lexical grammar
   // is not context-free: `InputElementDiv` and `InputElementRegExp` resolve `/`
   // differently, and only the enclosing parse knows which applied.
   //
   // **This is the `/` problem the specification predicted, and measuring it here
-  // settles a design question for expansion**: #sec-tokensof says "the lexical
+  // settled a design question for expansion**: #sec-tokensof says "the lexical
   // goal symbol at each position is the one the enclosing parse used", which a
-  // re-lex cannot honour. So the tokens a decorator receives must be THREADED
+  // re-lex cannot honour. So the tokens a decorator receives are now THREADED
   // FROM THE PARSE rather than re-derived from source text - which is the same
   // conclusion #sec-expansion reaches from the other direction when it says
   // nothing is re-lexed.
+  //
+  // What this test pins is the LIMIT of `tokenizeText`, which remains the right
+  // tool for the one region that has no parse to thread from: a moded one, whose
+  // contents are not ECMAScript. The expansion path no longer uses it, and
+  // `decorators/expansion.test.mts` says so.
   expect(show(tokens('const r = /ab+/g;'))).toBe('const r = / ab + / g ;');
   expect(kinds(tokens('const r = /ab+/g;'))).not.toContain('regexp');
   // Division tokenizes identically, which is the whole ambiguity in one line.

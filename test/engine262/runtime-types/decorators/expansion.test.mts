@@ -438,3 +438,69 @@ test('a macro may emit a constant beside an exported declaration', () => {
     + '  g("[", [k("string","\\"<div>\\"")]), k("punctuator",";")].concat(t); })');
   expect(emitted).toBe('const $t = ["<div>"] ;export function View() { return 1; }');
 });
+
+// -- Tokens come from the PARSE, not from a re-lex -------------------------------
+//
+// #sec-tokensof: "The lexical goal symbol at each position is the one the
+// enclosing parse used, so `/` is already resolved to ~punctuator~ or ~regexp~
+// and no ambiguity reaches the caller." A macro's stream was instead re-lexed
+// from a source slice, which cannot honour that - the lexical grammar is not
+// context-free, so only the parse knows which goal symbol applied.
+const SHOW = '(function (t) {'
+  + ' var s = t[0] ? t[0].span : undefined;'
+  + ' function walk(ts) { return ts.map(function (x) {'
+  + '   return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }'
+  + ' return [{ kind: "string", value: JSON.stringify(walk(t)), span: s }]; })';
+
+test('a regular expression reaches the macro as one token', () => {
+  // It arrived as `/` `ab` `/` `g` - four tokens, indistinguishable from a
+  // division, and a macro inspecting them could not tell which it had.
+  expect(expandedBody('@m { const r = /ab/g; }', SHOW))
+    .toBe('"G(i:const i:r p:= r:/ab/g p:;)"');
+  // A division is still a punctuator, which is the other half: the two must be
+  // DISTINGUISHABLE, not merely both handled.
+  expect(expandedBody('@m { const q = a / b; }', SHOW))
+    .toBe('"G(i:const i:q p:= i:a p:/ i:b p:;)"');
+});
+
+test('a template literal reaches the macro as one token', () => {
+  // It arrived as a backtick, an identifier and a backtick - and for a
+  // substitution, as the identifier `a$`, a token that exists in no source.
+  expect(expandedBody('@m { const s = `abc`; }', SHOW))
+    .toBe('"G(i:const i:s p:= t:`abc` p:;)"');
+  expect(expandedBody('@m { const s = `a${x}b`; }', SHOW))
+    .toBe('"G(i:const i:s p:= t:`a${x}b` p:;)"');
+  // Nested and tagged forms are one token too - the end is taken at the closing
+  // backtick, which is the only moment it is knowable, since a template's parts
+  // are scanned by advancing the position rather than through `next()`.
+  expect(expandedBody('@m { const s = `a${`i${y}`}b`; }', SHOW))
+    .toBe('"G(i:const i:s p:= t:`a${`i${y}`}b` p:;)"');
+  expect(expandedBody('@m { const s = tag`a${x}`; }', SHOW))
+    .toBe('"G(i:const i:s p:= i:tag t:`a${x}` p:;)"');
+});
+
+test('neither form produces a group that is not there', () => {
+  // The dangerous half of the defect rather than the visible one. A `{` inside a
+  // regular expression or a template opened a delimited run, so a macro
+  // forwarding tokens saw brace structure the source does not have - and an
+  // unbalanced one could mis-nest the rest of the region.
+  expect(expandedBody('@m { const r = /a{2}/; }', SHOW))
+    .toBe('"G(i:const i:r p:= r:/a{2}/ p:;)"');
+  expect(expandedBody('@m { const r = /\\{/; }', SHOW))
+    .toBe('"G(i:const i:r p:= r:/\\\\{/ p:;)"');
+});
+
+test('a macro that forwards them round-trips byte for byte', () => {
+  // Preserved tokens are sliced from the buffer they came from, so this held
+  // even while the kinds were wrong. It must keep holding.
+  expect(expandedBody('@m { const r = /a{2}/g; const s = `a${x}b`; }', IDENTITY))
+    .toBe('{ const r = /a{2}/g; const s = `a${x}b`; }');
+});
+
+test('backtracking leaves no residue in the stream', () => {
+  // The parse records what it consumed, and a cover-grammar attempt that is
+  // abandoned must contribute nothing. An arrow parameter list is what drives
+  // most of the checkpoint sites, so it is the case worth pinning.
+  expect(expandedBody('@m { const f = (a, b) => a + b; }', SHOW))
+    .toBe('"G(i:const i:f p:= G(i:a p:, i:b) p:=> i:a p:+ i:b p:;)"');
+});
