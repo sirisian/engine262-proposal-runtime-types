@@ -93,3 +93,56 @@ test('an enum operand is read at its underlying type in a comparison', () => {
   // every other typed value.
   expect(evaluated('enum C { Zero, One } let n = 1; C.One === n ? "eq" : "neq";')).toBe('neq');
 });
+
+// A relational operator a class does not declare is DERIVED from the one it
+// does: `a > b` is `b < a`, `a <= b` is `!(b < a)`, `a >= b` is `!(a < b)`.
+//
+// Falling through to the abstract comparison gave WRONG answers, not missing
+// ones - two objects coerce to "[object Object]", and comparing that string
+// with itself makes `>` always false and `<=` and `>=` always true. Half of
+// those are right by coincidence, so every case below is asserted in BOTH
+// operand orders; a one-directional test passes against the bug.
+
+test('an undeclared relational operator derives from the declared one', () => {
+  const M = 'class M { constructor(v) { this.v = v; } operator <(o: M) { return this.v < o.v; } } ';
+  // The declared operator, unchanged.
+  expect(evaluated(`${M}String(new M(1) < new M(2));`)).toBe('true');
+  expect(evaluated(`${M}String(new M(2) < new M(1));`)).toBe('false');
+  // `>` was always false; the reversed order is what exposes it.
+  expect(evaluated(`${M}String(new M(2) > new M(1));`)).toBe('true');
+  expect(evaluated(`${M}String(new M(1) > new M(2));`)).toBe('false');
+  // `<=` and `>=` were always true.
+  expect(evaluated(`${M}String(new M(1) <= new M(2));`)).toBe('true');
+  expect(evaluated(`${M}String(new M(2) <= new M(1));`)).toBe('false');
+  expect(evaluated(`${M}String(new M(1) <= new M(1));`)).toBe('true');
+  expect(evaluated(`${M}String(new M(2) >= new M(1));`)).toBe('true');
+  expect(evaluated(`${M}String(new M(1) >= new M(2));`)).toBe('false');
+  expect(evaluated(`${M}String(new M(1) >= new M(1));`)).toBe('true');
+});
+
+test('a declared operator takes precedence over the derivation', () => {
+  // Its `>` deliberately DISAGREES with its `<`: derivation would answer true,
+  // so a passing assertion proves the declaration won rather than coincided.
+  const D = 'class D { constructor(v) { this.v = v; } operator <(o: D) { return this.v < o.v; } operator >(o: D) { return false; } } ';
+  expect(evaluated(`${D}String(new D(2) > new D(1));`)).toBe('false');
+  expect(evaluated(`${D}String(new D(1) < new D(2));`)).toBe('true');
+  // A class declaring only `<=` keeps using it.
+  expect(evaluated('class M { constructor(v) { this.v = v; } operator <=(o: M) { return this.v <= o.v; } } String(new M(2) <= new M(1));')).toBe('false');
+});
+
+test('the derivation reaches only classes that declare a comparison', () => {
+  // A class declaring nothing keeps the abstract comparison.
+  expect(evaluated('class N { constructor(v) { this.v = v; } } String(new N(1) < new N(2));')).toBe('false');
+  expect(evaluated('const a = {}, b = {}; String(a > b);')).toBe('false');
+  // Numbers and strings are untouched.
+  expect(evaluated('String(2 > 1);')).toBe('true');
+  expect(evaluated('String("b" > "a");')).toBe('true');
+});
+
+test('the declared operator is a user function', () => {
+  // It may return a non-boolean, so the result is coerced before negating
+  // rather than assumed.
+  const B = 'class B { constructor(v) { this.v = v; } operator <(o: B) { return this.v < o.v ? 1 : 0; } } ';
+  expect(evaluated(`${B}String(new B(2) >= new B(1));`)).toBe('true');
+  expect(evaluated(`${B}String(new B(1) >= new B(2));`)).toBe('false');
+});

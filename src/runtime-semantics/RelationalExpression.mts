@@ -150,6 +150,30 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
     if (opFn) {
       return Q(yield* Call(opFn as Value, lval, [rval]));
     }
+    // A relational operator the class does not declare is DERIVED from the one
+    // it does, rather than falling through to the abstract comparison below.
+    //
+    // Falling through gave wrong answers, not missing ones: two objects coerce
+    // to "[object Object]" and comparing that string with itself makes `>`
+    // always false and `<=` and `>=` always true. Half of those are right by
+    // coincidence, which is how it survived - only the reversed operand order
+    // shows it, `M(2) > M(1)` answering false.
+    //
+    // Reached only after the explicit lookup above has missed, so a declared
+    // operator keeps winning with no separate check.
+    const lessFn = LookupClassOperator(lval, '<');
+    if (lessFn && operator !== '<') {
+      // `a > b` is `b < a`; `a <= b` is `!(b < a)`; `a >= b` is `!(a < b)`.
+      const swapped = operator === '>' || operator === '<=';
+      const receiver = swapped ? rval : lval;
+      const argument = swapped ? lval : rval;
+      // The declared operator is a USER function and may return anything, so
+      // the result is coerced before being negated rather than assumed boolean.
+      const raw = Q(yield* Call(lessFn as Value, receiver, [argument]));
+      const less = ToBoolean(raw) === Value.true;
+      const negate = operator === '<=' || operator === '>=';
+      return (negate ? !less : less) ? Value.true : Value.false;
+    }
   }
   // proposal-runtime-types (operatoroverloading.md): the same operator declared by
   // the RIGHT operand is not reached, since dispatch keys on the left. Report it
