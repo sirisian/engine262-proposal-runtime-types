@@ -1335,12 +1335,13 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // its parameters, and selected its case labels.
         const carriedByValue = CarriedTypeRecordOf(value);
         if (carriedByValue !== undefined) {
-          return SameType(carriedByValue, t);
+          // A refinement question, not an equality one.
+          return IsSubtype(carriedByValue, t, []);
         }
         // An identity-compared value carries its enum outside itself.
         const claimedByValue = RegisteredEnumOf(value);
         if (claimedByValue !== undefined) {
-          return SameType(claimedByValue, t);
+          return IsSubtype(claimedByValue, t, []);
         }
         // A value carrying nothing can only be an enumerator of an enum whose
         // members carry nothing either. Without this guard a bare "x" matches a

@@ -8,7 +8,7 @@ import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
-import { IsSubtype, SameType } from './relations.mts';
+import { IsSubtype, SameTypeStructural } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
 import { RequireType } from '#self';
 import {
@@ -207,7 +207,10 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     internTables.set(agent, table);
   }
   for (const existing of table) {
-    if (SameType(existing.TypeRecord, canonical)) {
+    // STRUCTURAL identity, not mutual assignability: two records that denote the
+    // same values may still carry different metadata claims, and interning them
+    // together loses one.
+    if (SameTypeStructural(existing.TypeRecord, canonical)) {
       // proposal-runtime-types: a class's type may be interned BEFORE the class
       // is initialized. A hoisted `type Alias = A;` resolves `A` through the
       // declaration (which #sec-compile-time-evaluability requires, since type

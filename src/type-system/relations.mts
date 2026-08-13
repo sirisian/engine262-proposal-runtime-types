@@ -93,7 +93,41 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   });
 }
 
+/**
+ * Whether two types are the SAME type: mutual subtyping.
+ *
+ * sec-type-relations defined this by an algorithm carrying three steps keyed on
+ * _s_ alone - for an enum, a literal, and a parameterized type - with no mirror
+ * for _t_, which made the relation ASYMMETRIC: `SameType("a", string)` answered
+ * *true* where `SameType(string, "a")` answered *false*. A relation named for
+ * equality that is not symmetric breaks every caller treating it as one, which
+ * is how a union of a literal and its base came to discard the base.
+ *
+ * Mutual subtyping is symmetric BY CONSTRUCTION rather than by an algorithm that
+ * must be kept symmetric, and inherits reflexivity and transitivity from
+ * IsSubtype - both swept and confirmed - so it is a genuine equivalence. Scala
+ * arrived at the same definition, `=:=` being mutual `<:<`.
+ *
+ * The refinement behaviour is not lost: it lives in IsSubtype, which is where a
+ * caller asking "does this refine to that" should go. `SameTypeWithAssumptions`
+ * remains the STRUCTURAL comparison IsSubtype uses internally, so this does not
+ * recur through it.
+ */
 export function SameType(s: TypeRecord, t: TypeRecord): boolean {
+  return IsSubtype(s, t, []) && IsSubtype(t, s, []);
+}
+
+/**
+ * STRUCTURAL identity, for callers that need to know whether two records
+ * describe the same type CONSTRUCTION rather than whether they denote the same
+ * set of values.
+ *
+ * Interning is the case: two records that are mutually assignable may still
+ * carry different metadata claims, and collapsing them loses the claim. This is
+ * the relation the exported `SameType` used to be, kept under a name that says
+ * what it does.
+ */
+export function SameTypeStructural(s: TypeRecord, t: TypeRecord): boolean {
   return SameTypeWithAssumptions(s, t, []);
 }
 
