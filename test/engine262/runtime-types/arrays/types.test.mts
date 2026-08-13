@@ -281,3 +281,23 @@ test('the rule reaches a tuple wherever it is held', () => {
 test('a defaulted trailing position is unaffected', () => {
   expect(evaluated('type D = [uint8, uint8 = 5]; let d: D = [1]; `${d.length}:${d[1]}`;')).toBe('2:5');
 });
+
+test('a tuple carries its type even when it needed no conversion', () => {
+  // The conversion builds a fresh array and stamps its positions there, so a
+  // tuple whose elements needed converting was checked ever after and one that
+  // ALREADY satisfied its type was not - the membership shortcut returned it
+  // unstamped. The same shortcut already stamps an array's element type and a
+  // typed collection's arguments, for the same reason.
+  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
+    + ' let m = ""; try { a[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  // Through `any`, so the boundary certainly runs rather than being elided.
+  expect(evaluated('const x = (1 := uint8); let src: any = [x, x]; let a: [uint8, uint8] = src;'
+    + ' let m = ""; try { a[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  // The ARITY was missing with it, which is what made this hard to see: a
+  // converted tuple refused a `push` and an already-conforming one did not.
+  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
+    + ' let m = ""; try { a.push(3); } catch (e) { m = "refused"; } m;')).toBe('refused');
+  // And the legitimate store still works, so the stamp is not simply refusing.
+  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
+    + ' a[0] = (9 := uint8); String(a[0]);')).toBe('9');
+});

@@ -728,6 +728,26 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
       }
     }
+    // A TUPLE needs it for the same reason, and was missing for the same reason
+    // the empty array was: the conversion below builds a fresh array and stamps
+    // its positions there, so a tuple whose elements needed converting was
+    // checked ever after and one that ALREADY satisfied its type was not.
+    //
+    //   const x = (1 := uint8);
+    //   let a: [uint8, uint8] = [x, x];   // took this shortcut, unstamped
+    //   a[0] = "bad";                     // accepted - a String in a uint8 slot
+    //   let b: [uint8, uint8] = [1, 2];   // converted, stamped
+    //   b[0] = "bad";                     // refused, as both should be
+    //
+    // The ARITY was stamped either way, which is what made this hard to see: the
+    // tuple carried half its type, refusing a `push` while accepting a store.
+    if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      const rest = t.Elements.find((e) => e.Rest);
+      (value as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
+        Positions: t.Elements.filter((e) => !e.Rest).map((e) => e.Type),
+        Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
+      };
+    }
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
     // it, but `new Set()` is a CONSTRUCTION rather than a conversion, so
