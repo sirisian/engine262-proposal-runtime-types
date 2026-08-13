@@ -20,7 +20,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
-import {
+import { toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame,
 } from '../type-system/runtime.mts';
@@ -1378,6 +1378,36 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
   return ctor;
 }
 
+/**
+ * The Type Object a parameterized primitive family denotes when applied, or
+ * *undefined* where the base does not name one.
+ *
+ * `builtinTypeRecord` already carries the rule this has to honour: its arm for
+ * these families answers a record when arguments are present and *null* when
+ * the name is bare, so the bare name cannot be produced here by construction.
+ */
+function* FamilyApplicationFor(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
+  const name = (node.Expression as unknown as { name?: string }).name;
+  if (name !== 'int' && name !== 'uint' && name !== 'vector') {
+    return undefined;
+  }
+  const args: (TypeRecord | number)[] = [];
+  for (const argument of node.TypeArguments.TypeArgumentList ?? []) {
+    const resolved = Q(yield* TypeNodeToTypeRecord(argument as ParseNode.Type));
+    // Through the same reading type position uses: a numeric argument is a
+    // WIDTH or a LANE COUNT, so `int.<8>` carries the number 8 rather than a
+    // literal type of 8. Building the record with the literal type instead
+    // produces a family record with no layout - it resolves, and then has no
+    // byteLength and interns unequal to `int8`.
+    args.push(toNumericArgument(resolved as TypeRecord));
+  }
+  const record = builtinTypeRecord(name, args);
+  if (record === null) {
+    return undefined;
+  }
+  return GetTypeObject(record);
+}
+
 export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
   // proposal-runtime-types (README "Typed Arrays"): an ARRAY TYPE written in
   // expression position - `new [100].<uint8>()`, or `class G extends
@@ -1399,6 +1429,29 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   }
   const peeked = EnsureCompletion(yield* GetValue(inspected.Value as never));
   if (peeked.Type !== 'normal') {
+    // proposal-runtime-types #sec-types-in-expression-position: "A type name is
+    // already an expression, since a type is a value, so `uint8` and
+    // `Map.<string, uint8>` may be written where a value is expected."
+    //
+    // A PARAMETERIZED PRIMITIVE FAMILY has no binding to evaluate - `int`,
+    // `uint` and `vector` are types only when applied, and #sec-vector-widths
+    // is explicit that "a bare parameterized primitive is not a value", so
+    // binding them is not the fix. The application is resolved here instead,
+    // where the reference has just failed to resolve, and only there: these are
+    // ORDINARY IDENTIFIERS a program may bind -
+    //
+    //   let int = 5;        // legal, and keeps its meaning
+    //   int.<8>             // only reaches this arm when nothing bound `int`
+    //
+    // so resolving before the lookup would shadow a working program. Confined
+    // to the unresolvable case, this changes behaviour exactly where a
+    // ReferenceError was thrown and nowhere else.
+    if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'IdentifierReference') {
+      const familyType = Q(yield* FamilyApplicationFor(node));
+      if (familyType !== undefined) {
+        return familyType;
+      }
+    }
     return ref;
   }
   const value = peeked.Value;

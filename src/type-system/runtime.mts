@@ -1621,7 +1621,14 @@ function literalBase(kind: ParseNode.LiteralType['kind']): TypeRecord {
   }
 }
 
-function toNumericArgument(record: TypeRecord): TypeRecord | number {
+/**
+ * A type argument as the record wants it: a numeric literal type is a WIDTH or a
+ * LANE COUNT rather than a type - `int.<8>` carries the number 8, not a literal
+ * type of 8 - so it is unwrapped here. Exported because an application in
+ * EXPRESSION position resolves its arguments the same way, and a family record
+ * built with a literal type where a number belongs has no layout at all.
+ */
+export function toNumericArgument(record: TypeRecord): TypeRecord | number {
   if (record.Kind === 'literal' && record.Value instanceof NumberValue) {
     return R(record.Value);
   }

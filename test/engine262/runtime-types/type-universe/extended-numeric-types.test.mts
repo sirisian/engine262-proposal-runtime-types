@@ -666,3 +666,53 @@ test('numeric types: a complex lays out as two components', () => {
   // than a sequence of padded records.
   expect(evaluated('String((type complex128).alignment);')).toBe('8');
 });
+
+// -- A family base applied in expression position (#sec-types-in-expression-position)
+//
+// "A type name is already an expression, since a type is a value, so `uint8` and
+// `Map.<string, uint8>` may be written where a value is expected." The named
+// shorthands obeyed this and the parameterized families did not, because their
+// bases are not bindings: `int.<8>` was a ReferenceError.
+
+test('a family base applied denotes its type', () => {
+  expect(evaluated('String(int.<8> === int8);')).toBe('true');
+  expect(evaluated('String(vector.<float32, 4> === float32x4);')).toBe('true');
+  // A width with no shorthand to compare against, which tests the general form
+  // rather than a named alias.
+  expect(evaluated('typeof uint.<4>;')).toBe('object');
+  expect(evaluated('String((type uint.<4>) === uint.<4>);')).toBe('true');
+});
+
+test('the result IS a Type Object, not something that interns like one', () => {
+  // Identity alone would pass if the arm returned the interned object by a route
+  // that skipped part of its construction. It did, once: resolving the argument
+  // as a literal TYPE rather than as the number 8 produced a record with no
+  // layout, which resolved and had no byteLength.
+  expect(evaluated('String(int.<8>.byteLength);')).toBe('1');
+  expect(evaluated('String(int.<8>(65));')).toBe('65');
+  expect(evaluated('String((5 := int8) instanceof int.<8>);')).toBe('true');
+  expect(evaluated('let m = ""; try { new (int.<8>)(); } catch (e) { m = e.constructor.name; } m;')).toBe('TypeError');
+});
+
+test('a family base is not bound, and a program may bind the name itself', () => {
+  // #sec-vector-widths: "a bare parameterized primitive is not a value" - so the
+  // fix may not bind them, and `typeof int` stays undefined.
+  expect(evaluated('`${typeof int}:${typeof uint}:${typeof vector}`;')).toBe('undefined:undefined:undefined');
+  // And these are ORDINARY IDENTIFIERS a program may bind. The application is
+  // resolved only where the name does NOT resolve, so a binding keeps its
+  // meaning - resolving before the lookup would have changed a working program.
+  expect(evaluated('let int = 5; `${int}:${typeof int}`;')).toBe('5:number');
+  expect(evaluated('let vector = { m() { return "bound"; } }; vector.m();')).toBe('bound');
+  expect(evaluated('let vector = { m() { return "bound"; } }; String(vector.<float32, 4> === float32x4);')).toBe('false');
+});
+
+test('the neighbouring forms are unchanged', () => {
+  // A base WITH a constructor specializes it rather than denoting a type, which
+  // is what `new Map.<string, uint8>()` needs and what `complex` does too.
+  expect(evaluated('typeof Map.<string, uint8>;')).toBe('function');
+  expect(evaluated('typeof complex.<float32>;')).toBe('function');
+  expect(evaluated('String((type complex.<float32>) === (type complex64));')).toBe('true');
+  // Type position is untouched, and an application composes where a type may.
+  expect(evaluated('String((type int.<8>) === (type int8));')).toBe('true');
+  expect(evaluated('`${typeof (type Map.<string, int.<8>>)}:${typeof vector.<int.<8>, 4>}`;')).toBe('object:object');
+});
