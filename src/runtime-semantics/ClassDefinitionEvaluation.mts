@@ -1990,8 +1990,22 @@ const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
  * Staticness is already a field of every declaration, so the key states a fact
  * the record already holds.
  */
-function memberKey(member: string, isStatic: boolean): string {
-  return isStatic ? `static ${member}` : member;
+/**
+ * proposal-runtime-types #sec-decorator-contexts: `Reflect.getReflection.<`_C_`,
+ * `_T_`>(...)` "reflects the part of _T_ that the context _C_ names", and
+ * #table-reflection-contexts gives the Class family thirteen contexts, each
+ * naming a distinct part. So the KIND is part of a member's identity here, not
+ * only its name and placement.
+ *
+ * Without it a getter and a setter of one name were two declarations with one
+ * key and the second overwrote the first, which made a shape-selected retrieval
+ * answer whichever came last - and made the getter unreflectable altogether,
+ * since the enumerating form filters by kind and the getter was no longer in the
+ * store to be found.
+ */
+function memberKey(member: string, isStatic: boolean, kind?: string): string {
+  const placed = isStatic ? `static ${member}` : member;
+  return kind === undefined ? placed : `${placed}\u0000${kind}`;
 }
 
 export function RecordMemberDeclaration(owner: Value, member: string, declaration: MemberDeclaration): void {
@@ -2000,7 +2014,7 @@ export function RecordMemberDeclaration(owner: Value, member: string, declaratio
     byMember = new Map();
     memberDeclarations.set(owner, byMember);
   }
-  byMember.set(memberKey(member, declaration.static === true), { ...declaration, name: member });
+  byMember.set(memberKey(member, declaration.static === true, declaration.kind), { ...declaration, name: member });
 }
 
 /**
@@ -2050,21 +2064,46 @@ export function AllMemberDeclarationsOf(owner: Value, kind: string, own: boolean
   return collected;
 }
 
-/** The declaration recorded on `owner` itself, without walking the base chain. */
-export function OwnMemberDeclarationOf(owner: Value, member: string, isStatic: boolean): MemberDeclaration | undefined {
-  return memberDeclarations.get(owner)?.get(memberKey(member, isStatic));
+/**
+ * The declaration recorded on `owner` itself, without walking the base chain.
+ *
+ * A KIND is required rather than optional: this reader exists to find the
+ * previous declaration of the member being recorded, and "previous" means of
+ * the same kind now that a getter and a setter of one name are two entries.
+ */
+export function OwnMemberDeclarationOf(owner: Value, member: string, isStatic: boolean, kind: string): MemberDeclaration | undefined {
+  return memberDeclarations.get(owner)?.get(memberKey(member, isStatic, kind));
 }
 
-export function MemberDeclarationOf(owner: Value, member: string, isStatic?: boolean): MemberDeclaration | undefined {
+export function MemberDeclarationOf(owner: Value, member: string, isStatic?: boolean, kind?: string): MemberDeclaration | undefined {
   let current: Value | undefined = owner;
   while (current !== undefined && current !== Value.null) {
     const byMember = memberDeclarations.get(current);
     // Where the caller does not say, an instance member answers first: that is
     // what a bare name has always meant, and `constructor` unqualified is the
     // class's constructor rather than a static method sharing its name.
-    const found = isStatic === undefined
-      ? byMember?.get(memberKey(member, false)) ?? byMember?.get(memberKey(member, true))
-      : byMember?.get(memberKey(member, isStatic));
+    // A caller that NAMES a kind gets that kind's declaration; one that does not
+    // - the field-layout reflection, which has only a name to go on - gets
+    // whichever kind is recorded, by scanning. The scan is what keeps an
+    // unqualified reader from having to guess a kind and silently answer
+    // *undefined* when it guesses wrong.
+    const anyKind = (placedStatic: boolean) => {
+      const exact = byMember?.get(memberKey(member, placedStatic));
+      if (exact) {
+        return exact;
+      }
+      for (const [, candidate] of byMember ?? []) {
+        if (candidate.name === member && (candidate.static === true) === placedStatic) {
+          return candidate;
+        }
+      }
+      return undefined;
+    };
+    const found = kind !== undefined
+      ? (isStatic === undefined
+        ? byMember?.get(memberKey(member, false, kind)) ?? byMember?.get(memberKey(member, true, kind))
+        : byMember?.get(memberKey(member, isStatic, kind)))
+      : (isStatic === undefined ? anyKind(false) ?? anyKind(true) : anyKind(isStatic));
     if (found) {
       return found;
     }
@@ -2234,7 +2273,11 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
   // subclass declares - an override replaces - and MemberDeclarationOf walks the
   // prototype chain, so reading through it merged an override's arms with the
   // base's and the derived type stopped being its own declaration's.
-  const previous = OwnMemberDeclarationOf(owner, key.stringValue(), n.static === true);
+  // Of the SAME KIND, which is what the comparison below was already testing
+  // for - `previous?.kind === kind`. Now that the key carries the kind, the
+  // lookup asks for it rather than finding whatever shared the name and then
+  // discarding it.
+  const previous = OwnMemberDeclarationOf(owner, key.stringValue(), n.static === true, kind);
   const previousType = previous?.type as { Kind?: string, Signatures?: readonly unknown[] } | undefined;
   const nextType = declaredType as { Kind?: string, Signatures?: readonly unknown[] } | undefined;
   if (previousType?.Kind === 'function' && nextType?.Kind === 'function'

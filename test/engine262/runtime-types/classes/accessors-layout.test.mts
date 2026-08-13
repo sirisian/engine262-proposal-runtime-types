@@ -96,7 +96,15 @@ test('an accessor\'s layout slot reports the DECLARED name', () => {
   // compiler artifact into every reflective enumeration.
   const cls = 'class A { a: uint8; accessor b: uint32 = 0; c: uint8; } ';
   expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);`)).toBe('4');
-  expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassField, A>("b").name);`)).toBe('b');
+  // The name is read through the context that NAMES an accessor.
+  // #table-reflection-contexts gives `ClassField` and `ClassAccessor` as
+  // distinct contexts of the Class family, and the ENUMERATING form always
+  // agreed - `getReflection.<Reflect.ClassField, A>()` lists `a` and `c` and
+  // not `b`. The named form used to answer here only because a member was
+  // stored under its name alone, so any context found any declaration; asking
+  // `ClassField` for an accessor now refuses, as the enumeration always did.
+  expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassAccessor, A>("b").name);`)).toBe('b');
+  expect(evaluated(`${cls} try { Reflect.getReflection.<Reflect.ClassField, A>("b"); "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
   // The layout itself is untouched - this names a slot, it does not move one.
   expect(evaluated(`${cls} String((type A).byteLength);`)).toBe('12');
   expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("c").offset);`)).toBe('8');

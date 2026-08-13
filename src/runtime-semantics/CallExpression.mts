@@ -442,7 +442,14 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           return collection;
         }
         const memberName = Q(yield* ToString(nameValue));
-        const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
+        // #sec-decorator-contexts: the context "reflects the part of _T_ that
+        // the context _C_ names", so the requested kind selects among members
+        // sharing a name. Without it a getter and a setter of one name answered
+        // whichever was declared last - and the enumerating path beside this one
+        // already passes its kind to AllMemberDeclarationsOf, which is why that
+        // form reported the getter as absent rather than as the setter.
+        const wantedKind = (contextRecord.LibraryName as string).slice('Reflect.'.length);
+        const declaration = MemberDeclarationOf(constructor, memberName.stringValue(), undefined, wantedKind);
         if (declaration === undefined) {
           return ThrowError.TypeError('$1 is not a member of this type', memberName);
         }
