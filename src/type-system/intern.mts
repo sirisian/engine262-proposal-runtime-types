@@ -8,7 +8,7 @@ import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
-import { SameType } from './relations.mts';
+import { IsSubtype, SameType } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
 import { RequireType } from '#self';
 import {
@@ -67,7 +67,33 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         members.push({ canonical: c, source: m });
       }
     }
-    members = members.filter((m, i) => !members.slice(0, i).some((earlier) => SameType(earlier.canonical, m.canonical)));
+    // Reduce by SUBSUMPTION, directionally, rather than by position.
+    //
+    // The old rule dropped any member a preceding one was `SameType` to, and
+    // `SameType` is asymmetric for a literal against a non-literal - it answers
+    // *true* for `SameType("a", string)` and *false* for `SameType(string, "a")`.
+    // So `"a" | string` de-duplicated to just `"a"`, discarding the wider arm and
+    // rejecting `"b"`, while `string | "a"` kept both. The same type written two
+    // ways behaved differently.
+    //
+    // The direction matters and is opposite for the two kinds: a UNION keeps the
+    // wider member, `"a" | string` being `string`; an INTERSECTION keeps the
+    // narrower, `"a" & string` being `"a"`. A single "keep the wider" rule would
+    // fix unions and break intersections, which today are right by accident.
+    const subsumes = (keep: TypeRecord, drop: TypeRecord): boolean => (t.Kind === 'union'
+      ? IsSubtype(drop, keep, [])
+      : IsSubtype(keep, drop, []));
+    members = members.filter((m, i) => !members.some((other, j) => {
+      if (i === j) {
+        return false;
+      }
+      if (!subsumes(other.canonical, m.canonical)) {
+        return false;
+      }
+      // Mutually subsuming members are the same type; keep the first so that a
+      // genuine duplicate still collapses to one.
+      return !subsumes(m.canonical, other.canonical) || j < i;
+    }));
     if (t.Kind === 'intersection' && members.some((m) => m.canonical.Kind === 'union' && m.canonical.Members.length === 0)) {
       return neverType;
     }
