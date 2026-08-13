@@ -38,7 +38,11 @@ function expand(source: string, macros: Record<string, string>): string {
 }
 
 const ID = '(function (t) { return t; })';
-const MARK = (mark: string) => `(function (t) { return t.concat([{ kind: "identifier", value: "${mark}", span: t[0].span, tokens: undefined }]); })`;
+// Appends a marker STATEMENT. It appended a bare identifier until the printer
+// stopped merging created tokens: a stack of two then produced `B A`, which ran
+// together as the single identifier `BA` and parsed - so the test passed on
+// output that was never valid.
+const MARK = (mark: string) => `(function (t) { return t.concat([{ kind: "identifier", value: "${mark}", span: t[0].span, tokens: undefined }, { kind: \"punctuator\", value: \";\", span: t[0].span, tokens: undefined }]); })`;
 
 test('a STACK of two replacement decorators runs OUTER first', () => {
   // #sec-expansion: an outer decoration receives the ones it encloses
@@ -245,7 +249,7 @@ test('a macro that CHANGES a token gets its change, and the rest prints', () => 
     + ' if (x.kind === "group") { return { kind: x.kind, value: x.value, span: x.span, tokens: walk(x.tokens) }; }'
     + ' if (!done && x.kind === "numeric") { done = true; return { kind: x.kind, value: String(Number(x.value) * 2), span: x.span, tokens: x.tokens }; }'
     + ' return x; }); } return walk; })()';
-  expect(expandPrinted('@m class C { x = 2; }', DOUBLE)).toBe('class C {x =4;}');
+  expect(expandPrinted('@m class C { x = 2; }', DOUBLE)).toBe('class C {x = 4;}');
 });
 
 test('a created token is SEPARATED, because concatenation would merge it', () => {
@@ -332,4 +336,56 @@ test('an argumented decoration is replaced along with what it decorates', () => 
   // output. `@m(X)` and its class are both gone, replaced by what the macro
   // returned.
   expect(expandPrinted('@m(X) class C { x = 1; }', IDENTITY)).toBe('class C { x = 1; }');
+});
+
+// -- A created token is printed, not sliced ------------------------------------
+//
+// A token a macro CREATED has no buffer to slice from, so it is printed with a
+// separator before it. A token the macro handed back unchanged is sliced from
+// the buffer it came from, which is what keeps an untouched run exactly as
+// written, comments included.
+//
+// The two were told apart by asking whether the buffer at the token's span
+// matched its value. That is trivially TRUE for a created token, because its
+// span is self-relative and the buffer IS its own text - so every created token
+// was mistaken for a preserved one and printed with no separator at all.
+const EMIT = (tokens: string) => `(function (t) { var s = t[0].span;`
+  + ` function k(kind, v) { return { kind: kind, value: v, span: s }; }`
+  + ` function g(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }`
+  + ` return ${tokens}; })`;
+
+test('created tokens are separated, so a keyword does not merge with a name', () => {
+  // `const` and `a` printed as `consta`, which is a valid program that declares
+  // nothing - a silent change of meaning rather than an error.
+  expect(expandedBody('@m class C {}', EMIT('[k("identifier","const"), k("identifier","a"), '
+    + 'k("punctuator","="), k("numeric","1"), k("punctuator",";")]'))).toBe('const a = 1 ;');
+  // `function` and `f` printed as `functionf`, and `functionf () {}` does not
+  // parse - so a macro could not emit a function declaration at all.
+  expect(expandedBody('@m class C {}', EMIT('[k("identifier","function"), k("identifier","f"), '
+    + 'g("(", []), g("{", [])]'))).toBe('function f () {}');
+});
+
+test('a macro can emit a declaration beside what it replaces', () => {
+  // This is what a hoisting macro needs: a statement position admits several
+  // statements, so a template constant can be emitted at the scope the
+  // decoration sat in and referred to by the construct that replaces it.
+  expect(expandedBody('@m class C {}', EMIT('[k("identifier","const"), k("identifier","$t"), '
+    + 'k("punctuator","="), g("[", [k("string","\\"<div>\\"")]), k("punctuator",";"), '
+    + 'k("identifier","function"), k("identifier","View"), g("(", []), '
+    + 'g("{", [k("identifier","return"), k("identifier","$t"), k("punctuator",";")])]')))
+    .toBe('const $t = ["<div>"] ; function View () {return $t ;}');
+});
+
+test('two adjacent identifiers are now a Syntax Error rather than one name', () => {
+  // The severity of the defect in one line: `a` then `b` is not a program, and
+  // printing it as `ab` made it one.
+  expect(expandedBody('@m class C {}', EMIT('[k("identifier","a"), k("identifier","b"), '
+    + 'k("punctuator",";")]'))).toBe('THROW');
+});
+
+test('a token handed back unchanged is still sliced, comments and all', () => {
+  // The other half: preservation must not regress, since it is what a macro
+  // that rewrites one thing and leaves the rest alone depends on.
+  expect(expandedBody('@m class C { /* kept */ x = 1; }', IDENTITY))
+    .toBe('class C { /* kept */ x = 1; }');
 });

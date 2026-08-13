@@ -65,6 +65,15 @@ export interface TokenRecord {
    * not enough to keep a statement from joining the one above it.
    */
   readonly LineTerminatorBefore: boolean;
+
+  /**
+   * Whether a macro CREATED this token rather than handing back one it received.
+   *
+   * A created token is PRINTED, with a separator before it; a preserved one is
+   * SLICED from the buffer it came from, which is what keeps an untouched run
+   * exactly as written, comments included.
+   */
+  readonly Created?: boolean;
 }
 
 /**

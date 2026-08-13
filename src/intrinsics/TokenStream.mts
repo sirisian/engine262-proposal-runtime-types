@@ -111,6 +111,13 @@ export function TokenStreamText(records: readonly TokenRecord[]): string {
   // print branch, which emitted `{` and dropped everything it delimited. A
   // group is sliceable when its span begins with its delimiter.
   const isSliceable = (t: TokenRecord) => {
+    // A created token is never sliced, whatever its span looks like. Asking only
+    // whether the buffer at the span matches the value cannot tell the two
+    // apart, because a created token's buffer is its own text and so always
+    // matches - which is what suppressed every separator.
+    if (t.Created) {
+      return false;
+    }
     const sliced = t.Span.Source.Text.slice(t.Span.Start, t.Span.End);
     return t.Kind === 'group' ? sliced.startsWith(t.Value) && sliced.length > t.Value.length : sliced === t.Value;
   };
@@ -218,6 +225,13 @@ export function TokenRecordsFrom(value: Value): readonly TokenRecord[] | undefin
       },
       Tokens: nested instanceof ObjectValue ? TokenRecordsFrom(nested) : undefined,
       LineTerminatorBefore: false,
+      // Marked as created. A self-relative span makes the printer's "can this be
+      // sliced from its buffer?" test TRIVIALLY true - the buffer IS the value -
+      // so every created token was mistaken for a preserved one and printed
+      // without the separator it needs. `const` and `a` came out as `consta`,
+      // and `function` and `f` as `functionf`, which does not parse. A preserved
+      // token arrives through [[TokenRecord]] above and is not marked.
+      Created: true,
     });
   }
   return out;

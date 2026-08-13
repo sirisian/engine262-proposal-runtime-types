@@ -60,8 +60,8 @@ const jsx = (body: string, macroSource = JSX_MACRO) => expandWith('jsx', JSX_IMP
 
 test('a mode lets a region reach a macro that ECMAScript could not scan', () => {
   // Without a mode this is `Unexpected token` at the `<`, before any macro runs.
-  expect(jsx('@jsx { <div/> }')).toBe('_jsx ("div", {})');
-  expect(jsx('const v = @jsx do { <span/> }; v;')).toBe('const v = _jsx ("span", {}); v;');
+  expect(jsx('@jsx { <div/> }')).toBe('_jsx ("div" , {})');
+  expect(jsx('const v = @jsx do { <span/> }; v;')).toBe('const v = _jsx ("span" , {}); v;');
 });
 
 test('the region arrives as tokens of its mode', () => {
@@ -79,15 +79,15 @@ test('the region arrives as tokens of its mode', () => {
 test('`do` carries a region wherever a value is wanted', () => {
   // `do` yields a value, which is what an element expression is, so it composes
   // in every expression position rather than only where a statement may stand.
-  expect(jsx('f(@jsx do { <br/> });')).toBe('f(_jsx ("br", {}));');
-  expect(jsx('function A() { return @jsx do { <p/> }; }')).toBe('function A() { return _jsx ("p", {}); }');
-  expect(jsx('const a = [@jsx do { <i/> }];')).toBe('const a = [_jsx ("i", {})];');
-  expect(jsx('const f = () => @jsx do { <b/> };')).toBe('const f = () => _jsx ("b", {});');
+  expect(jsx('f(@jsx do { <br/> });')).toBe('f(_jsx ("br" , {}));');
+  expect(jsx('function A() { return @jsx do { <p/> }; }')).toBe('function A() { return _jsx ("p" , {}); }');
+  expect(jsx('const a = [@jsx do { <i/> }];')).toBe('const a = [_jsx ("i" , {})];');
+  expect(jsx('const f = () => @jsx do { <b/> };')).toBe('const f = () => _jsx ("b" , {});');
 });
 
 test('two regions in one module expand independently', () => {
   expect(jsx('const a = @jsx do { <a/> }; const b = @jsx do { <b/> };'))
-    .toBe('const a = _jsx ("a", {}); const b = _jsx ("b", {});');
+    .toBe('const a = _jsx ("a" , {}); const b = _jsx ("b" , {});');
 });
 
 test('a mode is keyed by the decoration NAME, including a renamed import', () => {
@@ -97,7 +97,7 @@ test('a mode is keyed by the decoration NAME, including a renamed import', () =>
   // is what `lit-html` and `graphql-tag` are highlighted by today.
   const renamed = 'import { jsx as h } from "./x.js" with { preprocessor: "true", mode: "jsx" };' + NL;
   expect(expandWith('h', `${renamed}const v = @h do { <div/> }; v;`, JSX_MACRO))
-    .toBe('const v = _jsx ("div", {}); v;');
+    .toBe('const v = _jsx ("div" , {}); v;');
 });
 
 test('without a mode the same source is refused, as it was before', () => {
@@ -130,7 +130,7 @@ test('what the macro returns is ordinary ECMAScript', () => {
   // A mode governs the region going IN. Coming out, a macro returns the same
   // token kinds any other macro does, so the re-parse needs to know nothing
   // about modes.
-  expect(jsx('const v = @jsx do { <div/> }; v;')).toBe('const v = _jsx ("div", {}); v;');
+  expect(jsx('const v = @jsx do { <div/> }; v;')).toBe('const v = _jsx ("div" , {}); v;');
 });
 
 test('an unknown mode is refused at the import', () => {
