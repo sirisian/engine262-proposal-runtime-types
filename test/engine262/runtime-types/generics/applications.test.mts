@@ -1,3 +1,5 @@
+import { test, expect } from 'vitest';
+import { evaluated, expectThrown } from '../harness.mts';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
 //
