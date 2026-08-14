@@ -5,6 +5,7 @@ import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
+import { CreateComplexValue } from './Complex.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
@@ -36,6 +37,35 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  * whose value is out of range is a RangeError.
  */
 /** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
+/**
+ * The string form of a complex, as the imaginary literal writes it: an optional
+ * real part, an optional signed imaginary part suffixed `i`, or either alone.
+ * Whitespace around the whole is ignored; a sign between the parts is required,
+ * since `3 2i` denotes nothing.
+ */
+function ParseComplexLiteral(text: string): { real: number, imaginary: number } | null {
+  const source = text.trim();
+  if (source === '') {
+    return null;
+  }
+  const num = '[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?';
+  // Both parts: a real, then a SIGNED imaginary.
+  const both = new RegExp(`^(${num})([+-](?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)i$`);
+  const pair = both.exec(source);
+  if (pair) {
+    return { real: Number(pair[1]), imaginary: Number(pair[2]) };
+  }
+  const onlyImaginary = new RegExp(`^(${num})i$`).exec(source);
+  if (onlyImaginary) {
+    return { real: 0, imaginary: Number(onlyImaginary[1]) };
+  }
+  const onlyReal = new RegExp(`^(${num})$`).exec(source);
+  if (onlyReal) {
+    return { real: Number(onlyReal[1]), imaginary: 0 };
+  }
+  return null;
+}
+
 function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
@@ -61,6 +91,25 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     }
     const decimalWidth = t.Name === 'decimal32' ? 32 : t.Name === 'decimal64' ? 64 : 128;
     return CreateDecimalValue(digits.significand, digits.exponent, decimalWidth, surroundingAgent.currentRealmRecord);
+  }
+  // proposal-runtime-types: "for the binary floating-point, decimal, rational,
+  // and complex types it is `parse(_string_)`". complex.md names
+  // `complex.parse('3-2i')` beside the literal, so a complex is constructible
+  // from a string as every other numeric type is.
+  //
+  // The grammar is the one the literal writes: an optional real part, an
+  // optional signed imaginary part carrying the `i` suffix, and either alone.
+  // `'3-2i'`, `'4i'`, and `'5'` are each valid; a bare `'i'` is not, the suffix
+  // being on a numeric literal rather than a name.
+  if (t.Kind === 'primitive' && t.Name === 'complex') {
+    if (!(S instanceof JSStringValue)) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    const parsed = ParseComplexLiteral(S.stringValue());
+    if (!parsed) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    return CreateComplexValue(parsed.real, parsed.imaginary, t.Arguments?.[0], surroundingAgent.currentRealmRecord);
   }
   if (!isInteger && !isFloat) {
     return Throw.TypeError('parse is not defined for $1', thisValue);
