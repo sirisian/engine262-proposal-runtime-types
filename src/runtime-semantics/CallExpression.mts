@@ -376,6 +376,49 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // class family plus `Type` - so this was one of the thirty-six that fell
       // through to "undefined is not a type". The type-level `"enum"` reflection
       // node exists as a workaround for exactly this gap.
+      // sec-reflection-shape-enum: `EnumEnumerator` reports `name`, `value`, and
+      // `index`. decorators.md gives it TWO forms - with a value, returning that
+      // enumerator, and without, returning every enumerator keyed by name:
+      //
+      //   getReflection<Reflect.EnumEnumerator, T>(): { [name]: Reflection }
+      //   getReflection<Reflect.EnumEnumerator, T>(value: T): Reflection
+      //
+      // The names live on the DECLARATION's EnumMemberList; [[EnumMembers]]
+      // carries only the values, so the two are read together and stay aligned
+      // by index.
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.EnumEnumerator') {
+        const enumRec = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const values = (enumRec as { EnumMembers?: readonly Value[] }).EnumMembers;
+        const decl = (enumRec as { Declaration?: { EnumMemberList?: readonly { IdentifierName?: { name?: string } }[] } }).Declaration;
+        if (values === undefined || decl?.EnumMemberList === undefined) {
+          return ThrowError.TypeError('$1 is not an enum type', Value('the target of Reflect.getReflection'));
+        }
+        const names = decl.EnumMemberList;
+        const realm = surroundingAgent.currentRealmRecord;
+        const nodeFor = (i: number) => {
+          const node = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          X(CreateDataProperty(node, Value('kind'), Value('EnumEnumerator')));
+          X(CreateDataProperty(node, Value('name'), Value(names[i]?.IdentifierName?.name ?? String(i))));
+          X(CreateDataProperty(node, Value('value'), values[i]!));
+          X(CreateDataProperty(node, Value('index'), Value(i)));
+          return node;
+        };
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        if (argList.length === 0) {
+          // The keyed form: every enumerator, by name.
+          const all = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          for (let i = 0; i < values.length; i += 1) {
+            X(CreateDataProperty(all, Value(names[i]?.IdentifierName?.name ?? String(i)), nodeFor(i)));
+          }
+          return all;
+        }
+        const wantedValue = argList[0]!;
+        const at = values.findIndex((v) => SameValue(v, wantedValue));
+        if (at < 0) {
+          return ThrowError.TypeError('$1 is not an enumerator of the enum', wantedValue);
+        }
+        return nodeFor(at);
+      }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Enum') {
         const enumRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const members = (enumRecord as { EnumMembers?: readonly Value[] }).EnumMembers;

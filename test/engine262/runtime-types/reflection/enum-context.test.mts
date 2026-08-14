@@ -41,3 +41,29 @@ test('the routes that already worked still do', () => {
   // And the type-level node, the workaround this does not yet remove.
   expect(evaluated(`${E}String(Reflect.getReflection(Component).kind);`)).toBe('enum');
 });
+
+// `EnumEnumerator` completes the family. decorators.md gives it TWO forms:
+//
+//   getReflection<Reflect.EnumEnumerator, T>()          -> every enumerator, keyed by name
+//   getReflection<Reflect.EnumEnumerator, T>(value: T)  -> that one enumerator
+//
+// The names live on the DECLARATION's EnumMemberList - [[EnumMembers]] carries
+// only the values - so the two are read together and aligned by index.
+
+const C = 'enum Color: uint8 { Red, Green, Blue } ';
+
+test('EnumEnumerator, the keyed form', () => {
+  expect(evaluated(`${C}Object.keys(Reflect.getReflection.<Reflect.EnumEnumerator, Color>()).join(",");`)).toBe('Red,Green,Blue');
+  expect(evaluated(`${C}const all = Reflect.getReflection.<Reflect.EnumEnumerator, Color>(); String(all.Green.index) + "/" + String(all.Green.name);`)).toBe('1/Green');
+});
+
+test('EnumEnumerator, the value form', () => {
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.EnumEnumerator, Color>(Color.Red); String(r.name) + "/" + String(r.index);`)).toBe('Red/0');
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.EnumEnumerator, Color>(Color.Blue); String(r.name) + "/" + String(r.index);`)).toBe('Blue/2');
+  // A string-based enum resolves by its value the same way.
+  expect(evaluated('enum S: string { X = "a", Y = "b" } const r = Reflect.getReflection.<Reflect.EnumEnumerator, S>(S.Y); String(r.name) + "/" + String(r.index);')).toBe('Y/1');
+});
+
+test('a value that is not an enumerator is refused', () => {
+  expectThrown(`${C}Reflect.getReflection.<Reflect.EnumEnumerator, Color>(99);`);
+});
