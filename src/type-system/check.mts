@@ -1154,9 +1154,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const isRangeFamilyName = (name: string | undefined): boolean => name === 'Range'
     || name === 'RangeFrom' || name === 'RangeTo' || name === 'RangeFull' || name === 'RangeBounds';
 
+  /** The RETURN type a function literal's position wants, read by its own arm. */
+  const contextualReturnTypes = new Map<ParseNode, Known>();
+
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (!node) {
       return null;
+    }
+    // A FUNCTION LITERAL at a function-typed position takes that position's
+    // RETURN type as the context for its body, just as it takes the position's
+    // parameter types for its parameters. Without this the body is typed in
+    // isolation and a literal inside it keeps its literal type: the return of
+    // `() => ({ value: 1, done: false })` reads as an object of LITERAL types,
+    // which is not assignable to `{ value: uint8, done: boolean }` however
+    // plainly the program meant it. Recorded here, where a node meets its
+    // contextual type, and read by the literal's own arm in `staticType`.
+    if ((node.type === 'ArrowFunction' || node.type === 'FunctionExpression')
+      && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
+      const wanted = contextual.Signatures[0].Return;
+      if (wanted) {
+        contextualReturnTypes.set(node, wanted as Known);
+      }
     }
     // sec-new-expressions: `new.(...)` constructs the type its POSITION requires.
     // This operation is where a node meets its contextual type, so it is where
@@ -2203,6 +2221,75 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (node.type) {
       case 'TopicReference':
         return lookup(TOPIC_NAME) ?? null;
+      case 'ArrowFunction':
+      case 'FunctionExpression': {
+        // proposal-runtime-types #table-check-sites makes an argument and an
+        // annotated binding check sites, and a function LITERAL had no static
+        // type at all - so nothing could be checked against anything at either.
+        // A function DECLARATION was refused correctly and a literal of the same
+        // shape was not, which is what said the gap was the literal rather than
+        // the position it stood in.
+        //
+        // Built from what the literal WROTE DOWN: each parameter's annotation,
+        // or the contextual type its position supplied, or ~any~; and the
+        // return annotation, or an inferred one where the body is an
+        // expression. A BLOCK body's return stays ~any~ - imprecise rather than
+        // wrong - which means a block-bodied literal passes every check. That
+        // is the limit of the checker's inference rather than a decision.
+        const literal = node as unknown as {
+          ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[],
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        };
+        const contextual = contextualParameterTypes.get(node) ?? [];
+        const wantedReturn = contextualReturnTypes.get(node) ?? null;
+        // Only an EXPRESSION body's type can be read: the expression IS the
+        // return. A block body needs return-type inference this checker does
+        // not have, and inferring it anyway answers `undefined` for a body that
+        // simply never returns - which is not assignable to `void` and would
+        // refuse `() => {}` at every position wanting one.
+        const conciseArrow = node as unknown as { ConciseBody?: ParseNode };
+        const conciseBodied = node.type === 'ArrowFunction'
+          && conciseArrow.ConciseBody !== undefined
+          && conciseArrow.ConciseBody.type !== 'FunctionBody';
+        // Where the literal wrote no return type, its body cannot be read, and
+        // its position wants nothing, there is NOTHING TO SAY - so say nothing
+        // rather than claim ~any~. A claimed `any` is not the same as silence
+        // downstream: `(function () { return ref x; })() = 5` asks whether the
+        // callee returns a ref, and an `any` return answers "no" where an
+        // absent type left the question to the run time.
+        if (!literal.TypeAnnotation && !conciseBodied && wantedReturn === null) {
+          return null;
+        }
+        const params = literal.ArrowParameters ?? literal.FormalParameters ?? [];
+        const Parameters = params.map((prm, i) => {
+          const named = prm as ParseNode.SingleNameBinding;
+          const annotated = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const resolved = annotated ? resolveType(annotated.Type) : (contextual[i] ?? null);
+          return parameter((resolved ?? anyTypeRecord) as TypeRecord, {
+            Name: named.BindingIdentifier?.name ?? '',
+            Rest: prm.type === 'BindingRestElement',
+            // A parameter is OPTIONAL only where it has a default; the node
+            // carries an Initializer for a defaulted one and nothing otherwise.
+            Optional: (prm as { Initializer?: unknown | null }).Initializer != null,
+          });
+        });
+        const Return = literal.TypeAnnotation
+          ? resolveType(literal.TypeAnnotation.Type)
+          : ((conciseBodied ? inferredReturnType(node, contextual as readonly Known[], wantedReturn) : null)
+            // Where the body's type cannot be read - a BLOCK body, which needs
+            // return-type inference this checker does not have - the literal
+            // adopts the return its position wants rather than claiming ~any~.
+            // Claiming ~any~ would be worse than saying nothing: `any` is not a
+            // subtype of every type here, so a block-bodied callback would be
+            // refused at every typed position, which is the opposite of the
+            // imprecision intended. Adopting the wanted return leaves the
+            // block-bodied case exactly as unchecked as it was.
+            ?? wantedReturn);
+        return {
+          Kind: 'function',
+          Signatures: [{ Parameters, Return: (Return ?? anyTypeRecord) as TypeRecord, Untyped: false }],
+        } as unknown as Known;
+      }
       case 'PipelineExpression': {
         // #sec-pipeline-operator: the topic has the left operand's type, and
         // the pipeline has the body's. The topic is declared in a frame of its
@@ -3346,7 +3433,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *  - Returns inside a NESTED function belong to that function and are not
    *    collected; the walk stops at every function form.
    */
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[]): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null): Known => {
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
       ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
     if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression') {
@@ -3384,7 +3471,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (body.type !== 'FunctionBody') {
       return pushBlock(() => {
         declareParameters();
-        return staticType(body!);
+        // Typed AT the return the position wants, where there is one, so a
+        // literal in the body propagates the way it would at any other check
+        // site: `() => ({ value: 1, done: false })` at an IteratorResult gives
+        // that record, while `() => "wrong"` at a `uint8` gives a literal string
+        // type and is refused. Using the WANTED type as the answer instead
+        // would make every unannotated literal trivially conform.
+        return wanted ? staticTypeIn(body!, wanted) : staticType(body!);
       });
     }
 
@@ -5159,7 +5252,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     });
                   }
                 }
-                return;
+                // FALL THROUGH to the check rather than returning. The branch
+                // above exists to give a callback its parameter types, which is
+                // what lets `a.map((x) => x + 1)` type `x` without an
+                // annotation - and it returned, so the argument was never
+                // checked against the parameter at all. Recording the
+                // contextual types is a prerequisite of the check, not a
+                // substitute for it: the literal's own type is built FROM them.
               }
               requireAssignable(staticTypeIn(arg, param), param);
             });

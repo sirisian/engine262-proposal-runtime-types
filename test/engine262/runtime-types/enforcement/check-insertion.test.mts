@@ -1303,3 +1303,65 @@ test('an invariant position still admits any, and a method is an output position
   expect(evaluated('function* g(): uint8 { yield 1; }'
     + ' const i: Iterable.<uint8> = g(); typeof i;')).toBe('object');
 });
+
+// -- A function literal has a static type (#table-check-sites) ----------------
+//
+// An argument and an annotated binding are check sites, and a function LITERAL
+// had no type at all - so nothing could be checked against anything at either.
+// A function DECLARATION of the same shape was refused correctly, which is what
+// said the gap was the literal rather than the position it stood in.
+
+test('a function literal is checked at an argument', () => {
+  const h = 'function h(f: (x: uint8) => uint8) { return "took"; } ';
+  expectStatic(`${h} h((x) => "wrong");`);
+  // Even ANNOTATED wrong: this one needs no inference at all, and was accepted.
+  expectStatic(`${h} h((x: uint8): string => "wrong");`);
+  // A non-function was always refused, which is why the check clearly ran and
+  // the literal's type was what was missing.
+  expectStatic(`${h} h(5);`);
+});
+
+test('a function literal is checked at a binding too', () => {
+  // The half the entry did not name. Closing it needed no change to the
+  // argument path, which is what says the fix was the literal's type.
+  expectStatic('let f: (x: uint8) => uint8 = (x) => "wrong";');
+  expectStatic('let g: (x: uint8) => uint8 = (x: uint8): string => "wrong";');
+});
+
+test('arity is checked, in the direction the subtype rule gives', () => {
+  // A literal needing MORE arguments than the position supplies is refused; one
+  // that ignores arguments is fine, which is what every callback does.
+  expectStatic('function h(f: () => uint8) { return "took"; } h((a, b) => (1 := uint8));');
+  expect(evaluated('function h(f: (x: uint8, y: uint8) => uint8) { return "took"; } h((x) => x);')).toBe('took');
+});
+
+test('contextual typing survives, which is what the diversion existed for', () => {
+  // The argument path recorded a callback's parameter types and then RETURNED,
+  // skipping the check. Recording them is a prerequisite of the check rather
+  // than a substitute: the literal's own type is built FROM them.
+  expect(evaluated('const a: [].<uint8> = [1, 2, 3];'
+    + ' const b = a.map((x) => x + (1 := uint8)); `${b.length}:${b[0]}`;')).toBe('3:2');
+  expect(evaluated('const a: [].<uint8> = [1, 2, 3]; String(a.filter((x) => x > (1 := uint8)).length);')).toBe('2');
+});
+
+test('a body the checker cannot read is left alone', () => {
+  // A BLOCK body needs return-type inference this checker does not have, so a
+  // literal with one adopts the return its position wants. Claiming `any`
+  // instead refused every block-bodied callback, `any` not being a subtype of
+  // everything here.
+  expect(evaluated('function h(f: (x: uint8) => uint8) { return "took"; }'
+    + ' h((x) => { return "wrong"; });')).toBe('took');
+  expect(evaluated('let f: (a: uint8) => void = () => {}; f(5); "ok";')).toBe('ok');
+  // An object-literal property is a position too, and the return it wants has
+  // to TYPE the body rather than replace it: handing the literal that type
+  // would make every unannotated body trivially conform.
+  expect(evaluated('const i: Iterator.<uint8> = { next: () => ({ value: 1, done: false }) };'
+    + ' String(i.next().value);')).toBe('1');
+});
+
+test('where nothing is knowable, nothing is claimed', () => {
+  // A claimed `any` is not the same as silence downstream: this asks whether
+  // the callee returns a ref, and an `any` return answers "no" where an absent
+  // type left the question to the run time.
+  expect(evaluated('let x = 1; (function () { return ref x; })() = 5; String(x);')).toBe('5');
+});
