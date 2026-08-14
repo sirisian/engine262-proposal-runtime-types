@@ -10,6 +10,7 @@ import {
 import type { Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import type { NumberObject } from './Number.mts';
+import { surroundingAgent } from '#self';
 import {
   Assert,
   ToIntegerOrInfinity,
@@ -87,6 +88,17 @@ function* NumberProto_toPrecision([precision = Value.undefined]: Arguments, { th
 
 /** https://tc39.es/ecma262/#sec-number.prototype.tostring */
 function* NumberProto_toString([radix = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  // proposal-runtime-types #sec-integer-types: an integer type is exact _N_-bit
+  // two's complement, and a value above 2^53 carries a BigInt. `thisNumberValue`
+  // unwraps to a Number FIRST, so the exact carrier was collapsed to a double
+  // before anything was printed: `int64.parse("9223372036854775807").toString()`
+  // answered '9223372036854776000' while `String(...)` of the same value
+  // answered it exactly. ToString reads the carrier, so a typed value at radix
+  // 10 goes through it rather than through the unwrapped Number.
+  if (surroundingAgent.feature('runtime-types') && isTypedNumber(thisValue)
+    && (radix === Value.undefined || (radix instanceof NumberValue && R(radix) === 10))) {
+    return X(ToString(thisValue));
+  }
   const x = Q(thisNumberValue(thisValue));
   let radixNumber;
   if (radix === Value.undefined) {
