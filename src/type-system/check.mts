@@ -5479,9 +5479,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         classContext.pop();
         return;
       }
-      case 'MemberExpression':
+      case 'MemberExpression': {
         checkProtectedAccess(n);
+        // AND WALK THE BASE. `break` leaves the switch, and the generic child
+        // recursion lives in `default:` - so a member expression's own subtree
+        // was never descended into, and anything a walk RECORDS about it was
+        // never recorded.
+        //
+        // That is what made `(9223372036854775807 := int64).toString()` answer
+        // -9223372036854775808 while `String((9223372036854775807 := int64))`
+        // answered the value exactly: a wide literal's exact digits are stored
+        // by the walk of its enclosing conversion (#sec-literalvalueintype
+        // takes the value "before any rounding", and the source text is where
+        // it still exists), and evaluation reads them back. A conversion under
+        // a member base was never walked, so the literal evaluated from the
+        // double the lexer scanned - and for a 60-digit literal that produced
+        // '0', which no rounding of the true value gives.
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+            walk(child as ParseNode);
+          }
+        }
         break;
+      }
       case 'GeneratorDeclaration':
       case 'GeneratorExpression':
       case 'AsyncFunctionDeclaration':

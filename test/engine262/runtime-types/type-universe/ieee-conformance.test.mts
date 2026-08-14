@@ -353,3 +353,40 @@ test('a result carries the operand type, with its components rounded', () => {
   // And the same values at `complex` keep double components, so the two differ.
   expect(evaluated('const a = complex(0.1, 0.2), b = complex(0.3, 0.4); String((a * b).real);')).toBe(String(exact));
 });
+
+// -- A member expression's base is walked (#sec-literalvalueintype) -----------
+//
+// A wide literal's exact digits are recorded by the WALK of its enclosing
+// conversion and read back at evaluation. A member expression exited the walk's
+// switch without descending into its own subtree, so a conversion standing as a
+// member base was never walked and its literal evaluated from the double the
+// lexer scanned.
+
+test('a wide literal is exact however it is spelled', () => {
+  // The two spellings of one operation, which is the property worth asserting
+  // rather than either value alone: a reader takes them to be the same.
+  expect(evaluated('String((9223372036854775807 := int64));')).toBe('9223372036854775807');
+  expect(evaluated('(9223372036854775807 := int64).toString();')).toBe('9223372036854775807');
+  // The second was not merely rounded but WRAPPED: the literal became a double,
+  // rounded up to 2**63, and re-entered int64 as -2**63.
+  expect(evaluated('String((9223372036854775807 := int64).toString() === String((9223372036854775807 := int64)));')).toBe('true');
+});
+
+test('a literal beyond a double answers from its digits', () => {
+  // The discriminator that ruled out a rounding: no rounding of this value
+  // gives zero, which is what `.toString()` answered.
+  const wide = '1606938044258990275541962092341162602522202993782792835301375';
+  expect(evaluated(`(${wide} := uint.<200>).toString();`)).toBe(wide);
+  expect(evaluated(`String((${wide} := uint.<200>));`)).toBe(wide);
+});
+
+test('arithmetic over wide casts agrees in both spellings', () => {
+  expect(evaluated('((9223372036854775807 := int64) + (1 := int64)).toString();')).toBe('-9223372036854775808');
+  expect(evaluated('String((9223372036854775807 := int64) + (1 := int64));')).toBe('-9223372036854775808');
+});
+
+test('valueOf still answers a Number, which is its contract', () => {
+  // Pinned so a later reader does not "fix" it: valueOf is defined to produce a
+  // Number, and a Number cannot hold this value. That is not the same defect.
+  expect(evaluated('String((9223372036854775807 := int64).valueOf());')).toBe('9223372036854776000');
+});
