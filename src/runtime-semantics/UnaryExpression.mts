@@ -37,6 +37,7 @@ import {
   isArrayIndex,
 } from '#self';
 import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
+import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
@@ -246,6 +247,13 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
       }
       return new VectorValue(lanes, v.TypeRecord);
     }
+  }
+  // proposal-runtime-types #sec-which-operations-each-family-defines gives the
+  // complex family unaryMinus. Both components negate, INCLUDING the zeroes, so
+  // -complex(0, 0) is complex(-0, -0) - which Object.is on the components can
+  // see, and which the sign rules of the component format require.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(rawValue)) {
+    return complexNegate(rawValue, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types (decimal.md): unary minus on a decimal keeps its
   // COHORT MEMBER - `-1.50` is `-1.50`, not `-1.5` - since negation changes the

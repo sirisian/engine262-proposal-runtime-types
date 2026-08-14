@@ -1,3 +1,4 @@
+import { isComplexObject, complexAbs, complexConjugate, complexArgument } from './Complex.mts';
 import { VectorValue,
   Value,
   NumberValue,
@@ -37,12 +38,39 @@ import {
 
 /** https://tc39.es/ecma262/#sec-math.abs */
 function* Math_abs([x = Value.undefined]: Arguments): ValueEvaluator {
+  // proposal-runtime-types #sec-numeric-library: "`Math.abs` of a `complex.<T>`
+  // is the real magnitude, a value of _T_" - so it answers a REAL rather than a
+  // complex, and it is hypot rather than sqrt of the sum of squares: hypot
+  // answers Infinity where a component is infinite even if the other is NaN,
+  // and does not overflow for components whose squares do.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return F(complexAbs(x));
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN()) return n;
   if (Object.is(n.value, -0)) return F(+0);
   if (Object.is(n.value, -Infinity)) return F(Infinity);
   if (n.value < 0) return F(-n.value);
   return n;
+}
+
+/**
+ * proposal-runtime-types #sec-numeric-library: "`Math.conj` and `Math.arg` are
+ * its additions" - the complex family's, and defined for no other type.
+ */
+function* Math_conj([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (!surroundingAgent.feature('runtime-types') || !isComplexObject(x)) {
+    return Throw.TypeError('$1 is not a $2', x, Value('complex'));
+  }
+  return complexConjugate(x, surroundingAgent.currentRealmRecord);
+}
+
+/** The argument, or phase: a value of _T_ rather than a complex. */
+function* Math_arg([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (!surroundingAgent.feature('runtime-types') || !isComplexObject(x)) {
+    return Throw.TypeError('$1 is not a $2', x, Value('complex'));
+  }
+  return F(complexArgument(x));
 }
 
 /** https://tc39.es/ecma262/#sec-math.acos */
@@ -1661,6 +1689,8 @@ export function bootstrapMath(realmRec: Realm) {
       ['mod', Math_mod, 2],
     ] as [string, NativeSteps, number][] : []),
     ['abs', withNumericLibrarySignatures(Math_abs, 'abs'), 1],
+    ['conj', Math_conj, 1],
+    ['arg', Math_arg, 1],
     ['acos', withNumericLibrarySignatures(Math_acos, 'acos'), 1],
     ['acosh', withNumericLibrarySignatures(Math_acosh, 'acosh'), 1],
     ['asin', withNumericLibrarySignatures(Math_asin, 'asin'), 1],

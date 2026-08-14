@@ -1,3 +1,6 @@
+import {
+  isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow,
+} from '../intrinsics/Complex.mts';
 import { ObjectValue,
   JSStringValue, Value,
   NumberValue,
@@ -253,6 +256,41 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // preferred exponent is min(Q(x), Q(y)) - the rule is the standard's, and
   // taking it from there is what stops a result's significance being invented
   // per operation.
+  // proposal-runtime-types #sec-which-operations-each-family-defines: the
+  // complex family defines unaryMinus, exponentiate, multiply, divide, add,
+  // subtract, equal, sameValue, sameValueZero and toString, and denies it
+  // lessThan "since the complex numbers are not ordered", remainder, and the
+  // bitwise and shift operations. The `default` below is that denial, and the
+  // guard's `||` is what refuses a MIXED pair - without either, `complex(1,0) +
+  // complex(2,0)` reached the string path and CONCATENATED, and every other
+  // operator answered NaN.
+  //
+  // What the defined ones compute is C99 Annex G's, since #sec-extension-hooks
+  // assigns the operators outward and Annex G is the recognized specification
+  // of complex arithmetic over IEEE 754 components.
+  if (surroundingAgent.feature('runtime-types') && (isComplexObject(lval) || isComplexObject(rval))) {
+    if (!isComplexObject(lval) || !isComplexObject(rval)) {
+      // A complex mixes with nothing implicitly, for the reason a decimal does
+      // not: the other operand would have to be converted, and the conversion
+      // into the family is explicit by #sec-complex-numbers.
+      return Throw.TypeError('a complex operand requires a complex on both sides');
+    }
+    const realmRec = surroundingAgent.currentRealmRecord;
+    switch (opText) {
+      case '+':
+        return complexAdd(lval, rval, realmRec);
+      case '-':
+        return complexSubtract(lval, rval, realmRec);
+      case '*':
+        return complexMultiply(lval, rval, realmRec);
+      case '/':
+        return complexDivide(lval, rval, realmRec);
+      case '**':
+        return complexPow(lval, rval, realmRec);
+      default:
+        return Throw.TypeError('this operator is not defined for a complex');
+    }
+  }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(lval) || isDecimalObject(rval))) {
     if (!isDecimalObject(lval) || !isDecimalObject(rval)) {
       // A decimal mixes with nothing implicitly: the other operand would have to

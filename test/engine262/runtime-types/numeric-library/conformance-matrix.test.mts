@@ -256,12 +256,21 @@ test('a function with no numeric parameter is NOT overloaded, and untyped code i
   expect(evaluated('let a: [].<uint8> = [1]; const b = [1]; String(a.length is uint32) + "/" + String(b.length is uint32);')).toBe('true/false');
 });
 
+test('inventory: the complex Math additions exist and answer their own family', () => {
+  // They were deferred while `complex` had no values to operate on. It has
+  // them, so #sec-numeric-library's "`Math.abs` of a `complex.<T>` is the real
+  // magnitude, a value of _T_ ... and `Math.conj` and `Math.arg` are its
+  // additions" is testable rather than pending.
+  expect(evaluated('`${typeof Math.conj}:${typeof Math.arg}`;')).toBe('function:function');
+  expect(evaluated('String(Math.abs(complex(3, 4)));')).toBe('5');
+  expect(evaluated('Math.conj(complex(3, 4)).toString();')).toBe('3-4i');
+  expect(evaluated('String(Math.arg(complex(0, 1)));')).toBe(String(Math.PI / 2));
+  // Additions of the COMPLEX family, so they take nothing else.
+  expect(evaluated('let m = ""; try { Math.conj(1); } catch (e) { m = e.constructor.name; } m;')).toBe('TypeError');
+});
+
 test('inventory: the specified-but-absent operations are the deferrals they should be', () => {
   const DEFERRED: Record<string, string> = {
-    // The complex value level is deferred entire: `complex` is not yet a usable
-    // type, so its Math additions have nothing to operate on.
-    'Math.conj': 'complex extension, value level deferred',
-    'Math.arg': 'complex extension, value level deferred',
     // Structural matching. The clause itself calls it optional rather than
     // load-bearing: "the design's own catalog needed this operation exactly zero
     // times, which is the measurement that makes it optional".

@@ -230,3 +230,118 @@ test('float128.parse builds a value of the format, not a double wearing its name
   expect(evaluated('float128.parse("1.5").toString();')).toBe('1.5');
   expect(evaluated('String(float128.tryParse("nope"));')).toBe('null');
 });
+
+// -- The complex family's operators (C99 Annex G over IEEE 754 components) ----
+//
+// #sec-which-operations-each-family-defines gives the family unaryMinus,
+// exponentiate, multiply, divide, add, subtract, equal, sameValue,
+// sameValueZero and toString, and denies it lessThan "since the complex numbers
+// are not ordered", remainder, and the bitwise and shift operations. What the
+// defined ones compute is not written there - #sec-extension-hooks assigns the
+// operators outward - so the reference is C99 Annex G, which is what an engine
+// backed by C's `_Complex` implements. Every expectation below is computed here
+// from the component formulas rather than read off the engine.
+
+/** The component formulas, applied to the same doubles the engine uses. */
+function refMul(a: number, b: number, c: number, d: number): [number, number] {
+  return [a * c - b * d, a * d + b * c];
+}
+
+function refDiv(a: number, b: number, c: number, d: number): [number, number] {
+  // Smith's algorithm, which is what Annex G assumes: the naive conjugate form
+  // computes c*c + d*d and overflows for operands whose squares do.
+  if (Math.abs(c) >= Math.abs(d)) {
+    const r = d / c;
+    const denominator = c + d * r;
+    return [(a + b * r) / denominator, (b - a * r) / denominator];
+  }
+  const r = c / d;
+  const denominator = c * r + d;
+  return [(a * r + b) / denominator, (b * r - a) / denominator];
+}
+
+test('complex arithmetic matches the component formulas', () => {
+  const cases: [number, number, number, number][] = [
+    [3, 4, 1, 2], [0.1, 0.2, 0.3, 0.4], [-5, 2.5, 7, -1.25], [1e10, 1e-10, 3, 7],
+  ];
+  for (const [a, b, c, d] of cases) {
+    const label = `(${a}+${b}i) op (${c}+${d}i)`;
+    expect(evaluated(`(complex(${a}, ${b}) + complex(${c}, ${d})).toString();`), label)
+      .toBe(`${a + c}${b + d < 0 ? '' : '+'}${b + d}i`);
+    const [mr, mi] = refMul(a, b, c, d);
+    expect(evaluated(`(complex(${a}, ${b}) * complex(${c}, ${d})).toString();`), label)
+      .toBe(`${mr}${mi < 0 ? '' : '+'}${mi}i`);
+    const [dr, di] = refDiv(a, b, c, d);
+    expect(evaluated(`(complex(${a}, ${b}) / complex(${c}, ${d})).toString();`), label)
+      .toBe(`${dr}${di < 0 ? '' : '+'}${di}i`);
+  }
+});
+
+test('complex division does not overflow where the quotient is finite', () => {
+  // The single case that proves Smith's algorithm is in place: the naive
+  // conjugate formula computes a denominator of Infinity here and answers NaN.
+  const [r, i] = refDiv(1e200, 1e200, 3e200, 4e200);
+  expect(r).toBe(0.28);
+  expect(evaluated('(complex(1e200, 1e200) / complex(3e200, 4e200)).toString();'))
+    .toBe(`${r}${i < 0 ? '' : '+'}${i}i`);
+});
+
+test('unary minus negates both components, including the zeroes', () => {
+  expect(evaluated('(-complex(3, 4)).toString();')).toBe('-3-4i');
+  // -complex(0, 0) is complex(-0, -0), which the component signs can see.
+  expect(evaluated('const z = -complex(0, 0); `${Object.is(z.real, -0)}:${Object.is(z.imaginary, -0)}`;'))
+    .toBe('true:true');
+});
+
+test('exponentiation agrees with repeated multiplication', () => {
+  expect(evaluated('const a = complex(3, 4); const sq = a * a;'
+    + ' const p = a ** complex(2, 0);'
+    + ' `${Math.abs(p.real - sq.real) < 1e-9}:${Math.abs(p.imaginary - sq.imaginary) < 1e-9}`;')).toBe('true:true');
+});
+
+test('every operation the family denies is refused', () => {
+  // Asserted one at a time: a group passes if any single one throws.
+  for (const op of ['%', '<', '<=', '>', '>=', '<<', '>>', '>>>', '&', '|', '^']) {
+    expect(evaluated(`const a = complex(3, 4), b = complex(1, 2); let m = "accepted";`
+      + ` try { a ${op} b; } catch (e) { m = "refused"; } m;`), op).toBe('refused');
+  }
+  // And `+` no longer CONCATENATES, which is what it did before the family
+  // reached the operator dispatch at all.
+  expect(evaluated('String(complex(1, 0) + complex(2, 0));')).toBe('3+0i');
+  // A complex mixes with nothing implicitly, as a decimal does not.
+  expect(evaluated('let m = "accepted"; try { complex(1, 0) + 1; } catch (e) { m = "refused"; } m;')).toBe('refused');
+});
+
+test('equality is over the pair, and splits the way every numeric type does', () => {
+  expect(evaluated('String(complex(3, 4) === complex(3, 4));')).toBe('true');
+  expect(evaluated('String(complex(3, 4) === complex(3, 5));')).toBe('false');
+  expect(evaluated('String(Object.is(complex(3, 4), complex(3, 4)));')).toBe('true');
+  // `===` makes the two zeroes equal and Object.is does not - the same split
+  // the Number type has.
+  expect(evaluated('String(complex(0, 0) === complex(-0, 0));')).toBe('true');
+  expect(evaluated('String(Object.is(complex(0, 0), complex(-0, 0)));')).toBe('false');
+  // A complex serves as a Map key by value.
+  expect(evaluated('const m = new Map(); m.set(complex(3, 4), "v"); String(m.get(complex(3, 4)));')).toBe('v');
+});
+
+test('the Math additions answer a REAL, not a complex', () => {
+  // "`Math.abs` of a `complex.<T>` is the real magnitude, a value of _T_", and
+  // it is hypot: sqrt(x*x + y*y) overflows where hypot does not.
+  expect(evaluated('String(Math.abs(complex(3, 4)));')).toBe('5');
+  expect(evaluated('String(Math.abs(complex(1e200, 1e200)));')).toBe(String(Math.hypot(1e200, 1e200)));
+  expect(evaluated('String(Math.arg(complex(0, 1)));')).toBe(String(Math.PI / 2));
+  expect(evaluated('Math.conj(complex(3, 4)).toString();')).toBe('3-4i');
+  // conj IS a complex, being the family's own operation.
+  expect(evaluated('const c = Math.conj(complex(3, 4)); `${c.real}:${c.imaginary}`;')).toBe('3:-4');
+});
+
+test('a result carries the operand type, with its components rounded', () => {
+  // The operator table says a binary operator yields "the operand type", so a
+  // complex64 product is a pair of FLOAT32s - not a pair of doubles labelled
+  // complex64. Chosen so the exact product is not a float32.
+  const exact = 0.1 * 0.3 - 0.2 * 0.4;
+  expect(evaluated('const a = complex64(complex(0.1, 0.2)), b = complex64(complex(0.3, 0.4));'
+    + ' String((a * b).real);')).toBe(String(Math.fround(Math.fround(0.1) * Math.fround(0.3) - Math.fround(0.2) * Math.fround(0.4))));
+  // And the same values at `complex` keep double components, so the two differ.
+  expect(evaluated('const a = complex(0.1, 0.2), b = complex(0.3, 0.4); String((a * b).real);')).toBe(String(exact));
+});
