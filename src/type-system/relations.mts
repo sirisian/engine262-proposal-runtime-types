@@ -569,6 +569,34 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // capture-shape mismatch between two written parameterizations is still an
       // error. Identity for same-argument nominals is handled by SameType above.
       const tn = t as Extract<TypeRecord, { Kind: 'nominal' }>;
+      // proposal-runtime-types #sec-generic-variance: "where a parameter is
+      // covariant, one instantiation is a subtype of another along that position
+      // when the argument in the first is a subtype of the argument in the
+      // second; where contravariant, when the reverse holds; where neither is
+      // declared, the position is invariant".
+      //
+      // Only two instantiations of the SAME declaration relate this way, and
+      // only where some parameter carries a modifier - so a declaration that
+      // declares no variance behaves exactly as it did, which is the default the
+      // clause calls conservative.
+      if (s.Declaration === tn.Declaration && s.Arguments.length === tn.Arguments.length
+        && s.Arguments.length > 0) {
+        const params = (s.Declaration as { TypeParameters?: { TypeParameterList?: readonly { Variance?: string }[] } } | undefined)
+          ?.TypeParameters?.TypeParameterList;
+        if (params?.some((p) => p.Variance !== undefined)) {
+          return s.Arguments.every((sa, i) => {
+            const ta = tn.Arguments[i] as TypeRecord;
+            const variance = params[i]?.Variance;
+            if (variance === 'covariant') {
+              return IsSubtype(sa as TypeRecord, ta, next);
+            }
+            if (variance === 'contravariant') {
+              return IsSubtype(ta, sa as TypeRecord, next);
+            }
+            return SameTypeWithAssumptions(sa as TypeRecord, ta, next);
+          });
+        }
+      }
       if (s.LibraryName !== undefined && tn.LibraryName === s.LibraryName
         && tn.Arguments.length === 0 && s.Arguments.length > 0) {
         return true;

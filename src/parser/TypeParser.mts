@@ -482,6 +482,27 @@ export abstract class TypeParser extends ExpressionParser {
         break; // trailing comma
       }
       const param = this.startNode<ParseNode.TypeParameter>();
+      // proposal-runtime-types #sec-type-parameters: an optional
+      // VarianceModifier, `in` or `out`, declares the parameter covariant or
+      // contravariant (#sec-generic-variance).
+      //
+      // `in` is RESERVED, so it can only be a modifier here. `out` is not: it
+      // stays an ordinary identifier everywhere, INCLUDING as a parameter's own
+      // name, so it is a modifier only where a BindingIdentifier follows it
+      // immediately. That is one token of lookahead, and it is what keeps
+      // `<out>`, `<out: T>` and `<out = T>` meaning a parameter NAMED `out`
+      // while `<out T>` declares a covariant `T` - and `<out out>` a covariant
+      // parameter named `out`.
+      let Variance: 'covariant' | 'contravariant' | undefined;
+      if (this.test(Token.IN)) {
+        this.next();
+        Variance = 'contravariant';
+      } else if (this.test(Token.IDENTIFIER) && this.peek().value === 'out'
+        && this.testAhead(Token.IDENTIFIER)) {
+        this.next();
+        Variance = 'covariant';
+      }
+      param.Variance = Variance;
       param.BindingIdentifier = this.parseBindingIdentifier();
       // proposal-runtime-types #sec-higher-kinded-parameters: a parameter is
       // higher-kinded when its name is followed by a bracketed list of `_`,

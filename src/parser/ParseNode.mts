@@ -3313,6 +3313,12 @@ export namespace ParseNode {
     readonly type: 'TypeParameter';
     readonly BindingIdentifier: BindingIdentifier;
     /**
+     * proposal-runtime-types #sec-type-parameters: the VarianceModifier this
+     * parameter was declared with, or *undefined* where it carries none - which
+     * #sec-generic-variance makes invariant, "the conservative default".
+     */
+    readonly Variance?: 'covariant' | 'contravariant';
+    /**
      * proposal-runtime-types #sec-higher-kinded-parameters: the count of `_`
      * holes after the name. 0 is an ordinary parameter standing for a type; n
      * > 0 is a higher-kinded parameter standing for a generic declaration of n
