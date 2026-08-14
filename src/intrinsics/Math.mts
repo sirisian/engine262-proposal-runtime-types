@@ -1,4 +1,7 @@
-import { isComplexObject, complexAbs, complexConjugate, complexArgument } from './Complex.mts';
+import {
+  isComplexObject, complexAbs, complexConjugate, complexArgument,
+  complexSqrt, complexExp, complexLog, complexSin, complexCos, complexTan,
+} from './Complex.mts';
 import { VectorValue,
   Value,
   NumberValue,
@@ -197,6 +200,13 @@ function* Math_clz32([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.cos */
 function* Math_cos([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexCos(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (!n.isFinite()) return F(NaN);
   if (Object.is(n.value, 0) || Object.is(n.value, -0)) return F(1);
@@ -214,6 +224,13 @@ function* Math_cosh([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.exp */
 function* Math_exp([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexExp(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || n.value === Infinity) return n;
   if (Object.is(n.value, 0) || Object.is(n.value, -0)) return F(1);
@@ -294,6 +311,13 @@ function* Math_imul([x = Value.undefined, y = Value.undefined]: Arguments): Valu
 
 /** https://tc39.es/ecma262/#sec-math.log */
 function* Math_log([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexLog(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || n.value === Infinity) return n;
   if (n.value === 1) return F(+0);
@@ -575,6 +599,13 @@ function* Math_sign([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.sin */
 function* Math_sin([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexSin(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   if (n.isInfinity()) return F(NaN);
@@ -782,6 +813,13 @@ function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefine
 
 /** https://tc39.es/ecma262/#sec-math.sqrt */
 function* Math_sqrt([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexSqrt(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0) || n.value === Infinity) return n;
   // eslint-disable-next-line no-compare-neg-zero
@@ -923,6 +961,13 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
 
 /** https://tc39.es/ecma262/#sec-math.tan */
 function* Math_tan([x = Value.undefined]: Arguments): ValueEvaluator {
+  // complex.md: "The transcendental `Math` functions are overloaded for
+  // `complex` and return a `complex`", so the same name does the real thing on
+  // a real and the complex thing on a complex - `Math.sqrt` of a complex
+  // reaching the negative-argument answer a real `Math.sqrt` cannot.
+  if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
+    return complexTan(x, surroundingAgent.currentRealmRecord);
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   if (n.isInfinity()) return F(NaN);

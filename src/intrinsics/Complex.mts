@@ -263,6 +263,59 @@ export function complexArgument(x: ComplexObject): number {
   return Math.atan2(x.ComplexImaginary, x.ComplexReal);
 }
 
+/**
+ * proposal-runtime-types complex.md: "The transcendental `Math` functions are
+ * overloaded for `complex` and return a `complex`, so the same name does the
+ * real thing on a real and the complex thing on a complex."
+ *
+ * The principal square root, by the half-angle form rather than
+ * `exp(log(z)/2)`: the direct formula is exact where a component is zero, so
+ * `Math.sqrt(complex(-1, 0))` is `0 + 1i` and not `6.1e-17 + 1i`.
+ */
+export function complexSqrt(x: ComplexObject, realmRec: Realm): ComplexObject {
+  const re = x.ComplexReal;
+  const im = x.ComplexImaginary;
+  if (im === 0) {
+    // On the real axis the answer is exact in one component or the other.
+    if (re >= 0 || Object.is(re, -0)) {
+      return CreateComplexValue(Math.sqrt(re), 0, x.ComplexComponent, realmRec);
+    }
+    return CreateComplexValue(0, Math.sqrt(-re), x.ComplexComponent, realmRec);
+  }
+  const modulus = Math.hypot(re, im);
+  const realPart = Math.sqrt((modulus + re) / 2);
+  const imaginaryPart = Math.sign(im) * Math.sqrt((modulus - re) / 2);
+  return CreateComplexValue(realPart, imaginaryPart, x.ComplexComponent, realmRec);
+}
+
+/** `e**z`, which is `e**re` scaled onto the unit circle at angle `im`. */
+export function complexExp(x: ComplexObject, realmRec: Realm): ComplexObject {
+  const scale = Math.exp(x.ComplexReal);
+  return CreateComplexValue(scale * Math.cos(x.ComplexImaginary), scale * Math.sin(x.ComplexImaginary), x.ComplexComponent, realmRec);
+}
+
+/** The principal logarithm: `log|z|` with the argument as the imaginary part. */
+export function complexLog(x: ComplexObject, realmRec: Realm): ComplexObject {
+  return CreateComplexValue(Math.log(complexAbs(x)), complexArgument(x), x.ComplexComponent, realmRec);
+}
+
+export function complexSin(x: ComplexObject, realmRec: Realm): ComplexObject {
+  const re = x.ComplexReal;
+  const im = x.ComplexImaginary;
+  return CreateComplexValue(Math.sin(re) * Math.cosh(im), Math.cos(re) * Math.sinh(im), x.ComplexComponent, realmRec);
+}
+
+export function complexCos(x: ComplexObject, realmRec: Realm): ComplexObject {
+  const re = x.ComplexReal;
+  const im = x.ComplexImaginary;
+  return CreateComplexValue(Math.cos(re) * Math.cosh(im), -Math.sin(re) * Math.sinh(im), x.ComplexComponent, realmRec);
+}
+
+/** `sin z / cos z`, formed through the two above so the identity holds. */
+export function complexTan(x: ComplexObject, realmRec: Realm): ComplexObject {
+  return complexDivide(complexSin(x, realmRec), complexCos(x, realmRec), realmRec);
+}
+
 function* ComplexProto_real(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isComplexObject(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('complex'));
