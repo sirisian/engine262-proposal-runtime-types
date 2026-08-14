@@ -8,6 +8,7 @@ import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
+import { Float128FromNumber } from './Float128.mts';
 import { surroundingAgent } from '#self';
 
 /**
@@ -41,7 +42,7 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   }
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
-  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64');
+  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
   // decimal.md names `decimal128.parse('19.99')` as the EXACT construction form,
   // beside a literal: "an exact decimal comes from a literal or a string, never
   // from a round trip through binary". So parse reads the DIGITS and takes the
@@ -112,6 +113,14 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   }
   if (!fitsNumericType(value, t.Name, t.Arguments)) {
     return Throw.RangeError('$1 is out of range for the type', S);
+  }
+  // proposal-runtime-types #sec-binary-floating-point-types: a float128's values
+  // are software pairs rather than Numbers, so a parse builds one of those - a
+  // TypedNumberValue carrying a double would be a value of the wrong shape, and
+  // `float128.parse("0.1")` would answer the double's SHORTEST text rather than
+  // the exact value the format holds.
+  if (t.Kind === 'primitive' && t.Name === 'float128') {
+    return Float128FromNumber(typeof value === 'bigint' ? Number(value) : value, surroundingAgent.currentRealmRecord);
   }
   return new TypedNumberValue(value, t);
 }
@@ -223,7 +232,7 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   }
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
-  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64');
+  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
   if (!isInteger && !isFloat) {
     return Throw.TypeError('tryParse is not defined for $1', thisValue);
   }

@@ -316,7 +316,10 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return value;
       }
       if (value instanceof NumberValue) {
-        return Float128FromNumber(R(value) as number, surroundingAgent.currentRealmRecord);
+        // numberValue() rather than R(): R answers the MATHEMATICAL value, in
+        // which negative zero does not exist. IEEE 754 distinguishes the two
+        // zeroes, so reading through R would lose one of the format's values.
+        return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
       }
       if (isTypedNumber(value)) {
         return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
@@ -839,7 +842,12 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           return value;
         }
         if (value instanceof NumberValue) {
-          return Float128FromNumber(R(value) as number, surroundingAgent.currentRealmRecord);
+          // numberValue() rather than R(): R answers the MATHEMATICAL value, in
+          // which negative zero does not exist - it maps -0 to 0 deliberately.
+          // IEEE 754 distinguishes the two zeroes and so does SameValue, so a
+          // format that reads its input through R cannot represent one of its
+          // own values.
+          return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
         }
         if (isTypedNumber(value)) {
           return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);

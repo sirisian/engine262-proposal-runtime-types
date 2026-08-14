@@ -208,15 +208,25 @@ test('the two zeroes are distinct in every float width', () => {
   }
 });
 
-test.fails('float128 distinguishes the two zeroes', () => {
-  // KNOWN FAILURE, recorded rather than omitted: a conformance instrument that
-  // silently skips a case it fails is worse than one that fails visibly.
-  //
-  // `float128(-0)` reads back as +0. The sign is lost BEFORE the conversion
-  // arm - the value arrives there already positive - while float16, float32 and
-  // float64 keep theirs through the same function, so this is specific to the
-  // float128 path rather than general. Every other property of the format is
-  // exact; this one is not, and until it is the type is not a faithful
-  // binary128.
+test('float128 distinguishes the two zeroes', () => {
+  // The sign was being lost by reading the incoming payload through `R`, which
+  // answers the MATHEMATICAL value - and negative zero does not exist there, so
+  // R maps it to 0 deliberately. A format whose values include both zeroes
+  // cannot read its input that way; the payload is read directly instead, which
+  // is what the other float widths already did.
   expect(evaluated('String(1 / float128(-0).valueOf());')).toBe('-Infinity');
+  expect(evaluated('String(1 / float128(0).valueOf());')).toBe('Infinity');
+  expect(evaluated('float128(-0).toString();')).toBe('-0');
+  // And through a computed negative zero, which no constant folding can reach.
+  expect(evaluated('String(1 / float128(-1 / Infinity).valueOf());')).toBe('-Infinity');
+});
+
+test('float128.parse builds a value of the format, not a double wearing its name', () => {
+  // A parse that answered a TypedNumberValue carrying a double would print the
+  // double's SHORTEST text - '0.1' - rather than the exact value a binary128
+  // holds. The distinction is the whole point of the type.
+  expect(evaluated('String(float128.parse("0.1") is float128);')).toBe('true');
+  expect(evaluated('float128.parse("0.1").toString();')).toBe(exactDecimalOfDouble(0.1));
+  expect(evaluated('float128.parse("1.5").toString();')).toBe('1.5');
+  expect(evaluated('String(float128.tryParse("nope"));')).toBe('null');
 });
