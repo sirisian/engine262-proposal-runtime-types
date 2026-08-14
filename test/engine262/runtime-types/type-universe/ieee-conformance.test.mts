@@ -390,3 +390,61 @@ test('valueOf still answers a Number, which is its contract', () => {
   // Number, and a Number cannot hold this value. That is not the same defect.
   expect(evaluated('String((9223372036854775807 := int64).valueOf());')).toBe('9223372036854776000');
 });
+
+// -- Shifts at the type's width (#sec-integer-operations) ---------------------
+//
+// Each integer type has the operations of its family AT ITS OWN WIDTH.
+// JavaScript's shift operators truncate their operand to 32 bits, so a type
+// whose values a double holds - width 33 to 53 - answered a 32-bit shift, while
+// the exact path above 53 had computed these at the width all along. The
+// expectations below come from BigInt.asIntN/asUintN, which are the reduction
+// the width defines, rather than from what the engine prints.
+
+test('every shift is performed at the type\'s own width', () => {
+  const widths = [33, 40, 52, 53, 54, 64];
+  const distances = [0, 1, 31, 32];
+  for (const bits of widths) {
+    for (const dist of distances.concat([bits - 1, bits, bits + 1])) {
+      const d = BigInt(((dist % bits) + bits) % bits);
+      const expected = BigInt.asUintN(bits, 1n << d).toString();
+      expect(
+        evaluated(`String((1 := uint.<${bits}>) << (${dist} := uint.<${bits}>));`),
+        `uint.<${bits}> 1 << ${dist}`,
+      ).toBe(expected);
+    }
+  }
+});
+
+test('the right shifts read the operand at the width', () => {
+  // `>>` passing before the fix was a coincidence - sign extension agrees at
+  // every width for -1 - so both are asserted over operands where they differ.
+  for (const bits of [33, 40, 52, 53, 54]) {
+    const max = BigInt.asUintN(bits, -1n);
+    expect(
+      evaluated(`String((${max} := uint.<${bits}>) >>> (4 := uint.<${bits}>));`),
+      `uint.<${bits}> max >>> 4`,
+    ).toBe((max >> 4n).toString());
+    expect(
+      evaluated(`String((-1 := int.<${bits}>) >>> (4 := int.<${bits}>));`),
+      `int.<${bits}> -1 >>> 4`,
+    ).toBe((BigInt.asUintN(bits, -1n) >> 4n).toString());
+    expect(
+      evaluated(`String((-1 := int.<${bits}>) >> (4 := int.<${bits}>));`),
+      `int.<${bits}> -1 >> 4`,
+    ).toBe('-1');
+  }
+});
+
+test('widths at or below 32 keep the semantics every program uses', () => {
+  // The band is `> 32 && <= 53`. Below it JavaScript's own shift IS the width's,
+  // and getting that bound wrong would change an operator every program uses.
+  for (const bits of [8, 16, 31, 32]) {
+    for (const dist of [0, 1, 4, bits - 1]) {
+      const d = BigInt(((dist % bits) + bits) % bits);
+      expect(
+        evaluated(`String((1 := uint.<${bits}>) << (${dist} := uint.<${bits}>));`),
+        `uint.<${bits}> 1 << ${dist}`,
+      ).toBe(BigInt.asUintN(bits, 1n << d).toString());
+    }
+  }
+});

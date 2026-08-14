@@ -529,11 +529,18 @@ test('a wide operation is exact', () => {
   expect(evaluated('String((1 := uint64) << (40 := uint64));')).toBe('1099511627776');
 });
 
-test('the shifts are still wrong at a width a double holds', () => {
-  // KNOWN-DIVERGENCES.md D30 is the operator's defect rather than the carrier's,
-  // so a width above 32 and below 54 keeps the 32-bit behaviour: the exact path
-  // does not run there, and 2**32 is exactly representable in a double.
-  expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('1');
+test('a shift is performed at the type\'s width, whatever the carrier', () => {
+  // #sec-integer-operations gives each type the operations of its family at its
+  // own width. JavaScript's shifts truncate their operand to 32 bits, so a
+  // width above 32 and at or below 53 - Number-backed, because a double holds
+  // it exactly - answered a 32-bit shift. The exact path above 53 had computed
+  // these at the width all along, so the two disagreed across the carrier's
+  // line rather than across anything the language says.
+  expect(evaluated('String((1 := uint.<33>) << (32 := uint.<33>));')).toBe('4294967296');
+  expect(evaluated('String((1 := uint.<40>) << (39 := uint.<40>));')).toBe('549755813888');
+  // The band and the wide path now answer the same at the join.
+  expect(evaluated('String((1 := uint.<53>) << (32 := uint.<53>));'))
+    .toBe(evaluated('String((1 := uint.<54>) << (32 := uint.<54>));'));
 });
 
 test('a literal reaches a wide type exactly', () => {

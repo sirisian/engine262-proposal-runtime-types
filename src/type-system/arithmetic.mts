@@ -279,6 +279,40 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
     // A division by zero has no integer answer; fall through to the Number
     // path, which reports it the way it always has.
   }
+  // proposal-runtime-types #sec-integer-operations gives each type the
+  // operations of its family AT ITS OWN WIDTH. JavaScript's shift operators are
+  // defined to truncate their operand to 32 bits, so `mathOp`'s `x << y`
+  // answers a 32-bit shift whatever the type says - which was invisible above
+  // 53, where the exact path already computes the shifts at the width, and
+  // wrong for every width from 33 to 53.
+  //
+  // Those widths are NUMBER-BACKED because a double holds them exactly, so the
+  // fix is not to widen the carrier - that would cost every operation in the
+  // band for no exactness gain. It is to compute the shift arithmetically:
+  // `<<` multiplies by 2**distance, `>>` divides the SIGNED value, and `>>>`
+  // divides the value read as unsigned at the width. Each is exact in a double,
+  // because `m * 2**d` needs no more significand than `m` does - the
+  // multiplication only moves the exponent - and `wrapToType` below already
+  // reduces the result through asIntN/asUintN at the width.
+  const shiftBits = widthOf(target);
+  if (shiftBits !== null && shiftBits > 32 && shiftBits <= 53
+    && (op === '<<' || op === '>>' || op === '>>>')) {
+    const left = payload(x) as number;
+    const distance = (((payload(y) as number) % shiftBits) + shiftBits) % shiftBits;
+    const scale = 2 ** distance;
+    let shifted;
+    if (op === '<<') {
+      shifted = left * scale;
+    } else if (op === '>>') {
+      shifted = Math.floor(left / scale);
+    } else {
+      // An unsigned shift reads the operand as its two's-complement bit pattern
+      // at the width, which for a Number-backed type is the value plus 2**N
+      // where it is negative.
+      shifted = Math.floor((left < 0 ? left + 2 ** shiftBits : left) / scale);
+    }
+    return new TypedNumberValue(wrapToType(shifted, target), target);
+  }
   const math = mathOp(op, payload(x), payload(y));
   return new TypedNumberValue(wrapToType(math, target), target);
 }
