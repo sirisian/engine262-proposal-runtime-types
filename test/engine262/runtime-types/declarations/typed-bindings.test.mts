@@ -329,13 +329,12 @@ test('an assignment converts the way the initializer does', () => {
   // #sec-literal-propagation: the literal takes the type its position requires,
   // and an annotated binding is such a position.
   expect(value('let v: uint8 = 1; v = 2; `${v}:${v is uint8}`;')).toBe('2:true');
-  // `var` is NOT covered, and not by oversight: its storage at the top level is
-  // a property of the global object rather than an environment binding, so
-  // there is nowhere on it to record a declared type. That is the same
-  // structural difference KNOWN-DIVERGENCES.md D25 records for its default -
-  // the var path never consults its annotation - and this pins the state rather
-  // than assuming it.
-  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('false');
+  // `var` is covered too, at the top level as well as inside a function. The
+  // reasoning this used to record - that a global `var` is a property of the
+  // global object "so there is nowhere on it to record a declared type" - had
+  // the first half right and the second wrong: a property is exactly where this
+  // engine records a type, through [[TypedProperties]].
+  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('true');
   // An already-typed value still round-trips rather than being reconverted.
   expect(value('let v: uint8 = 1; v = (3 := uint8); `${v}:${v is uint8}`;')).toBe('3:true');
 });
@@ -418,12 +417,20 @@ test('a function-scoped var enforces its type on assignment', () => {
     + ' try { v = a; return "accepted"; } catch (e) { return "refused"; } } f();')).toBe('refused');
 });
 
-test('a TOP-LEVEL var still does not enforce its type on assignment', () => {
-  // Pinned rather than omitted. A top-level `var` is a property of the global
-  // object - hasOwnProperty(globalThis, name) is true for one and false for the
-  // equivalent `let` - so there is no binding record to carry a declared type,
-  // and the recorder that serves every other declaration finds nothing. That is
-  // a different problem from the function-scoped case rather than the same one
-  // twice, and it is recorded in KNOWN-DIVERGENCES.md.
-  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('false');
+test('a TOP-LEVEL var enforces its type, through the property that holds it', () => {
+  // A top-level `var` IS a property of the global object, and that is the fix
+  // rather than the obstacle: the property carries the type through
+  // [[TypedProperties]], which the ordinary Set already consults. So the two
+  // spellings of the same store agree.
+  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('true');
+  expectTypeError('var v: uint8 = 1; let a: any = 300; v = a;');
+  expectTypeError('var v: uint8 = 1; globalThis.v = 300;');
+  // An UNANNOTATED var is untouched, so an ordinary program marks nothing.
+  expect(value('var x = 1; x = "s"; String(x);')).toBe('s');
+  // A `var` that merely assigns to a property the realm already has is NOT
+  // marked - `var Object: uint8 = 1` would otherwise type the realm's own
+  // Object as uint8 and convert or refuse every later write to it.
+  expect(value('var Object: uint8 = 1; let a: any = 300; Object = a; String(Object);')).toBe('300');
+  // A redeclaration keeps the annotation, since it is the same binding.
+  expect(value('var v: uint8 = 1; var v = 2; String(v is uint8);')).toBe('true');
 });

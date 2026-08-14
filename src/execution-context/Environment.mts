@@ -1014,6 +1014,17 @@ export class GlobalEnvironmentRecord extends EnvironmentRecord {
     const extensible = Q(yield* IsExtensible(globalObject));
     // 6. If hasProperty is false and extensible is true, then
     if (hasProperty === Value.false && extensible === Value.true) {
+      // proposal-runtime-types: remember that THIS declaration created the
+      // property, so an annotation on it may be recorded against the property
+      // later (there being no binding record for a top-level `var` to carry
+      // one). A `var` that merely assigns to a property the realm already has -
+      // `var Object: uint8 = 1` - must NOT be recorded, or the realm's own
+      // `Object` would be typed `uint8` and every later write to it converted
+      // or refused. This is the one place that can tell the two apart.
+      // A plain array rather than a Set: `Set` names the abstract operation in
+      // this file.
+      ((globalObject as { VarCreatedProperties?: string[] }).VarCreatedProperties
+        ??= []).push(N.stringValue());
       // a. Perform ? ObjRec.CreateMutableBinding(N, D).
       Q(yield* ObjRec.CreateMutableBinding(N, D));
       // b. Perform ? ObjRec.InitializeBinding(N, undefined).

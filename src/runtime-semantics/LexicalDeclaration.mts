@@ -217,6 +217,34 @@ export function recordDeclaredType(lhs: unknown, record: unknown): void {
     ?? resolved?.DeclarativeRecord?.bindings?.get(reference?.ReferencedName);
   if (binding) {
     binding.declaredType = record;
+    return;
+  }
+  // A TOP-LEVEL `var` has no binding record to carry a type: it is an own
+  // PROPERTY of the global object, which is why the lookup above finds nothing.
+  // The type has a home all the same - this engine already enforces types on
+  // object properties through [[TypedProperties]], which the ordinary `Set` and
+  // `DefineOwnProperty` consult - so the property is marked rather than a
+  // second mechanism invented. That also closes the same hole by its other
+  // spelling, `globalThis.v = 300`, which a binding-side fix would have missed.
+  //
+  // ONLY WHERE THE PROPERTY IS NEW. `var Object: uint8 = 1` overwrites the
+  // realm's own `Object` today, and marking there would record `uint8` against
+  // it and convert or refuse every later write - a realm broken by one line.
+  // That is the condition CreateGlobalVarBinding itself tests, so this is not a
+  // new rule, and the cost is that a `var` shadowing a host global stays
+  // unenforced.
+  const globalRecord = reference?.Base as { ObjectRecord?: { BindingObject?: object } } | undefined;
+  const globalObject = globalRecord?.ObjectRecord?.BindingObject as
+    { TypedProperties?: Map<unknown, { TypeRecord: unknown }>, VarCreatedProperties?: string[] } | undefined;
+  const name = reference?.ReferencedName as { stringValue?(): string } | undefined;
+  const key = name?.stringValue?.();
+  if (globalObject !== undefined && key !== undefined && record !== undefined
+    && globalObject.VarCreatedProperties?.includes(key) === true) {
+    const typed = globalObject.TypedProperties ?? new Map<unknown, { TypeRecord: unknown }>();
+    if (!typed.has(key)) {
+      typed.set(key, { TypeRecord: record });
+      globalObject.TypedProperties = typed;
+    }
   }
 }
 
