@@ -1,5 +1,6 @@
 import {
-  isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow,
+  isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
+  type ComplexObject,
 } from '../intrinsics/Complex.mts';
 import { ObjectValue,
   JSStringValue, Value,
@@ -269,24 +270,61 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // assigns the operators outward and Annex G is the recognized specification
   // of complex arithmetic over IEEE 754 components.
   if (surroundingAgent.feature('runtime-types') && (isComplexObject(lval) || isComplexObject(rval))) {
-    if (!isComplexObject(lval) || !isComplexObject(rval)) {
-      // A complex mixes with nothing implicitly, for the reason a decimal does
-      // not: the other operand would have to be converted, and the conversion
-      // into the family is explicit by #sec-complex-numbers.
+    // complex.md: "A real literal propagates onto the real axis, so `z + 3` and
+    // `z * 2` read naturally - `2` becomes `complex(2, 0)` and the multiply
+    // scales both parts - but a real VALUE does not convert on its own, so
+    // `z + x` for a `complex` `z` and a `number` `x` is a TypeError."
+    //
+    // So the refusal is about values, not literals: a literal takes the type of
+    // the position it is written in (#sec-literal-propagation), and beside a
+    // complex operand that position is complex. `literals` records which side
+    // the parser saw as one, the same information the numeric types use to
+    // decide that `a + 1` is not a mixed-type addition.
+    const liftLiteral = (other: Value, beside: ComplexObject): ComplexObject | undefined => {
+      if (other instanceof NumberValue) {
+        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord);
+      }
+      if (isTypedNumber(other)) {
+        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord);
+      }
+      return undefined;
+    };
+    let left: ComplexObject;
+    let right: ComplexObject;
+    if (isComplexObject(lval) && isComplexObject(rval)) {
+      left = lval;
+      right = rval;
+    } else if (isComplexObject(lval) && literals?.right) {
+      const lifted = liftLiteral(rval, lval);
+      if (lifted === undefined) {
+        return Throw.TypeError('a complex operand requires a complex on both sides');
+      }
+      left = lval;
+      right = lifted;
+    } else if (isComplexObject(rval) && literals?.left) {
+      const lifted = liftLiteral(lval, rval);
+      if (lifted === undefined) {
+        return Throw.TypeError('a complex operand requires a complex on both sides');
+      }
+      left = lifted;
+      right = rval;
+    } else {
+      // A real VALUE would have to be converted, and the conversion into the
+      // family is explicit by #sec-complex-numbers.
       return Throw.TypeError('a complex operand requires a complex on both sides');
     }
     const realmRec = surroundingAgent.currentRealmRecord;
     switch (opText) {
       case '+':
-        return complexAdd(lval, rval, realmRec);
+        return complexAdd(left, right, realmRec);
       case '-':
-        return complexSubtract(lval, rval, realmRec);
+        return complexSubtract(left, right, realmRec);
       case '*':
-        return complexMultiply(lval, rval, realmRec);
+        return complexMultiply(left, right, realmRec);
       case '/':
-        return complexDivide(lval, rval, realmRec);
+        return complexDivide(left, right, realmRec);
       case '**':
-        return complexPow(lval, rval, realmRec);
+        return complexPow(left, right, realmRec);
       default:
         return Throw.TypeError('this operator is not defined for a complex');
     }

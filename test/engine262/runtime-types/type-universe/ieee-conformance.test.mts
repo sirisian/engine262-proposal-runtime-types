@@ -308,8 +308,16 @@ test('every operation the family denies is refused', () => {
   // And `+` no longer CONCATENATES, which is what it did before the family
   // reached the operator dispatch at all.
   expect(evaluated('String(complex(1, 0) + complex(2, 0));')).toBe('3+0i');
-  // A complex mixes with nothing implicitly, as a decimal does not.
-  expect(evaluated('let m = "accepted"; try { complex(1, 0) + 1; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  // A complex mixes with no VALUE implicitly, as a decimal does not. A LITERAL
+  // is a different case: complex.md has "a real literal propagates onto the real
+  // axis, so `z + 3` and `z * 2` read naturally ... but a real value does not
+  // convert on its own", which is literal propagation rather than widening.
+  // `let`, not `const`: an unannotated `const` with a constant initializer IS a
+  // literal for this rule, so a `const x = 1` would propagate as one.
+  expect(evaluated('let x = 1; let m = "accepted";'
+    + ' try { complex(1, 0) + x; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  expect(evaluated('String(complex(1, 0) + 1);')).toBe('2+0i');
+  expect(evaluated('String(complex(1, 2) * 2);')).toBe('2+4i');
 });
 
 test('equality is over the pair, and splits the way every numeric type does', () => {

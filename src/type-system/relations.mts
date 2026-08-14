@@ -1,5 +1,5 @@
 import { SameValue } from '../abstract-ops/all.mts';
-import { Value } from '../value.mts';
+import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import {
@@ -163,6 +163,25 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // A literal refines its base and a parameterized type its [[Base]]; the
   // refinement steps of the specification fold those subtype paths in here.
   if (s.Kind === 'literal' && t.Kind !== 'literal') {
+    // proposal-runtime-types #sec-literal-propagation: a numeric literal takes
+    // the type of the position it is written in, and for a complex position
+    // that is "the literal as its real component and zero as its imaginary
+    // one". Falling back to the literal's base alone made `let r: complex = 5`
+    // a `number` against a `complex` and refused it, where the rule is that the
+    // literal becomes one.
+    //
+    // The literal must be representable as the COMPONENT type, which is the
+    // same requirement the conversion then applies, so a literal no `float32`
+    // holds is no `complex64` either.
+    if (t.Kind === 'primitive' && t.Name === 'complex' && isNumericLiteralRecord(s)) {
+      const component = t.Arguments?.[0] as TypeRecord | undefined;
+      if (component === undefined) {
+        // Bare `complex` has `number` components, and every numeric literal is
+        // a `number`, so there is nothing further to check.
+        return true;
+      }
+      return IsSubtype(s, component, assumptions);
+    }
     return IsSubtype(s.Base, t, assumptions);
   }
   if (s.Kind === 'parameterized' && t.Kind !== 'parameterized') {
@@ -363,6 +382,11 @@ function tupleTypeAt(elements: readonly TupleElementRecord[], i: number): TypeRe
 /** Whether a Type Record is the `any` type, the element of the array family's top. */
 function isAnyElement(t: TypeRecord): boolean {
   return t.Kind === 'any';
+}
+
+/** A literal type whose value is a Number, which a complex position may lift. */
+function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
+  return s.Value instanceof NumberValue || isTypedNumber(s.Value as Value);
 }
 
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {

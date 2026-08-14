@@ -335,6 +335,23 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // the boundary of the COMPONENT type, which is what makes a complex64's
     // parts float32s and gives an out-of-range part the float rule rather
     // than a rule of its own.
+    // proposal-runtime-types #sec-literal-propagation: a numeric literal in a
+    // complex position takes the complex type, "with the literal as its real
+    // component and zero as its imaginary one", so `let r: complex = 5` is
+    // `complex(5, 0)`. The literal's representability is the COMPONENT type's,
+    // which the delegation below gives for free: a literal no `float32` can
+    // hold is no `complex64` either.
+    //
+    // A real VALUE still does not convert on its own - that is the same
+    // no-implicit-widening rule that holds between any two numeric types - so
+    // this reaches only where a literal is being placed.
+    if (t.Name === 'complex' && !isComplexObject(value)
+        && (value instanceof NumberValue || isTypedNumber(value))) {
+      const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
+      const lifted = Q(yield* CheckedConvertValue(value, component));
+      const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
+      return CreateComplexValue(liftedPart, 0, component, surroundingAgent.currentRealmRecord);
+    }
     if (t.Name === 'complex' && isComplexObject(value)) {
       const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
       const re = Q(yield* CheckedConvertValue(Value(value.ComplexReal), component));
@@ -570,6 +587,22 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
   if (declared !== undefined) {
     return declared;
+  }
+  // proposal-runtime-types #sec-literal-propagation: a numeric literal in a
+  // complex position takes the complex type, "with the literal as its real
+  // component and zero as its imaginary one". This is the ASSIGNMENT boundary,
+  // where a declaration's initializer arrives; the explicit `:=` path carries
+  // the same lift of its own.
+  //
+  // The literal's representability is the component type's, delegated below, so
+  // a literal no `float32` holds is no `complex64` either. A real VALUE reaches
+  // an operator rather than this boundary, and is refused there.
+  if (t.Kind === 'primitive' && t.Name === 'complex' && !isComplexObject(value)
+      && (value instanceof NumberValue || isTypedNumber(value))) {
+    const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
+    const lifted = Q(yield* CheckedConvertValue(value, component));
+    const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
+    return CreateComplexValue(liftedPart, 0, component, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types #sec-threading-shared-modifier: "The modifier is
   // therefore not observable in the value; it is observable in where the value is
