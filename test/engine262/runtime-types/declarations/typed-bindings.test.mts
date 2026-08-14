@@ -257,13 +257,12 @@ test('a binding whose type has no default is refused', () => {
   expectTypeError('let n: never;');
   expectTypeError('let f: (x: uint8) => uint8;');
   expectTypeError('let o: { x: uint8 };');
-  // `var` is out of scope, and not because the clause exempts it: a `var`
-  // declaration does not take its type's DEFAULT either - `var v: uint8;` is
-  // undefined where `let v: uint8;` is 0 - so it never reaches the lookup this
-  // rule follows. Recorded in KNOWN-DIVERGENCES.md; this pins today's
-  // behaviour so the asymmetry is visible rather than assumed.
-  expectOk('var v: uint8 | string;');
-  expect(value('var v: uint8; String(v);')).toBe('undefined');
+  // `var` is IN scope now, and for the reason the clause gives:
+  // #sec-declarations draws no distinction among the declaration forms, so a
+  // `var` takes its type's default and inherits the refusal that follows it.
+  expectTypeError('var v: uint8 | string;');
+  expect(value('var v: uint8; String(v);')).toBe('0');
+  expect(value('var v: uint8; String(v is uint8);')).toBe('true');
 });
 
 test('an initializer is what the refusal asks for', () => {
@@ -381,4 +380,50 @@ test('the storage kinds that already worked are unchanged', () => {
 test('a binding whose type needs no conversion is untouched', () => {
   expect(value('let s: string = "a"; s = "b"; `${s}:${typeof s}`;')).toBe('b:string');
   expect(value('let b: boolean = true; b = false; String(b);')).toBe('false');
+});
+
+// -- A `var` is a binding like any other (#sec-declarations) ------------------
+
+test('an annotated var takes its default and its refusal', () => {
+  // The two halves of the asymmetry this closes: `let v: uint8;` read 0 and
+  // `var v: uint8;` read undefined, and the refusal that follows the default
+  // reached one and not the other.
+  expect(value('var v: uint8; `${v}:${v is uint8}`;')).toBe('0:true');
+  expect(value('let l: uint8; var v: uint8; `${l}:${v}`;')).toBe('0:0');
+  expectTypeError('var u: uint8 | string;');
+  // An UNANNOTATED var is untouched.
+  expect(value('var x; String(x);')).toBe('undefined');
+  expect(value('var x = 1; String(x);')).toBe('1');
+});
+
+test('the default lands at the declaration, not at the hoisted binding', () => {
+  // A `var` is created at function entry, so the two moments are observable
+  // apart. This is the choice the implementation makes: a read BEFORE the
+  // declaration still sees undefined, and the binding holds its default from
+  // the declaration onward. `let` cannot distinguish the two, since its binding
+  // is in the temporal dead zone until the declaration runs - so the clause was
+  // written without this case in view, and the assertion is what makes the
+  // reading legible.
+  expect(value('function g() { const before = w; var w: uint8; return `${before}/${w}`; } g();'))
+    .toBe('undefined/0');
+});
+
+test('a function-scoped var enforces its type on assignment', () => {
+  // #sec-typed-bindings checks an annotation "against its initializer AND
+  // against every later assignment". A `var` was getting only the first, so a
+  // value the type forbids could be stored - the invariant break a `let` no
+  // longer has.
+  expect(value('function f() { var v: uint8 = 1; v = 2; return String(v is uint8); } f();')).toBe('true');
+  expect(value('function f() { var v: uint8 = 1; let a: any = 300;'
+    + ' try { v = a; return "accepted"; } catch (e) { return "refused"; } } f();')).toBe('refused');
+});
+
+test('a TOP-LEVEL var still does not enforce its type on assignment', () => {
+  // Pinned rather than omitted. A top-level `var` is a property of the global
+  // object - hasOwnProperty(globalThis, name) is true for one and false for the
+  // equivalent `let` - so there is no binding record to carry a declared type,
+  // and the recorder that serves every other declaration finds nothing. That is
+  // a different problem from the function-scoped case rather than the same one
+  // twice, and it is recorded in KNOWN-DIVERGENCES.md.
+  expect(value('var v: uint8 = 1; v = 2; String(v is uint8);')).toBe('false');
 });

@@ -198,7 +198,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
  * making the record conditional on mutability would be a second rule to keep in
  * step with the first.
  */
-function recordDeclaredType(lhs: unknown, record: unknown): void {
+export function recordDeclaredType(lhs: unknown, record: unknown): void {
   // ResolveBinding hands back a Reference Record, sometimes still inside a
   // normal completion, so both shapes are unwrapped here rather than at the two
   // call sites.
