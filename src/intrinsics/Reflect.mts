@@ -1,6 +1,7 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
-import { SignaturesOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
+import {
+  LookupClassType, SignaturesOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
@@ -693,10 +694,21 @@ function Reflect_getMetadata() {
 
 function Reflect_getReflection([type = Value.undefined]: Arguments) {
   // proposal-runtime-types #sec-getreflection (the Reflect.Type context).
-  if (!isTypeObject(type)) {
+  //
+  // A class DENOTES its type through its constructor - the design's "a class's
+  // type object is its constructor" - but the constructor cannot carry
+  // [[TypeRecord]] itself: `isTypeObject` would then answer true for it and
+  // `typeof K` would report *"object"*, where ECMA-262 requires *"function"*.
+  // That is the one denotation where the record cannot simply be attached, so
+  // the association is resolved here instead.
+  const resolved = !isTypeObject(type) && type instanceof ObjectValue
+    ? LookupClassType(type as unknown as object)
+    : undefined;
+  const target = resolved !== undefined ? resolved : type;
+  if (!isTypeObject(target)) {
     return Throw.TypeError('$1 is not a type', type);
   }
-  return recordToNode(type.TypeRecord, surroundingAgent.currentRealmRecord);
+  return recordToNode(target.TypeRecord, surroundingAgent.currentRealmRecord);
 }
 
 function* Reflect_makeType([node = Value.undefined]: Arguments): ValueEvaluator {
