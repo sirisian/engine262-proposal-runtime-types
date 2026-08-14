@@ -1,7 +1,8 @@
-import { SameValue } from '../abstract-ops/all.mts';
+import { SameValue, R } from '../abstract-ops/all.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
+import { fitsNumericType } from './runtime.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
@@ -180,7 +181,33 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
         // a `number`, so there is nothing further to check.
         return true;
       }
-      return IsSubtype(s, component, assumptions);
+      // REPRESENTABILITY, not subtyping. A literal is not a subtype of
+      // `float32` - `5 is float32` is *false*, the literal's own type being
+      // `number` - and yet `let f: float32 = 5` is well formed, because a
+      // literal takes the type of its position when that type can hold it.
+      // Asking IsSubtype here refused every literal for a `complex64`, where
+      // the question is the one LiteralValueInType asks: does the component
+      // type have this value.
+      if (component.Kind !== 'primitive') {
+        return false;
+      }
+      if (component.Name === 'number') {
+        // Every numeric literal is a `number`, which is what bare `complex`
+        // has; `fitsNumericType` describes the SIZED types and does not name it.
+        return true;
+      }
+      const literalValue = s.Value;
+      let mv;
+      if (literalValue instanceof NumberValue) {
+        mv = R(literalValue);
+      } else if (isTypedNumber(literalValue as Value)) {
+        // A typed number carries its own value; R is defined over the language
+        // types and does not take one.
+        mv = (literalValue as { numberValue(): number }).numberValue(); // eslint-disable-line @engine262/mathematical-value -- R does not accept a TypedNumberValue
+      } else {
+        return false;
+      }
+      return fitsNumericType(mv, component.Name, component.Arguments ?? []);
     }
     return IsSubtype(s.Base, t, assumptions);
   }
