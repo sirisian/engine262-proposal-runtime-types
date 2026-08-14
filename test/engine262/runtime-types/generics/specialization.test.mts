@@ -375,3 +375,52 @@ test('an unspecialized generic still constructs', () => {
   // must not disturb it.
   expect(evaluated('class U<T> { v: T; } typeof new U();')).toBe('object');
 });
+
+// -- Declaration-site variance (#sec-generic-variance) ------------------------
+
+test('a declared parameter relates its instantiations', () => {
+  const decls = 'interface P<out T> { get(): T } interface H<in T> { put(v: T): void }'
+    + ' interface B<T> { get(): T } ';
+  // Checked against the STRUCTURAL forms, which have had this variance by
+  // inference all along - a stronger test than asserting a literal, since it
+  // fails if either side drifts.
+  const structural = 'type SOut<T> = { readonly get: () => T };'
+    + ' type SIn<T> = { readonly put: (v: T) => void };'
+    + ' type SBoth<T> = { readonly get: () => T, readonly put: (v: T) => void }; ';
+  expect(evaluated(`${decls}${structural}`
+    + ' `${Reflect.isAssignable(type P.<uint8>, type P.<uint8 | string>)}`'
+    + ' === `${Reflect.isAssignable(type SOut.<uint8>, type SOut.<uint8 | string>)}` ? "agree" : "differ";')).toBe('agree');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type P.<uint8>, type P.<uint8 | string>));`)).toBe('true');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type P.<uint8 | string>, type P.<uint8>));`)).toBe('false');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type H.<uint8 | string>, type H.<uint8>));`)).toBe('true');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type H.<uint8>, type H.<uint8 | string>));`)).toBe('false');
+  // A declaration carrying no modifier is invariant, "the conservative default".
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type B.<uint8>, type B.<uint8 | string>));`)).toBe('false');
+});
+
+test('`out` is contextual and `in` is not', () => {
+  // `in` is reserved, so it can only be a modifier. `out` is an ordinary
+  // identifier and stays one - these are programs that were legal before the
+  // modifier existed and must keep their meaning.
+  expect(evaluated('let out = 5; String(out);')).toBe('5');
+  expect(evaluated('type T1<out> = out; let a: T1.<uint8> = (1 := uint8); String(a);')).toBe('1');
+  expect(evaluated('type T2<out: uint8> = out; String(typeof (type T2.<1>));')).toBe('object');
+  // The marker, then a parameter named `out` - which looks like a mistake and
+  // is not.
+  expect(evaluated('interface Q<out out> { get(): out } String(typeof (type Q.<uint8>));')).toBe('object');
+});
+
+test('a variance declaration is checked against its positions', () => {
+  // #sec-variance-static-semantics-early-errors. This is the half inference
+  // cannot have: a structural type derives its variance and cannot be wrong,
+  // while a declaration is a CLAIM - and an unchecked claim would readmit by
+  // declaration the unsoundness #sec-isobjectsubtype refuses structurally.
+  expectThrown('interface Bad<out T> { value: T }');       // writable field is ~both~
+  expectThrown('interface Bad2<in T> { get(): T }');       // return is ~output~
+  expectThrown('interface Bad3<out T> { put(v: T): void }'); // parameter is ~input~
+  // A writable field admits neither modifier, not merely `out`.
+  expectThrown('interface Bad4<in T> { value: T }');
+  // The well-formed ones are untouched.
+  expect(evaluated('interface Ok<out T> { get(): T; readonly r: T } String(typeof (type Ok.<uint8>));')).toBe('object');
+  expect(evaluated('interface Ok2<in T> { put(v: T): void } String(typeof (type Ok2.<uint8>));')).toBe('object');
+});

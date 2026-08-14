@@ -1424,6 +1424,96 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
   const interfaceTypeMemo = new Map<ParseNode, Known>();
+  /**
+   * proposal-runtime-types #sec-variance-static-semantics-early-errors: a
+   * covariant parameter is well-formed only in OUTPUT positions and a
+   * contravariant one only in INPUT positions, per #table-variance-positions -
+   * a method return and a `readonly` field are output, a method parameter is
+   * input, and a non-`readonly` field is BOTH, "so only an invariant parameter
+   * may appear".
+   *
+   * This is the half that inference cannot have. A structural type derives its
+   * variance from its members and so cannot be wrong about it; a DECLARATION is
+   * a claim, and without this rule `interface Bad<out T> { value: T }` would
+   * readmit by declaration exactly the unsoundness #sec-isobjectsubtype refuses
+   * structurally - a write through the wider view into a slot the narrower view
+   * believes holds something else.
+   */
+  const mentionsTypeName = (node: ParseNode | null | undefined, name: string): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const n = node as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } };
+    if (n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === name) {
+      return true;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (node as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(child)) {
+        if (child.some((c) => mentionsTypeName(c as ParseNode, name))) {
+          return true;
+        }
+      } else if (child && typeof child === 'object' && 'type' in (child as object)
+        && mentionsTypeName(child as ParseNode, name)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const checkVariancePositions = (declaration: ParseNode): void => {
+    const d = declaration as unknown as {
+      TypeParameters?: { TypeParameterList?: readonly { Variance?: string, BindingIdentifier?: { name?: string } }[] },
+      InterfaceMemberList?: readonly ParseNode[] | null,
+    };
+    const params = d.TypeParameters?.TypeParameterList ?? [];
+    for (const param of params) {
+      const variance = param.Variance;
+      const name = param.BindingIdentifier?.name;
+      if (!variance || !name) {
+        continue;
+      }
+      for (const member of d.InterfaceMemberList ?? []) {
+        const tm = member as unknown as {
+          type?: string,
+          Readonly?: boolean,
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          MethodSignature?: { FunctionTypeParameterList?: readonly ParseNode[] | null, TypeAnnotation?: ParseNode.TypeAnnotation | null } | null,
+        };
+        if (tm.type !== 'TypeMember') {
+          continue;
+        }
+        if (tm.MethodSignature) {
+          // A method RETURN is output; a method PARAMETER is input.
+          if (variance === 'contravariant' && mentionsTypeName(tm.MethodSignature.TypeAnnotation?.Type as ParseNode, name)) {
+            pushCallError(`the contravariant type parameter "${name}" appears in an output position`);
+          }
+          if (variance === 'covariant') {
+            for (const fp of tm.MethodSignature.FunctionTypeParameterList ?? []) {
+              if (mentionsTypeName(fp, name)) {
+                pushCallError(`the covariant type parameter "${name}" appears in an input position`);
+              }
+            }
+          }
+          continue;
+        }
+        if (!mentionsTypeName(tm.TypeAnnotation?.Type as ParseNode, name)) {
+          continue;
+        }
+        // A field: `readonly` is output, and a writable one is ~both~, which
+        // admits an invariant parameter only.
+        if (!tm.Readonly) {
+          pushCallError(`the ${variance} type parameter "${name}" appears in a writable field, which admits only an invariant parameter`);
+        } else if (variance === 'contravariant') {
+          pushCallError(`the contravariant type parameter "${name}" appears in an output position`);
+        }
+      }
+    }
+  };
+
   const interfaceTypeOf = (name: string): Known => {
     const node = interfaceNodes.get(name);
     if (!node) {
@@ -3661,6 +3751,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           sealedSubclasses.set(n, []);
         }
       } else if (n.type === 'InterfaceDeclaration') {
+        // #sec-variance-static-semantics-early-errors: a declared variance is a
+        // claim about where the parameter appears, and this is where the claim
+        // is judged against #table-variance-positions.
+        checkVariancePositions(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
           interfaceNodes.set(name, n);
