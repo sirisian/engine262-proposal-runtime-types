@@ -4,6 +4,7 @@ import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
+import type { Arguments } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
 import { SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
@@ -32,7 +33,7 @@ import { ConvertValue, AssociateClassType, LookupClassType } from '../abstract-o
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
   SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
-  GetMethod, LengthOfArrayLike, ToBoolean, ArrayCreate, CreateBuiltinFunction,
+  GetMethod, LengthOfArrayLike, ToBoolean, ToNumber, ArrayCreate, CreateBuiltinFunction,
   GetPrototypeFromConstructor,
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
@@ -1265,6 +1266,27 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   // The prototype a subclass inherits from: array instances are Arrays, so the
   // methods come from %Array.prototype%.
   X(CreateDataProperty(ctor, Value('prototype'), realm.Intrinsics['%Array.prototype%']));
+  // `[].<T>` in expression position evaluates to this CONSTRUCTOR, not to the
+  // interned Type Object it was keyed on. So `isTypeObject` - which is
+  // `'TypeRecord' in value` - answered false for it, and
+  // `Reflect.getReflection([].<uint32>)` threw "is not a type" while every other
+  // type reflected. Carrying the record here makes the constructor a Type Object
+  // in its own right, which is the same shape the design already gives a class:
+  // "a class's type object is its constructor".
+  (ctor as unknown as { TypeRecord?: unknown }).TypeRecord = record;
+  // README "Capacity": the static `[].<T>.withCapacity(n)` builds an EMPTY array
+  // of T with room for at least n. It belongs here because this is the object
+  // the design writes it on - an earlier attempt attached it at GetTypeObject,
+  // which never sees an array type.
+  const withCapacity = CreateBuiltinFunction(function* withCapacitySteps([wanted0 = Value.undefined]: Arguments): ValueEvaluator {
+    const wanted = Q(yield* ToNumber(wanted0));
+    const n = Math.max(0, Math.trunc(Number(wanted.numberValue())));
+    const arr = X(ArrayCreate(0)) as unknown as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
+    arr.TypedElement = element;
+    arr.TypedCapacity = n;
+    return arr;
+  }, 1, Value('withCapacity'), []);
+  X(CreateDataProperty(ctor as unknown as ObjectValue, Value('withCapacity'), withCapacity));
   arrayTypeConstructors.set(key, ctor);
   return ctor;
 }
