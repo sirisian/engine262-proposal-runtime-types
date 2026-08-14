@@ -8,6 +8,7 @@ import { Throw } from '../host-defined/error-messages.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
@@ -275,6 +276,49 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const shape = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
       const argList = Q(yield* ArgumentListEvaluation(args));
       return Q(yield* CompositeFromShape(shape, argList.length > 0 ? argList[0]! : Value.undefined));
+    }
+  }
+  // sec-reflection-shape-object: the Object family is reached FROM AN INSTANCE,
+  // not from a declaration - `Reflect.getReflection.<Reflect.ObjectField>(o, n)`
+  // takes the object itself where the Class family takes the class. So it has
+  // ONE type argument, and the gate below requires two, which is why these
+  // contexts never dispatched.
+  //
+  // Their error shape was a third one, distinct from the two the Function family
+  // showed: "[object Object] is not a type", the INSTANCE being resolved as a
+  // type argument.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const reflectObj1 = surroundingAgent.intrinsic('%Reflect%');
+    const getReflection1 = Q(yield* Get(reflectObj1, Value('getReflection')));
+    if (SameValue(func, getReflection1)) {
+      const ctx = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const ctxName = (ctx as { LibraryName?: unknown }).LibraryName;
+      if (ctx.Kind === 'nominal' && (ctxName === 'Reflect.Object' || ctxName === 'Reflect.ObjectField')) {
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const instance = argList.length > 0 ? argList[0]! : Value.undefined;
+        if (!(instance instanceof ObjectValueClass)) {
+          return ThrowError.TypeError('$1 is not an object', instance);
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        if (ctxName === 'Reflect.ObjectField') {
+          const fieldName = argList.length > 1 ? Q(yield* ToString(argList[1]!)) : Value('');
+          const present = Q(yield* instance.HasProperty(fieldName));
+          if (present === Value.false) {
+            return ThrowError.TypeError('$1 is not a field of the object', fieldName);
+          }
+          const fieldValue = Q(yield* Get(instance, fieldName));
+          X(CreateDataProperty(reflection, Value('kind'), Value('ObjectField')));
+          X(CreateDataProperty(reflection, Value('name'), fieldName as unknown as Value));
+          X(CreateDataProperty(reflection, Value('type'), GetTypeObject(RuntimeTypeOf(fieldValue)) as unknown as Value));
+          return reflection;
+        }
+        X(CreateDataProperty(reflection, Value('kind'), Value('Object')));
+        X(CreateDataProperty(reflection, Value('type'), GetTypeObject(RuntimeTypeOf(instance)) as unknown as Value));
+        return reflection;
+      }
     }
   }
   if (surroundingAgent.feature('runtime-types')
