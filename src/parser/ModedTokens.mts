@@ -139,6 +139,14 @@ function tokenizeJSX(text: string, source: SourceRefRecord, offset: number): Tok
  * it, so by here it names a scanner.
  */
 export function tokenizeModedText(text: string, mode: string, source: SourceRefRecord, offset = 0): readonly TokenRecord[] {
+  // Only a mode whose text is not ECMAScript needs a scanner of its own.
+  //
+  // `linq` does not: a query is lexically ordinary - `from p in people where
+  // p.age >= 18 select p.name` is identifiers, punctuators and a number - and
+  // differs only GRAMMATICALLY, in that `from p` is two adjacent identifiers and
+  // `x in xs` already means a RelationalExpression. A mode is what keeps the
+  // parser out of the region; the scanner is only needed where the LEXICAL
+  // grammar differs too, as JSX's child text does.
   if (mode !== 'jsx') {
     return tokenizeText(text, source, offset);
   }

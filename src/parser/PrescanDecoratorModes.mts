@@ -21,7 +21,7 @@
  * it first, and a decoration whose target is not a region would fail with an
  * unexpected token before the mode itself could be reported.
  */
-const KNOWN_MODES = new Set(['jsx']);
+const KNOWN_MODES = new Set(['jsx', 'linq']);
 
 /** Matches `import { a, b as c } from "..." with { ... }` and captures the pieces. */
 const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*(?:'[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;

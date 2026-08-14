@@ -93,7 +93,7 @@ export function ImportAttributeValue(node: ParseNode, wantedKey: string): string
  * that gate analyses a function the engine has already parsed. Arbitrary code
  * running before the parse is the capability a CSP-conscious host refuses.
  */
-const KNOWN_MODES = new Set(['jsx']);
+const KNOWN_MODES = new Set(['jsx', 'linq']);
 
 /**
  * The first import declaring a mode this implementation does not provide, or
