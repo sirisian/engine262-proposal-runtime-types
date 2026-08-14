@@ -656,6 +656,7 @@ export interface Throw {
   | '$1 is too large'
   | '$1 is too small'
   | '$1 matched no clause of this match'
+  | 'a `match all` has no `default`: a clause that always contributes is `when _`'
   | '$1 must be supplied by explicit application and is never inferred'
   | '$1 names a lane twice and cannot be assigned to'
   | '$1 needs an element type, as in `new SoA.<T, N>()`'

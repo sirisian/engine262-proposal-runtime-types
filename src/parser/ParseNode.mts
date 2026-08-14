@@ -2944,6 +2944,16 @@ export namespace ParseNode {
     readonly type: 'MatchExpression';
     readonly Expression: ParseNode;
     readonly Clauses: readonly MatchClause[];
+    /**
+     * proposal-runtime-types: `match all`, whose value is EVERY arm that
+     * matched rather than the first.
+     *
+     * A flag rather than a second node type, because the two share their clause
+     * list, their patterns, their guards and their bodies - so everything that
+     * walks a MatchExpression should keep walking both, and a second type would
+     * silently miss one.
+     */
+    readonly All: boolean;
   }
   export interface MatchClause extends BaseParseNode {
     readonly type: 'MatchClause';

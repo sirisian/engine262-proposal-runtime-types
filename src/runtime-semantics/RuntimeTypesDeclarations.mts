@@ -6,6 +6,7 @@ import {
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import type { Arguments } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
+import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
@@ -620,6 +621,11 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
   const subjectRef = Q(yield* Evaluate(node.Expression as never));
   const subject = Q(yield* GetValue(subjectRef as never));
   const cache = NewMatchCache();
+  // `match all` collects instead of returning: every clause is tried, every one
+  // that matches contributes its arm's value, and the result is an Array in arm
+  // order. An abrupt completion still propagates, which is what makes a
+  // throwing arm abort the collection - the arms before it have already run.
+  const collected: Value[] = [];
   for (const clause of node.Clauses) {
     // "A fresh declarative environment per clause with the clause's BoundNames
     // created" - so a binding of one arm is invisible to the next, and a `const`
@@ -683,7 +689,12 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       if (blockResult.Type !== 'normal') {
         return blockResult as never;
       }
-      return (blockResult.Value ?? Value.undefined) as unknown as Value;
+      const blockValue = (blockResult.Value ?? Value.undefined) as unknown as Value;
+      if (node.All) {
+        collected.push(blockValue);
+        continue;
+      }
+      return blockValue;
     }
     const bodyRef = EnsureCompletion(yield* Evaluate(clause.Body as never));
     const body = bodyRef.Type === 'normal'
@@ -696,7 +707,17 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
     if (clause.IsThrow) {
       return ThrowCompletion(body.Value) as never;
     }
+    if (node.All) {
+      collected.push(body.Value as Value);
+      continue;
+    }
     return body.Value as Value;
+  }
+  if (node.All) {
+    // No arm matching is an ANSWER rather than a missing case, which is why
+    // exhaustiveness is not required of a `match all`. An empty list is what
+    // "none of these hold" looks like.
+    return X(CreateArrayFromList(collected));
   }
   return Throw.TypeError('$1 matched no clause of this match', subject);
 }

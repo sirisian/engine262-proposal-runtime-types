@@ -2653,6 +2653,21 @@ export abstract class ExpressionParser extends FunctionParser {
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchExpression>();
     this.next();
+    // `match` [no LineTerminator here] `all` - the modifier, which is contextual.
+    //
+    // `all` is an ordinary identifier everywhere, so it is the modifier only
+    // when it is followed by `(` on the same line. The LineTerminator
+    // restriction is what keeps
+    //
+    //     match
+    //     all(x) { }
+    //
+    // meaning what it means today - a statement, a call, and a block - rather
+    // than becoming a `match all` whose subject is on the next line.
+    node.All = this.test('all') && !this.peek().hadLineTerminatorBefore;
+    if (node.All) {
+      this.next();
+    }
     // `match` [no LineTerminator here] `(` - the restriction the grammar states,
     // applied where it belongs. `match\n(x)` is a CALL to something named
     // `match`, and must stay one.
@@ -2679,6 +2694,14 @@ export abstract class ExpressionParser extends FunctionParser {
       // a different parse.
       if (this.test(Token.DEFAULT)) {
         this.next();
+        // A `match all` has no `default`. It and `_` are synonyms in a `match`,
+        // and a word meaning "always" in one form and "only if nothing else
+        // did" one form over is a trap - so the one that would diverge is
+        // refused, and the message names the spelling that does what the author
+        // wanted.
+        if (node.All) {
+          this.addEarlyError(Throw.SyntaxError('a `match all` has no `default`: a clause that always contributes is `when _`'), clause);
+        }
         clause.Pattern = null;
       } else if (this.test('when')) {
         this.next();
