@@ -357,6 +357,54 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // The suffix test is the one `getReflectionByIndex` already applies for
       // its own routing, so the two paths agree by construction instead of by
       // two lists being kept in step.
+      // sec-reflection-shape-function: the Function family. `Function` reports
+      // `type`, `name`, and `signatures`; `FunctionParameter` reports `type`,
+      // `name`, and `index`; `FunctionReturn` reports `type`.
+      //
+      // These were three of the contexts that answered nothing. The two error
+      // shapes told them apart: `Function` and `FunctionReturn` gave "undefined
+      // is not a type" - never dispatched - while `FunctionParameter` gave
+      // `"a" is not a type`, reaching a path that resolved its NAME argument as
+      // a type. Both are fixed by dispatching them here, where the name is read
+      // through ArgumentListEvaluation as the class family reads its own.
+      if (contextRecord.Kind === 'nominal'
+          && (contextRecord.LibraryName === 'Reflect.Function'
+            || contextRecord.LibraryName === 'Reflect.FunctionParameter'
+            || contextRecord.LibraryName === 'Reflect.FunctionReturn')) {
+        const fnRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const signatures = (fnRecord as { Signatures?: readonly { Parameters?: readonly { Name?: string, Type?: unknown }[], Return?: unknown }[] }).Signatures;
+        if (signatures === undefined || signatures.length === 0) {
+          return ThrowError.TypeError('$1 is not a function type', Value('the target of Reflect.getReflection'));
+        }
+        const signature = signatures[0]!;
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        if (contextRecord.LibraryName === 'Reflect.FunctionReturn') {
+          X(CreateDataProperty(reflection, Value('kind'), Value('FunctionReturn')));
+          X(CreateDataProperty(reflection, Value('type'),
+            signature.Return === undefined ? Value.undefined : GetTypeObject(signature.Return as never) as unknown as Value));
+          return reflection;
+        }
+        if (contextRecord.LibraryName === 'Reflect.FunctionParameter') {
+          const argList = Q(yield* ArgumentListEvaluation(args));
+          const wanted = argList.length > 0 ? Q(yield* ToString(argList[0]!)).stringValue() : undefined;
+          const params = signature.Parameters ?? [];
+          const index = params.findIndex((prm) => prm.Name === wanted);
+          if (index < 0) {
+            return ThrowError.TypeError('$1 is not a parameter of the function', Value(String(wanted)));
+          }
+          X(CreateDataProperty(reflection, Value('kind'), Value('FunctionParameter')));
+          X(CreateDataProperty(reflection, Value('name'), Value(String(wanted))));
+          X(CreateDataProperty(reflection, Value('index'), Value(index)));
+          X(CreateDataProperty(reflection, Value('type'),
+            params[index]!.Type === undefined ? Value.undefined : GetTypeObject(params[index]!.Type as never) as unknown as Value));
+          return reflection;
+        }
+        X(CreateDataProperty(reflection, Value('kind'), Value('Function')));
+        X(CreateDataProperty(reflection, Value('type'), GetTypeObject(fnRecord) as unknown as Value));
+        X(CreateDataProperty(reflection, Value('signatures'), Value(signatures.length)));
+        return reflection;
+      }
       const libraryName = typeof (contextRecord as { LibraryName?: unknown }).LibraryName === 'string' ? (contextRecord as { LibraryName: string }).LibraryName : '';
       const memberRead = contextRecord.Kind === 'nominal'
         && (['Reflect.ClassField', 'Reflect.ClassMethod', 'Reflect.ClassGetter', 'Reflect.ClassSetter',
