@@ -42,3 +42,26 @@ test('the families already implemented still answer', () => {
   expect(evaluated('type F = (a: uint8) => uint8; String(Reflect.getReflection.<Reflect.Function, F>().kind);')).toBe('Function');
   expect(evaluated('enum E: uint8 { A } String(Reflect.getReflection.<Reflect.Enum, E>().size);')).toBe('1');
 });
+
+// The accessor and method members of the same family. They read the same
+// instance the field member does, differing in WHICH property they expect and
+// what they report of it: an accessor's `type` is its function type, which the
+// shape clause calls "the getter's function type".
+
+const A = 'const o = { get g() { return 1; }, set s(v) { }, m(a) { return a; }, f: 1 }; ';
+
+test('accessors and methods reflect', () => {
+  expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectGetter>(o, "g"); String(r.kind) + "/" + String(r.name);`)).toBe('ObjectGetter/g');
+  expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectSetter>(o, "s"); String(r.kind) + "/" + String(r.name);`)).toBe('ObjectSetter/s');
+  expect(evaluated(`${A}String(Reflect.getReflection.<Reflect.ObjectMethod>(o, "m").kind);`)).toBe('ObjectMethod');
+  expect(evaluated(`${A}String(Reflect.getReflection.<Reflect.ObjectGetterReturn>(o, "g").kind);`)).toBe('ObjectGetterReturn');
+  // The reported type is a Type Object and reflects in turn.
+  expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectGetter>(o, "g"); String(Reflect.getReflection(r.type).kind);`)).toBe('object');
+});
+
+test('a member of the wrong kind is refused', () => {
+  // The discriminating case: `f` exists but is a data property, so asking for it
+  // as a getter must fail rather than answering about the value.
+  expectThrown(`${A}Reflect.getReflection.<Reflect.ObjectGetter>(o, "f");`);
+  expectThrown(`${A}Reflect.getReflection.<Reflect.ObjectSetter>(o, "zz");`);
+});

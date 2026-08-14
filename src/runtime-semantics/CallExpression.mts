@@ -295,7 +295,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     if (SameValue(func, getReflection1)) {
       const ctx = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
       const ctxName = (ctx as { LibraryName?: unknown }).LibraryName;
-      if (ctx.Kind === 'nominal' && (ctxName === 'Reflect.Object' || ctxName === 'Reflect.ObjectField')) {
+      const objectContexts = ['Reflect.Object', 'Reflect.ObjectField', 'Reflect.ObjectGetter',
+        'Reflect.ObjectSetter', 'Reflect.ObjectMethod', 'Reflect.ObjectGetterReturn'];
+      if (ctx.Kind === 'nominal' && typeof ctxName === 'string' && objectContexts.includes(ctxName)) {
         const argList = Q(yield* ArgumentListEvaluation(args));
         const instance = argList.length > 0 ? argList[0]! : Value.undefined;
         if (!(instance instanceof ObjectValueClass)) {
@@ -303,6 +305,31 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         const realm = surroundingAgent.currentRealmRecord;
         const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        // The accessor and method members read the same instance the field
+        // member does, differing only in WHICH property they expect and what
+        // they report of it. An accessor's `type` is its function type, which is
+        // what the shape clause calls "the getter's function type".
+        if (ctxName === 'Reflect.ObjectGetter' || ctxName === 'Reflect.ObjectSetter'
+          || ctxName === 'Reflect.ObjectMethod' || ctxName === 'Reflect.ObjectGetterReturn') {
+          const memberName = argList.length > 1 ? Q(yield* ToString(argList[1]!)) : Value('');
+          const desc = Q(yield* instance.GetOwnProperty(memberName));
+          if (desc === Value.undefined) {
+            return ThrowError.TypeError('$1 is not a member of the object', memberName);
+          }
+          const accessor = desc as { Getter?: Value, Setter?: Value, Value?: Value };
+          const wantGet = ctxName === 'Reflect.ObjectGetter' || ctxName === 'Reflect.ObjectGetterReturn';
+          const fn = wantGet ? accessor.Getter : (ctxName === 'Reflect.ObjectSetter' ? accessor.Setter : accessor.Value);
+          if (fn === undefined || fn === Value.undefined) {
+            return ThrowError.TypeError('$1 is not a member of the object', memberName);
+          }
+          const label = ctxName.slice('Reflect.'.length);
+          X(CreateDataProperty(reflection, Value('kind'), Value(label)));
+          if (ctxName !== 'Reflect.ObjectGetterReturn') {
+            X(CreateDataProperty(reflection, Value('name'), memberName as unknown as Value));
+          }
+          X(CreateDataProperty(reflection, Value('type'), GetTypeObject(RuntimeTypeOf(fn)) as unknown as Value));
+          return reflection;
+        }
         if (ctxName === 'Reflect.ObjectField') {
           const fieldName = argList.length > 1 ? Q(yield* ToString(argList[1]!)) : Value('');
           const present = Q(yield* instance.HasProperty(fieldName));
