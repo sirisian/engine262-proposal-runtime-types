@@ -26,6 +26,7 @@ import type { NumberObject } from '../intrinsics/Number.mts';
 import type { SymbolObject } from '../intrinsics/Symbol.mts';
 import type { BigIntObject } from '../intrinsics/BigInt.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
+import { isComplexObject } from '../intrinsics/Complex.mts';
 import {
   Assert,
   Call,
@@ -136,6 +137,19 @@ export function ToBoolean(argument: Value): BooleanValue {
     // -0, or NaN, matching a plain Number.
     const n = unwrapToNumber(argument);
     if (n.numberValue() === 0 || n.isNaN()) { // eslint-disable-line @engine262/mathematical-value -- n is a fresh unwrapped NumberValue
+      return Value.false;
+    }
+  } else if (isComplexObject(argument)) {
+    // proposal-runtime-types complex.md: "`complex(0, 0)` is falsy on the same
+    // zero-is-falsy rule the other numeric types follow; every other complex
+    // value is truthy."
+    //
+    // A complex is carried as an object, and ToBoolean over an object is
+    // otherwise always true - which made the origin truthy where every other
+    // numeric zero is falsy. This is the same exception the typed-number branch
+    // above makes, for the same reason: the value is numeric even though its
+    // representation is not a Number.
+    if (argument.ComplexReal === 0 && argument.ComplexImaginary === 0) {
       return Value.false;
     }
   } else if (argument instanceof NumberValue) {
