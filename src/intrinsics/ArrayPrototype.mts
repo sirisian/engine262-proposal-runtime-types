@@ -764,7 +764,11 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
     ['pop', ArrayProto_pop, 0],
     ['push', ArrayProto_push, 1],
     ['reserve', ArrayProto_reserve, 1],
-    ['capacity', ArrayProto_capacity, 0],
+    // A GETTER, not a method: the design writes `out.capacity;` as a read, and it
+    // sits beside `length`, which is a property. As a method `a.capacity` yielded
+    // the function itself - truthy, so `if (a.capacity > 1000)` misbehaved
+    // silently rather than throwing.
+    ['capacity', [ArrayProto_capacity]],
     ['shift', ArrayProto_shift, 0],
     ['slice', ArrayProto_slice, 2],
     ['sort', ArrayProto_sort, 1],

@@ -520,8 +520,8 @@ test('a ref member borrows the property location on the destructured object', ()
 
 // -- #sec-reference-liveness: relocation for a growable [].<T> (B4) -----------
 test('a growable typed array has a capacity that reserve can grow', () => {
-  expect(evaluated('const a: [].<uint32> = [1, 2]; String(a.capacity() >= 2);')).toBe('true');
-  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); String(a.capacity() >= 64);')).toBe('true');
+  expect(evaluated('const a: [].<uint32> = [1, 2]; String(a.capacity >= 2);')).toBe('true');
+  expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); String(a.capacity >= 64);')).toBe('true');
   // the operations belong to a typed array, which is what has an allocation
   expectThrownKind('let a = [1]; a.reserve(4);', 'TypeError');
 });
