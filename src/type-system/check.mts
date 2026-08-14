@@ -1514,6 +1514,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           key,
           type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
           optional: tm.Optional === true,
+          // A METHOD is an OUTPUT position, which #sec-variance-annotations says
+          // in as many words: "a covariant parameter is well-formed only where
+          // it appears in output positions of the declaration, A METHOD RETURN
+          // OR A `readonly` FIELD". So a method member is compared the way a
+          // readonly one is - by IsSubtype, which is what lets function
+          // subtyping decide its own variance - rather than by the invariance
+          // #sec-isobjectsubtype requires of a WRITABLE data member.
+          //
+          // Without this, making writable members invariant refused a generator
+          // where an `Iterable.<uint8>` was required, because the two agree on
+          // that method through function subtyping and not by identity.
+          readonly: true,
         });
         continue;
       }
@@ -2181,6 +2193,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Without this the checker derives an ordinary object type for the
         // call, so `let c: Composite = Composite({x: 1})` was refused - the
         // runtime knew the value's type and the checker did not.
+        // proposal-runtime-types #sec-type-prototype: `T.parse` and `T.tryParse`
+        // answer a value OF T, and the checker knew neither - so
+        // `let a: string = uint8.parse("1")` was accepted, and a generator
+        // yielding one inferred `any` for its element type. The run time was
+        // right throughout; only the static type was missing.
+        const parseCallee = (node as { CallExpression?: ParseNode }).CallExpression as {
+          type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null,
+        } | undefined;
+        if (parseCallee?.type === 'MemberExpression'
+          && (parseCallee.IdentifierName?.name === 'parse' || parseCallee.IdentifierName?.name === 'tryParse')
+          && parseCallee.MemberExpression) {
+          const targetName = parseCallee.MemberExpression.type === 'IdentifierReference'
+            ? (parseCallee.MemberExpression as unknown as { name?: string }).name
+            : undefined;
+          const target = targetName ? builtinTypeRecord(targetName) : null;
+          if (target) {
+            // `parse` answers a value OF the type. `tryParse` answers that or
+            // *null*, and only `parse` is typed here: a union with null needs a
+            // null record this checker does not have, and claiming the bare
+            // type for tryParse would be WRONG in the direction that matters -
+            // it would let `let a: uint8 = uint8.tryParse(s)` pass while the
+            // value may be null.
+            if (parseCallee.IdentifierName.name === 'parse') {
+              return target as Known;
+            }
+          }
+        }
         const calleeNode = (node as { CallExpression?: ParseNode }).CallExpression;
         if (calleeNode?.type === 'IdentifierReference'
           && (calleeNode as { name?: string }).name === 'Composite') {

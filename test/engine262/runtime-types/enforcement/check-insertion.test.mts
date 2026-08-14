@@ -1247,3 +1247,59 @@ test('the limits of the rule, recorded rather than assumed', () => {
   expect(evaluated("type A = { s: string, c: 'US'|'CA' } where if (this.c == 'US') { this is { p: string } }"
     + " else { this is { p: string } }; const a: A = { s: 'x', c: 'US', p: 'M' }; String(a.p);")).toBe('M');
 });
+
+// -- A writable member is invariant (#sec-isobjectsubtype) --------------------
+
+test('depth subtyping goes only through a readonly member', () => {
+  // "A writable member is invariant, because covariance there is unsound: were
+  // `{ x: Meter }` a subtype of `{ x: float32 }`, a bare `float32` could be
+  // written through the supertype view into a slot the program believes holds a
+  // `Meter`."
+  expect(evaluated('type A = { x: uint8 }; type B = { x: uint8 | string };'
+    + ' String(Reflect.isAssignable(A, B));')).toBe('false');
+  // The readonly half is covariant, for the reason the clause gives - nothing
+  // can be written through it.
+  expect(evaluated('type A = { readonly x: uint8 }; type B = { readonly x: uint8 | string };'
+    + ' String(Reflect.isAssignable(A, B));')).toBe('true');
+  // A READONLY SOURCE cannot satisfy a WRITABLE target: the target's view
+  // permits writes the source's own declaration forbids.
+  expect(evaluated('type A = { readonly x: uint8 }; type B = { x: uint8 };'
+    + ' String(Reflect.isAssignable(A, B));')).toBe('false');
+});
+
+test('the unsound write is refused at the boundary that would admit it', () => {
+  // Written with a CONVERTING initializer, so the object IS stamped and this
+  // exercises the variance rule rather than the stamping of a conforming value
+  // - the two must not be able to pass for one another.
+  expectStatic('type A = { x: uint8 }; type B = { x: uint8 | string };'
+    + ' let a: A = { x: 1 }; let b: B = a;');
+});
+
+test('the rule does not overshoot', () => {
+  // Width subtyping is untouched: a type with MORE members is still a subtype.
+  expect(evaluated('type Wide = { x: uint8, y: string }; type Narrow = { x: uint8 };'
+    + ' String(Reflect.isAssignable(Wide, Narrow));')).toBe('true');
+  // Identity holds, and a missing member still refuses.
+  expect(evaluated('type A = { x: uint8 };'
+    + ' String(Reflect.isAssignable(A, type { x: uint8 }));')).toBe('true');
+  expect(evaluated('type A = { x: uint8 }; type More = { x: uint8, y: string };'
+    + ' String(Reflect.isAssignable(A, More));')).toBe('false');
+  // Nested writable members are invariant too.
+  expect(evaluated('type I = { inner: { x: uint8 } }; type W = { inner: { x: uint8 | string } };'
+    + ' String(Reflect.isAssignable(I, W));')).toBe('false');
+  // A recursive type still terminates, which is what the assumptions list does.
+  expect(evaluated('type L = { next: L | null }; String(Reflect.isAssignable(L, L));')).toBe('true');
+});
+
+test('an invariant position still admits any, and a method is an output position', () => {
+  // ~any~ is the program opting out of the check for that member, and the
+  // clause's soundness argument does not reach it - requiring identity would
+  // make the escape hatch unusable in any writable position.
+  expect(evaluated('type A = { x: any }; type B = { x: uint8 };'
+    + ' `${Reflect.isAssignable(A, B)}:${Reflect.isAssignable(B, A)}`;')).toBe('true:true');
+  // #sec-variance-annotations groups "a method return or a `readonly` field" as
+  // OUTPUT positions, so a method is compared by function subtyping rather than
+  // by identity - which is what lets a generator satisfy an iteration protocol.
+  expect(evaluated('function* g(): uint8 { yield 1; }'
+    + ' const i: Iterable.<uint8> = g(); typeof i;')).toBe('object');
+});

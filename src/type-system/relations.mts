@@ -602,6 +602,35 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
     if (sp.optional && !tp.optional) {
       return false;
     }
+    // proposal-runtime-types #sec-isobjectsubtype: "A writable member is
+    // invariant, because covariance there is unsound." A single IsSubtype here
+    // made every member covariant, so `{ x: uint8 }` satisfied
+    // `{ x: uint8 | string }` and a String could be written through the wider
+    // view into a slot the program believes holds a uint8.
+    //
+    // The TARGET's flag decides. A readonly target permits covariance for the
+    // reason the clause gives - nothing can be written through it - and a
+    // writable one demands the member types be the same.
+    if (!tp.readonly) {
+      // A READONLY SOURCE cannot satisfy a WRITABLE target either, and that is a
+      // separate rule reading the same flag: the target's view permits writes
+      // the source's declaration forbids, so admitting it would let a program
+      // write through a member its own type says is immutable.
+      if (sp.readonly) {
+        return false;
+      }
+      // ~any~ satisfies an invariant position from either side. The clause's
+      // soundness argument is that a write through the wider view puts a value
+      // in the slot that the narrower view's readers do not expect - and that
+      // argument does not apply to a member whose type is ~any~, which is the
+      // program saying it has opted out of the check for that member. Requiring
+      // identity there would make the escape hatch unusable in any writable
+      // position, which is not what "a writable member is invariant" is for.
+      if (sp.type.Kind === 'any' || tp.type.Kind === 'any') {
+        return true;
+      }
+      return SameTypeWithAssumptions(sp.type, tp.type, assumptions);
+    }
     return IsSubtype(sp.type, tp.type, assumptions);
   });
   // Each of t's index signatures must be covered by one of s's.

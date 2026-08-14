@@ -302,3 +302,22 @@ test('numeric library: sumPrecise rounds once to the element type', () => {
   // and an untyped iterable is untouched
   expect(evaluated('String(Math.sumPrecise([1, 2, 3]));')).toBe('6');
 });
+
+test('a type\'s parse has a static type, not just a runtime one', () => {
+  // The run time always answered a value of the type; the CHECKER did not know,
+  // so `let a: string = uint8.parse("1")` was accepted and a generator yielding
+  // one inferred `any` for its element type. That second effect was invisible
+  // while writable members were covariant, since `Generator.<any>` satisfied
+  // `Iterable.<uint8>` anyway - two gaps that cancelled.
+  expectStaticTypeError('let a: string = uint8.parse("1");');
+  expect(evaluated('let a: uint8 = uint8.parse("1"); `${a}:${a is uint8}`;')).toBe('1:true');
+  // The effect that was invisible: a do-generator yielding a parse now infers
+  // `uint8` for its element type rather than `never`, so it satisfies the
+  // protocol on its merits.
+  expect(evaluated('const i: Iterable.<uint8> = do * { yield uint8.parse("1"); };'
+    + ' String([...i]);')).toBe('1');
+  // tryParse is deliberately NOT typed as the bare type: it answers the value
+  // or null, and claiming the bare type would let `let a: uint8 =
+  // uint8.tryParse(s)` pass while the value may be null.
+  expect(evaluated('String(uint8.tryParse("nope"));')).toBe('null');
+});

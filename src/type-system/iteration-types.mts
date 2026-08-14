@@ -95,7 +95,7 @@ export function isIterationInterfaceName(name: string): boolean {
   return BUILTIN_INTERFACES.has(name);
 }
 
-function objectType(properties: { key: string | symbol, type: TypeRecord, optional?: boolean }[]): TypeRecord {
+function objectType(properties: { key: string | symbol, type: TypeRecord, optional?: boolean, readonly?: boolean }[]): TypeRecord {
   return {
     Kind: 'object',
     Properties: properties.map((p) => ({
@@ -163,6 +163,14 @@ function iteratorResult(T: TypeRecord, R: TypeRecord): TypeRecord {
  * iterator - the failure TypeScript documented when its builtin iterator type
  * and its generators disagreed on this parameter.
  */
+/**
+ * The members of these interfaces are METHODS, and a method is an OUTPUT
+ * position - #sec-variance-annotations groups "a method return or a `readonly`
+ * field" together as exactly that. So they are marked readonly, which is what
+ * makes #sec-isobjectsubtype compare them by IsSubtype and let function
+ * subtyping decide their variance, rather than by the invariance that clause
+ * requires of a WRITABLE data member.
+ */
 export function iterationInterfaceRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {
   if (!BUILTIN_INTERFACES.has(name)) {
     return null;
@@ -188,14 +196,14 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
       // no annotation naming an iteration type had to move.
       const wrap = (result: TypeRecord) => (name === 'AsyncIterator' ? promiseOf(result) : result);
       return objectType([
-        { key: 'next', type: fnType([N], wrap(iteratorResult(T, R))) },
-        { key: 'return', type: fnType([R], wrap(iteratorResult(T, R))), optional: true },
-        { key: 'throw', type: fnType([anyType], wrap(iteratorResult(T, R))), optional: true },
+        { key: 'next', type: fnType([N], wrap(iteratorResult(T, R))), readonly: true },
+        { key: 'return', type: fnType([R], wrap(iteratorResult(T, R))), optional: true, readonly: true },
+        { key: 'throw', type: fnType([anyType], wrap(iteratorResult(T, R))), optional: true, readonly: true },
       ]);
     }
     case 'Iterable':
       return objectType([
-        { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T])!) },
+        { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T])!), readonly: true },
       ]);
     case 'IterableIterator':
       return objectType([
