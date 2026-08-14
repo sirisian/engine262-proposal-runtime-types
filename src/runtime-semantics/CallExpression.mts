@@ -296,6 +296,33 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // decorators.md's `ClassReflection`: `name`, `type`, `abstract`,
       // `metadata`. The whole-class read every other class-family read hangs
       // off, and the first of the thirty-nine contexts that answered nothing.
+      // sec-reflection-shape-enum: the `Enum` context reports `type`, the enum
+      // type; `name`; and `valueType`, the Type Object of the underlying type.
+      // The design reads `.size` off it, so the enumerator count is part of what
+      // the context is FOR.
+      //
+      // The dispatch here names nine contexts of the forty-five declared - the
+      // class family plus `Type` - so this was one of the thirty-six that fell
+      // through to "undefined is not a type". The type-level `"enum"` reflection
+      // node exists as a workaround for exactly this gap.
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Enum') {
+        const enumRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const members = (enumRecord as { EnumMembers?: readonly Value[] }).EnumMembers;
+        if (members === undefined) {
+          return ThrowError.TypeError('$1 is not an enum type', Value('the target of Reflect.getReflection'));
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        X(CreateDataProperty(reflection, Value('kind'), Value('Enum')));
+        X(CreateDataProperty(reflection, Value('type'), GetTypeObject(enumRecord) as unknown as Value));
+        const declaredName = (enumRecord as { Declaration?: { BindingIdentifier?: { name: string } } })
+          .Declaration?.BindingIdentifier?.name;
+        X(CreateDataProperty(reflection, Value('name'), declaredName === undefined ? Value.undefined : Value(declaredName)));
+        const underlying = (enumRecord as { Underlying?: unknown }).Underlying;
+        X(CreateDataProperty(reflection, Value('valueType'), underlying === undefined ? Value.undefined : GetTypeObject(underlying as never) as unknown as Value));
+        X(CreateDataProperty(reflection, Value('size'), Value(members.length)));
+        return reflection;
+      }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Class') {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const constructor = (classRecord as { Constructor?: Value }).Constructor;
