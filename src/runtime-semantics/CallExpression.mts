@@ -386,6 +386,54 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // The names live on the DECLARATION's EnumMemberList; [[EnumMembers]]
       // carries only the values, so the two are read together and stay aligned
       // by index.
+      // sec-reflection-contexts, the Structural family: `Tuple` and `Record`
+      // reflect "a tuple or record declaration", so they take the TYPE as the
+      // second type argument - the Class family's spelling, not the Object
+      // family's instance one.
+      //
+      // Both name a set of members, and the clause says such a context "has two
+      // signatures: one taking no name, returning an object keyed by name" -
+      // the same pair `EnumEnumerator` has.
+      if (contextRecord.Kind === 'nominal'
+          && (contextRecord.LibraryName === 'Reflect.Tuple' || contextRecord.LibraryName === 'Reflect.Record')) {
+        const structRec = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const wantTuple = contextRecord.LibraryName === 'Reflect.Tuple';
+        const elements = (structRec as { Elements?: readonly { Type?: unknown }[] }).Elements;
+        const properties = (structRec as { Properties?: readonly { key?: unknown, type?: unknown }[] }).Properties;
+        if (wantTuple ? elements === undefined : properties === undefined) {
+          return ThrowError.TypeError(wantTuple ? '$1 is not a tuple type' : '$1 is not a record type',
+            Value('the target of Reflect.getReflection'));
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const memberNode = (name: JSStringValue, type: unknown, index: number) => {
+          const node = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          X(CreateDataProperty(node, Value('kind'), Value(wantTuple ? 'Tuple' : 'Record')));
+          X(CreateDataProperty(node, Value('name'), name));
+          X(CreateDataProperty(node, Value('index'), Value(index)));
+          X(CreateDataProperty(node, Value('type'), type === undefined ? Value.undefined : GetTypeObject(type as never) as unknown as Value));
+          return node;
+        };
+        const count = wantTuple ? elements!.length : properties!.length;
+        const nameAt = (i: number): JSStringValue => (wantTuple
+          ? Value(String(i))
+          : (typeof (properties![i]!.key) === 'string' ? Value(properties![i]!.key as string) : Value(String(i))));
+        const typeAt = (i: number): unknown => (wantTuple ? elements![i]!.Type : properties![i]!.type);
+        if (argList.length === 0) {
+          const all = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+          for (let i = 0; i < count; i += 1) {
+            X(CreateDataProperty(all, nameAt(i), memberNode(nameAt(i), typeAt(i), i)));
+          }
+          return all;
+        }
+        const wantedName = Q(yield* ToString(argList[0]!));
+        for (let i = 0; i < count; i += 1) {
+          if (nameAt(i).stringValue() === wantedName.stringValue()) {
+            return memberNode(nameAt(i), typeAt(i), i);
+          }
+        }
+        return ThrowError.TypeError('$1 is not a member of the type', wantedName);
+      }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.EnumEnumerator') {
         const enumRec = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
         const values = (enumRec as { EnumMembers?: readonly Value[] }).EnumMembers;
