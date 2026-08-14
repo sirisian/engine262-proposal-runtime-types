@@ -85,6 +85,30 @@ function* Evaluate_UnaryExpression_Delete({ UnaryExpression }: ParseNode.UnaryEx
         && isArrayIndex(ref.ReferencedName as Value)) {
       return Throw.TypeError('$1 is a typed element and cannot be deleted', ref.ReferencedName as Value);
     }
+    // A TUPLE is an array whose positions are typed, and the same sentence
+    // covers it - but a tuple is stamped with TypedTuple rather than
+    // TypedElement, so the rule above reached the typed array and missed the
+    // tuple entirely.
+    //
+    // A REST position is refused too, though a rest's arity is not fixed:
+    // growing it by a store is legal, and punching a hole in it is not. The
+    // distinction the note above draws is the whole of it - a shortening
+    // removes elements, and a delete leaves a hole where a value of the
+    // position's type is declared to be.
+    //
+    // An index PAST a fixed tuple's end has no position to remove, which is
+    // *true* in JavaScript and removes nothing; an ordinary property of a tuple
+    // is not a position at all. Neither is refused.
+    if (surroundingAgent.feature('runtime-types')
+        && isArrayIndex(ref.ReferencedName as Value)) {
+      const tuple = (baseObj as { TypedTuple?: { Positions: readonly unknown[], Rest: unknown } }).TypedTuple;
+      if (tuple !== undefined) {
+        const index = Number((ref.ReferencedName as JSStringValue).stringValue());
+        if (index < tuple.Positions.length || tuple.Rest !== undefined) {
+          return Throw.TypeError('$1 is a position of a tuple and cannot be deleted', ref.ReferencedName as Value);
+        }
+      }
+    }
     // e. Let deleteStatus be ? baseObj.[[Delete]](ref.[[ReferencedName]]).
     const deleteStatus = Q(yield* baseObj.Delete(ref.ReferencedName as JSStringValue));
     // f. If deleteStatus is false and ref.[[Strict]] is true, throw a TypeError exception.

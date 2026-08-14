@@ -129,3 +129,51 @@ test('a Proxy checks a trap result against the target typed own property', () =>
   expect(evaluated('let t = { x: 1 }; let p = new Proxy(t, { get() { return 999; } }); String(p.x);')).toBe('999');
   expect(evaluated('let t = { (a: uint8): 1 }; let p = new Proxy(t, {}); String(Number(p.a));')).toBe('1');
 });
+
+// -- Deleting a tuple position (#sec-array-defaults-and-stores) ---------------
+//
+// "Deleting an element of a typed array throws a TypeError exception." A tuple
+// is an array whose positions are typed, and it is stamped with TypedTuple
+// rather than TypedElement - so the rule reached the typed array and missed the
+// tuple, which left a hole where a declared type said a value would be.
+
+test('a tuple position cannot be deleted', () => {
+  const t = 'type T = [uint8, string]; let t: T = [1, "s"]; ';
+  expectThrown(`${t} delete t[0];`);
+  // Every position, not only the first.
+  expectThrown(`${t} delete t[1];`);
+  // The same object seen through a WIDER view is still the same tuple, which is
+  // why the stamp is on the object rather than in the binding.
+  expectThrown('type N = [uint8]; type W = [uint8 | string];'
+    + ' let n: N = [1]; let w: W = n; delete w[0];');
+});
+
+test('a REST position cannot be deleted either', () => {
+  // A rest's arity is not fixed, so growing it by a store is legal - but a
+  // delete is not a shortening. `pop` removes an element and leaves a shorter
+  // array; `delete` leaves the length alone and puts a HOLE in it, and a hole
+  // reads as undefined, which is not a value of the position's type.
+  const r = 'type R = [uint8, ...string]; let r: R = [1, "a", "b"]; ';
+  expectThrown(`${r} delete r[2];`);
+  expect(evaluated(`${r} r[9] = "grown"; String(r[9]);`)).toBe('grown');
+});
+
+test('the rule reaches only positions', () => {
+  const t = 'type T = [uint8, string]; let t: T = [1, "s"]; ';
+  // An index past a FIXED tuple's end has no position to remove, which is true
+  // in JavaScript and removes nothing.
+  expect(evaluated(`${t} String(delete t[9]);`)).toBe('true');
+  // An ordinary property of a tuple is not a position.
+  expect(evaluated(`${t} String(delete t.nope);`)).toBe('true');
+  // And an untyped array is plain JavaScript.
+  expect(evaluated('const a = [1, 2]; String(delete a[0]);')).toBe('true');
+});
+
+test('shortening is not deleting', () => {
+  // The rule lives on the delete OPERATOR rather than in [[Delete]], because
+  // ArraySetLength truncates by deleting from the top - so a rule in [[Delete]]
+  // would refuse `pop`, which removes an element without leaving a hole. A
+  // typed array already allowed pop for that reason, and a tuple now agrees.
+  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"]; String(t.pop());')).toBe('s');
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.pop());')).toBe('3');
+});
