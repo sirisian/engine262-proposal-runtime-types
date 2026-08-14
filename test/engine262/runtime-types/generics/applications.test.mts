@@ -43,12 +43,16 @@ test('a deferred application works in every position a parameter is bound', () =
     + ' String(ret((3 := uint8)));')).toBe('3,3');
 });
 
-test('a class field is the one position it does not reach', () => {
-  // KNOWN-DIVERGENCES.md: a specialized generic's FIELD type is not
-  // substituted, so the application is still over an unbound parameter when the
-  // field is defined. The error names `[T, T]`, which is the parameter showing
-  // through, and it is reported by the rule that refuses a declaration whose
-  // type has no default - that rule is doing its job on a type the
-  // substitution gap left behind.
-  expectThrown(`${pairOf} class Box<T> { p: pairOf(T); } new Box.<uint8>();`);
+test('a class field reaches it too', () => {
+  // This was the one position a deferred application did NOT reach: a field's
+  // type was resolved over a frame that bound each parameter to a fresh unbound
+  // record, shadowing the specialization's own bindings, so the application was
+  // still over `T` when the field was defined and the declaration was refused
+  // for having no default. With the field deferring to an active binding, the
+  // application specializes here as it does everywhere else.
+  expect(evaluated(`${pairOf} class Box<T> { p: pairOf(T); }`
+    + ' const b = new Box.<uint8>(); `${b.p.length}:${b.p[0]}`;')).toBe('2:0');
+  // And the positions substituted, so a store into one is checked.
+  expectThrown(`${pairOf} class Box<T> { p: pairOf(T); }`
+    + ' const b = new Box.<uint8>(); b.p[0] = "wrong";');
 });

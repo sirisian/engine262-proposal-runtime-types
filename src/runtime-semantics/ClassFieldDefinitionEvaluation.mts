@@ -1,6 +1,6 @@
 import { X, Q } from '../completion.mts';
 import {
-  TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame,
+  TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame, lookupTypeParameter,
 } from '../type-system/runtime.mts';
 import { parameterTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -133,7 +133,16 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
           // declaration wrote is carried, so a reference to a kinded parameter
           // knows it stands for a declaration rather than a type.
           const arity = (p as unknown as { Arity?: number }).Arity ?? 0;
-          frame.set(name, parameterTypeRecord(name, undefined, arity));
+          // ONLY where nothing has bound it. A SPECIALIZATION pushes a frame
+          // binding each parameter to its argument before evaluating the class
+          // body, and binding a fresh ~parameter~ record here shadowed it - so
+          // `class Box<T> { value: T; }` at `Box.<uint8>` gave the field the
+          // unbound `T` rather than `uint8`, leaving it undefaulted and
+          // unchecked while a METHOD's parameter of the same `T` substituted
+          // correctly. The frame is for the UNSPECIALIZED declaration, where
+          // there is genuinely nothing to bind to.
+          const bound = lookupTypeParameter(name);
+          frame.set(name, bound ?? parameterTypeRecord(name, undefined, arity));
         }
       }
       pushTypeParameterFrame(frame);

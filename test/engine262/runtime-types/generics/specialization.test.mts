@@ -321,3 +321,57 @@ test('a parameter without a default still needs its argument', () => {
   expectThrown('type A<T> = [].<T>; let a: A;');
   expectThrown('type A<T, U = uint8> = [].<T>; let a: A;');
 });
+
+// -- A field's type at a specialization (#sec-generic-specialization) ---------
+//
+// Each application is a distinct type, and a field declared at a parameter
+// holds the argument's type once the parameter is bound. A METHOD's parameter
+// substituted and a field's did not, so the same `T` in the same class was
+// enforced in one position and ignored in the other.
+
+test('a specialized field holds the argument type', () => {
+  const box = 'class Box<T> { value: T; set(v: T) { this.value = v; } } ';
+  // Defaulted from the BOUND type rather than left undefined.
+  expect(evaluated(`${box} const b = new Box.<uint8>(); \`\${b.value}:\${b.value is uint8}\`;`)).toBe('0:true');
+  // A literal converts, as it does at any other typed field.
+  expect(evaluated(`${box} const b = new Box.<uint8>(); b.value = 5; \`\${b.value}:\${b.value is uint8}\`;`)).toBe('5:true');
+  // And a value the type forbids is refused - the soundness half.
+  expectThrown(`${box} const b = new Box.<uint8>(); b.value = "a string";`);
+  // The method position, which always worked, still does.
+  expectThrown(`${box} const b = new Box.<uint8>(); b.set("a string");`);
+});
+
+test('a plain literal initializer converts to the bound type', () => {
+  // The assertion that would pass spuriously against an ALREADY-TYPED
+  // initializer: `value: T = (0 := uint8)` reads back as a uint8 whether or not
+  // the field's type substituted, because the initializer was one already.
+  expect(evaluated('class A<T> { value: T = 0; } const a = new A.<uint8>();'
+    + ' `${a.value}:${a.value is uint8}`;')).toBe('0:true');
+});
+
+test('a composed field type substitutes through to its parts', () => {
+  // An empty array is what ANY array type defaults to, so the default proves
+  // nothing here; the element store is what says the element type bound.
+  const arr = 'class Arr<T> { a: [].<T>; } ';
+  expect(evaluated(`${arr} const x = new Arr.<uint8>(); String(x.a.length);`)).toBe('0');
+  expectThrown(`${arr} const x = new Arr.<uint8>(); x.a[0] = "s";`);
+  expect(evaluated(`${arr} const x = new Arr.<uint8>(); x.a[0] = 5; String(x.a[0] is uint8);`)).toBe('true');
+});
+
+test('two specializations do not share a field type', () => {
+  // The way this fix could go wrong worse than the bug: one field type resolved
+  // once and reused, so `Box.<uint8>` and `Box.<string>` would agree on what
+  // they accept.
+  const box = 'class Box<T> { value: T; } ';
+  expect(evaluated(`${box} const u = new Box.<uint8>(); const s = new Box.<string>();`
+    + ' u.value = 5; s.value = "text"; `${u.value}:${s.value}`;')).toBe('5:text');
+  expectThrown(`${box} const u = new Box.<uint8>(); u.value = "s";`);
+  expect(evaluated(`${box} const s = new Box.<string>(); s.value = "ok"; s.value;`)).toBe('ok');
+});
+
+test('an unspecialized generic still constructs', () => {
+  // The frame the field pushes exists for exactly this case - a declaration
+  // with nothing to bind its parameters to - so deferring to an active binding
+  // must not disturb it.
+  expect(evaluated('class U<T> { v: T; } typeof new U();')).toBe('object');
+});
