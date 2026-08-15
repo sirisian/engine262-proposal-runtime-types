@@ -1401,6 +1401,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * pick up the members of an interface it implements.
    */
   const interfaceNodes = new Map<string, ParseNode>();
+  /** Alias declarations found by the name pre-pass, resolved on demand. */
+  const aliasNodes = new Map<string, ParseNode>();
   /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
   const symbolConsts = new Map<string, ParseNode>();
   /**
@@ -1731,11 +1733,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Construct signatures by class node, for checking `new C(...)` (F59). */
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
 
+  const resolvingAliases = new Set<string>();
   const lookupAlias = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
       if (t) {
         return t;
+      }
+    }
+    // Not yet WALKED, but declared. A function declaration's signature is built
+    // before the walk reaches the alias that annotates a parameter, so the frame
+    // is empty and the parameter became ~any~ - which is what made an
+    // alias-typed parameter accept an out-of-range literal where the inline
+    // spelling refused it. The pre-pass found the declaration; resolve it here.
+    const node = aliasNodes.get(name);
+    if (node !== undefined && !resolvingAliases.has(name)) {
+      // An alias naming itself would otherwise recur forever; the walk's own
+      // registration handles a legitimate recursive type by publishing a
+      // placeholder first.
+      resolvingAliases.add(name);
+      try {
+        const declared = (node as unknown as { Type?: ParseNode.Type | null }).Type;
+        if (!declared) {
+          return null;
+        }
+        const resolved = resolveType(declared);
+        // An alias carrying WHERE CLAUSES is a nominal type wrapping its
+        // structure, not the structure itself - that wrapper is where the
+        // refinements live, and the discriminated-chain and freshness rules read
+        // them off it. Resolving the bare type here would answer a structurally
+        // equal record that has forgotten them, which is worse than answering
+        // nothing: it looks right and refuses valid programs.
+        const whereClauses = (node as unknown as { WhereClauses?: readonly unknown[] }).WhereClauses;
+        if (whereClauses && whereClauses.length > 0) {
+          return {
+            Kind: 'nominal', Declaration: node, Arguments: [], Structure: resolved,
+          } as unknown as Known;
+        }
+        return resolved;
+      } finally {
+        resolvingAliases.delete(name);
       }
     }
     return null;
@@ -3755,6 +3792,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (interfaceName && !interfaceNodes.has(interfaceName)) {
           interfaceNodes.set(interfaceName, n);
+        }
+      } else if (n.type === 'TypeAliasDeclaration') {
+        // AND ALIASES, for the reason the interface note above gives. An alias
+        // was registered during the WALK, and a function declaration's signature
+        // is built before the walk reaches it - so `type U = uint8; function
+        // f(p: U) {}` gave the parameter ~any~, while the same annotation
+        // written inline, or naming a CLASS or an INTERFACE, resolved.
+        //
+        // Everything downstream was then innocent and looked broken: `f(300)`
+        // fell through to the run time because ~any~ admits it, and
+        // #sec-literal-freshness never ran at such a parameter because there was
+        // no object type to be fresh against.
+        //
+        // Names only, as above: the alias's own type is still resolved lazily,
+        // so nothing is computed earlier than before - only found.
+        const aliasName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (aliasName && !aliasNodes.has(aliasName)) {
+          aliasNodes.set(aliasName, n);
         }
       }
     }

@@ -1188,13 +1188,13 @@ test('a fresh literal may not carry an undeclared property', () => {
   // where a rule about the literal's syntax belongs.
   expectStatic('type E = { x: uint8 }; let bad: E = { x: 1, extra: 2 };');
   expectStatic('function f(p: { x: uint8 }) { return "took it"; } f({ x: 1, extra: 9 });');
-  // Written INLINE, because an ALIAS-typed parameter receives no contextual
-  // type at a call at all - so no rule that depends on one reaches it. That is
-  // a gap of its own, recorded in KNOWN-DIVERGENCES.md, and it is visible
-  // without freshness: `type U = uint8; function f(p: U) {} f(300)` reports a
-  // RangeError from inside `f` where the inline spelling is an early error.
-  expect(evaluated('type E = { x: uint8 }; function f(p: E) { return "took it"; }'
-    + ' f({ x: 1, extra: 9 });')).toBe('took it');
+  // An ALIAS-typed parameter is checked the same way now: the alias was
+  // registered during the walk, and a function's signature is built before the
+  // walk reaches it, so the parameter had become ~any~ and no rule that depends
+  // on the type could fire.
+  expectStatic('type E = { x: uint8 }; function f(p: E) { return "took it"; }'
+    + ' f({ x: 1, extra: 9 });');
+  expectStatic('type U = uint8; function g(p: U) {} g(300);');
   // "reported against the property", so the message names the key rather than
   // only the type it offended.
   expect(thrownMessage('type E = { x: uint8 }; let bad: E = { x: 1, extra: 2 };'))
@@ -1364,4 +1364,47 @@ test('where nothing is knowable, nothing is claimed', () => {
   // the callee returns a ref, and an `any` return answers "no" where an absent
   // type left the question to the run time.
   expect(evaluated('let x = 1; (function () { return ref x; })() = 5; String(x);')).toBe('5');
+});
+
+// -- An alias-typed parameter (#sec-literal-propagation) ----------------------
+//
+// A literal takes the type its position requires, and a parameter is such a
+// position. Where the annotation NAMED AN ALIAS the parameter had become ~any~,
+// so every rule that reads the type was skipped - not because the rules were
+// wrong but because there was nothing left for them to read.
+
+test('an alias-typed parameter is the type it names', () => {
+  // The inline spelling is the reference: both must refuse at CHECK time.
+  expectStatic('function inline(p: uint8) {} inline(300);');
+  expectStatic('type U = uint8; function alias(p: U) {} alias(300);');
+  // And freshness, which is the rule whose absence made this visible.
+  expectStatic('function inline(p: { x: uint8 }) {} inline({ x: 1, extra: 9 });');
+  expectStatic('type E = { x: uint8 }; function alias(p: E) {} alias({ x: 1, extra: 9 });');
+});
+
+test('an alias resolves however it is declared relative to its use', () => {
+  // The cause was ORDER OF PASSES rather than order of source: an alias was
+  // registered during the walk, and a function's signature is built before the
+  // walk reaches it. A name pre-pass finds the declaration, as it already did
+  // for a class and an interface.
+  expectStatic('type U = uint8; function f(p: U) {} f(300);');
+  expectStatic('function f(p: U) {} type U = uint8; f(300);');
+});
+
+test('the neighbouring names were never affected', () => {
+  // A CLASS or an INTERFACE name resolved all along, which is what said the
+  // defect was aliases specifically rather than named types.
+  expectStatic('class C { x: uint8 = (1 := uint8); } function f(p: C) {} f(5);');
+  expectStatic('interface I { x: uint8 } function f(p: I) {} f(5);');
+});
+
+test('an alias carrying refinements keeps them', () => {
+  // The resolution has to build what the WALK builds: an alias with `where`
+  // clauses is a nominal type WRAPPING its structure, and the refinements live
+  // on the wrapper. Resolving the bare type answers a structurally equal record
+  // that has forgotten them - which looks right and refuses valid programs.
+  expect(evaluated("type Ad = { s: string, c: 'US'|'CA' }"
+    + " where if (this.c == 'US') { this is { p: string } } else { this is { p: string } };"
+    + " function f(a: Ad) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' }: 2; }; }"
+    + " String(f({ s: 'x', c: 'US', p: 'M' }));")).toBe('1');
 });
