@@ -58,7 +58,7 @@ function DecoratorGrammars(source: string, specifier: string | undefined): Reado
   if (!surroundingAgent.feature('runtime-types')) {
     return grammars;
   }
-  for (const name of PrescanPreprocessorNames(source)) {
+  for (const name of PrescanPreprocessorNames(source).keys()) {
     const macro = HostResolveReplacementDecorator(name, specifier);
     let captured = false;
     if (macro instanceof ObjectValue) {

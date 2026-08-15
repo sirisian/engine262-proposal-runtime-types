@@ -66,7 +66,7 @@ export class Parser extends LanguageParser {
     this.specifier = specifier;
     this.decoratingSource = decoratingSource;
     this.preprocessorNames = surroundingAgent?.feature?.('runtime-types')
-      ? PrescanPreprocessorNames(source)
+      ? new Set(PrescanPreprocessorNames(source).keys())
       : new Set();
     // WHICH grammar a region is read in comes from the macro, which is resolved
     // before the parse and passed in. A preprocessor name whose macro declares

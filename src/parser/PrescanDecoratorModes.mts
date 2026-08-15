@@ -17,8 +17,15 @@
 // and it stops at the first item that is not an import - the modes it is looking
 // for cannot appear after one.
 
-/** Matches `import { a, b as c } from "..." with { ... }` and captures the pieces. */
-const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*(?:'[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
+/**
+ * Matches `import { a, b as c } from "..." with { ... }` and captures the pieces.
+ *
+ * The specifier is CAPTURED. It was not, because nothing needed it: the mode came
+ * from an attribute and the macro from a host hook, so the module was never
+ * loaded. Loading it - which is what the specification says happens - needs to
+ * know where from.
+ */
+const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*('[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
 
 /** Matches `key: "value"` or `key: 'value'` inside a with-clause. */
 const ATTRIBUTE = /([A-Za-z_$][\w$]*|'[^']*'|"[^"]*")\s*:\s*(?:'([^']*)'|"([^"]*)")/g;
@@ -36,17 +43,31 @@ function unquote(text: string): string {
  * program - so the cost where nothing uses a mode is one failed regular
  * expression match.
  */
-export function PrescanPreprocessorNames(source: string): ReadonlySet<string> {
-  const names = new Set<string>();
+export interface PreprocessorImport {
+  /** The module specifier the import names. */
+  readonly Specifier: string;
+  /** The name the module EXPORTS, which is not the bound one under `as`. */
+  readonly ExportName: string;
+}
+
+/**
+ * The `{ bound name -> import }` a source text's preprocessor imports declare.
+ *
+ * Keyed by the BOUND name, because that is what a decoration is spelled with -
+ * `import { jsx as h }` declares `@h` - and carrying the EXPORT name beside it,
+ * because that is what the loaded module must be asked for.
+ */
+export function PrescanPreprocessorNames(source: string): ReadonlyMap<string, PreprocessorImport> {
+  const found = new Map<string, PreprocessorImport>();
   if (!source.includes('preprocessor')) {
     // The attribute name must appear literally for any of this to apply, so a
     // single substring test skips the scan for essentially all source.
-    return names;
+    return found;
   }
   IMPORT_WITH_ATTRIBUTES.lastIndex = 0;
   let match = IMPORT_WITH_ATTRIBUTES.exec(source);
   while (match !== null) {
-    const [, namedImports, withClause] = match;
+    const [, namedImports, specifier, withClause] = match;
     let isPreprocessor = false;
     ATTRIBUTE.lastIndex = 0;
     let attribute = ATTRIBUTE.exec(withClause);
@@ -62,16 +83,16 @@ export function PrescanPreprocessorNames(source: string): ReadonlySet<string> {
         if (text === '') {
           continue;
         }
-        // `a` binds `a`; `a as b` binds `b`. The BOUND name is the one a
-        // decoration is spelled with.
+        // `a` binds `a` and exports `a`; `a as b` binds `b` and exports `a`.
         const as = /\bas\b/.exec(text);
+        const exported = (as ? text.slice(0, as.index) : text).trim();
         const bound = (as ? text.slice(as.index + 2) : text).trim();
-        if (/^[A-Za-z_$][\w$]*$/.test(bound)) {
-          names.add(bound);
+        if (/^[A-Za-z_$][\w$]*$/.test(bound) && /^[A-Za-z_$][\w$]*$/.test(exported)) {
+          found.set(bound, { Specifier: unquote(specifier), ExportName: exported });
         }
       }
     }
     match = IMPORT_WITH_ATTRIBUTES.exec(source);
   }
-  return names;
+  return found;
 }
