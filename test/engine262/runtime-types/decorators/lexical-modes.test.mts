@@ -69,11 +69,11 @@ test('the region arrives as tokens of its mode', () => {
   // macro able to pass an interpolated expression through untouched - a `{ ... }`
   // substitution as a GROUP whose contents are ordinary ECMAScript tokens.
   expect(jsx('@jsx { <a href="/x" id={y}>t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:> s:\\"t\\" p:< p:/ i:a p:>)";');
+    .toBe('"G(p:< i:a i:href p:= s:\\"/x\\" i:id p:= G(i:y) p:> j:t p:< p:/ i:a p:>)";');
   // Text between tags is one string rather than a run of identifiers, which is
   // what makes a Deno-style static/dynamic split expressible.
   expect(jsx('@jsx { <div>hi there</div> }', KINDS))
-    .toBe('"G(p:< i:div p:> s:\\"hi there\\" p:< p:/ i:div p:>)";');
+    .toBe('"G(p:< i:div p:> j:hi there p:< p:/ i:div p:>)";');
 });
 
 test('`do` carries a region wherever a value is wanted', () => {
@@ -121,9 +121,9 @@ test('a region ends where its delimiters balance, not at the first brace', () =>
   // count would stop at the first `}` and splice the wrong range, which surfaces
   // much later as a parse failure on the re-parse.
   expect(jsx('@jsx { <a title="}">t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:title p:= s:\\"}\\" p:> s:\\"t\\" p:< p:/ i:a p:>)";');
+    .toBe('"G(p:< i:a i:title p:= s:\\"}\\" p:> j:t p:< p:/ i:a p:>)";');
   expect(jsx('@jsx { <a id={ { k: 1 } }>t</a> }', KINDS))
-    .toBe('"G(p:< i:a i:id p:= G(G(i:k p:: n:1)) p:> s:\\"t\\" p:< p:/ i:a p:>)";');
+    .toBe('"G(p:< i:a i:id p:= G(G(i:k p:: n:1)) p:> j:t p:< p:/ i:a p:>)";');
 });
 
 test('what the macro returns is ordinary ECMAScript', () => {
@@ -165,18 +165,18 @@ test('whitespace between children is content, and survives', () => {
   // `<p>Hi {name}!</p>` is an ordinary line of JSX, and losing the space after
   // `Hi` made a macro render `Hiname!` with no way to do otherwise.
   expect(jsx('@jsx { <p>Hi {name}!</p> }', KINDS))
-    .toBe('"G(p:< i:p p:> s:\\"Hi \\" G(i:name) s:\\"!\\" p:< p:/ i:p p:>)";');
+    .toBe('"G(p:< i:p p:> j:Hi  G(i:name) j:! p:< p:/ i:p p:>)";');
   // A whitespace-only run between two substitutions is content too: these two
   // render differently, so they must not tokenize identically.
   expect(jsx('@jsx { <p>{a} {b}</p> }', KINDS))
-    .toBe('"G(p:< i:p p:> G(i:a) s:\\" \\" G(i:b) p:< p:/ i:p p:>)";');
+    .toBe('"G(p:< i:p p:> G(i:a) j:  G(i:b) p:< p:/ i:p p:>)";');
   expect(jsx('@jsx { <p>{a}{b}</p> }', KINDS))
     .toBe('"G(p:< i:p p:> G(i:a) G(i:b) p:< p:/ i:p p:>)";');
   // Text is emitted exactly as written, newlines and indentation included.
   // WHICH whitespace is significant is JSX's rule, not the scanner's: a mode
   // says what the tokens are and a macro says what they mean.
   expect(jsx(`@jsx { <p>one${NL}  two</p> }`, KINDS))
-    .toBe('"G(p:< i:p p:> s:\\"one\\\\n  two\\" p:< p:/ i:p p:>)";');
+    .toBe('"G(p:< i:p p:> j:one\\n  two p:< p:/ i:p p:>)";');
 });
 
 test('whitespace at the region\'s own edges is formatting, not content', () => {
@@ -204,16 +204,16 @@ test('a decorated declaration may contain JSX in expression position', () => {
   // written at all before: `@jsx function View()` took no region, so its body
   // lexed as ordinary ECMAScript and the `<` stopped it.
   expect(jsxDecl('@jsx function View() { return <div/>; }'))
-    .toBe('"i:function i:View G() G(i:return G(p:< i:div p:/ p:>) p:;)"');
+    .toBe('"i:function i:View G() G(i:return p:< i:div p:/ p:> p:;)"');
   // JavaScript and JSX in one body, which a captured region cannot express - a
   // statement beside JSX in a pure region becomes TEXT.
   expect(jsxDecl('@jsx function V() { const q = 1; return <div/>; }'))
-    .toBe('"i:function i:V G() G(i:const i:q p:= n:1 p:; i:return G(p:< i:div p:/ p:>) p:;)"');
+    .toBe('"i:function i:V G() G(i:const i:q p:= n:1 p:; i:return p:< i:div p:/ p:> p:;)"');
 });
 
 test('the element arrives as structure, not as an opaque run', () => {
   expect(jsxDecl('@jsx function V() { return <a href="/x">t</a>; }'))
-    .toBe('"i:function i:V G() G(i:return G(p:< i:a i:href p:= s:\\"/x\\" p:> s:\\"t\\" p:< p:/ i:a p:>) p:;)"');
+    .toBe('"i:function i:V G() G(i:return p:< i:a i:href p:= s:\\"/x\\" p:> j:t p:< p:/ i:a p:> p:;)"');
 });
 
 test('JSX nested inside an interpolation is scanned as JSX', () => {
@@ -222,7 +222,7 @@ test('JSX nested inside an interpolation is scanned as JSX', () => {
   // punctuation and identifiers with its text fidelity already gone. The parser
   // re-enters at any depth, so it does not.
   expect(jsxDecl('@jsx function V() { return <ul>{xs.map(x => <li/>)}</ul>; }'))
-    .toBe('"i:function i:V G() G(i:return G(p:< i:ul p:> G(i:xs p:. i:map G(i:x p:=> p:< i:li p:/ p:>)) p:< p:/ i:ul p:>) p:;)"');
+    .toBe('"i:function i:V G() G(i:return p:< i:ul p:> G(i:xs p:. i:map G(i:x p:=> p:< i:li p:/ p:>)) p:< p:/ i:ul p:> p:;)"');
 });
 
 test('an exported declaration takes the mode too', () => {
@@ -230,7 +230,7 @@ test('an exported declaration takes the mode too', () => {
   // declaration by different routes, and this is the shape that lets a macro
   // emit a constant beside what it replaces.
   expect(jsxDecl('@jsx export function View() { return <p/>; }'))
-    .toBe('"i:export i:function i:View G() G(i:return G(p:< i:p p:/ p:>) p:;)"');
+    .toBe('"i:export i:function i:View G() G(i:return p:< i:p p:/ p:> p:;)"');
 });
 
 test('the mode changes nothing outside a decorated declaration', () => {
@@ -291,9 +291,9 @@ test('arguments work in every spelling and position', () => {
     .toBe('const v = "T[G(p:< i:div p:/ p:>)] A[G(n:1)]";');
   expect(both('@jsx(1) { <div/> }')).toBe('"T[G(p:< i:div p:/ p:>)] A[G(n:1)]";');
   expect(both('@jsx(1) function V() { return <div/>; }'))
-    .toBe('"T[i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
+    .toBe('"T[i:function i:V G() G(i:return p:< i:div p:/ p:> p:;)] A[G(n:1)]"');
   expect(both('@jsx(1) export function V() { return <div/>; }'))
-    .toBe('"T[i:export i:function i:V G() G(i:return G(p:< i:div p:/ p:>) p:;)] A[G(n:1)]"');
+    .toBe('"T[i:export i:function i:V G() G(i:return p:< i:div p:/ p:> p:;)] A[G(n:1)]"');
 });
 
 // -- The two spellings are interchangeable --------------------------------------
@@ -356,4 +356,37 @@ test('a terminator is not added where the macro already ended one', () => {
     + ' function grp(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }'
     + ' return [k("identifier", "function"), k("identifier", "g"), grp("(", []), grp("{", [])]; })';
   expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> }`, emitsBlock)).toBe('function g () {}');
+});
+
+// -- Control flow between tags --------------------------------------------------
+//
+// An element is PARSED rather than scanned, so its children may be statements.
+// The `@` sigil marks them, because child TEXT is possible here and a bare
+// `if (` could be either - Angular 17 reached the same answer with the same
+// spelling. At the region's statement level no sigil is needed, since there is
+// no text there to be ambiguous with.
+test('a construct may stand between tags, marked by a sigil', () => {
+  expect(jsx('const v = @jsx { <panel>@if (c) { <a t="1" />; }</panel>; };', KINDS))
+    .toBe('const v = "G(p:< i:panel p:> i:if G(i:c) G(p:< i:a i:t p:= s:\\"1\\" p:/ p:> p:;)'
+      + ' p:< p:/ i:panel p:> p:;)";');
+  // The loop binding is in scope where `@key` is written, which is the whole
+  // reason the decoration goes on the BLOCK rather than before the construct.
+  expect(jsx('const v = @jsx { <panel>@for (const s of xs) @key(s.id) { <a t="1" />; }</panel>; };', KINDS))
+    .toBe('const v = "G(p:< i:panel p:> i:for G(i:const i:s i:of i:xs) p:@ i:key G(i:s p:. i:id)'
+      + ' G(p:< i:a i:t p:= s:\\"1\\" p:/ p:> p:;) p:< p:/ i:panel p:> p:;)";');
+});
+
+test('a parsed element keeps what the scanner used to lose', () => {
+  // A close tag carries its `<` and `/`, so it cannot be read as a child named
+  // `panel`.
+  expect(jsx('const v = @jsx { <panel><label text="a" /></panel>; };', KINDS))
+    .toBe('const v = "G(p:< i:panel p:> p:< i:label i:text p:= s:\\"a\\" p:/ p:>'
+      + ' p:< p:/ i:panel p:> p:;)";');
+  // A prop's interpolation is a group, so `{n}` is not a bare identifier.
+  expect(jsx('const v = @jsx { <label text={n} />; };', KINDS))
+    .toBe('const v = "G(p:< i:label i:text p:= G(i:n) p:/ p:> p:;)";');
+  // And a template literal in a prop is ONE token, because it came from the
+  // parse rather than from a re-lex.
+  expect(jsx('const v = @jsx { <label text={`${n} x`} />; };', KINDS))
+    .toBe('const v = "G(p:< i:label i:text p:= G(t:`${n} x`) p:/ p:> p:;)";');
 });

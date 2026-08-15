@@ -1229,6 +1229,10 @@ export namespace ParseNode {
     readonly RegionText: string;
     /** Whether it stands where a value is wanted, as `@jsx do { ... }` does. */
     readonly IsExpression: boolean;
+    /** Whether the region was PARSED rather than captured - a mixed mode. */
+    readonly Parsed?: boolean;
+    /** The parsed Block, where [[Parsed]] is *true*. */
+    readonly Block?: ParseNode;
   }
 
   // Block :

@@ -126,7 +126,10 @@ export function ExpansionSites(root: ParseNode, names: readonly string[]): reado
             distance: decorators.length - 1 - i,
             args: spelled.args,
             // A ModedRegion carries the mode the parser scanned it in.
-            mode: (n as { Mode?: string }).Mode,
+            // A PARSED region's tokens come from the parse, so it names no
+            // scanner: passing its mode would send the range back through
+            // `tokenizeModedText` and undo the parse threading.
+            mode: (n as { Parsed?: boolean }).Parsed ? undefined : (n as { Mode?: string }).Mode,
           });
         }
       });
