@@ -28,7 +28,7 @@ import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsi
 import { Call, Get } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
-import { tokenizeText, TokensFromParse } from './parser/TokensOf.mts';
+import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { tokenizeModedText } from './parser/ModedTokens.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
@@ -81,6 +81,43 @@ function DecoratorGrammars(source: string, specifier: string | undefined): Reado
     grammars.set(name, grammar);
   }
   return grammars;
+}
+
+/**
+ * Parse a sub-range of a region's text and answer its tokens.
+ *
+ * The whole of `TokenStream.prototype.parse`. A macro delegating an
+ * interpolation reaches here, and what it gets back are tokens THREADED FROM
+ * THAT PARSE - so a regular expression is one token and a template literal is
+ * one token, which is exactly what a macro re-lexing the slice itself cannot
+ * achieve.
+ *
+ * The range's own text is parsed rather than the whole region, and the token
+ * log is filtered to it - so a macro asking for `{ ... }`'s contents is charged
+ * for those contents and nothing else.
+ */
+export function ParseRange(
+  text: string,
+  from: number,
+  to: number,
+  goal: 'expression' | 'statements',
+  source: { URL: string | undefined, Macro: string | undefined, Generation: number, Text: string },
+): readonly TokenRecord[] | string {
+  const slice = text.slice(from, to);
+  const result = wrappedParse<ParseNode>(
+    { source: slice },
+    (p) => (goal === 'expression'
+      ? (p as unknown as { parseExpression(): ParseNode }).parseExpression()
+      : (p as unknown as { parseScript(): ParseNode }).parseScript()),
+  );
+  if (Array.isArray(result)) {
+    // The message travels; the POSITION is the range's own, since a macro asked
+    // about a range of its region rather than about a standalone program.
+    const first = result[0] as { message?: unknown } | undefined;
+    return typeof first?.message === 'string' ? first.message : 'the range does not parse';
+  }
+  const log = (result as { tokenLog?: readonly { type: number, startIndex: number, endIndex: number, kind?: string }[] }).tokenLog ?? [];
+  return TokensFromParse(log as never, slice, source as never, 0, slice.length);
 }
 
 export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T) {

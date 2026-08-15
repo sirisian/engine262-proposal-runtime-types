@@ -5,6 +5,7 @@ import {
 import { type ValueEvaluator } from '../completion.mts';
 import type { TokenRecord, SpanRecord } from '../parser/TokensOf.mts';
 import { R } from "../abstract-ops/all.mjs";
+import { ParseRange } from '../parse.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
@@ -244,6 +245,54 @@ function* TokenStreamProto_toString(_args: Arguments, { thisValue }: FunctionCal
   return Value(TokenStreamText(thisValue.TokenRecords));
 }
 
+/**
+ * `TokenStream.prototype.parse(start, end, goal)`: parse a sub-range of this
+ * stream's source and answer its tokens.
+ *
+ * This is what lets a macro define a bespoke syntax without the engine knowing
+ * anything about it. A macro captures its region, scans whatever it likes, and
+ * delegates the one thing it CANNOT do: decide whether `/` begins a regular
+ * expression or a division. That is not decidable lexically - after `}` it
+ * depends on whether the brace closed a block or an object literal, which needs
+ * a parse - so a macro re-lexing a slice gets four tokens where there is one
+ * regular expression and no way to tell.
+ *
+ * Rust hands a macro a complete token stream and needs no such call, because its
+ * lexical grammar is parse-INDEPENDENT. JavaScript's is not, which is why the
+ * engine must offer this rather than leave a macro to re-implement the grammar -
+ * the trade Rust makes, at the cost of `syn`.
+ *
+ * The parse inherits this region's context: [Yield], [Await], [Return] and
+ * strictness come from where the region SITS, not from the macro. A macro has
+ * nothing sensible to pass, and letting it pass anything invites parsing `await`
+ * into a synchronous function.
+ */
+function* TokenStreamProto_parse([start = Value.undefined, end = Value.undefined, goal = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isTokenStream(thisValue)) {
+    return Throw.TypeError('$1 is not a token stream', thisValue);
+  }
+  const records = thisValue.TokenRecords;
+  const source = records.length > 0 ? records[0].Span.Source : undefined;
+  if (source === undefined) {
+    return Throw.TypeError('$1 is not a token stream', thisValue);
+  }
+  const text = source.Text;
+  const from = start instanceof NumberValue ? R(start) : 0;
+  const to = end instanceof NumberValue ? R(end) : text.length;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to > text.length || from > to) {
+    return Throw.RangeError('$1 is not a range of this stream', start);
+  }
+  const wanted = goal instanceof JSStringValue ? goal.stringValue() : 'expression';
+  if (wanted !== 'expression' && wanted !== 'statements') {
+    return Throw.TypeError('$1 does not name a goal symbol', goal);
+  }
+  const parsed = ParseRange(text, from, to, wanted, source);
+  if (typeof parsed === 'string') {
+    return Throw.SyntaxError('$1', Value(parsed));
+  }
+  return CreateTokenStream(parsed, surroundingAgent.currentRealmRecord);
+}
+
 let gensymCounter = 0;
 
 /**
@@ -287,6 +336,7 @@ function* TokenStream_gensym(args: Arguments): ValueEvaluator {
 export function bootstrapTokenStreamPrototype(realmRec: Realm): void {
   const proto = bootstrapPrototype(realmRec, [
     ['toString', TokenStreamProto_toString, 0],
+    ['parse', TokenStreamProto_parse, 3],
   ], realmRec.Intrinsics['%Array.prototype%'], 'TokenStream');
   realmRec.Intrinsics['%TokenStream.prototype%'] = proto;
 }
