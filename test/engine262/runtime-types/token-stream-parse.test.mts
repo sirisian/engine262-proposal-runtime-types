@@ -97,3 +97,20 @@ test('an unrecognised goal, and a range outside the source, are refused', () => 
   }), { capture: true })`;
   expect(expandWith(badRange, 'const v = @m { x };')).toBe('REFUSED');
 });
+
+test('a span exposes the source TEXT its ranges index', () => {
+  // `parse(start, end)` indexes the SOURCE, so a macro scanning a captured
+  // region needs the same string - and `toString` is a rendering of the tokens,
+  // which is not guaranteed to be it. Exposing the source removes the question.
+  const reportsBoth = `Object.assign((function (t) {
+    var s = t[0].span;
+    return [{ kind: "string", value: JSON.stringify(
+      (String(t) === s.source.text ? "same" : "differ") + " " + JSON.stringify(s.source.text)), span: s }];
+  }), { capture: true })`;
+  expect(expandWith(reportsBoth, 'const v = @m { x };'))
+    .toBe('const v = "same \\"{ x }\\"";');
+  // A macro that scans `source.text` and delegates against it cannot be off by
+  // characters the rendering happens to drop, whatever those turn out to be.
+  expect(expandWith(reportsBoth, 'const v = @m { /* c */ x };'))
+    .toBe('const v = "same \\"{ /* c */ x }\\"";');
+});

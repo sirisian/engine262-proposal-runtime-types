@@ -45,6 +45,12 @@ function SpanToObject(span: SpanRecord, realmRec: Realm): ObjectValue {
   X(CreateDataPropertyOrThrow(source, Value('url'), span.Source.URL === undefined ? Value.undefined : Value(span.Source.URL)));
   X(CreateDataPropertyOrThrow(source, Value('macro'), span.Source.Macro === undefined ? Value.undefined : Value(span.Source.Macro)));
   X(CreateDataPropertyOrThrow(source, Value('generation'), F(span.Source.Generation)));
+  // The source TEXT, which a macro scanning a captured region needs and which
+  // `toString()` cannot serve: that renders the TOKENS, so it differs from the
+  // source by whatever is not a token - a comment, most obviously. A macro
+  // indexing the rendering while `parse` indexes the source is off by exactly
+  // those characters, which is a silent misdelegation rather than an error.
+  X(CreateDataPropertyOrThrow(source, Value('text'), Value(span.Source.Text)));
   const obj = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
   X(CreateDataPropertyOrThrow(obj, Value('source'), source));
   X(CreateDataPropertyOrThrow(obj, Value('start'), F(span.Start)));
