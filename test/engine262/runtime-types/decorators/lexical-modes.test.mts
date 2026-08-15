@@ -165,7 +165,6 @@ test('declaring a mode does not require every use to take a region', () => {
 // decision comes back - and it is the parser's, not a scanner's. The parser
 // admits a JSX element at exactly the position it would otherwise try a regular
 // expression literal, which is the only place the question can be answered.
-const jsxDecl = (body: string, macroSource = KINDS) => expandWith('jsx', JSX_IMPORT + body, withJsxGrammar(macroSource));
 
 
 // -- An ARGUMENTED moded decoration ---------------------------------------------

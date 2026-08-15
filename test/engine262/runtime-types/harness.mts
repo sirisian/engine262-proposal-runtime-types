@@ -1,5 +1,7 @@
 import { expect } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import {
+  Agent, ManagedRealm, setSurroundingAgent, FinishLoadingImportedModule,
+} from '#self';
 
 /**
  * Shared harness for the README feature suite. Each test verifies a concrete,
@@ -148,4 +150,61 @@ export function expectErrorFlagOff(source: string) {
  */
 export function bool(source: string): boolean {
   return evaluated(source) === 'true';
+}
+
+/**
+ * An agent whose host LOADS preprocessor modules, which is how
+ * `sec-preprocessor-modules` says a replacement decorator is found: the module
+ * is fetched and evaluated before the importing module is parsed, and the
+ * decoration names one of its exports.
+ *
+ * The loading is SYNCHRONOUS, and may be: the graph loader is a callback machine
+ * rather than an asynchronous one, so a host that calls
+ * `FinishLoadingImportedModule` before returning resolves the whole graph in
+ * time for the parse that is waiting on it.
+ *
+ * This replaces `HostResolveReplacementDecorator`, which was how the engine
+ * found a macro before any of this existed and which appears nowhere in the
+ * specification.
+ */
+export function realmWithPreprocessors(modules: Record<string, string>): ManagedRealm {
+  // A holder, because the loader closes over the realm it is registered with -
+  // the hook is installed before the realm exists, and answers only after it
+  // does.
+  const held: { realm?: ManagedRealm } = {};
+  setSurroundingAgent(new Agent({
+    features: ['runtime-types'],
+    hostHooks: {
+      HostLoadImportedModule(referrer: unknown, request: { Specifier: string }, _hostDefined: unknown, payload: unknown) {
+        const source = modules[request.Specifier];
+        const realm = held.realm as ManagedRealm;
+        const compiled = source === undefined
+          ? realm.compileModule('throw new Error("no such module");')
+          : realm.compileModule(source, { specifier: request.Specifier } as never);
+        FinishLoadingImportedModule(referrer as never, request as never, payload as never, compiled as never);
+      },
+    },
+  } as never));
+  held.realm = new ManagedRealm();
+  return held.realm;
+}
+
+/** A preprocessor module exporting one macro under `name`. */
+export function preprocessorModule(name: string, body: string): string {
+  return `export const ${name} = ${body};`;
+}
+
+/**
+ * A realm whose host serves ONE preprocessor module, whatever specifier is asked
+ * for, exporting `name` bound to `macroExpression`.
+ *
+ * Which specifier a fixture writes is not what these tests are about, so the
+ * loader answers them all - which is also what the host hook this replaces did,
+ * being asked for a decorator by name and never told where it came from.
+ */
+export function realmWithMacro(name: string, macroExpression: string): ManagedRealm {
+  return realmWithPreprocessors(new Proxy({}, {
+    get: () => `export const ${name} = ${macroExpression};`,
+    has: () => true,
+  }) as Record<string, string>);
 }

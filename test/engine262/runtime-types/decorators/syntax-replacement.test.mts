@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { realmWithMacro } from '../harness.mts';
 import {
   Agent, ManagedRealm, Parser, ReplacementDecoratorNames, setSurroundingAgent,
 } from '#self';
@@ -14,15 +15,10 @@ const NL = String.fromCharCode(10);
 const PRE = 'import { m } from "./x.js" with { preprocessor: "true" }; ';
 
 function outcome(source: string, macroSource?: string): string {
-  let macro: unknown;
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro : undefined) },
-  } as never));
-  const realm = new ManagedRealm();
-  if (macroSource) {
-    macro = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
-  }
+  // The macro comes from a MODULE the host loads. Where a test supplies none,
+  // the module exports `undefined` and the decoration resolves to nothing, which
+  // is what the hook answered before.
+  const realm = realmWithMacro('m', macroSource ?? 'undefined');
   const compiled = realm.compileModule(source) as { Type: string, Value?: { properties?: Iterable<[{ stringValue(): string }, { Value?: { stringValue?(): string } }]> } };
   if (compiled.Type === 'normal') {
     return 'ACCEPTED';

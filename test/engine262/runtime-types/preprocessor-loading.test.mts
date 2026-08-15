@@ -34,7 +34,7 @@ function realmWithModules(modules: Record<string, string>, defer = false) {
   setSurroundingAgent(new Agent({
     features: ['runtime-types'],
     hostHooks: {
-      HostLoadImportedModule(referrer: unknown, request: { Specifier: string }, hostDefined: unknown, payload: unknown) {
+      HostLoadImportedModule(referrer: unknown, request: { Specifier: string }, _hostDefined: unknown, payload: unknown) {
         const source = modules[request.Specifier];
         const realm = (globalThis as { __realm?: ManagedRealm }).__realm as ManagedRealm;
         const finish = () => {

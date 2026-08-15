@@ -1,6 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, evaluatedFlagOff } from '../harness.mts';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { evaluated, evaluatedFlagOff, realmWithMacro } from '../harness.mts';
 
 /**
  * The NEGATIVE matrix: "A decoration in a position
@@ -177,13 +176,9 @@ const NL = String.fromCharCode(10);
 const MODE_PRE = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
 
 function moduleOutcome(source: string): string {
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
-  } as never));
-  const realm = new ManagedRealm();
-  macro.current = (realm.evaluateScriptSkipDebugger('(function (t) { return t; })') as { Value?: unknown }).Value;
+  // The macro comes from a MODULE the host loads, which is how
+  // `sec-preprocessor-modules` says a decoration is resolved.
+  const realm = realmWithMacro('m', '(function (t) { return t; })');
   const compiled = realm.compileModule(source) as { Type: string };
   return compiled.Type === 'normal' ? 'ACCEPTED' : 'REFUSED';
 }
