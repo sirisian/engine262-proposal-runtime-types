@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { realmWithMacro } from './harness.mts';
 
 /**
  * `TokenStream.prototype.parse(start, end, goal)`.
@@ -29,17 +29,9 @@ const DELEGATING = `Object.assign((function (t) {
 }), { capture: true })`;
 
 function expandWith(macroSource: string, body: string): string {
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: () => macro.current },
-  } as never));
-  const realm = new ManagedRealm();
-  const loaded = realm.evaluateScriptSkipDebugger(macroSource) as { Type?: string, Value?: unknown };
-  if (loaded.Type !== 'normal') {
- return 'MACRO LOAD FAILED';
-}
-  macro.current = loaded.Value;
+  // The macro comes from a MODULE the host loads, as `sec-preprocessor-modules`
+  // describes, rather than from a host hook that never appeared in it.
+  const realm = realmWithMacro('m', macroSource);
   const module = realm.compileModule(IMPORT + body) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };

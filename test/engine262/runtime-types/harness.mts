@@ -208,3 +208,19 @@ export function realmWithMacro(name: string, macroExpression: string): ManagedRe
     has: () => true,
   }) as Record<string, string>);
 }
+
+/**
+ * A realm whose one preprocessor module exports SEVERAL macros, keyed by name.
+ *
+ * A module may export more than one, and a fixture importing two decorations
+ * from one specifier is the ordinary case rather than a special one.
+ */
+export function realmWithMacros(macros: Record<string, string>): ManagedRealm {
+  const source = Object.keys(macros)
+    .map((name) => `export const ${name} = ${macros[name]};`)
+    .join('\n');
+  return realmWithPreprocessors(new Proxy({}, {
+    get: () => source,
+    has: () => true,
+  }) as Record<string, string>);
+}

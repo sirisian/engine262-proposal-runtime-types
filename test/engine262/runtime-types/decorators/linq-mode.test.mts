@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { realmWithMacro } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -227,13 +228,7 @@ const MACRO = `Object.assign((function (tokens, args) {
 
 /** The text a query compiles to, whitespace collapsed, or `REFUSED`. */
 function compiled(query: string): string {
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: () => macro.current },
-  } as never));
-  const realm = new ManagedRealm();
-  macro.current = (realm.evaluateScriptSkipDebugger(MACRO) as { Value?: unknown }).Value;
+  const realm = realmWithMacro('linq', MACRO);
   const module = realm.compileModule(LINQ_IMPORT + query) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };

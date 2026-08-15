@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { realmWithMacro } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -50,15 +51,11 @@ const KINDS = '(function (t) {'
   + ' return [{ kind: "string", value: JSON.stringify(walk(t)), span: s }]; })';
 
 function expandWith(macroName: string, source: string, macroSource: string): string {
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: {
-      HostResolveReplacementDecorator: (n: string) => (n === macroName ? macro.current : undefined),
-    },
-  } as never));
-  const realm = new ManagedRealm();
-  macro.current = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
+  // The macro comes from a MODULE the host loads, which is how
+  // `sec-preprocessor-modules` says a decoration is resolved: fetched and
+  // evaluated before the importing module is parsed, and named by one of its
+  // exports.
+  const realm = realmWithMacro(macroName, macroSource);
   const compiled = realm.compileModule(source) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };
@@ -91,8 +88,11 @@ test('a grammar follows the decoration NAME, including a renamed import', () => 
   // through the import, because that is what lets a highlighter recognise a
   // region: a TextMate grammar cannot follow an import. Keying on the bound name
   // is what `lit-html` and `graphql-tag` are highlighted by today.
-  const renamed = 'import { jsx as h } from "./x.js" with { preprocessor: "true", mode: "jsx" };' + NL;
-  expect(expandWith('h', `${renamed}const v = @h do { <div/> }; v;`, withJsxGrammar(JSX_MACRO)))
+  // `mode:` is gone, and the alias is the point: the module EXPORTS `jsx` and the
+  // decoration is spelled `@h`, so resolution has to ask for one and recognise
+  // the other. The pre-scan keeps both for exactly this.
+  const renamed = 'import { jsx as h } from "./x.js" with { preprocessor: "true" };' + NL;
+  expect(expandWith('jsx', `${renamed}const v = @h do { <div/> }; v;`, withJsxGrammar(JSX_MACRO)))
     .toBe('const v = _jsx ("div" , {}); v;');
 });
 

@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { realmWithMacro, realmWithMacros } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -12,15 +13,10 @@ const NL = String.fromCharCode(10);
 
 function expand(source: string, macros: Record<string, string>): string {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] } as never));
-  const realm = new ManagedRealm();
-  const built: Record<string, unknown> = {};
-  for (const name of Object.keys(macros)) {
-    built[name] = (realm.evaluateScriptSkipDebugger(macros[name]) as { Value?: unknown }).Value;
-  }
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => built[n] },
-  } as never));
+  // The macros come from a MODULE the host loads, which is how
+  // `sec-preprocessor-modules` says a decoration is resolved. A module may
+  // export several, which is what a fixture with two decorations needs.
+  const realm = realmWithMacros(macros);
   const compiled = realm.compileModule(source) as {
     Type: string,
     Value?: { ECMAScriptCode?: { sourceText?: string }, properties?: Iterable<[{ stringValue(): string }, { Value?: { stringValue?(): string } }]> },
@@ -211,15 +207,7 @@ test('a top-level decoration takes the same forms a nested one does', () => {
 const PRINT_PRE = `import { m } from "./x.js" with { preprocessor: "true" };${NL}`;
 
 function expandPrinted(body: string, macroSource: string): string {
-  // The hook closure is installed before the macro exists, so the binding it
-  // reads has to be a holder rather than the value itself.
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
-  } as never));
-  const realm = new ManagedRealm();
-  macro.current = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
+  const realm = realmWithMacro('m', macroSource);
   const compiled = realm.compileModule(PRINT_PRE + body) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };
@@ -290,13 +278,7 @@ test('a GROUP prints its delimiters around its contents', () => {
  * what they RECEIVED, so there is nothing to slice to.
  */
 function expandedBody(body: string, macroSource: string): string {
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: (n: string) => (n === 'm' ? macro.current : undefined) },
-  } as never));
-  const realm = new ManagedRealm();
-  macro.current = (realm.evaluateScriptSkipDebugger(macroSource) as { Value?: unknown }).Value;
+  const realm = realmWithMacro('m', macroSource);
   const compiled = realm.compileModule(PRINT_PRE + body) as {
     Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } };
   };
