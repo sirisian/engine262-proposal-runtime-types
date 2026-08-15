@@ -1,5 +1,10 @@
-// proposal-runtime-types: the lexical modes a module's preprocessor imports
-// declare, read from SOURCE TEXT before the module is parsed.
+// proposal-runtime-types: the names a module's preprocessor imports BIND, read
+// from SOURCE TEXT before the module is parsed.
+//
+// It used to read a `mode:` attribute and answer a name-to-mode map. The mode is
+// gone: a preprocessor decoration followed by `{` takes a region because it is a
+// preprocessor decoration, and WHICH grammar the region is read in comes from the
+// macro, which is resolved before the parse. So the scan needs only the names.
 //
 // Why a pre-scan rather than a walk of the parsed tree, which is how
 // `ReplacementDecoratorModes` reads the same information: expansion runs on an
@@ -11,17 +16,6 @@
 // module and lexes as ordinary ECMAScript, so this cannot itself need a mode,
 // and it stops at the first item that is not an import - the modes it is looking
 // for cannot appear after one.
-
-/**
- * The lexical modes this implementation provides.
- *
- * An unknown mode is NOT registered here. `sec-preprocessor-modules` makes it a
- * Syntax Error at the import, and that error is raised from the parsed tree -
- * so registering the mode anyway would have the parser try to scan a region for
- * it first, and a decoration whose target is not a region would fail with an
- * unexpected token before the mode itself could be reported.
- */
-const KNOWN_MODES = new Set(['jsx', 'linq']);
 
 /** Matches `import { a, b as c } from "..." with { ... }` and captures the pieces. */
 const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*(?:'[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
@@ -42,43 +36,42 @@ function unquote(text: string): string {
  * program - so the cost where nothing uses a mode is one failed regular
  * expression match.
  */
-export function PrescanDecoratorModes(source: string): ReadonlyMap<string, string> {
-  const modes = new Map<string, string>();
+export function PrescanPreprocessorNames(source: string): ReadonlySet<string> {
+  const names = new Set<string>();
   if (!source.includes('preprocessor')) {
     // The attribute name must appear literally for any of this to apply, so a
     // single substring test skips the scan for essentially all source.
-    return modes;
+    return names;
   }
   IMPORT_WITH_ATTRIBUTES.lastIndex = 0;
   let match = IMPORT_WITH_ATTRIBUTES.exec(source);
   while (match !== null) {
     const [, namedImports, withClause] = match;
     let isPreprocessor = false;
-    let mode: string | undefined;
     ATTRIBUTE.lastIndex = 0;
     let attribute = ATTRIBUTE.exec(withClause);
     while (attribute !== null) {
-      const key = unquote(attribute[1]);
-      const value = attribute[2] ?? attribute[3] ?? '';
-      if (key === 'preprocessor' && value === 'true') {
+      if (unquote(attribute[1]) === 'preprocessor' && (attribute[2] ?? attribute[3] ?? '') === 'true') {
         isPreprocessor = true;
-      } else if (key === 'mode') {
-        mode = value;
       }
       attribute = ATTRIBUTE.exec(withClause);
     }
-    if (isPreprocessor && mode !== undefined && KNOWN_MODES.has(mode)) {
-      for (const specifier of namedImports.split(',')) {
-        // `a` binds `a`; `a as b` binds `b`, which is the name a decoration is
-        // spelled with and therefore the name a mode is keyed by.
-        const parts = specifier.trim().split(/\s+as\s+/);
-        const bound = (parts[parts.length - 1] ?? '').trim();
-        if (bound !== '') {
-          modes.set(bound, mode);
+    if (isPreprocessor) {
+      for (const clause of namedImports.split(',')) {
+        const text = clause.trim();
+        if (text === '') {
+          continue;
+        }
+        // `a` binds `a`; `a as b` binds `b`. The BOUND name is the one a
+        // decoration is spelled with.
+        const as = /\bas\b/.exec(text);
+        const bound = (as ? text.slice(as.index + 2) : text).trim();
+        if (/^[A-Za-z_$][\w$]*$/.test(bound)) {
+          names.add(bound);
         }
       }
     }
     match = IMPORT_WITH_ATTRIBUTES.exec(source);
   }
-  return modes;
+  return names;
 }

@@ -22,15 +22,15 @@ import { ParseJSON } from './intrinsics/JSON.mts';
 import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyErrors.mts';
-import { FirstUnknownMode } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstEvaluabilityViolation } from './static-semantics/PreprocessorEvaluability.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
-import { Call } from './abstract-ops/all.mts';
+import { Call, Get } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse } from './parser/TokensOf.mts';
 import { tokenizeModedText } from './parser/ModedTokens.mts';
+import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
@@ -40,8 +40,54 @@ import {
 
 export { Parser, RegExpParser };
 
+/**
+ * `{ bound name -> grammar }` for a source text's preprocessor decorations.
+ *
+ * The grammar comes from the MACRO, which `sec-preprocessor-modules` has
+ * evaluated before the importing module is parsed - so it is available here.
+ * A macro that declares none takes an opaque region, which is what a
+ * preprocessor with no special lexical grammar wants.
+ *
+ * This replaces the `mode:` import attribute. The attribute answered two
+ * questions - is this a region, and which grammar - and only the second needs an
+ * answer the source cannot give: being a preprocessor decoration is what makes
+ * the braces a region.
+ */
+function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
+  const grammars = new Map<string, string>();
+  if (!surroundingAgent.feature('runtime-types')) {
+    return grammars;
+  }
+  for (const name of PrescanPreprocessorNames(source)) {
+    const macro = HostResolveReplacementDecorator(name, specifier);
+    // The DEFAULT is an ordinary ECMAScript region - a Block, parsed, with its
+    // tokens threaded from the parse. That is what a decorated block was before
+    // this change, and making the default a CAPTURED region instead re-lexed it:
+    // `/ab/g` arrived as four tokens rather than one regular expression, undoing
+    // the parse threading for every macro that had not asked for anything.
+    //
+    // A macro whose region is not ECMAScript - a query language, say - declares
+    // `grammar: "opaque"` and gets the captured behaviour.
+    let grammar = 'ecmascript';
+    if (macro instanceof ObjectValue) {
+      // EnsureCompletion, because `skipDebugger` answers the VALUE rather than a
+      // Completion Record - reading `.Type` off it is always undefined, so the
+      // grammar silently read as absent and every region was opaque.
+      const declared = EnsureCompletion(skipDebugger(Get(macro, Value('grammar')))) as { Type: string, Value?: unknown };
+      if (declared.Type === 'normal' && declared.Value instanceof JSStringValue) {
+        grammar = declared.Value.stringValue();
+      }
+    }
+    grammars.set(name, grammar);
+  }
+  return grammars;
+}
+
 export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T) {
-  const p = new Parser(init);
+  const p = new Parser({
+    ...init,
+    decoratorGrammars: init.decoratorGrammars ?? DecoratorGrammars(init.source, init.specifier),
+  });
 
   try {
     const r = f(p);
@@ -239,15 +285,11 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // preprocessor import at all, where every decorated statement is a runtime
   // decoration of one.
   if (surroundingAgent.feature('runtime-types')) {
-    // `sec-preprocessor-modules`: an unknown mode is a Syntax Error at the
-    // IMPORT. Reported here rather than where a region is scanned, so a
-    // misspelled mode says so instead of failing later at the `<` of a region
-    // the author believed was moded.
-    const unknown = FirstUnknownMode(body);
-    if (unknown !== undefined) {
-      const completion = Throw.SyntaxError('$1 does not name a lexical mode this implementation provides', Value(unknown.mode)) as ThrowCompletion;
-      return [completion.Value as ObjectValue];
-    }
+    // The unknown-GRAMMAR error is raised at the DECORATION, not here: a macro
+    // declaring a grammar this implementation does not provide is only a problem
+    // where a region is written with it, and the parser needs the answer at the
+    // decoration anyway. Where the attribute was, the error had to be here,
+    // because an import is all there was to report against.
     const early = FirstReplacementEarlyError(body);
     if (early) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);

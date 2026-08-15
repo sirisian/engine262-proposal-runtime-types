@@ -4,10 +4,12 @@ import type {
   ParseNodesByType,
 } from './ParseNode.mts';
 import { Scope } from './Scope.mts';
-import { PrescanDecoratorModes } from './PrescanDecoratorModes.mts';
+import { PrescanPreprocessorNames } from './PrescanDecoratorModes.mts';
 import { surroundingAgent, type Feature } from '#self';
 
 export interface ParserOptions {
+  /** `{ bound name -> grammar }` for this module's preprocessor decorations. */
+  decoratorGrammars?: ReadonlyMap<string, string>;
   readonly source: string;
   readonly decoratingSource?: string;
   readonly specifier?: string;
@@ -44,16 +46,38 @@ export class Parser extends LanguageParser {
    */
   readonly decoratorModes: ReadonlyMap<string, string>;
 
+  /**
+   * The names this module's preprocessor imports BIND.
+   *
+   * A decoration spelled with one of these takes a REGION where a `{` follows
+   * it, which is what used to require a `mode:` attribute. The attribute is
+   * gone: being a preprocessor decoration is what makes the braces a region, and
+   * `preprocessor: "true"` is as lexically visible as `mode:` was - so a tool
+   * that does not resolve imports recognises a region exactly as before.
+   */
+  readonly preprocessorNames: ReadonlySet<string>;
+
   constructor({
     source, specifier, json = false, allowAllPrivateNames = false, decoratingSource,
+    decoratorGrammars,
   }: ParserOptions) {
     super();
     this.source = source;
     this.specifier = specifier;
     this.decoratingSource = decoratingSource;
-    this.decoratorModes = surroundingAgent?.feature?.('runtime-types')
-      ? PrescanDecoratorModes(source)
-      : new Map();
+    this.preprocessorNames = surroundingAgent?.feature?.('runtime-types')
+      ? PrescanPreprocessorNames(source)
+      : new Set();
+    // WHICH grammar a region is read in comes from the macro, which is resolved
+    // before the parse and passed in. A preprocessor name whose macro declares
+    // none takes an opaque region - captured by delimiter matching and handed to
+    // the macro as tokens of the ordinary lexical grammar, which is what `linq`
+    // wants and what a mode-less preprocessor gets.
+    const grammars = new Map<string, string>();
+    for (const name of this.preprocessorNames) {
+      grammars.set(name, decoratorGrammars?.get(name) ?? 'opaque');
+    }
+    this.decoratorModes = grammars;
     this.state = {
       hasTopLevelAwait: false,
       strict: false,

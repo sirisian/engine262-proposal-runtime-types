@@ -456,27 +456,27 @@ test('a regular expression reaches the macro as one token', () => {
   // It arrived as `/` `ab` `/` `g` - four tokens, indistinguishable from a
   // division, and a macro inspecting them could not tell which it had.
   expect(expandedBody('@m { const r = /ab/g; }', SHOW))
-    .toBe('"G(i:const i:r p:= r:/ab/g p:;)"');
+    .toBe('"G(i:const i:r p:= r:/ab/g p:;)";');
   // A division is still a punctuator, which is the other half: the two must be
   // DISTINGUISHABLE, not merely both handled.
   expect(expandedBody('@m { const q = a / b; }', SHOW))
-    .toBe('"G(i:const i:q p:= i:a p:/ i:b p:;)"');
+    .toBe('"G(i:const i:q p:= i:a p:/ i:b p:;)";');
 });
 
 test('a template literal reaches the macro as one token', () => {
   // It arrived as a backtick, an identifier and a backtick - and for a
   // substitution, as the identifier `a$`, a token that exists in no source.
   expect(expandedBody('@m { const s = `abc`; }', SHOW))
-    .toBe('"G(i:const i:s p:= t:`abc` p:;)"');
+    .toBe('"G(i:const i:s p:= t:`abc` p:;)";');
   expect(expandedBody('@m { const s = `a${x}b`; }', SHOW))
-    .toBe('"G(i:const i:s p:= t:`a${x}b` p:;)"');
+    .toBe('"G(i:const i:s p:= t:`a${x}b` p:;)";');
   // Nested and tagged forms are one token too - the end is taken at the closing
   // backtick, which is the only moment it is knowable, since a template's parts
   // are scanned by advancing the position rather than through `next()`.
   expect(expandedBody('@m { const s = `a${`i${y}`}b`; }', SHOW))
-    .toBe('"G(i:const i:s p:= t:`a${`i${y}`}b` p:;)"');
+    .toBe('"G(i:const i:s p:= t:`a${`i${y}`}b` p:;)";');
   expect(expandedBody('@m { const s = tag`a${x}`; }', SHOW))
-    .toBe('"G(i:const i:s p:= i:tag t:`a${x}` p:;)"');
+    .toBe('"G(i:const i:s p:= i:tag t:`a${x}` p:;)";');
 });
 
 test('neither form produces a group that is not there', () => {
@@ -485,9 +485,9 @@ test('neither form produces a group that is not there', () => {
   // forwarding tokens saw brace structure the source does not have - and an
   // unbalanced one could mis-nest the rest of the region.
   expect(expandedBody('@m { const r = /a{2}/; }', SHOW))
-    .toBe('"G(i:const i:r p:= r:/a{2}/ p:;)"');
+    .toBe('"G(i:const i:r p:= r:/a{2}/ p:;)";');
   expect(expandedBody('@m { const r = /\\{/; }', SHOW))
-    .toBe('"G(i:const i:r p:= r:/\\\\{/ p:;)"');
+    .toBe('"G(i:const i:r p:= r:/\\\\{/ p:;)";');
 });
 
 test('a macro that forwards them round-trips byte for byte', () => {
@@ -502,5 +502,5 @@ test('backtracking leaves no residue in the stream', () => {
   // abandoned must contribute nothing. An arrow parameter list is what drives
   // most of the checkpoint sites, so it is the case worth pinning.
   expect(expandedBody('@m { const f = (a, b) => a + b; }', SHOW))
-    .toBe('"G(i:const i:f p:= G(i:a p:, i:b) p:=> i:a p:+ i:b p:;)"');
+    .toBe('"G(i:const i:f p:= G(i:a p:, i:b) p:=> i:a p:+ i:b p:;)";');
 });

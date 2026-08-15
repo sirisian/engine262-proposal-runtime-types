@@ -17,7 +17,13 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * changes INGESTION only.
  */
 const NL = String.fromCharCode(10);
-const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true", mode: "jsx" };' + NL;
+// The import declares no grammar. Being a preprocessor decoration is what makes
+// `@jsx { ... }` a region; WHICH grammar it is read in comes from the macro,
+// which is resolved before the parse.
+const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true" };' + NL;
+
+/** Wraps a macro so it declares the `jsx` grammar, as a real one would. */
+const withJsxGrammar = (macroSource: string) => `Object.assign(${macroSource}, { grammar: "jsx" })`;
 const PLAIN_IMPORT = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
 
 /** A macro that rewrites the region's first element to a `_jsx` call. */
@@ -56,7 +62,7 @@ function expandWith(macroName: string, source: string, macroSource: string): str
   return text.slice(text.indexOf(NL) + 1).trim();
 }
 
-const jsx = (body: string, macroSource = JSX_MACRO) => expandWith('jsx', JSX_IMPORT + body, macroSource);
+const jsx = (body: string, macroSource = JSX_MACRO) => expandWith('jsx', JSX_IMPORT + body, withJsxGrammar(macroSource));
 
 test('a mode lets a region reach a macro that ECMAScript could not scan', () => {
   // Without a mode this is `Unexpected token` at the `<`, before any macro runs.
@@ -90,21 +96,27 @@ test('two regions in one module expand independently', () => {
     .toBe('const a = _jsx ("a" , {}); const b = _jsx ("b" , {});');
 });
 
-test('a mode is keyed by the decoration NAME, including a renamed import', () => {
+test('a grammar follows the decoration NAME, including a renamed import', () => {
   // The mode has to be readable at the decoration site rather than resolved
   // through the import, because that is what lets a highlighter recognise a
   // region: a TextMate grammar cannot follow an import. Keying on the bound name
   // is what `lit-html` and `graphql-tag` are highlighted by today.
   const renamed = 'import { jsx as h } from "./x.js" with { preprocessor: "true", mode: "jsx" };' + NL;
-  expect(expandWith('h', `${renamed}const v = @h do { <div/> }; v;`, JSX_MACRO))
+  expect(expandWith('h', `${renamed}const v = @h do { <div/> }; v;`, withJsxGrammar(JSX_MACRO)))
     .toBe('const v = _jsx ("div" , {}); v;');
 });
 
-test('without a mode the same source is refused, as it was before', () => {
-  // The import declares no mode, so the region is scanned as ECMAScript and the
-  // `<` stops it - which is the behaviour a program that declares no mode must
-  // keep.
-  expect(expandWith('m', `${PLAIN_IMPORT}@m { <div/> }`, JSX_MACRO)).toBe('REFUSED');
+test('a macro declaring no grammar takes an ordinary ECMAScript region', () => {
+  // The DEFAULT is a parsed region, not a captured one - so its tokens come from
+  // the parse, and a regular expression in it is one token rather than four.
+  // Making the default captured re-lexed everything and undid the threading.
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { const r = /ab/g; }`, KINDS))
+    .toBe('"G(i:const i:r p:= r:/ab/g p:;)";');
+  // Its contents must therefore BE ECMAScript. A macro whose region is not -
+  // a query language - declares `grammar: "opaque"` and is captured instead.
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, KINDS)).toBe('REFUSED');
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`,
+    `Object.assign(${KINDS}, { grammar: "opaque" })`)).toBe('"G(i:a i:b i:c)";');
 });
 
 test('a mode changes ingestion only, and nothing outside a region', () => {
@@ -133,24 +145,22 @@ test('what the macro returns is ordinary ECMAScript', () => {
   expect(jsx('const v = @jsx do { <div/> }; v;')).toBe('const v = _jsx ("div" , {}); v;');
 });
 
-test('an unknown mode is refused at the import', () => {
-  // sec-preprocessor-modules: "It is a Syntax Error if the value does not name a
-  // mode the implementation provides, reported at the import declaration."
-  // Falling back to scanning as ECMAScript instead fails later, at the `<` of a
-  // region the author believed was moded, with a message about an unexpected
-  // token rather than about the mode they misspelled.
-  const bad = 'import { q } from "./x.js" with { preprocessor: "true", mode: "nope" };' + NL;
-  expect(expandWith('q', `${bad}@q class C {}`, JSX_MACRO)).toBe('REFUSED');
-  // Reported at the IMPORT, so it does not depend on the mode being used.
-  expect(expandWith('q', `${bad}const a = 1;`, JSX_MACRO)).toBe('REFUSED');
-  // A near miss is refused for the same reason - this is the case the rule is
-  // worth having for.
-  const typo = 'import { q } from "./x.js" with { preprocessor: "true", mode: "jsxx" };' + NL;
-  expect(expandWith('q', `${typo}@q class C {}`, JSX_MACRO)).toBe('REFUSED');
-  // `mode` without `preprocessor` declares nothing, so it is not this rule's
-  // business and the module is ordinary.
-  expect(expandWith('q', 'import { q } from "./x.js" with { mode: "nope" };' + NL + 'const a = 1;',
-    '(function (t) { return t; })')).toBe('const a = 1;');
+test('an unknown grammar is refused at the DECORATION', () => {
+  // The grammar comes from the macro, so a name may declare one and never be
+  // used as a decoration - which is not an error. The parser needs the answer
+  // where a region is written, and that is where it reports.
+  const bad = (macro: string) => `Object.assign(${macro}, { grammar: "nope" })`;
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { x }`, bad(KINDS))).toBe('REFUSED');
+  // Never decorated, so never a problem.
+  expect(expandWith('m', `${PLAIN_IMPORT}const a = 1;`, bad(KINDS))).toBe('const a = 1;');
+});
+
+test('a preprocessor name need not be callable unless it decorates', () => {
+  // `sec-preprocessor-modules` says a preprocessor module's exports MAY be used
+  // as replacement decorators - so a bound name that is never used as one has no
+  // reason to be a function, and importing a constant beside a macro works.
+  expect(expandWith('m', `${PLAIN_IMPORT}const a = 1;`, '({ notCallable: true })'))
+    .toBe('const a = 1;');
 });
 
 test('declaring a mode does not require every use to take a region', () => {
@@ -197,7 +207,7 @@ test('whitespace at the region\'s own edges is formatting, not content', () => {
 // decision comes back - and it is the parser's, not a scanner's. The parser
 // admits a JSX element at exactly the position it would otherwise try a regular
 // expression literal, which is the only place the question can be answered.
-const jsxDecl = (body: string, macroSource = KINDS) => expandWith('jsx', JSX_IMPORT + body, macroSource);
+const jsxDecl = (body: string, macroSource = KINDS) => expandWith('jsx', JSX_IMPORT + body, withJsxGrammar(macroSource));
 
 test('a decorated declaration may contain JSX in expression position', () => {
   // The shape a component macro is written in, and the one that could not be
@@ -253,12 +263,12 @@ test('the mode changes nothing outside a decorated declaration', () => {
 //
 // The same shape twice, in two places, years apart. These tests exist so it is
 // not three.
-const both = (source: string) => expandWith('jsx', JSX_IMPORT + source,
+const both = (source: string) => expandWith('jsx', JSX_IMPORT + source, withJsxGrammar(
   '(function (t, a) {'
   + ' var s = t[0] ? t[0].span : undefined;'
   + ' function walk(ts) { return (ts || []).map(function (x) {'
   + '   return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }'
-  + ' return [{ kind: "string", value: JSON.stringify("T[" + walk(t) + "] A[" + walk(a) + "]"), span: s }]; })');
+  + ' return [{ kind: "string", value: JSON.stringify("T[" + walk(t) + "] A[" + walk(a) + "]"), span: s }]; })'));
 
 test('a moded decoration may carry arguments', () => {
   const region = 'T[G(p:< i:div p:/ p:>)]';
@@ -322,8 +332,8 @@ const FIRST_TOKEN = '(function (t) {'
 
 test('either spelling expands identically, in every position', () => {
   const both = (bare: string, withDo: string, expected: string) => {
-    expect(expandWith('jsx', JSX_IMPORT + bare, FIRST_TOKEN)).toBe(expected);
-    expect(expandWith('jsx', JSX_IMPORT + withDo, FIRST_TOKEN)).toBe(expected);
+    expect(expandWith('jsx', JSX_IMPORT + bare, withJsxGrammar(FIRST_TOKEN))).toBe(expected);
+    expect(expandWith('jsx', JSX_IMPORT + withDo, withJsxGrammar(FIRST_TOKEN))).toBe(expected);
   };
   both('const v = @jsx { <div/> }; const w = 2;',
     'const v = @jsx do { <div/> }; const w = 2;',
@@ -342,9 +352,9 @@ test('either spelling expands identically, in every position', () => {
 test('a region in statement position composes with what follows it', () => {
   // The case that exposed all of this: without a terminator the expansion sits
   // against the next statement, and no LineTerminator means ASI cannot help.
-  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> } const after = 1;`, FIRST_TOKEN))
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> } const after = 1;`, withJsxGrammar(FIRST_TOKEN)))
     .toBe('jsxTemplate ("div"); const after = 1;');
-  expect(expandWith('jsx', `${JSX_IMPORT}@jsx do { <div/> } const after = 1;`, FIRST_TOKEN))
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx do { <div/> } const after = 1;`, withJsxGrammar(FIRST_TOKEN)))
     .toBe('jsxTemplate ("div"); const after = 1;');
 });
 
@@ -355,7 +365,7 @@ test('a terminator is not added where the macro already ended one', () => {
     + ' function k(kind, v) { return { kind: kind, value: v, span: s }; }'
     + ' function grp(v, inner) { return { kind: "group", value: v, span: s, tokens: inner }; }'
     + ' return [k("identifier", "function"), k("identifier", "g"), grp("(", []), grp("{", [])]; })';
-  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> }`, emitsBlock)).toBe('function g () {}');
+  expect(expandWith('jsx', `${JSX_IMPORT}@jsx { <div/> }`, withJsxGrammar(emitsBlock))).toBe('function g () {}');
 });
 
 // -- Control flow between tags --------------------------------------------------

@@ -23,9 +23,12 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * compile to what the document says they compile to.
  */
 const NL = String.fromCharCode(10);
-const LINQ_IMPORT = 'import { linq } from "./linq.js" with { preprocessor: "true", mode: "linq" };' + NL;
+// A query is not ECMAScript grammatically, so its region is CAPTURED - which
+// the macro declares with `grammar: "opaque"`. The import declares nothing: being
+// a preprocessor decoration is what makes the braces a region.
+const LINQ_IMPORT = 'import { linq } from "./linq.js" with { preprocessor: "true" };' + NL;
 
-const MACRO = `(function (tokens, args) {
+const MACRO = `Object.assign((function (tokens, args) {
   var KEYWORDS = ["from", "let", "where", "join", "orderby", "index", "take",
     "skip", "takewhile", "skipwhile", "distinct", "select", "group", "into"];
   var fresh = 0;
@@ -219,7 +222,7 @@ const MACRO = `(function (tokens, args) {
       [k("punctuator", ","), g("(", source)]))];
   }
   return source;
-})
+}), { grammar: "opaque" })
 `;
 
 /** The text a query compiles to, whitespace collapsed, or `REFUSED`. */
@@ -241,13 +244,17 @@ function compiled(query: string): string {
   return text.slice(text.indexOf(NL) + 1).trim().replace(/\s+/g, ' ');
 }
 
-test('the mode is provided, and an undeclared one is still refused', () => {
+test('a preprocessor import needs no mode, and an unknown grammar is refused', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
+  // No `mode:` anywhere. Being a preprocessor decoration is what makes a region.
   expect(realm.compileModule(`${LINQ_IMPORT}const a = 1;`).Type).toBe('normal');
+  // An unrecognised attribute is refused when the module is LOADED rather than
+  // parsed, so `compileModule` accepts it - which is the same distinction that
+  // hid a missing `mode` key for an entire feature.
   expect(realm.compileModule(
-    'import { q } from "./q.js" with { preprocessor: "true", mode: "sql" };' + NL + 'const a = 1;',
-  ).Type).toBe('throw');
+    'import { q } from "./q.js" with { preprocessor: "true", nonsense: "x" };' + NL + 'const a = 1;',
+  ).Type).toBe('normal');
 });
 
 test('a query does not parse as ECMAScript, but its parts do', () => {
