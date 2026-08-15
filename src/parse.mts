@@ -30,7 +30,9 @@ import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
-import { LoadPreprocessorModule, PreprocessorExport } from './preprocessor-loading.mts';
+import {
+  ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
+} from './preprocessor-loading.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
   CreateDefaultExportSyntheticModule,
@@ -77,11 +79,24 @@ export function ResolveReplacementDecorator(
   if (imported !== undefined) {
     const realm = surroundingAgent.currentRealmRecord;
     const module = LoadPreprocessorModule(realm, realm as never, imported.Specifier);
-    if ((module as { Type?: string }).Type !== 'throw') {
-      const exported = PreprocessorExport(module as never, imported.ExportName);
-      if (exported instanceof ObjectValue) {
-        return exported;
-      }
+    // A REFUSAL propagates; a miss does not. Turning every failure into "no
+    // macro" is right for a host with no loader - it gets the parse it would
+    // have got anyway - and wrong for a cycle, whose whole point is to be
+    // reported. Swallowing it let compilation carry on into the assertion this
+    // rule exists to replace.
+    // A REFUSAL is recorded; a miss is not. Turning every failure into "no
+    // macro" is right for a host with no loader - it gets the parse it would
+    // have got anyway - and wrong for a cycle, whose whole point is to be
+    // reported.
+    // A failure here leaves the decoration alone. Only a CYCLE refuses, and it
+    // records itself where it is detected - a host with no loader must still get
+    // the parse it would have got.
+    if ((module as { Type?: string }).Type === 'throw') {
+      return undefined;
+    }
+    const exported = PreprocessorExport(module as never, imported.ExportName);
+    if (exported instanceof ObjectValue) {
+      return exported;
     }
   }
   void specifier;
@@ -304,6 +319,10 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   //    early error detection may be interweaved in an implementation-dependent manner. If more
   //    than one parsing error or early error is present, the number and ordering of error
   //    objects in the list is implementation-dependent, but at least one must be present.
+  // A refusal belongs to the parse that is running. Clearing here is what keeps
+  // one from reaching a later compile that has nothing to do with it - a global
+  // that is only ever set and read leaks into every compile that follows.
+  ClearPreprocessorRefusal();
   const body = withRealmContext(realm, () => wrappedParse<ParseNode.Module>({ source: sourceText, specifier: hostDefined.specifier }, (p) => p.parseModule()));
   // 3. If body is a List of errors, return body.
   if (Array.isArray(body)) {
@@ -329,6 +348,12 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // A module whose names are EMPTY observes no phase at all: same parse, same
   // errors, same positions. That is the common case and it is what makes the
   // gate worth computing rather than always expanding.
+  // A refusal recorded while resolving a decorator - a preprocessor cycle - is a
+  // parse error, and this is where a parse answers with one.
+  const refusal = TakePreprocessorRefusal();
+  if (refusal !== undefined) {
+    return [refusal];
+  }
   const replacementNames = surroundingAgent.feature('runtime-types')
     ? ReplacementDecoratorNames(body)
     : [];

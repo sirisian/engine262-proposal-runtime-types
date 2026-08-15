@@ -121,3 +121,61 @@ test('a macro resolves from its MODULE, and nothing else resolves one', () => {
   const bare = new ManagedRealm();
   expect(expanded(bare.compileModule(SOURCE) as never)).toBe('export const v = @m { anything };');
 });
+
+/** The message a compile refused with, or its outcome. */
+function refusal(realm: ManagedRealm, source: string): string {
+  const c = realm.compileModule(source) as {
+    Type: string, Value?: { properties?: Iterable<[{ stringValue(): string }, { Value?: { stringValue?(): string } }]> },
+  };
+  if (c.Type === 'normal') {
+ return 'COMPILED';
+}
+  for (const [k, d] of c.Value?.properties ?? []) {
+    if (k.stringValue() === 'message') {
+ return d.Value?.stringValue?.() ?? 'THROW';
+}
+  }
+  return 'THROW';
+}
+
+test('a preprocessor may use a preprocessor, and a CYCLE may not', () => {
+  // Recursion is ordinary - a macro written with a macro - and every macro
+  // system allows it. A cycle has no fixpoint: to parse A you evaluate its
+  // preprocessor B, to parse B you evaluate its preprocessor A, and to evaluate
+  // A you parse A. `sec-preprocessor-modules` makes it a Syntax Error, and a
+  // stronger rule than ECMAScript modules have, which permit cycles.
+  const macro = '(t) => t';
+  const ok = realmWithModules({
+    './outer.js': 'import { p } from "./plain.js" with { preprocessor: "true" };' + NL
+      + 'export const outer = ' + macro + ';',
+    './plain.js': 'export const p = ' + macro + ';',
+  }).realm;
+  expect(refusal(ok, 'import { outer } from "./outer.js" with { preprocessor: "true" };' + NL
+    + 'export const v = @outer { x };')).toBe('COMPILED');
+
+  const cyclic = realmWithModules({
+    './a.js': 'import { b } from "./b.js" with { preprocessor: "true" };' + NL + 'export const a = ' + macro + ';',
+    './b.js': 'import { a } from "./a.js" with { preprocessor: "true" };' + NL + 'export const b = ' + macro + ';',
+  }).realm;
+  // A Syntax Error naming the import, NOT an internal assertion - which is what
+  // this produced before, and which reads to a macro author as an engine bug
+  // rather than as their own mistake.
+  expect(refusal(cyclic, 'import { a } from "./a.js" with { preprocessor: "true" };' + NL
+    + 'export const v = @a { x };'))
+    .toBe('a preprocessor module cannot import itself, directly or otherwise: "./a.js"');
+});
+
+test('a refused cycle does not poison the realm', () => {
+  // A refusal recorded and never cleared reaches every compile that follows, and
+  // a test that only checks the first one does not notice. This is that check.
+  const macro = '(t) => [{ kind: "string", value: JSON.stringify("OK"), span: t[0] && t[0].span }]';
+  const realm = realmWithModules({
+    './a.js': 'import { b } from "./b.js" with { preprocessor: "true" };' + NL + 'export const a = ' + macro + ';',
+    './b.js': 'import { a } from "./a.js" with { preprocessor: "true" };' + NL + 'export const b = ' + macro + ';',
+    './fine.js': 'export const m = ' + macro + ';',
+  }).realm;
+  refusal(realm, 'import { a } from "./a.js" with { preprocessor: "true" };' + NL + 'export const v = @a { x };');
+  // A second, unrelated module in the SAME realm still compiles and expands.
+  expect(refusal(realm, 'import { m } from "./fine.js" with { preprocessor: "true" };' + NL
+    + 'export const v = @m { x };')).toBe('COMPILED');
+});
