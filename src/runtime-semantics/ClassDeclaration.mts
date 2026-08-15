@@ -107,7 +107,14 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
     let ctor: Value = Value.undefined;
     let binding;
     if (ClassDeclaration.BindingIdentifier) {
-      binding = Q(yield* ResolveBinding(name as never));
+      // STRICT, which every class body is: #sec-strict-mode-code makes all
+      // class code strict, and a module's is strict besides. `ResolveBinding`
+      // defaults its third argument to *false*, and a module Environment
+      // Record's GetBindingValue asserts the read is strict - so resolving the
+      // class's own name here without saying so killed the HOST rather than
+      // raising any guest error, for a program as small as `class C {}` alone
+      // in a module.
+      binding = Q(yield* ResolveBinding(name as never, undefined, true));
       ctor = Q(yield* GetValue(binding));
     }
     // decorators.md: a class decorator's return "replaces the class itself".
