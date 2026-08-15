@@ -75,7 +75,7 @@ export class Parser extends LanguageParser {
     // wants and what a mode-less preprocessor gets.
     const grammars = new Map<string, string>();
     for (const name of this.preprocessorNames) {
-      grammars.set(name, decoratorGrammars?.get(name) ?? 'opaque');
+      grammars.set(name, decoratorGrammars?.get(name) ?? 'parsed');
     }
     this.decoratorModes = grammars;
     this.state = {

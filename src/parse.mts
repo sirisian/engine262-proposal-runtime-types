@@ -40,17 +40,18 @@ import {
 export { Parser, RegExpParser };
 
 /**
- * `{ bound name -> grammar }` for a source text's preprocessor decorations.
+ * `{ bound name -> 'parsed' | 'captured' }` for a source text's preprocessor
+ * decorations.
  *
- * The grammar comes from the MACRO, which `sec-preprocessor-modules` has
- * evaluated before the importing module is parsed - so it is available here.
- * A macro that declares none takes an opaque region, which is what a
- * preprocessor with no special lexical grammar wants.
+ * One question, and it is binary: IS THIS REGION'S TEXT ECMASCRIPT? A macro that
+ * says nothing gets a parsed region - a Block, with its tokens threaded from the
+ * parse - which is what a decorated block has always been. A macro whose region
+ * is not ECMAScript declares `capture: true`, reads the text itself, and
+ * delegates the ranges that are through `TokenStream.prototype.parse`.
  *
- * This replaces the `mode:` import attribute. The attribute answered two
- * questions - is this a region, and which grammar - and only the second needs an
- * answer the source cannot give: being a preprocessor decoration is what makes
- * the braces a region.
+ * There is no set of grammar names for the engine to recognise any more, so
+ * there is no unknown one to refuse. That check, and its error, are gone with
+ * the grammars they policed.
  */
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
   const grammars = new Map<string, string>();
@@ -59,25 +60,15 @@ function DecoratorGrammars(source: string, specifier: string | undefined): Reado
   }
   for (const name of PrescanPreprocessorNames(source)) {
     const macro = HostResolveReplacementDecorator(name, specifier);
-    // The DEFAULT is an ordinary ECMAScript region - a Block, parsed, with its
-    // tokens threaded from the parse. That is what a decorated block was before
-    // this change, and making the default a CAPTURED region instead re-lexed it:
-    // `/ab/g` arrived as four tokens rather than one regular expression, undoing
-    // the parse threading for every macro that had not asked for anything.
-    //
-    // A macro whose region is not ECMAScript - a query language, say - declares
-    // `grammar: "opaque"` and gets the captured behaviour.
-    let grammar = 'ecmascript';
+    let captured = false;
     if (macro instanceof ObjectValue) {
       // EnsureCompletion, because `skipDebugger` answers the VALUE rather than a
-      // Completion Record - reading `.Type` off it is always undefined, so the
-      // grammar silently read as absent and every region was opaque.
-      const declared = EnsureCompletion(skipDebugger(Get(macro, Value('grammar')))) as { Type: string, Value?: unknown };
-      if (declared.Type === 'normal' && declared.Value instanceof JSStringValue) {
-        grammar = declared.Value.stringValue();
-      }
+      // Completion Record - reading `.Type` off it is always undefined, and the
+      // flag silently read as absent.
+      const declared = EnsureCompletion(skipDebugger(Get(macro, Value('capture')))) as { Type: string, Value?: unknown };
+      captured = declared.Type === 'normal' && declared.Value === Value.true;
     }
-    grammars.set(name, grammar);
+    grammars.set(name, captured ? 'captured' : 'parsed');
   }
   return grammars;
 }
@@ -88,12 +79,7 @@ function DecoratorGrammars(source: string, specifier: string | undefined): Reado
  * The whole of `TokenStream.prototype.parse`. A macro delegating an
  * interpolation reaches here, and what it gets back are tokens THREADED FROM
  * THAT PARSE - so a regular expression is one token and a template literal is
- * one token, which is exactly what a macro re-lexing the slice itself cannot
- * achieve.
- *
- * The range's own text is parsed rather than the whole region, and the token
- * log is filtered to it - so a macro asking for `{ ... }`'s contents is charged
- * for those contents and nothing else.
+ * one token, which is exactly what a macro re-lexing the slice cannot achieve.
  */
 export function ParseRange(
   text: string,
@@ -110,8 +96,6 @@ export function ParseRange(
       : (p as unknown as { parseScript(): ParseNode }).parseScript()),
   );
   if (Array.isArray(result)) {
-    // The message travels; the POSITION is the range's own, since a macro asked
-    // about a range of its region rather than about a standalone program.
     const first = result[0] as { message?: unknown } | undefined;
     return typeof first?.message === 'string' ? first.message : 'the range does not parse';
   }

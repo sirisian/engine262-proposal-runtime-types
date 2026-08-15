@@ -30,7 +30,7 @@ const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true" };'
  * that are ECMAScript through `TokenStream.prototype.parse` - which is what let
  * several hundred lines of JSX-specific parsing leave the implementation.
  */
-const withJsxGrammar = (macroSource: string) => `Object.assign(${macroSource}, { grammar: "opaque" })`;
+const withJsxGrammar = (macroSource: string) => `Object.assign(${macroSource}, { capture: true })`;
 const PLAIN_IMPORT = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
 
 /** A macro that rewrites the region's first element to a `_jsx` call. */
@@ -106,7 +106,7 @@ test('a macro declaring no grammar takes an ordinary ECMAScript region', () => {
   // a query language - declares `grammar: "opaque"` and is captured instead.
   expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, KINDS)).toBe('REFUSED');
   expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`,
-    `Object.assign(${KINDS}, { grammar: "opaque" })`)).toBe('"G(i:a i:b i:c)";');
+    `Object.assign(${KINDS}, { capture: true })`)).toBe('"G(i:a i:b i:c)";');
 });
 
 
@@ -127,14 +127,19 @@ test('what the macro returns is ordinary ECMAScript', () => {
   expect(jsx('const v = @jsx do { <div/> }; v;')).toBe('const v = _jsx ("div" , {}); v;');
 });
 
-test('an unknown grammar is refused at the DECORATION', () => {
-  // The grammar comes from the macro, so a name may declare one and never be
-  // used as a decoration - which is not an error. The parser needs the answer
-  // where a region is written, and that is where it reports.
-  const bad = (macro: string) => `Object.assign(${macro}, { grammar: "nope" })`;
-  expect(expandWith('m', `${PLAIN_IMPORT}@m { x }`, bad(KINDS))).toBe('REFUSED');
-  // Never decorated, so never a problem.
-  expect(expandWith('m', `${PLAIN_IMPORT}const a = 1;`, bad(KINDS))).toBe('const a = 1;');
+test('`capture` is a boolean, so there is no unknown value to refuse', () => {
+  // One question, and it is binary: is this region's text ECMAScript? A macro
+  // saying nothing gets a parsed region; one declaring `capture: true` reads the
+  // text itself. There is no set of grammar names for the engine to recognise,
+  // so there is no unknown one - the check that policed them went with them.
+  const captured = `Object.assign(${KINDS}, { capture: true })`;
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, captured)).toBe('"G(i:a i:b i:c)";');
+  // Anything other than `true` leaves the region parsed, so its text must be
+  // ECMAScript - and a nonsense value is not an error, merely not a capture.
+  const odd = `Object.assign(${KINDS}, { capture: "yes" })`;
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, odd)).toBe('REFUSED');
+  expect(expandWith('m', `${PLAIN_IMPORT}@m { const r = /ab/g; }`, odd))
+    .toBe('"G(i:const i:r p:= r:/ab/g p:;)";');
 });
 
 test('a preprocessor name need not be callable unless it decorates', () => {

@@ -26,7 +26,7 @@ const DELEGATING = `Object.assign((function (t) {
   function walk(ts) { return (ts || []).map(function (x) {
     return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }
   return [{ kind: "string", value: JSON.stringify("RAW[" + walk(t) + "] PARSED[" + walk(inner) + "]"), span: s }];
-}), { grammar: "opaque" })`;
+}), { capture: true })`;
 
 function expandWith(macroSource: string, body: string): string {
   const macro: { current?: unknown } = {};
@@ -75,7 +75,7 @@ test('the goal symbol chooses what the range may be', () => {
     var open = text.indexOf("{"), close = text.lastIndexOf("}");
     var inner = t.parse(open + 1, close, ${JSON.stringify(goal)});
     return [{ kind: "string", value: JSON.stringify(inner.length + " tokens"), span: s }];
-  }), { grammar: "opaque" })`;
+  }), { capture: true })`;
   // A statement list is not an expression, so the goal is not decoration.
   expect(expandWith(withGoal('statements'), 'const v = @m { const a = 1; a; };'))
     .toBe('const v = "7 tokens";');
@@ -90,10 +90,10 @@ test('a range that does not parse is refused', () => {
 test('an unrecognised goal, and a range outside the source, are refused', () => {
   const badGoal = `Object.assign((function (t) {
     return t.parse(0, 1, "module");
-  }), { grammar: "opaque" })`;
+  }), { capture: true })`;
   expect(expandWith(badGoal, 'const v = @m { x };')).toBe('REFUSED');
   const badRange = `Object.assign((function (t) {
     return t.parse(0, 9999, "expression");
-  }), { grammar: "opaque" })`;
+  }), { capture: true })`;
   expect(expandWith(badRange, 'const v = @m { x };')).toBe('REFUSED');
 });

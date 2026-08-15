@@ -222,7 +222,7 @@ const MACRO = `Object.assign((function (tokens, args) {
       [k("punctuator", ","), g("(", source)]))];
   }
   return source;
-}), { grammar: "opaque" })
+}), { capture: true })
 `;
 
 /** The text a query compiles to, whitespace collapsed, or `REFUSED`. */

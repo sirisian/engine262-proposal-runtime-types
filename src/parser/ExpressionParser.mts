@@ -371,14 +371,6 @@ export abstract class ExpressionParser extends FunctionParser {
     if (!this.test(Token.DO) && !this.test(Token.LBRACE)) {
       return undefined;
     }
-    // A grammar this implementation does not provide is a Syntax Error HERE, at
-    // the decoration - which is where the parser needs the answer, and where an
-    // author who wrote the region can see what is wrong with it. A macro may
-    // declare a grammar and never be used as a decoration, which is not an
-    // error, so the check cannot sit at the import.
-    if (mode !== 'opaque' && mode !== 'ecmascript') {
-      this.raise(Throw.SyntaxError('$1 does not name a lexical grammar this implementation provides', Value(mode)) as never, this.peek());
-    }
     // A MIXED mode parses its region rather than capturing it.
     //
     // This is the whole of the mixed mode, and it needs no scanner: `jsx` is
@@ -393,7 +385,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // JSX element arrives as a group carrying its own structure.
     // Both parsed grammars take this path; they differ only in whether the JSX
     // element production is enabled while the Block is parsed.
-    if (mode === 'ecmascript') {
+    if (mode === 'parsed') {
       const parsed = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
       if (this.test(Token.DO)) {
         this.next();
