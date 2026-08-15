@@ -22,6 +22,28 @@ export const Error = new ObjectInspector<ObjectValue>('Error', 'error', (value, 
     }
     return Value.undefined;
   });
+  // A stack with no frames is discarded above, and an error raised where no
+  // user code is running has none - a module that failed to load is raised by
+  // the loader, not by a call. That left the description as the bare class
+  // name, so the console printed `Uncaught Error` and the reason - which the
+  // error carries perfectly well - was visible only if the object was expanded.
+  //
+  // Falling back to `name: message` rather than to `Error` says what happened
+  // wherever it happened.
+  if (!text) {
+    nativeEvalInAnyRealm(true, context, () => {
+      const read = (key: string) => {
+        const completion = EnsureCompletion(skipDebugger(Get(value, Value(key))));
+        return completion instanceof NormalCompletion && completion.Value instanceof JSStringValue
+          ? completion.Value.stringValue()
+          : '';
+      };
+      const name = read('name') || 'Error';
+      const message = read('message');
+      text = message ? `${name}: ${message}` : name;
+      return Value.undefined;
+    });
+  }
   return text || 'Error';
 }, {
   internalProperties: (error, context) => {

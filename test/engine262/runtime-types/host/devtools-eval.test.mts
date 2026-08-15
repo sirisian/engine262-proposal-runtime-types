@@ -419,3 +419,34 @@ test('Runtime.evaluate: top-level await is unaffected', () => makeInspector()
   .then((r) => {
     expect(r?.result?.value).toBe(1);
   }));
+
+// -- An error with no call frames still says what happened -------------------
+//
+// The inspector describes an Error by its `stack`, and discards a stack with no
+// "  at" frames. An error raised where no user code is running has none - a
+// module that fails to load is raised by the LOADER, not by a call - so the
+// description fell back to the bare class name and the console printed
+// `Uncaught Error` with the reason visible only if the object was expanded.
+
+test('Runtime.evaluate: a module that cannot load says so', () => makeInspector()
+  .evaluate('import { x } from "nowhere.js";', { replMode: true })
+  .then((r) => {
+    const described = String((r as { exceptionDetails?: { exception?: { description?: string } } } | undefined)
+      ?.exceptionDetails?.exception?.description ?? '');
+    // Not the bare class name: this harness installs no module loader, so the
+    // reason is that rather than a missing file - which is the point, since
+    // either way the console now says something.
+    expect(described).not.toBe('Error');
+    expect(described).toContain('Error: ');
+    expect(described.length).toBeGreaterThan('Error: '.length);
+  }));
+
+test('Runtime.evaluate: an ordinary thrown error is unchanged', () => makeInspector()
+  .evaluate('throw new TypeError("boom");', { replMode: true })
+  .then((r) => {
+    const described = String((r as { exceptionDetails?: { exception?: { description?: string } } } | undefined)
+      ?.exceptionDetails?.exception?.description ?? '');
+    // This one HAS a stack, so the stack is still what is shown.
+    expect(described).toContain('TypeError');
+    expect(described).toContain('boom');
+  }));
