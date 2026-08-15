@@ -30,7 +30,6 @@ import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
-import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { LoadPreprocessorModule, PreprocessorExport } from './preprocessor-loading.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
@@ -62,12 +61,12 @@ export { Parser, RegExpParser };
  * decoration may be spelled with. So the module is LOADED and its export read -
  * which is what this does first.
  *
- * `HostResolveReplacementDecorator` remains as a fallback, and is not in the
- * specification. It is how this feature worked before the loading path existed,
- * and every test in this repository still supplies its macro that way. Keeping
- * it means the two paths can be compared on the same tests before those tests
- * migrate; deleting it in the same change would have made one large diff with
- * nowhere for a bisect to land.
+ * There is no fallback. `HostResolveReplacementDecorator` was how the engine
+ * found a macro before any of this existed, and it appeared nowhere in the
+ * specification - which is why a host had to implement both a module loader AND
+ * a name-keyed registry to use the feature, and why that registry could not even
+ * learn which module a decorator came from: the hook was handed the CONSUMING
+ * module's specifier, never the import's.
  */
 export function ResolveReplacementDecorator(
   source: string,
@@ -85,7 +84,8 @@ export function ResolveReplacementDecorator(
       }
     }
   }
-  return HostResolveReplacementDecorator(name, specifier);
+  void specifier;
+  return undefined;
 }
 
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {

@@ -119,20 +119,6 @@ export interface HostHooks {
   HostEnqueueFinalizationRegistryCleanupJob?(finalizationRegistry: FinalizationRegistryObject): void;
   /** https://tc39.es/ecma262/#sec-hostensurecancompilestrings */
   HostEnsureCanCompileStrings?(calleeRealm: Realm, parameterStrings: readonly string[], bodyString: string, direct: boolean): PlainEvaluator | PlainCompletion<void>;
-  /**
-   * proposal-runtime-types `sec-preprocessor-modules`: the function a
-   * replacement decorator name denotes.
-   *
-   * A preprocessor module is "fetched and evaluated before the importing module
-   * is parsed", and FETCHING IS HOST BUSINESS - the same reason
-   * `HostLoadImportedModule` is a hook. The engine owns the expansion loop, its
-   * order and its limit; the host owns getting the module.
-   *
-   * Returning *undefined* means the name resolves to nothing, and expansion
-   * leaves the decoration alone rather than failing - a host that does not
-   * implement preprocessor modules gets the parse it would have got anyway.
-   */
-  HostResolveReplacementDecorator?(name: string, specifier: string | undefined): ObjectValue | undefined;
   /** https://tc39.es/ecma262/#sec-hosthassourcetextavailable */
   HostHasSourceTextAvailable?(func: FunctionObject): boolean;
   /** https://tc39.es/proposal-shadowrealm/#sec-hostinitializeshadowrealm */
@@ -281,9 +267,6 @@ export function HostHasSourceTextAvailable(func: FunctionObject) {
   return Value.true;
 }
 
-export function HostResolveReplacementDecorator(name: string, specifier: string | undefined) {
-  return surroundingAgent.hostDefinedOptions.hostHooks?.HostResolveReplacementDecorator?.(name, specifier);
-}
 
 export function HostGetSupportedImportAttributes(): readonly string[] {
   // proposal-runtime-types `sec-preprocessor-modules`: *"preprocessor"* and

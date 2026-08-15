@@ -99,15 +99,10 @@ test('a module that throws while evaluating propagates', () => {
   expect(result.Type).toBe('throw');
 });
 
-test('a macro resolved from its MODULE expands as one from the hook does', () => {
-  // The claim of this phase, and the whole point of the fallback: the two paths
-  // are compared on ONE test rather than by migrating every test at once.
-  //
+test('a macro resolves from its MODULE, and nothing else resolves one', () => {
   // `sec-preprocessor-modules` says a preprocessor module is fetched and
   // evaluated before the importing module is parsed, and that its exports are
-  // what a decoration names. So the module is loaded and its export read.
-  // `HostResolveReplacementDecorator`, which is not in the specification, stays
-  // behind it until the tests move.
+  // what a decoration names. That is now the only way a macro is found.
   const MACRO = 'export const m = (t) => [{ kind: "string", value: JSON.stringify("EXPANDED"), span: t[0] && t[0].span }];';
   const SOURCE = 'import { m } from "./m.js" with { preprocessor: "true" };' + NL
     + 'export const v = @m { anything };';
@@ -116,22 +111,13 @@ test('a macro resolved from its MODULE expands as one from the hook does', () =>
     return c.Type === 'normal' ? text.slice(text.indexOf(NL) + 1).trim() : 'REFUSED';
   };
 
-  // From the MODULE: a host that loads, and no decorator hook at all.
   const { realm } = realmWithModules({ './m.js': MACRO });
-  const viaModule = expanded(realm.compileModule(SOURCE) as never);
+  expect(expanded(realm.compileModule(SOURCE) as never)).toBe('export const v = "EXPANDED";');
 
-  // From the HOOK: no loader, the fallback answering instead.
-  const macro: { current?: unknown } = {};
-  setSurroundingAgent(new Agent({
-    features: ['runtime-types'],
-    hostHooks: { HostResolveReplacementDecorator: () => macro.current },
-  } as never));
-  const hookRealm = new ManagedRealm();
-  macro.current = (hookRealm.evaluateScriptSkipDebugger(
-    '((t) => [{ kind: "string", value: JSON.stringify("EXPANDED"), span: t[0] && t[0].span }])',
-  ) as { Value?: unknown }).Value;
-  const viaHook = expanded(hookRealm.compileModule(SOURCE) as never);
-
-  expect(viaModule).toBe('export const v = "EXPANDED";');
-  expect(viaModule).toBe(viaHook);
+  // With no loader there is no macro, and a decoration resolving to nothing is
+  // left alone rather than refused - a host that does not implement preprocessor
+  // modules gets the parse it would have got anyway.
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] } as never));
+  const bare = new ManagedRealm();
+  expect(expanded(bare.compileModule(SOURCE) as never)).toBe('export const v = @m { anything };');
 });
