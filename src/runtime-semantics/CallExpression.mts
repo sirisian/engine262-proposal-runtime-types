@@ -9,6 +9,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
@@ -296,7 +297,8 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const ctx = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
       const ctxName = (ctx as { LibraryName?: unknown }).LibraryName;
       const objectContexts = ['Reflect.Object', 'Reflect.ObjectField', 'Reflect.ObjectGetter',
-        'Reflect.ObjectSetter', 'Reflect.ObjectMethod', 'Reflect.ObjectGetterReturn'];
+        'Reflect.ObjectSetter', 'Reflect.ObjectMethod', 'Reflect.ObjectGetterReturn',
+        'Reflect.ObjectMethodParameter', 'Reflect.ObjectSetterParameter', 'Reflect.ObjectMethodReturn'];
       if (ctx.Kind === 'nominal' && typeof ctxName === 'string' && objectContexts.includes(ctxName)) {
         const argList = Q(yield* ArgumentListEvaluation(args));
         const instance = argList.length > 0 ? argList[0]! : Value.undefined;
@@ -305,6 +307,65 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         const realm = surroundingAgent.currentRealmRecord;
         const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        // The parameter and return contexts of a method or setter: they name a
+        // member AND a parameter within it, so they take two names where the
+        // member contexts take one.
+        //
+        // The signatures come from `OverloadSignatureOf`, NOT from
+        // `RuntimeTypeOf`. A first attempt used the latter and got an ~object~
+        // record with no signatures at all - because RuntimeTypeOf is
+        // SYNCHRONOUS and deriving a signature resolves parameter annotations,
+        // which needs an evaluator. `Reflect.typeOf` takes the same step for the
+        // same reason, and its comment says so; this is a generator, so it can.
+        //
+        // sec-reflection-contexts: "a context that names a set of members has
+        // two signatures: one taking no name, returning an object keyed by
+        // name". A parameter context names a set, so the member-only call
+        // returns every parameter.
+        if (ctxName === 'Reflect.ObjectMethodParameter' || ctxName === 'Reflect.ObjectSetterParameter'
+          || ctxName === 'Reflect.ObjectMethodReturn') {
+          const memberName = argList.length > 1 ? Q(yield* ToString(argList[1]!)) : Value('');
+          const desc = Q(yield* instance.GetOwnProperty(memberName));
+          if (desc === Value.undefined) {
+            return ThrowError.TypeError('$1 is not a member of the object', memberName);
+          }
+          const holder = desc as { Setter?: Value, Value?: Value };
+          const fn = ctxName === 'Reflect.ObjectSetterParameter' ? holder.Setter : holder.Value;
+          if (fn === undefined || fn === Value.undefined || !(fn instanceof ObjectValueClass)) {
+            return ThrowError.TypeError('$1 is not a member of the object', memberName);
+          }
+          const sig = Q(yield* OverloadSignatureOf(fn)) as { Parameters?: readonly { Name?: string, Type?: unknown }[], Return?: unknown };
+          const params = sig.Parameters ?? [];
+          if (ctxName === 'Reflect.ObjectMethodReturn') {
+            X(CreateDataProperty(reflection, Value('kind'), Value('ObjectMethodReturn')));
+            X(CreateDataProperty(reflection, Value('type'),
+              sig.Return === undefined || sig.Return === null ? Value.undefined : GetTypeObject(sig.Return as never) as unknown as Value));
+            return reflection;
+          }
+          const label = ctxName.slice('Reflect.'.length);
+          const paramNode = (i: number) => {
+            const node = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+            X(CreateDataProperty(node, Value('kind'), Value(label)));
+            X(CreateDataProperty(node, Value('name'), Value(params[i]?.Name ?? String(i))));
+            X(CreateDataProperty(node, Value('index'), Value(i)));
+            X(CreateDataProperty(node, Value('type'),
+              params[i]?.Type === undefined ? Value.undefined : GetTypeObject(params[i]!.Type as never) as unknown as Value));
+            return node;
+          };
+          if (argList.length < 3) {
+            const all = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+            for (let i = 0; i < params.length; i += 1) {
+              X(CreateDataProperty(all, Value(params[i]?.Name ?? String(i)), paramNode(i)));
+            }
+            return all;
+          }
+          const wantedParam = Q(yield* ToString(argList[2]!));
+          const at = params.findIndex((prm) => prm.Name === wantedParam.stringValue());
+          if (at < 0) {
+            return ThrowError.TypeError('$1 is not a parameter of the function', wantedParam);
+          }
+          return paramNode(at);
+        }
         // The accessor and method members read the same instance the field
         // member does, differing only in WHICH property they expect and what
         // they report of it. An accessor's `type` is its function type, which is

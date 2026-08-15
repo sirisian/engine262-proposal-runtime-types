@@ -65,3 +65,33 @@ test('a member of the wrong kind is refused', () => {
   expectThrown(`${A}Reflect.getReflection.<Reflect.ObjectGetter>(o, "f");`);
   expectThrown(`${A}Reflect.getReflection.<Reflect.ObjectSetter>(o, "zz");`);
 });
+
+// The parameter and return contexts complete the family. They name a member AND
+// a parameter within it, so they take two names where the member contexts take
+// one, and they honour the general rule in sec-reflection-contexts: "a context
+// that names a set of members has two signatures: one taking no name, returning
+// an object keyed by name".
+//
+// Their signatures come from `OverloadSignatureOf`, NOT `RuntimeTypeOf`. The
+// latter returns an ~object~ record with no signatures for a method value,
+// because it is SYNCHRONOUS and deriving a signature resolves parameter
+// annotations, which needs an evaluator. `Reflect.typeOf` takes the same step
+// for the same reason. A first attempt used RuntimeTypeOf and every parameter
+// list came back empty.
+
+const P = 'const o = { m(a: uint8, b: string) { return a; }, set s(v: uint8) { }, f: 1 }; ';
+
+test('method and setter parameters reflect', () => {
+  expect(evaluated(`${P}Object.keys(Reflect.getReflection.<Reflect.ObjectMethodParameter>(o, "m")).join(",");`)).toBe('a,b');
+  expect(evaluated(`${P}const p = Reflect.getReflection.<Reflect.ObjectMethodParameter>(o, "m", "b"); String(p.name) + "/" + String(p.index);`)).toBe('b/1');
+  expect(evaluated(`${P}Object.keys(Reflect.getReflection.<Reflect.ObjectSetterParameter>(o, "s")).join(",");`)).toBe('v');
+  // The reported type is a Type Object and reflects in turn.
+  expect(evaluated(`${P}const p = Reflect.getReflection.<Reflect.ObjectMethodParameter>(o, "m", "a"); String(Reflect.getReflection(p.type).kind);`)).toBe('primitive');
+  expect(evaluated(`${P}String(Reflect.getReflection.<Reflect.ObjectMethodReturn>(o, "m").kind);`)).toBe('ObjectMethodReturn');
+});
+
+test('a wrong member or parameter is refused', () => {
+  expectThrown(`${P}Reflect.getReflection.<Reflect.ObjectMethodParameter>(o, "m", "zz");`);
+  // `f` exists but is a data property, not a method.
+  expectThrown(`${P}Reflect.getReflection.<Reflect.ObjectMethodParameter>(o, "f", "a");`);
+});
