@@ -940,6 +940,18 @@ export function FinishLoadingImportedModule(referrer: ScriptRecord | CyclicModul
   if (payload_ instanceof GraphLoadingState) {
     // a. Perform ContinueModuleLoading(payload, result, moduleRequest.[[ImportedNames]], moduleRequest.[[Phase]]).
     ContinueModuleLoading(payload_, result, moduleRequest.ImportedNames, moduleRequest.Phase);
+  } else if (payload_ === undefined) {
+    // proposal-runtime-types: a PREPROCESSOR module carries no payload. It is
+    // loaded during a parse and its result is read back from the referrer's
+    // [[LoadedModules]], which step 1 has just appended to - so there is nothing
+    // to continue, and the two payload shapes below belong to the graph loader
+    // and to dynamic import.
+    //
+    // Without this the payload is dereferenced as a PromiseCapability. A host
+    // whose loader answers synchronously never reaches that - the caller's
+    // try/catch covers it - but one that answers on the job queue does, and the
+    // host dies reading `.Resolve` of *undefined* rather than raising anything a
+    // program could see.
   } else { // 3. Else,
     // a. Perform ContinueDynamicImport(payload, moduleRequest.[[Phase]], result).
     ContinueDynamicImport(payload_, moduleRequest.Phase, result);
