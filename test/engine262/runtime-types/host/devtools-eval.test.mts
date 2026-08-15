@@ -376,3 +376,46 @@ test('two realms of one agent are two consoles', () => {
   expect(run(first, 'n = 300;')).toBe('refused');
   expect(run(second, 'n = 300;')).toBe('ok');
 });
+
+// -- A console entry that declares an import ---------------------------------
+//
+// A static `import` is a Module production, so no script parse accepts it
+// however it is parameterised - which is why this was a SyntaxError while
+// top-level await was not: that path re-parses a SCRIPT with the await
+// parameter, and there is no equivalent for a module declaration.
+//
+// It matters beyond convenience for a PREPROCESSOR import. #sec-expansion
+// collects macro names from the parsed body's own imports and expands before
+// evaluation, so a macro must be imported by the very unit that uses it; a
+// dynamic import() resolves during evaluation, after expansion is over.
+
+test('Runtime.evaluate: a console entry may declare an import', () => makeInspector()
+  .evaluate('import { x } from "./nowhere.js";', { replMode: true })
+  .then((r) => {
+    // The specifier does not resolve in this harness, so what matters is that
+    // the entry PARSED: a syntax error would name a token, and a load failure
+    // names the module.
+    const described = String((r as { exceptionDetails?: { exception?: { description?: string } } } | undefined)?.exceptionDetails?.exception?.description ?? '');
+    expect(described).not.toContain('Unexpected token');
+  }));
+
+test('Runtime.evaluate: a preprocessor import parses too', () => makeInspector()
+  .evaluate('import { jsx } from "./jsx.js" with { preprocessor: "true", mode: "jsx" };', { replMode: true })
+  .then((r) => {
+    const described = String((r as { exceptionDetails?: { exception?: { description?: string } } } | undefined)?.exceptionDetails?.exception?.description ?? '');
+    expect(described).not.toContain('Unexpected token');
+  }));
+
+test('Runtime.evaluate: an ordinary entry still takes the script path', () => makeInspector()
+  .evaluate('let importantValue = 1; importantValue + 1;', { replMode: true })
+  .then((r) => {
+    // A name merely CONTAINING "import" must not divert the entry, and a script
+    // entry keeps its completion value - which a module entry would not have.
+    expect(r?.result?.value).toBe(2);
+  }));
+
+test('Runtime.evaluate: top-level await is unaffected', () => makeInspector()
+  .evaluate('await 1;', { replMode: true })
+  .then((r) => {
+    expect(r?.result?.value).toBe(1);
+  }));

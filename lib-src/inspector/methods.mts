@@ -361,7 +361,40 @@ function evaluate(options: {
     // rather than the result.
     const evalReport: DevtoolsEvalReport = { isAsync: false };
     let toBeEvaluated;
-    if (isPreview || isRepl || options.evalMode === 'console' || isCallOnFrame) {
+    // A console entry that DECLARES an import or an export is module code and
+    // cannot parse any other way, so it takes the module goal even in REPL mode.
+    //
+    // This is not the top-level-await path, which already works by re-parsing a
+    // SCRIPT with the await parameter - a static `import` is a Module
+    // production, so no script parse can accept it however it is parameterised.
+    //
+    // It matters beyond convenience for a PREPROCESSOR import: `#sec-expansion`
+    // collects macro names from the parsed body's own imports and expands before
+    // evaluation, so a macro must be imported by the very unit that uses it. A
+    // dynamic `import()` resolves during evaluation, after expansion is over,
+    // and can never feed the expander - which is why a console that cannot take
+    // a static import cannot use macros at all.
+    //
+    // A module-parsed entry gets module semantics: its bindings are its own and
+    // the next entry does not see them. That is the price of the goal rather
+    // than a choice made here.
+    const declaresModuleSyntax = !isPreview
+      && /^[\s;]*(import|export)\s/m.test(options.expression)
+      && !/^[\s;]*import\s*\(/m.test(options.expression);
+    if (declaresModuleSyntax && !isCallOnFrame) {
+      const moduleRealm = context.getRealm(options.uniqueContextId);
+      if (!moduleRealm) {
+        resolve(unsupportedError);
+        return;
+      }
+      const parsedModule = ParseModule(options.expression, moduleRealm.realm, { specifier: 'console' });
+      if (Array.isArray(parsedModule)) {
+        const e = context.createExceptionDetails(ThrowCompletion(parsedModule[0]), false);
+        resolve({ exceptionDetails: e, result: { type: 'undefined' } });
+        return;
+      }
+      toBeEvaluated = parsedModule;
+    } else if (isPreview || isRepl || options.evalMode === 'console' || isCallOnFrame) {
       toBeEvaluated = performDevtoolsEval(options.expression, realm.realm, false, !!(isPreview || isCallOnFrame), evalReport);
     } else {
       let parsed!: ScriptRecord | SourceTextModuleRecord | ObjectValue[];
