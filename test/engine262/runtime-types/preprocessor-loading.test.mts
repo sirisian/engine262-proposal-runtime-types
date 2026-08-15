@@ -98,3 +98,40 @@ test('a module that throws while evaluating propagates', () => {
   const result = inRealm(realm, () => LoadPreprocessorModule(realm, realm as never, './m.js')) as { Type?: string };
   expect(result.Type).toBe('throw');
 });
+
+test('a macro resolved from its MODULE expands as one from the hook does', () => {
+  // The claim of this phase, and the whole point of the fallback: the two paths
+  // are compared on ONE test rather than by migrating every test at once.
+  //
+  // `sec-preprocessor-modules` says a preprocessor module is fetched and
+  // evaluated before the importing module is parsed, and that its exports are
+  // what a decoration names. So the module is loaded and its export read.
+  // `HostResolveReplacementDecorator`, which is not in the specification, stays
+  // behind it until the tests move.
+  const MACRO = 'export const m = (t) => [{ kind: "string", value: JSON.stringify("EXPANDED"), span: t[0] && t[0].span }];';
+  const SOURCE = 'import { m } from "./m.js" with { preprocessor: "true" };' + NL
+    + 'export const v = @m { anything };';
+  const expanded = (c: { Type: string, Value?: { ECMAScriptCode?: { sourceText?: string } } }) => {
+    const text = c.Value?.ECMAScriptCode?.sourceText ?? '';
+    return c.Type === 'normal' ? text.slice(text.indexOf(NL) + 1).trim() : 'REFUSED';
+  };
+
+  // From the MODULE: a host that loads, and no decorator hook at all.
+  const { realm } = realmWithModules({ './m.js': MACRO });
+  const viaModule = expanded(realm.compileModule(SOURCE) as never);
+
+  // From the HOOK: no loader, the fallback answering instead.
+  const macro: { current?: unknown } = {};
+  setSurroundingAgent(new Agent({
+    features: ['runtime-types'],
+    hostHooks: { HostResolveReplacementDecorator: () => macro.current },
+  } as never));
+  const hookRealm = new ManagedRealm();
+  macro.current = (hookRealm.evaluateScriptSkipDebugger(
+    '((t) => [{ kind: "string", value: JSON.stringify("EXPANDED"), span: t[0] && t[0].span }])',
+  ) as { Value?: unknown }).Value;
+  const viaHook = expanded(hookRealm.compileModule(SOURCE) as never);
+
+  expect(viaModule).toBe('export const v = "EXPANDED";');
+  expect(viaModule).toBe(viaHook);
+});

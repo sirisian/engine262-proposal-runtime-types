@@ -50,8 +50,27 @@ export function LoadPreprocessorModule(
   // If nothing was appended when the call returns, the host DEFERRED - which
   // this feature cannot wait for, the importing module's PARSE being what is
   // waiting.
+  // Already loaded? `FinishLoadingImportedModule` records a module against the
+  // referrer, and asserts rather than appending when asked twice - so a second
+  // request for the same specifier adds nothing, and looking only at what was
+  // APPENDED finds nothing and reports a load failure for a module that is
+  // already there. That is what left an expansion resolving through the fallback
+  // while the grammar lookup, which ran first, resolved from the module.
+  const already = referrer.LoadedModules.find((r) => r.Specifier === specifier);
+  if (already !== undefined) {
+    return already.Module as AbstractModuleRecord;
+  }
+
   const before = referrer.LoadedModules.length;
-  HostLoadImportedModule(referrer as never, request, undefined, { data: undefined } as never);
+  try {
+    HostLoadImportedModule(referrer as never, request, undefined, { data: undefined } as never);
+  } catch {
+    // A host with no loader answers `FinishLoadingImportedModule` with an error,
+    // which then reaches for a payload this call does not carry - the payload
+    // shapes it knows belong to the graph loader and to dynamic import. Treated
+    // as "did not load", which is what it is.
+    return Throw.Error('a preprocessor module must load synchronously: $1', Value(specifier));
+  }
   const record = referrer.LoadedModules
     .slice(before)
     .find((r) => r.Specifier === specifier);

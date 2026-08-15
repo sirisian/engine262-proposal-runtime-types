@@ -31,6 +31,7 @@ import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
+import { LoadPreprocessorModule, PreprocessorExport } from './preprocessor-loading.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
 import {
   CreateDefaultExportSyntheticModule,
@@ -53,13 +54,47 @@ export { Parser, RegExpParser };
  * there is no unknown one to refuse. That check, and its error, are gone with
  * the grammars they policed.
  */
+/**
+ * The macro a preprocessor decoration names.
+ *
+ * `sec-preprocessor-modules` says a preprocessor module is fetched and evaluated
+ * before the importing module is parsed, and that its exports are what a
+ * decoration may be spelled with. So the module is LOADED and its export read -
+ * which is what this does first.
+ *
+ * `HostResolveReplacementDecorator` remains as a fallback, and is not in the
+ * specification. It is how this feature worked before the loading path existed,
+ * and every test in this repository still supplies its macro that way. Keeping
+ * it means the two paths can be compared on the same tests before those tests
+ * migrate; deleting it in the same change would have made one large diff with
+ * nowhere for a bisect to land.
+ */
+export function ResolveReplacementDecorator(
+  source: string,
+  specifier: string | undefined,
+  name: string,
+): ObjectValue | undefined {
+  const imported = PrescanPreprocessorNames(source).get(name);
+  if (imported !== undefined) {
+    const realm = surroundingAgent.currentRealmRecord;
+    const module = LoadPreprocessorModule(realm, realm as never, imported.Specifier);
+    if ((module as { Type?: string }).Type !== 'throw') {
+      const exported = PreprocessorExport(module as never, imported.ExportName);
+      if (exported instanceof ObjectValue) {
+        return exported;
+      }
+    }
+  }
+  return HostResolveReplacementDecorator(name, specifier);
+}
+
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
   const grammars = new Map<string, string>();
   if (!surroundingAgent.feature('runtime-types')) {
     return grammars;
   }
   for (const name of PrescanPreprocessorNames(source).keys()) {
-    const macro = HostResolveReplacementDecorator(name, specifier);
+    const macro = ResolveReplacementDecorator(source, specifier, name);
     let captured = false;
     if (macro instanceof ObjectValue) {
       // EnsureCompletion, because `skipDebugger` answers the VALUE rather than a
@@ -337,7 +372,7 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
       sourceText,
       body,
       replacementNames,
-      (name) => HostResolveReplacementDecorator(name, hostDefined.specifier),
+      (name) => ResolveReplacementDecorator(sourceText, hostDefined.specifier, name),
       (from, to, mode) => {
         const slice = sourceText.slice(from, to);
         const source = {
