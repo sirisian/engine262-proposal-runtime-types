@@ -390,3 +390,26 @@ test('a parsed element keeps what the scanner used to lose', () => {
   expect(jsx('const v = @jsx { <label text={`${n} x`} />; };', KINDS))
     .toBe('const v = "G(p:< i:label i:text p:= G(t:`${n} x`) p:/ p:> p:;)";');
 });
+
+// -- The import attributes must be SUPPORTED, not merely written ---------------
+//
+// `AllImportAttributesSupported` runs when a module is LOADED, and parsing one
+// never reaches it - so every test that compiled a moded region passed while
+// `HostGetSupportedImportAttributes` omitted `"mode"`, and the first attempt to
+// actually load one failed with "Unsupported import attribute mode".
+//
+// The specification lists both keys. These assert the host hook agrees.
+test('`preprocessor` and `mode` are supported import attribute keys', () => {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  // A dynamic import carries the attributes through the same check a static one
+  // does, and rejects with a SyntaxError where a key is unsupported.
+  const supported = (key: string) => {
+    const r = realm.evaluateScriptSkipDebugger(
+      `import("./x.js", { with: { ${key}: "true" } }).then(() => "loaded", (e) => String(e && e.message))`,
+    ) as { Type: string };
+    return r.Type === 'normal';
+  };
+  expect(supported('preprocessor')).toBe(true);
+  expect(supported('mode')).toBe(true);
+});

@@ -1,4 +1,3 @@
-import type { ThreadCluster } from './thread-cluster.mts';
 import { Value } from '../value.mts';
 import {
   EnsureCompletion,
@@ -33,6 +32,7 @@ import type { FinalizationRegistryObject } from '../intrinsics/FinalizationRegis
 import type { ShadowRealmObject } from '../intrinsics/ShadowRealm.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
+import type { ThreadCluster } from './thread-cluster.mts';
 import {
   FinishLoadingImportedModule,
   type FunctionObject,
@@ -286,11 +286,17 @@ export function HostResolveReplacementDecorator(name: string, specifier: string 
 }
 
 export function HostGetSupportedImportAttributes(): readonly string[] {
-  // proposal-runtime-types `sec-preprocessor-modules`: *"preprocessor"* is a
-  // supported key, or a conforming host rejects the attribute before anything
-  // else in this feature can run. It is added to whatever the host supports
-  // rather than replacing it.
-  const preprocessor = surroundingAgent.feature('runtime-types') ? ['preprocessor'] : [];
+  // proposal-runtime-types `sec-preprocessor-modules`: *"preprocessor"* and
+  // *"mode"* are supported keys, or a conforming host rejects the attribute
+  // before anything else in this feature can run. They are added to whatever the
+  // host supports rather than replacing it.
+  //
+  // `"mode"` was missing here while the specification listed it, which nothing
+  // caught: AllImportAttributesSupported runs when a module is LOADED, and
+  // parsing a module never reaches it. Every test that compiled a moded region
+  // passed, and the first attempt to actually load one failed with
+  // "Unsupported import attribute mode".
+  const preprocessor = surroundingAgent.feature('runtime-types') ? ['preprocessor', 'mode'] : [];
   if (surroundingAgent.hostDefinedOptions.supportedImportAttributes) {
     return [...surroundingAgent.hostDefinedOptions.supportedImportAttributes, ...preprocessor];
   }
