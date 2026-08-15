@@ -1,4 +1,8 @@
 export * from './abstract-ops/all.mts';
+// proposal-runtime-types: loading a preprocessor module before the importing
+// module is parsed, which `sec-preprocessor-modules` requires and which the
+// host hook it replaces was never in the specification to do.
+export * from './preprocessor-loading.mts';
 export * from './execution-context/all.mts';
 export * from './static-semantics/all.mts';
 export * from './runtime-semantics/all.mts';
