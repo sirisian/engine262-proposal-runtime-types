@@ -29,7 +29,6 @@ import { Call, Get } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
-import { tokenizeModedText } from './parser/ModedTokens.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
 import { HostResolveReplacementDecorator } from './host-defined/engine.mts';
 import { surroundingAgent, type GCMarker, Realm } from '#self';
@@ -368,13 +367,13 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         if (mode === undefined && log !== undefined) {
           return CreateTokenStream(TokensFromParse(log as never, sourceText, source, from, to), realm);
         }
-        // A moded region is NOT ECMAScript, so tokenizing it as such is what
-        // failed before a mode could be declared - `<div/>` reaches `<` where an
-        // expression is wanted and the scan stops. The mode's own scanner
-        // produces its tokens instead.
-        return CreateTokenStream(mode === undefined
-          ? tokenizeText(slice, source)
-          : tokenizeModedText(slice, mode, source), realm);
+        // A CAPTURED region is tokenized with the ordinary lexical grammar, and
+        // that is all a region ever needs from the engine now. A macro wanting a
+        // different reading scans the text itself and delegates the ranges that
+        // are ECMAScript through `TokenStream.prototype.parse` - which is what
+        // let the JSX grammar leave the engine, it being the only thing that
+        // ever needed a scanner of its own.
+        return CreateTokenStream(tokenizeText(slice, source), realm);
       },
       (fn) => {
         // The macro's own source is on the function object, so evaluability is

@@ -117,22 +117,7 @@ export abstract class LanguageParser extends ModuleParser {
               this.addEarlyError(Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), decorators[0]);
             }
             // ModuleItem: DecoratorList `export` Declaration
-            // A decoration that declared a mode covers the exported declaration
-            // too. `@jsx export function View() { ... }` is the shape a
-            // component macro is written in, and the flag has to be set on THIS
-            // path as well as the statement one - they reach the declaration by
-            // different routes.
-            const exportMode = this.modeOfDecorators(decorators);
-            const outerJsx = this.jsxAllowed;
-            if (exportMode === 'jsx') {
-              this.jsxAllowed = true;
-            }
-            let exports;
-            try {
-              exports = this.parseExportDeclaration(decorators);
-            } finally {
-              this.jsxAllowed = outerJsx;
-            }
+            const exports = this.parseExportDeclaration(decorators);
             // `sec-syntax-replacement`: "Every decorable position may be
             // syntax-replaced, including the positions that do not admit value
             // replacement." A DECLARATION is one, whether or not it is

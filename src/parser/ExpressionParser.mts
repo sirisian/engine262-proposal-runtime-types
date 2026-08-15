@@ -284,17 +284,7 @@ export abstract class ExpressionParser extends FunctionParser {
    * did - which is the whole argument for a scoped mode over a grammar that
    * admits JSX everywhere and then has to disambiguate `<` per occurrence.
    */
-  protected jsxAllowed = false;
 
-  /**
-   * Modes whose regions are PARSED rather than captured.
-   *
-   * A captured region is read by its mode's scanner, which is right where the
-   * region's text is not ECMAScript. A mixed mode's text IS ECMAScript, with
-   * one extra production, so its region is parsed and its tokens come from the
-   * parse like everything else.
-   */
-  protected static readonly MIXED_MODES = new Set(['jsx']);
 
   /**
    * A JSX element, scanned rather than tokenized.
@@ -309,213 +299,12 @@ export abstract class ExpressionParser extends FunctionParser {
    * admitted it replaces the whole region before evaluation. It exists to be
    * found, measured, and spliced.
    */
-  /**
-   * A JSX element, PARSED rather than scanned.
-   *
-   * Scanning the extent and expanding it with the mode's scanner made control
-   * flow between tags arrive as JSX TEXT - correct for a scanner reading
-   * characters between tags, and useless for a macro. Parsing the children lets
-   * `@if`, `@for` and `@match` be ordinary statements where they stand, and puts
-   * every interpolation on the parse-threaded token path, so a template literal
-   * or a regular expression in a prop is one token.
-   *
-   * Child TEXT is the reason this is not simply a Block: `Hi ` is not a
-   * statement. It is scanned raw and logged as a string token, so
-   * `<p>Hi {name}!</p>` keeps the space that distinguishes it from `Hi{name}!`.
-   */
-  parseJSXElement(): ParseNode.ModedRegion {
-    const node = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
-    const start = this.peek().startIndex;
-    this.parseJSXTagAndChildren();
-    const end = this.currentToken.endIndex;
-    (node as { Mode?: string }).Mode = 'jsx';
-    (node as { RegionText?: string }).RegionText = this.source.slice(start, end);
-    (node as { IsExpression?: boolean }).IsExpression = true;
-    (node as { Parsed?: boolean }).Parsed = true;
-    const finished = this.finishNode(node as ParseNode.Unfinished<ParseNode>, 'ModedRegion' as ParseNode['type']) as unknown as ParseNode.ModedRegion;
-    if (finished.location) {
-      (finished.location as { endIndex: number }).endIndex = end;
-    }
-    return finished;
-  }
 
   /** `<tag ...>children</tag>` or `<tag ... />`, consuming through the close. */
-  parseJSXTagAndChildren(): void {
-    this.expectPunct('<');
-    if (this.testPunct('>')) {
-      this.nextPunct();
-      this.parseJSXChildren('');
-      return;
-    }
-    const tag = this.parseJSXName();
-    // Attributes: `name`, `name="s"`, `name={expr}`.
-    while (!this.testPunct('>') && !this.testPunct('/')) {
-      this.parseJSXName();
-      if (this.testPunct('=')) {
-        this.nextPunct();
-        if (this.testPunct('{')) {
-          // The interpolation is found from where the last token ENDED, not from
-          // the scan position, which the lexer has already advanced past it.
-          // Same offset that broke the children loop, in the one place the
-          // children loop does not cover.
-          this.position = this.currentToken.endIndex;
-          this.parseJSXInterpolation();
-        } else {
-          this.next();
-        }
-      }
-    }
-    if (this.testPunct('/')) {
-      this.nextPunct();
-      this.expectPunct('>');
-      return;
-    }
-    this.expectPunct('>');
-    this.parseJSXChildren(tag);
-  }
 
-  parseJSXChildren(tag: string): void {
-    for (;;) {
-      // The scan position is a token AHEAD of the last one consumed, because the
-      // lexer looks ahead - so text begins where the last token ENDED. Reading
-      // `this.position` here skips the first child and mis-positions every
-      // recursion after it.
-      this.position = this.currentToken.endIndex;
-      this.skipJSXText();
-      if (this.position >= this.source.length) {
-        this.unexpected();
-        return;
-      }
-      const c = this.source[this.position];
-      if (c === '<' && this.source[this.position + 1] === '/') {
-        // Logged rather than skipped: without the `<` and `/` a close tag reads
-        // as a bare identifier, and a macro cannot tell `</panel>` from a child
-        // named `panel`.
-        this.resumeLexingAt(this.position);
-        this.expectPunct('<');
-        this.expectPunct('/');
-        const closing = tag === '' ? '' : this.parseJSXName();
-        if (closing !== tag) {
-          this.unexpected();
-        }
-        this.expectPunct('>');
-        return;
-      }
-      if (c === '<') {
- this.resumeLexingAt(this.position); this.parseJSXTagAndChildren(); continue;
-}
-      if (c === '{') {
- this.parseJSXInterpolation(); continue;
-}
-      if (c === '@') {
-        // The sigil. A construct in child position is marked, because child TEXT
-        // is possible here and a bare `if (` could be either. Angular 17 reached
-        // the same answer with the same spelling.
-        this.resumeLexingAt(this.position + 1);
-        const outerJsx = this.jsxAllowed;
-        this.jsxAllowed = true;
-        try {
-          // `parseStatement` is defined on StatementParser, which is BELOW this
-          // class in the chain - the same shape that made `parseModedRegion`
-          // move down. The instance is always the leaf Parser, so the cast is
-          // sound at run time.
-          (this as unknown as { parseStatement(): unknown }).parseStatement();
-        } finally {
-          this.jsxAllowed = outerJsx;
-        }
-        continue;
-      }
-      this.unexpected();
-      return;
-    }
-  }
 
   /** Raw text between tags, logged as one string token so its spaces survive. */
-  skipJSXText(): void {
-    const from = this.position;
-    let i = from;
-    while (i < this.source.length) {
-      const c = this.source[i];
-      if (c === '<' || c === '{' || c === '@') {
- break;
-}
-      i += 1;
-    }
-    if (i > from) {
-      // EVERY non-empty run is logged, whitespace-only included. Dropping a run
-      // that trims to nothing is lossy in a way nothing downstream can repair:
-      // `{a} {b}` and `{a}{b}` become identical streams, and the space between
-      // two interpolations - which the view renders - is gone. Which whitespace
-      // is significant is the consumer's rule, not the parser's.
-      this.tokenLog.push({
-        type: Token.STRING, startIndex: from, endIndex: i, kind: 'jsxtext',
-      });
-    }
-    this.position = i;
-  }
 
-  parseJSXInterpolation(): void {
-    const start = this.position;
-    const run = ScanBalancedRun(this.source, start);
-    if (run === undefined) {
- this.unexpected(); return;
-}
-    const logFrom = this.tokenLog.length;
-    const inner = start + 1;
-    this.resumeLexingAt(inner);
-    if (this.source.slice(inner, run.end - 1).trim() !== '') {
-      this.parseExpression();
-    }
-    this.resumeLexingAt(run.end);
-    // Marked as a group so `{name}` reaches a macro as an interpolation rather
-    // than as a bare identifier child. The tokens it contains stay in the log
-    // after the marker, which is what `markLogSpan` preserves and
-    // `collapseLogFrom` would have discarded.
-    // The DELIMITERS are logged around the expression, rather than a marker in
-    // front of it. `groupRuns` builds a group from an opening delimiter and its
-    // match, so logging `{` and `}` makes the interpolation a group by the
-    // ordinary path - where a marker would need span-expansion machinery to
-    // become one.
-    this.tokenLog.splice(logFrom, 0, {
-      type: Token.LBRACE, startIndex: start, endIndex: start + 1,
-    });
-    this.tokenLog.push({
-      type: Token.RBRACE, startIndex: run.end - 1, endIndex: run.end,
-    });
-  }
-
-  parseJSXName(): string {
-    let name = '';
-    for (;;) {
-      const t = this.peek();
-      if (t.type !== Token.IDENTIFIER && !/^[a-z]+$/.test(String(t.value ?? ''))) {
- break;
-}
-      name += String(this.next().value);
-      if (this.testPunct('-') || this.testPunct('.') || this.testPunct(':')) {
-        name += String(this.nextPunct().value);
-      } else {
-        break;
-      }
-    }
-    return name;
-  }
-
-  testPunct(v: string): boolean {
-    const t = this.peek();
-    return t !== undefined && this.source.slice(t.startIndex, t.endIndex) === v;
-  }
-
-  nextPunct() {
- return this.next();
-}
-
-  expectPunct(v: string) {
-    if (!this.testPunct(v)) {
- return this.unexpected() as never;
-}
-    return this.next();
-  }
 
   /** The lexical mode a decoration list declared, if any. */
   modeOfDecorators(decorators: readonly ParseNode.Decorator[] | null): string | undefined {
@@ -587,7 +376,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // author who wrote the region can see what is wrong with it. A macro may
     // declare a grammar and never be used as a decoration, which is not an
     // error, so the check cannot sit at the import.
-    if (mode !== 'opaque' && mode !== 'ecmascript' && !ExpressionParser.MIXED_MODES.has(mode)) {
+    if (mode !== 'opaque' && mode !== 'ecmascript') {
       this.raise(Throw.SyntaxError('$1 does not name a lexical grammar this implementation provides', Value(mode)) as never, this.peek());
     }
     // A MIXED mode parses its region rather than capturing it.
@@ -604,20 +393,13 @@ export abstract class ExpressionParser extends FunctionParser {
     // JSX element arrives as a group carrying its own structure.
     // Both parsed grammars take this path; they differ only in whether the JSX
     // element production is enabled while the Block is parsed.
-    if (mode === 'ecmascript' || ExpressionParser.MIXED_MODES.has(mode)) {
+    if (mode === 'ecmascript') {
       const parsed = this.startNode<ParseNode.ModedRegion>() as ParseNode.Unfinished<ParseNode.ModedRegion>;
       if (this.test(Token.DO)) {
         this.next();
       }
       const blockStart = this.peek().startIndex;
-      const outerJsx = this.jsxAllowed;
-      this.jsxAllowed = ExpressionParser.MIXED_MODES.has(mode);
-      let block;
-      try {
-        block = this.parseBlock();
-      } finally {
-        this.jsxAllowed = outerJsx;
-      }
+      const block = this.parseBlock();
       (parsed as { Mode?: string }).Mode = mode;
       (parsed as { Block?: unknown }).Block = block;
       (parsed as { Parsed?: boolean }).Parsed = true;
@@ -1920,13 +1702,6 @@ export abstract class ExpressionParser extends FunctionParser {
     // position.
     if (surroundingAgent.feature('runtime-types') && this.test(Token.DO)) {
       return this.parseDoExpression(false) as unknown as ParseNode.PrimaryExpression;
-    }
-    // A JSX element, where the mode admits one. This is the point at which the
-    // parser would otherwise try a regular expression literal - the position
-    // where an OPERAND is expected - and it is the only place the decision can
-    // be made, since a tokenizer does not know it.
-    if (this.jsxAllowed && this.test(Token.LT)) {
-      return this.parseJSXElement() as unknown as ParseNode.PrimaryExpression;
     }
     // proposal-runtime-types: `constant` Block.
     //

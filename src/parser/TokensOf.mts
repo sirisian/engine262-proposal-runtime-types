@@ -46,11 +46,7 @@ export type TokenKind =
   | 'string'
   | 'template'
   | 'regexp'
-  | 'group'
-  // proposal-runtime-types: a whole JSX element, recorded by the parse as one
-  // span and expanded by the mode's scanner. It never survives into a macro's
-  // stream as this kind - TokensFromParse turns it into a `group`.
-  | 'jsx';
+  | 'group';
 
 /** `sec-token-records`. */
 export interface TokenRecord {
@@ -186,19 +182,6 @@ export function tokenizeText(text: string, source: SourceRefRecord, offset = 0):
   return groupRuns(flat, source, offset);
 }
 
-/**
- * How a `jsx` span is turned into tokens.
- *
- * Set by the mode scanner rather than imported, because the scanner already
- * imports this module for `tokenizeText` - the interpolations inside a JSX
- * element are ECMAScript and are tokenized by it.
- */
-let expandJSX: (text: string, source: SourceRefRecord, offset: number) => readonly TokenRecord[] = () => [];
-
-export function SetJSXExpander(f: (text: string, source: SourceRefRecord, offset: number) => readonly TokenRecord[]) {
-  expandJSX = f;
-}
-
 /** An entry the grouping step can consume, from a fresh lex or from the parse log. */
 interface FlatToken {
   readonly data: { type: Token, startIndex: number, endIndex: number, hadLineTerminatorBefore?: boolean };
@@ -247,20 +230,6 @@ function groupRuns(flat: readonly FlatToken[], source: SourceRefRecord, offset: 
       }
       index += 1;
       const kind = flat[index - 1].kind ?? kindOf(data.type);
-      // A `jsx` entry is a whole element, recorded by the parse as one span
-      // because its child text is not ECMAScript. It becomes the element's
-      // STRUCTURE here - expanded at whatever depth it sits, since a component's
-      // JSX is inside a function body inside a declaration.
-      if (kind === 'jsx') {
-        out.push({
-          Kind: 'group',
-          Value: raw,
-          Span: span,
-          Tokens: expandJSX(raw, source, span.Start),
-          LineTerminatorBefore: (data as { hadLineTerminatorBefore?: boolean }).hadLineTerminatorBefore === true,
-        });
-        continue;
-      }
       out.push({
         Kind: kind,
         Value: raw,
