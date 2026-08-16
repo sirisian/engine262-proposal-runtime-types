@@ -30,7 +30,7 @@ import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
-import { KindOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
+import { KindOfDecoratedNode, LabelOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
 import {
   ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
 } from './preprocessor-loading.mts';
@@ -450,7 +450,7 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         const kind = KindOfDecoratedNode(target);
         const context = kind === undefined
           ? Value.undefined
-          : SyntaxContextFor(surroundingAgent.currentRealmRecord, kind);
+          : SyntaxContextFor(surroundingAgent.currentRealmRecord, kind, LabelOfDecoratedNode(target));
         const callArgs = args === undefined
           ? [tokens as Value, context as Value]
           : [tokens as Value, context as Value, args as Value];

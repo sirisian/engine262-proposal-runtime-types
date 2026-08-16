@@ -80,3 +80,34 @@ test('arguments move to the THIRD parameter', () => {
   expect(reported('const v = @m { x };', arity)).toBe('const v = "2:none";');
   expect(reported('const v = @m(Serialize) { x };', arity)).toBe('const v = "3:args";');
 });
+
+test('a label reaches the macro, being the one thing the tokens cannot carry', () => {
+  // Everything else a runtime context reports syntactically is IN the tokens a
+  // replacement decorator receives. A label is not: it PRECEDES the decoration -
+  // `lbl:` then `@m` then `{ ... }` - so a span reaching back for it would
+  // contain the decoration being expanded. decorators.md already declares
+  // `label?: string` on every block reflection.
+  const report = '(function (t, c) { return [{ kind: "string",'
+    + ' value: JSON.stringify(c.kind + "/" + String(c.label)), span: t[0] && t[0].span }]; })';
+  expect(reported('lbl: @m { y; }', report)).toBe('lbl: "Region/lbl";');
+  expect(reported('lbl: @m while (c) { y; }', report)).toBe('lbl: "WhileBlock/lbl"');
+});
+
+test('an unlabelled decoration reports no label at all', () => {
+  // Absent rather than *undefined*: a field that is present and empty is the
+  // shape this project has been bitten by, and `Object.keys` is what says which.
+  const keys = '(function (t, c) { return [{ kind: "string",'
+    + ' value: JSON.stringify(Object.keys(c).sort().join(",")), span: t[0] && t[0].span }]; })';
+  expect(reported('@m { y; }', keys)).toBe('"kind";');
+  expect(reported('lbl: @m { y; }', keys)).toBe('lbl: "kind,label";');
+});
+
+test('a labelled decoration is not a different POSITION from an unlabelled one', () => {
+  // `lbl: @m { y; }` used to report Block where `@m { y; }` reported Region,
+  // because the labelled path reached the statement parser by a different route
+  // and the region rule did not apply. A label is not a position.
+  const kindOnly = '(function (t, c) { return [{ kind: "string",'
+    + ' value: JSON.stringify(c.kind), span: t[0] && t[0].span }]; })';
+  expect(reported('@m { y; }', kindOnly)).toBe('"Region";');
+  expect(reported('lbl: @m { y; }', kindOnly)).toBe('lbl: "Region";');
+});

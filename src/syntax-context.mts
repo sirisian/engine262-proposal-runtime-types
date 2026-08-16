@@ -69,9 +69,23 @@ export function KindOfDecoratedNode(node: ParseNode): string | undefined {
  *
  * Frozen, because a context is a report and not a channel.
  */
-export function SyntaxContextFor(realm: Realm, kind: string): ObjectValue {
+export function SyntaxContextFor(realm: Realm, kind: string, label?: string): ObjectValue {
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataPropertyOrThrow(context, Value('kind'), Value(kind)));
+  // `label` is the ONE syntactic fact the tokens cannot carry, and that is why
+  // it is here when nothing else is. A label PRECEDES the decoration -
+  // `lbl:` then `@m` then `{ ... }` - so a span reaching back to include it
+  // would contain the decoration being expanded. `decorators.md` already
+  // declares `label?: string` on every block reflection, so carrying it makes
+  // this context match the document rather than diverge from it.
+  if (label !== undefined) {
+    X(CreateDataPropertyOrThrow(context, Value('label'), Value(label)));
+  }
   X(SetIntegrityLevel(context, 'frozen'));
   return context;
+}
+
+/** The label a decorated statement carries, where the parser recorded one. */
+export function LabelOfDecoratedNode(node: ParseNode): string | undefined {
+  return (node as { BlockLabel?: string }).BlockLabel;
 }

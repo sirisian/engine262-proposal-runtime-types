@@ -1015,7 +1015,12 @@ export abstract class StatementParser extends TypeParser {
       Statement?: unknown,
       Statement_a?: unknown,
     };
-    const target = owned?.type === 'Block'
+    // A DECORATED statement is itself the target: the decoration sits on the
+    // `while`, so its context is the one that should report the label, not the
+    // body block's. Otherwise `lbl: @m while (c) { }` marks the inner block and
+    // the macro decorating the loop sees nothing.
+    const decorated = (owned as { Decorators?: readonly unknown[] } | undefined)?.Decorators;
+    const target = (Array.isArray(decorated) && decorated.length > 0) || owned?.type === 'Block'
       ? owned
       : [owned?.Statement, owned?.Statement_a].find((n) => (n as { type?: string })?.type === 'Block');
     if (target && (target as { BlockLabel?: string }).BlockLabel === undefined) {
@@ -1713,7 +1718,14 @@ export abstract class StatementParser extends TypeParser {
         nextToken: type === null ? this.peek() : null,
       });
 
-      node.LabelledItem = this.parseStatement();
+      // A decoration is handled by `parseStatementListItem`, and a labelled
+      // statement takes its item from `parseStatement` - so `lbl: @m while (c)
+      // { }` reached the `@` with nothing to consume it and failed with
+      // "Unexpected token". Nothing says a labelled decorated statement is
+      // illegal, and the block family exists to decorate exactly these forms.
+      node.LabelledItem = surroundingAgent.feature('runtime-types') && this.test(Token.AT)
+        ? this.parseDecoratedStatementListItem() as ParseNode.LabelledItem
+        : this.parseStatement();
       // proposal-runtime-types: decorators.md gives every block reflection a
       // `label`, and it has answered *undefined* since the contexts were built
       // because nothing read it. The label is LEXICAL - it is known here and
