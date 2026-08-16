@@ -3,6 +3,7 @@ import {
   Descriptor,
   JSStringValue,
   ObjectValue,
+  TypedNumberValue,
   UndefinedValue,
   Value,
   wellKnownSymbols,
@@ -316,6 +317,14 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
 }
 
 /**
+ * #index-type: the type every count an array reports carries. `length` reads at
+ * this type (value.mts), and `capacity` must read at the same one - a single
+ * index type is the claim that the two counts ARE one type, and two
+ * representations contradict it.
+ */
+const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [32] }) as unknown as never;
+
+/**
  * proposal-runtime-types (README "Capacity"): `reserve(n)` grows the backing
  * allocation to hold at least n elements without changing the length, and
  * `capacity()` reports it. Growth RELOCATES the allocation, so it invalidates
@@ -392,11 +401,11 @@ function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallConte
   // the allocation's. Falling through to the length below returned the right
   // number only while such an array was full.
   if (O.TypedExtent !== undefined) {
-    return F(O.TypedExtent);
+    return new TypedNumberValue(O.TypedExtent, INDEX_TYPE);
   }
   const lenValue = Q(yield* Get(O, Value('length')));
   const len = R(Q(yield* ToLength(lenValue)));
-  return F(Math.max(O.TypedCapacity ?? 0, len));
+  return new TypedNumberValue(Math.max(O.TypedCapacity ?? 0, len), INDEX_TYPE);
 }
 
 /** https://tc39.es/ecma262/#sec-array.prototype.push */

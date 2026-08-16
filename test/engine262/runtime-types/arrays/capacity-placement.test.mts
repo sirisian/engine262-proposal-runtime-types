@@ -98,6 +98,46 @@ test('a growable array does not get the static bound', () => {
   expectThrownKind('let a: [].<uint32> = [1]; a[10];', 'RangeError');
 });
 
+// -- the index type is one type, so both counts read at it -------------------
+
+test('capacity reads at the index type, as length does', () => {
+  // `length` reads as a typed value and `capacity` read as a plain Number, so
+  // the two counts of one array disagreed while sharing a static type. A single
+  // index type is the claim that they ARE one type, and two representations
+  // contradict it.
+  //
+  // The typed `length` is the settled side: check-insertion.test.mts pins it,
+  // and #sec-arithmetic-never-promotes is why it does not mix with an untyped
+  // operand. So `capacity` moves to match `length`, not the reverse.
+  expect(bool('let a: [].<uint32> = [1]; String(a.capacity is uint32);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1]; String(a.length is uint32);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity is uint32);')).toBe(true);
+});
+
+test('the value a capacity reports is unchanged', () => {
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity);')).toBe('4');
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(typeof a.capacity);')).toBe('number');
+});
+
+test('a capacity carries the same comparison rules a length does', () => {
+  // #sec-arithmetic-never-promotes: a literal adopts the other operand's type,
+  // so the comparison against a literal is true; a binding adopts nothing, so
+  // the comparison against one is false. This is the pinned behaviour of
+  // `length`, now true of `capacity` as well rather than only of one of them.
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity === 4);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let n = 4; String(a.capacity === n);')).toBe(false);
+});
+
+test('a loop over a capacity needs a typed counter, as one over a length does', () => {
+  // The price of a typed count, applied consistently. This is STRICTER than
+  // before - the same loop over `a.capacity` used to run - and it is the pinned
+  // decision reaching a place it had not reached.
+  expectThrownKind('let a: [].<uint32> = [1, 2, 3]; for (let i = 0; i < a.capacity; i++) { }', 'TypeError');
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; let n = 0;'
+    + ' for (let i = (0 := uint32); i < a.capacity; i++) { n += 1; } String(n);')).toBe('3');
+});
+
 // -- the index type: capacity and reserve are typed, not `any` ---------------
 
 test('capacity has the index type rather than any', () => {
