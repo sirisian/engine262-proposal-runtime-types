@@ -2037,6 +2037,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.ArrayExtent && node.ArrayExtent.type !== 'NumericLiteral') {
           return null;
         }
+        // sec-array-and-tuple-types: an array type takes ONE type argument, its
+        // element. A second was read as the length type in an early draft of
+        // the design and never wired to anything, so `[4].<uint8, uint64>` and
+        // even `[4].<uint8, uint64, uint32>` resolved with the extra arguments
+        // DISCARDED and a plain `uint32` length - which made a typo and a
+        // feature indistinguishable. Refused here rather than ignored; the
+        // index type is fixed by the specification, not declared per array.
+        if (node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 1) {
+          const completion = Throw.TypeError('an array type takes a single type argument') as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return null;
+        }
         const el = node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 0 ? resolveType(node.TypeArguments.TypeArgumentList[0]) : { Kind: 'any' as const };
         if (!el) {
           return null;

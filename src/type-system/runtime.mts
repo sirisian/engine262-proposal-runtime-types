@@ -2171,6 +2171,15 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return Throw.TypeError('$1 does not name a type parameter of $2', Value(named), Value('an array type'));
         }
       }
+      // The arity half of the same rule, kept HERE as well as in the checker's
+      // resolveType because the two resolvers must agree on what an annotation
+      // means - a rule enforced in one and not the other is a rule that holds
+      // in some positions. An array type's one argument is its element; a
+      // second was read as the length type in an early draft and never wired
+      // to anything, so extra arguments were silently discarded.
+      if (node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 1) {
+        return Throw.TypeError('an array type takes a single type argument');
+      }
       const Element = node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 0
         ? Q(yield* TypeNodeToTypeRecord(node.TypeArguments.TypeArgumentList[0]))
         : anyType;

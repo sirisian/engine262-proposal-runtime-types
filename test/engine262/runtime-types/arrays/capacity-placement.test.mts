@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, expectThrownKind, bool,
+  evaluated, expectThrownKind, expectStaticTypeError, bool,
 } from '../harness.mts';
 
 /**
@@ -37,6 +37,55 @@ import {
  *     references.md states that it never moves, so a `reserve` past its extent
  *     is a bug under either placement.
  */
+
+// -- the growable ceiling: reserve cannot buy unusable room -------------------
+
+test('reserve past the maximum array length is refused', () => {
+  // The same defect as the fixed-extent case, one level up. A `[].<T>` is an
+  // Array, so its length can never pass (2 ** 32) - 1 - `a.length = 2 ** 32`
+  // is a RangeError and so is a push there. `reserve` asked only about the
+  // extent, so a growable array accepted `reserve(2 ** 40)` and then reported
+  // a capacity of 1099511627776 it could never use.
+  //
+  // RangeError rather than TypeError: this is the Array representational limit
+  // that ArrayCreate already enforces, not a statement about the element type.
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(4294967296);', 'RangeError');
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(1099511627776);', 'RangeError');
+});
+
+test('reserve at the maximum array length is allowed', () => {
+  // The ceiling is a valid length, so reserving exactly it is a request the
+  // array could in principle satisfy. Off-by-one here would make the largest
+  // legal array unbuildable.
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(4294967295); String(a.capacity);')).toBe('4294967295');
+});
+
+test('an ordinary reserve is unaffected by the ceiling', () => {
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+  expect(evaluated('let a: [].<uint32> = [1, 2]; a.reserve(64); String(a.length) + "/" + String(a.capacity);')).toBe('2/64');
+});
+
+// -- array type arity ---------------------------------------------------------
+
+test('an array type takes exactly one type argument', () => {
+  // A second argument was read as the length type in an early draft of the
+  // design and never wired to anything, so `[4].<uint8, uint64>` type-checked,
+  // enforced `uint8` on elements, and yielded a plain `uint32` length with the
+  // second argument DISCARDED. A three-argument form parsed too. Silently
+  // ignoring them made a typo indistinguishable from a feature.
+  // A STATIC rejection, not a catchable throw: the checker refuses the
+  // annotation before evaluation, so a `try` around it cannot swallow it.
+  expectStaticTypeError('let a: [4].<uint8, uint64> = [1, 2, 3, 4];');
+  expectStaticTypeError('let a: [4].<uint8, uint64, uint32> = [1, 2, 3, 4];');
+  expectStaticTypeError('let a: [].<uint32, uint64> = [];');
+});
+
+test('the one-argument and bare array forms still resolve', () => {
+  // The guard must not catch the forms that were always correct.
+  expect(evaluated('let a: [4].<uint8> = [1, 2, 3, 4]; String(a.length);')).toBe('4');
+  expect(evaluated('let a: [].<uint32> = [1, 2]; String(a.length);')).toBe('2');
+  expect(evaluated('let a: [] = [1, 2]; String(a.length);')).toBe('2');
+});
 
 // -- placement: an untyped array has no capacity surface ----------------------
 // PLACEMENT DECISION: the two tests in this section assert the members are

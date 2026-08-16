@@ -358,6 +358,19 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
   if (wanted <= capacity) {
     return Value.undefined;
   }
+  // The growable case has a ceiling of its own, and it is the SAME defect one
+  // level up: a `[` `]` `.` `<` T `>` is an Array, so its length can never pass
+  // (2 ** 32) - 1 - `a.length = 2 ** 32` is a *RangeError* and so is a `push`
+  // there. A reserve past that ceiling therefore buys room the array can never
+  // use, exactly as `reserve(64)` on a `[4]` did before the extent guard above.
+  //
+  // *RangeError* rather than *TypeError* because this is the Array
+  // representational limit that `ArrayCreate` already enforces, not a statement
+  // about the element type: nothing here is wrong with the array, the number is
+  // simply too large to be a length.
+  if (wanted > (2 ** 32) - 1) {
+    return Throw.RangeError('a capacity above the maximum array length cannot be reserved');
+  }
   O.TypedCapacity = wanted;
   O.TypedGeneration = (O.TypedGeneration ?? 0) + 1;
   return Value.undefined;

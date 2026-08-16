@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  Agent, ManagedRealm, setSurroundingAgent, runSingleJobInQueue, Throw, Value,
+  Agent, ManagedRealm, setSurroundingAgent, runSingleJobInQueue, Throw,
   createBuiltinModuleLoader, composeModuleLoaders,
 } from '#self';
 import { Inspector } from '#self/inspector';
