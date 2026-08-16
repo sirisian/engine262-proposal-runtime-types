@@ -2,6 +2,7 @@ import { Value, ObjectValue } from '../value.mts';
 import { X } from '../completion.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { anyType, makePrimitive } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   Descriptor, Realm, surroundingAgent,
@@ -116,11 +117,57 @@ export function metadataInterfaceRecord(name: string): TypeRecord {
  * descriptor: a type name is not assignable and not enumerable, and stays
  * configurable as the primitive names are.
  */
+/**
+ * proposal-runtime-types: `Token`, the record a replacement decorator RETURNS.
+ *
+ * A decorator receives a TokenStream and answers a token sequence - an
+ * array-like of these. The asymmetry is deliberate: a TokenStream carries spans
+ * the engine assigns and refuses construction, so a decorator that rewrites
+ * assembles ordinary records instead. Without this name the RETURN of every
+ * macro in the companion documents could not be annotated, though its parameters
+ * could.
+ *
+ * Structural rather than nominal-by-prototype, because a macro builds these with
+ * object literals and they are instances of nothing. `span` and `tokens` are
+ * optional: a created token carries no span until the engine assigns one, and
+ * only a group carries tokens.
+ */
+const tokenDeclaration = { type: 'ReflectionContext', name: 'Token' } as unknown as ParseNode;
+
+export function tokenRecord(): TypeRecord {
+  const string = makePrimitive('string');
+  const property = (key: string, type: TypeRecord, optional: boolean) => ({
+    key, type, optional, readonly: false,
+  });
+  return {
+    Kind: 'nominal',
+    Declaration: tokenDeclaration,
+    Arguments: [],
+    LibraryName: 'Token',
+    Structure: {
+      Kind: 'object',
+      Properties: [
+        property('kind', string, false),
+        property('value', string, false),
+        property('span', anyType, true),
+        property('tokens', anyType, true),
+      ],
+      IndexSignatures: [],
+    },
+  } as unknown as TypeRecord;
+}
+
 export function bindMetadataInterfaceGlobals(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {
     return;
   }
   const global = realmRec.GlobalObject as ObjectValue;
+  X(global.DefineOwnProperty(Value('Token'), Descriptor({
+    Value: GetTypeObject(tokenRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.true,
+  })));
   for (const name of metadataInterfaceNames) {
     X(global.DefineOwnProperty(Value(name), Descriptor({
       Value: GetTypeObject(metadataInterfaceRecord(name), realmRec),
