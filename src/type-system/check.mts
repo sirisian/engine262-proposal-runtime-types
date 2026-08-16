@@ -2572,6 +2572,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // subject is types.
             const name = (m.IdentifierName as { name: string }).name;
             if (name === 'length' || name === 'capacity') {
+              // NOT literal-typed on a fixed extent, though the extent is a
+              // compile-time constant and the type would be exact. `a.length`
+              // evaluates to a TYPED value and `a.capacity` to a plain Number,
+              // so a literal type is assignable from one and not the other:
+              // `let n: 4 = a.capacity` passes and `let n: 4 = a.length` fails
+              // the run-time boundary with "4 (typed) is not assignable". The
+              // static types would be identical and the observable behaviour
+              // would not, which is worse than the index type for both.
+              //
+              // #sec-array-and-tuple-types says of `length` that "the value
+              // read is unchanged, a Number, and no conversion is applied at
+              // run time", so the divergence is the engine's and settling it
+              // is a prerequisite rather than part of this pass. The bounds
+              // rule below does not depend on it: it reads [[Extent]] from the
+              // type directly.
               return indexTypeRecord();
             }
             const sig = arrayMethodSignature(name, receiver.Element, receiver);
@@ -2612,6 +2627,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             return prop ? prop.type : null;
+          }
+        }
+        // A COMPUTED access, `a[i]`. This fell through to ~any~, so indexing a
+        // typed array was untyped: `let b: boolean = a[0]` type-checked on a
+        // `[4].<uint32>`. Element WRITES were checked all along, which made the
+        // hole easy to miss - the asymmetry read as "indexing is checked" when
+        // only half of it was.
+        if (m.Expression && m.MemberExpression) {
+          const receiver = staticType(m.MemberExpression);
+          if (receiver && receiver.Kind === 'array') {
+            // #sec-array-and-tuple-types: a fixed extent is part of the type
+            // and is a compile-time constant, so an index written as a literal
+            // is decidable HERE. Out of range it is refused before the program
+            // runs rather than as the run-time RangeError it used to be, which
+            // is what lets a bounds check be elided where the index is proven.
+            //
+            // Only a literal is decided: anything computed keeps the run-time
+            // check, which stays the backstop for every other index.
+            const index = m.Expression as { type?: string, value?: number };
+            if (index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
+                && typeof index.value === 'number'
+                && (!Number.isInteger(index.value) || index.value < 0 || index.value >= receiver.Extent)) {
+              const completion = Throw.TypeError(
+                '$1 is not an index of $2',
+                Value(String(index.value)),
+                Value(displayType(receiver)),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+            return receiver.Element;
           }
         }
         return null;

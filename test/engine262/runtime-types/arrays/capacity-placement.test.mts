@@ -38,6 +38,66 @@ import {
  *     is a bug under either placement.
  */
 
+// -- element access is typed --------------------------------------------------
+
+test('reading an element has the element type, not any', () => {
+  // A computed access fell through to ~any~, so indexing a typed array was
+  // untyped: `let b: boolean = a[0]` type-checked on a `[4].<uint32>`. Element
+  // WRITES were checked all along, and that asymmetry is what hid it - the
+  // half that worked read as though the whole thing did.
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; let s: string = a[0];');
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; let b: boolean = a[0];');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let n: uint32 = a[0]; String(n);')).toBe('1');
+});
+
+test('a growable array types its elements the same way', () => {
+  expectStaticTypeError('let a: [].<uint32> = [1]; let s: string = a[0];');
+  expect(evaluated('let a: [].<uint32> = [1]; let n: uint32 = a[0]; String(n);')).toBe('1');
+});
+
+test('element writes stay checked', () => {
+  // The half that already worked, kept as a guard: typing the read must not
+  // disturb the store check.
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; a[0] = "x";');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; a[0] = 9; String(a[0]);')).toBe('9');
+});
+
+test('an untyped array is unaffected', () => {
+  // Reached through a receiver whose type is known; an unannotated binding is
+  // ~any~, so existing code sees no change.
+  expect(evaluated('let a = [1, 2]; let s: string = a[0]; String(s);')).toBe('1');
+});
+
+// -- a literal index against a fixed extent ----------------------------------
+
+test('a literal index outside a fixed extent is refused before the program runs', () => {
+  // The extent is a compile-time constant, so the index is decidable here. It
+  // was a run-time RangeError, which is the wrong moment for a mistake that
+  // was visible in the source.
+  //
+  // Checked in an UNEXECUTED body: at the top level the run-time RangeError
+  // would fire too, and the two are indistinguishable from the outside.
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; function f() { return a[10]; }');
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; function f() { return a[4]; }');
+});
+
+test('an index within a fixed extent is accepted', () => {
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; function f() { return a[3]; } String(f());')).toBe('4');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; function f() { return a[0]; } String(f());')).toBe('1');
+});
+
+test('a computed index keeps the run-time check', () => {
+  // Only a literal is decided statically. Everything else keeps the run-time
+  // bound as its backstop, which is what the elision above is safe against.
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let i = 2; String(a[i]);')).toBe('3');
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; let i = 10; a[i];', 'RangeError');
+});
+
+test('a growable array does not get the static bound', () => {
+  // No extent, nothing to decide: a literal index is checked at run time.
+  expectThrownKind('let a: [].<uint32> = [1]; a[10];', 'RangeError');
+});
+
 // -- the index type: capacity and reserve are typed, not `any` ---------------
 
 test('capacity has the index type rather than any', () => {
