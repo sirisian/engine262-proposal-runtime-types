@@ -2608,6 +2608,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
+          // #sec-span-type: a WINDOW receiver. It reads like an array of its
+          // element type and has none of the operations that change a length or
+          // describe an allocation. Without this the receiver fell through to
+          // ~any~, so `p.push(1)` on a `Span.<uint32>` type-checked and
+          // `let s: string = p[0]` did too - the type existed and constrained
+          // nothing, which is worse than not having it.
+          {
+            const spanElement = spanElementOfReceiver(receiver);
+            if (spanElement) {
+              const name = (m.IdentifierName as { name: string }).name;
+              if (name === 'length') {
+                return indexTypeRecord();
+              }
+              if (spanForbiddenMembers.has(name)) {
+                const completion = Throw.TypeError(
+                  '$1 is not declared by $2',
+                  Value(name),
+                  Value(displayType(receiver!)),
+                ) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+                return null;
+              }
+              const sig = arrayMethodSignature(name, spanElement, receiver!);
+              if (sig) {
+                return sig;
+              }
+            }
+          }
           // The same for a typed COLLECTION, which reaches the checker as the
           // nominal its annotation resolved to, carrying its type arguments.
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
@@ -2636,6 +2664,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // only half of it was.
         if (m.Expression && m.MemberExpression) {
           const receiver = staticType(m.MemberExpression);
+          // #sec-span-type: an element read through a WINDOW has the element
+          // type, exactly as one through the array it windows. There is no
+          // extent to decide a literal index against - a window's length is a
+          // run-time fact - so the bound below is the array's alone.
+          const spanElement = spanElementOfReceiver(receiver);
+          if (spanElement) {
+            return spanElement;
+          }
           if (receiver && receiver.Kind === 'array') {
             // #sec-array-and-tuple-types: a fixed extent is part of the type
             // and is a compile-time constant, so an index written as a literal
@@ -3757,6 +3793,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * edit here and one in the specification rather than a search for `uint32`.
    */
   const indexTypeRecord = () => builtinTypeRecord('uint', [32])!;
+
+  /**
+   * #sec-span-type: `Span.<T>` is a library nominal, so a receiver is
+   * recognised by its LibraryName. A window has the READ surface of an array
+   * and none of the operations that change a length or describe an allocation,
+   * because it owns no allocation and its length is fixed.
+   */
+  const spanElementOfReceiver = (r: TypeRecord | null): TypeRecord | null => {
+    if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
+      return null;
+    }
+    const args = (r as { Arguments?: readonly TypeRecord[] }).Arguments;
+    return args && args.length > 0 ? args[0] : { Kind: 'any' as const };
+  };
+
+  /** Operations a window does not have: they grow, shrink, or name an allocation. */
+  const spanForbiddenMembers = new Set([
+    'capacity', 'reserve', 'shrinkToFit',
+    'push', 'pop', 'shift', 'unshift', 'splice',
+  ]);
 
   const arrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
     const anyType = { Kind: 'any' as const };

@@ -411,6 +411,22 @@ function isAnyElement(t: TypeRecord): boolean {
   return t.Kind === 'any';
 }
 
+/**
+ * #sec-span-type: `Span.<T>` is a library nominal, as `SoA.<T, N>` is, so it is
+ * recognised by its LibraryName rather than by a Kind of its own. Keeping it a
+ * nominal is deliberate: the window differs from the array types on ownership
+ * and not on extent, and a Kind beside `array` would have suggested otherwise.
+ */
+function isSpanRecord(t: TypeRecord): boolean {
+  return t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span';
+}
+
+/** The element type of a `Span.<T>`, or ~undefined~ for a bare `Span`. */
+function spanElementOf(t: TypeRecord): TypeRecord | undefined {
+  const args = (t as { Arguments?: readonly TypeRecord[] }).Arguments;
+  return args && args.length > 0 ? args[0] : undefined;
+}
+
 /** A literal type whose value is a Number, which a complex position may lift. */
 function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
   return s.Value instanceof NumberValue || isTypedNumber(s.Value as Value);
@@ -521,8 +537,32 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // all, since no array is written that way - and the same was true of an
   // ordinary parameter typed `[].<any>`.
   if (t.Kind === 'array' && t.Extent === 'dynamic' && isAnyElement(t.Element)
-      && (s.Kind === 'array' || s.Kind === 'tuple')) {
+      && (s.Kind === 'array' || s.Kind === 'tuple' || isSpanRecord(s))) {
     return true;
+  }
+  // #sec-span-coercion: `[].<T>` and `[N].<T>` are both assignable to
+  // `Span.<T>`, and a tuple is assignable to it when EVERY position's type is
+  // T. The reverse never holds - a window is not assignable to either array
+  // type, since neither the storage nor the right to grow it is the window's to
+  // give - and that falls out of this rule being one-directional rather than
+  // needing a case of its own.
+  if (isSpanRecord(t)) {
+    const element = spanElementOf(t);
+    if (element === undefined) {
+      return false;
+    }
+    if (s.Kind === 'array') {
+      return isAnyElement(element) || SameTypeWithAssumptions(s.Element, element, next);
+    }
+    if (s.Kind === 'tuple') {
+      return s.Elements.every((e) => isAnyElement(element) || SameTypeWithAssumptions(e.Type, element, next));
+    }
+    if (isSpanRecord(s)) {
+      const source = spanElementOf(s);
+      return source !== undefined
+        && (isAnyElement(element) || SameTypeWithAssumptions(source, element, next));
+    }
+    return false;
   }
   if (s.Kind !== t.Kind) {
     return false;

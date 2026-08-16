@@ -428,6 +428,14 @@ const libraryTypeNames = new Set([
   // structure-of-arrays rule, so both are answered here rather than by a
   // lookup.
   'SoA',
+  // proposal-runtime-types #sec-span-type: `Span.<T>` is a fixed-length WINDOW
+  // over a run of elements of T that it does not own. It is a library type name
+  // for the same reason `SoA` is - so that `Span.<T>` resolves in type position
+  // - and like `SoA` it is not a global constructor whose prototype chain
+  // decides membership. The brackets of the array types carry the EXTENT;
+  // ownership is a separate question and this is the type that answers it,
+  // which is why it lives in a name rather than inside `[` `]`.
+  'Span',
   // proposal-runtime-types (README Global Objects): global constructors usable as
   // type names. Each is a nominal type whose values are its instances, tested by
   // the prototype chain of the global (see IsOfType). This is what lets

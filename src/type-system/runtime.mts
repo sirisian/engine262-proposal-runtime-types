@@ -1467,6 +1467,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           return rangeShapeMatches(value, t.LibraryName)
             && rangeMatchesBoundArguments(value, t.LibraryName, t.Arguments);
         }
+        // #sec-span-type: a window's membership is NOT a prototype-chain
+        // question, and the lookup below would answer it wrongly. A `[].<T>`, a
+        // `[N].<T>`, a tuple of T, and a view over a buffer all satisfy
+        // `Span.<T>` by the coercion of #sec-span-coercion, and not one of them
+        // has a Span in its prototype chain - there is no such global, because
+        // a window is a way of viewing storage rather than a class of object.
+        // So the test is the array-membership test with the extent dropped,
+        // which is exactly what the coercion says: any run of T, however owned.
+        if (t.LibraryName === 'Span') {
+          const element = t.Arguments.length > 0 ? t.Arguments[0] : { Kind: 'any' as const };
+          return yield* IsOfType(value, { Kind: 'array', Element: element, Extent: 'dynamic' } as TypeRecord);
+        }
         const ref = Q(yield* ResolveBinding(Value(t.LibraryName)));
         const ctor = Q(yield* GetValue(ref));
         if (!(ctor instanceof ObjectValue)) {
