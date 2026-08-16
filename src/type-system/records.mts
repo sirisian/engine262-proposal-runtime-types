@@ -436,6 +436,12 @@ const libraryTypeNames = new Set([
   'FinalizationRegistry', 'Map', 'Proxy', 'RangeError', 'ReferenceError',
   'RegExp', 'Set', 'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError',
   'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
+  // proposal-runtime-types (decoratorreplacement.md): the stream a replacement
+  // decorator receives and returns. It belongs in this list for the same reason
+  // `Map` does - a global whose values are its instances - and its absence is
+  // why `function jsx(tokens: TokenStream)` could not be written, which is the
+  // signature both reference macros are documented with.
+  'TokenStream',
   // proposal-runtime-types (ranges.md, #sec-ranges): the range value types and
   // the two enums the clause names. "There are four shapes ... Each implements
   // `RangeBounds.<T>`, which is the interface a consumer of an arbitrary range

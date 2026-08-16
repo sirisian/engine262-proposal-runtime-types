@@ -65,3 +65,25 @@ test('an untyped context parameter is not a declaration', () => {
   expect(outcome(reads, 'const v = @m { x };')).toBe('const v = "Region";');
   expect(outcome(reads, '@m class C {}')).toBe('"Class"');
 });
+
+test('TokenStream is a type, so a macro can be fully annotated', () => {
+  // It is a global whose values are its instances, like `Map` - and its absence
+  // from that list is why `function jsx(tokens: TokenStream)` could not be
+  // written, though both reference macros are documented with that signature.
+  expect(outcome('(function (t: TokenStream, c: Reflect.Region) { ' + BODY + ' })', 'const v = @m { x };'))
+    .toBe('const v = "X";');
+  // And the annotation is enforced rather than decorative: the position still
+  // decides where the macro may be used.
+  expect(outcome('(function (t: TokenStream, c: Reflect.Class) { ' + BODY + ' })', 'const v = @m { x };'))
+    .toBe('REFUSED');
+});
+
+test('a non-stream is not a TokenStream', () => {
+  // The nominal test is the prototype chain, so an object that merely looks
+  // array-like does not satisfy it.
+  const realm = realmWithMacro('m', '(function (t) { ' + BODY + ' })');
+  const r = realm.evaluateScriptSkipDebugger(
+    'function f(t: TokenStream) { return 1; } f([]);',
+  ) as { Type: string };
+  expect(r.Type).toBe('throw');
+});
