@@ -548,6 +548,7 @@ export interface Throw {
   | 'this reference is into an array that has since grown'
   | 'this view is over a buffer that no longer covers it'
   | 'this view is over a detached buffer'
+  | 'this window is into an array that has since grown'
   | 'timeZone is not a string'
   | 'totalOf is required'
   | 'u and v cannot be used together'

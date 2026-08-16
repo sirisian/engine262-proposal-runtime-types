@@ -2,7 +2,7 @@ import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
-import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement } from './abstract-ops/array-view.mts';
+import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -1024,6 +1024,22 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
     }
+    // proposal-runtime-types #sec-span-type: an element read through a WINDOW
+    // over an owned array. There is nothing to decode - the storage is the
+    // array's own elements - so this defers to the array after the liveness
+    // check, which is the whole of what the window adds.
+    if (surroundingAgent.feature('runtime-types') && P instanceof JSStringValue) {
+      const spanBacking = ArraySpanBackingOf(this as unknown as object);
+      if (spanBacking !== undefined) {
+        if (P.stringValue() === 'length') {
+          return Value(ArraySpanLength(spanBacking));
+        }
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          return Q(yield* ReadArraySpanElement(spanBacking, index));
+        }
+      }
+    }
     // proposal-runtime-types (README, "Views"): an element read through an array
     // view is a decode at the view's offset plus index times stride, and
     // `length` derives from the buffer for a length-tracking view.
@@ -1204,6 +1220,18 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (index >= capacity) {
           typed.TypedCapacity = Math.max(index + 1, capacity * 2, 4);
           typed.TypedGeneration = (typed.TypedGeneration ?? 0) + 1;
+        }
+      }
+      // #sec-span-type: an element write through a WINDOW over an owned array.
+      // The store is checked against the ARRAY's element type by the array's
+      // own store path below, so nothing is re-checked here: a window does not
+      // get to choose the type of storage it does not own.
+      const spanBacking = ArraySpanBackingOf(Receiver as unknown as object);
+      if (spanBacking !== undefined && P instanceof JSStringValue) {
+        const index = Number(P.stringValue());
+        if (String(index) === P.stringValue()) {
+          Q(yield* WriteArraySpanElement(spanBacking, index, V));
+          return Value.true;
         }
       }
       const viewBacking = ArrayViewBackingOf(Receiver as unknown as object);

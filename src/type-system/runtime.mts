@@ -1,6 +1,7 @@
 import { OutOfRange } from '../utils/language.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
+import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
   TypedNumberValue, TypedStringValue, TypedBigIntValue, ReferenceValue, isTypedNumber, unwrapToNumber,
@@ -1468,16 +1469,26 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
             && rangeMatchesBoundArguments(value, t.LibraryName, t.Arguments);
         }
         // #sec-span-type: a window's membership is NOT a prototype-chain
-        // question, and the lookup below would answer it wrongly. A `[].<T>`, a
-        // `[N].<T>`, a tuple of T, and a view over a buffer all satisfy
-        // `Span.<T>` by the coercion of #sec-span-coercion, and not one of them
-        // has a Span in its prototype chain - there is no such global, because
-        // a window is a way of viewing storage rather than a class of object.
-        // So the test is the array-membership test with the extent dropped,
-        // which is exactly what the coercion says: any run of T, however owned.
+        // question — there is no `Span` global and no window prototype, a
+        // window being a way of viewing storage rather than a class of object.
+        //
+        // Nor is it "does this coerce". An owned array is ASSIGNABLE to
+        // `Span.<T>` and is not one, exactly as the literal 5 is assignable to
+        // `uint8` while `5 is uint8` is *false*: the boundary converts, and
+        // #sec-span-coercion says that conversion MATERIALIZES. Answering true
+        // here would mean no conversion was needed, so no window would ever be
+        // built and the liveness rule would have nothing to attach to.
+        //
+        // So the test is: is this value a window, and is it a window of T.
         if (t.LibraryName === 'Span') {
-          const element = t.Arguments.length > 0 ? t.Arguments[0] : { Kind: 'any' as const };
-          return yield* IsOfType(value, { Kind: 'array', Element: element, Extent: 'dynamic' } as TypeRecord);
+          const element = (t.Arguments.length > 0 ? t.Arguments[0] : { Kind: 'any' as const }) as TypeRecord;
+          const spanBacking = ArraySpanBackingOf(value as unknown as object);
+          const viewBacking = ArrayViewBackingOf(value as unknown as object);
+          const backingElement = spanBacking?.Element ?? viewBacking?.Element;
+          if (backingElement === undefined) {
+            return false;
+          }
+          return element.Kind === 'any' || SameType(backingElement, element);
         }
         const ref = Q(yield* ResolveBinding(Value(t.LibraryName)));
         const ctor = Q(yield* GetValue(ref));

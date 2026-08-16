@@ -2,10 +2,11 @@ import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsCallable, IsConstructor } from './all.mts';
+import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
+import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
@@ -64,6 +65,16 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
     // CheckedConvertValue was ever reached.
     if (t.Kind === 'primitive' && t.Name === 'vector' && value.type !== 'Vector') {
       return Q(yield* CheckedConvertValue(value, t));
+    }
+    // proposal-runtime-types #sec-span-coercion, and here for the reason the
+    // broadcast above is here: an owned array is not a MEMBER of `Span.<T>`,
+    // it COERCES to one, exactly as the literal 5 is assignable to `uint8`
+    // while `5 is uint8` is *false*. The coercion MATERIALIZES, so this is
+    // where the window is built - membership having just answered no is
+    // precisely the condition that means one is needed.
+    if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
+        && value instanceof ObjectValue) {
+      return Q(yield* ConvertValue(value, t));
     }
     // sec-user-defined-conversions form 1: "A constructor taking one parameter
     // of type S ... A converting constructor, so `let t: MyType = 1;` is legal
@@ -189,6 +200,20 @@ function isNumberConversionSource(value: Value): boolean {
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // proposal-runtime-types #sec-span-coercion: a coercion to `Span.<T>`
+  // MATERIALIZES. The window is a value distinct from the array coerced, so
+  // that one static type does not stand for two different kinds of value —
+  // which is the confusion the type exists to end. A window reaching a window
+  // position is already one and is passed through.
+  if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
+      && value instanceof ObjectValue
+      && ArraySpanBackingOf(value as unknown as object) === undefined
+      && ArrayViewBackingOf(value as unknown as object) === undefined) {
+    const element = (t as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] ?? { Kind: 'any' as const };
+    const lenValue = Q(yield* Get(value, Value('length')));
+    const len = R(Q(yield* ToLength(lenValue)));
+    return MakeArraySpan(element as TypeRecord, value, len);
+  }
   // proposal-runtime-types (simd.md): a vector converts to another vector of the
   // same lane COUNT by converting each lane, which is the target's
   // `cvtdq2ps`/`scvtf`/`f32x4.convert_i32x4_s`. The scalar rule decides the

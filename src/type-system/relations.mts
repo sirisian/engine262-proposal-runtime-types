@@ -424,7 +424,12 @@ function isSpanRecord(t: TypeRecord): boolean {
 /** The element type of a `Span.<T>`, or ~undefined~ for a bare `Span`. */
 function spanElementOf(t: TypeRecord): TypeRecord | undefined {
   const args = (t as { Arguments?: readonly TypeRecord[] }).Arguments;
-  return args && args.length > 0 ? args[0] : undefined;
+  // A bare `Span`, or one whose argument did not resolve, has no element. It is
+  // returned as ~undefined~ rather than defaulted, so a caller decides: the
+  // subtype rules below refuse rather than guess, since guessing `any` would
+  // make an unresolved argument silently permissive.
+  const first = args && args.length > 0 ? args[0] : undefined;
+  return first === undefined || first === null ? undefined : first;
 }
 
 /** A literal type whose value is a Number, which a complex position may lift. */

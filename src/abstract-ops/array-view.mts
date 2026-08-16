@@ -9,7 +9,7 @@ import { BufferElementType } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
-  Throw, ToIndex, surroundingAgent,
+  Throw, ToIndex, surroundingAgent, Get, Set as SetValueOnObject,
 } from '#self';
 
 /**
@@ -210,4 +210,105 @@ export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, by
   });
   X(view.PreventExtensions());
   return view;
+}
+
+/**
+ * proposal-runtime-types #sec-span-type: a window over an OWNED array, as
+ * distinct from one over a buffer's bytes.
+ *
+ * A view knows a buffer, an offset, and a stride; there is nothing to decode
+ * here, because the storage is the array's own indexed elements. What the two
+ * share is the thing that matters — the liveness rule — so the generation is
+ * recorded the same way an `SoA` column projection records it, and the check
+ * below is the same comparison `requireLive` makes.
+ */
+export interface ArraySpanBacking {
+  readonly Element: TypeRecord;
+  /** The array being windowed. Its elements ARE the window's storage. */
+  readonly Source: ObjectValue;
+  /** Fixed at coercion: a window's length does not change (#sec-span-type). */
+  readonly Length: number;
+  /**
+   * [[TypedGeneration]] when the window was taken. A growth that reallocates
+   * bumps it, and the window then describes storage the array no longer uses,
+   * so it is refused rather than read — the rule a `ref` into the same array
+   * already obeys.
+   */
+  readonly TakenAtGeneration: number;
+}
+
+const arraySpans = new WeakMap<object, ArraySpanBacking>();
+
+export function ArraySpanBackingOf(instance: object): ArraySpanBacking | undefined {
+  return arraySpans.get(instance);
+}
+
+/** The generation an array is at, which is 0 until something has relocated it. */
+function generationOf(source: ObjectValue): number {
+  return (source as unknown as { TypedGeneration?: number }).TypedGeneration ?? 0;
+}
+
+/**
+ * #sec-span-coercion: a coercion MATERIALIZES. The window is a value distinct
+ * from the array coerced, and two coercions of one array need not be the same
+ * value — which is why this constructs rather than tagging the array.
+ */
+export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number): ObjectValue {
+  const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  arraySpans.set(span as unknown as object, {
+    Element: element,
+    Source: source,
+    Length: length,
+    TakenAtGeneration: generationOf(source),
+  });
+  X(span.PreventExtensions());
+  return span;
+}
+
+/**
+ * #sec-span-liveness. A window over a growable array is invalidated when that
+ * array's allocation relocates. An operation that does NOT relocate does not
+ * invalidate: a `reserve` for room the array already has, and a `shrinkToFit`
+ * on an array already at fit, leave every window over it valid — which is why
+ * this compares generations rather than asking whether anything was called.
+ */
+function requireSpanLive(backing: ArraySpanBacking) {
+  if (generationOf(backing.Source) !== backing.TakenAtGeneration) {
+    return Throw.TypeError('this window is into an array that has since grown');
+  }
+  return undefined;
+}
+
+/** An element read through a window: the array's own element, liveness first. */
+export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number): ValueEvaluator {
+  const live = requireSpanLive(backing);
+  if (live) {
+    return live;
+  }
+  if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
+    return Throw.RangeError('$1 is out of range', Value(String(index)));
+  }
+  return Q(yield* Get(backing.Source, Value(String(index))));
+}
+
+/**
+ * An element write through a window. The store is checked against the ARRAY's
+ * element type by the array's own store path, so nothing is re-checked here:
+ * a window does not get to choose the type of storage it does not own.
+ */
+export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number, value: Value): PlainEvaluator<boolean> {
+  const live = requireSpanLive(backing);
+  if (live) {
+    return live;
+  }
+  if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
+    return Throw.RangeError('$1 is out of range', Value(String(index)));
+  }
+  Q(yield* SetValueOnObject(backing.Source, Value(String(index)), value, Value.true));
+  return true;
+}
+
+/** A window's length is fixed at coercion and does not follow the array. */
+export function ArraySpanLength(backing: ArraySpanBacking): number {
+  return backing.Length;
 }
