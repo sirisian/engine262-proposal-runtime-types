@@ -386,6 +386,41 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
 }
 
 /**
+ * proposal-runtime-types #sec-capacity-operations: `shrinkToFit()` releases the
+ * backing allocation down to the length, which is the only way capacity is
+ * given back - nothing else releases it, `a.length = 0` included.
+ *
+ * It is the mirror of `reserve` and inherits its shape: releasing room the
+ * array does not have is a no-op rather than an error, so a caller need not
+ * know the capacity to ask. Where it DOES release, the allocation relocates,
+ * so it invalidates every live reference into the array - INCLUDING ones to
+ * elements that remain, which is what distinguishes it from a length shrink.
+ * `pop` invalidates the reference to the element it removed and leaves the
+ * rest readable ("a shrink moves nothing"); this moves everything.
+ *
+ * A FIXED extent needs no case of its own: its capacity is its extent and its
+ * length is its extent, so it is always already at fit and the no-op below
+ * covers it.
+ *
+ * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
+ */
+function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
+  if (O.TypedElement === undefined) {
+    return Throw.TypeError('shrinkToFit is available on an array with an element type');
+  }
+  const lenValue = Q(yield* Get(O, Value('length')));
+  const len = R(Q(yield* ToLength(lenValue)));
+  const capacity = Math.max(O.TypedCapacity ?? 0, len);
+  if (capacity <= len) {
+    return Value.undefined;
+  }
+  O.TypedCapacity = len;
+  O.TypedGeneration = (O.TypedGeneration ?? 0) + 1;
+  return Value.undefined;
+}
+
+/**
  * proposal-runtime-types (README "Capacity"): the allocation backing a typed
  * array, counted in elements, which is at least its length.
  *
@@ -816,6 +851,7 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
     ['pop', ArrayProto_pop, 0],
     ['push', ArrayProto_push, 1],
     ['reserve', ArrayProto_reserve, 1],
+    ['shrinkToFit', ArrayProto_shrinkToFit, 0],
     // A GETTER, not a method: the design writes `out.capacity;` as a read, and it
     // sits beside `length`, which is a property. As a method `a.capacity` yielded
     // the function itself - truthy, so `if (a.capacity > 1000)` misbehaved

@@ -98,6 +98,52 @@ test('a growable array does not get the static bound', () => {
   expectThrownKind('let a: [].<uint32> = [1]; a[10];', 'RangeError');
 });
 
+// -- shrinkToFit: the only thing that releases capacity ----------------------
+
+test('nothing but shrinkToFit releases capacity', () => {
+  // The README claimed a `length =` released it. It does not: shortening an
+  // array changes the length and leaves the allocation where it is, which is
+  // the same fact the liveness rules state when they say a shrink moves
+  // nothing. Before `shrinkToFit` there was no way to give capacity back.
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.length = 0; String(a.capacity);')).toBe('64');
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.pop(); String(a.capacity);')).toBe('64');
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.shrinkToFit(); String(a.capacity);')).toBe('3');
+});
+
+test('shrinkToFit keeps the length and the elements', () => {
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.shrinkToFit(); String(a.length);')).toBe('3');
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.shrinkToFit(); a.join(",");')).toBe('1,2,3');
+  // and the array is still growable afterwards - it released an allocation,
+  // not the ability to have one
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.shrinkToFit(); a.push(4); String(a.length);')).toBe('4');
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); a.shrinkToFit(); String(a.capacity);')).toBe('0');
+});
+
+test('releasing room the array does not have is a no-op', () => {
+  // The mirror of `reserve`: a caller need not know the capacity to ask.
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.shrinkToFit(); String(a.capacity);')).toBe('3');
+  // A fixed extent needs no case of its own - its capacity IS its extent and
+  // its length is its extent, so it is always already at fit.
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; a.shrinkToFit(); String(a.capacity);')).toBe('4');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; a.shrinkToFit(); String(a.length);')).toBe('4');
+});
+
+test('a release relocates, so it invalidates references that a pop would not', () => {
+  // This is the distinction worth pinning. Removing an element invalidates the
+  // reference to the element REMOVED and leaves the rest readable, because
+  // that storage has not moved. Releasing capacity moves all of it, so every
+  // live reference goes, including ones to elements that remain.
+  expectThrownKind('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); let ref b = a[0]; a.shrinkToFit(); b;', 'TypeError');
+  // and the no-op path releases nothing, so it moves nothing and the borrow
+  // survives - the generation must not be bumped where no allocation changed
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; let ref b = a[0]; a.shrinkToFit(); String(b);')).toBe('1');
+});
+
+test('shrinkToFit is available only on an array with an element type', () => {
+  expectThrownKind('let a = [1]; a.shrinkToFit();', 'TypeError');
+  expect(evaluated('let a: [].<uint32> = [1]; String(typeof a.shrinkToFit());')).toBe('undefined');
+});
+
 // -- the index type is one type, so both counts read at it -------------------
 
 test('capacity reads at the index type, as length does', () => {

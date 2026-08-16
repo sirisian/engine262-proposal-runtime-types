@@ -507,6 +507,7 @@ export interface Throw {
   | 'reserve is available on an array with an element type'
   | 'roundTo is required'
   | 'roundingIncrement must be 1 when rounding a date unit to a larger unit'
+  | 'shrinkToFit is available on an array with an element type'
   | 'size property must be a positive integer'
   | 'size property must not be undefined, as it will be NaN'
   | 'smallestUnit and largestUnit cannot both be omitted'

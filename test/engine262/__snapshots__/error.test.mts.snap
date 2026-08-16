@@ -41,6 +41,7 @@ exports[`native function names 1`] = `
   ".Array.prototype.reserve()": "Array#reserve",
   ".Array.prototype.reverse()": "Array#reverse",
   ".Array.prototype.shift()": "Array#shift",
+  ".Array.prototype.shrinkToFit()": "Array#shrinkToFit",
   ".Array.prototype.slice()": "Array#slice",
   ".Array.prototype.some()": "Array#some",
   ".Array.prototype.sort()": "Array#sort",
