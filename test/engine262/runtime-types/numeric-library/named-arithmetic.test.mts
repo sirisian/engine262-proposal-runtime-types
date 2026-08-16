@@ -207,3 +207,26 @@ test('floored division: the checked and saturating forms stay integer-only', () 
     expectThrownKind(`Math.${fn}(1, 2);`, 'TypeError');
   }
 });
+
+test('the operators wrap and a conversion refuses, and the two do not disagree', () => {
+  // #sec-checked-and-saturating-arithmetic. The one place these rules LOOK
+  // contradictory, pinned so the seam is a decision and not a discovery.
+  //
+  // A conversion is a value crossing into a type that cannot hold it, which is
+  // a mistake about the value, so it raises.
+  expectThrownKind('let a: [4].<uint8> = [1, 2, 3, 4]; let v = 300; a[0] = v;', 'RangeError');
+  expectThrownKind('let v = 300; let x: uint8 = v;', 'RangeError');
+
+  // An arithmetic overflow is not a mistake about a value but what a
+  // fixed-width integer IS, so it wraps.
+  expect(evaluated('let x: uint8 = 200; let y: uint8 = 100; String(x + y);')).toBe('44');
+
+  // The two meet without contradicting: the wrap happens at the operator, so
+  // the value reaching the binding is in range and the conversion has nothing
+  // left to refuse. This is the worked example the clause gives.
+  expect(evaluated('let x: uint8 = 200; let y: uint8 = 100; let z: uint8 = x + y; String(z);')).toBe('44');
+
+  // And where the wrap is not wanted, the named forms are how it is said.
+  expectThrownKind('let x: uint8 = 200; let y: uint8 = 100; Math.addChecked(x, y);', 'RangeError');
+  expect(evaluated('let x: uint8 = 200; let y: uint8 = 100; String(Math.addSaturating(x, y));')).toBe('255');
+});
