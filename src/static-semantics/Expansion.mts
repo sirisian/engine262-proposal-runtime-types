@@ -189,7 +189,7 @@ export function ExpandSource(
   resolve: (name: string) => unknown,
   tokensOfRange: (from: number, to: number, mode?: string) => unknown,
   checkEvaluable: (fn: unknown) => string | undefined,
-  call: (fn: unknown, tokens: unknown, args?: unknown) => unknown,
+  call: (fn: unknown, tokens: unknown, args: unknown, target: ParseNode) => unknown,
   textOf: (tokens: unknown) => string | undefined,
 ): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] } {
   // `sec-expansion` expands ONE site per pass - "let _d_ be the outermost such
@@ -262,7 +262,7 @@ export function ExpandSource(
     // merely both accepted.
     const regionText = (site.target as { RegionText?: string }).RegionText;
     const streamStart = regionText === undefined ? decoratorEnd : end - regionText.length;
-    const returned = call(fn, tokensOfRange(streamStart, end, site.mode), argTokens);
+    const returned = call(fn, tokensOfRange(streamStart, end, site.mode), argTokens, site.target);
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own

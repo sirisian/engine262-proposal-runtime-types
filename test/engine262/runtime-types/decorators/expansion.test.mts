@@ -289,16 +289,16 @@ function expandedBody(body: string, macroSource: string): string {
   return text.slice(text.indexOf(NL) + 1).trim();
 }
 
-const ARGS = '(function (t, a) { var s = t[0].span;'
+const ARGS = '(function (t, c, a) { var s = t[0].span;'
   + ' var txt = "n" + arguments.length + ":" + (a ? a.map(function (x) { return x.kind; }).join(",") : "none");'
   + ' return [{ kind: "string", value: JSON.stringify(txt), span: s }]; })';
 
-test('an argumented decoration expands, and a bare one still takes one argument', () => {
-  // The bare form is unchanged: a macro written for `@m` is called with exactly
-  // one argument, so nothing existing observes the new channel.
-  expect(expandedBody('@m class C { x = 1; }', ARGS)).toBe('"n1:none"');
-  // And an argumented one now runs at all, which is the defect.
-  expect(expandedBody('@m(Serialize) class C { x = 1; }', ARGS)).toBe('"n2:group"');
+test('an argumented decoration expands, and a bare one is called without args', () => {
+  // Every decoration is called with the TOKENS and a CONTEXT; arguments are a
+  // third parameter and only present where the decoration has any. So a bare
+  // decoration is two arguments and an argumented one is three.
+  expect(expandedBody('@m class C { x = 1; }', ARGS)).toBe('"n2:none"');
+  expect(expandedBody('@m(Serialize) class C { x = 1; }', ARGS)).toBe('"n3:group"');
 });
 
 test('the arguments arrive as tokens, not as an evaluated value', () => {
@@ -306,11 +306,11 @@ test('the arguments arrive as tokens, not as an evaluated value', () => {
   // which is how every delimited run reaches a macro. `Serialize` is never
   // looked up: expansion runs before anything is evaluated, so a binding of that
   // name need not exist.
-  expect(expandedBody('@m(Serialize) class C {}', ARGS)).toBe('"n2:group"');
-  expect(expandedBody('@m(A, B) class C {}', ARGS)).toBe('"n2:group"');
-  expect(expandedBody('@m("literal") class C {}', ARGS)).toBe('"n2:group"');
+  expect(expandedBody('@m(Serialize) class C {}', ARGS)).toBe('"n3:group"');
+  expect(expandedBody('@m(A, B) class C {}', ARGS)).toBe('"n3:group"');
+  expect(expandedBody('@m("literal") class C {}', ARGS)).toBe('"n3:group"');
   // An empty argument list is still an argument list - `@m()` is not `@m`.
-  expect(expandedBody('@m() class C {}', ARGS)).toBe('"n2:group"');
+  expect(expandedBody('@m() class C {}', ARGS)).toBe('"n3:group"');
 });
 
 test('an argumented decoration is replaced along with what it decorates', () => {

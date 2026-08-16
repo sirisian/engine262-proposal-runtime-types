@@ -30,6 +30,7 @@ import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
+import { KindOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
 import {
   ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
 } from './preprocessor-loading.mts';
@@ -434,16 +435,25 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
         const violation = FirstEvaluabilityViolation(parsed);
         return violation ? `${violation.name} (${violation.why})` : undefined;
       },
-      (fn, tokens, args) => {
+      (fn, tokens, args, target) => {
         // `skipDebugger` drives the evaluator synchronously: expansion happens
         // before anything is running, so there is no context to suspend into.
         //
-        // A decoration's own arguments arrive as a second argument, and only
-        // when it has any - so a macro written for `@m` is called with one
-        // argument exactly as before.
+        // `(tokens, context, args?)`, matching a runtime decorator's
+        // `(value, context)` in the position that carries the context.
+        //
+        // The context is `{ kind }` and nothing else. A replacement decorator
+        // receives the TOKENS of what it decorates, so everything else a runtime
+        // context carries syntactically - a name, `static`, a binding, a pattern
+        // - is already in them, and a field beside a token stream is two ways to
+        // say one thing.
+        const kind = KindOfDecoratedNode(target);
+        const context = kind === undefined
+          ? Value.undefined
+          : SyntaxContextFor(surroundingAgent.currentRealmRecord, kind);
         const callArgs = args === undefined
-          ? [tokens as Value]
-          : [tokens as Value, args as Value];
+          ? [tokens as Value, context as Value]
+          : [tokens as Value, context as Value, args as Value];
         const result = EnsureCompletion(skipDebugger(Call(fn as ObjectValue, Value.undefined, callArgs)));
         return result.Type === 'normal' ? result.Value : undefined;
       },

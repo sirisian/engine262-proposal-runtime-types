@@ -180,7 +180,7 @@ test('declaring a mode does not require every use to take a region', () => {
 // The same shape twice, in two places, years apart. These tests exist so it is
 // not three.
 const both = (source: string) => expandWith('jsx', JSX_IMPORT + source, withJsxGrammar(
-  '(function (t, a) {'
+  '(function (t, c, a) {'
   + ' var s = t[0] ? t[0].span : undefined;'
   + ' function walk(ts) { return (ts || []).map(function (x) {'
   + '   return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }'
