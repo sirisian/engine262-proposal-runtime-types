@@ -407,6 +407,7 @@ export function DecimalToString(d: DecimalObject): string {
   return negative ? `-${out}` : out;
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-decimal-types */
 function* DecimalProto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isDecimalObject(thisValue)) {
     return Throw.TypeError('$1 is not a decimal', thisValue);
@@ -427,6 +428,7 @@ function* DecimalProto_toString(_args: Arguments, { thisValue }: FunctionCallCon
  * Stage C owns the operators, with IEEE's exponent rules deciding which cohort
  * member results - `1.5 + 1.50` is `3.00`, not `3.0`.
  */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-decimal-types */
 function* DecimalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isDecimalObject(thisValue)) {
     return Throw.TypeError('$1 is not a decimal', thisValue);

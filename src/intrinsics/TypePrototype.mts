@@ -66,6 +66,7 @@ function ParseComplexLiteral(text: string): { real: number, imaginary: number } 
   return null;
 }
 
+/** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
 function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
@@ -429,6 +430,7 @@ function familyOfThis(thisValue: Value) {
   return Value(familyOfRecord(thisValue.TypeRecord));
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_familyGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return familyOfThis(thisValue);
 }
@@ -484,18 +486,22 @@ function floatOnlyOfThis(thisValue: Value, which: 'minPositive' | 'epsilon') {
   return Value(entry[which]);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_minGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return boundOfThis(thisValue, 'min');
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_maxGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return boundOfThis(thisValue, 'max');
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_minPositiveGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return floatOnlyOfThis(thisValue, 'minPositive');
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return floatOnlyOfThis(thisValue, 'epsilon');
 }

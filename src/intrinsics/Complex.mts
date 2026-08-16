@@ -316,6 +316,7 @@ export function complexTan(x: ComplexObject, realmRec: Realm): ComplexObject {
   return complexDivide(complexSin(x, realmRec), complexCos(x, realmRec), realmRec);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-complex-types */
 function* ComplexProto_real(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isComplexObject(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('complex'));
@@ -323,6 +324,7 @@ function* ComplexProto_real(_args: Arguments, { thisValue }: FunctionCallContext
   return Value(thisValue.ComplexReal);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-complex-types */
 function* ComplexProto_imaginary(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isComplexObject(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('complex'));
@@ -330,6 +332,7 @@ function* ComplexProto_imaginary(_args: Arguments, { thisValue }: FunctionCallCo
   return Value(thisValue.ComplexImaginary);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-complex-types */
 function* ComplexProto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isComplexObject(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('complex'));

@@ -69,6 +69,7 @@ function* Math_conj([x = Value.undefined]: Arguments): ValueEvaluator {
 }
 
 /** The argument, or phase: a value of _T_ rather than a complex. */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-numeric-library */
 function* Math_arg([x = Value.undefined]: Arguments): ValueEvaluator {
   if (!surroundingAgent.feature('runtime-types') || !isComplexObject(x)) {
     return Throw.TypeError('$1 is not a $2', x, Value('complex'));

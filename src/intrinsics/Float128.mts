@@ -244,6 +244,7 @@ export function float128Equals(x: Float128Object, y: Float128Object): boolean {
   return float128SameValue(x, y);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-extended-floats */
 function* Float128Proto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isFloat128Object(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('float128'));
@@ -251,6 +252,7 @@ function* Float128Proto_toString(_args: Arguments, { thisValue }: FunctionCallCo
   return Value(Float128ToString(thisValue));
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-extended-floats */
 function* Float128Proto_valueOf(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isFloat128Object(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('float128'));

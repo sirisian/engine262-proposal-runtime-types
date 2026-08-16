@@ -711,6 +711,7 @@ function Reflect_getReflection([type = Value.undefined]: Arguments) {
   return recordToNode(target.TypeRecord, surroundingAgent.currentRealmRecord);
 }
 
+/** https://sirisian.github.io/proposal-runtime-types/#sec-reflection */
 function* Reflect_makeType([node = Value.undefined]: Arguments): ValueEvaluator {
   // proposal-runtime-types #sec-reflect-maketype.
   const record = Q(yield* nodeToTypeRecord(node));
