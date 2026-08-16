@@ -3815,6 +3815,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } as unknown as TypeRecord;
         return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
       }
+      case 'shrinkToFit':
+        // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
+        // It had no entry, so it resolved to ~any~ and `a.shrinkToFit(1, 2, 3)`
+        // was accepted - the same hole Phase C closed for `capacity`, reopened
+        // by adding an operation without adding its signature alongside.
+        return { Kind: 'function', Signatures: [{ Parameters: [], Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
       case 'reserve':
         // #sec-array.prototype.reserve: takes a count and answers nothing. The
         // parameter is the index type and not `number`, so that a reserve

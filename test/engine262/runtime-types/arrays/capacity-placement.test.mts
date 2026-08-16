@@ -422,3 +422,33 @@ test('the existing capacity rules still hold after the move', () => {
   // capacity is kept at least the length
   expect(bool('let a: [].<uint32> = [];  a.push(1); String(a.capacity >= 1);')).toBe(true);
 });
+
+// -- gaps found by rechecking the landed work --------------------------------
+
+test('shrinkToFit has a signature rather than resolving to any', () => {
+  // It was added without one, so it resolved to ~any~ - the same hole the
+  // index type closed for `capacity`, reopened by adding an operation and not
+  // its signature alongside. Adding an operation to the family means adding
+  // its entry in the same change.
+  expectStaticTypeError('let a: [].<uint32> = [1]; let s: string = a.shrinkToFit();');
+  expect(evaluated('let a: [].<uint32> = [1]; String(typeof a.shrinkToFit());')).toBe('undefined');
+});
+
+test('withCapacity enforces the ceiling its clause specifies', () => {
+  // #sec-array-type-withcapacity has always said "If wanted > 2**32 - 1, throw
+  // a RangeError". The construction path did not perform it, so `withCapacity`
+  // was the one way to obtain the unusable capacity `reserve` refuses - a
+  // specification and an implementation disagreeing in the same feature.
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
+  expectThrownKind('[].<uint32>.withCapacity(1099511627776);', 'RangeError');
+  // and the ceiling itself is still constructible
+  expect(evaluated('const o = [].<uint32>.withCapacity(4294967295); String(o.capacity);')).toBe('4294967295');
+  expect(evaluated('const o = [].<uint32>.withCapacity(8); String(o.capacity);')).toBe('8');
+});
+
+test('reserve and withCapacity agree on the ceiling', () => {
+  // The two ways to obtain capacity must refuse the same values, or the rule is
+  // only enforced on whichever path a program happens to take.
+  expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
+});

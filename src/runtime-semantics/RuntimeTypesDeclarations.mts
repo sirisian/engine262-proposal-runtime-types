@@ -1302,6 +1302,14 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   const withCapacity = CreateBuiltinFunction(function* withCapacitySteps([wanted0 = Value.undefined]: Arguments): ValueEvaluator {
     const wanted = Q(yield* ToNumber(wanted0));
     const n = Math.max(0, Math.trunc(Number(wanted.numberValue())));
+    // #sec-array-type-withcapacity: the same ceiling `reserve` enforces. A
+    // `[` `]` `.` `<` T `>` is an Array, so a capacity past (2 ** 32) - 1 is
+    // room the array could never use. The clause specified this from the
+    // start; the construction path did not perform it, so `withCapacity`
+    // was the one way to obtain the unusable capacity `reserve` refuses.
+    if (n > (2 ** 32) - 1) {
+      return Throw.RangeError('a capacity above the maximum array length cannot be reserved');
+    }
     const arr = X(ArrayCreate(0)) as unknown as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
     arr.TypedElement = element;
     arr.TypedCapacity = n;
