@@ -438,6 +438,17 @@ function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
 }
 
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
+  // A record that is ABSENT relates to nothing. The recursions in
+  // SameTypeWithAssumptions follow `s.Base` for a literal and `s.Constraint`
+  // for a type parameter, and either can be missing - an unconstrained
+  // parameter has no constraint to compare - so this is reached with nothing on
+  // the left. Answering "not a subtype" is the meaning of that: there is no
+  // type here to be one. It was a dereference instead, which turned a question
+  // with an answer into a crash, and only surfaced when generic inference began
+  // binding a parameter to a type whose own record has neither field.
+  if (s === null || s === undefined || t === null || t === undefined) {
+    return false;
+  }
   if (SameTypeWithAssumptions(s, t, assumptions)) {
     return true;
   }

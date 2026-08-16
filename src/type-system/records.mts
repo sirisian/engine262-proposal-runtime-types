@@ -801,6 +801,13 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
 
 /** A readable rendering of a Type Record for error messages. */
 export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): string {
+  // An ABSENT record renders rather than crashing. A diagnostic is built on the
+  // failure path, so it is the last place that should raise: a type that could
+  // not be resolved is exactly the sort of thing a message is being written
+  // about, and turning the message into a crash loses the diagnosis with it.
+  if (t === null || t === undefined) {
+    return '(unresolved)';
+  }
   // #sec-type-alias-declarations admits a self-referential alias, so a record
   // rendered into a diagnostic may be cyclic. A name in an error message does
   // not have to be reconstructible, only recognisable, so a record already on
