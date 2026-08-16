@@ -16,6 +16,12 @@ import type { Realm } from '#self';
  *
  * `'Region'` is the one value that is new, a captured region not being a
  * position `decorators.md` had.
+ *
+ * EVERY VALUE HERE IS A NAME `decorators.md` DEFINES. An earlier draft carried
+ * `'TryBlock'`, `'SwitchBlock'` and `'MatchBlock'`, which it does not - its block
+ * family is `Block` and eleven others, and try and switch are not among them.
+ * A position with no documented context yields no context rather than an
+ * invented one, and `syntax-context.test.mts` fails if that stops being true.
  */
 const KIND_BY_PARSE_NODE: Readonly<Record<string, string>> = {
   ModedRegion: 'Region',
@@ -36,10 +42,9 @@ const KIND_BY_PARSE_NODE: Readonly<Record<string, string>> = {
   WhileStatement: 'WhileBlock',
   DoWhileStatement: 'DoWhileBlock',
   DoExpression: 'DoBlock',
-  TryStatement: 'TryBlock',
-  SwitchStatement: 'SwitchBlock',
-  MatchExpression: 'MatchBlock',
 };
+/** Every `kind` this implementation can produce, for the vocabulary test. */
+export const KIND_NAMES: readonly string[] = [...new Set(Object.values(KIND_BY_PARSE_NODE))];
 
 /** The `kind` for a decorated ParseNode, or *undefined* where it has none. */
 export function KindOfDecoratedNode(node: ParseNode): string | undefined {

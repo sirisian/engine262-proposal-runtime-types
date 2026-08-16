@@ -3,6 +3,8 @@ export * from './abstract-ops/all.mts';
 // module is parsed, which `sec-preprocessor-modules` requires and which the
 // host hook it replaces was never in the specification to do.
 export * from './preprocessor-loading.mts';
+// proposal-runtime-types: the `kind` a replacement decorator's context reports.
+export * from './syntax-context.mts';
 export * from './execution-context/all.mts';
 export * from './static-semantics/all.mts';
 export * from './runtime-semantics/all.mts';
