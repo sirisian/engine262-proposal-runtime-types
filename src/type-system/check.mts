@@ -2560,14 +2560,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `a.includes(70000)` from a run-time RangeError into the Early Error
           // a statically determinable mistake deserves (F70).
           if (receiver && receiver.Kind === 'array') {
-            // "The Static Type of a member access reading the `length` property
-            // of an array is `uint32`" - the specification says so and the run
-            // time has done it since F54; this is the static half, which had
-            // been open since the first verification pass (F79).
-            if ((m.IdentifierName as { name: string }).name === 'length') {
-              return builtinTypeRecord('uint', [32]);
+            // #index-type: one type describes every count an array reports or
+            // accepts - its `length`, its `capacity`, an index, and a view's
+            // length. It is named once HERE rather than written as `uint32` at
+            // each site, so that the width is stated in one place and the two
+            // counts stay comparable: "a capacity is at least a length" is
+            // unstateable if `length` and `capacity` are not one type.
+            //
+            // `capacity` had no entry at all and so resolved to ~any~, which
+            // let `let n: string = a.capacity` type-check on a proposal whose
+            // subject is types.
+            const name = (m.IdentifierName as { name: string }).name;
+            if (name === 'length' || name === 'capacity') {
+              return indexTypeRecord();
             }
-            const sig = arrayMethodSignature((m.IdentifierName as { name: string }).name, receiver.Element, receiver);
+            const sig = arrayMethodSignature(name, receiver.Element, receiver);
             if (sig) {
               return sig;
             }
@@ -3699,6 +3706,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #index-type: the type of every count an array reports or accepts. Defined
+   * as `uint32` and referenced rather than repeated, so that widening it is one
+   * edit here and one in the specification rather than a search for `uint32`.
+   */
+  const indexTypeRecord = () => builtinTypeRecord('uint', [32])!;
+
   const arrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
     const anyType = { Kind: 'any' as const };
     const numberType = makePrimitive('number');
@@ -3756,6 +3770,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } as unknown as TypeRecord;
         return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
       }
+      case 'reserve':
+        // #sec-array.prototype.reserve: takes a count and answers nothing. The
+        // parameter is the index type and not `number`, so that a reserve
+        // argument is checked exactly as a length or a capacity would be.
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeRecord()], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
       case 'slice':
       case 'reverse':
       case 'sort':

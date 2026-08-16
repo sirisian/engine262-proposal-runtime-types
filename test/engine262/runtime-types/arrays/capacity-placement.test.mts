@@ -38,6 +38,42 @@ import {
  *     is a bug under either placement.
  */
 
+// -- the index type: capacity and reserve are typed, not `any` ---------------
+
+test('capacity has the index type rather than any', () => {
+  // `capacity` had no entry in the array member table at all, so a read fell
+  // through to ~any~ and `let n: string = a.capacity` type-checked - a member
+  // that silently defeats the checker, on a proposal whose subject is types.
+  //
+  // #index-type: one type describes every count an array reports or accepts,
+  // so `capacity` carries whatever `length` carries. The invariant the design
+  // states, that a capacity is at least a length, is unstateable otherwise.
+  expectStaticTypeError('let a: [].<uint32> = [1]; let n: string = a.capacity;');
+  expectStaticTypeError('let a: [].<uint32> = [1]; let b: boolean = a.capacity;');
+  expect(evaluated('let a: [].<uint32> = [1]; let n: uint32 = a.capacity; String(n);')).toBe('1');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let n: uint32 = a.capacity; String(n);')).toBe('4');
+});
+
+test('length keeps the same index type', () => {
+  // The control for the above: whatever `capacity` gets, `length` already had,
+  // and the two must not drift apart.
+  expectStaticTypeError('let a: [].<uint32> = [1]; let s: string = a.length;');
+  expect(evaluated('let a: [].<uint32> = [1]; let n: uint32 = a.length; String(n);')).toBe('1');
+});
+
+test('reserve takes the index type and answers nothing', () => {
+  expectStaticTypeError('let a: [].<uint32> = []; a.reserve("4");');
+  expectStaticTypeError('let a: [].<uint32> = []; a.reserve(true);');
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+  expect(evaluated('let a: [].<uint32> = []; String(typeof a.reserve(8));')).toBe('undefined');
+});
+
+test('an untyped array is untouched by the index type', () => {
+  // The typing is reached through an array RECEIVER whose type is known. An
+  // unannotated binding is ~any~, so existing code sees no change.
+  expect(evaluated('let a = [1, 2]; let s: string = a.length; String(s);')).toBe('2');
+});
+
 // -- the growable ceiling: reserve cannot buy unusable room -------------------
 
 test('reserve past the maximum array length is refused', () => {
@@ -47,10 +83,21 @@ test('reserve past the maximum array length is refused', () => {
   // extent, so a growable array accepted `reserve(2 ** 40)` and then reported
   // a capacity of 1099511627776 it could never use.
   //
-  // RangeError rather than TypeError: this is the Array representational limit
-  // that ArrayCreate already enforces, not a statement about the element type.
-  expectThrownKind('let a: [].<uint32> = []; a.reserve(4294967296);', 'RangeError');
-  expectThrownKind('let a: [].<uint32> = []; a.reserve(1099511627776);', 'RangeError');
+  // TWO refusals, and they are complementary rather than redundant. Once
+  // `reserve` takes the index type, a LITERAL too large to be one is rejected
+  // before the program runs - the better error, and the common case. A value
+  // that only becomes too large at run time reaches the ceiling check, which
+  // answers RangeError: the Array representational limit that ArrayCreate
+  // already enforces, not a statement about the element type.
+  expectStaticTypeError('let a: [].<uint32> = []; a.reserve(4294967296);');
+  expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
+  expectThrownKind('let a: [].<uint32> = []; let n = 1099511627776; a.reserve(n);', 'RangeError');
+});
+
+test('a computed reserve within the ceiling is unaffected', () => {
+  // The control for the runtime half: the ceiling check must not catch a value
+  // that merely arrived dynamically.
+  expect(evaluated('let a: [].<uint32> = []; let n = 64; a.reserve(n); String(a.capacity);')).toBe('64');
 });
 
 test('reserve at the maximum array length is allowed', () => {
