@@ -1123,6 +1123,26 @@ export function blockContextRecord(): TypeRecord {
   };
 }
 
+/**
+ * proposal-runtime-types: a CAPTURED REGION.
+ *
+ * The one context that is not also a reflection: nothing reflects on a region at
+ * run time, because a region does not survive to run time - it is replaced by
+ * whatever its decorator returns. It exists so a replacement decorator can
+ * declare that it applies to one, which is how every other position declares
+ * applicability.
+ */
+const regionContextDeclaration = { type: 'ReflectionContext', name: 'Region' } as unknown as ParseNode;
+
+export function regionContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: regionContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Region',
+  };
+}
+
 const ifBlockContextDeclaration = { type: 'ReflectionContext', name: 'IfBlock' } as unknown as ParseNode;
 
 export function ifBlockContextRecord(): TypeRecord {
@@ -1503,6 +1523,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ObjectMethodReturn'), Descriptor({
     Value: GetTypeObject(objectMethodReturnContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Region'), Descriptor({
+    Value: GetTypeObject(regionContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,
