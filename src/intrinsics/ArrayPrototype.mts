@@ -326,12 +326,35 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
  * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
 function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
-  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number, TypedGeneration?: number };
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
   if (O.TypedElement === undefined) {
     return Throw.TypeError('reserve is available on an array with an element type');
   }
   const wanted = R(Q(yield* ToLength(n)));
-  const capacity = O.TypedCapacity ?? 0;
+  // #sec-array-and-tuple-types: a FIXED extent is part of the type, and
+  // references.md states that such an array never moves. There is therefore no
+  // allocation to grow: a reserve PAST the extent is the same refusal `push`
+  // and `a.length = n` already give, and a reserve WITHIN it is a request for
+  // room the array already has, which is a no-op rather than an error.
+  //
+  // This guard asked only whether the array was TYPED, which is a different
+  // question, so `reserve` was the one growth path a fixed extent did not
+  // close: a `[4].<uint32>` accepted `reserve(64)` and then reported a capacity
+  // of 64 it could never use, its length being pinned at 4.
+  const extent = O.TypedExtent;
+  if (extent !== undefined) {
+    if (wanted > extent) {
+      return Throw.TypeError('a fixed-extent array cannot be grown');
+    }
+    return Value.undefined;
+  }
+  // A growable array's capacity is at least its length, so the comparison
+  // starts THERE and not at zero. Starting at zero made a reserve for room the
+  // array already held look like growth, which bumped [[TypedGeneration]] and
+  // so invalidated every live borrow into storage that had not moved.
+  const lenValue = Q(yield* Get(O, Value('length')));
+  const len = R(Q(yield* ToLength(lenValue)));
+  const capacity = Math.max(O.TypedCapacity ?? 0, len);
   if (wanted <= capacity) {
     return Value.undefined;
   }
@@ -347,9 +370,16 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
  * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
 function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
-  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number };
   if (O.TypedElement === undefined) {
     return Throw.TypeError('capacity is available on an array with an element type');
+  }
+  // A fixed extent IS the capacity: the storage holds exactly that many
+  // elements for the life of the array, so the answer is the type's and not
+  // the allocation's. Falling through to the length below returned the right
+  // number only while such an array was full.
+  if (O.TypedExtent !== undefined) {
+    return F(O.TypedExtent);
   }
   const lenValue = Q(yield* Get(O, Value('length')));
   const len = R(Q(yield* ToLength(lenValue)));
