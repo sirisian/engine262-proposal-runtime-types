@@ -314,3 +314,42 @@ test('the old spellings still construct', () => {
   expect(evaluated(`${b}String([].<uint8>(b).length);`)).toBe('8');
   expect(evaluated(`${b}String([8].<uint8>(b).length);`)).toBe('8');
 });
+
+// -- the failure path ---------------------------------------------------------
+
+test('a window of the wrong element type is refused, not converted', () => {
+  // A window does not own its storage, so it cannot restate what that storage
+  // holds: there is no conversion from a `Span.<uint8>` to a `Span.<uint32>`,
+  // and the attempt is a type error.
+  //
+  // This was an infinite loop rather than a wrong answer, and it is worth
+  // saying how: membership failed, the coercion was attempted, the coercion
+  // declined because the value was ALREADY a window, and the declared-conversion
+  // search then re-entered membership. The stack overflowed inside the
+  // diagnostic being built for the failure, which is why it presented as a
+  // `displayType` bug and not as a coercion one.
+  expectThrownKind('const b = new ArrayBuffer(4);'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(Span.<uint8>(b));', 'TypeError');
+  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);', 'TypeError');
+});
+
+test('a matching window still passes, and an owned array still coerces', () => {
+  // The controls for the refusal above: it must reject the mismatch WITHOUT
+  // rejecting the cases that were working.
+  expect(evaluated('const b = new ArrayBuffer(4);'
+    + ' function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
+  expect(evaluated('function f(p: Span.<uint32>) { return p.length; }'
+    + ' let a: [].<uint32> = [1, 2]; String(f(a));')).toBe('2');
+  // and a window passed on to another window position is not re-wrapped
+  expect(evaluated('const b = new ArrayBuffer(4);'
+    + ' function g(s: Span.<uint8>) { return s; } function f(p: Span.<uint8>) { return p.length; }'
+    + ' String(f(g(Span.<uint8>(b))));')).toBe('4');
+});
+
+test('an owned array of the wrong element type is still an early error', () => {
+  // The static path is unchanged: where both types are known at check time the
+  // mismatch is caught before the program runs, and only a value that reaches
+  // the boundary needs the run-time refusal above.
+  expectStaticTypeError('function f(p: Span.<uint32>) { return p.length; } let a: [].<uint8> = [1]; f(a);');
+});

@@ -73,8 +73,23 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
     // where the window is built - membership having just answered no is
     // precisely the condition that means one is needed.
     if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
-        && value instanceof ObjectValue) {
+        && value instanceof ObjectValue
+        && ArraySpanBackingOf(value as unknown as object) === undefined
+        && ArrayViewBackingOf(value as unknown as object) === undefined) {
       return Q(yield* ConvertValue(value, t));
+    }
+    // A value that IS already a window and did not satisfy the membership test
+    // is a window of the WRONG element type, and there is no conversion for
+    // that: a window does not own its storage, so it cannot restate what that
+    // storage holds. It is refused here rather than falling through.
+    //
+    // Falling through was an infinite loop, not a wrong answer. The declared
+    // conversion search re-entered the membership test, which re-entered the
+    // search, and the stack overflowed inside the diagnostic being built for
+    // the failure - which is why it read as a `displayType` bug.
+    if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
+        && value instanceof ObjectValue) {
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
     }
     // sec-user-defined-conversions form 1: "A constructor taking one parameter
     // of type S ... A converting constructor, so `let t: MyType = 1;` is legal
