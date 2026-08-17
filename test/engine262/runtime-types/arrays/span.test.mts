@@ -376,19 +376,29 @@ test('a column projection of the wrong element type is refused', () => {
     + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);', 'TypeError');
 });
 
-test('fields is statically an object of windows where the columns resolve', () => {
-  // The checker builds the projection's type from `SoAColumnsOf`, which reads a
-  // PRIMITIVE element directly and a CLASS element through its instance layout.
-  // The layout is a run-time artifact and is not populated when the checker
-  // runs, so a class element still falls through to ~any~ - the static typing
-  // reaches the primitive case and stops there.
-  //
-  // Both are asserted so the boundary is recorded rather than assumed: the
-  // first is the rule, the second is the limit, and a change to either shows up
-  // here.
+test('fields is statically an object of windows', () => {
+  // Built from `SoAColumnsOf` where the element has a layout - which covers a
+  // primitive - and from the element's Structure otherwise. A class element has
+  // no layout at check time, the layout being built when the class is
+  // constructed, but a layout is not what this needs: the columns are one per
+  // FIELD, and the checker already knows a class's fields and their types.
   expectStaticTypeError('let s: SoA.<float32> = new SoA.<float32>(); let z: string = s.fields;');
-  // a class element: still `any`, so the refusal comes from the run-time
-  // boundary rather than the checker
-  expectThrownKind('class P { x: float32; } let s: SoA.<P> = new SoA.<P>();'
-    + ' let z: string = s.fields;', 'TypeError');
+  expectStaticTypeError('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); let z: string = s.fields;');
+});
+
+test('the per-field hop is not yet typed', () => {
+  // `s.fields` is an object of `Span.<F>` properties, and `s.fields.x` should
+  // therefore be a `Span.<float32>` - it is not, it is ~any~, so the refusal
+  // below comes from the run-time boundary rather than the checker. The
+  // property record carries the right keys and the right types; what does not
+  // happen is the second member access reading them.
+  //
+  // Asserted so the boundary is recorded rather than assumed. When the hop is
+  // fixed this test fails and says so, which is how the previous limit here was
+  // caught moving.
+  expectThrownKind('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
+    + ' let z: string = s.fields.x;', 'TypeError');
+  // and what already works regardless: the window itself is right
+  expect(evaluated('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
+    + ' let z: Span.<float32> = s.fields.x; String(z.length);')).toBe('1');
 });

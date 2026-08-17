@@ -2650,6 +2650,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && (m.IdentifierName as { name: string }).name === 'fields') {
             const element = receiver.Arguments[0];
             if (element !== undefined && typeof element !== 'number') {
+              // Columns from the LAYOUT where there is one - which covers a
+              // primitive element, whose column is the element itself.
               const columns = SoAColumnsOf(element as TypeRecord);
               if (columns) {
                 return {
@@ -2657,6 +2659,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Properties: columns.map((c: { key: string, type: TypeRecord }) => ({
                     key: c.key,
                     type: builtinTypeRecord('Span', [c.type])!,
+                    optional: false,
+                    readonly: true,
+                  })),
+                  IndexSignatures: [],
+                } as unknown as Known;
+              }
+              // A CLASS element has no layout here: the layout is built when the
+              // class is constructed and the checker runs before that. But a
+              // layout is not what this needs - the columns are one per field,
+              // and the checker already knows a class's fields and their types
+              // as its Structure. Reading them from there types the projection
+              // without waiting for a run-time artifact.
+              //
+              // The split is ONE LEVEL, matching #sec-structure-of-arrays: a
+              // field that is itself a value type stays one column rather than
+              // being flattened to its leaves.
+              const structure = structureOf(element as Known);
+              if (structure && structure.Kind === 'object') {
+                return {
+                  Kind: 'object',
+                  Properties: structure.Properties.map((f) => ({
+                    key: f.key,
+                    type: builtinTypeRecord('Span', [f.type])!,
                     optional: false,
                     readonly: true,
                   })),
