@@ -1317,7 +1317,8 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     // start; the construction path did not perform it, so `withCapacity`
     // was the one way to obtain the unusable capacity `reserve` refuses.
     if (n > (2 ** 32) - 1) {
-      return Throw.RangeError('a capacity above the maximum array length cannot be reserved');
+      // See `reserve`: specified but not reachable in this engine (#index-type).
+      return Throw.TypeError('a count above the maximum array length is specified but not implemented in this engine');
     }
     const arr = X(ArrayCreate(0)) as unknown as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
     StampTypedArray(arr as unknown as ObjectValue, element);

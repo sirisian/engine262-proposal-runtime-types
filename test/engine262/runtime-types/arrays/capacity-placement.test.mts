@@ -222,19 +222,23 @@ test('an untyped array is untouched by the index type', () => {
 
 // -- the growable ceiling: reserve cannot buy unusable room -------------------
 
-test('reserve past the maximum array length is refused', () => {
-  // The ceiling is the Array limit, not the index type's range: an owned array
-  // is an Array and cannot hold more. With the index type at `uint64` the
-  // literal 2**32 FITS the parameter, so the refusal is no longer static - it
-  // comes from the ceiling at run time instead. Same refusal, later moment, and
-  // both spellings are pinned so a change to either shows up.
-  expectThrownKind('let a: [].<uint32> = []; a.reserve(4294967296);', 'RangeError');
-  expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
-  expectThrownKind('let a: [].<uint32> = []; a.reserve(1099511627776);', 'RangeError');
-  // and the ceiling itself is still reservable
+test('a count the specification allows but this engine cannot reach is unimplemented', () => {
+  // The ceiling is the range of the INDEX TYPE, and its full range is
+  // allocatable: an array type is not bounded by `ArrayCreate`'s limit, since a
+  // count type wider than what the container can hold would describe lengths no
+  // program could reach.
+  //
+  // This engine cannot honour that - its arrays are ordinary JavaScript arrays
+  // and its counts are doubles - so it reports the count as UNIMPLEMENTED. That
+  // is deliberately not a RangeError: a RangeError says the LANGUAGE forbids
+  // the value, and a reader would conclude the range does not exist.
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(4294967296);', 'TypeError');
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(1099511627776);', 'TypeError');
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'TypeError');
+  // everything this engine CAN reach is unaffected
   expect(evaluated('let a: [].<uint32> = []; a.reserve(4294967295); String(a.capacity);')).toBe('4294967295');
-});
-test('a computed reserve within the ceiling is unaffected', () => {
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+});test('a computed reserve within the ceiling is unaffected', () => {
   // The control for the runtime half: the ceiling check must not catch a value
   // that merely arrived dynamically.
   expect(evaluated('let a: [].<uint32> = []; let n = 64; a.reserve(n); String(a.capacity);')).toBe('64');
@@ -434,12 +438,12 @@ test('shrinkToFit has a signature rather than resolving to any', () => {
 });
 
 test('withCapacity enforces the ceiling its clause specifies', () => {
-  // #sec-array-type-withcapacity has always said "If wanted > 2**32 - 1, throw
+  // The clause now says 2**64 - 1, the range of the index type, and this engine
   // a RangeError". The construction path did not perform it, so `withCapacity`
   // was the one way to obtain the unusable capacity `reserve` refuses - a
   // specification and an implementation disagreeing in the same feature.
-  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
-  expectThrownKind('[].<uint32>.withCapacity(1099511627776);', 'RangeError');
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'TypeError');
+  expectThrownKind('[].<uint32>.withCapacity(1099511627776);', 'TypeError');
   // and the ceiling itself is still constructible
   expect(evaluated('const o = [].<uint32>.withCapacity(4294967295); String(o.capacity);')).toBe('4294967295');
   expect(evaluated('const o = [].<uint32>.withCapacity(8); String(o.capacity);')).toBe('8');
@@ -448,8 +452,31 @@ test('withCapacity enforces the ceiling its clause specifies', () => {
 test('reserve and withCapacity agree on the ceiling', () => {
   // The two ways to obtain capacity must refuse the same values, or the rule is
   // only enforced on whichever path a program happens to take.
-  expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
-  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
+  expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'TypeError');
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'TypeError');
+});
+
+// -- the two operations that take a count agree on what one is ----------------
+
+test('a count is checked as a count, not coerced', () => {
+  // `reserve`'s parameter is the index type, so `a.reserve("4")` is refused.
+  // `withCapacity` followed its clause's `ToLength` and ACCEPTED the String,
+  // so the two operations that take a count disagreed about what one is -
+  // and the clause was the thing that was wrong, not the implementation:
+  // `length` and `capacity` READ at the index type, so a count that could be
+  // written as a String would make the operations accepting a count disagree
+  // with the ones reporting one.
+  expectStaticTypeError('let a: [].<uint32> = []; a.reserve("4");');
+  expectThrownKind('[].<uint32>.withCapacity("8");', 'TypeError');
+  expectThrownKind('[].<uint32>.withCapacity({});', 'TypeError');
+});
+
+test('a count that is a count still works, however written', () => {
+  expect(evaluated('const o = [].<uint32>.withCapacity(8); String(o.capacity);')).toBe('8');
+  expect(evaluated('const o = [].<uint32>.withCapacity((8 := uint64)); String(o.capacity);')).toBe('8');
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+  // and the ceiling is unaffected by the check that now precedes it
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'TypeError');
 });
 
 // -- the two operations that take a count agree on what one is ----------------

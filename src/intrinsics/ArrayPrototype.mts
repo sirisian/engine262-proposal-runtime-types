@@ -378,7 +378,17 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
   // about the element type: nothing here is wrong with the array, the number is
   // simply too large to be a length.
   if (wanted > (2 ** 32) - 1) {
-    return Throw.RangeError('a capacity above the maximum array length cannot be reserved');
+    // proposal-runtime-types #index-type: the ceiling is the range of the INDEX
+    // TYPE, and the full range is allocatable - an array type is not bounded by
+    // `ArrayCreate`'s limit, because a count type wider than what the container
+    // can hold would describe lengths no program could reach.
+    //
+    // This engine cannot honour that: its arrays are ordinary JavaScript arrays
+    // and its counts are doubles. So a count the SPECIFICATION allows and this
+    // engine cannot reach is reported as UNIMPLEMENTED rather than as a range
+    // violation - a *RangeError* would say the language forbids the value, and
+    // a reader would conclude the range does not exist.
+    return Throw.TypeError('a count above the maximum array length is specified but not implemented in this engine');
   }
   O.TypedCapacity = wanted;
   O.TypedGeneration = (O.TypedGeneration ?? 0) + 1;
