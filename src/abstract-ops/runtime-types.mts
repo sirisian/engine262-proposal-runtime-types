@@ -76,6 +76,33 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
         && value instanceof ObjectValue
         && ArraySpanBackingOf(value as unknown as object) === undefined
         && ArrayViewBackingOf(value as unknown as object) === undefined) {
+      // #sec-span-coercion: a window of T is a window over a run OF T, so the
+      // elements have to be checked before one is built. A statically typed
+      // source is caught by the checker, but anything reaching here as ~any~ -
+      // a `Uint8Array`, a plain array, an object with a `length` - is not, and
+      // without this every one of them coerced to `Span.<`ANY`>`.
+      //
+      // That was unsound rather than merely permissive: a `Uint8Array` became a
+      // `Span.<uint32>` that answered *true* to `is`, and a store of 300
+      // through it landed as 44, the underlying storage having wrapped it. The
+      // window would have been promising an element type its storage does not
+      // hold.
+      // The ELEMENTS are checked, not "is this a dynamic array of T": that
+      // question now answers *false* for a fixed array (#sec-array-and-tuple-
+      // types), and a fixed array is exactly one of the things that must reach
+      // a window. What a window promises is a run of T, and the extent is the
+      // part it does not promise.
+      const spanElement = (t as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] as TypeRecord | undefined;
+      if (spanElement !== undefined && spanElement.Kind !== 'any') {
+        const lengthValue = Q(yield* Get(value, Value('length')));
+        const count = R(Q(yield* ToLength(lengthValue)));
+        for (let i = 0; i < count; i += 1) {
+          const element = Q(yield* Get(value, Value(String(i))));
+          if (!Q(yield* IsOfType(element, spanElement))) {
+            return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+          }
+        }
+      }
       return Q(yield* ConvertValue(value, t));
     }
     // A value that IS already a window and did not satisfy the membership test

@@ -435,3 +435,48 @@ test('the window is what replaces it', () => {
   expect(evaluated('function f(p: []) { return p.length; }'
     + ' let a: [4].<uint32> = [1, 2, 3, 4]; String(f(a));')).toBe('4');
 });
+
+// -- a window is a run of T, and the coercion checks that ---------------------
+
+test('a value reaching the boundary untyped is checked before a window is built', () => {
+  // The checker catches a mismatch where both types are known. Anything
+  // arriving as ~any~ is not caught there - a `Uint8Array`, a plain array, an
+  // object with a `length` - and every one of them coerced to `Span.<`ANY`>`.
+  //
+  // That was unsound rather than merely permissive: a `Uint8Array` became a
+  // `Span.<uint32>` that answered *true* to `is`, and a store of 300 through it
+  // landed as 44, the underlying storage having wrapped it. The window was
+  // promising an element type its storage does not hold.
+  expectThrownKind('const u = new Uint8Array([1, 2, 3]);'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(u);', 'TypeError');
+  expectThrownKind('const p = [1, 2, 3];'
+    + ' function f(q: Span.<uint32>) { return q.length; } f(p);', 'TypeError');
+  expectThrownKind('const o = { length: 2, 0: 1, 1: 2 };'
+    + ' function f(q: Span.<uint32>) { return q.length; } f(o);', 'TypeError');
+});
+
+test('the check is on the ELEMENTS, so a fixed array still reaches a window', () => {
+  // Asking "is this a dynamic array of T" would answer *false* for a fixed
+  // array now that the extents must agree - and a fixed array is exactly one of
+  // the things that must reach a window. What a window promises is a run of T;
+  // the extent is the part it does not promise.
+  expect(evaluated('function f(p: Span.<uint32>) { return p.length; }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; String(f(a));')).toBe('4');
+  expect(evaluated('function f(p: Span.<uint32>) { return p.length; }'
+    + ' let a: [].<uint32> = [1, 2]; String(f(a));')).toBe('2');
+  expect(evaluated('const b = new ArrayBuffer(4);'
+    + ' function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
+  expect(evaluated('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));')).toBe('1');
+});
+
+test('a legacy TypedArray reaches a window through its buffer', () => {
+  // `Uint8Array` is untouched by this proposal, and its elements are plain
+  // Numbers rather than `uint8` values - so it is not a run of `uint8` and does
+  // not coerce to one. The interop path is the buffer, which is what a window
+  // over bytes is for.
+  expect(bool('const u = new Uint8Array([1, 2, 3]); String(u[0] is uint8);')).toBe(false);
+  expect(bool('const u = new Uint8Array([1, 2, 3]); String(u[0] is number);')).toBe(true);
+  expect(evaluated('const u = new Uint8Array([1, 2, 3]);'
+    + ' String(Span.<uint8>(u.buffer).length);')).toBe('3');
+});
