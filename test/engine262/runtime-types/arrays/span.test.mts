@@ -509,3 +509,38 @@ test('typing the counts does not change what they report', () => {
   expect(evaluated('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' String(s.fields.x.length);')).toBe('1');
 });
+
+// -- one bounds rule, every window --------------------------------------------
+
+test('an out-of-range access raises through every window, however backed', () => {
+  // #sec-array-and-tuple-types pins that a typed array is bounds-checked and
+  // only a PLAIN array keeps JavaScript's `undefined`. A window over a buffer
+  // and an `SoA` column projection did not honour it: the read answered
+  // `undefined` and the write silently did nothing, while the same access
+  // through an array-backed window raised.
+  //
+  // One type standing for two behaviours at the same operation is the
+  // divergence the window was introduced to end, so all five are asserted
+  // together - the point is that they AGREE.
+  expectThrownKind('const b = new ArrayBuffer(4); Span.<uint8>(b)[100];', 'RangeError');
+  expectThrownKind('const b = new ArrayBuffer(4); const v = Span.<uint8>(b); v[100] = 1;', 'RangeError');
+  expectThrownKind('function w(s: Span.<uint32>) { return s; }'
+    + ' let a: [].<uint32> = [1, 2, 3]; w(a)[100];', 'RangeError');
+  expectThrownKind('let a: [].<float32> = [1, 2, 3]; a[9];', 'RangeError');
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; let i = 9; a[i];', 'RangeError');
+  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' s.fields.x[100];', 'RangeError');
+});
+
+test('a plain array still answers undefined', () => {
+  // The one case that must NOT change: an array with no element type keeps
+  // JavaScript's semantics exactly.
+  expect(evaluated('const p = [1, 2, 3]; String(p[100]);')).toBe('undefined');
+  expect(evaluated('const p = [1, 2, 3]; p[100] = 1; String(p[100]);')).toBe('1');
+});
+
+test('a window in range is unaffected', () => {
+  const b = 'const b = new ArrayBuffer(4); ';
+  expect(evaluated(`${b}const v = Span.<uint8>(b); v[3] = 7; String(v[3]);`)).toBe('7');
+  expect(evaluated(`${b}String(Span.<uint8>(b)[0]);`)).toBe('0');
+});

@@ -105,8 +105,16 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
   if (live) {
     return live;
   }
+  // #sec-span-type: an out-of-range read RAISES rather than answering
+  // *undefined*. A window over a buffer is bounds-checked exactly as one over
+  // an owned array is, and as an owned array is - only a PLAIN array keeps
+  // JavaScript's `undefined`, which #sec-array-and-tuple-types pins.
+  //
+  // This answered *undefined* while the array-backed window raised, so the one
+  // type stood for two different behaviours at the same operation, which is the
+  // divergence the window was introduced to end.
   if (index < 0 || index >= ArrayViewLength(backing) || !Number.isInteger(index)) {
-    return Value.undefined;
+    return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
   const type = BufferElementType(backing.Element);
   if (type === null) {
@@ -122,8 +130,10 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
   if (live) {
     return live;
   }
+  // As with the read: an out-of-range write raises rather than silently doing
+  // nothing. Answering *false* here made a store vanish without a word.
   if (index < 0 || index >= ArrayViewLength(backing) || !Number.isInteger(index)) {
-    return false;
+    return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
   const type = BufferElementType(backing.Element);
   if (type === null) {
