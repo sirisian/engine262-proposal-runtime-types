@@ -10,6 +10,7 @@ import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
 import { SoAColumnsOf } from './layout.mts';
+
 import { badKindedArgument } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
@@ -2658,7 +2659,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Kind: 'object',
                   Properties: columns.map((c: { key: string, type: TypeRecord }) => ({
                     key: c.key,
-                    type: builtinTypeRecord('Span', [c.type])!,
+                    type: libraryTypeRecord('Span', [c.type])!,
                     optional: false,
                     readonly: true,
                   })),
@@ -2681,7 +2682,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Kind: 'object',
                   Properties: structure.Properties.map((f) => ({
                     key: f.key,
-                    type: builtinTypeRecord('Span', [f.type])!,
+                    type: libraryTypeRecord('Span', [f.type])!,
                     optional: false,
                     readonly: true,
                   })),

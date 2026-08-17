@@ -386,19 +386,15 @@ test('fields is statically an object of windows', () => {
   expectStaticTypeError('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); let z: string = s.fields;');
 });
 
-test('the per-field hop is not yet typed', () => {
-  // `s.fields` is an object of `Span.<F>` properties, and `s.fields.x` should
-  // therefore be a `Span.<float32>` - it is not, it is ~any~, so the refusal
-  // below comes from the run-time boundary rather than the checker. The
-  // property record carries the right keys and the right types; what does not
-  // happen is the second member access reading them.
-  //
-  // Asserted so the boundary is recorded rather than assumed. When the hop is
-  // fixed this test fails and says so, which is how the previous limit here was
-  // caught moving.
-  expectThrownKind('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
-    + ' let z: string = s.fields.x;', 'TypeError');
-  // and what already works regardless: the window itself is right
-  expect(evaluated('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
-    + ' let z: Span.<float32> = s.fields.x; String(z.length);')).toBe('1');
+test('a column reads as a window of the field type', () => {
+  // The hop that completes it: `s.fields` is an object of `Span.<F>` properties
+  // and `s.fields.x` reads one, so a column is typed all the way down to its
+  // elements rather than only at the projection.
+  const s = 'class P { x: float32; y: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1, y: 2 }); ';
+  expectStaticTypeError(`${s}let z: string = s.fields.x;`);
+  expectStaticTypeError(`${s}let z: string = s.fields.x[0];`);
+  // and the ELEMENT type is the field's, not merely "some number"
+  expectStaticTypeError(`${s}let z: uint32 = s.fields.x[0];`);
+  expect(evaluated(`${s}let z: float32 = s.fields.x[0]; String(z);`)).toBe('1');
+  expect(evaluated(`${s}let z: Span.<float32> = s.fields.x; String(z.length);`)).toBe('1');
 });
