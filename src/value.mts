@@ -37,6 +37,12 @@ import {
 } from '#self';
 
 /** #sec-array-defaults-and-stores: the type a typed array's `length` reads at. */
+/**
+ * proposal-runtime-types #index-type: the type EVERY count an array reports
+ * carries - a `length`, a `capacity`, an index, and the length of a view. Named
+ * once so the width is stated in one place; widening it is this constant and
+ * the specification's `#index-type`, and nothing else.
+ */
 const ARRAY_LENGTH_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [32] }) as unknown as never;
 
 let createStringValue: (value: string) => JSStringValue; // set by static block in StringValue for privileged access to constructor
@@ -1066,7 +1072,11 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const spanBacking = ArraySpanBackingOf(this as unknown as object);
       if (spanBacking !== undefined) {
         if (P.stringValue() === 'length') {
-          return Value(ArraySpanLength(spanBacking));
+          // #index-type: a window's length is a count and reads at the index
+          // type, as an owned array's does. It read as a plain Number, so the
+          // one type that is supposed to describe EVERY count described two of
+          // the five places a count comes from.
+          return new TypedNumberValue(ArraySpanLength(spanBacking), ARRAY_LENGTH_TYPE);
         }
         const index = Number(P.stringValue());
         if (String(index) === P.stringValue()) {
@@ -1081,7 +1091,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const viewBacking = ArrayViewBackingOf(this as unknown as object);
       if (viewBacking !== undefined) {
         if (P.stringValue() === 'length') {
-          return Value(ArrayViewLength(viewBacking));
+          return new TypedNumberValue(ArrayViewLength(viewBacking), ARRAY_LENGTH_TYPE);
         }
         const index = Number(P.stringValue());
         if (String(index) === P.stringValue()) {

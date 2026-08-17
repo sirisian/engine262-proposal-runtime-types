@@ -480,3 +480,32 @@ test('a legacy TypedArray reaches a window through its buffer', () => {
   expect(evaluated('const u = new Uint8Array([1, 2, 3]);'
     + ' String(Span.<uint8>(u.buffer).length);')).toBe('3');
 });
+
+// -- one index type, every count ----------------------------------------------
+
+test('every count an array reports reads at the index type', () => {
+  // #index-type is a claim about ALL of them - a `length`, a `capacity`, and
+  // the length of a view. Three of the five places a count comes from read as
+  // plain Numbers, so the type that says "one type describes every count"
+  // described two of them.
+  //
+  // Asserted together rather than one per site, because the point is that they
+  // AGREE: a widening that reached only some of these would be worse than one
+  // that reached none.
+  expect(bool('let a: [].<uint32> = [1, 2]; String(a.length is uint32);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1, 2]; String(a.capacity is uint32);')).toBe(true);
+  expect(bool('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length is uint32);')).toBe(true);
+  expect(bool('function w(s: Span.<uint32>) { return s; }'
+    + ' let a: [].<uint32> = [1, 2]; String(w(a).length is uint32);')).toBe(true);
+  expect(bool('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' String(s.fields.x.length is uint32);')).toBe(true);
+});
+
+test('typing the counts does not change what they report', () => {
+  expect(evaluated('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length);')).toBe('4');
+  expect(evaluated('const b = new ArrayBuffer(4); String(Span.<uint8>(b).map((x) => x).length);')).toBe('4');
+  expect(evaluated('const b = new ArrayBuffer(4); let n = 0;'
+    + ' for (const x of Span.<uint8>(b)) { n += 1; } String(n);')).toBe('4');
+  expect(evaluated('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' String(s.fields.x.length);')).toBe('1');
+});
