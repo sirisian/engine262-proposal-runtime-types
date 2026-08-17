@@ -398,3 +398,40 @@ test('a column reads as a window of the field type', () => {
   expect(evaluated(`${s}let z: float32 = s.fields.x[0]; String(z);`)).toBe('1');
   expect(evaluated(`${s}let z: Span.<float32> = s.fields.x; String(z.length);`)).toBe('1');
 });
+
+// -- the coercion this whole phase replaces -----------------------------------
+
+test('a fixed array is not assignable to a growable one', () => {
+  // The unsoundness `Span.<T>` exists to replace. `[].<T>` promises growth and
+  // a fixed array cannot grow, so the assignment type-checked and then threw at
+  // whatever grew it - the checker said yes and the run time said no.
+  expectStaticTypeError('function f(p: [].<uint32>) { return p.length; }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; f(a);');
+  expectStaticTypeError('function g(p: [].<uint32>) { p.push((9 := uint32)); }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; g(a);');
+});
+
+test('membership agrees with assignability', () => {
+  // `match` dispatches on membership, so a run-time answer that disagreed with
+  // the checker would let a pattern select a branch the checker calls
+  // impossible. The two halves land together for that reason.
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is [].<uint32>);')).toBe(false);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is [4].<uint32>);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1, 2]; String(a is [].<uint32>);')).toBe(true);
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' match (a) { when [].<uint32>: "dyn"; when [4].<uint32>: "fixed"; default: "no" };')).toBe('fixed');
+});
+
+test('the window is what replaces it', () => {
+  // Both owned forms reach a window, which is the whole point: a function that
+  // only reads says `Span.<T>` and accepts either.
+  expect(evaluated('function f(p: Span.<uint32>) { return p.length; }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; String(f(a));')).toBe('4');
+  expect(evaluated('function f(p: Span.<uint32>) { return p.length; }'
+    + ' let a: [].<uint32> = [1, 2]; String(f(a));')).toBe('2');
+  // and the forms that always worked still do
+  expect(evaluated('function f(p: [4].<uint32>) { return p.length; }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; String(f(a));')).toBe('4');
+  expect(evaluated('function f(p: []) { return p.length; }'
+    + ' let a: [4].<uint32> = [1, 2, 3, 4]; String(f(a));')).toBe('4');
+});

@@ -586,7 +586,16 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   switch (s.Kind) {
     case 'array': {
       const ta = t as Extract<TypeRecord, { Kind: 'array' }>;
-      if (ta.Extent !== 'dynamic' && ta.Extent !== s.Extent) {
+      // #sec-array-and-tuple-types: the extents must AGREE. A dynamic target
+      // used to skip this check, which made `[4].<T>` assignable to `[].<T>` -
+      // the unsoundness `Span.<T>` exists to replace, since a `[].<T>` may be
+      // grown and a fixed array may not. `function f(p: [].<uint32>) {
+      // p.push(9); }` accepted a `[4].<uint32>` and threw at the push.
+      //
+      // A function wanting "any array of T, however long" says `Span.<T>`
+      // (#sec-span-type): the type that promises reading and writing elements
+      // and says nothing about growth.
+      if (ta.Extent !== s.Extent) {
         return false;
       }
       // A fixed target with an `any` element still fixes the extent, and takes

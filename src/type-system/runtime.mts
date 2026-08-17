@@ -1272,6 +1272,15 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         if (t.Extent !== 'dynamic' && t.Extent !== len) {
           return false;
         }
+        // The run-time half of #sec-array-and-tuple-types' extent rule. A FIXED
+        // array is not a member of a dynamic array type: it cannot be grown and
+        // that type says it can. The static and dynamic answers have to agree,
+        // because `match` dispatches on membership - without this a pattern
+        // could select a branch the checker calls impossible.
+        if (t.Extent === 'dynamic'
+            && (value as unknown as { TypedExtent?: number }).TypedExtent !== undefined) {
+          return false;
+        }
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* Get(value, Value(String(i))));
           if (!Q(yield* IsOfType(el, t.Element))) {

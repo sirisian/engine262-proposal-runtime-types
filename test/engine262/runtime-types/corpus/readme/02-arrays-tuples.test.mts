@@ -71,11 +71,19 @@ test('Fixed-length arrays: [N].<T> is distinct by extent and from the dynamic ar
   expect(bool('type A = [4].<uint8>; type D = [].<uint8>; String(A === D);')).toBe(false);
 });
 
-test('Fixed-length arrays: a fixed-length array is assignable to the dynamic array', () => {
-  // README instanceof example: arr: [4].<uint8> satisfies [].<uint8>
-  expect(bool('type F = [4].<uint8>; type D = [].<uint8>; String(Reflect.isAssignable(F, D));')).toBe(true);
-  // but not the reverse (dynamic is not a fixed length)
+test('Fixed-length arrays: the extents must agree, and a window takes either', () => {
+  // The README used to say a fixed-length array was assignable to the dynamic
+  // one. It is not, and that assignment was the unsoundness `Span.<T>` exists
+  // to replace: `[].<uint8>` promises growth and a fixed array cannot grow, so
+  // `function f(p: [].<uint8>) { p.push(0); }` accepted a `[4].<uint8>` and
+  // threw at the push.
+  expect(bool('type F = [4].<uint8>; type D = [].<uint8>; String(Reflect.isAssignable(F, D));')).toBe(false);
   expect(bool('type F = [4].<uint8>; type D = [].<uint8>; String(Reflect.isAssignable(D, F));')).toBe(false);
+  // What a function saying "any array of uint8, however long" writes instead.
+  expect(bool('type F = [4].<uint8>; type S = Span.<uint8>; String(Reflect.isAssignable(F, S));')).toBe(true);
+  expect(bool('type D = [].<uint8>; type S = Span.<uint8>; String(Reflect.isAssignable(D, S));')).toBe(true);
+  // and a window does not become an owner
+  expect(bool('type F = [4].<uint8>; type S = Span.<uint8>; String(Reflect.isAssignable(S, F));')).toBe(false);
 });
 
 // -- Any Typed Array: [] -------------------------------------------------------
