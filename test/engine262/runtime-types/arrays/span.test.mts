@@ -283,3 +283,34 @@ test('equipping the window disturbs neither arrays nor liveness', () => {
   expectThrownKind('function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2, 3]; const s = w(a); a.push((4 := uint32)); s[0];', 'TypeError');
 });
+
+// -- the view constructor, respelled ------------------------------------------
+
+test('a view is constructed as Span.<T>(buffer)', () => {
+  // #sec-array-views. It was spelled `[].<T>(buffer, ...)`, which named the
+  // GROWABLE ARRAY type to produce a value that owns nothing and cannot grow.
+  // The spelling now says which type it makes.
+  const b = 'const b = new ArrayBuffer(8); ';
+  expect(evaluated(`${b}String(Span.<uint8>(b).length);`)).toBe('8');
+  expect(evaluated(`${b}String(Span.<uint32>(b).length);`)).toBe('2');
+  expect(evaluated(`${b}String(Span.<uint8>(b, 2).length);`)).toBe('6');
+});
+
+test('a view built this way is a window in full', () => {
+  const b = 'const b = new ArrayBuffer(8); ';
+  expect(bool(`${b}String(Span.<uint8>(b) is Span.<uint8>);`)).toBe(true);
+  expect(evaluated(`${b}const v = Span.<uint8>(b); v[0] = 7; String(v[0]);`)).toBe('7');
+  expect(evaluated(`${b}String(typeof Span.<uint8>(b).map);`)).toBe('function');
+  expect(evaluated(`${b}let n = 0; for (const x of Span.<uint8>(b)) { n += 1; } String(n);`)).toBe('8');
+  expect(evaluated(`${b}function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));`)).toBe('8');
+});
+
+test('the old spellings still construct', () => {
+  // Deliberately NOT yet an error. The fixed view is `[N].<T>(buffer, ...)` and
+  // takes its extent from the array type's brackets; `Span.<T>` has no brackets
+  // to take one from, so retiring the old spelling waits on deciding where a
+  // fixed view's extent lives.
+  const b = 'const b = new ArrayBuffer(8); ';
+  expect(evaluated(`${b}String([].<uint8>(b).length);`)).toBe('8');
+  expect(evaluated(`${b}String([8].<uint8>(b).length);`)).toBe('8');
+});

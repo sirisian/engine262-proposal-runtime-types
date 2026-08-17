@@ -148,6 +148,28 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       }
     }
   }
+  // proposal-runtime-types #sec-span-type: `Span.<T>(buffer, byteOffset,
+  // byteElementLength)` is a VIEW over bytes that already exist, and it is a
+  // call rather than a construction because nothing is allocated - the bytes
+  // are there and this reinterprets them.
+  //
+  // It replaces the spelling `[].<T>(buffer, ...)`, which named the GROWABLE
+  // ARRAY type to produce a value that owns nothing and cannot grow. The old
+  // form still works and is not yet an error: the FIXED view is spelled
+  // `[N].<T>(buffer, ...)` and takes its extent from the array type's brackets,
+  // and `Span.<T>` has no brackets to take one from. Retiring the old spelling
+  // waits on deciding where a fixed view's extent lives.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression?.type === 'IdentifierReference'
+      && (memberExpr as unknown as { Expression: { name?: string } }).Expression.name === 'Span'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]!));
+    const argList = Q(yield* ArgumentListEvaluation(args));
+    if (argList.length > 0) {
+      return Q(yield* CreateArrayView(element, 'dynamic', argList as unknown as readonly Value[]));
+    }
+  }
   const ref = Q(yield* Evaluate(memberExpr));
   // 5. Let func be ? GetValue(ref).
   const func = Q(yield* GetValue(ref));
