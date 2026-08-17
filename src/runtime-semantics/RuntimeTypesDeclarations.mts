@@ -1317,6 +1317,27 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     return arr;
   }, 1, Value('withCapacity'), []);
   X(CreateDataProperty(ctor as unknown as ObjectValue, Value('withCapacity'), withCapacity));
+  // proposal-runtime-types #sec-instanceof-for-type-objects: "A Type Object has
+  // a %Symbol.hasInstance% method. When called with argument v, it returns ?
+  // IsOfType(v, the Type Object's [[TypeRecord]])."
+  //
+  // An array type in expression position is a CONSTRUCTOR, so it inherited
+  // `Function.prototype[%Symbol.hasInstance%]` and answered by walking the
+  // prototype chain instead. Every Array is an Array, so `x instanceof
+  // [].<uint32>` was *true* for a plain untyped array, for an array of the
+  // wrong element type, and for a fixed-extent array - while `is` answered
+  // correctly in all three. Two membership operators disagreeing is the thing
+  // the clause exists to prevent.
+  const hasInstance = CreateBuiltinFunction(function* hasInstanceSteps([v = Value.undefined]: Arguments): ValueEvaluator {
+    const member = Q(yield* IsOfType(v, record));
+    return member ? Value.true : Value.false;
+  }, 1, Value('[Symbol.hasInstance]'), []);
+  X((ctor as unknown as ObjectValue).DefineOwnProperty(wellKnownSymbols.hasInstance, {
+    Value: hasInstance as unknown as Value,
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  } as never));
   arrayTypeConstructors.set(key, ctor);
   return ctor;
 }

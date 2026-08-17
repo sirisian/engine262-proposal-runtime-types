@@ -586,3 +586,38 @@ test('a fixed view whose bytes cease to exist reports a length of zero', () => {
   // and it recovers if the bytes come back, rather than being permanently dead
   expect(evaluated(`${r}const v = Span.<uint8>(rb, 0, 8); rb.resize(4); rb.resize(12); String(v.length);`)).toBe('8');
 });
+
+// -- instanceof and is answer the same question -------------------------------
+
+test('instanceof on an array type goes through membership', () => {
+  // #sec-instanceof-for-type-objects: a Type Object's %Symbol.hasInstance%
+  // returns IsOfType(v, its [[TypeRecord]]). An array type in EXPRESSION
+  // position is a constructor, so it inherited
+  // `Function.prototype[%Symbol.hasInstance%]` and answered by walking the
+  // prototype chain instead - every Array is an Array, so the answer was *true*
+  // for a plain untyped array, for the wrong element type, and for a fixed
+  // extent, while `is` answered correctly in all three.
+  //
+  // Each case is asserted through BOTH operators, because the defect was not a
+  // wrong answer in isolation but two membership operators disagreeing.
+  for (const [source, expected] of [
+    ['const p = [1, 2];', false],
+    ['let p: [].<uint8> = [1];', false],
+    ['let p: [4].<uint32> = [1, 2, 3, 4];', false],
+    ['let p: [].<uint32> = [1, 2];', true],
+  ] as [string, boolean][]) {
+    expect(bool(`${source} String(p instanceof [].<uint32>);`)).toBe(expected);
+    expect(bool(`${source} String(p is [].<uint32>);`)).toBe(expected);
+  }
+});
+
+test('instanceof on a scalar type is unchanged', () => {
+  // The scalar types already routed through membership, and must keep doing so.
+  expect(bool('let a: uint8 = 5; String(a instanceof uint8);')).toBe(true);
+  expect(bool('let a: uint8 = 5; String(a instanceof uint16);')).toBe(false);
+});
+
+test('a fixed extent is an instance of its own type', () => {
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a instanceof [4].<uint32>);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a instanceof [3].<uint32>);')).toBe(false);
+});
