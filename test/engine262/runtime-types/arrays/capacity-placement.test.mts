@@ -451,3 +451,26 @@ test('reserve and withCapacity agree on the ceiling', () => {
   expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
   expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
 });
+
+// -- the two operations that take a count agree on what one is ----------------
+
+test('a count is checked as a count, not coerced', () => {
+  // `reserve`'s parameter is the index type, so `a.reserve("4")` is refused.
+  // `withCapacity` followed its clause's `ToLength` and ACCEPTED the String,
+  // so the two operations that take a count disagreed about what one is -
+  // and the clause was the thing that was wrong, not the implementation:
+  // `length` and `capacity` READ at the index type, so a count that could be
+  // written as a String would make the operations accepting a count disagree
+  // with the ones reporting one.
+  expectStaticTypeError('let a: [].<uint32> = []; a.reserve("4");');
+  expectThrownKind('[].<uint32>.withCapacity("8");', 'TypeError');
+  expectThrownKind('[].<uint32>.withCapacity({});', 'TypeError');
+});
+
+test('a count that is a count still works, however written', () => {
+  expect(evaluated('const o = [].<uint32>.withCapacity(8); String(o.capacity);')).toBe('8');
+  expect(evaluated('const o = [].<uint32>.withCapacity((8 := uint64)); String(o.capacity);')).toBe('8');
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
+  // and the ceiling is unaffected by the check that now precedes it
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
+});

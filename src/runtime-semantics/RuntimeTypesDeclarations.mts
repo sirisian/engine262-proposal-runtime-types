@@ -1,4 +1,4 @@
-import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
+import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
 import {
@@ -1301,6 +1301,14 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   // the design writes it on - an earlier attempt attached it at GetTypeObject,
   // which never sees an array type.
   const withCapacity = CreateBuiltinFunction(function* withCapacitySteps([wanted0 = Value.undefined]: Arguments): ValueEvaluator {
+    // #sec-toindextype: a COUNT is checked as a count rather than coerced.
+    // `reserve` refuses `a.reserve("4")` because its parameter is the index
+    // type; `withCapacity` followed its clause's `ToLength` and accepted the
+    // String, so the two operations that take a count disagreed about what one
+    // is. Both clauses now say ToIndexType, and this is the second half.
+    if (!isTypedNumber(wanted0 as Value) && !(wanted0 instanceof NumberValue)) {
+      return Throw.TypeError('$1 is not assignable to $2', wanted0, Value('the index type'));
+    }
     const wanted = Q(yield* ToNumber(wanted0));
     const n = Math.max(0, Math.trunc(Number(wanted.numberValue())));
     // #sec-array-type-withcapacity: the same ceiling `reserve` enforces. A
