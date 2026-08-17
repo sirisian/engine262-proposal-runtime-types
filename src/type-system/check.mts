@@ -9,6 +9,7 @@ import { CanonicalizeType } from './intern.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
+import { SoAColumnsOf } from './layout.mts';
 import { badKindedArgument } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
@@ -2633,6 +2634,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const sig = arrayMethodSignature(name, spanElement, receiver!);
               if (sig) {
                 return sig;
+              }
+            }
+          }
+          // #sec-structure-of-arrays: `fields` projects each of T's immediate
+          // fields as a `Span.<F>` over that field's column. The projection has
+          // BEEN a window since before the type had a name - it is stored the
+          // way a buffer view is - and this is the checker learning to say so.
+          //
+          // Without it the whole chain was ~any~: `s.fields.x[0]` accepted a
+          // `string` annotation, so the one place in the design already using
+          // windows was the one place they went unchecked.
+          if (receiver && receiver.Kind === 'nominal' && receiver.LibraryName === 'SoA'
+              && receiver.Arguments.length > 0
+              && (m.IdentifierName as { name: string }).name === 'fields') {
+            const element = receiver.Arguments[0];
+            if (element !== undefined && typeof element !== 'number') {
+              const columns = SoAColumnsOf(element as TypeRecord);
+              if (columns) {
+                return {
+                  Kind: 'object',
+                  Properties: columns.map((c: { key: string, type: TypeRecord }) => ({
+                    key: c.key,
+                    type: builtinTypeRecord('Span', [c.type])!,
+                    optional: false,
+                    readonly: true,
+                  })),
+                  IndexSignatures: [],
+                } as unknown as Known;
               }
             }
           }

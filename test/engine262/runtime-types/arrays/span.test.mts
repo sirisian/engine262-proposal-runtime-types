@@ -353,3 +353,42 @@ test('an owned array of the wrong element type is still an early error', () => {
   // the boundary needs the run-time refusal above.
   expectStaticTypeError('function f(p: Span.<uint32>) { return p.length; } let a: [].<uint8> = [1]; f(a);');
 });
+
+// -- SoA column projections are windows ---------------------------------------
+
+test('a column projection is a window at run time', () => {
+  // #sec-structure-of-arrays. The projection has BEEN a window since before the
+  // type had a name - it is stored the way a buffer view is - so this needed no
+  // work in `SoA` at all. It follows from the window being a real value.
+  const s = 'class P { x: float32; y: float32; } const s = new SoA.<P>();'
+    + ' s.push({ x: 1, y: 2 }); s.push({ x: 3, y: 4 }); ';
+  expect(bool(`${s}String(s.fields.x is Span.<float32>);`)).toBe(true);
+  expect(evaluated(`${s}String(s.fields.x.length);`)).toBe('2');
+  expect(evaluated(`${s}String(s.fields.x[1]);`)).toBe('3');
+  expect(evaluated(`${s}String(typeof s.fields.x.map);`)).toBe('function');
+  expect(evaluated(`${s}let n = 0; for (const v of s.fields.x) { n += 1; } String(n);`)).toBe('2');
+  expect(evaluated(`${s}String(typeof s.fields.x.push);`)).toBe('undefined');
+  expect(evaluated(`${s}function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));`)).toBe('2');
+});
+
+test('a column projection of the wrong element type is refused', () => {
+  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);', 'TypeError');
+});
+
+test('fields is statically an object of windows where the columns resolve', () => {
+  // The checker builds the projection's type from `SoAColumnsOf`, which reads a
+  // PRIMITIVE element directly and a CLASS element through its instance layout.
+  // The layout is a run-time artifact and is not populated when the checker
+  // runs, so a class element still falls through to ~any~ - the static typing
+  // reaches the primitive case and stops there.
+  //
+  // Both are asserted so the boundary is recorded rather than assumed: the
+  // first is the rule, the second is the limit, and a change to either shows up
+  // here.
+  expectStaticTypeError('let s: SoA.<float32> = new SoA.<float32>(); let z: string = s.fields;');
+  // a class element: still `any`, so the refusal comes from the run-time
+  // boundary rather than the checker
+  expectThrownKind('class P { x: float32; } let s: SoA.<P> = new SoA.<P>();'
+    + ' let z: string = s.fields;', 'TypeError');
+});
