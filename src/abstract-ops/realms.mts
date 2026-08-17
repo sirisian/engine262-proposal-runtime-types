@@ -221,6 +221,8 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%SoA.prototype%': ObjectValue;
   /** proposal-runtime-types #sec-span-type: the prototype of a window. */
   '%Span.prototype%': ObjectValue;
+  /** proposal-runtime-types: the prototype of an array with an element type. */
+  '%TypedArrayLike.prototype%': ObjectValue;
   '%WeakRef.prototype%': ObjectValue;
   '%WeakSet.prototype%': ObjectValue;
 }

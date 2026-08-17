@@ -6,7 +6,7 @@ import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
-import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan } from './array-view.mts';
+import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided } from '../type-system/check.mts';
@@ -329,7 +329,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // The same shape as F38's crossing, swallowed by the same provenance-blind
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-      (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      StampTypedArray(value as ObjectValue, t.Element);
       if (t.Extent !== 'dynamic') {
         (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
       }
@@ -845,7 +845,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // The same shape as F38's crossing, swallowed by the same provenance-blind
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-      (value as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      StampTypedArray(value as ObjectValue, t.Element);
       if (t.Extent !== 'dynamic') {
         (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
       }
@@ -1276,7 +1276,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // assignment, and a store past the end, growing a type whose extent the
         // layout rules and the array views both treat as a compile-time
         // constant.
-        (out as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+        StampTypedArray(out as ObjectValue, t.Element);
         if (t.Extent !== 'dynamic') {
           (out as { TypedExtent?: number }).TypedExtent = t.Extent as number;
         }

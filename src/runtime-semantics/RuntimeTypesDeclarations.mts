@@ -1,4 +1,5 @@
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, wellKnownSymbols } from '../value.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
@@ -1270,7 +1271,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
         X(CreateDataProperty(array, Value(String(i)), dflt));
       }
     }
-    array.TypedElement = element;
+    StampTypedArray(array as unknown as ObjectValue, element);
     // #sec-array-and-tuple-types: a fixed extent is part of the type, so a
     // constructed array carries it exactly as a converted one does - otherwise
     // `new [4].<float32>()` could be grown where `const a: [4].<float32>`
@@ -1311,7 +1312,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
       return Throw.RangeError('a capacity above the maximum array length cannot be reserved');
     }
     const arr = X(ArrayCreate(0)) as unknown as ObjectValue & { TypedElement?: unknown, TypedCapacity?: number };
-    arr.TypedElement = element;
+    StampTypedArray(arr as unknown as ObjectValue, element);
     arr.TypedCapacity = n;
     return arr;
   }, 1, Value('withCapacity'), []);

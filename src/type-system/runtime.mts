@@ -1,4 +1,5 @@
 import { OutOfRange } from '../utils/language.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
@@ -873,7 +874,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // security, since an allocation exposing a previous one's bytes leaks
       // whatever was there.
       const out = X(ArrayCreate(0));
-      (out as { TypedElement?: TypeRecord }).TypedElement = t.Element;
+      StampTypedArray(out as ObjectValue, t.Element);
       if (t.Extent === 'dynamic') {
         return out;
       }

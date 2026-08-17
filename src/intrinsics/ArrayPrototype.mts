@@ -850,13 +850,10 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
     ['map', ArrayProto_map, 1],
     ['pop', ArrayProto_pop, 0],
     ['push', ArrayProto_push, 1],
-    ['reserve', ArrayProto_reserve, 1],
-    ['shrinkToFit', ArrayProto_shrinkToFit, 0],
     // A GETTER, not a method: the design writes `out.capacity;` as a read, and it
     // sits beside `length`, which is a property. As a method `a.capacity` yielded
     // the function itself - truthy, so `if (a.capacity > 1000)` misbehaved
     // silently rather than throwing.
-    ['capacity', [ArrayProto_capacity]],
     ['shift', ArrayProto_shift, 0],
     ['slice', ArrayProto_slice, 2],
     ['sort', ArrayProto_sort, 1],
@@ -906,6 +903,32 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
   realmRec.Intrinsics['%Array.prototype%'] = proto;
 
   bootstrapSpanPrototype(realmRec, proto);
+  bootstrapTypedArrayLikePrototype(realmRec, proto);
+}
+
+/**
+ * proposal-runtime-types #sec-array-and-tuple-types: the prototype of an array
+ * that HAS an element type.
+ *
+ * It inherits from `%Array.prototype%`, so every method of an ordinary array
+ * reaches a typed one unchanged - which is what the clause means by "the
+ * methods of `Array.prototype` apply" - and it adds the capacity operations,
+ * which therefore reach only an array that has an element type.
+ *
+ * The alternative was to leave them on `%Array.prototype%`, and that put three
+ * members on EVERY array in the language which exist to refuse the receiver
+ * they will usually have: `'capacity' in []` answered *true* for an ordinary
+ * array and reading it threw. A member that is absent says the same thing
+ * without pretending to be there.
+ */
+function bootstrapTypedArrayLikePrototype(realmRec: Realm, arrayProto: ObjectValue) {
+  const proto = OrdinaryObjectCreate(arrayProto);
+  assignProps(realmRec, proto, [
+    ['reserve', ArrayProto_reserve, 1],
+    ['shrinkToFit', ArrayProto_shrinkToFit, 0],
+    ['capacity', [ArrayProto_capacity]],
+  ]);
+  realmRec.Intrinsics['%TypedArrayLike.prototype%'] = proto;
 }
 
 /**

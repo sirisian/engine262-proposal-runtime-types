@@ -301,12 +301,17 @@ test('the capacity members are not own properties of %Array.prototype%', () => {
   expect(bool('String(Object.getOwnPropertyNames(Array.prototype).includes("reserve"));')).toBe(false);
 });
 
-test('calling a capacity member on an untyped array is still a TypeError', () => {
-  // Absence gives this for free - `undefined` is not callable - but the
-  // OUTCOME the previous guard produced is still the right outcome, so it is
-  // pinned here independently of how it is reached.
+test('an untyped array answers for the members as it does for anything absent', () => {
+  // Calling one is still a TypeError, because `undefined` is not callable -
+  // the outcome the old guard produced, now reached by the member simply not
+  // being there.
   expectThrownKind('let a = [1]; a.reserve(4);', 'TypeError');
-  expectThrownKind('let a = [1]; a.capacity;', 'TypeError');
+  expectThrownKind('let a = [1]; a.shrinkToFit();', 'TypeError');
+  // READING one no longer throws, and that is the placement decision showing
+  // its face: a property that does not exist reads as `undefined`, which is
+  // ordinary JavaScript. The throw it used to give was a symptom of the member
+  // being present in order to refuse, which is the thing that was wrong.
+  expect(evaluated('let a = [1]; String(a.capacity);')).toBe('undefined');
 });
 
 // -- placement: a typed array has them ---------------------------------------

@@ -335,3 +335,26 @@ export function SpanLikeLengthOf(instance: object): number | undefined {
   }
   return undefined;
 }
+
+/**
+ * proposal-runtime-types #sec-array-and-tuple-types: give an array its element
+ * type AND the prototype that carries the capacity operations.
+ *
+ * The two go together. Seven places stamp `[[TypedElement]]`, and a place that
+ * set the slot without setting the prototype would produce an array that is
+ * typed for every purpose except the three members that describe its
+ * allocation — a difference invisible until someone called `capacity` on it.
+ * Routing them through one helper is what stops that drifting apart again.
+ */
+export function StampTypedArray(array: ObjectValue, element: TypeRecord): void {
+  (array as unknown as { TypedElement?: TypeRecord }).TypedElement = element;
+  const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics;
+  const proto = intrinsics['%TypedArrayLike.prototype%'];
+  const shaped = array as unknown as { Prototype?: ObjectValue };
+  // Only where the array still has the ORDINARY array prototype. A class
+  // deriving from an array type has its own, and replacing that would break
+  // the derivation the clause allows.
+  if (proto !== undefined && shaped.Prototype === intrinsics['%Array.prototype%']) {
+    shaped.Prototype = proto;
+  }
+}

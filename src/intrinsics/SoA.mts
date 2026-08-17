@@ -1,4 +1,5 @@
 import { Q, X } from '../completion.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
   NumberValue, ObjectValue, TypedNumberValue, Value, type Arguments, type FunctionCallContext,
@@ -519,7 +520,7 @@ function* SoAProto_toArray(_args: Arguments, { thisValue }: FunctionCallContext)
     X(CreateDataProperty(out, Value(String(i)), element));
   }
   X(CreateDataProperty(out, Value('length'), Value(storage.Length)));
-  (out as { TypedElement?: TypeRecord }).TypedElement = storage.Element;
+  StampTypedArray(out as ObjectValue, storage.Element);
   return out;
 }
 
