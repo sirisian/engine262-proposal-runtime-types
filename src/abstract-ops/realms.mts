@@ -219,6 +219,8 @@ export interface Intrinsics extends Intrinsics_Table6 {
   /** proposal-runtime-types (composites.md) */
   '%Composite%': FunctionObject;
   '%SoA.prototype%': ObjectValue;
+  /** proposal-runtime-types #sec-span-type: the prototype of a window. */
+  '%Span.prototype%': ObjectValue;
   '%WeakRef.prototype%': ObjectValue;
   '%WeakSet.prototype%': ObjectValue;
 }

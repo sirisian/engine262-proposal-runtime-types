@@ -182,7 +182,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   if (extent !== 'dynamic' && offset + byteExtent > bufferByteLength(buffer)) {
     return Throw.RangeError('the view extent exceeds the buffer');
   }
-  const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   views.set(view as unknown as object, {
     Element: element, Buffer: buffer, ByteOffset: offset, Stride: stride, Extent: extent, ByteExtent: byteExtent,
   });
@@ -197,7 +197,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
  * parse and nothing to check.
  */
 export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic', source?: { readonly Generation: number }): ObjectValue {
-  const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   views.set(view as unknown as object, {
     Element: element,
     Buffer: buffer,
@@ -254,7 +254,7 @@ function generationOf(source: ObjectValue): number {
  * value — which is why this constructs rather than tagging the array.
  */
 export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number): ObjectValue {
-  const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
+  const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   arraySpans.set(span as unknown as object, {
     Element: element,
     Source: source,

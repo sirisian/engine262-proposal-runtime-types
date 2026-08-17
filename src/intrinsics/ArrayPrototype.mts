@@ -904,4 +904,43 @@ export function bootstrapArrayPrototype(realmRec: Realm) {
   realmRec.Intrinsics['%Array.prototype.values%'] = X(Get(proto, Value('values'))) as FunctionObject;
 
   realmRec.Intrinsics['%Array.prototype%'] = proto;
+
+  bootstrapSpanPrototype(realmRec, proto);
+}
+
+/**
+ * proposal-runtime-types #sec-span-type: the prototype of a WINDOW - a
+ * `Span.<T>` over an owned array, or a view over a buffer.
+ *
+ * It is built by copying `%Array.prototype%` and REMOVING what a window does
+ * not have, rather than by listing what it does, so that a method added to
+ * arrays reaches windows without a second edit. What is removed is the set the
+ * checker already refuses on a window receiver: the operations that change a
+ * length, and the ones that describe an allocation a window does not own.
+ *
+ * The copied functions are the same objects `%Array.prototype%` holds. They are
+ * generic over an array-LIKE, and a window reports its indices and its length,
+ * so they need no window-specific versions - which is the whole reason making
+ * the indices visible was the fix and equipping the prototype is only reach.
+ */
+function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
+  // `Set` is the abstract operation in this module's scope, so the collection is
+  // named explicitly.
+  const withheld: readonly string[] = [
+    // change the length
+    'push', 'pop', 'shift', 'unshift', 'splice',
+    // describe an allocation
+    'capacity', 'reserve', 'shrinkToFit',
+  ];
+  const spanProto = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
+  for (const key of X(arrayProto.OwnPropertyKeys())) {
+    if (key instanceof JSStringValue && withheld.includes(key.stringValue())) {
+      continue;
+    }
+    const desc = X(arrayProto.GetOwnProperty(key));
+    if (!(desc instanceof UndefinedValue)) {
+      X(spanProto.DefineOwnProperty(key, desc));
+    }
+  }
+  realmRec.Intrinsics['%Span.prototype%'] = spanProto;
 }

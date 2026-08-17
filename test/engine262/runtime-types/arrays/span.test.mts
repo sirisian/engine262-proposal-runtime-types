@@ -234,3 +234,52 @@ test('reporting the indices does not disturb reads, writes, or liveness', () => 
   expect(evaluated(`${w}String(s.length);`)).toBe('3');
   expectThrownKind(`${w}a.push((4 := uint32)); s[0];`, 'TypeError');
 });
+
+// -- the window's own surface, reachable ---------------------------------------
+
+test('a window carries the array methods it is allowed', () => {
+  // Making the indices visible was what made the methods WORK; this is what
+  // makes them reachable. `%Span.prototype%` is built by copying
+  // `%Array.prototype%` and removing what a window does not have, rather than
+  // by listing what it does - so a method added to arrays reaches windows
+  // without a second edit, and the copied functions are the same objects,
+  // being generic over an array-like.
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  expect(evaluated(`${w}String(s.map((x) => x).length);`)).toBe('3');
+  expect(evaluated(`${w}let n = 0; s.forEach(() => { n += 1; }); String(n);`)).toBe('3');
+  expect(evaluated(`${w}String(s.join(","));`)).toBe('1,2,3');
+  expect(evaluated(`${w}String(s.slice(1).length);`)).toBe('2');
+  expect(evaluated(`${w}String(s.filter(() => true).length);`)).toBe('3');
+});
+
+test('a window is iterable', () => {
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  expect(evaluated(`${w}let n = 0; for (const x of s) { n += 1; } String(n);`)).toBe('3');
+  expect(evaluated(`${w}String([...s].length);`)).toBe('3');
+  // and the spread produces a new OWNED array, which is the explicit way out of
+  // a window's lifetime
+  expect(evaluated(`${w}const owned = [...s]; owned.push(4); String(owned.length);`)).toBe('4');
+});
+
+test('the operations a window does not have are absent, not merely refused', () => {
+  // The checker refuses them on a `Span.<T>` receiver; the value does not carry
+  // them either, so the two agree rather than one relying on the other.
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  for (const member of ['push', 'pop', 'shift', 'unshift', 'splice', 'capacity', 'reserve', 'shrinkToFit']) {
+    expect(evaluated(`${w}String(typeof s.${member});`)).toBe('undefined');
+  }
+});
+
+test('a buffer view gains the same surface', () => {
+  const v = 'const b = new ArrayBuffer(4); const v = [].<uint8>(b); ';
+  expect(evaluated(`${v}String(v.map((x) => x).length);`)).toBe('4');
+  expect(evaluated(`${v}let n = 0; for (const x of v) { n += 1; } String(n);`)).toBe('4');
+  expect(evaluated(`${v}String(typeof v.push);`)).toBe('undefined');
+});
+
+test('equipping the window disturbs neither arrays nor liveness', () => {
+  expect(evaluated('let a = [1, 2]; a.push(3); String(a.length);')).toBe('3');
+  expect(evaluated('let a: [].<uint32> = []; a.push((1 := uint32)); a.reserve(64); String(a.capacity);')).toBe('64');
+  expectThrownKind('function w(s: Span.<uint32>) { return s; }'
+    + ' let a: [].<uint32> = [1, 2, 3]; const s = w(a); a.push((4 := uint32)); s[0];', 'TypeError');
+});
