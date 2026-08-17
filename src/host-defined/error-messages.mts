@@ -463,6 +463,7 @@ export interface Throw {
   | 'a using declaration requires an object with a Symbol.dispose method'
   | 'a var declaration may not appear in a do expression in a parameter'
   | 'a view element cannot have a zero byte length'
+  | 'a view is constructed as `Span.<T>(buffer, byteOffset, count, byteElementLength)`'
   | 'a view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array'
   | 'a view needs an element type with a layout'
   | 'a zero rational to a negative power'

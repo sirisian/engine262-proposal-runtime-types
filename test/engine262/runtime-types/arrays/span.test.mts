@@ -93,7 +93,7 @@ test('an owned array is assignable to a window and is not one', () => {
 test('a view over a buffer is a window', () => {
   // The type the view clause always described and could not name.
   expect(evaluated('const b = new ArrayBuffer(4);'
-    + ' function f(p: Span.<uint8>) { return p.length; } String(f([].<uint8>(b)));')).toBe('4');
+    + ' function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
 });
 
 // -- the receiver surface -----------------------------------------------------
@@ -221,7 +221,7 @@ test('a buffer view is fixed by the same change', () => {
   // both answer elements from a backing. Fixing one fixes the other, which is
   // the argument for the window and the view sharing a definition rather than
   // resembling each other.
-  const v = 'const b = new ArrayBuffer(4); const v = [].<uint8>(b); ';
+  const v = 'const b = new ArrayBuffer(4); const v = Span.<uint8>(b); ';
   expect(bool(`${v}String(0 in v);`)).toBe(true);
   expect(evaluated(`${v}let n = 0; Array.prototype.forEach.call(v, () => { n += 1; }); String(n);`)).toBe('4');
   expect(evaluated(`${v}String(Object.getOwnPropertyNames(v).join(","));`)).toBe('0,1,2,3,length');
@@ -271,7 +271,7 @@ test('the operations a window does not have are absent, not merely refused', () 
 });
 
 test('a buffer view gains the same surface', () => {
-  const v = 'const b = new ArrayBuffer(4); const v = [].<uint8>(b); ';
+  const v = 'const b = new ArrayBuffer(4); const v = Span.<uint8>(b); ';
   expect(evaluated(`${v}String(v.map((x) => x).length);`)).toBe('4');
   expect(evaluated(`${v}let n = 0; for (const x of v) { n += 1; } String(n);`)).toBe('4');
   expect(evaluated(`${v}String(typeof v.push);`)).toBe('undefined');
@@ -305,16 +305,21 @@ test('a view built this way is a window in full', () => {
   expect(evaluated(`${b}function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));`)).toBe('8');
 });
 
-test('the old spellings still construct', () => {
-  // Deliberately NOT yet an error. The fixed view is `[N].<T>(buffer, ...)` and
-  // takes its extent from the array type's brackets; `Span.<T>` has no brackets
-  // to take one from, so retiring the old spelling waits on deciding where a
-  // fixed view's extent lives.
-  const b = 'const b = new ArrayBuffer(8); ';
-  expect(evaluated(`${b}String([].<uint8>(b).length);`)).toBe('8');
-  expect(evaluated(`${b}String([8].<uint8>(b).length);`)).toBe('8');
+test('the old view spellings are retired, not reinterpreted', () => {
+  // `[].<T>(buffer, …)` named the GROWABLE ARRAY type to produce a value that
+  // owns nothing, and `[N].<T>(buffer, …)` put a window's extent inside the
+  // brackets of an owned type. Both are gone.
+  //
+  // They RAISE rather than being quietly re-read, because the third argument
+  // changed meaning in the same change - it was the stride and is now the count
+  // - so an untouched call site would keep parsing and describe a different run
+  // of bytes. This is not hypothetical: `[].<uint16>(buf, 1, 3)` in the SoA
+  // tests meant five elements at a 3-byte stride and would have become three
+  // elements at the default stride, with nothing reported.
+  expectThrownKind('const b = new ArrayBuffer(8); [].<uint8>(b);', 'TypeError');
+  expectThrownKind('const b = new ArrayBuffer(8); [8].<uint8>(b);', 'TypeError');
+  expectThrownKind('const b = new ArrayBuffer(8); [].<uint16>(b, 1, 3);', 'TypeError');
 });
-
 // -- the failure path ---------------------------------------------------------
 
 test('a window of the wrong element type is refused, not converted', () => {
@@ -543,4 +548,41 @@ test('a window in range is unaffected', () => {
   const b = 'const b = new ArrayBuffer(4); ';
   expect(evaluated(`${b}const v = Span.<uint8>(b); v[3] = 7; String(v[3]);`)).toBe('7');
   expect(evaluated(`${b}String(Span.<uint8>(b)[0]);`)).toBe('0');
+});
+
+// -- the view signature matches the platform ----------------------------------
+
+test('the third argument is a count, as every other view constructor takes', () => {
+  // It was the STRIDE, so a call that looked exactly like a `%TypedArray%`
+  // construction meant something else: `Span.<uint8>(b, 0, 4)` was a view of
+  // two elements where `new Uint8Array(b, 0, 4)` is a view of four, and neither
+  // reported anything. The two are asserted together, because agreeing with the
+  // platform is the whole point of the position.
+  const b = 'const b = new ArrayBuffer(8); ';
+  expect(evaluated(`${b}String(Span.<uint8>(b, 0, 4).length);`)).toBe('4');
+  expect(evaluated(`${b}String(new Uint8Array(b, 0, 4).length);`)).toBe('4');
+  // the stride moved to fourth, where a capability nothing else has belongs
+  expect(evaluated(`${b}String(Span.<uint8>(b, 0, undefined, 2).length);`)).toBe('4');
+  expect(evaluated(`${b}String(Span.<uint8>(b, 0, 3, 2).length);`)).toBe('3');
+  expectThrownKind(`${b}Span.<uint8>(b, 0, 99);`, 'RangeError');
+});
+
+test('a count present fixes the view, a count omitted tracks', () => {
+  // The rule `%TypedArray%` and `DataView` already use, spelled the same way so
+  // that a reader who knows one knows the other.
+  const r = 'const rb = new ArrayBuffer(8, { maxByteLength: 16 }); ';
+  expect(evaluated(`${r}const v = Span.<uint8>(rb); rb.resize(12); String(v.length);`)).toBe('12');
+  expect(evaluated(`${r}const v = Span.<uint8>(rb, 0, 8); rb.resize(12); String(v.length);`)).toBe('8');
+});
+
+test('a fixed view whose bytes cease to exist reports a length of zero', () => {
+  // It reported its ORIGINAL extent, describing a run of elements none of which
+  // could be read - every access already refused and only the count disagreed.
+  // A `%TypedArray%` in the same position answers 0, and is asserted beside it.
+  const r = 'const rb = new ArrayBuffer(8, { maxByteLength: 16 }); ';
+  expect(evaluated(`${r}const v = Span.<uint8>(rb, 0, 8); rb.resize(4); String(v.length);`)).toBe('0');
+  expect(evaluated(`${r}const u = new Uint8Array(rb, 0, 8); rb.resize(4); String(u.length);`)).toBe('0');
+  expectThrownKind(`${r}const v = Span.<uint8>(rb, 0, 8); rb.resize(4); v[0];`, 'TypeError');
+  // and it recovers if the bytes come back, rather than being permanently dead
+  expect(evaluated(`${r}const v = Span.<uint8>(rb, 0, 8); rb.resize(4); rb.resize(12); String(v.length);`)).toBe('8');
 });

@@ -272,10 +272,19 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       extent = -1;
     }
     if (extent !== -1) {
-      const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
       const argList = Q(yield* ArgumentListEvaluation(args));
       if (argList.length > 0) {
-        return Q(yield* CreateArrayView(element, extent, argList as unknown as readonly Value[]));
+        // #sec-array-views: `[].<T>(buffer, …)` and `[N].<T>(buffer, …)` are
+        // RETIRED in favour of `Span.<T>(buffer, …)`.
+        //
+        // They are refused rather than reinterpreted because the third
+        // argument changed meaning - it was the stride and is now the count -
+        // so an untouched call site would keep parsing and silently describe a
+        // different run of bytes. A spelling that no longer exists says so; a
+        // spelling that quietly means something else does not.
+        return Throw.TypeError(
+          'a view is constructed as `Span.<T>(buffer, byteOffset, count, byteElementLength)`',
+        );
       }
     }
   }

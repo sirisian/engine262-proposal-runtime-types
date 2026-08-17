@@ -66,6 +66,14 @@ function bufferByteLength(buffer: ArrayBufferObject): number {
  */
 export function ArrayViewLength(backing: ArrayViewBacking): number {
   if (backing.Extent !== 'dynamic') {
+    // #sec-array-views: a FIXED view whose bytes have ceased to exist reports a
+    // length of +0F, as a `%TypedArray%` in the same position does. It reported
+    // its ORIGINAL extent, so a view over a buffer that had shrunk beneath it
+    // described a run of elements none of which could be read - every access
+    // already refused, and only the count disagreed.
+    if (backing.ByteOffset + backing.ByteExtent > bufferByteLength(backing.Buffer)) {
+      return 0;
+    }
     return backing.Extent;
   }
   const available = bufferByteLength(backing.Buffer) - backing.ByteOffset;
@@ -183,18 +191,36 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
     return Throw.TypeError('a view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array');
   }
   const byteOffset = args.length > 1 ? Number(Q(yield* ToIndex(args[1]!))) : 0;
-  const stride = args.length > 2 ? Number(Q(yield* ToIndex(args[2]!))) : layout.byteLength;
+  // proposal-runtime-types #sec-array-views: the third argument is the COUNT
+  // and the fourth is the stride.
+  //
+  // Every other view constructor in the language takes `(buffer, byteOffset,
+  // count)` and makes the fixed/length-tracking distinction by whether that
+  // third argument is there - `new Uint8Array(b, 0)` tracks and
+  // `new Uint8Array(b, 0, 8)` does not. Taking a STRIDE in that position made a
+  // familiar-looking call mean something else: `Span.<uint8>(b, 0, 4)` was a
+  // view of 2 elements where `new Uint8Array(b, 0, 4)` is a view of 4, and
+  // neither reported anything. The stride is last because nothing else in the
+  // language has one - `%TypedArray%` cannot address interleaved data at all -
+  // so the rare capability takes the rare position.
+  const stride = args.length > 3 ? Number(Q(yield* ToIndex(args[3]!))) : layout.byteLength;
+  const givenCount = args.length > 2 && args[2] !== Value.undefined
+    ? Number(Q(yield* ToIndex(args[2]!)))
+    : undefined;
+  // A count given fixes the extent; a count omitted leaves it tracking. An
+  // extent from the type still wins, since `[N].<T>(buffer)` states it there.
+  const resolvedExtent = extent !== 'dynamic' ? extent : (givenCount ?? 'dynamic');
   if (stride === 0) {
     return Throw.TypeError('a view element cannot have a zero byte length');
   }
   const offset = baseOffset + byteOffset;
-  const byteExtent = extent === 'dynamic' ? 0 : extent * stride;
-  if (extent !== 'dynamic' && offset + byteExtent > bufferByteLength(buffer)) {
+  const byteExtent = resolvedExtent === 'dynamic' ? 0 : resolvedExtent * stride;
+  if (resolvedExtent !== 'dynamic' && offset + byteExtent > bufferByteLength(buffer)) {
     return Throw.RangeError('the view extent exceeds the buffer');
   }
   const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   views.set(view as unknown as object, {
-    Element: element, Buffer: buffer, ByteOffset: offset, Stride: stride, Extent: extent, ByteExtent: byteExtent,
+    Element: element, Buffer: buffer, ByteOffset: offset, Stride: stride, Extent: resolvedExtent, ByteExtent: byteExtent,
   });
   X(view.PreventExtensions());
   return view;

@@ -51,7 +51,7 @@ test('memory layout: a type reports its own byteLength', () => {
   // THE VIEW CONSTRUCTOR. `[].<T>(buffer,
   // byteOffset, byteElementLength)` views bytes that already exist: it is a
   // call on the type rather than a `new`, because nothing is constructed.
-  expect(evaluated('const b = new ArrayBuffer(4); String([].<uint8>(b).length);')).toBe('4');
+  expect(evaluated('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length);')).toBe('4');
 });
 
 // -- soa: structure of arrays --------------------------------------------------
