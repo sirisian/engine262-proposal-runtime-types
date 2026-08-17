@@ -322,7 +322,7 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
  * index type is the claim that the two counts ARE one type, and two
  * representations contradict it.
  */
-const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [32] }) as unknown as never;
+const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
 
 /**
  * proposal-runtime-types (README "Capacity"): `reserve(n)` grows the backing

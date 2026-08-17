@@ -253,7 +253,7 @@ test('a function with no numeric parameter is NOT overloaded, and untyped code i
   // What IS overloaded dispatches on an argument: Math's rows, and an array's
   // length, which is typed only for a TYPED array.
   expect(evaluated('String(Math.abs((5 := int32)) is int32);')).toBe('true');
-  expect(evaluated('let a: [].<uint8> = [1]; const b = [1]; String(a.length is uint32) + "/" + String(b.length is uint32);')).toBe('true/false');
+  expect(evaluated('let a: [].<uint8> = [1]; const b = [1]; String(a.length is uint64) + "/" + String(b.length is uint64);')).toBe('true/false');
 });
 
 test('inventory: the complex Math additions exist and answer their own family', () => {

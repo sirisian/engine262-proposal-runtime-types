@@ -667,7 +667,7 @@ test('a typed array length and element-preserving results flow statically', () =
   // half.
   expectStatic('function nc(a: [].<uint8>) { let n: string = a.length; }');
   expectStatic('function nc(a: [].<uint8>) { let n: uint8 = a.length; }');
-  expect(evaluated('function nc(a: [].<uint8>) { let n: uint32 = a.length; } "ok";')).toBe('ok');
+  expect(evaluated('function nc(a: [].<uint8>) { let n: uint64 = a.length; } "ok";')).toBe('ok');
   // A result drawn from the receiver's own elements is an array of the SAME
   // element type.
   expectStatic('function nc(a: [].<uint8>) { let b: string = a.filter(x => true); }');
@@ -1090,16 +1090,16 @@ test('a typed collection takes its needle at the element type', () => {
   expect(evaluated('String([1n].includes(1));')).toBe('false');
 });
 
-test('a typed array reads its length at uint32, and an untyped one does not', () => {
-  // "`length` is a `uint32`" (#sec-array-defaults-and-stores). The STORED length
+test('a typed array reads its length at the index type, and an untyped one does not', () => {
+  // "`length` is of the index type" (#index-type), which is `uint64`. The STORED length
   // stays a plain Number - the array exotic object asserts that it is one and
   // ArraySetLength computes with it - so the typing is applied at the read
   // at the read.
-  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length is uint32) + "/" + String(a.length);')).toBe('true/3');
-  expect(evaluated('const b = [1,2,3]; String(b.length is uint32) + "/" + String(b.length);')).toBe('false/3');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length is uint64) + "/" + String(a.length);')).toBe('true/3');
+  expect(evaluated('const b = [1,2,3]; String(b.length is uint64) + "/" + String(b.length);')).toBe('false/3');
   // Everything that computes with the length still works: growing, truncating,
   // the library methods, and iteration.
-  expect(evaluated('let a: [].<uint8> = [1]; a.push((2 := uint8)); String(a.length) + "/" + String(a.length is uint32);')).toBe('2/true');
+  expect(evaluated('let a: [].<uint8> = [1]; a.push((2 := uint8)); String(a.length) + "/" + String(a.length is uint64);')).toBe('2/true');
   expect(evaluated('let a: [].<uint8> = [1,2,3]; a.length = 2; String(a.length) + "/" + String(a.join(","));')).toBe('2/1,2');
   expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.slice(1).length) + "/" + String(a.join(","));')).toBe('2/1,2,3');
   expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (const x of a) { n += 1; } String(n);')).toBe('3');
@@ -1115,7 +1115,7 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   // this - it is size_t in C - but it is the most common loop in JavaScript,
   // so it is pinned here rather than left to be discovered.
   expect(thrownKind('let a: [].<uint8> = [1,2,3]; for (let i = 0; i < a.length; ++i) { }')).toBe('TypeError');
-  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (let i = (0 := uint32); i < a.length; ++i) { n += 1; } String(n);')).toBe('3');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (let i = (0 := uint64); i < a.length; ++i) { n += 1; } String(n);')).toBe('3');
   // And strict equality against a plain literal is false, because a typed value
   // and a Number are different types - the same reason (3 := uint8) === 3
   // is false. Loose equality still coerces.

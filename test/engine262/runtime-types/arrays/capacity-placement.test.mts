@@ -155,9 +155,9 @@ test('capacity reads at the index type, as length does', () => {
   // The typed `length` is the settled side: check-insertion.test.mts pins it,
   // and #sec-arithmetic-never-promotes is why it does not mix with an untyped
   // operand. So `capacity` moves to match `length`, not the reverse.
-  expect(bool('let a: [].<uint32> = [1]; String(a.capacity is uint32);')).toBe(true);
-  expect(bool('let a: [].<uint32> = [1]; String(a.length is uint32);')).toBe(true);
-  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity is uint32);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1]; String(a.capacity is uint64);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1]; String(a.length is uint64);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity is uint64);')).toBe(true);
 });
 
 test('the value a capacity reports is unchanged', () => {
@@ -181,7 +181,7 @@ test('a loop over a capacity needs a typed counter, as one over a length does', 
   // decision reaching a place it had not reached.
   expectThrownKind('let a: [].<uint32> = [1, 2, 3]; for (let i = 0; i < a.capacity; i++) { }', 'TypeError');
   expect(evaluated('let a: [].<uint32> = [1, 2, 3]; let n = 0;'
-    + ' for (let i = (0 := uint32); i < a.capacity; i++) { n += 1; } String(n);')).toBe('3');
+    + ' for (let i = (0 := uint64); i < a.capacity; i++) { n += 1; } String(n);')).toBe('3');
 });
 
 // -- the index type: capacity and reserve are typed, not `any` ---------------
@@ -196,15 +196,15 @@ test('capacity has the index type rather than any', () => {
   // states, that a capacity is at least a length, is unstateable otherwise.
   expectStaticTypeError('let a: [].<uint32> = [1]; let n: string = a.capacity;');
   expectStaticTypeError('let a: [].<uint32> = [1]; let b: boolean = a.capacity;');
-  expect(evaluated('let a: [].<uint32> = [1]; let n: uint32 = a.capacity; String(n);')).toBe('1');
-  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let n: uint32 = a.capacity; String(n);')).toBe('4');
+  expect(evaluated('let a: [].<uint32> = [1]; let n: uint64 = a.capacity; String(n);')).toBe('1');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let n: uint64 = a.capacity; String(n);')).toBe('4');
 });
 
 test('length keeps the same index type', () => {
   // The control for the above: whatever `capacity` gets, `length` already had,
   // and the two must not drift apart.
   expectStaticTypeError('let a: [].<uint32> = [1]; let s: string = a.length;');
-  expect(evaluated('let a: [].<uint32> = [1]; let n: uint32 = a.length; String(n);')).toBe('1');
+  expect(evaluated('let a: [].<uint32> = [1]; let n: uint64 = a.length; String(n);')).toBe('1');
 });
 
 test('reserve takes the index type and answers nothing', () => {
@@ -223,23 +223,17 @@ test('an untyped array is untouched by the index type', () => {
 // -- the growable ceiling: reserve cannot buy unusable room -------------------
 
 test('reserve past the maximum array length is refused', () => {
-  // The same defect as the fixed-extent case, one level up. A `[].<T>` is an
-  // Array, so its length can never pass (2 ** 32) - 1 - `a.length = 2 ** 32`
-  // is a RangeError and so is a push there. `reserve` asked only about the
-  // extent, so a growable array accepted `reserve(2 ** 40)` and then reported
-  // a capacity of 1099511627776 it could never use.
-  //
-  // TWO refusals, and they are complementary rather than redundant. Once
-  // `reserve` takes the index type, a LITERAL too large to be one is rejected
-  // before the program runs - the better error, and the common case. A value
-  // that only becomes too large at run time reaches the ceiling check, which
-  // answers RangeError: the Array representational limit that ArrayCreate
-  // already enforces, not a statement about the element type.
-  expectStaticTypeError('let a: [].<uint32> = []; a.reserve(4294967296);');
+  // The ceiling is the Array limit, not the index type's range: an owned array
+  // is an Array and cannot hold more. With the index type at `uint64` the
+  // literal 2**32 FITS the parameter, so the refusal is no longer static - it
+  // comes from the ceiling at run time instead. Same refusal, later moment, and
+  // both spellings are pinned so a change to either shows up.
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(4294967296);', 'RangeError');
   expectThrownKind('let a: [].<uint32> = []; let n = 4294967296; a.reserve(n);', 'RangeError');
-  expectThrownKind('let a: [].<uint32> = []; let n = 1099511627776; a.reserve(n);', 'RangeError');
+  expectThrownKind('let a: [].<uint32> = []; a.reserve(1099511627776);', 'RangeError');
+  // and the ceiling itself is still reservable
+  expect(evaluated('let a: [].<uint32> = []; a.reserve(4294967295); String(a.capacity);')).toBe('4294967295');
 });
-
 test('a computed reserve within the ceiling is unaffected', () => {
   // The control for the runtime half: the ceiling check must not catch a value
   // that merely arrived dynamically.

@@ -3847,7 +3847,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * as `uint32` and referenced rather than repeated, so that widening it is one
    * edit here and one in the specification rather than a search for `uint32`.
    */
-  const indexTypeRecord = () => builtinTypeRecord('uint', [32])!;
+  const indexTypeRecord = () => builtinTypeRecord('uint', [64])!;
 
   /**
    * #sec-span-type: `Span.<T>` is a library nominal, so a receiver is

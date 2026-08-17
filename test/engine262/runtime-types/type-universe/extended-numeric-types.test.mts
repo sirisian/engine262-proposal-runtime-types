@@ -245,8 +245,8 @@ test('numeric types: a library position that means NUMERIC accepts a numeric val
   // `length` typing applies at the [[Get]] of a TYPED array, and a plain array
   // built from a typed length is still plain. Pinned in both directions so
   // neither is "fixed" into the other.
-  expect(evaluated('String(Array((3 := uint32)).length is uint32);')).toBe('false');
-  expect(evaluated('let t: [].<uint8> = [1, 2, 3]; String(t.length is uint32);')).toBe('true');
+  expect(evaluated('String(Array((3 := uint32)).length is uint64);')).toBe('false');
+  expect(evaluated('let t: [].<uint8> = [1, 2, 3]; String(t.length is uint64);')).toBe('true');
 
   // JSON.stringify's indentation is the same shape: a numeric position that
   // silently ignored a typed value, so the output came back unindented.

@@ -43,7 +43,7 @@ import {
  * once so the width is stated in one place; widening it is this constant and
  * the specification's `#index-type`, and nothing else.
  */
-const ARRAY_LENGTH_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [32] }) as unknown as never;
+const ARRAY_LENGTH_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
 
 let createStringValue: (value: string) => JSStringValue; // set by static block in StringValue for privileged access to constructor
 // proposal-runtime-types (Capability B): privileged factory for a String value carrying an inferred Type Record, set by the StringValue static block.

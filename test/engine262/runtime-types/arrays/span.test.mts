@@ -107,7 +107,7 @@ test('an element read through a window has the element type', () => {
 });
 
 test('length reads at the index type', () => {
-  expect(evaluated('function f(p: Span.<uint32>) { let n: uint32 = p.length; return n; }'
+  expect(evaluated('function f(p: Span.<uint32>) { let n: uint64 = p.length; return n; }'
     + ' let a: [].<uint32> = [1, 2]; String(f(a));')).toBe('2');
 });
 
@@ -492,13 +492,13 @@ test('every count an array reports reads at the index type', () => {
   // Asserted together rather than one per site, because the point is that they
   // AGREE: a widening that reached only some of these would be worse than one
   // that reached none.
-  expect(bool('let a: [].<uint32> = [1, 2]; String(a.length is uint32);')).toBe(true);
-  expect(bool('let a: [].<uint32> = [1, 2]; String(a.capacity is uint32);')).toBe(true);
-  expect(bool('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length is uint32);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1, 2]; String(a.length is uint64);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1, 2]; String(a.capacity is uint64);')).toBe(true);
+  expect(bool('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length is uint64);')).toBe(true);
   expect(bool('function w(s: Span.<uint32>) { return s; }'
-    + ' let a: [].<uint32> = [1, 2]; String(w(a).length is uint32);')).toBe(true);
+    + ' let a: [].<uint32> = [1, 2]; String(w(a).length is uint64);')).toBe(true);
   expect(bool('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
-    + ' String(s.fields.x.length is uint32);')).toBe(true);
+    + ' String(s.fields.x.length is uint64);')).toBe(true);
 });
 
 test('typing the counts does not change what they report', () => {
