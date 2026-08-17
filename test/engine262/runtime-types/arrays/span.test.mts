@@ -189,3 +189,48 @@ test('a window over a fixed extent is never invalidated', () => {
   expect(evaluated('function w(s: Span.<uint32>) { return s; }'
     + ' let a: [4].<uint32> = [1, 2, 3, 4]; let s = w(a); String(s[0]);')).toBe('1');
 });
+
+// -- the object model can see a window's elements -----------------------------
+
+test('a window reports its indices as properties', () => {
+  // A window answers its elements from a backing rather than storing them, so
+  // the object model could not see them: `0 in window` was *false*,
+  // `getOwnPropertyNames` was empty, and every generic array method that tests
+  // for a hole treated every element as one. `forEach` over three elements ran
+  // ZERO times, which is the shape of the bug - not an error, just nothing.
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  expect(bool(`${w}String(0 in s);`)).toBe(true);
+  expect(bool(`${w}String(Object.prototype.hasOwnProperty.call(s, "0"));`)).toBe(true);
+  // the indices in order, then `length`, which is the order an Array reports
+  expect(evaluated(`${w}String(Object.getOwnPropertyNames(s).join(","));`)).toBe('0,1,2,length');
+});
+
+test('the generic array methods work on a window', () => {
+  // They are generic over an array-LIKE, so reporting the indices is all they
+  // needed. The window is not given its own copies of them.
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  expect(evaluated(`${w}let n = 0; Array.prototype.forEach.call(s, () => { n += 1; }); String(n);`)).toBe('3');
+  expect(evaluated(`${w}String(Array.prototype.filter.call(s, () => true).length);`)).toBe('3');
+  expect(evaluated(`${w}String(Array.prototype.join.call(s, ","));`)).toBe('1,2,3');
+  // and `map` produces a real element rather than a hole
+  expect(bool(`${w}const r = Array.prototype.map.call(s, (x) => x); String(0 in r);`)).toBe(true);
+});
+
+test('a buffer view is fixed by the same change', () => {
+  // The view has had this hole since it was written, and it is the same hole:
+  // both answer elements from a backing. Fixing one fixes the other, which is
+  // the argument for the window and the view sharing a definition rather than
+  // resembling each other.
+  const v = 'const b = new ArrayBuffer(4); const v = [].<uint8>(b); ';
+  expect(bool(`${v}String(0 in v);`)).toBe(true);
+  expect(evaluated(`${v}let n = 0; Array.prototype.forEach.call(v, () => { n += 1; }); String(n);`)).toBe('4');
+  expect(evaluated(`${v}String(Object.getOwnPropertyNames(v).join(","));`)).toBe('0,1,2,3,length');
+});
+
+test('reporting the indices does not disturb reads, writes, or liveness', () => {
+  const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
+  expect(evaluated(`${w}String(s[1]);`)).toBe('2');
+  expect(evaluated(`${w}s[0] = (9 := uint32); String(a[0]);`)).toBe('9');
+  expect(evaluated(`${w}String(s.length);`)).toBe('3');
+  expectThrownKind(`${w}a.push((4 := uint32)); s[0];`, 'TypeError');
+});

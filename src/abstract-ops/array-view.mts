@@ -312,3 +312,26 @@ export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number,
 export function ArraySpanLength(backing: ArraySpanBacking): number {
   return backing.Length;
 }
+
+/**
+ * The length of a value that presents a run of elements without owning
+ * properties for them — a `Span.<T>` over an array, or a view over a buffer —
+ * or ~undefined~ for anything else.
+ *
+ * Both kinds answer their elements from a backing rather than from stored
+ * properties, so the object model cannot see those elements unless it is told.
+ * This is what tells it, and it exists once rather than twice because the two
+ * differ in where the bytes are and in nothing else that the object model
+ * cares about.
+ */
+export function SpanLikeLengthOf(instance: object): number | undefined {
+  const span = arraySpans.get(instance);
+  if (span !== undefined) {
+    return span.Length;
+  }
+  const view = views.get(instance);
+  if (view !== undefined) {
+    return ArrayViewLength(view);
+  }
+  return undefined;
+}

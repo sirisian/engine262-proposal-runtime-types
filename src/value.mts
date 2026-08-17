@@ -2,7 +2,7 @@ import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
-import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement } from './abstract-ops/array-view.mts';
+import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, type ValueEvaluator, type PlainCompletion,
@@ -998,6 +998,40 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   // eslint-disable-next-line require-yield
   * GetOwnProperty(P: PropertyKeyValue): ObjectSlotReturn['GetOwnProperty'] {
+    // proposal-runtime-types #sec-span-type: a WINDOW's elements and its length
+    // are answered by its backing, not stored on it, so the object model could
+    // not see them: `0 in window` was *false*, `Object.getOwnPropertyNames`
+    // was empty, and every generic array method that tests a hole - `forEach`,
+    // `map`, `filter` - treated every element as one. `forEach` over a window
+    // of three elements ran zero times.
+    //
+    // Reporting the indices here is what makes a window array-LIKE in the sense
+    // those methods require. The same was true of a buffer view, which has had
+    // the hole all along, so both are answered together.
+    const windowLength = SpanLikeLengthOf(this as unknown as object);
+    if (windowLength !== undefined && P instanceof JSStringValue) {
+      if (P.stringValue() === 'length') {
+        return Descriptor({
+          Value: Value(windowLength), Writable: Value.false, Enumerable: Value.false, Configurable: Value.false,
+        });
+      }
+      const index = Number(P.stringValue());
+      if (String(index) === P.stringValue() && Number.isInteger(index) && index >= 0 && index < windowLength) {
+        // Read through the BACKING, not through `this.Get`: Get consults
+        // GetOwnProperty, so going back through it here recurses without end.
+        const spanBacking = ArraySpanBackingOf(this as unknown as object);
+        let element;
+        if (spanBacking !== undefined) {
+          element = Q(yield* ReadArraySpanElement(spanBacking, index));
+        } else {
+          const viewBacking = ArrayViewBackingOf(this as unknown as object)!;
+          element = Q(yield* ReadArrayViewElement(viewBacking, index));
+        }
+        return Descriptor({
+          Value: element, Writable: Value.true, Enumerable: Value.true, Configurable: Value.false,
+        });
+      }
+    }
     return OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
   }
 
@@ -1304,6 +1338,17 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   // eslint-disable-next-line require-yield
   * OwnPropertyKeys(): ObjectSlotReturn['OwnPropertyKeys'] {
+    // The indices in ascending order and then `length`, which is the order an
+    // Array reports and the one anything walking a window will expect.
+    const windowLength = SpanLikeLengthOf(this as unknown as object);
+    if (windowLength !== undefined) {
+      const keys: PropertyKeyValue[] = [];
+      for (let i = 0; i < windowLength; i += 1) {
+        keys.push(Value(String(i)));
+      }
+      keys.push(Value('length'));
+      return keys;
+    }
     return OrdinaryOwnPropertyKeys(this as unknown as OrdinaryObject);
   }
 
