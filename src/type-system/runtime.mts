@@ -1204,6 +1204,26 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       return true;
     }
     case 'parameterized': {
+      // #sec-isoftype, the arm's FIRST step: "If IsSubtype(RuntimeTypeOf(value),
+      // _t_, « ») is *true*, return *true*." It was absent, and the absence only
+      // becomes visible once a brand can be crossed into (PLAN-parameterized-
+      // defaults.md phase 1): a value that crossed through an implicit cast is
+      // stamped AT the target - "its result is taken AT the target rather than
+      // checked against it" - and yet every later boundary asked the judgment
+      // again and answered *false* for a meta type defining no `validate`. The
+      // binding would hold a `Velocity` that `v is Velocity` denied and that no
+      // `Velocity` parameter would accept.
+      //
+      // The carried record is read rather than calling RuntimeTypeOf, which for
+      // an Object infers a shape: every value that can be of a parameterized
+      // type is a primitive stamped at construction, so the carried record IS
+      // what RuntimeTypeOf would answer, and reading it keeps this arm off the
+      // inference path. The enum arm below reads it the same way and for the
+      // same reason.
+      const carried = CarriedTypeRecordOf(value);
+      if (carried !== undefined && IsSubtype(carried, t, [])) {
+        return true;
+      }
       // #sec-isoftype: a value belongs to a parameterized type when it belongs
       // to the base and the meta type's validate judgment holds of the
       // metadata. The base's Type Object carries the hook.

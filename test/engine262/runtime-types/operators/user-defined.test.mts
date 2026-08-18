@@ -247,6 +247,55 @@ test('a primitive block may declare an implicit cast into a parameterization', (
   expect(evaluated(`${computing} let d: float64.<{ m: 2 }> = 4; String(Number(d));`)).toBe('8');
 });
 
+test('a cast into a meta type that defines no validate admits the crossing', () => {
+  // PLAN-parameterized-defaults.md phase 1, and the case every fixture above
+  // is blind to: each of them gives its meta type a `validate` returning
+  // *true*, and the DESIGN'S OWN `Dimensions` defines none - "No validate -
+  // dimensions constrain type compatibility, not value ranges"
+  // (primitivemetadata.md). So the sentence those fixtures assert,
+  // "`const v: Velocity = 10;` compiles exactly where `number` declares a cast
+  // into the dimensions meta type", was passing only in the variant the design
+  // does not write.
+  //
+  // #sec-primitive-metadata, ConvertParameterization's second way through:
+  // "Set _v_ to the result of applying that operator to _v_. IF _M_ DEFINES
+  // `validate` and it does not hold of _v_ and _tp_, throw" - the hook,
+  // conditioned on definedness. Asking membership instead re-applied the brand
+  // rule, which is a rule about BARE values, to a value that had just crossed.
+  const dim = 'type Dim = { m: number, s: number }; '
+    + 'meta Dim { default = { m: 0, s: 0 }; subtype(a, b) { return a.m === b.m && a.s === b.s; } } ';
+  const cast = 'primitive float64 { operator float64.<{ m: 1, s: -1 }>(): float64.<{ m: 1, s: -1 }> { return this; } } ';
+  const velocity = 'type Velocity = float64.<{ m: 1, s: -1 }>; ';
+  expect(evaluated(`${dim}${velocity}${cast} let v: Velocity = 10; String(Number(v));`)).toBe('10');
+  // Without the cast the same boundary is still a type error: the crossing is
+  // what a brand requires, and nothing here weakens that.
+  expectThrown(`${dim}${velocity} let v: Velocity = 10;`);
+  // The crossing also holds at RUN TIME, where the value arrives untyped.
+  expect(evaluated(`${dim}${velocity}${cast} let a: any = 10; let v: Velocity = a; String(Number(v));`)).toBe('10');
+
+  // A value that crossed IS of the type afterwards - #sec-isoftype's first
+  // step, "If IsSubtype(RuntimeTypeOf(value), _t_, «») is *true*, return
+  // *true*", which was absent. Without it the binding held a Velocity that
+  // `is Velocity` denied and no Velocity parameter would take, since the
+  // judgment answers *false* for a meta type defining no `validate`.
+  expect(evaluated(`${dim}${velocity}${cast} let v: Velocity = 10; String(v is Velocity);`)).toBe('true');
+  expect(evaluated(`${dim}${velocity}${cast} let v: Velocity = 10; `
+    + 'function f(p: Velocity) { return Number(p); } String(f(v));')).toBe('10');
+  // A BARE value is still not a member: the crossing is what makes one, and
+  // membership must not start admitting what only a cast may admit.
+  expect(evaluated(`${dim}${velocity}${cast} String(10 is Velocity);`)).toBe('false');
+
+  // A cast is a way IN, not a way past. Where the meta type DOES define
+  // `validate`, the cast's result still faces it.
+  const bounded = 'type Bnd = { lo: number }; '
+    + 'meta Bnd { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } '
+    + 'type NonNeg = float64.<{ lo: 0 }>; '
+    + 'primitive float64 { operator float64.<{ lo: 0 }>(): float64.<{ lo: 0 }> { return this; } } ';
+  expect(evaluated(`${bounded} let a: NonNeg = 5; String(Number(a));`)).toBe('5');
+  expectThrown(`${bounded} let b: NonNeg = -5;`);
+  expectThrown(`${bounded} let a: any = -5; let b: NonNeg = a;`);
+});
+
 test('a parameterized primitive block declares operators per parameterization', () => {
   // #sec-primitive-operator-blocks: "A declaration of the form `primitive` _T_
   // _P_ `{` ... `}`, where ... _P_ is an optional TypeParameters constrained by

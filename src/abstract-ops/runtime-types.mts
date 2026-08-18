@@ -1973,13 +1973,66 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
  * already an effectful operation, so running a hook inside it costs nothing
  * structurally; it is the synchronous subtype RELATION that cannot call one.
  */
-/** The membership judgment over a cast's result, which a cast does not bypass. */
+/**
+ * The check a cast's result still faces, which a cast does not bypass.
+ *
+ * PLAN-parameterized-defaults.md phase 1. This asked MEMBERSHIP, and membership
+ * is the wrong question here by exactly one arm. #sec-primitive-metadata's
+ * ConvertParameterization runs, at its second way through, only
+ * "If _M_ defines `validate` and it does not hold of _v_ and _tp_, throw" - the
+ * hook, CONDITIONED ON DEFINEDNESS. IsOfType answers *false* for a meta type
+ * that defines none, because that is the brand rule, "which is what makes a
+ * brand a brand" - so asking membership here re-applied the very gate the cast
+ * had just satisfied, and refused the crossing the clause sanctions:
+ * `const v: Velocity = 10;` "compiles exactly where `number` declares a cast
+ * into the dimensions meta type", and the design's `Dimensions` declares no
+ * `validate` at all ("dimensions constrain type compatibility, not value
+ * ranges"). The engine's own fixture hid this by giving its meta type a
+ * `validate` returning *true*, which the design's does not have.
+ *
+ * The intent the old comment recorded is right and is kept: a cast is a way IN,
+ * not a way past. `validate` still judges the result, which is where a bound is
+ * enforced - a cast into a bounds meta type still refuses an out-of-range
+ * value. What changed is that a meta type offering no judgment now admits,
+ * rather than refusing on the strength of a rule about BARE values that a cast
+ * result is no longer one of.
+ */
 export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluator {
-  const ok = Q(yield* IsOfType(value, t));
-  if (ok) {
-    return value;
+  if (t.Kind !== 'parameterized') {
+    const ok = Q(yield* IsOfType(value, t));
+    return ok ? value : Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
-  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  // The value must still be one of the BASE: a cast supplies metadata, not a
+  // different primitive.
+  if (!Q(yield* IsOfType(value, t.Base))) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  const { types: governing } = GoverningMetaTypes(t.Metadata);
+  for (const metaType of governing) {
+    if (!MetaTypeGoverns(t.Metadata, metaType)) {
+      // The judgment's sit-out: a portion equal to the default constrains
+      // nothing, so the meta type takes no part in the crossing either.
+      continue;
+    }
+    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType)));
+    // *undefined* is "this meta type defines no `validate`", which the clause's
+    // step reads as nothing to check rather than as a refusal.
+    if (verdict === false) {
+      const named = LookupMetaTypeName(metaType) ?? 'a meta type';
+      const described = Q(yield* DescribePortion(metaType, MetadataPortion(t.Metadata, metaType)));
+      if (described !== undefined) {
+        return Throw.TypeError('$1 does not admit $2', Value(named), Value(described));
+      }
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    }
+  }
+  // A hook declared against the BASE judges the whole metadata, as it does in
+  // IsOfType's parameterized arm.
+  const baseVerdict = Q(yield* ApplyValidateHook(GetTypeObject(t.Base), value, t.Metadata));
+  if (baseVerdict === false) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  return value;
 }
 
 export function* ConvertParameterization(value: Value, from: TypeRecord, to: TypeRecord): ValueEvaluator {
