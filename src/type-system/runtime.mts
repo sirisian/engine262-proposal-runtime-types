@@ -1707,8 +1707,32 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
         && r.Arguments.length === args.length
         && r.Arguments.every((a, i) => a === args[i]);
     }
-    case 'number':
-      return value instanceof NumberValue && !(value instanceof TypedNumberValue);
+    case 'number': {
+      // PLAN-parameterized-defaults.md phase 2b. A plain Number is `number` and
+      // a value type's value is not, which is what this arm existed to say. But
+      // it said it by excluding EVERY carried value, and a value of
+      // `number.<M>` is necessarily carried - the parameterization is what the
+      // value carries - so a value of a `number` parameterization was not a
+      // value of `number`. That contradicts the branding rule of
+      // #sec-parameterized-types, "a parameterized type is a subtype of its
+      // base, so the brand is shed freely on the way up", which the numeric
+      // value types' arm above already implements by shedding [[Base]] before
+      // comparing.
+      //
+      // It surfaced through the cast: with a cast declared on `number`, the
+      // crossing's stamped result failed the base check of the boundary that
+      // received it, so DECLARING a cast broke assignments that had worked
+      // without one. Shedding here is the same rule the arm above applies, and
+      // it still refuses a float64 or a uint8, whose shed name is not `number`.
+      if (value instanceof TypedNumberValue) {
+        let r = (value as TypedNumberValue).TypeRecord as TypeRecord;
+        if (r.Kind === 'parameterized') {
+          r = r.Base;
+        }
+        return r.Kind === 'primitive' && r.Name === 'number';
+      }
+      return value instanceof NumberValue;
+    }
     case 'string':
       return value instanceof JSStringValue;
     case 'boolean':

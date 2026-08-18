@@ -76,6 +76,15 @@ test('primitive metadata: a parameterization over `number` defaults as one over 
   // already; the value of the Number type representing 0 is the Number +0.
   const bounds = 'type B = { lo: number }; '
     + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';
+  // These four assert the MEMBERSHIP model, which is what the engine
+  // implements today: a parameterization's default is its base's zero where
+  // that zero is a value of the parameterization. PLAN-parameterized-defaults.md
+  // phase 4 replaces it with the CROSSING model, under which a default is the
+  // base's zero having crossed (#sec-metadata-conversion), and the two disagree
+  // exactly here: with no cast declared the crossing is refused, so the first
+  // two expectations become throws. Revisit them with phase 4 rather than
+  // deleting them - the number/float64 PARITY they assert is the bug this
+  // phase fixed and must hold under either model.
   // A `validate` that ADMITS the base's zero gives the parameterization that
   // zero, over `number` exactly as over `float64`.
   expect(evaluated(`${bounds} type NonNeg = number.<{ lo: 0 }>; let n: NonNeg; String(n);`)).toBe('0');
@@ -99,4 +108,39 @@ test('primitive metadata: the zero of `number` is a plain Number and is one of `
   expect(evaluated('let a: [2].<number>; String(a[0] === 0 && a[1] === 0);')).toBe('true');
   // A value type keeps its own zero, distinct from a plain Number's.
   ok('let f: float64; let a: any = {}; a.v = f; a.v is float64;');
+});
+
+test('primitive metadata: a value of a `number` parameterization is a value of `number`', () => {
+  // PLAN-parameterized-defaults.md phase 2b. The `number` arm of membership
+  // said "a plain Number, and nothing carried", which is right about the value
+  // types and wrong about `number`'s own parameterizations: a value of
+  // `number.<M>` is necessarily carried, the parameterization being what it
+  // carries, so it failed to be a value of `number` - against the branding rule
+  // of #sec-parameterized-types, "a parameterized type is a subtype of its
+  // base, so the brand is shed freely on the way up".
+  //
+  // It surfaced through the cast rather than directly: DECLARING a cast on
+  // `number` broke assignments that worked without one, because the crossing's
+  // stamped result then failed the base check at the boundary that received it.
+  const bounds = 'type B = { lo: number }; '
+    + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } '
+    + 'type NonNeg = number.<{ lo: 0 }>; ';
+  const cast = 'primitive number { operator number.<{ lo: 0 }>(): number.<{ lo: 0 }> { return this; } } ';
+
+  // With a cast declared, a bare value crosses, the crossing's result is of the
+  // parameterization AND of its base, and `validate` still gates it.
+  expect(evaluated(`${bounds}${cast} let n: NonNeg = 5; String(Number(n));`)).toBe('5');
+  expect(evaluated(`${bounds}${cast} let n: NonNeg = 5; let b = {}; b.v = n; String(b.v is number);`)).toBe('true');
+  expect(evaluated(`${bounds}${cast} let n: NonNeg = 5; let b = {}; b.v = n; String(b.v is NonNeg);`)).toBe('true');
+  expect(evaluated(`${bounds}${cast} let n: NonNeg = 5; function f(v: number) { return Number(v); } String(f(n));`)).toBe('5');
+  expectThrown(`${bounds}${cast} let n: NonNeg = -5;`);
+
+  // Shedding is by name after the parameterization comes off, so a value type's
+  // value is still not a `number` and a plain Number is still not a float64:
+  // #sec-value-types keeps the two populations apart, and this must not merge
+  // them.
+  expect(evaluated('let f: float64 = (1 := float64); let b = {}; b.v = f; String(b.v is number);')).toBe('false');
+  expect(evaluated('let u: uint8 = (1 := uint8); let b = {}; b.v = u; String(b.v is number);')).toBe('false');
+  expect(evaluated('let b = {}; b.v = 1; String(b.v is float64);')).toBe('false');
+  expect(evaluated('let b = {}; b.v = 1; String(b.v is number);')).toBe('true');
 });
