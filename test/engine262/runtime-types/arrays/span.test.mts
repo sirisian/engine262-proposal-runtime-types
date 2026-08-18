@@ -621,3 +621,40 @@ test('a fixed extent is an instance of its own type', () => {
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a instanceof [4].<uint32>);')).toBe(true);
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a instanceof [3].<uint32>);')).toBe(false);
 });
+
+// -- a coercion materialises at EVERY boundary --------------------------------
+
+test('a window is built at a binding, a return, and a parameter alike', () => {
+  // #sec-span-coercion says a coercion MATERIALIZES. It did so at a parameter
+  // and nowhere else: the checker proved a binding and a return "had nothing to
+  // do" because the source was already assignable, and eliding the check elided
+  // the conversion with it.
+  //
+  // Every route is asserted because the defect was route-dependent, and every
+  // existing test of this type used the one route that worked.
+  const o = 'let owned: [].<uint32> = [1, 2, 3]; ';
+  expect(bool(`${o}let w: Span.<uint32> = owned; String(w === owned);`)).toBe(false);
+  expect(bool(`${o}function f(): Span.<uint32> { return owned; } String(f() === owned);`)).toBe(false);
+  expect(bool(`${o}function f(s: Span.<uint32>) { return s; } String(f(owned) === owned);`)).toBe(false);
+  expect(bool(`${o}let w: Span.<uint32> = owned; String(w is Span.<uint32>);`)).toBe(true);
+  expect(bool(`${o}function f(): Span.<uint32> { return owned; } String(f() is Span.<uint32>);`)).toBe(true);
+});
+
+test('a window bound by a let has the window surface and not the array one', () => {
+  // What the elision cost: a `Span.<uint32>` on the binding path WAS the array,
+  // carrying every member the type says it does not have and obeying no
+  // liveness rule.
+  const o = 'let owned: [].<uint32> = [1, 2, 3]; let w: Span.<uint32> = owned; ';
+  expect(evaluated(`${o}String(typeof w.push);`)).toBe('undefined');
+  expect(evaluated(`${o}String(typeof w.capacity);`)).toBe('undefined');
+  expect(evaluated(`${o}w[0] = (9 := uint32); String(owned[0]);`)).toBe('9');
+  expectThrownKind(`${o}owned.push((4 := uint32)); w[0];`, 'TypeError');
+});
+
+test('an elision with nothing to do is still elided', () => {
+  // The control. Only a boundary whose conversion has an EFFECT is kept - an
+  // ordinary same-type binding still passes the value through, and identity
+  // proves no work was done.
+  expect(bool('let a: [].<uint32> = [1, 2]; let b: [].<uint32> = a; String(b === a);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let b: [4].<uint32> = a; String(b === a);')).toBe(true);
+});

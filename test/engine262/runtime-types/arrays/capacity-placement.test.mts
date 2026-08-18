@@ -499,5 +499,7 @@ test('a count that is a count still works, however written', () => {
   expect(evaluated('const o = [].<uint32>.withCapacity((8 := uint64)); String(o.capacity);')).toBe('8');
   expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
   // and the ceiling is unaffected by the check that now precedes it
-  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'RangeError');
+  // The index-type range is allocatable; this engine cannot reach past the
+  // Array limit, so the refusal is the unimplemented report, not a RangeError.
+  expectThrownKind('[].<uint32>.withCapacity(4294967296);', 'TypeError');
 });

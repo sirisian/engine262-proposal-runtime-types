@@ -337,6 +337,29 @@ function widen(t: TypeRecord): TypeRecord {
 const elidableAnnotations = new WeakSet<object>();
 
 /**
+ * proposal-runtime-types: whether a conversion to this target has an EFFECT
+ * beyond passing the value through.
+ *
+ * An elision is sound only where the boundary would return the value unchanged.
+ * The conditions below already exclude an `~any~` or `~literal~` SOURCE for that
+ * reason - both convert, and eliding a conversion loses it - but a TARGET can
+ * convert too, and `Span.<T>` does: #sec-span-coercion says the coercion
+ * MATERIALIZES, producing a window distinct from the array coerced.
+ *
+ * Eliding it left the window unbuilt. A `Span.<T>` bound by a `let` or returned
+ * from a function was then the array itself, carrying `push` and `capacity` and
+ * subject to no liveness rule - every guarantee the type states, absent,
+ * because the checker proved the boundary "had nothing to do".
+ *
+ * This is a predicate rather than a test for `Span` inline because the rule is
+ * about conversions that do something, and `Span.<T>` is only today's instance.
+ */
+function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
+  return !!target && target.Kind === 'nominal'
+    && (target as { LibraryName?: string }).LibraryName === 'Span';
+}
+
+/**
  * Whether a contextual type asks for a `bigint`, through a union as well as
  * directly: `let x: bigint | undefined = 9007199254740993` wants the same
  * reading as the bare annotation.
@@ -4390,7 +4413,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const source = staticType(b.Initializer);
         // Not `any`, not a literal, and assignable: the value is already of the
         // target type, so the boundary has nothing to do (F81).
-        if (source && source.Kind !== 'any' && source.Kind !== 'literal' && IsAssignable(source, declared)) {
+        if (source && source.Kind !== 'any' && source.Kind !== 'literal'
+            && !conversionHasEffect(declared) && IsAssignable(source, declared)) {
           elidableAnnotations.add(b.TypeAnnotation);
         }
       }
@@ -4578,7 +4602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const proven = returnsProven.pop();
     const declaredReturn = returnTypes[returnTypes.length - 1];
     if (checkReturns && returnAnnotation && declaredReturn && proven
-        && endsWithReturn(body)) {
+        && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
       elidableAnnotations.add(returnAnnotation);
     }
     returnTypes.pop();
@@ -5358,7 +5382,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
           if (n.TypeAnnotation && declared && n.Initializer) {
             const src = staticType(n.Initializer);
-            if (src && src.Kind !== 'any' && src.Kind !== 'literal' && IsAssignable(src, declared)) {
+            if (src && src.Kind !== 'any' && src.Kind !== 'literal'
+                && !conversionHasEffect(declared) && IsAssignable(src, declared)) {
               elidableAnnotations.add(n.TypeAnnotation);
             }
           }

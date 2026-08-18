@@ -1408,3 +1408,25 @@ test('an alias carrying refinements keeps them', () => {
     + " function f(a: Ad) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' }: 2; }; }"
     + " String(f({ s: 'x', c: 'US', p: 'M' }));")).toBe('1');
 });
+
+// -- an elision may not skip a conversion that does something -----------------
+
+test('a boundary whose conversion has an effect is never elided', () => {
+  // The elision rule is that a boundary the checker proves cannot fail and
+  // cannot convert has no check inserted. The second half is the load-bearing
+  // one, and it was read too narrowly: the conditions excluded an `any` or a
+  // literal SOURCE, both of which convert, and did not consider that a TARGET
+  // can convert too.
+  //
+  // `Span.<T>` is such a target - #sec-span-coercion says the coercion
+  // MATERIALIZES - so eliding its boundary left the window unbuilt and the
+  // annotation naming a type the value did not have.
+  const o = 'let owned: [].<uint32> = [1, 2, 3]; ';
+  expect(evaluated(`${o}let w: Span.<uint32> = owned; String(w === owned);`)).toBe('false');
+  expect(evaluated(`${o}function f(): Span.<uint32> { return owned; } String(f() === owned);`)).toBe('false');
+
+  // And the elision itself is intact where the boundary really has nothing to
+  // do: identity is the evidence that no conversion ran.
+  expect(evaluated('let a: [].<uint32> = [1, 2]; let b: [].<uint32> = a; String(b === a);')).toBe('true');
+  expect(evaluated('let a: [4].<uint8> = [1, 2, 3, 4]; let b: [4].<uint8> = a; String(b === a);')).toBe('true');
+});
