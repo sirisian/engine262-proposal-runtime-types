@@ -514,6 +514,25 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
 }
 
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  // proposal-runtime-types #sec-span-type: a WINDOW carries the Type Record it
+  // was built at, for the reason a vector does - the type is not recoverable
+  // from the value.
+  //
+  // A window has no own properties beyond the indices it reports, and it is not
+  // an Array exotic, so inference read a SHAPE off it and produced the literal
+  // type of `{}`. `f<T extends []>(window)` then failed its own bound while
+  // `window is []` answered *true*, which is the two answers disagreeing that
+  // #sec-instanceof-for-type-objects exists to prevent.
+  if (value instanceof ObjectValue) {
+    const spanBacking = ArraySpanBackingOf(value as unknown as object);
+    if (spanBacking !== undefined) {
+      return libraryTypeRecord('Span', [spanBacking.Element])!;
+    }
+    const viewBacking = ArrayViewBackingOf(value as unknown as object);
+    if (viewBacking !== undefined) {
+      return libraryTypeRecord('Span', [viewBacking.Element])!;
+    }
+  }
   // proposal-runtime-types #sec-vector-types: a vector carries the Type Record
   // it was built at, so its runtime type is read rather than inferred - the
   // same as a TypedNumberValue, and for the same reason: the lane type and

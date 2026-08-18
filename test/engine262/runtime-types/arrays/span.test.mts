@@ -64,13 +64,29 @@ test('a window is a member of the array and tuple family', () => {
   expect(evaluated('function f(p: []) { return p.length; }'
     + ' function g(s: Span.<uint32>) { return f(s); }'
     + ' let a: [].<uint32> = [1, 2]; String(g(a));')).toBe('2');
-  // `T extends []` through a window is NOT asserted: generic inference reads a
-  // shape off the value, and a window has no own properties at all - its length
-  // and elements are answered by its backing - so it infers the literal type of
-  // `{}`. Reporting a window's runtime type as `Span.<T>` is the fix and is not
-  // in yet (plan K7).
   expect(bool('function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2]; String(w(a) is []);')).toBe(true);
+
+  // And through a GENERIC bound, which was the last place the two answers
+  // disagreed. Inference reads a shape off a value, and a window is not an
+  // Array exotic, so it inferred the literal type of `{}` and the window failed
+  // a bound its own membership test said it satisfied. A window now carries its
+  // Type Record the way a vector does, for the same reason: the type is not
+  // recoverable from the value.
+  expect(evaluated('const b = new ArrayBuffer(4);'
+    + ' function f<T extends []>(p: T) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
+  expect(evaluated('function f<T extends []>(p: T) { return p.length; }'
+    + ' function w(s: Span.<uint32>) { return s; }'
+    + ' let a: [].<uint32> = [1, 2]; String(f(w(a)));')).toBe('2');
+  expect(evaluated('function f<T extends []>(p: T) { return p.length; }'
+    + ' class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' String(f(s.fields.x));')).toBe('1');
+  // the controls: what the bound admitted before must still be admitted, and
+  // what it refused must still be refused
+  expect(evaluated('function f<T extends []>(p: T) { return p.length; } String(f([1, 2, 3]));')).toBe('3');
+  expect(evaluated('function f<T extends []>(p: T) { return p.length; }'
+    + ' let t: [uint8, uint8] = [1, 2]; String(f(t));')).toBe('2');
+  expectThrownKind('function f<T extends []>(p: T) { return p.length; } f({});', 'TypeError');
 });
 
 // -- membership is structural, not a prototype chain --------------------------
