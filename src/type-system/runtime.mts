@@ -20,7 +20,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, CheckedConvertValue, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
@@ -973,24 +973,44 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return out;
     }
     case 'parameterized': {
-      // #sec-defaultvalueof: "Let _d_ be DefaultValueOf(_t_.[[Base]]) ... If the
-      // metadata's meta type defines a validation judgment and that judgment
-      // does not hold of _d_ and _t_.[[Metadata]], return ~none~. Return _d_."
+      // #sec-defaultvalueof, the ~parameterized~ step: "Let _d_ be
+      // DefaultValueOf(_t_.[[Base]]) ... Let _e_ be a new empty Object, which is
+      // the metadata of a value of _t_.[[Base]] that carries none. Let
+      // _crossed_ be Completion(ConvertParameterization(_d_, _e_,
+      // _t_.[[Metadata]])). If _crossed_ is an abrupt completion, return
+      // ~none~. Return _crossed_.[[Value]]."
       //
-      // The membership test is used rather than the validation judgment alone,
-      // because the operation's own signature is "either a value of the type
-      // _t_ or ~none~" and the judgment is not enough to secure that. Where a
-      // governing meta type constrains and defines no `validate` - a brand -
-      // the base's zero is NOT a value of the parameterization, and returning
-      // it would both break that contract and hand the binding a value its own
-      // annotation then refuses. IsOfType's ~parameterized~ branch is the
-      // judgment plus that brand rule, so it subsumes the clause's step.
+      // PLAN-parameterized-defaults.md phase 4. This tested MEMBERSHIP, which
+      // secured the operation's contract but answered a different question than
+      // the declaration beside it: `let w: T;` succeeded where `let w: T = 0;`
+      // failed, because a bare zero is a MEMBER of a parameterization whose
+      // `validate` admits it while CROSSING into one still wants a cast. The
+      // clause now says the default is the base's zero having crossed, so the
+      // two spellings of one declaration agree - and a brand keeps a zero
+      // exactly where its base declares the cast that lets one in, which is
+      // what keeps a unit type zero-fillable and `let d: [10].<A>;` working for
+      // a class holding one.
+      //
+      // CrossBareValueIntoParameterization is this engine's spelling of the
+      // clause's call: its ConvertParameterization takes two parameterized
+      // records, and the bare-value case wants a _from_ whose every portion is
+      // its meta type's `default`. It is deliberately NOT CheckedConvertValue,
+      // which is a boundary and admits whatever is already a member - so a bare
+      // zero would pass it with no cast declared, and the two spellings of one
+      // declaration would go on disagreeing.
       const d = Q(yield* DefaultValueOf(t.Base));
       if (d === undefined) {
         return undefined;
       }
-      const holds = Q(yield* IsOfType(d, t));
-      return holds ? d : undefined;
+      const crossed = EnsureCompletion(yield* CrossBareValueIntoParameterization(d, t));
+      if (crossed.Type === 'throw') {
+        // "If _crossed_ is an abrupt completion, return ~none~": a type whose
+        // zero cannot cross has no default, and the caller reports THAT - a
+        // declaration needing an initializer - rather than the crossing's own
+        // error, which names a boundary the program never wrote.
+        return undefined;
+      }
+      return crossed.Value;
     }
     case 'nominal': {
       // #sec-rational-types is a numeric type too, but it resolves through the

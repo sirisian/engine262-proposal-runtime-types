@@ -799,6 +799,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {
       return Q(yield* ConvertParameterization(value, carried, t));
     }
+    if (t.Kind === 'parameterized' && SameType(carried, t)) {
+      // Already at the target, so there is nothing to cross. ConvertParameterization
+      // reaches the same answer the long way - every meta type's `subtype` holds
+      // of a portion and itself, so each "admits the crossing, and requires
+      // nothing of the value" - but falling through to the cast branch below
+      // would APPLY the cast operator a second time to a value that has already
+      // crossed. Harmless for the identity body the design writes and not for a
+      // body that computes, and PLAN-parameterized-defaults.md phase 4 made it
+      // reachable: a default now arrives at its annotation already stamped.
+      return value;
+    }
     if (t.Kind !== 'parameterized' && SameType(carried.Base, t)) {
       return new TypedNumberValue(value.value, t);
     }
@@ -2031,6 +2042,64 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
   const baseVerdict = Q(yield* ApplyValidateHook(GetTypeObject(t.Base), value, t.Metadata));
   if (baseVerdict === false) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  return value;
+}
+
+/**
+ * The crossing of a value carrying NO metadata into a parameterization, which
+ * is the algorithm of #sec-metadata-conversion applied with a _from_ whose
+ * every portion is its meta type's `default`.
+ *
+ * PLAN-parameterized-defaults.md phase 4 needs it separately from
+ * CheckedConvertValue. That operation is a BOUNDARY, and a boundary reached at
+ * run time admits a value that is already of the target
+ * (#table-check-sites defers to RequireType, which is membership), so a bare
+ * zero passes it wherever `validate` says the zero is in range - with or
+ * without a cast. A DEFAULT is not a boundary crossing of a value the program
+ * produced; it is the clause's own ConvertParameterization call, and the clause
+ * offers "exactly two ways through: `subtype` admits it, or the value carries
+ * nothing of that meta type and a cast supplies what it lacks". Membership is
+ * not among them, which is what makes `let w: T;` and `let w: T = 0;` agree.
+ */
+export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord & { Kind: 'parameterized' }): ValueEvaluator {
+  // The second way through, tried first because it is the one that can supply
+  // what the value lacks; RequireTypeAfterCast then runs `validate` over the
+  // result, which is what the cast costs.
+  const cast = Q(yield* ApplyImplicitCast(value, t));
+  if (cast !== undefined) {
+    return Q(yield* RequireTypeAfterCast(cast, t));
+  }
+  // The first way: every meta type the target constrains must admit the
+  // crossing from its own `default`, which is the portion a value carrying
+  // nothing has. MetadataPortion of *undefined* is that copy of the default.
+  const { types: governing } = GoverningMetaTypes(t.Metadata);
+  for (const metaType of governing) {
+    if (!MetaTypeGoverns(t.Metadata, metaType)) {
+      continue;
+    }
+    const fp = MetadataPortion(Value.undefined, metaType);
+    const tp = MetadataPortion(t.Metadata, metaType);
+    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp]));
+    if (admits !== Value.true) {
+      const named = LookupMetaTypeName(metaType) ?? 'a meta type';
+      const described = Q(yield* DescribePortion(metaType, tp));
+      if (described !== undefined) {
+        return Throw.TypeError('$1 does not admit $2', Value(named), Value(described));
+      }
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    }
+  }
+  // Every meta type admitted, so the value has crossed and is AT the target -
+  // which this engine says by carrying the record, as ApplyImplicitCast does
+  // for the other way through. Returning it unstamped left the caller holding a
+  // bare zero that its own annotation then refused, which is the very shape of
+  // failure D22 records.
+  if (isTypedNumber(value)) {
+    return new TypedNumberValue(value.value, t);
+  }
+  if (value instanceof NumberValue) {
+    return new TypedNumberValue(R(value) as number, t);
   }
   return value;
 }

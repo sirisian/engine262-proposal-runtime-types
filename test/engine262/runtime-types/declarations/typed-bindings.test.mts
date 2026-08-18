@@ -175,12 +175,33 @@ test('a parameterization defaults to its base zero where that is a value of it',
   expect(value(`${meta} type Meter = float64.<{ m: 1 }>; let d: Meter; \`\${d}:\${d is Meter}\`;`)).toBe('0:true');
 });
 
-test('a brand has no default, since its base zero is not a value of it', () => {
-  // A governing meta type that constrains and defines no `validate` admits no
-  // bare value of the base. DefaultValueOf answers "a value of the type _t_ or
-  // ~none~", so it must answer ~none~ here rather than the base's zero.
-  const brand = 'type M = { m: number }; meta M { default = { m: 0 }; subtype(a, b) { return true; } }';
+test('a brand has no default where nothing lets its base zero in', () => {
+  // PLAN-parameterized-defaults.md phase 4 rewrote what "brand" has to mean
+  // here. A parameterization's default is its base's zero HAVING CROSSED
+  // (#sec-defaultvalueof, #sec-metadata-conversion), and a crossing has "exactly
+  // two ways through: `subtype` admits it, or the value carries nothing of that
+  // meta type and a cast supplies what it lacks". So the absence of `validate`
+  // is not by itself what denies the zero - that governs MEMBERSHIP - and this
+  // test's old meta type, whose `subtype` returned *true* unconditionally, let
+  // the zero through the first way while reading like a brand.
+  //
+  // A brand is a meta type whose `subtype` distinguishes its constraint from
+  // its default, so nothing crosses from an unconstrained value; with no cast
+  // declared, "a brand ... is reachable only by construction" and a declaration
+  // without an initializer is not one.
+  const brand = 'type M = { m: number }; meta M { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } }';
   expectTypeError(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter;`);
+  // The declaration and its initializer form agree, which is the point of the
+  // crossing model: neither spelling gets a zero the other cannot have.
+  expectTypeError(`${brand} type Meter = float64.<{ m: 1 }>; let d: Meter = 0;`);
+  // Declaring the cast is what lets the zero in, and then BOTH spellings work.
+  const cast = ' primitive float64 { operator float64.<{ m: 1 }>(): float64.<{ m: 1 }> { return this; } }';
+  expect(value(`${brand} type Meter = float64.<{ m: 1 }>;${cast} let d: Meter; String(Number(d));`)).toBe('0');
+  expect(value(`${brand} type Meter = float64.<{ m: 1 }>;${cast} let d: Meter = 5; String(Number(d));`)).toBe('5');
+  // A meta type whose `subtype` admits from its default needs no cast: it has
+  // said that an unconstrained value may cross.
+  const permissive = 'type P = { p: number }; meta P { default = { p: 0 }; subtype(a, b) { return true; } }';
+  expect(value(`${permissive} type Q = float64.<{ p: 1 }>; let d: Q; String(Number(d));`)).toBe('0');
 });
 
 // -- Numeric-family defaults (#sec-defaultvalueof step 2) ----------------------

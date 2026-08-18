@@ -76,23 +76,26 @@ test('primitive metadata: a parameterization over `number` defaults as one over 
   // already; the value of the Number type representing 0 is the Number +0.
   const bounds = 'type B = { lo: number }; '
     + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';
-  // These four assert the MEMBERSHIP model, which is what the engine
-  // implements today: a parameterization's default is its base's zero where
-  // that zero is a value of the parameterization. PLAN-parameterized-defaults.md
-  // phase 4 replaces it with the CROSSING model, under which a default is the
-  // base's zero having crossed (#sec-metadata-conversion), and the two disagree
-  // exactly here: with no cast declared the crossing is refused, so the first
-  // two expectations become throws. Revisit them with phase 4 rather than
-  // deleting them - the number/float64 PARITY they assert is the bug this
-  // phase fixed and must hold under either model.
-  // A `validate` that ADMITS the base's zero gives the parameterization that
-  // zero, over `number` exactly as over `float64`.
-  expect(evaluated(`${bounds} type NonNeg = number.<{ lo: 0 }>; let n: NonNeg; String(n);`)).toBe('0');
-  expect(evaluated(`${bounds} type NonNegF = float64.<{ lo: 0 }>; let n: NonNegF; String(Number(n));`)).toBe('0');
-  // And one that REJECTS it still has no default: the discrimination the step
-  // exists to make, which an unconditional refusal would have hidden.
-  expectThrown(`${bounds} type Pos = number.<{ lo: 1 }>; let p: Pos;`);
-  expectThrown(`${bounds} type PosF = float64.<{ lo: 1 }>; let p: PosF;`);
+  // Rewritten for the CROSSING model (PLAN-parameterized-defaults.md phase 4):
+  // a default is the base's zero having crossed, so it needs a way in. The
+  // PARITY is what this test is for and holds under either model - `number` and
+  // `float64` must answer alike - so each case is asked of both bases.
+  const castN = 'primitive number { operator number.<{ lo: 0 }>(): number.<{ lo: 0 }> { return this; } } ';
+  const castF = 'primitive float64 { operator float64.<{ lo: 0 }>(): float64.<{ lo: 0 }> { return this; } } ';
+  // A `validate` that ADMITS the base's zero lets the crossing complete, and
+  // the parameterization has that zero.
+  expect(evaluated(`${bounds}${castN} type NonNeg = number.<{ lo: 0 }>; let n: NonNeg; String(Number(n));`)).toBe('0');
+  expect(evaluated(`${bounds}${castF} type NonNegF = float64.<{ lo: 0 }>; let n: NonNegF; String(Number(n));`)).toBe('0');
+  // One that REJECTS it has no default even with the cast declared: "a cast is
+  // how a value gets IN, not a way past what the metadata requires".
+  const castN1 = 'primitive number { operator number.<{ lo: 1 }>(): number.<{ lo: 1 }> { return this; } } ';
+  const castF1 = 'primitive float64 { operator float64.<{ lo: 1 }>(): float64.<{ lo: 1 }> { return this; } } ';
+  expectThrown(`${bounds}${castN1} type Pos = number.<{ lo: 1 }>; let p: Pos;`);
+  expectThrown(`${bounds}${castF1} type PosF = float64.<{ lo: 1 }>; let p: PosF;`);
+  // And with no way in at all, neither base has a default - `subtype` cannot
+  // admit an unconstrained value into a bound.
+  expectThrown(`${bounds} type NonNeg = number.<{ lo: 0 }>; let n: NonNeg;`);
+  expectThrown(`${bounds} type NonNegF = float64.<{ lo: 0 }>; let n: NonNegF;`);
 });
 
 test('primitive metadata: the zero of `number` is a plain Number and is one of `number`', () => {
@@ -143,4 +146,49 @@ test('primitive metadata: a value of a `number` parameterization is a value of `
   expect(evaluated('let u: uint8 = (1 := uint8); let b = {}; b.v = u; String(b.v is number);')).toBe('false');
   expect(evaluated('let b = {}; b.v = 1; String(b.v is float64);')).toBe('false');
   expect(evaluated('let b = {}; b.v = 1; String(b.v is number);')).toBe('true');
+});
+
+test('primitive metadata: a default crosses, so both spellings of a declaration agree', () => {
+  // PLAN-parameterized-defaults.md phase 4, closing D22. #sec-defaultvalueof's
+  // ~parameterized~ step crosses the base's zero into the parameterization
+  // (#sec-metadata-conversion) instead of testing membership, so `let w: T;`
+  // and `let w: T = 0;` succeed together and fail together. The four cases
+  // below are the whole matrix over one base: the two ways through a crossing
+  // are `subtype` and a cast, and `validate` is what the cast costs.
+  const dims = 'type Dim = { m: number }; '
+    + 'meta Dim { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } } ';
+  const bounded = 'type Bnd = { lo: number }; '
+    + 'meta Bnd { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';
+  const castD = 'primitive float64 { operator float64.<{ m: 1 }>(): float64.<{ m: 1 }> { return this; } } ';
+  const castB = 'primitive float64 { operator float64.<{ lo: 0 }>(): float64.<{ lo: 0 }> { return this; } } ';
+
+  // No `validate`, cast declared: the crossing completes and the zero exists.
+  // This is the design's own units case, which the membership model denied.
+  expect(evaluated(`${dims}${castD} let w: float64.<{ m: 1 }>; String(Number(w));`)).toBe('0');
+  expect(evaluated(`${dims}${castD} let w: float64.<{ m: 1 }> = 10; String(Number(w));`)).toBe('10');
+  // No `validate`, no cast: neither spelling gets a value.
+  expectThrown(`${dims} let w: float64.<{ m: 1 }>;`);
+  expectThrown(`${dims} let w: float64.<{ m: 1 }> = 10;`);
+  // `validate` admitting the zero, cast declared: both spellings work, and the
+  // hook still gates what crosses.
+  expect(evaluated(`${bounded}${castB} let w: float64.<{ lo: 0 }>; String(Number(w));`)).toBe('0');
+  expectThrown(`${bounded}${castB} let w: float64.<{ lo: 0 }> = -5;`);
+  // `validate` admitting the zero, no cast: the default is refused exactly as
+  // the initializer is. Membership would have admitted the first and not the
+  // second, which is the disagreement this step existed to end.
+  expectThrown(`${bounded} let w: float64.<{ lo: 0 }>;`);
+  expectThrown(`${bounded} let w: float64.<{ lo: 0 }> = 0;`);
+
+  // The zero a crossing produces is AT the parameterization, not a bare base
+  // value that the annotation would then refuse.
+  expect(evaluated(`${dims}${castD} type Meter = float64.<{ m: 1 }>; let w: Meter; `
+    + 'let b = {}; b.v = w; String(b.v is Meter);')).toBe('true');
+
+  // And the requirement the model was chosen for: a value type class whose
+  // fields are unit-typed is zero-fillable, which #sec-typed-classes needs for
+  // `let d: [10].<A>;` to hold ten zero-filled instances.
+  const vec = `${dims}${castD} type Meter = float64.<{ m: 1 }>; class Vec3 { x: Meter; y: Meter; z: Meter; } `;
+  expect(evaluated(`${vec} const v = new Vec3(); String(Number(v.x) + Number(v.y) + Number(v.z));`)).toBe('0');
+  expect(evaluated(`${vec} let d: [10].<Vec3>; String(Number(d.length)) + ":" + String(Number(d[0].x));`)).toBe('10:0');
+  expect(evaluated(`${dims}${castD} let m: [4].<float64.<{ m: 1 }>>; String(Number(m[3]));`)).toBe('0');
 });
