@@ -344,12 +344,19 @@ function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: Parse
  * The recursive call for a re-expansion passes through here again and is free:
  * `withRealmContext` pushes nothing when the realm's context is already
  * running.
+ *
+ * The return type is written out rather than inferred. Splitting the body
+ * introduced a CYCLE - `ParseModule` returns the arrow's result, the arrow
+ * returns `ParseModuleInRealm`'s, and the re-expansion tail calls
+ * `ParseModule` - and inference across it is circular (TS7023/TS7024), which
+ * collapsed the type to `any` and took the inspector's call sites with it.
+ * This is the type inference produced before the split.
  */
-export function ParseModule(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined = {}) {
+export function ParseModule(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined = {}): ObjectValue[] | SourceTextModuleRecord {
   return withRealmContext(realm, () => ParseModuleInRealm(sourceText, realm, hostDefined));
 }
 
-function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined) {
+function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined): ObjectValue[] | SourceTextModuleRecord {
   // 1. Assert: sourceText is an ECMAScript source text (see clause 10).
   // 2. Parse sourceText using Module as the goal symbol and analyse the parse result for
   //    any Early Error conditions. If the parse was successful and no early errors were found,
