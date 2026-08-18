@@ -18,11 +18,15 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 function evaluate(source: string, features: readonly string[]): string {
   setSurroundingAgent(new Agent({ features }));
   const realm = new ManagedRealm();
-  const completion = realm.evaluateScriptSkipDebugger(source);
+  // The completion is read the way `harness.mts` reads one: as `unknown` and
+  // cast, since `ValueCompletion` does not expose Type/Value on its type.
+  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as {
+    Type: string, Value: { stringValue?(): string, constructor: { name: string } },
+  };
   if (completion.Type !== 'normal') {
-    return `THREW ${(completion.Value as { constructor: { name: string } }).constructor.name}`;
+    return `THREW ${completion.Value.constructor.name}`;
   }
-  const value = completion.Value as { stringValue?(): string };
+  const value = completion.Value;
   return value.stringValue ? value.stringValue() : String(value);
 }
 
@@ -136,5 +140,5 @@ test('the notice is absent where the proposal is not active, and optional always
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const bare = new ManagedRealm();
   const completion = bare.evaluateScriptSkipDebugger('const u = new Uint8Array(4); String(u.length);');
-  expect(completion.Type).toBe('normal');
+  expect((completion as unknown as { Type: string }).Type).toBe('normal');
 });

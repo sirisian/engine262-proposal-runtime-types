@@ -13,7 +13,7 @@ import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
-import { ToIndex } from '../abstract-ops/all.mts';
+import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -132,6 +132,44 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       IdentifierName?: { name: string },
     };
     const methodName = inner.IdentifierName?.name;
+    // proposal-runtime-types #sec-span-type: `a.window.<N>(start)` is a window
+    // of exactly N, and N is a TYPE ARGUMENT - it cannot reach a builtin, which
+    // receives values - so the overload is resolved here.
+    //
+    // The length being in the type is the whole point of this form over
+    // `window(start, start + N)`: an index the checker can prove is below N
+    // needs no per-element check, and a window with no stated length has
+    // nothing to prove it against.
+    if (methodName === 'window' && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+      const receiverRef = Q(yield* Evaluate(inner.MemberExpression));
+      const receiver = Q(yield* GetValue(receiverRef));
+      // The length arrives as a LiteralType rather than a NumericLiteral: it is
+      // written in a TYPE argument position, so the parser reads it as the
+      // literal TYPE of that number. This is the same reading the vector lane
+      // index needs, for the same reason.
+      const node = memberExpr.TypeArguments.TypeArgumentList[0] as unknown as {
+        type?: string, kind?: string, value?: unknown, negated?: boolean,
+      };
+      const count = node?.type === 'LiteralType' && node.kind === 'number' && !node.negated
+        ? node.value as number
+        : undefined;
+      if (count !== undefined && Number.isInteger(count) && count >= 0) {
+        const argList = Q(yield* ArgumentListEvaluation(args));
+        const start = argList.length > 0 ? Number(Q(yield* ToIndex(argList[0] as Value))) : 0;
+        // The README's Bounds Checks section: `window.<N>(start)` "checks once
+        // that start + N fits and returns a window whose own accesses are then
+        // unchecked". The check has to be HERE, because the plain `window`
+        // clamps to the length the way `subarray` does - clamping is right for
+        // a range and wrong for a promise of exactly N elements.
+        const lengthValue = Q(yield* GetV(receiver, Value('length')));
+        const length = R(Q(yield* ToLength(lengthValue)));
+        if (start + count > length) {
+          return Throw.RangeError('$1 is out of range', Value(String(start + count)));
+        }
+        const method = Q(yield* GetV(receiver, Value('window')));
+        return Q(yield* Call(method, receiver, [Value(start), Value(start + count)]));
+      }
+    }
     if (methodName === 'lane' || methodName === 'withLane'
         || methodName === 'swizzle' || methodName === 'shuffle') {
       const receiverRef = Q(yield* Evaluate(inner.MemberExpression));

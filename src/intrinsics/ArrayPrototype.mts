@@ -557,6 +557,20 @@ function* ArrayProto_subarray(args: Arguments, { thisValue }: FunctionCallContex
   return MakeArraySpan(O.TypedElement as TypeRecord, O, count, begin);
 }
 
+/**
+ * proposal-runtime-types #sec-span-type: `window(start, end)` is a WINDOW over
+ * part of this array, aliasing rather than copying.
+ *
+ * It is `subarray` under the name the design uses for it, and it exists
+ * separately because the design's `window.<N>(start)` overload returns a window
+ * whose length is IN ITS TYPE - which is what lets an access inside it skip the
+ * per-element check. That overload is handled at the call site, since a type
+ * argument is not a value and cannot reach a builtin.
+ */
+function* ArrayProto_window(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  return yield* ArrayProto_subarray(args, { thisValue } as FunctionCallContext);
+}
+
 /** https://sirisian.github.io/ecmascript-types/#sec-capacity-operations */
 function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number };
@@ -1061,6 +1075,7 @@ function bootstrapTypedArrayLikePrototype(realmRec: Realm, arrayProto: ObjectVal
     ['capacity', [ArrayProto_capacity]],
     ['set', ArrayProto_set, 1],
     ['subarray', ArrayProto_subarray, 2],
+    ['window', ArrayProto_window, 2],
     ['buffer', [ArrayProto_buffer]],
     ['byteOffset', [ArrayProto_byteOffset]],
     ['byteLength', [ArrayProto_byteLength]],
@@ -1108,6 +1123,7 @@ function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
   assignProps(realmRec, spanProto, [
     ['set', ArrayProto_set, 1],
     ['subarray', ArrayProto_subarray, 2],
+    ['window', ArrayProto_window, 2],
     ['buffer', [ArrayProto_buffer]],
     ['byteOffset', [ArrayProto_byteOffset]],
     ['byteLength', [ArrayProto_byteLength]],

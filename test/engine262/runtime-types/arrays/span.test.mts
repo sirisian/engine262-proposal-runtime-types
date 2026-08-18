@@ -850,3 +850,41 @@ test('both live on an array with an element type, and on no other array', () => 
     + ' String(typeof v.set) + "/" + String(typeof v.subarray);')).toBe('function/function');
   expect(evaluated('const p = [1]; String(typeof p.set) + "/" + String(typeof p.subarray);')).toBe('undefined/undefined');
 });
+
+// -- window() -----------------------------------------------------------------
+
+test('window takes a window over part of an array, aliasing it', () => {
+  // Documented in the design and absent from the engine until now. It is
+  // `subarray` under the name the design uses, and it aliases - a copy would
+  // break the example the README is built around, which writes through the
+  // window and expects the original to change.
+  const a = 'let a: [].<uint8> = [1, 2, 3, 4]; ';
+  expect(evaluated(`${a}String(a.window(0, 2).length);`)).toBe('2');
+  expect(bool(`${a}String(a.window(0, 2) is Span.<uint8>);`)).toBe(true);
+  expect(evaluated(`${a}const w = a.window(1, 3); w[0] = (9 := uint8); String(a[1]);`)).toBe('9');
+  // and on a window over a buffer, which carves by bytes rather than elements
+  expect(evaluated('const b = new ArrayBuffer(4); const v = Span.<uint8>(b); v.set([1, 2, 3, 4]);'
+    + ' const w = v.window(2, 4); w[0] = (9 := uint8); String(v[2]);')).toBe('9');
+  expect(evaluated('const p = [1, 2]; String(typeof p.window);')).toBe('undefined');
+});
+
+test('window.<N> returns a window of exactly N and checks once that it fits', () => {
+  // The overload the design's Bounds Checks section is about: the length is in
+  // the TYPE, so an index the checker can prove is below N needs no
+  // per-element check, and `window(start, start + N)` cannot say that.
+  //
+  // The bounds check belongs to this form rather than to plain `window`, which
+  // CLAMPS the way `subarray` does - clamping is right for a range and wrong
+  // for a promise of exactly N elements.
+  const rows = 'const rows: [64].<uint32> = new [64].<uint32>(); ';
+  expect(evaluated(`${rows}String(rows.window.<8>(0).length);`)).toBe('8');
+  expect(evaluated(`${rows}String(rows.window.<8>(16).length);`)).toBe('8');
+  expectThrownKind(`${rows}rows.window.<8>(60);`, 'RangeError');
+});
+
+test('the design README example works as written', () => {
+  // `row[0] = 1; rows[entityIndex * 8]` reading 1 back is the whole claim: the
+  // window is the same storage, not a copy of it.
+  expect(evaluated('const rows: [64].<uint32> = new [64].<uint32>();'
+    + ' const row = rows.window.<8>(2 * 8); row[0] = (1 := uint32); String(rows[16]);')).toBe('1');
+});
