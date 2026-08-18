@@ -763,3 +763,43 @@ test('a fixed SoA projects columns that carry their length', () => {
   expect(evaluated('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));')).toBe('1');
 });
+
+// -- the buffer bridge runs both ways -----------------------------------------
+
+test('a view exposes its buffer, byte offset, and byte length', () => {
+  // Without these the `%TypedArray%` bridge went one way only: `Span.<T>(u.buffer)`
+  // went in and nothing came back, because a window could not say what buffer
+  // it was over.
+  const b = 'const b = new ArrayBuffer(8); const v = Span.<uint8>(b, 2); ';
+  expect(evaluated(`${b}String(v.byteOffset);`)).toBe('2');
+  expect(evaluated(`${b}String(v.byteLength);`)).toBe('6');
+  expect(bool(`${b}String(v.buffer === b);`)).toBe(true);
+  // the counts are counts, so they read at the index type
+  expect(bool(`${b}String(v.byteOffset is uint64);`)).toBe(true);
+  expect(bool(`${b}String(v.byteLength is uint64);`)).toBe(true);
+  // and the byte length follows the element size, not the length
+  expect(evaluated('const b2 = new ArrayBuffer(8); String(Span.<uint32>(b2).byteLength);')).toBe('8');
+});
+
+test('a window round-trips to a TypedArray and back', () => {
+  // The requirement the bridge claims. It FAILED SILENTLY before: `v.buffer`
+  // was `undefined`, the constructor read that as a length, and the program got
+  // an empty array rather than an error.
+  const b = 'const b = new ArrayBuffer(8); const v = Span.<uint8>(b, 2); ';
+  expect(evaluated(`${b}String(new Uint8Array(v.buffer).length);`)).toBe('8');
+  // and the two really are the same bytes
+  expect(evaluated(`${b}v[0] = (9 := uint8); String(new Uint8Array(v.buffer)[2]);`)).toBe('9');
+});
+
+test('a window with no buffer beneath it reports the limit, not undefined', () => {
+  // #sec-array-and-tuple-types says a typed array IS a contiguous buffer, so
+  // this is an implementation limit rather than a rule of the language, and it
+  // is reported as one. Answering `undefined` is what made the failure silent.
+  expectThrownKind('let a: [].<uint8> = [1, 2, 3]; a.buffer;', 'TypeError');
+  expectThrownKind('function w(s: Span.<uint32>) { return s; }'
+    + ' let a: [].<uint32> = [1, 2]; w(a).buffer;', 'TypeError');
+  // an owned array still reports its byte length, which it takes from its layout
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.byteLength);')).toBe('3');
+  // and a plain array has none of the three
+  expect(evaluated('const p = [1, 2]; String(typeof p.buffer);')).toBe('undefined');
+});

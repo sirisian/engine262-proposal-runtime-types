@@ -516,6 +516,7 @@ export interface Throw {
   | 'smallestUnit cannot be hour'
   | 'smallestUnit cannot be hour or minute'
   | 'the buffer does not hold this SoA view'
+  | 'the bytes beneath this array are specified but not implemented in this engine'
   | 'the call is ambiguous between two declared signatures'
   | 'the comparison is ambiguous among its result forms; write the result type'
   | 'the complex numbers are not ordered, so this operator is not defined for a complex'

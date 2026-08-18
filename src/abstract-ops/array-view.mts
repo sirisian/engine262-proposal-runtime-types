@@ -394,3 +394,40 @@ export function StampTypedArray(array: ObjectValue, element: TypeRecord): void {
     shaped.Prototype = proto;
   }
 }
+
+/**
+ * proposal-runtime-types #sec-array-views: the buffer a window is over, its
+ * byte offset into it, and its byte length.
+ *
+ * These are what make the `%TypedArray%` bridge two-directional. Without them
+ * `Span.<T>(u.buffer)` went in and nothing came back, because a window could
+ * not say what buffer it was over - and it failed silently rather than loudly:
+ * `new Uint8Array(v.buffer)` CONSTRUCTED, because `undefined` reads as a length,
+ * so a program got an empty array instead of an error.
+ *
+ * The values are derived rather than stored: an ArrayViewBacking already holds
+ * Buffer, ByteOffset, Stride, and Extent.
+ *
+ * A window over an OWNED array has no buffer. #sec-array-and-tuple-types says a
+ * typed array IS a contiguous buffer, so this is an implementation limit rather
+ * than a rule of the language, and it is reported as one - the same distinction
+ * the index-type range draws between what the language forbids and what this
+ * engine cannot reach.
+ */
+export function ArrayViewBufferOf(instance: object): ArrayBufferObject | undefined {
+  return views.get(instance)?.Buffer;
+}
+
+export function ArrayViewByteOffsetOf(instance: object): number | undefined {
+  return views.get(instance)?.ByteOffset;
+}
+
+export function ArrayViewByteLengthOf(instance: object): number | undefined {
+  const backing = views.get(instance);
+  return backing === undefined ? undefined : ArrayViewLength(backing) * backing.Stride;
+}
+
+/** Whether this value is a window with no buffer beneath it in this engine. */
+export function IsBufferlessWindow(instance: object): boolean {
+  return arraySpans.get(instance) !== undefined;
+}

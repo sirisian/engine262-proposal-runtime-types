@@ -13,6 +13,9 @@ import {
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
+import { ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf } from '../abstract-ops/array-view.mts';
+import { LayoutOf } from '../type-system/layout.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { assignProps } from './bootstrap.mts';
@@ -334,6 +337,7 @@ const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [
  *
  * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
+/** https://sirisian.github.io/ecmascript-types/#sec-array.prototype.reserve */
 function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
   if (O.TypedElement === undefined) {
@@ -414,6 +418,7 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
  *
  * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
+/** https://sirisian.github.io/ecmascript-types/#sec-array.prototype.shrinktofit */
 function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
   if (O.TypedElement === undefined) {
@@ -436,6 +441,58 @@ function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallCo
  *
  * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
  */
+/**
+ * proposal-runtime-types #sec-array-views: `buffer`, `byteOffset`, and
+ * `byteLength` on a window, which is what makes the `%TypedArray%` bridge run
+ * BOTH ways. `Span.<T>(u.buffer)` went in and nothing came back before these.
+ *
+ * A window with no buffer beneath it - one over an owned array, in this engine -
+ * reports the limit rather than answering `undefined`. Answering `undefined` is
+ * what made the failure silent: `new Uint8Array(v.buffer)` reads it as a length
+ * and constructs an empty array.
+ */
+/** https://sirisian.github.io/ecmascript-types/#sec-array-views-buffer */
+function* ArrayProto_buffer(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue));
+  const buffer = ArrayViewBufferOf(O as unknown as object);
+  if (buffer !== undefined) {
+    return buffer as unknown as Value;
+  }
+  return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-array-views-byteoffset */
+function* ArrayProto_byteOffset(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue));
+  const offset = ArrayViewByteOffsetOf(O as unknown as object);
+  if (offset !== undefined) {
+    return new TypedNumberValue(offset, INDEX_TYPE);
+  }
+  return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-array-views-bytelength */
+function* ArrayProto_byteLength(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown };
+  const byteLength = ArrayViewByteLengthOf(O as unknown as object);
+  if (byteLength !== undefined) {
+    return new TypedNumberValue(byteLength, INDEX_TYPE);
+  }
+  // An owned typed array reports its byte length from its LAYOUT. Reading the
+  // property back here would re-enter this accessor and recurse without end,
+  // so the layout is consulted directly.
+  if (O.TypedElement !== undefined) {
+    const layout = LayoutOf(O.TypedElement as TypeRecord);
+    if (layout) {
+      const lenValue = Q(yield* Get(O, Value('length')));
+      const len = R(Q(yield* ToLength(lenValue)));
+      return new TypedNumberValue(len * layout.byteLength, INDEX_TYPE);
+    }
+  }
+  return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
+}
+
+/** https://sirisian.github.io/ecmascript-types/#sec-capacity-operations */
 function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number };
   if (O.TypedElement === undefined) {
@@ -937,6 +994,9 @@ function bootstrapTypedArrayLikePrototype(realmRec: Realm, arrayProto: ObjectVal
     ['reserve', ArrayProto_reserve, 1],
     ['shrinkToFit', ArrayProto_shrinkToFit, 0],
     ['capacity', [ArrayProto_capacity]],
+    ['buffer', [ArrayProto_buffer]],
+    ['byteOffset', [ArrayProto_byteOffset]],
+    ['byteLength', [ArrayProto_byteLength]],
   ]);
   realmRec.Intrinsics['%TypedArrayLike.prototype%'] = proto;
 }
@@ -975,5 +1035,13 @@ function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
       X(spanProto.DefineOwnProperty(key, desc));
     }
   }
+  // The two prototypes are SIBLINGS - this one copies `%Array.prototype%` while
+  // `%TypedArrayLike.prototype%` inherits from it - so a member belonging on
+  // both is registered on both. Neither can carry it for the other.
+  assignProps(realmRec, spanProto, [
+    ['buffer', [ArrayProto_buffer]],
+    ['byteOffset', [ArrayProto_byteOffset]],
+    ['byteLength', [ArrayProto_byteLength]],
+  ]);
   realmRec.Intrinsics['%Span.prototype%'] = spanProto;
 }
