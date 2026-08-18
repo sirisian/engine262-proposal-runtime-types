@@ -148,6 +148,21 @@ export interface AgentHostDefined {
   eventLoop?: (agent: Agent) => EventLoop;
   eventLoopRunType?: EventLoopRunType;
   startEventLoop?: boolean;
+  /**
+   * proposal-runtime-types #sec-relationship-to-typed-arrays: reported once per
+   * agent when a DEPRECATED feature is first used.
+   *
+   * Once per agent rather than per use: a diagnostic that fires inside a loop
+   * over binary data is noise, and noise is ignored. The purpose is to tell an
+   * author that the family they are using has a successor, which needs saying
+   * one time.
+   *
+   * Nothing about it is observable to an ECMAScript program - no property, no
+   * altered result, no thrown completion - and an implementation that does not
+   * install it is conforming. `replacement` is required rather than optional
+   * because a notice that says only "deprecated" leaves the reader to search.
+   */
+  onDeprecation?(feature: string, replacement: string): void;
   onDebugger?(reason?: DebuggerPauseReason): void;
   onNodeEvaluation?(node: ParseNode, realm: Realm): void;
   onRealmCreated?(realm: ManagedRealm): void;

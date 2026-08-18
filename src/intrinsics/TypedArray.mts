@@ -288,7 +288,44 @@ function TypedArrayConstructor(this: BuiltinFunctionObject) {
 }
 
 /** https://tc39.es/ecma262/#sec-allocatetypedarray */
+
+/**
+ * Fire the deprecation notice at most once per agent.
+ *
+ * Once per agent rather than per use: a diagnostic that repeats inside a loop
+ * over binary data is noise, and noise is ignored. Keyed on the agent the way
+ * the intern tables are, so two agents each get told.
+ */
+const deprecationReported = new WeakSet<object>();
+
+function ReportTypedArrayDeprecation(): void {
+  // Only WHERE THE PROPOSAL IS ACTIVE. With the feature off there is no
+  // successor to point at, and telling an author to move to a type their engine
+  // does not have is worse than saying nothing.
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const agent = surroundingAgent as unknown as object;
+  if (deprecationReported.has(agent)) {
+    return;
+  }
+  deprecationReported.add(agent);
+  surroundingAgent.hostDefinedOptions.onDeprecation?.(
+    '%TypedArray%',
+    'the array types: `[].<T>` for typed storage, and `Span.<T>(buffer)` to view existing bytes',
+  );
+}
+
 export function* AllocateTypedArray(constructorName: JSStringValue, newTarget: FunctionObject, defaultProto: keyof Intrinsics, length?: number): ValueEvaluator<Mutable<TypedArrayObject>> {
+  // proposal-runtime-types #sec-relationship-to-typed-arrays: `%TypedArray%` is
+  // DEPRECATED in favour of the array types, and its semantics are untouched.
+  // The two are not in tension: deprecated says a program SHOULD move, untouched
+  // says no program BREAKS by not moving.
+  //
+  // Reported here rather than on each of the twelve constructors because every
+  // one of them allocates through this operation, so this is the one place that
+  // sees all of them and sees each of them once.
+  ReportTypedArrayDeprecation();
   // 1. Let proto be ? GetPrototypeFromConstructor(newTarget, defaultProto).
   const proto = Q(yield* GetPrototypeFromConstructor(newTarget, defaultProto));
   // 2. Let obj be TypedArrayCreate(proto).
@@ -300,6 +337,7 @@ export function* AllocateTypedArray(constructorName: JSStringValue, newTarget: F
   // 5. If constructorName is "BigInt64Array" or "BigUint64Array", set obj.[[ContentType]] to BigInt.
   // 6. Otherwise, set obj.[[ContentType]] to Number.
   if (constructorName.stringValue() === 'BigInt64Array' || constructorName.stringValue() === 'BigUint64Array') {
+
     obj.ContentType = 'BigInt';
   } else {
     obj.ContentType = 'Number';
