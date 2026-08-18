@@ -658,3 +658,53 @@ test('an elision with nothing to do is still elided', () => {
   expect(bool('let a: [].<uint32> = [1, 2]; let b: [].<uint32> = a; String(b === a);')).toBe(true);
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let b: [4].<uint32> = a; String(b === a);')).toBe(true);
 });
+
+// -- assignment aliases; a disagreement is refused, not copied ----------------
+
+test('an already-typed array is refused rather than rebuilt', () => {
+  // Where the source arrives as `any`, a fixed array assigned to a dynamic
+  // target was ACCEPTED and produced a copy. Sound, but it made one operation
+  // mean two things: assignment aliases everywhere else, and `b === a` was the
+  // only way to find out which had happened.
+  //
+  // It reached that path because the extent rule made membership answer *false*
+  // for the pair, so the early return stopped firing and an already-typed array
+  // fell into the branch meant for LITERALS.
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; let x = a; let b: [].<uint32> = x;', 'TypeError');
+  // and the explicit route the message names still works
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let b = [...a];'
+    + ' b.push((5 := uint32)); String(b.length);')).toBe('5');
+});
+
+test('propagation is untouched: an UNTYPED array still adopts the element type', () => {
+  // The feature the branch exists for. A literal, and a plain array reaching
+  // the boundary as `any`, both become typed arrays whose elements are
+  // converted - and both are new objects, which is correct for a literal.
+  expect(bool('let b: [].<uint8> = [1, 2, 3]; String(b[0] is uint8);')).toBe(true);
+  expect(bool('let x = [1, 2, 3]; let b: [].<uint8> = x; String(b[0] is uint8);')).toBe(true);
+  expect(bool('let x = [1, 2, 3]; let b: [].<uint8> = x; String(b === x);')).toBe(false);
+});
+
+test('every other assignment still aliases', () => {
+  // The controls, and they matter more than the refusal: refusing too much is
+  // the likely failure, and identity is what shows it.
+  expect(bool('let a: [].<uint32> = [1]; let b: [].<uint32> = a; String(b === a);')).toBe(true);
+  expect(bool('let a: [].<uint32> = [1]; let x = a; let b: [].<uint32> = x; String(b === a);')).toBe(true);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let x = a; let b: [4].<uint32> = x; String(b === a);')).toBe(true);
+});
+
+test('the family bound admits a fixed array, and does not copy it', () => {
+  // Bare `[]` is `[].<any>`, the top of the array and tuple family, so a fixed
+  // array IS a member of it - the extent rule excepts it, because the family
+  // bound is not a promise of growth but the statement that the element type is
+  // not being constrained.
+  //
+  // Two clauses contradicted each other before this: `a is []` answered *false*
+  // while a parameter typed `[]` accepted one, and it accepted one by COPYING,
+  // since a failed membership sent the value to the conversion.
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is []);')).toBe(true);
+  expect(bool('function f(p: []) { return p; } let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' String(f(a) === a);')).toBe(true);
+  // and the concrete-element rule is unaffected
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is [].<uint32>);')).toBe(false);
+});

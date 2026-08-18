@@ -1278,7 +1278,17 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // that type says it can. The static and dynamic answers have to agree,
         // because `match` dispatches on membership - without this a pattern
         // could select a branch the checker calls impossible.
-        if (t.Extent === 'dynamic'
+        //
+        // The FAMILY BOUND is excepted. Bare `[]` is `[].<any>`, and
+        // #sec-array-and-tuple-types makes it the top of the array and tuple
+        // family - "satisfied by any array or tuple" - so a fixed array is a
+        // member of it. Without this exception the two clauses contradicted
+        // each other: `a is []` answered *false* for a `[4].<T>` while a
+        // parameter typed `[]` accepted one, and it accepted one by COPYING,
+        // since membership failing sent the value to the conversion. The
+        // family bound is not a promise of growth; it is the statement that
+        // the element type is not being constrained.
+        if (t.Extent === 'dynamic' && t.Element.Kind !== 'any'
             && (value as unknown as { TypedExtent?: number }).TypedExtent !== undefined) {
           return false;
         }

@@ -1251,6 +1251,23 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // are uint8 values and whose stores wrap. A fixed extent must match the length.
     if (value instanceof ObjectValue) {
       const isArr = Q(IsArray(value));
+      // proposal-runtime-types: propagation is for an array that has NO element
+      // type - a literal, or a plain array reaching here as `~any~`. An array
+      // that already has one and still failed the membership test above means
+      // the two types genuinely disagree, and rebuilding it silently answers a
+      // disagreement with a COPY.
+      //
+      // The case that reached here was a fixed array against a dynamic target,
+      // and it reached here BECAUSE #sec-array-and-tuple-types made membership
+      // answer *false* for that pair: the early return stopped firing, so an
+      // already-typed array fell into the branch meant for literals. Assignment
+      // aliases everywhere else, including through `~any~` and including fixed
+      // to fixed, so this one case silently allocated and disconnected - and
+      // `b === a` was the only way to find out which had happened.
+      const alreadyTyped = (value as unknown as { TypedElement?: unknown }).TypedElement !== undefined;
+      if (isArr === Value.true && alreadyTyped) {
+        return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
+      }
       if (isArr === Value.true) {
         const lenValue = Q(yield* Get(value, Value('length')));
         const len = R(Q(yield* ToNumber(lenValue))) as number;
