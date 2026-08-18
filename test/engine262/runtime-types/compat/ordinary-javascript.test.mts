@@ -37,58 +37,120 @@ function agrees(source: string): void {
   expect(on, `flag-on and flag-off disagree for: ${source}`).toBe(off);
 }
 
-test('a plain array behaves identically with the feature on and off', () => {
-  for (const source of [
-    'const a = [1, 2, 3]; String(a.length);',
-    'const a = [1, 2, 3]; String(a.length - 1);',
-    'const a = []; String(a.length - 1);',
-    'const a = [1, 2, 3]; let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; } String(s);',
-    'const a = [1, 2, 3]; let o = ""; for (let i = a.length - 1; i >= 0; i--) { o += a[i]; } o;',
-    'const a = [1, 2, 3]; let n = 0; a.forEach(() => { n += 1; }); String(n);',
-    'const a = [1, 2, 3]; String(a.map((x) => x * 2).filter((x) => x > 2).length);',
-    'const a = [1]; a.push(2); a.pop(); String(a.length);',
-    'const a = [1, 2, 3]; a.length = 1; String(a.length);',
-    'const a = [1, 2, 3]; a.slice(1).join(",");',
-    'const a = [1, 2, 3]; String(a[99]);',
-    'const a = [1, 2, 3]; let n = 3; String(a.length === n);',
-  ]) {
-    agrees(source);
-  }
+// Each idiom is its OWN test case rather than a loop over a list. A loop
+// reports the first disagreement and hides the rest, and these are exactly the
+// assertions where knowing WHICH idiom broke is the whole diagnostic.
+
+test('a plain array is unchanged: length', () => {
+  agrees('const a = [1, 2, 3]; String(a.length);');
 });
 
-test('a TypedArray behaves identically with the feature on and off', () => {
-  // The deprecation of #sec-relationship-to-typed-arrays changes nothing a
-  // program can see. This is the check requirement 8.1.1 asks for, and it is
-  // the reason it asks for a comparison: asserting that
-  // `getOwnPropertyNames(new Uint8Array(4))` is empty would test a guess about
-  // `%TypedArray%` rather than testing that the proposal left it alone.
-  for (const source of [
-    'const u = new Uint8Array(4); String(u.length);',
-    'const u = new Uint8Array(4); String(u.length - 1);',
-    'const u = new Uint8Array([1, 2, 3]); let s = 0; for (let i = 0; i < u.length; i++) { s += u[i]; } String(s);',
-    'const u = new Uint8Array(4); Object.getOwnPropertyNames(u).join(",");',
-    'const u = new Uint8Array(1); u[0] = 300; String(u[0]);',
-    'const u = new Uint8ClampedArray(1); u[0] = 300; String(u[0]);',
-    'const u = new Float64Array([1.5]); String(u[0]);',
-    'const u = new Uint8Array([1, 2]); String(u.map((x) => x)[1]);',
-    'const u = new Uint8Array([1, 2]); String(u.subarray(1).length);',
-    'const u = new Uint8Array(4); String(u.buffer.byteLength);',
-    'const u = new Uint8Array(4); String(typeof u.set);',
-    'const u = new Uint8Array(2); let n = 2; String(u.length === n);',
-  ]) {
-    agrees(source);
-  }
+test('a plain array is unchanged: length in arithmetic', () => {
+  agrees('const a = [1, 2, 3]; String(a.length - 1);');
 });
 
-test('other length-bearing values are untouched', () => {
-  for (const source of [
-    'const s = "abc"; String(s.length - 1);',
-    'function f() { return arguments.length; } String(f(1, 2));',
-    'String(Array.from({ length: 3 }).length);',
-    'String(Object.keys({ a: 1, b: 2 }).length);',
-  ]) {
-    agrees(source);
-  }
+test('a plain array is unchanged: empty length minus one', () => {
+  agrees('const a = []; String(a.length - 1);');
+});
+
+test('a plain array is unchanged: counted for loop', () => {
+  agrees('const a = [1, 2, 3]; let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; } String(s);');
+});
+
+test('a plain array is unchanged: reverse loop', () => {
+  agrees('const a = [1, 2, 3]; let o = ""; for (let i = a.length - 1; i >= 0; i--) { o += a[i]; } o;');
+});
+
+test('a plain array is unchanged: forEach', () => {
+  agrees('const a = [1, 2, 3]; let n = 0; a.forEach(() => { n += 1; }); String(n);');
+});
+
+test('a plain array is unchanged: map and filter', () => {
+  agrees('const a = [1, 2, 3]; String(a.map((x) => x * 2).filter((x) => x > 2).length);');
+});
+
+test('a plain array is unchanged: push and pop', () => {
+  agrees('const a = [1]; a.push(2); a.pop(); String(a.length);');
+});
+
+test('a plain array is unchanged: length assignment', () => {
+  agrees('const a = [1, 2, 3]; a.length = 1; String(a.length);');
+});
+
+test('a plain array is unchanged: slice and join', () => {
+  agrees('const a = [1, 2, 3]; a.slice(1).join(\',\');');
+});
+
+test('a plain array is unchanged: out-of-range read', () => {
+  agrees('const a = [1, 2, 3]; String(a[99]);');
+});
+
+test('a plain array is unchanged: equality against a binding', () => {
+  agrees('const a = [1, 2, 3]; let n = 3; String(a.length === n);');
+});
+
+test('a TypedArray is unchanged: length', () => {
+  agrees('const u = new Uint8Array(4); String(u.length);');
+});
+
+test('a TypedArray is unchanged: length in arithmetic', () => {
+  agrees('const u = new Uint8Array(4); String(u.length - 1);');
+});
+
+test('a TypedArray is unchanged: counted for loop', () => {
+  agrees('const u = new Uint8Array([1, 2, 3]); let s = 0; for (let i = 0; i < u.length; i++) { s += u[i]; } String(s);');
+});
+
+test('a TypedArray is unchanged: own property names', () => {
+  agrees('const u = new Uint8Array(4); Object.getOwnPropertyNames(u).join(\',\');');
+});
+
+test('a TypedArray is unchanged: a store wraps', () => {
+  agrees('const u = new Uint8Array(1); u[0] = 300; String(u[0]);');
+});
+
+test('a TypedArray is unchanged: a clamped store clamps', () => {
+  agrees('const u = new Uint8ClampedArray(1); u[0] = 300; String(u[0]);');
+});
+
+test('a TypedArray is unchanged: a float element', () => {
+  agrees('const u = new Float64Array([1.5]); String(u[0]);');
+});
+
+test('a TypedArray is unchanged: map', () => {
+  agrees('const u = new Uint8Array([1, 2]); String(u.map((x) => x)[1]);');
+});
+
+test('a TypedArray is unchanged: subarray', () => {
+  agrees('const u = new Uint8Array([1, 2]); String(u.subarray(1).length);');
+});
+
+test('a TypedArray is unchanged: buffer byte length', () => {
+  agrees('const u = new Uint8Array(4); String(u.buffer.byteLength);');
+});
+
+test('a TypedArray is unchanged: set is present', () => {
+  agrees('const u = new Uint8Array(4); String(typeof u.set);');
+});
+
+test('a TypedArray is unchanged: equality against a binding', () => {
+  agrees('const u = new Uint8Array(2); let n = 2; String(u.length === n);');
+});
+
+test('other length-bearing values are unchanged: String length', () => {
+  agrees('const s = "abc"; String(s.length - 1);');
+});
+
+test('other length-bearing values are unchanged: arguments length', () => {
+  agrees('function f() { return arguments.length; } String(f(1, 2));');
+});
+
+test('other length-bearing values are unchanged: Array.from', () => {
+  agrees('String(Array.from({ length: 3 }).length);');
+});
+
+test('other length-bearing values are unchanged: Object.keys', () => {
+  agrees('String(Object.keys({ a: 1, b: 2 }).length);');
 });
 
 test('the deprecation notice is reported once per agent and is not observable', () => {

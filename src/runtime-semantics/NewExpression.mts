@@ -27,6 +27,24 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 2. Assert: arguments is either empty or an Arguments.
   Assert(args === undefined || isArray(args));
   // 3. Let ref be the result of evaluating constructExpr.
+  // Refused BEFORE the callee is evaluated. `Span` is deliberately not a global
+  // binding, so evaluating it first raises `"Span" is not defined` and the
+  // refusal below never runs - the same ordering trap the view constructor has.
+  if (surroundingAgent.feature('runtime-types') && constructExpr.type === 'TypeArgumentsExpression'
+      && (constructExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression?.type === 'IdentifierReference'
+      && (constructExpr as unknown as { Expression: { name?: string } }).Expression.name === 'Span') {
+    // proposal-runtime-types #sec-span-type: `new Span.<T>()` is refused because
+    // there is nothing for such a construction to ALLOCATE - a window is a view
+    // of storage someone else owns. `Span.<T>(buffer)` is a call rather than a
+    // construction for the same reason: it reinterprets bytes that exist.
+    //
+    // Refused HERE so it says that. `Span` is deliberately not a global binding
+    // - a window is a way of viewing storage rather than a class of object - so
+    // without this the evaluation reached identifier resolution and reported
+    // `"Span" is not defined`, telling an author the type does not exist when it
+    // does and works in every other position.
+    return Throw.TypeError('a window is a view of existing storage; use `Span.<T>(buffer, ...)`');
+  }
   const ref = Q(yield* Evaluate(constructExpr));
   // 4. Let constructor be ? GetValue(ref).
   const constructor = Q(yield* GetValue(ref as never));

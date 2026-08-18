@@ -466,6 +466,7 @@ export interface Throw {
   | 'a view is constructed as `Span.<T>(buffer, byteOffset, count, byteElementLength)`'
   | 'a view needs an ArrayBuffer, a SharedArrayBuffer, or a typed array'
   | 'a view needs an element type with a layout'
+  | 'a window is a view of existing storage; use `Span.<T>(buffer, ...)`'
   | 'a zero rational to a negative power'
   | 'an SoA may not be resized while a reference into it is live'
   | 'an SoA view needs a byte offset that is a multiple of its alignment'
