@@ -241,7 +241,22 @@ function withRealmContext<T>(realm: Realm, f: () => T): T {
   }
 }
 
+/**
+ * The realm is entered around the WHOLE of a parse, not just around the parse
+ * itself.
+ *
+ * Everything after the parse needs a realm as much as the parse does: an early
+ * error is a SyntaxError OBJECT and a type error is a TypeError object, and
+ * constructing either reads the constructor from the running execution
+ * context's realm. Wrapping only `wrappedParse` left every one of those
+ * crashing the host on an empty stack - the very failure `withRealmContext`
+ * exists to prevent, reintroduced by each rule added after it.
+ */
 export function ParseScript(sourceText: string, realm: Realm, hostDefined: ParseScriptHostDefined = {}): ScriptRecord | ObjectValue[] {
+  return withRealmContext(realm, () => ParseScriptInRealm(sourceText, realm, hostDefined));
+}
+
+function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: ParseScriptHostDefined): ScriptRecord | ObjectValue[] {
   // 1. Assert: sourceText is an ECMAScript source text (see clause 10).
   // 2. Parse sourceText using Script as the goal symbol and analyse the parse result for
   //    any Early Error conditions. If the parse was successful and no early errors were found,
@@ -256,9 +271,11 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
     json: hostDefined[kInternal]?.json,
     allowAllPrivateNames: hostDefined[kInternal]?.allowAllPrivateNames,
   };
-  let body = withRealmContext(realm, () => wrappedParse(parseOptions, (p) => p.parseScript()));
+  // The realm is already entered by the caller above, so these read the
+  // context rather than pushing one of their own.
+  let body = wrappedParse(parseOptions, (p) => p.parseScript());
   if (Array.isArray(body) && hostDefined[kInternal]?.allowAwait) {
-    body = withRealmContext(realm, () => wrappedParse(parseOptions, (p) => p.scope.with({ await: true }, () => p.parseScript())));
+    body = wrappedParse(parseOptions, (p) => p.scope.with({ await: true }, () => p.parseScript()));
   }
   // 3. If body is a List of errors, return body.
   if (Array.isArray(body)) {
@@ -311,7 +328,28 @@ export function ParseScript(sourceText: string, realm: Realm, hostDefined: Parse
   return script;
 }
 
+/**
+ * As `ParseScript`: the realm is entered around the whole of the parse.
+ *
+ * The EXPANSION PHASE is why this matters here rather than only in principle.
+ * It runs after the parse - resolving a decorator, loading and evaluating the
+ * preprocessor module it names, building the token stream, and CALLING the
+ * macro - and every one of those steps reads the current realm. A host that
+ * compiles before entering the realm therefore crashed on any module using a
+ * replacement decorator, which is every module that imports a macro: the
+ * inspector's console takes the module goal precisely so that a preprocessor
+ * import can be written there, so the one path macros must travel was the one
+ * with no execution context on the stack.
+ *
+ * The recursive call for a re-expansion passes through here again and is free:
+ * `withRealmContext` pushes nothing when the realm's context is already
+ * running.
+ */
 export function ParseModule(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined = {}) {
+  return withRealmContext(realm, () => ParseModuleInRealm(sourceText, realm, hostDefined));
+}
+
+function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: ModuleRecordHostDefined) {
   // 1. Assert: sourceText is an ECMAScript source text (see clause 10).
   // 2. Parse sourceText using Module as the goal symbol and analyse the parse result for
   //    any Early Error conditions. If the parse was successful and no early errors were found,
@@ -324,7 +362,7 @@ export function ParseModule(sourceText: string, realm: Realm, hostDefined: Modul
   // one from reaching a later compile that has nothing to do with it - a global
   // that is only ever set and read leaks into every compile that follows.
   ClearPreprocessorRefusal();
-  const body = withRealmContext(realm, () => wrappedParse<ParseNode.Module>({ source: sourceText, specifier: hostDefined.specifier }, (p) => p.parseModule()));
+  const body = wrappedParse<ParseNode.Module>({ source: sourceText, specifier: hostDefined.specifier }, (p) => p.parseModule());
   // 3. If body is a List of errors, return body.
   if (Array.isArray(body)) {
     const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
