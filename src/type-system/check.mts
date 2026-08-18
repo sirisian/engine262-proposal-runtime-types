@@ -2673,6 +2673,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && receiver.Arguments.length > 0
               && (m.IdentifierName as { name: string }).name === 'fields') {
             const element = receiver.Arguments[0];
+            // #sec-structure-of-arrays: a FIXED `SoA.<T, N>` projects columns
+            // of exactly N, so the projection carries its length in its type -
+            // which is what lets an access into it skip the per-element check.
+            // A growable one projects a window whose length follows the
+            // container and cannot be stated.
+            const soaExtent = receiver.Arguments.length > 1 && typeof receiver.Arguments[1] === 'number'
+              && receiver.Arguments[1] !== 0
+              ? receiver.Arguments[1] as number
+              : undefined;
+            const spanOf = (el: TypeRecord) => (soaExtent === undefined
+              ? libraryTypeRecord('Span', [el])!
+              : libraryTypeRecord('Span', [el, soaExtent])!);
             if (element !== undefined && typeof element !== 'number') {
               // Columns from the LAYOUT where there is one - which covers a
               // primitive element, whose column is the element itself.
@@ -2682,7 +2694,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Kind: 'object',
                   Properties: columns.map((c: { key: string, type: TypeRecord }) => ({
                     key: c.key,
-                    type: libraryTypeRecord('Span', [c.type])!,
+                    type: spanOf(c.type),
                     optional: false,
                     readonly: true,
                   })),
@@ -2705,7 +2717,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Kind: 'object',
                   Properties: structure.Properties.map((f) => ({
                     key: f.key,
-                    type: libraryTypeRecord('Span', [f.type])!,
+                    type: spanOf(f.type),
                     optional: false,
                     readonly: true,
                   })),
@@ -2748,6 +2760,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // run-time fact - so the bound below is the array's alone.
           const spanElement = spanElementOfReceiver(receiver);
           if (spanElement) {
+            // #sec-span-type: a window whose length is STATED decides a literal
+            // index exactly as a fixed extent does, and this is the whole point
+            // of the length being in the type - an access it has proven is in
+            // range needs no per-element check. A window whose length is not
+            // stated has nothing to decide against and keeps the run-time check.
+            const spanExtent = spanExtentOfReceiver(receiver);
+            const spanIndex = m.Expression as { type?: string, value?: unknown };
+            if (spanExtent !== undefined && spanIndex.type === 'NumericLiteral'
+                && typeof spanIndex.value === 'number'
+                && (!Number.isInteger(spanIndex.value) || spanIndex.value < 0 || spanIndex.value >= spanExtent)) {
+              const completion = Throw.TypeError(
+                '$1 is not an index of $2',
+                Value(String(spanIndex.value)),
+                Value(displayType(receiver!)),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
             return spanElement;
           }
           if (receiver && receiver.Kind === 'array') {
@@ -3884,6 +3913,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const args = (r as { Arguments?: readonly TypeRecord[] }).Arguments;
     return args && args.length > 0 ? args[0] : { Kind: 'any' as const };
+  };
+
+  /** The stated length of a `Span.<T, N>` receiver, or ~undefined~ if unstated. */
+  const spanExtentOfReceiver = (r: TypeRecord | null): number | undefined => {
+    if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
+      return undefined;
+    }
+    const args = (r as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+    const second = args && args.length > 1 ? args[1] : undefined;
+    return typeof second === 'number' ? second : undefined;
   };
 
   /** Operations a window does not have: they grow, shrink, or name an allocation. */

@@ -708,3 +708,58 @@ test('the family bound admits a fixed array, and does not copy it', () => {
   // and the concrete-element rule is unaffected
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is [].<uint32>);')).toBe(false);
 });
+
+// -- an optional stated length ------------------------------------------------
+
+test('a source reaches Span.<T, N> only where its length is known to be N', () => {
+  // #sec-span-type. A `[N].<T>` and a tuple know their length; a `[].<T>` does
+  // not, its length being a run-time fact, so it reaches only the unstated
+  // form. The second argument was parsed and IGNORED before this - a window of
+  // 4 satisfied `Span.<uint32, 3>` and said nothing.
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function f(p: Span.<uint32, 4>) { return p.length; } String(f(a));')).toBe('4');
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function f(p: Span.<uint32, 3>) { return p.length; } f(a);');
+  expectStaticTypeError('let d: [].<uint32> = [1, 2];'
+    + ' function f(p: Span.<uint32, 2>) { return p.length; } f(d);');
+  // a tuple knows its length
+  expect(evaluated('let t: [uint8, uint8] = [1, 2];'
+    + ' function f(p: Span.<uint8, 2>) { return p.length; } String(f(t));')).toBe('2');
+});
+
+test('forgetting a length is safe; inventing one is not', () => {
+  // The asymmetry, which is the whole of the subtyping rule.
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function g(p: Span.<uint32>) { return p.length; }'
+    + ' function f(p: Span.<uint32, 4>) { return g(p); } String(f(a));')).toBe('4');
+  expectStaticTypeError('function g(p: Span.<uint32, 4>) { return p.length; }'
+    + ' function f(p: Span.<uint32>) { return g(p); }');
+  expectStaticTypeError('function g(p: Span.<uint32, 3>) { return p.length; }'
+    + ' function f(p: Span.<uint32, 4>) { return g(p); }');
+});
+
+test('a stated length decides a literal index', () => {
+  // This is what the length in the type is FOR: an access it has proven to be
+  // in range needs no per-element check. An unstated window has nothing to
+  // decide against, and a computed index proves nothing either way, so both
+  // keep the run-time check.
+  expectStaticTypeError('function f(p: Span.<uint32, 4>) { return p[9]; }');
+  expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function f(p: Span.<uint32, 4>) { return p[2]; } String(f(a));')).toBe('3');
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function f(p: Span.<uint32>) { return p[9]; } f(a);', 'RangeError');
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4];'
+    + ' function f(p: Span.<uint32, 4>) { let i = 9; return p[i]; } f(a);', 'RangeError');
+});
+
+test('a fixed SoA projects columns that carry their length', () => {
+  // #sec-structure-of-arrays: a fixed `SoA.<T, N>` has columns of exactly N, so
+  // the projection states its length; a growable one projects a window whose
+  // length follows the container and cannot be stated.
+  expect(evaluated('class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
+    + ' function f(p: Span.<float32, 4>) { return p.length; } String(f(s.fields.x));')).toBe('4');
+  expectStaticTypeError('class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
+    + ' function f(p: Span.<float32, 3>) { return p.length; } f(s.fields.x);');
+  expect(evaluated('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));')).toBe('1');
+});

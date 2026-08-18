@@ -421,6 +421,21 @@ function isSpanRecord(t: TypeRecord): boolean {
   return t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span';
 }
 
+/**
+ * #sec-span-type: the STATED LENGTH of a `Span.<T, N>`, or ~undefined~ where
+ * the window's length is not stated.
+ *
+ * Optional rather than always present because the two cases differ: a view over
+ * a resizable buffer cannot carry its length in its type, which is why the view
+ * constructor takes a count as an ARGUMENT, while a window over a known run of
+ * elements can - and something has to carry it for a bounds check to be elided.
+ */
+function spanExtentOf(t: TypeRecord): number | undefined {
+  const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+  const second = args && args.length > 1 ? args[1] : undefined;
+  return typeof second === 'number' ? second : undefined;
+}
+
 /** The element type of a `Span.<T>`, or ~undefined~ for a bare `Span`. */
 function spanElementOf(t: TypeRecord): TypeRecord | undefined {
   const args = (t as { Arguments?: readonly TypeRecord[] }).Arguments;
@@ -567,16 +582,34 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (element === undefined) {
       return false;
     }
+    // #sec-span-type: a source reaches `Span.<T, N>` only where its length is
+    // KNOWN to be N. A `[N].<T>` and a tuple know theirs; a `[].<T>` does not,
+    // its length being a run-time fact, so it reaches only the unstated form.
+    const wantExtent = spanExtentOf(t);
+    const elementOk = (e: TypeRecord) => isAnyElement(element) || SameTypeWithAssumptions(e, element, next);
     if (s.Kind === 'array') {
-      return isAnyElement(element) || SameTypeWithAssumptions(s.Element, element, next);
+      if (wantExtent !== undefined && s.Extent !== wantExtent) {
+        return false;
+      }
+      return elementOk(s.Element);
     }
     if (s.Kind === 'tuple') {
-      return s.Elements.every((e) => isAnyElement(element) || SameTypeWithAssumptions(e.Type, element, next));
+      if (wantExtent !== undefined && s.Elements.length !== wantExtent) {
+        return false;
+      }
+      return s.Elements.every((e) => elementOk(e.Type));
     }
     if (isSpanRecord(s)) {
       const source = spanElementOf(s);
-      return source !== undefined
-        && (isAnyElement(element) || SameTypeWithAssumptions(source, element, next));
+      if (source === undefined) {
+        return false;
+      }
+      // Forgetting a length is always safe; inventing one is not. So
+      // `Span.<T, N>` reaches `Span.<T>`, and the reverse is refused.
+      if (wantExtent !== undefined && spanExtentOf(s) !== wantExtent) {
+        return false;
+      }
+      return elementOk(source);
     }
     return false;
   }
