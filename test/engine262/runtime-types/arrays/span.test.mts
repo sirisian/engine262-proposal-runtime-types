@@ -803,3 +803,50 @@ test('a window with no buffer beneath it reports the limit, not undefined', () =
   // and a plain array has none of the three
   expect(evaluated('const p = [1, 2]; String(typeof p.buffer);')).toBe('undefined');
 });
+
+// -- set and subarray ---------------------------------------------------------
+
+test('set stores a run of elements, checking each', () => {
+  // A `%TypedArray%` method with no `Array.prototype` equivalent. It is
+  // LENGTH-PRESERVING, which is why a window may have it: it writes elements
+  // and never grows.
+  const a = 'let a: [].<uint8> = [1, 2, 3, 4]; ';
+  expect(evaluated(`${a}a.set([9, 8]); a.join(",");`)).toBe('9,8,3,4');
+  expect(evaluated(`${a}a.set([9, 8], 2); a.join(",");`)).toBe('1,2,9,8');
+  // each element goes through the ordinary store, so it gets the ordinary check
+  expectThrownKind(`${a}a.set([300]);`, 'RangeError');
+  expectThrownKind(`${a}a.set([1, 2], 3);`, 'RangeError');
+  // and it works on a window, which is the point of it being length-preserving
+  expect(evaluated('const b = new ArrayBuffer(4); const v = Span.<uint8>(b);'
+    + ' v.set([7, 6]); String(v[0]) + "/" + String(v[1]);')).toBe('7/6');
+});
+
+test('subarray aliases where slice copies', () => {
+  // The distinction is the whole point of having both, and it is the reason
+  // `subarray` belongs on a window: a subarray of anything is a window, since
+  // it does not own the storage it names.
+  const a = 'let a: [].<uint8> = [1, 2, 3, 4]; ';
+  expect(evaluated(`${a}const s = a.subarray(1, 3); s[0] = (9 := uint8); String(a[1]);`)).toBe('9');
+  expect(evaluated(`${a}const c = a.slice(1, 3); c[0] = (9 := uint8); String(a[1]);`)).toBe('2');
+  expect(evaluated(`${a}String(a.subarray(1, 3).length);`)).toBe('2');
+  expect(bool(`${a}String(a.subarray(1, 3) is Span.<uint8>);`)).toBe(true);
+  expect(evaluated(`${a}String(a.subarray().length);`)).toBe('4');
+});
+
+test('subarray carves both backings a window can have', () => {
+  // A window is one type over two representations - a run of an owned array's
+  // elements, or a stretch of a buffer's bytes - and they carve differently:
+  // one counts elements, one counts bytes. Both are asserted because handling
+  // only the first is the mistake that is easy to make and hard to see.
+  expect(evaluated('let a: [].<uint8> = [1, 2, 3, 4]; const w = a.subarray(0);'
+    + ' const s = w.subarray(2); s[0] = (9 := uint8); String(a[2]);')).toBe('9');
+  expect(evaluated('const b = new ArrayBuffer(4); const v = Span.<uint8>(b);'
+    + ' v.set([1, 2, 3, 4]); const s = v.subarray(2); s[0] = (9 := uint8); String(v[2]);')).toBe('9');
+});
+
+test('both live on an array with an element type, and on no other array', () => {
+  expect(evaluated('let a: [].<uint8> = [1]; String(typeof a.set) + "/" + String(typeof a.subarray);')).toBe('function/function');
+  expect(evaluated('const b = new ArrayBuffer(4); const v = Span.<uint8>(b);'
+    + ' String(typeof v.set) + "/" + String(typeof v.subarray);')).toBe('function/function');
+  expect(evaluated('const p = [1]; String(typeof p.set) + "/" + String(typeof p.subarray);')).toBe('undefined/undefined');
+});

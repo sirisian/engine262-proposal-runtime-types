@@ -13,7 +13,7 @@ import {
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
-import { ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf } from '../abstract-ops/array-view.mts';
+import { ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { __ts_cast__ } from '../utils/language.mts';
@@ -490,6 +490,71 @@ function* ArrayProto_byteLength(_args: Arguments, { thisValue }: FunctionCallCon
     }
   }
   return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
+}
+
+/**
+ * proposal-runtime-types #sec-array-views: `set(source, offset)` stores a run of
+ * elements in one call.
+ *
+ * It is a `%TypedArray%` method with no `Array.prototype` equivalent, and a
+ * deprecation whose replacement cannot express the original is not one - so it
+ * belongs on both an owned typed array and a window. It is LENGTH-PRESERVING,
+ * which is why a window may have it: it writes elements and never grows.
+ *
+ * Each element goes through the ordinary store, so the element-type check is
+ * the same one an indexed assignment gets rather than a second implementation.
+ */
+function* ArrayProto_set(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const [source = Value.undefined, offset0 = Value.undefined] = args;
+  const O = Q(ToObject(thisValue));
+  const offset = offset0 === Value.undefined ? 0 : R(Q(yield* ToLength(offset0)));
+  const src = Q(ToObject(source));
+  const srcLen = R(Q(yield* ToLength(Q(yield* Get(src, Value('length'))))));
+  const ownLen = R(Q(yield* ToLength(Q(yield* Get(O, Value('length'))))));
+  if (offset + srcLen > ownLen) {
+    return Throw.RangeError('$1 is out of range', Value(String(offset + srcLen)));
+  }
+  for (let i = 0; i < srcLen; i += 1) {
+    const element = Q(yield* Get(src, Value(String(i))));
+    Q(yield* Set(O, Value(String(offset + i)), element, Value.true));
+  }
+  return Value.undefined;
+}
+
+/**
+ * proposal-runtime-types #sec-span-type: `subarray(begin, end)` is a WINDOW over
+ * part of the same storage, and the distinction from `slice` is the whole point
+ * - `slice` copies, this aliases, and a write through it is visible in the
+ * source.
+ *
+ * The result is a `Span.<T>` whatever the receiver was: a window carved out of
+ * an owned array does not own that storage either.
+ */
+function* ArrayProto_subarray(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const [begin0 = Value.undefined, end0 = Value.undefined] = args;
+  const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown };
+  const len = R(Q(yield* ToLength(Q(yield* Get(O, Value('length'))))));
+  const begin = begin0 === Value.undefined ? 0 : Math.min(R(Q(yield* ToLength(begin0))), len);
+  const end = end0 === Value.undefined ? len : Math.min(R(Q(yield* ToLength(end0))), len);
+  const count = Math.max(0, end - begin);
+  const existing = ArraySpanBackingOf(O as unknown as object);
+  if (existing !== undefined) {
+    // A subarray of a window over an OWNED array is a window over the same
+    // source, further along.
+    return MakeArraySpan(existing.Element, existing.Source, count, existing.Offset + begin);
+  }
+  const view = ArrayViewBackingOf(O as unknown as object);
+  if (view !== undefined) {
+    // A subarray of a window over a BUFFER is a view of the same buffer at a
+    // later byte offset. The two backings carve differently - one counts
+    // elements, one counts bytes - and both must be handled, since a window is
+    // one type over two representations.
+    return MakeArrayView(view.Element, view.Buffer, view.ByteOffset + begin * view.Stride, view.Stride, count);
+  }
+  if (O.TypedElement === undefined) {
+    return Throw.TypeError('subarray is available on an array with an element type');
+  }
+  return MakeArraySpan(O.TypedElement as TypeRecord, O, count, begin);
 }
 
 /** https://sirisian.github.io/ecmascript-types/#sec-capacity-operations */
@@ -994,6 +1059,8 @@ function bootstrapTypedArrayLikePrototype(realmRec: Realm, arrayProto: ObjectVal
     ['reserve', ArrayProto_reserve, 1],
     ['shrinkToFit', ArrayProto_shrinkToFit, 0],
     ['capacity', [ArrayProto_capacity]],
+    ['set', ArrayProto_set, 1],
+    ['subarray', ArrayProto_subarray, 2],
     ['buffer', [ArrayProto_buffer]],
     ['byteOffset', [ArrayProto_byteOffset]],
     ['byteLength', [ArrayProto_byteLength]],
@@ -1039,6 +1106,8 @@ function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
   // `%TypedArrayLike.prototype%` inherits from it - so a member belonging on
   // both is registered on both. Neither can carry it for the other.
   assignProps(realmRec, spanProto, [
+    ['set', ArrayProto_set, 1],
+    ['subarray', ArrayProto_subarray, 2],
     ['buffer', [ArrayProto_buffer]],
     ['byteOffset', [ArrayProto_byteOffset]],
     ['byteLength', [ArrayProto_byteLength]],

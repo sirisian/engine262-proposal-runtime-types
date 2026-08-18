@@ -263,6 +263,12 @@ export interface ArraySpanBacking {
   /** The array being windowed. Its elements ARE the window's storage. */
   readonly Source: ObjectValue;
   /** Fixed at coercion: a window's length does not change (#sec-span-type). */
+  /**
+   * Where the window starts in the source, in ELEMENTS. Zero for a window over
+   * a whole array; non-zero only for one `subarray` carved out of another, which
+   * is what makes a subarray alias rather than copy.
+   */
+  readonly Offset: number;
   readonly Length: number;
   /**
    * [[TypedGeneration]] when the window was taken. A growth that reallocates
@@ -289,11 +295,12 @@ function generationOf(source: ObjectValue): number {
  * from the array coerced, and two coercions of one array need not be the same
  * value — which is why this constructs rather than tagging the array.
  */
-export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number): ObjectValue {
+export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0): ObjectValue {
   const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   arraySpans.set(span as unknown as object, {
     Element: element,
     Source: source,
+    Offset: offset,
     Length: length,
     TakenAtGeneration: generationOf(source),
   });
@@ -324,7 +331,7 @@ export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number):
   if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
     return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
-  return Q(yield* Get(backing.Source, Value(String(index))));
+  return Q(yield* Get(backing.Source, Value(String(backing.Offset + index))));
 }
 
 /**
@@ -340,7 +347,7 @@ export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number,
   if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
     return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
-  Q(yield* SetValueOnObject(backing.Source, Value(String(index)), value, Value.true));
+  Q(yield* SetValueOnObject(backing.Source, Value(String(backing.Offset + index)), value, Value.true));
   return true;
 }
 

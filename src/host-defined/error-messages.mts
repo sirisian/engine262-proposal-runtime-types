@@ -515,6 +515,7 @@ export interface Throw {
   | 'smallestUnit cannot be auto'
   | 'smallestUnit cannot be hour'
   | 'smallestUnit cannot be hour or minute'
+  | 'subarray is available on an array with an element type'
   | 'the buffer does not hold this SoA view'
   | 'the bytes beneath this array are specified but not implemented in this engine'
   | 'the call is ambiguous between two declared signatures'
