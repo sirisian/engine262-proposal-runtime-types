@@ -57,6 +57,27 @@ export class ModuleCache {
     }
   }
 
+  /**
+   * Forget what has been cached, so the next request reaches the loader again.
+   *
+   * An entry is otherwise permanent: `set` declines to replace a resolved one,
+   * and the cache is consulted BEFORE the loader - so a host whose sources can
+   * change (an editor, a REPL with snippets) served the first compilation of a
+   * specifier for the life of the realm, and editing the source had no effect
+   * on a realm that had already imported it.
+   *
+   * Module records already linked against a forgotten entry keep working; they
+   * hold their own references. What changes is that a LATER import of the same
+   * specifier compiles the source again, which is what an edit is asking for.
+   */
+  delete(key: ModuleCacheKey): boolean {
+    return this.#cache.delete(key);
+  }
+
+  clear(): void {
+    this.#cache.clear();
+  }
+
   load(key: ModuleCacheKey, loader: ModuleCacheLoader, callback: (result: PlainCompletion<AbstractModuleRecord>) => void): void {
     if (!this.#cache.has(key)) {
       const promise = Promise.withResolvers<PlainCompletion<AbstractModuleRecord>>();

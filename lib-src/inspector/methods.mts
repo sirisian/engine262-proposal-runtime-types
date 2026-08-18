@@ -115,6 +115,31 @@ export const Debugger: DebuggerNamespace = {
 export const Profiler: ProfilerNamespace = {
   enable() { },
 };
+/**
+ * Whether a console entry is module code by its own syntax.
+ *
+ * A static `import` or `export` is a Module production, so no script parse can
+ * accept it however it is parameterised, and an entry containing one has only
+ * one goal it could have. The evaluate-mode dropdown therefore does not need to
+ * be told: the entry says what it is.
+ *
+ * Used by BOTH `compileScript` and `evaluate`, which is the point of it being
+ * one function. `evaluate` detected this and `compileScript` did not, and the
+ * console calls `compileScript` FIRST - to decide whether the input is complete
+ * - so module syntax was refused there before the goal-detecting path was ever
+ * reached. The dropdown was the only way through, and a preprocessor import
+ * needs the module goal, so the feature looked broken to anyone who had not
+ * found the dropdown.
+ *
+ * A dynamic `import()` is excluded: it is an ordinary expression that a script
+ * parses, and it resolves during evaluation - too late to feed the expander -
+ * so it neither needs the module goal nor implies it.
+ */
+export function DeclaresModuleSyntax(expression: string): boolean {
+  return /^[\s;]*(import|export)\s/m.test(expression)
+    && !/^[\s;]*import\s*\(/m.test(expression);
+}
+
 export const Runtime: RuntimeNamespace = {
   discardConsoleEntries() { },
   enable() {},
@@ -128,7 +153,9 @@ export const Runtime: RuntimeNamespace = {
       return unsupportedError;
     }
     const pop = realm.realm.pushTopContext();
-    if (context.evaluateMode === 'module') {
+    // The dropdown OR the entry's own syntax. The console calls this before it
+    // submits, so a mismatch here is what decides whether an entry runs at all.
+    if (context.evaluateMode === 'module' || DeclaresModuleSyntax(options.expression)) {
       parsed = ParseModule(options.expression, realm.realm, { specifier: options.sourceURL, doNotTrackScriptId: !options.persistScript });
     } else {
       parsed = ParseScript(options.expression, realm.realm, { specifier: options.sourceURL, doNotTrackScriptId: !options.persistScript, [kInternal]: { allowAllPrivateNames: true, allowAwait: true } });
@@ -378,9 +405,7 @@ function evaluate(options: {
     // A module-parsed entry gets module semantics: its bindings are its own and
     // the next entry does not see them. That is the price of the goal rather
     // than a choice made here.
-    const declaresModuleSyntax = !isPreview
-      && /^[\s;]*(import|export)\s/m.test(options.expression)
-      && !/^[\s;]*import\s*\(/m.test(options.expression);
+    const declaresModuleSyntax = !isPreview && DeclaresModuleSyntax(options.expression);
     if (declaresModuleSyntax && !isCallOnFrame) {
       const moduleRealm = context.getRealm(options.uniqueContextId);
       if (!moduleRealm) {
