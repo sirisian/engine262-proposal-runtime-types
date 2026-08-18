@@ -61,3 +61,42 @@ test('primitive metadata: a numeric type argument is unaffected', () => {
   expect(evaluated('type U = uint.<8>; String(U.bitLength);')).toBe('8');
   expect(evaluated('type V = vector.<float32, 4>; String(V.byteLength);')).toBe('16');
 });
+
+test('primitive metadata: a parameterization over `number` defaults as one over a value type does', () => {
+  // PLAN-parameterized-defaults.md phase 2. `number.<M>` had NO default while
+  // the identical `float64.<M>` had one, and the asymmetry was not in the
+  // metadata at all: DefaultValueOf stamped the zero of `number` as a typed
+  // number, and #sec-value-types keeps `number` free of stamped values - "a
+  // plain Number is not a member of a numeric value type" - so the default of
+  // `number` was not a member of `number`, and the ~parameterized~ arm's
+  // membership test failed at its base check.
+  //
+  // #sec-defaultvalueof step 2 returns "the value of _t_ representing 0", and
+  // #sec-value-types says ECMAScript "defines Number and BigInt that way"
+  // already; the value of the Number type representing 0 is the Number +0.
+  const bounds = 'type B = { lo: number }; '
+    + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';
+  // A `validate` that ADMITS the base's zero gives the parameterization that
+  // zero, over `number` exactly as over `float64`.
+  expect(evaluated(`${bounds} type NonNeg = number.<{ lo: 0 }>; let n: NonNeg; String(n);`)).toBe('0');
+  expect(evaluated(`${bounds} type NonNegF = float64.<{ lo: 0 }>; let n: NonNegF; String(Number(n));`)).toBe('0');
+  // And one that REJECTS it still has no default: the discrimination the step
+  // exists to make, which an unconditional refusal would have hidden.
+  expectThrown(`${bounds} type Pos = number.<{ lo: 1 }>; let p: Pos;`);
+  expectThrown(`${bounds} type PosF = float64.<{ lo: 1 }>; let p: PosF;`);
+});
+
+test('primitive metadata: the zero of `number` is a plain Number and is one of `number`', () => {
+  // The invariant the case above rests on, asserted directly so a regression
+  // names itself: DefaultValueOf's own result must satisfy IsOfType against the
+  // type it was asked for. `bigint` was always plain here; `number` is now
+  // consistent with it, while a value type's zero stays stamped.
+  ok('let x: number; let a: any = {}; a.v = x; a.v is number;');
+  expect(evaluated('let x: number; String(x === 0);')).toBe('true');
+  expect(evaluated('let b: bigint; String(b === 0n);')).toBe('true');
+  // A fixed-extent array of `number` is zero-filled rather than refused, which
+  // the stamped zero had made a type error at the declaration itself.
+  expect(evaluated('let a: [2].<number>; String(a[0] === 0 && a[1] === 0);')).toBe('true');
+  // A value type keeps its own zero, distinct from a plain Number's.
+  ok('let f: float64; let a: any = {}; a.v = f; a.v is float64;');
+});

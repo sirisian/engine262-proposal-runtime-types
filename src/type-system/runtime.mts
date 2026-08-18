@@ -796,7 +796,29 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return Value.undefined;
     case 'primitive': {
       const name = t.Name;
-      if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
+      if (name === 'number') {
+        // PLAN-parameterized-defaults.md phase 2. `number` was stamped here
+        // alongside the value types, and it is the one name in that list whose
+        // values are NOT the stamped ones: primitiveMembership answers
+        // `value instanceof NumberValue && !(value instanceof TypedNumberValue)`
+        // for it, because #sec-value-types gives the value types their own
+        // values and "a plain Number is not a member of a numeric value type".
+        // So the default of `number` was not a member of `number`, and the
+        // contradiction surfaced one level up: DefaultValueOf's ~parameterized~
+        // arm asks IsOfType(_d_, _t_), whose base check refused the stamped
+        // zero, so `number.<{ ... }>` had NO default while the identical
+        // `float64.<{ ... }>` had one. (Measured: `inBase= false` over `number`
+        // against `inBase= true` over float64.)
+        //
+        // #sec-defaultvalueof step 2 is "if _t_ is a numeric type, return the
+        // value of _t_ representing 0", and #sec-value-types is explicit that
+        // ECMAScript "defines Number and BigInt that way" ALREADY, the new
+        // types being numeric "in that sense". The value of the Number type
+        // representing 0 is the Number +0. `bigint` below was always plain for
+        // the same reason; `number` is now consistent with it.
+        return Value(+0);
+      }
+      if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64') {
         return new TypedNumberValue(0, t);
       }
       if (name === 'string') {
