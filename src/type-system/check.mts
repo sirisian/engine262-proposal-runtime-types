@@ -4813,6 +4813,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const contributionIsAnchored = (t: Known): boolean => !!t && t.Kind !== 'literal';
 
 
+
   /**
    * #sec-inference-fixpoint: publish an inferred return type for each queued
    * function, repeating until nothing changes.
@@ -6440,6 +6441,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Where the form decides no branch, the same test is merely a question with a
     // constant answer, which a program may legitimately ask, so it is left alone.
     if (!isGuard) {
+      return;
+    }
+    // A DYNAMIC array tested against a TUPLE type is not decidable here, and
+    // narrowing answers as though it were: `[].<uint8>` is not assignable to
+    // `[uint8, ...string]`, so NarrowTo keeps no member and the test reads as
+    // dead - but whether the value has the tuple's shape depends on its LENGTH,
+    // which a dynamic array's type does not carry. `[(1 := uint8)] instanceof
+    // [uint8, ...string]` is *true* at run time, and became a reported error the
+    // moment an array literal acquired a Static Type. The same holds in reverse,
+    // since a tuple-typed value is an Array.
+    const arrayVersusTuple = (a: TypeRecord, b: TypeRecord): boolean => (a.Kind === 'array' && (a as { Extent?: unknown }).Extent === 'dynamic' && b.Kind === 'tuple')
+      || (b.Kind === 'array' && (b as { Extent?: unknown }).Extent === 'dynamic' && a.Kind === 'tuple');
+    if (arrayVersusTuple(s, t)) {
       return;
     }
     if (NarrowTo(s, t) === empty) {
