@@ -261,6 +261,14 @@ interface Frame {
   readonly letConstants: Set<string>;
 
   /**
+   * Names this frame binds IMMUTABLY - a `const` declaration. Read by
+   * `derivationIsStable`: a call through such a name cannot be a call to a
+   * replaced function, which is what lets its return annotation license an
+   * elision.
+   */
+  readonly immutableNames: Set<string>;
+
+  /**
    * Every name this frame declares, whether or not it got a type. An
    * unannotated `let` registers NO binding - its type is null - so the bindings
    * map cannot answer "does this frame shadow the name", which is what the
@@ -286,6 +294,7 @@ function emptyFrame(): Frame {
     bindings: new Map(),
     constLiterals: new Set<string>(),
     letConstants: new Set<string>(),
+    immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
     aliases: new Map(),
     enums: new Map(),
@@ -308,6 +317,7 @@ function cloneFrame(frame: Frame): Frame {
   return {
     bindings: new Map(frame.bindings),
     constLiterals: new Set(frame.constLiterals),
+    immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
     aliases: new Map(frame.aliases),
@@ -521,6 +531,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // sees what earlier entries declared. It is already a copy (see
   // CheckScriptInSession), so checking writes the next state into it and the
   // caller decides whether to keep it.
+  /**
+   * Names the source text assigns to anywhere, and whether it contains a direct
+   * `eval`. Read by `immutablyBound` for the elision-stability judgment of
+   * #sec-check-elision. Collected once over the whole text rather than as the
+   * walk proceeds, because an assignment may appear textually after the call
+   * whose elision it invalidates.
+   */
+  const assignedNames = new Set<string>();
+  let hasDirectEval = false;
+  const collectMutations = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const c of node) {
+        collectMutations(c);
+      }
+      return;
+    }
+    const n = node as Record<string, unknown> & { type?: string };
+    if (typeof n.type !== 'string') {
+      return;
+    }
+    const targetName = (t: unknown): void => {
+      const x = t as { type?: string, name?: string } | null | undefined;
+      if (x && x.type === 'IdentifierReference' && typeof x.name === 'string') {
+        assignedNames.add(x.name);
+      }
+    };
+    if (n.type === 'AssignmentExpression') {
+      targetName(n.LeftHandSideExpression);
+    } else if (n.type === 'UpdateExpression') {
+      targetName(n.LeftHandSideExpression ?? n.UnaryExpression);
+    } else if (n.type === 'ForInStatement' || n.type === 'ForOfStatement') {
+      targetName(n.LeftHandSideExpression);
+    } else if (n.type === 'CallExpression') {
+      const callee = n.CallExpression ?? n.MemberExpression;
+      const c = callee as { type?: string, name?: string } | null | undefined;
+      if (c && c.type === 'IdentifierReference' && c.name === 'eval') {
+        hasDirectEval = true;
+      }
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+        continue;
+      }
+      collectMutations(n[key]);
+    }
+  };
+
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
 
@@ -2582,7 +2642,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindings.set(TOPIC_NAME, topic);
         }
         frames.push({
-          bindings, constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings, constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         try {
           return staticType(p.Body);
@@ -3764,7 +3824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
         const newFrame = () => ({
-          bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         frames.push(newFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
@@ -4690,6 +4750,95 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  /**
+   * proposal-runtime-types #sec-check-elision: whether an expression's Static
+   * Type is STABLE, meaning the value at run time is of that type for the same
+   * reason the checker said so.
+   *
+   * Elision is licensed by "the value is ALREADY of the target type", and that
+   * premise fails wherever a Static Type was read from a signature that a
+   * program can replace. A function DECLARATION creates a mutable binding, so:
+   *
+   *   function f(): uint32 { return 5; }
+   *   function g(): uint32 { return f(); }
+   *   f = function () { return 'now-a-string'; };
+   *   const n: uint32 = g();
+   *
+   * had BOTH checks elided - `g`'s return, because `f()` is a `uint32`, and the
+   * binding, because `g()` is - and the string reached `n` unreported. That is
+   * the runtime guarantee failing in fully annotated code, and it does not need
+   * inference to reach it. The assignment to `f` is admitted by the shallow
+   * function check, which #sec-shallow-function-checks says is the one place a
+   * type violation is knowingly permitted to go unreported; what this operation
+   * prevents is that admission being compounded by an elision that assumes it
+   * never happens.
+   *
+   * A call through an immutable binding is stable: nothing can replace the
+   * callee, so its return annotation is the fact the checker read. Everything
+   * else that yields a Static Type - a binding read, a parameter, a member of a
+   * typed shape, a literal, an operator over stable operands - is checked at
+   * its own boundary and stays stable.
+   */
+  const immutablyBound = (name: string): boolean => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].immutableNames.has(name)) {
+        return true;
+      }
+      if (frames[i].declaredNames.has(name)) {
+        break;
+      }
+    }
+    // A name the source text never assigns to is immutable IN FACT, whatever
+    // form declared it: a function declaration creates a mutable binding, but a
+    // program that never writes to that binding cannot replace the function the
+    // checker read a signature from. This is the same judgment a real engine
+    // makes when it guards an assumed callee and deoptimizes on reassignment,
+    // and it is what keeps the rule from charging every ordinary call for a
+    // replacement that no program performs. A direct `eval` can assign to any
+    // name in scope, so its presence withdraws the judgment for the whole
+    // source text.
+    return !assignedNames.has(name) && !hasDirectEval;
+  };
+
+  const derivationIsStable = (node: ParseNode | null | undefined): boolean => {
+    if (!node || typeof node !== 'object') {
+      return true;
+    }
+    if (node.type === 'CallExpression') {
+      const callee = (node as unknown as { CallExpression?: ParseNode, MemberExpression?: ParseNode });
+      const target = callee.CallExpression ?? callee.MemberExpression;
+      // Only a call through a PLAIN NAME is judged here. A method call reaches
+      // its callee through a property, which a program can also replace, so the
+      // same reasoning applies to it - but the demonstrated failure is the
+      // reassigned function binding above, and a property is a wider question
+      // (a frozen intrinsic, a `readonly` field, and an ordinary property are
+      // not alike). Recorded as a gap rather than closed by a rule that would
+      // charge every method call for a hazard this one does not demonstrate.
+      if (target && target.type === 'IdentifierReference'
+          && !immutablyBound((target as unknown as { name: string }).name)) {
+        return false;
+      }
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+        continue;
+      }
+      const child = (node as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(child)) {
+        for (const c of child) {
+          if (c && typeof c === 'object' && 'type' in (c as object) && !derivationIsStable(c as ParseNode)) {
+            return false;
+          }
+        }
+      } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+        if (!derivationIsStable(child as ParseNode)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
       const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
@@ -4698,7 +4847,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Not `any`, not a literal, and assignable: the value is already of the
         // target type, so the boundary has nothing to do (F81).
         if (source && source.Kind !== 'any' && source.Kind !== 'literal'
-            && !conversionHasEffect(declared) && IsAssignable(source, declared)) {
+            && !conversionHasEffect(declared) && IsAssignable(source, declared)
+            && derivationIsStable(b.Initializer)) {
           elidableAnnotations.add(b.TypeAnnotation);
         }
       }
@@ -4846,7 +4996,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
@@ -4898,7 +5048,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     try {
       return f();
     } finally {
@@ -5422,7 +5572,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
@@ -5667,7 +5817,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (n.TypeAnnotation && declared && n.Initializer) {
             const src = staticType(n.Initializer);
             if (src && src.Kind !== 'any' && src.Kind !== 'literal'
-                && !conversionHasEffect(declared) && IsAssignable(src, declared)) {
+                && !conversionHasEffect(declared) && IsAssignable(src, declared)
+                && derivationIsStable(n.Initializer)) {
               elidableAnnotations.add(n.TypeAnnotation);
             }
           }
@@ -5693,6 +5844,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const frame = frames[frames.length - 1];
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
               .add(n.BindingIdentifier.name);
+          }
+          // A `const` cannot be reassigned, so a call through it reaches the
+          // function the checker read a signature from (#sec-check-elision).
+          if (isConstDeclaration) {
+            frames[frames.length - 1].immutableNames.add(n.BindingIdentifier.name);
           }
           declare(n.BindingIdentifier.name, declared);
           return;
@@ -5996,7 +6152,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // off the end and is handled below.
           if (returnsProven.length > 0 && context) {
             const source = staticTypeIn(expr, context);
-            if (!(source && source.Kind !== 'any' && source.Kind !== 'literal' && IsAssignable(source, context))) {
+            if (!(source && source.Kind !== 'any' && source.Kind !== 'literal' && IsAssignable(source, context)
+                  && derivationIsStable(expr))) {
               returnsProven[returnsProven.length - 1] = false;
             }
           }
@@ -6101,6 +6258,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  collectMutations(statementList);
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
   // A3.1: the SECOND walk re-derives the same requests, and its resolutions
