@@ -4812,6 +4812,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const contributionIsAnchored = (t: Known): boolean => !!t && t.Kind !== 'literal';
 
+
   /**
    * #sec-inference-fixpoint: publish an inferred return type for each queued
    * function, repeating until nothing changes.

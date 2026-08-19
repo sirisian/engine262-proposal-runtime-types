@@ -115,18 +115,31 @@ test('the return check itself does run', () => {
   expectThrows('function f(): [].<uint8> { return [300]; }');
 });
 
-test.fails('an element read from a bare literal is typed', () => {
-  // `[1, 2]` has no Static Type, so indexing it yields nothing to check and a
-  // string annotation over a number is accepted.
-  expectThrows('const a = [1, 2]; const s: string = a[0];');
+test.fails('a bare literal has the type of its elements joined', () => {
+  // #sec-array-types. Written where no array type reaches it, a literal is an
+  // array of the widened join of its elements.
+  expectThrows('const s: string = [1, 2];');          // [].<number>
+  expectThrows('const s: string = [1, 2][0];');       // read: number
+  expectThrows('const s: string = [1, "x"];');        // [].<number | string>
+  // An unknown element leaves the element type unknown rather than stating the
+  // join of the others - so the mistake below is the boundary's to catch at run
+  // time rather than the checker's, and the message names the VALUE.
+  expect(thrown('function anyv() { return 1; } const s: string = [1, anyv()];')).toContain('[object Array]');
+  // An empty literal says nothing about its elements, so it still fits any
+  // array annotation - reporting `[].<never>` would say something false, since
+  // element types are invariant.
+  expectOk('let u: [].<uint8> = [];');
+  // An empty literal reports nothing, so the boundary decides and names the
+  // VALUE rather than a type.
+  expect(thrown('const s: string = [];')).toContain('[object Array]');
 });
 
 test.fails('an array literal contributes to an inferred return', () => {
   // An ~any~ contribution poisons a join, so a function returning an array
   // literal publishes nothing however completely its signature is annotated.
   expect(thrown('function f(): uint8 { return 1; } function g(a: uint32) { return [f()]; } const s: string = g(1);'))
-    .toContain('uint.<8>');
-  expect(thrown('function g(a: uint32) { return [1]; } const s: string = g(1);')).toContain('number');
+    .toContain('[].<uint.<8>>');
+  expect(thrown('function g(a: uint32) { return [1]; } const s: string = g(1);')).toContain('[].<number>');
 });
 
 test.fails('a return type that grows at every step is reported (r19)', () => {
@@ -148,4 +161,7 @@ test('a bare literal in an unannotated binding stays untyped, by design', () => 
   expectThrows('const a = [1]; const s: string = a;');
   expectThrows('const a = []; const s: string = a;');
   expectThrows('const a = [1, "x"]; const s: string = a;');
+  // Including a read THROUGH such a binding: the literal has a type, and the
+  // binding does not carry it. `:=` or an annotation is what does.
+  expectOk('const a = [1, 2]; const s: string = a[0];');
 });
