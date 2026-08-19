@@ -25,8 +25,7 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame,
-} from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName } from '../type-system/runtime.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
@@ -47,7 +46,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, ResolveBinding, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -392,7 +391,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // to specialize access to it; what it does not do is put every declared key
     // on every object.
     if ((node as { Partial?: boolean }).Partial) {
-      const existingRef = Q(yield* ResolveBinding(Value(name.stringValue())));
+      const existingRef = Q(yield* ResolveTypeName(Value(name.stringValue())));
       const existing = Q(yield* GetValue(existingRef));
       if (!isTypeObject(existing)) {
         return Throw.TypeError('$1 is not an interface', name);
@@ -1111,7 +1110,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   const record = builtinTypeRecord(name);
   let typeObject: Value | null = record ? GetTypeObject(record) : null;
   if (!typeObject) {
-    const ref = Q(yield* ResolveBinding(Value(name)));
+    const ref = Q(yield* ResolveTypeName(Value(name)));
     const candidate = Q(yield* GetValue(ref));
     typeObject = isTypeObject(candidate) ? candidate : null;
   }

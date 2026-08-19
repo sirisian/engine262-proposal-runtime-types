@@ -513,6 +513,23 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
   return undefined;
 }
 
+/**
+ * A type name resolved as strict code resolves an identifier.
+ *
+ * ResolveBinding defaults `strict` to *false*, and a Module Environment Record
+ * asserts that a read of it is strict - module code always is. Every resolution
+ * below is the engine looking up a name a TYPE mentions (an alias, a library
+ * name, a base, a meta declaration's shape), which is not a program's read at
+ * all and carries no sloppy-mode meaning; resolving it non-strict brought the
+ * HOST down on `type X = number; let d: X;` inside a module, an Assert failure
+ * rather than a thrown error. The only observable difference strictness makes
+ * to a resolution is for an unresolvable name, which throws a ReferenceError
+ * either way once the reference is read.
+ */
+export function ResolveTypeName(name: JSStringValue) {
+  return ResolveBinding(name, undefined, true);
+}
+
 export function RuntimeTypeOf(value: Value): TypeRecord {
   // proposal-runtime-types #sec-span-type: a WINDOW carries the Type Record it
   // was built at, for the reason a vector does - the type is not recoverable
@@ -1489,7 +1506,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           if (!bi || !bi.name) {
             return false;
           }
-          const ref = Q(yield* ResolveBinding(Value(bi.name)));
+          const ref = Q(yield* ResolveTypeName(Value(bi.name)));
           ctor = Q(yield* GetValue(ref));
         }
         if (!(ctor instanceof ObjectValue)) {
@@ -1591,7 +1608,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           }
           return element.Kind === 'any' || SameType(backingElement, element);
         }
-        const ref = Q(yield* ResolveBinding(Value(t.LibraryName)));
+        const ref = Q(yield* ResolveTypeName(Value(t.LibraryName)));
         const ctor = Q(yield* GetValue(ref));
         if (!(ctor instanceof ObjectValue)) {
           return false;
@@ -2002,7 +2019,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // reachable case today is an enum member, whose type is the literal
         // type of that member's value.
         const baseName = node.TypeName.IdentifierReference.name;
-        const baseRef = Q(yield* ResolveBinding(Value(baseName)));
+        const baseRef = Q(yield* ResolveTypeName(Value(baseName)));
         let base = Q(yield* GetValue(baseRef));
         for (const part of node.TypeName.MemberNames) {
           if (!(base instanceof ObjectValue)) {
@@ -2061,7 +2078,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           const argAsType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
           if (argAsType.Type === 'throw' && argNode.type === 'TypeReference'
               && (argNode.TypeName?.MemberNames?.length ?? 0) === 0 && !argNode.TypeArguments) {
-            const declRef = EnsureCompletion(yield* ResolveBinding(Value(argNode.TypeName.IdentifierReference.name)));
+            const declRef = EnsureCompletion(yield* ResolveTypeName(Value(argNode.TypeName.IdentifierReference.name)));
             if (declRef.Type === 'normal') {
               const declValue = EnsureCompletion(yield* GetValue(declRef.Value as never));
               if (declValue.Type === 'normal' && isTypeObject(declValue.Value)) {
@@ -2126,7 +2143,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (name === 'undefined') {
         return voidType;
       }
-      const ref = Q(yield* ResolveBinding(Value(name)));
+      const ref = Q(yield* ResolveTypeName(Value(name)));
       // The binding is consulted first, since an initialized one carries the
       // interned Type Object and everything downstream of it. Where it is in
       // its DEAD ZONE - which a class's own name is for the whole of its
@@ -2536,7 +2553,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // proposal-runtime-types (typeprogramming.md 4.1): `typeof x` is the type of
       // the value bound to the entity name, the query `Reflect.typeOf(x)` performs.
       const baseName = node.ExpressionName.IdentifierReference.name;
-      const ref = Q(yield* ResolveBinding(Value(baseName)));
+      const ref = Q(yield* ResolveTypeName(Value(baseName)));
       let value = Q(yield* GetValue(ref));
       for (const part of node.ExpressionName.MemberNames) {
         if (!(value instanceof ObjectValue)) {
@@ -2805,7 +2822,7 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
   if (node.Callee.type === 'ComputedType') {
     callee = Q(yield* evaluateComputedType(node.Callee));
   } else {
-    const ref = Q(yield* ResolveBinding(Value(node.Callee.TypeName.IdentifierReference.name)));
+    const ref = Q(yield* ResolveTypeName(Value(node.Callee.TypeName.IdentifierReference.name)));
     let v = Q(yield* GetValue(ref));
     for (const part of node.Callee.TypeName.MemberNames) {
       v = Q(yield* Get(v as ObjectValue, Value(part.name)));
