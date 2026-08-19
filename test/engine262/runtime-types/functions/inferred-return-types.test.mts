@@ -271,11 +271,18 @@ test('an async declaration reads its declared return type', () => {
   expectOk('async function af(a: uint32): Promise.<string, any> { return "s"; } const p: Promise.<string, any> = af(1);');
 });
 
-test('async INFERENCE does not publish yet', () => {
-  // Pinned as a known gap. The declared path above now works, the queue entry
-  // and the resolve-mode collector are in place, and the published type is
-  // still not reaching the call site - so the remaining fault is between the
-  // queue and publication rather than in either end. An unannotated async
-  // function therefore stays legacy, and the message names the VALUE.
-  expect(thrown('async function af(a: uint32) { return "s"; } const n: number = af(1);')).toContain('[object Promise]');
+test('an async function infers the type its result resolves with', () => {
+  // #sec-inference-and-function-forms: publish `Promise.<T, any>`. The reject
+  // type is never inferred - anything may throw, and the convention that
+  // `undefined` there means a promise that never rejects is a claim no body
+  // supports, so `any` is what an inference can honestly say about it.
+  expectEarly('async function af(a: uint32) { return "s"; } const n: number = af(1);', 'Promise.<string, any>');
+  expectOk('async function af(a: uint32) { return "s"; } const p: Promise.<string, any> = af(1);');
+  // A promise contribution contributes what IT resolves with, the flattening
+  // `await` performs.
+  expectEarly('async function inner(a: uint32) { return "s"; } async function outer(a: uint32) { return inner(a); } const n: number = outer(1);', 'Promise.<string, any>');
+  // A body that returns no value resolves with nothing.
+  expectEarly('async function af(a: uint32) { } const n: number = af(1);', 'Promise.<void, any>');
+  // With no annotation and no anchor it stays legacy, and the boundary decides.
+  expect(thrown('async function af() { return "s"; } const n: number = af();')).toContain('[object Promise]');
 });

@@ -4491,7 +4491,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let body = (fn as { ConciseBody?: ParseNode, FunctionBody?: ParseNode }).ConciseBody
       ?? (fn as { FunctionBody?: ParseNode }).FunctionBody
       ?? (fn as { GeneratorBody?: ParseNode }).GeneratorBody
-      ?? (fn as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody;
+      ?? (fn as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody
+      ?? (fn as { AsyncBody?: ParseNode }).AsyncBody;
     if (body && body.type === 'ConciseBody') {
       body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
     }
@@ -4504,7 +4505,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A generator's body is a GeneratorBody, not a FunctionBody, and it holds
     // its statements in the same field. Without admitting it here the body fell
     // to the concise-expression branch below and no `yield` was ever collected.
-    if (body.type !== 'FunctionBody' && body.type !== 'GeneratorBody' && body.type !== 'AsyncGeneratorBody') {
+    if (body.type !== 'FunctionBody' && body.type !== 'GeneratorBody' && body.type !== 'AsyncGeneratorBody'
+        && body.type !== 'AsyncBody') {
       return pushBlock(() => {
         declareParameters();
         // Typed AT the return the position wants, where there is one, so a
