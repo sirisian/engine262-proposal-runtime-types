@@ -4948,6 +4948,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'CallExpression') {
       const callee = (node as unknown as { CallExpression?: ParseNode, MemberExpression?: ParseNode });
       const target = callee.CallExpression ?? callee.MemberExpression;
+      // #sec-published-return-types: a published inferred return type never
+      // licenses an elision. It is a claim read off a body rather than a
+      // promise the program wrote, and until the return boundary enforces it
+      // (which this increment does not yet do) nothing has checked that the
+      // value leaving the function is of it. Eliding on it reopens exactly the
+      // hole #sec-elision-stability closed for declared types: publication made
+      // `g()` in `function g() { return f(); }` statically a `uint32`, which
+      // ENABLED an elision that could not fire while the call was ~any~.
+      if (target && target.type === 'IdentifierReference') {
+        const calleeType = lookup((target as unknown as { name: string }).name);
+        if (calleeType && calleeType.Kind === 'function' && calleeType.Signatures.length === 1) {
+          const only = calleeType.Signatures[0] as { Return: Known, InferredReturn?: Known };
+          if (!only.Return && only.InferredReturn) {
+            return false;
+          }
+        }
+      }
       // Only a call through a PLAIN NAME is judged here. A method call reaches
       // its callee through a property, which a program can also replace, so the
       // same reasoning applies to it - but the demonstrated failure is the

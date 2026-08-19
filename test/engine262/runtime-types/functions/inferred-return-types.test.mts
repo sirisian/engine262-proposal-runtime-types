@@ -121,3 +121,15 @@ test('a recursive function is left unpublished rather than guessed at', () => {
   // unknown and publishes nothing, which is the conservative answer.
   expectOk('function fac(n: uint32) { return n > 1 ? fac(n) : 1; } fac(1);');
 });
+
+test('a published type never licenses eliding a check', () => {
+  // #sec-published-return-types. Publication makes a call statically typed,
+  // which ENABLES an elision that could not fire while the call was ~any~ - so
+  // publishing without this exclusion reopens the hole #sec-elision-stability
+  // closed for declared types. Here `g` publishes `uint32`, `f` is then
+  // replaced, and the boundary must still run.
+  expect(run(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    f = function () { return 'now-a-string'; };
+    const n: uint32 = g();`)).toMatchObject({ Type: 'throw' });
+});
