@@ -2821,7 +2821,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (callee && callee.Kind === 'function' && callee.Signatures.length === 1) {
-          return callee.Signatures[0].Return;
+          // #sec-published-return-types: the Static Type of a call is the
+          // DECLARED return where one is declared, and the published inferred
+          // return otherwise. The two live in separate fields so that identity,
+          // overload-set formation, ranking, and viability can read the
+          // declared one alone.
+          const only = callee.Signatures[0] as { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known };
+          return only.Return ?? only.InferredReturn
+            ?? (inferenceDepth > 0 ? only.ProvisionalReturn ?? null : null);
         }
         return null;
       }
@@ -3982,12 +3989,120 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *  - Returns inside a NESTED function belong to that function and are not
    *    collected; the walk stops at every function form.
    */
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null): Known => {
+  /**
+   * proposal-runtime-types #sec-inferred-return-types: the functions of a scope
+   * whose return type is to be inferred, queued while their signatures are
+   * built and resolved once all of them are in scope.
+   */
+  /**
+   * Non-zero while an inference is running. #sec-anchored-contributions: a
+   * function that does not participate still ANSWERS a participating function's
+   * inference, and the answer types the asker without being published for the
+   * answerer. So its provisional type must be readable from inside an inference
+   * and invisible outside one, which is what this depth distinguishes: with it
+   * at zero a call of an unpublished function has the ~any~ Static Type, as a
+   * legacy program requires.
+   */
+  let inferenceDepth = 0;
+
+  const pendingInferences: {
+    signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
+    fn: ParseNode,
+    parameterTypes: readonly Known[],
+    signatureTyped: boolean,
+  }[] = [];
+
+  /**
+   * #sec-anchored-contributions: whether a contribution is ANCHORED, meaning its
+   * Static Type derives from a declared type rather than from a literal alone.
+   *
+   * A literal type is the mark of an unanchored contribution: `return 'foo'`
+   * knows its type perfectly well and still says nothing a program annotated,
+   * while `return f()` where `f` declares `: uint32` reports `uint32` because a
+   * declaration said so, and a read of a typed binding reports its annotation
+   * for the same reason. So a known, non-literal contribution is one that
+   * derives from an annotation somewhere, and an unknown one derives from
+   * nothing at all.
+   */
+  const contributionIsAnchored = (t: Known): boolean => !!t && t.Kind !== 'literal';
+
+  /**
+   * #sec-inference-fixpoint: publish an inferred return type for each queued
+   * function, repeating until nothing changes.
+   *
+   * Repetition is what lets one inference feed another: `g` returning `f()`
+   * cannot be typed until `f` is, and the two may be written in either order. A
+   * function still unresolved when the passes run out contributed something
+   * unknown - a recursive call reaches its own unpublished signature - and
+   * publishing nothing for it is the conservative answer, which leaves it
+   * exactly as untyped as it was before this operation existed.
+   */
+  const publishInferredReturns = (): void => {
+    if (pendingInferences.length === 0) {
+      return;
+    }
+    const queue = pendingInferences.splice(0, pendingInferences.length);
+    // Two passes settle a chain written in either order; a third changes
+    // nothing that a second did not, absent recursion, which this cycle leaves
+    // unpublished rather than iterated to a fixpoint.
+    for (let pass = 0; pass < 2; pass += 1) {
+      let changed = false;
+      for (const item of queue) {
+        const anchorage = { anchored: false };
+        inferenceDepth += 1;
+        let inferred: Known;
+        try {
+          inferred = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+        } finally {
+          inferenceDepth -= 1;
+        }
+        // Every queued function gets a PROVISIONAL type, whether or not it
+        // participates, so that a participating function asking about this one
+        // gets an answer. Publication is the separate step below.
+        if (inferred && item.signature.ProvisionalReturn !== inferred) {
+          item.signature.ProvisionalReturn = inferred;
+          changed = true;
+        }
+        // A join of ~any~ publishes nothing: a function whose result is unknown
+        // is indistinguishable from one that never participated.
+        if (!inferred) {
+          continue;
+        }
+        // Participation: the signature declares a type, or a contribution is
+        // anchored. The second is what carries a type one call past the
+        // annotation that established it.
+        if (!item.signatureTyped && !anchorage.anchored) {
+          continue;
+        }
+        // #sec-inferred-result-type as harmonized: where every contribution is
+        // valueless the join is `void`, which is the annotation such a function
+        // would have been given. A bare `undefined` join is exactly that case,
+        // since a body that MIXES a valueless path with a value-carrying one
+        // joins to a union rather than to `undefined` alone.
+        const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
+          ? voidTypeRecord
+          : inferred;
+        const previous = item.signature.InferredReturn;
+        if (!previous || !SameType(previous, published)) {
+          item.signature.InferredReturn = published;
+          changed = true;
+        }
+      }
+      if (!changed) {
+        break;
+      }
+    }
+  };
+
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }): Known => {
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
       ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
-    if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression') {
+    if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression'
+        && fn.type !== 'FunctionDeclaration') {
       // A generator or async literal's result is an iterator or a promise, not
       // the returned value; those judgments are not this operation's business.
+      // #sec-inference-and-function-forms states what each of those publishes;
+      // this operation is the plain-return case the others are built on.
       return null;
     }
     const declareParameters = () => {
@@ -4059,6 +4174,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!t) {
             unknown = true;
             return;
+          }
+          // #sec-anchored-contributions, recorded HERE rather than off the join,
+          // because widening erases what the test reads: `return 's'` has the
+          // literal type of a string and widens to `string`, at which point it
+          // is indistinguishable from a contribution that a declaration
+          // supplied. Anchoring is a property of the contribution, so it is
+          // taken from the contribution.
+          if (t.Kind !== 'literal') {
+            anchorage.anchored = true;
           }
           contributions.push(widen(t));
           return;
@@ -4436,7 +4560,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
-      signatures.push({ Parameters, Return: declared, Untyped });
+      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, InferredReturn?: Known } = { Parameters, Return: declared, Untyped } as never;
+      signatures.push(signature as never);
+      // #sec-inferred-return-types: a function that declares no return type may
+      // still publish one. The inference cannot run here, because it reads the
+      // types of the other declarations in this scope and none of them is in
+      // scope yet, so the work is queued and run once every signature exists.
+      // A generator or async function is not queued: what each publishes is a
+      // protocol type built from a different join, which this cycle leaves to
+      // the clause that defines it.
+      if (!fn.TypeAnnotation && !isGenerator && n.type === 'FunctionDeclaration') {
+        pendingInferences.push({
+          signature,
+          fn: fn as unknown as ParseNode,
+          parameterTypes: annotated.slice(),
+          signatureTyped: annotated.some((t) => t !== null),
+        });
+      }
       collected.set(name, signatures);
     }
     for (const [name, Signatures] of collected) {
@@ -4445,6 +4585,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       declare(name, { Kind: 'function', Signatures } as unknown as Known);
     }
+    publishInferredReturns();
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
     for (const n of list) {

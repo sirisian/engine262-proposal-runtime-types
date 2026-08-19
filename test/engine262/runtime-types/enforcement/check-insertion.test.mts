@@ -508,7 +508,7 @@ test('a typed Set takes its element positions at the element type', () => {
   // run time still converts it, which is the backstop that assertion was
   // really about.
   expectStatic(`${s} s.has((65 := uint16));`);
-  expect(evaluated(`${s} s.add(65); function anyv() { return (65 := uint16); } String(s.has(anyv()));`)).toBe('true');
+  expect(evaluated(`${s} s.add(65); function anyv(): any { return (65 := uint16); } String(s.has(anyv()));`)).toBe('true');
   expect(evaluated(`${s} s.add(65); String(s.delete(65)) + "/" + String(s.size);`)).toBe('true/0');
   expect(evaluated(`${s} s.add(65); s.add(65); String(s.size);`)).toBe('1');
   // An untyped Set constrains nothing, exactly as an untyped array does not.

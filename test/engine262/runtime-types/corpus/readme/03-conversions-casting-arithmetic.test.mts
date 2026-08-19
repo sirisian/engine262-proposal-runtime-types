@@ -47,7 +47,7 @@ test('Conversions: a checked boundary reports range and type failures differentl
   // a value that would have to be truncated to fit is unrepresentable too
   expectThrownKind('function g(){return 1.5;} let a: uint8 = g();', 'RangeError');
   // a typed value narrowing to a width that cannot hold it
-  expectThrownKind('function g(){return (300 := uint16);} let a: uint8 = g();', 'RangeError');
+  expectThrownKind('function g(): any {return (300 := uint16);} let a: uint8 = g();', 'RangeError');
   // a finite value that a float width could only represent as an infinity is
   // unrepresentable, rather than silently becoming that infinity
   expectThrownKind('function g(){return 1e300;} let a: float32 = g();', 'RangeError');

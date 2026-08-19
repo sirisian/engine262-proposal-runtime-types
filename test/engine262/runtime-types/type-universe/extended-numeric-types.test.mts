@@ -333,7 +333,7 @@ test('numeric types: the `number` target admits numeric values only', () => {
   // A NUMERIC value passes, which is the clause's own condition: a typed value
   // IS numeric and `number` represents it exactly.
   expect(evaluated('function a() { return 5; } let x: number = a(); String(x);')).toBe('5');
-  expect(evaluated('function a() { return (5 := uint8); } let x: number = a(); String(x);')).toBe('5');
+  expect(evaluated('function a(): any { return (5 := uint8); } let x: number = a(); String(x);')).toBe('5');
 
   // A CAST is not a boundary and is untouched: it is the explicit conversion a
   // program writes when it wants ToNumber's answer, and it still wraps and
