@@ -4250,26 +4250,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
    * operator, which differ only in what they guard (F76).
    */
-  /** A statement whose call this walk cannot type, and so cannot judge after. */
-  const isUnresolvedCallStatement = (statement: ParseNode): boolean => {
-    if (statement.type !== 'ExpressionStatement') {
-      return false;
-    }
-    const expression = (statement as unknown as { Expression?: ParseNode }).Expression;
-    if (!expression || expression.type !== 'CallExpression') {
-      return false;
-    }
-    const callee = (expression as unknown as { CallExpression?: ParseNode }).CallExpression;
-    // A BARE NAME only. A declared assertion is called through a binding of a
-    // constructed guard type, and restricting to that shape is what keeps the
-    // deferral from swallowing ordinary errors: `s.push(x); ...` has an untyped
-    // MEMBER callee for reasons that have nothing to do with narrowing, and
-    // suppressing after it hid real rejections in the span suite.
-    return callee !== undefined
-      && callee.type === 'IdentifierReference'
-      && staticType(callee) === null;
-  };
-
   /**
    * The narrowing an ASSERTION statement states, applied to the rest of its
    * block.
@@ -6541,12 +6521,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         applyAssertionNarrowing(n);
-        // And the same deferral the guarded branch makes: a call this walk
-        // cannot type may be an assertion it will narrow on once the alias
-        // resolves, so it stops judging until the block ends.
-        if (isUnresolvedCallStatement(n)) {
-          deferredGuardDepth += 1;
-        }
         return;
       }
       case 'Block':
