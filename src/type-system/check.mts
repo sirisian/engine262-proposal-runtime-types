@@ -4163,6 +4163,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     fn: ParseNode,
     parameterTypes: readonly Known[],
     signatureTyped: boolean,
+    /** A generator, whose inference computes _Y_ and rebuilds its Generator type. */
+    generator?: { asyncGenerator: boolean },
   }[] = [];
 
   /**
@@ -4207,6 +4209,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let pass = 0; pass < 8; pass += 1) {
       let changed = false;
       for (const item of queue) {
+        if (item.generator) {
+          // _Y_ is computed here rather than while signatures are built, for
+          // the reason the return inference is: a `yield` whose operand calls
+          // another declaration cannot be typed until that declaration is in
+          // scope, and the pass that builds signatures has none of them yet.
+          const ya = { anchored: false };
+          inferenceDepth += 1;
+          let inferredYield: Known;
+          try {
+            inferredYield = inferredReturnType(item.fn, item.parameterTypes, null, ya, 'yield');
+          } finally {
+            inferenceDepth -= 1;
+          }
+          if (inferredYield && (item.signatureTyped || ya.anchored) && inferredYield.Kind !== 'void') {
+            const rebuilt = generatorDeclaredType(inferredYield, item.generator.asyncGenerator);
+            if (rebuilt && (!item.signature.Return || !SameType(item.signature.Return, rebuilt))) {
+              item.signature.Return = rebuilt;
+              changed = true;
+            }
+          }
+          continue;
+        }
         const anchorage = { anchored: false };
         inferenceDepth += 1;
         // Only the signature being computed is marked. Marking the whole queue
@@ -4303,13 +4327,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }, mode: 'return' | 'yield' = 'return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
       ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters
       ?? (fn as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters;
-    if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression'
+    if (mode === 'yield') {
+      // #sec-inference-and-function-forms: a generator's _Y_ is the join of what
+      // its `yield` operands contribute. The walk is the same one the return
+      // contributions use - it stops at a nested function for the same reason -
+      // so the collector below is shared and only the node it reads differs.
+      if (fn.type !== 'GeneratorDeclaration' && fn.type !== 'AsyncGeneratorDeclaration'
+          && fn.type !== 'GeneratorExpression' && fn.type !== 'AsyncGeneratorExpression'
+          && fn.type !== 'GeneratorMethod' && fn.type !== 'AsyncGeneratorMethod') {
+        return null;
+      }
+    } else if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression'
         && fn.type !== 'FunctionDeclaration' && fn.type !== 'MethodDefinition') {
       // A generator or async literal's result is an iterator or a promise, not
       // the returned value; those judgments are not this operation's business.
@@ -4347,7 +4381,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A concise arrow body: the expression IS the return. Two wrapper nodes
     // deep - `ConciseBody` holds an `ExpressionBody` which holds it (F80).
     let body = (fn as { ConciseBody?: ParseNode, FunctionBody?: ParseNode }).ConciseBody
-      ?? (fn as { FunctionBody?: ParseNode }).FunctionBody;
+      ?? (fn as { FunctionBody?: ParseNode }).FunctionBody
+      ?? (fn as { GeneratorBody?: ParseNode }).GeneratorBody
+      ?? (fn as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody;
     if (body && body.type === 'ConciseBody') {
       body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
     }
@@ -4357,7 +4393,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!body) {
       return null;
     }
-    if (body.type !== 'FunctionBody') {
+    // A generator's body is a GeneratorBody, not a FunctionBody, and it holds
+    // its statements in the same field. Without admitting it here the body fell
+    // to the concise-expression branch below and no `yield` was ever collected.
+    if (body.type !== 'FunctionBody' && body.type !== 'GeneratorBody' && body.type !== 'AsyncGeneratorBody') {
       return pushBlock(() => {
         declareParameters();
         // Typed AT the return the position wants, where there is one, so a
@@ -4400,7 +4439,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || n.type === 'ClassDeclaration' || n.type === 'ClassExpression') {
           return;
         }
-        if (n.type === 'ReturnStatement') {
+        if (mode === 'yield') {
+          if (n.type === 'YieldExpression') {
+            const y = n as unknown as { AssignmentExpression?: ParseNode | null, hasStar?: boolean };
+            if (y.hasStar) {
+              // `yield*` contributes the yield type of its OPERAND, which this
+              // increment does not read: an unknown contribution is the honest
+              // answer rather than the operand's own type, which would be the
+              // iterable rather than what it yields.
+              unknown = true;
+              return;
+            }
+            const t = y.AssignmentExpression ? staticType(y.AssignmentExpression) : null;
+            if (!t) {
+              unknown = true;
+              return;
+            }
+            if (t.Kind !== 'literal') {
+              anchorage.anchored = true;
+            }
+            contributions.push(widen(t));
+            // Fall through: a `yield` may contain another in its operand.
+          }
+        } else if (n.type === 'ReturnStatement') {
           const expr = (n as { Expression?: ParseNode | null }).Expression;
           if (!expr) {
             contributions.push(makePrimitive('undefined'));
@@ -4821,6 +4882,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A generator or async function is not queued: what each publishes is a
       // protocol type built from a different join, which this cycle leaves to
       // the clause that defines it.
+      if (!fn.TypeAnnotation && isGenerator) {
+        pendingInferences.push({
+          signature,
+          fn: n as ParseNode,
+          parameterTypes: annotated.slice(),
+          signatureTyped: annotated.some((t) => t !== null),
+          generator: { asyncGenerator: isAsyncGenerator },
+        });
+      }
       if (!fn.TypeAnnotation && !isGenerator && n.type === 'FunctionDeclaration') {
         pendingInferences.push({
           signature,

@@ -234,3 +234,24 @@ test('a function literal publishes for its RETURN, not for its call sites', () =
   expectOk('function f(): uint32 { return 5; } const g = () => f(); const n: uint32 = g();');
   expectOk('function f(): uint32 { return 5; } const g = () => { return f(); }; const n: uint32 = g();');
 });
+
+test('a generator infers its yield type', () => {
+  // #sec-inference-and-function-forms: _Y_ is the join of what the `yield`
+  // operands contribute. A generator's return annotation is sugar for _Y_, so
+  // inferring _Y_ is inferring the annotation the program did not write.
+  expectEarly('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } const n: number = g(1);', 'Generator.<uint.<8> | undefined, void, void>');
+  expect(thrown('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); yield "x"; } const n: number = g(1);')).toContain('uint.<8> | string');
+  // A declared annotation still wins, and a legacy generator is unchanged.
+  expectEarly('function* g(a: uint32): uint8 { yield 1; } const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
+  expectEarly('function* g() { yield 1; } const n: number = g();', 'Generator.<any, void, void>');
+  // The inferred element type reaches a `for`-`of` over the generator.
+  expectOk('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } for (const v of g(1)) { const u: uint8 = v; }');
+});
+
+test('yield* contributes conservatively', () => {
+  // `yield*` yields the elements of its OPERAND, not the operand, and reading
+  // the operand's own type would have published a generator of generators.
+  // Until the operand's yield type is read, the honest answer is unknown.
+  expectEarly('function f(): uint8 { return 1; } function* inner() { yield f(); }'
+    + ' function* g(a: uint32) { yield* inner(); } const n: number = g(1);', 'Generator.<any, void, void>');
+});
