@@ -29,7 +29,12 @@ export function nullishType(): TypeRecord {
     Kind: 'union',
     Members: [
       { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') },
-      { Kind: 'literal', Value: Value.undefined, Base: voidType },
+      // proposal-runtime-types #sec-null-and-undefined-types: the nullish half
+      // is the `undefined` TYPE, not a literal over ~void~. Built over ~void~ it
+      // shared no member with a `T | undefined` annotation, so `x ?? d` on the
+      // very union the clause names as the optional position was reported as a
+      // test that "can never succeed" - dead-code diagnosis of live code.
+      makePrimitive('undefined'),
     ],
   } as TypeRecord;
 }

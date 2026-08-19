@@ -599,6 +599,16 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'Composite': return makePrimitive('Composite', args);
     case 'any': return anyType;
     case 'never': return neverType;
+    // proposal-runtime-types #sec-null-and-undefined-types: `undefined` is the
+    // type whose ONE VALUE is *undefined*, described by
+    // { [[Kind]]: ~primitive~, [[Name]]: *"undefined"* }, and it "is distinct
+    // from the `void` type: `void` is the type with no values ... whereas
+    // `undefined` has the one value *undefined* and a binding may hold it."
+    // Resolving the name to ~void~ instead made `undefined` unassignable to
+    // `undefined`, which took the whole `T | undefined` optional idiom with it -
+    // the very union that clause names as the position an erased system reaches
+    // with an optional.
+    case 'undefined': return makePrimitive('undefined');
     case 'boolean1': return makePrimitive('uint', [1]);
     // proposal-runtime-types: `object` names the object type with no required
     // properties, to which every Object is assignable (spec: the primitive names

@@ -2481,6 +2481,18 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   if (!annotation) {
     return value;
   }
+  // proposal-runtime-types #sec-void-type: "A call of a function whose return
+  // type is `void` evaluates to *undefined*, as a call of a function with no
+  // `return` statement does today. The `void` type is the statement that a
+  // program must not depend on that result, not a claim that no result exists."
+  // A `void` annotation therefore constrains the CONSUMER (no binding may hold
+  // the result), not the value leaving the function: checking *undefined*
+  // against a type with no values made `function f(): void { return; }` a
+  // TypeError while the identical `function f(): void { }` passed, which is the
+  // same function written two ways.
+  if ((yield* TypeNodeToTypeRecord(annotation.Type)).Kind === 'void') {
+    return value;
+  }
   return Q(yield* EnforceAnnotation(annotation, value));
 }
 

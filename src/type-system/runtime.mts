@@ -629,8 +629,12 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   if (value instanceof ObjectValue) {
     return runtimeObjectType(value, new Set());
   }
+  // proposal-runtime-types #sec-null-and-undefined-types: "These are the types
+  // RuntimeTypeOf reports for *null* and *undefined*" - the `undefined` type,
+  // not ~void~. Reporting ~void~ made a value whose runtime type is T fail to be
+  // assignable to T, since no value is a value of the `void` type.
   if (value === Value.undefined) {
-    return voidType;
+    return makePrimitive('undefined');
   }
   return { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
 }
@@ -1721,6 +1725,13 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
     return SameType(carried, component);
   }
   switch (name) {
+    // proposal-runtime-types #sec-null-and-undefined-types: `undefined` is "the
+    // type whose one value is *undefined*", so membership is exactly that one
+    // value. Without this case the name fell to the default below, which asks
+    // whether the value CONVERTS, and *undefined* converts to nothing - so a
+    // value was not a member of the very type RuntimeTypeOf reports for it.
+    case 'undefined':
+      return value === Value.undefined;
     case 'uint':
     case 'int':
     case 'float16':
@@ -2135,13 +2146,17 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (library) {
         return library;
       }
-      // proposal-runtime-types: `undefined` in type position denotes the type of
-      // the `undefined` value. RuntimeTypeOf(undefined) is `void`, so the
-      // `undefined` type name resolves to the same `void` type, keeping the type
-      // of a value and the type that names it in agreement (the name is otherwise
-      // the global `undefined` value binding).
+      // proposal-runtime-types #sec-null-and-undefined-types: `undefined` in type
+      // position denotes the type of the `undefined` value, which that clause
+      // states is a PRIMITIVE type named *"undefined"* and "distinct from the
+      // `void` type". Resolving it to ~void~ kept the name and RuntimeTypeOf in
+      // agreement only by making both wrong: `void` is the type with NO values,
+      // so `let x: undefined = undefined;` and every `T | undefined` union was a
+      // TypeError at the binding. RuntimeTypeOf is corrected to match (the
+      // `undefined` value reports the `undefined` type), which keeps the two in
+      // agreement at the type the clause specifies.
       if (name === 'undefined') {
-        return voidType;
+        return makePrimitive('undefined');
       }
       const ref = Q(yield* ResolveTypeName(Value(name)));
       // The binding is consulted first, since an initialized one carries the
@@ -2593,11 +2608,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           if (!prop) {
             return Throw.TypeError('$1', Value(`property '${keyName}' does not exist on the indexed type`));
           }
-          // An optional property's access admits `undefined`. The engine's `void`
-          // type (which `type undefined` names) has empty membership, so the
-          // admission is the literal `undefined` value type, whose membership is
-          // SameValue and therefore holds for `undefined`.
-          const undefinedType: TypeRecord = { Kind: 'literal', Value: Value.undefined, Base: voidType };
+          // proposal-runtime-types #sec-null-and-undefined-types: an optional
+          // property's access admits `undefined`, which is now the `undefined`
+          // TYPE. This previously had to spell that admission as a literal over
+          // ~void~, because the `undefined` name resolved to ~void~ and ~void~
+          // has empty membership; with the name resolving to the primitive the
+          // clause specifies, the type says what it means directly.
+          const undefinedType: TypeRecord = makePrimitive('undefined');
           results.push(prop.optional
             ? CanonicalizeType({ Kind: 'union', Members: [prop.type, undefinedType] })
             : prop.type);
