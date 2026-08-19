@@ -536,10 +536,63 @@ export function CheckScript(script: ParseNode.Script): ObjectValue[] {
   return CheckStatementList(script.ScriptBody?.StatementList ?? null, script);
 }
 
+/**
+ * proposal-runtime-types #sec-inference-fixpoint: the types a module makes
+ * available under each exported name, recorded when the module is checked so
+ * that an IMPORTING module can read them.
+ *
+ * A module's own text determines these - `export function fx(): uint32` says
+ * what `fx` is without reference to anything imported - so they are collected
+ * during the ordinary parse-time check and read later, at link time, when the
+ * graph is resolved and an importer can be told what it is importing.
+ */
+const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
+
+export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
+  return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
+}
+
 export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
   // walked structurally, and their inner declarations checked as usual.
-  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module);
+  const session = CreateCheckSession();
+  const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  // Every top-level declaration of the module, keyed by its LOCAL name. An
+  // importer resolves an import to the exporting module and a binding name -
+  // which is that local name - so nothing here needs to read export syntax, and
+  // a re-export or a renamed export resolves through the same lookup.
+  const exported = new Map<string, Known>(session.frame.bindings);
+  moduleExportedTypes.set(module as unknown as object, exported);
+  return errors;
+}
+
+/**
+ * Check _module_ again with the types of the names it IMPORTS supplied.
+ *
+ * The parse-time check above runs before the module graph is resolved, so an
+ * imported name is undeclared there and a call of it is ~any~. This pass runs at
+ * link time, when every dependency has been parsed and its exported types
+ * recorded, and it can therefore report what the first pass could not: that a
+ * value crossing a module boundary does not fit the annotation it is given.
+ *
+ * Running the whole check twice reports nothing twice, because a module whose
+ * first pass found errors never reaches linking. Every error this pass finds is
+ * one that needed an import to see.
+ */
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>): ObjectValue[] {
+  if (imported.size === 0) {
+    return [];
+  }
+  const session = CreateCheckSession();
+  for (const [name, t] of imported) {
+    session.frame.bindings.set(name, t as Known);
+    session.frame.declaredNames.add(name);
+    // An import binding cannot be assigned, so a call through it is stable for
+    // #sec-elision-stability - the exporting module's own mutation is what the
+    // stability rule there judges, and this pass does not see it.
+    session.frame.immutableNames.add(name);
+  }
+  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
 }
 
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
@@ -5043,7 +5096,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const declareFunctionSignatures = (list: readonly ParseNode[]) => {
+  const declareFunctionSignatures = (outerList: readonly ParseNode[]) => {
+    // An `export`ed declaration is wrapped, and the collection below reads the
+    // list positionally, so `export function f(): uint32 {}` was never
+    // collected: its signature existed nowhere, and a call of it was ~any~ in
+    // its own module as much as in an importing one. Unwrapping here rather
+    // than in each of the loops keeps the three collection passes reading one
+    // list.
+    const list: ParseNode[] = [];
+    for (const item of outerList) {
+      if (item.type === 'ExportDeclaration') {
+        const ed = item as unknown as {
+          Declaration?: ParseNode | null,
+          HoistableDeclaration?: ParseNode | null,
+          ClassDeclaration?: ParseNode | null,
+          VariableStatement?: ParseNode | null,
+        };
+        const inner = ed.HoistableDeclaration ?? ed.Declaration ?? ed.ClassDeclaration ?? ed.VariableStatement;
+        if (inner) {
+          list.push(inner);
+          continue;
+        }
+      }
+      list.push(item);
+    }
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
     // per name and declared together. Declaring one at a time let the last

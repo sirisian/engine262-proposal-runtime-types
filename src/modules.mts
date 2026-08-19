@@ -11,6 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
+import { CheckModuleWithImports, ExportedTypesOf } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import {
   Completion,
@@ -697,6 +698,9 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     const env = new ModuleEnvironmentRecord(realm.GlobalEnv);
     // 6. Set module.[[Environment]] to env.
     module.Environment = env;
+    // Accumulates each imported name's type, for the import-aware check that
+    // follows the loop.
+    const importedTypes = new Map<string, unknown>();
     // 7. For each ImportEntry Record in in module.[[ImportEntries]], do
     for (const ie of module.ImportEntries) {
       // a. Let importedModule be GetImportedModule(module, in.[[ModuleRequest]]).
@@ -710,6 +714,27 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
         X(env.CreateImmutableBinding(ie.LocalName, Value.true));
         // iii. Call env.InitializeBinding(in.[[LocalName]], namespace).
         X(env.InitializeBinding(ie.LocalName, namespace));
+        // proposal-runtime-types: a namespace import is one binding holding
+        // every export, so its type is the object shape of what the module
+        // declares. Without this `import * as A` typed `A.fx()` as ~any~ while
+        // `import { fx }` typed it, which would make the SPELLING of an import
+        // decide whether a program is checked.
+        if (surroundingAgent.feature('runtime-types')
+            && importedModule instanceof SourceTextModuleRecord) {
+          const exported = ExportedTypesOf(importedModule.ECMAScriptCode);
+          if (exported) {
+            const names = new Set(importedModule.GetExportedNames().map((v) => (typeof v === 'string' ? v : (v as JSStringValue).stringValue())));
+            const Properties = [];
+            for (const [local, t] of exported) {
+              if (names.has(local) && t) {
+                Properties.push({ key: local, type: t, optional: false, readonly: true });
+              }
+            }
+            if (Properties.length > 0) {
+              importedTypes.set(ie.LocalName.stringValue(), { Kind: 'object', Properties, IndexSignatures: [] });
+            }
+          }
+        }
       } else if (ie.ImportName === 'source') {
         const moduleSourceObject = importedModule.ModuleSource;
         if (moduleSourceObject === undefined) {
@@ -748,7 +773,34 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
         } else { // iv. Else,
           // 1. Call env.CreateImportBinding(in.[[LocalName]], resolution.[[Module]], resolution.[[BindingName]]).
           X(env.CreateImportBinding(ie.LocalName, resolution.Module, resolution.BindingName));
+          // proposal-runtime-types #sec-inference-fixpoint: record what this
+          // name IS, for the import-aware check below. The exporting module has
+          // been parsed and checked by now, so its exported types are known;
+          // at the importer's own parse this name was undeclared and every use
+          // of it was ~any~.
+          if (surroundingAgent.feature('runtime-types')
+              && resolution.Module instanceof SourceTextModuleRecord) {
+            const exported = ExportedTypesOf(resolution.Module.ECMAScriptCode);
+            const t = exported?.get((resolution.BindingName as JSStringValue).stringValue?.() ?? String(resolution.BindingName));
+            if (t !== undefined) {
+              importedTypes.set(ie.LocalName.stringValue(), t);
+            }
+          }
         }
+      }
+    }
+
+    // proposal-runtime-types: the import-aware check. A module is checked once
+    // at parse, before the graph exists, and again here, once every dependency
+    // has been resolved and its exported types are readable. The first pass
+    // cannot see across a module boundary at all, so a value crossing one was
+    // unchecked however completely both sides were annotated. Nothing is
+    // reported twice: a module whose parse-time check failed never reaches
+    // linking, so every error found here is one that needed an import to see.
+    if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
+      const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes);
+      if (typeErrors.length > 0) {
+        return ThrowCompletion(typeErrors[0]);
       }
     }
     // 8. Let moduleContext be a new ECMAScript code execution context.
