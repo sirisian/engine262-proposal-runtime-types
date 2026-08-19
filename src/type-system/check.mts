@@ -1732,6 +1732,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return libraryTypeRecord('RangeTo', [element, ordinal(r.RangeEndBound)]);
     }
+    if (node.type === 'ParenthesizedExpression') {
+      const inner = (node as unknown as { Expression?: ParseNode }).Expression;
+      if (inner && inner.type === 'ArrayLiteral' && contextual
+          && (contextual.Kind === 'array' || contextual.Kind === 'tuple')) {
+        return staticTypeIn(inner, contextual);
+      }
+    }
+    if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'tuple') {
+      return null;
+    }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'array') {
       checkArrayLiteralAgainst(node as ParseNode.ArrayLiteral, contextual);
       // The elements are checked above; the LITERAL still reports no type.
@@ -3160,6 +3170,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // either and nothing downstream could be checked.
       case 'TypeArgumentsExpression':
         return staticType((node as unknown as { Expression: ParseNode }).Expression);
+      case 'ArrayLiteral': {
+        const elements = (node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
+        if (elements.length === 0) {
+          return null;
+        }
+        let allElementsLiteral = true;
+        const members: TypeRecord[] = [];
+        for (const el of elements) {
+          if (!el || typeof el !== 'object') {
+            continue;
+          }
+          let t: Known;
+          if (el.type === 'Elision') {
+            t = makePrimitive('undefined');
+          } else if (el.type === 'SpreadElement') {
+            const spread = staticType((el as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+            t = spread && spread.Kind === 'array' ? (spread as { Element: TypeRecord }).Element : null;
+          } else {
+            t = staticType(el);
+          }
+          if (!t) {
+            return null;
+          }
+          if (t.Kind !== 'literal') {
+            allElementsLiteral = false;
+          }
+          const widened = widen(t);
+          if (!members.some((m) => SameType(m, widened))) {
+            members.push(widened);
+          }
+        }
+        if (members.length === 0) {
+          return null;
+        }
+        const element = members.length === 1 ? members[0]! : CanonicalizeType({ Kind: 'union', Members: members });
+        if (allElementsLiteral) {
+          literalDerivedArrays.add(node as unknown as object);
+        }
+        return { Kind: 'array', Element: element, Extent: 'dynamic' } as Known;
+      }
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'CallExpression': {
@@ -4814,6 +4864,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const contributionIsAnchored = (t: Known): boolean => !!t && t.Kind !== 'literal';
 
+  /** Array literals every element of which is a literal; they anchor nothing. */
+  const literalDerivedArrays = new WeakSet<object>();
+
 
 
   /**
@@ -5202,7 +5255,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // is indistinguishable from a contribution that a declaration
           // supplied. Anchoring is a property of the contribution, so it is
           // taken from the contribution.
-          if (t.Kind !== 'literal') {
+          if (t.Kind !== 'literal' && !literalDerivedArrays.has(expr as unknown as object)) {
             anchorage.anchored = true;
           }
           if (mode === 'resolve' && t.Kind === 'nominal' && t.LibraryName === 'Promise'

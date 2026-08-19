@@ -854,7 +854,12 @@ test('the PARAMETER boundary is a different decision, and this is why', () => {
   const f = 'function f(p: uint8) { return p is uint8; } ';
   expect(evaluated(`${f} String(f((5 := uint8)));`)).toBe('true');
   expect(thrownKind(`${f} f.apply(null, [300]);`)).toBe('RangeError');
-  expect(thrownKind(`${f} [300].map(f);`)).toBe('RangeError');
+  // The literal `[300]` now has an element type of `number`, so the mismatch
+  // with the callback's `uint8` parameter is reported as a TYPE error before
+  // the value is examined, where it was previously a RangeError about the value
+  // 300 itself. The stricter report arrives earlier; the weaker one described
+  // the value better, which is the trade this makes.
+  expect(thrownKind(`${f} [300].map(f);`)).toBe('TypeError');
   expect(thrownKind(`${f} eval("f(300)");`)).toBe('RangeError');
 });
 
@@ -1087,7 +1092,14 @@ test('a typed collection takes its needle at the element type', () => {
   // *false*, on the BigInt precedent the language already ships.
   expect(evaluated('const b = [65]; String(b.includes(70000)) + "/" + String(b.includes("hello"));')).toBe('false/false');
   expect(evaluated('const b = [65]; String(b.includes(65)) + "/" + String(b.includes((65 := uint16)));')).toBe('true/false');
-  expect(evaluated('String([1n].includes(1));')).toBe('false');
+  // #sec-array-types: a bare array literal is an array of the join of its
+  // elements, so `[1n]` is a `[].<bigint>` and `includes` is read at that
+  // element type - which makes the argument a `bigint` position, and literal
+  // propagation builds `1` as `1n`. The answer therefore changes from *false*
+  // to *true*. It is a change to a program with no annotation in it, and it is
+  // accepted deliberately: nothing writes `[1n].includes(1)` expecting *false*,
+  // and the alternative is to leave every array literal untyped.
+  expect(evaluated('String([1n].includes(1));')).toBe('true');
 });
 
 test('a typed array reads its length at the index type, and an untyped one does not', () => {
