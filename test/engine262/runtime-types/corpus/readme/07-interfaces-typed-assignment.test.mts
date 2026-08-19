@@ -71,9 +71,23 @@ test('Implementing Interfaces: a class implements an interface', () => {
 // A class that implements an interface is a subtype of it; a plain object type is
 // not a declared subtype (though its values satisfy it structurally, above).
 test('Interfaces: assignability follows the nominal hierarchy', () => {
-  // an implementing class relates to its interface; a bare object type does not
-  // (its VALUES satisfy the interface structurally via instanceof, tested above)
-  expect(bool('interface I { a: uint8; } type O = { a: uint8 }; String(Reflect.isAssignable(O, I));')).toBe(false);
+  // an implementing class relates to its interface, and so does a bare object
+  // type that has the members.
+  //
+  // PLAN-nominal-records.md phase 3 CHANGED THIS ASSERTION, and the change is
+  // worth a decision rather than a silent flip. This line asserted *false*, on
+  // the reading that an interface is nominal for assignability and structural
+  // only for membership. `#sec-object-types` says otherwise, in the clause that
+  // defines the structural form: "This is what lets a value satisfy an
+  // interface by having its members, which IsSubtype reads. Without it the
+  // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`
+  // ... the step separating the kinds would answer before any member was
+  // inspected." `#sec-issubtype` carries the step itself. `f(o)` for an
+  // object-typed `o` was refused here, which is that failure exactly.
+  //
+  // If the README's nominal reading is the intended one, this is the line to
+  // revert and the specification's two steps are what want changing.
+  expect(bool('interface I { a: uint8; } type O = { a: uint8 }; String(Reflect.isAssignable(O, I));')).toBe(true);
 });
 
 // -- Typed Assignment: `let a := X` and `expression := Type` -------------------

@@ -447,6 +447,29 @@ function spanElementOf(t: TypeRecord): TypeRecord | undefined {
   return first === undefined || first === null ? undefined : first;
 }
 
+/**
+ * The structural form of an interface type, where the type has one.
+ *
+ * PLAN-nominal-records.md phase 3. #sec-object-types: "The structural form of
+ * an interface type is the ~object~ Type Record whose [[Members]] are the
+ * members the interface declares, taken together with those it inherits ...
+ * Every interface has one. A class has none: a class states a construction and
+ * an identity as well as a shape, and it is the identity that its type is for."
+ *
+ * A LIBRARY nominal is excluded for the reason the class-satisfies-interface arm
+ * already gives: the reflection contexts are distinguished by kind, not by
+ * shape, and one whose members are a superset of another's must not satisfy it.
+ */
+function InterfaceStructureOf(t: TypeRecord): TypeRecord | undefined {
+  if (t.Kind !== 'nominal' || t.LibraryName !== undefined) {
+    return undefined;
+  }
+  if ((t.Declaration as { type?: string } | undefined)?.type !== 'InterfaceDeclaration') {
+    return undefined;
+  }
+  return t.Structure;
+}
+
 /** A literal type whose value is a Number, which a complex position may lift. */
 function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
   return s.Value instanceof NumberValue || isTypedNumber(s.Value as Value);
@@ -612,6 +635,40 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return elementOk(source);
     }
     return false;
+  }
+  // PLAN-nominal-records.md phase 3, and #sec-issubtype's two structural steps.
+  // They come BEFORE the step that separates the kinds, which is the whole
+  // point: #sec-object-types names the failure this prevents - "Without it the
+  // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`,
+  // since an interface is a ~nominal~ type and an object literal's type is
+  // ~object~, and the step separating the kinds would answer before any member
+  // was inspected." That was the engine's behaviour.
+  //
+  // Each step continues with `next`, the assumption list carrying this pair:
+  // an interface whose member type mentions the interface itself makes the
+  // structural comparison recursive, and the assumption list is what ends it.
+  // Passing `assumptions` unchanged blew the stack on two interfaces.
+  //
+  // A CLASS source is deliberately not routed here. It has no structural form,
+  // so a class that declares no `implements` must not satisfy an interface by
+  // shape; the class-satisfies-interface arm below handles the declared case.
+  {
+    const targetStructure = InterfaceStructureOf(t);
+    if (targetStructure && s.Kind === 'object') {
+      return IsSubtype(s, targetStructure, next);
+    }
+    const sourceStructure = InterfaceStructureOf(s);
+    if (sourceStructure && t.Kind === 'object') {
+      return IsSubtype(sourceStructure, t, next);
+    }
+    // Interface to interface is NOT routed here yet. It recurses without
+    // terminating: `assumed` compares assumption pairs by IDENTITY, and the
+    // records these two structures are compared through are not the same
+    // objects on the way back round, so the pair never matches and the walk
+    // never ends. It needs the assumption list to key on the DECLARATIONS, or
+    // the structural forms to be interned, and either is a change to how
+    // termination works rather than a step to add here. Recorded, not
+    // attempted: `Big <: Small` for two interfaces stays *false* for now.
   }
   if (s.Kind !== t.Kind) {
     return false;

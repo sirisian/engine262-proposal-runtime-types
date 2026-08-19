@@ -94,3 +94,22 @@ test('a class type is satisfied by construction, not by shape', () => {
   // for the other question.
   expect(evaluated('interface I { a: uint8 } let o: I = { a: (1 := uint8) }; String(o.a);')).toBe('1');
 });
+
+test('an object type satisfies an interface by having its members', () => {
+  // PLAN-nominal-records.md phase 3. #sec-issubtype takes the structural form
+  // of an interface BEFORE the step that separates the kinds, and
+  // #sec-object-types names the failure that ordering prevents: "Without it the
+  // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`".
+  const iface = 'interface I { a: uint8 } ';
+  expect(evaluated(`${iface} let o: { a: uint8 } = { a: (1 := uint8) }; let x: I = o; String(x.a);`)).toBe('1');
+  expect(evaluated(`${iface} function f(p: I) { return "took"; } let o: { a: uint8 } = { a: (1 := uint8) }; f(o);`)).toBe('took');
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { a: uint8 }, type I));`)).toBe('true');
+  // Width subtyping applies through the structural form.
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { a: uint8, b: string }, type I));`)).toBe('true');
+  // A missing member and a wrong member type are still refused.
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { b: uint8 }, type I));`)).toBe('false');
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { a: string }, type I));`)).toBe('false');
+  // The reverse direction is the clause's second step: an interface source
+  // against an ~object~ target.
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type I, type { a: uint8 }));`)).toBe('true');
+});
