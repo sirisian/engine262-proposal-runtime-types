@@ -70,3 +70,30 @@ test("a tuple's arity is fixed against length", () => {
   // A dynamic array's length is not part of its type.
   expect(evaluated('let a: [].<uint8> = [1, 2]; a.length = 1; String(a.length);')).toBe('1');
 });
+
+test('a copy of a tuple carries the shape the operation produced', () => {
+  // PLAN-tuple-stores.md phase 2, the tuple half. An array's copy has the same
+  // element type whatever the operation did; a tuple's does not - `toReversed`
+  // permutes the positions, `slice` takes a window, `with` leaves them alone -
+  // so each method states the shape it produced rather than sharing one rule.
+  const t = 'let t: [uint8, string] = [1, "s"]; let bad = {}; bad.v = "no"; ';
+  // Reversed: position 0 is now the string and position 1 the uint8.
+  expect(evaluated(`${t} const r = t.toReversed(); r[0] = "ok"; r[0];`)).toBe('ok');
+  expectThrown(`${t} const r = t.toReversed(); r[1] = bad.v;`);
+  // `with` replaces one position with a value already checked against that
+  // position's type, so the shape is unchanged.
+  expectThrown(`${t} const r = t.with(1, "x"); r[0] = bad.v;`);
+  // A slice is a window on the positions, and the indices are known at run time
+  // even where they were not known statically.
+  expect(evaluated(`${t} const r = t.slice(1); r[0] = "fine"; r[0];`)).toBe('fine');
+  expectThrown(`${t} const r = t.slice(0, 1); r[0] = bad.v;`);
+  // A sort permutes, so the shape survives only where permuting cannot change
+  // it: every position the same type.
+  expectThrown('let h: [uint8, uint8] = [2, 1]; let bad = {}; bad.v = "no"; const r = h.toSorted(); r[0] = bad.v;');
+  // A heterogeneous tuple sorted by an arbitrary comparator has no position
+  // types this operation can state, so the copy carries none rather than a
+  // guess. Recorded as the measured answer, not as the desired one.
+  expect(evaluated(`${t} const r = t.toSorted(); r[0] = bad.v; String(r[0]);`)).toBe('no');
+  // A tuple with a REST is left alone: its positions are not a fixed list.
+  expect(evaluated('let r: [uint8, ...string] = [1, "a"]; const c = r.toReversed(); c[0] = 5; String(c[0]);')).toBe('5');
+});

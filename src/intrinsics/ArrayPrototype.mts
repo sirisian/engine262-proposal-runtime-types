@@ -16,6 +16,7 @@ import {
 import { StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { assignProps } from './bootstrap.mts';
@@ -658,6 +659,8 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
   } else {
     final = Math.min(relativeEnd, len);
   }
+  // Captured before the copy loop advances `k`: this is the window's start.
+  const windowStart = k;
   const count = Math.max(final - k, 0);
   const A = Q(yield* ArraySpeciesCreate(O, count));
   let n = 0;
@@ -674,6 +677,12 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
   }
   Q(yield* Set(A, Value('length'), F(n), Value.true));
   propagateElementType(O, A);
+  // A slice is a WINDOW on the positions, and the indices are known here even
+  // where they were not known statically, so the window is exact.
+  const sliceShape = tupleShapeOf(O);
+  if (sliceShape !== undefined && sliceShape.Rest === undefined) {
+    propagateTupleShape(A, sliceShape.Positions.slice(windowStart, final));
+  }
   return A;
 }
 
@@ -720,6 +729,15 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
     j += 1;
   }
   propagateElementType(O, A);
+  // A sort permutes positions, so the result's shape is knowable only where
+  // permuting cannot change it - every position the same type. A heterogeneous
+  // tuple sorted by an arbitrary comparator has no position types this
+  // operation can state, and stamping the source's would be a lie.
+  const sortedShape = tupleShapeOf(O);
+  if (sortedShape !== undefined && sortedShape.Rest === undefined && sortedShape.Positions.length > 0
+      && sortedShape.Positions.every((position) => SameTypeRecord(position, sortedShape.Positions[0]!))) {
+    propagateTupleShape(A, sortedShape.Positions);
+  }
   return A;
 }
 
@@ -917,6 +935,12 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
     k += 1;
   }
   propagateElementType(O, A);
+  // `with` replaces one position with a value already checked against that
+  // position's type, so the shape is the source's.
+  const withShape = tupleShapeOf(O);
+  if (withShape !== undefined && withShape.Rest === undefined) {
+    propagateTupleShape(A, withShape.Positions);
+  }
   return A;
 }
 
@@ -1021,6 +1045,37 @@ function propagateElementType(source: Value, copy: Value): void {
   }
 }
 
+/** The tuple shape an array carries, where it carries one. */
+type TupleShape = { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined };
+
+function tupleShapeOf(source: Value): TupleShape | undefined {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return undefined;
+  }
+  return (source as { TypedTuple?: TupleShape }).TypedTuple;
+}
+
+/**
+ * PLAN-tuple-stores.md phase 2, the tuple half: give a copy the tuple shape the
+ * operation produced.
+ *
+ * `propagateElementType` covers an array, whose copy has the same element type
+ * whatever the operation did. A tuple's does not: `toReversed` permutes the
+ * positions, `slice` takes a window of them, `with` leaves them alone. So the
+ * caller passes the positions its own operation produced, and this stamps them.
+ *
+ * A tuple with a REST is left alone here. Its positions are not a fixed list -
+ * the rest collects however many the value happens to hold - so permuting or
+ * slicing one does not have an answer in the same sense, and stamping a guess
+ * would be worse than stamping nothing.
+ */
+function propagateTupleShape(copy: Value, positions: readonly TypeRecord[]): void {
+  if (!surroundingAgent.feature('runtime-types') || !(copy instanceof ObjectValue)) {
+    return;
+  }
+  (copy as unknown as { TypedTuple?: TupleShape }).TypedTuple = { Positions: positions, Rest: undefined };
+}
+
 /** https://tc39.es/ecma262/#sec-array.prototype.toreversed */
 function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
@@ -1035,6 +1090,12 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
     k += 1;
   }
   propagateElementType(O, A);
+  // The reverse of `[uint8, string]` is `[string, uint8]`: the positions are
+  // the source's, read backwards.
+  const reversedShape = tupleShapeOf(O);
+  if (reversedShape !== undefined && reversedShape.Rest === undefined) {
+    propagateTupleShape(A, [...reversedShape.Positions].reverse());
+  }
   return A;
 }
 
