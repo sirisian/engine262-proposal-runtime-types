@@ -878,18 +878,19 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if ((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
         && s.LibraryName === undefined
         && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
-        // PLAN-nominal-records.md phase 4 STOPPED HERE, deliberately. Requiring
-        // `ClassImplements(s, tn.Declaration)` is what #sec-issubtype says - a
-        // class relates to an interface only where it REFINES it, "a nominal
-        // type whose declaration extends or implements that type's declaration"
-        // - and #sec-object-types is explicit that "A class has none [no
-        // structural form]". But `classes/interface-satisfaction.test.mts`
-        // asserts the opposite in as many words, with reasoning, and the corpus
-        // asserted the opposite of THAT for object types (phase 3 flipped it).
-        // Two deliberate assertions pointing opposite ways is a design question,
-        // not a bug to fix in passing. The helper is written and unused; wire it
-        // here when the question is settled.
-        && true) {
+        // PLAN-interface-satisfaction.md phase 2, implementing D-3: AN INTERFACE
+        // ASKS WHAT A CLASS PROMISED. A class relates to an interface only where
+        // it REFINES it - #sec-issubtype, "a nominal type whose declaration
+        // extends or implements that type's declaration" - and #sec-object-types
+        // is explicit that a class has no structural form to be compared by.
+        //
+        // Comparing structures for ANY class against ANY interface admitted a
+        // class that declared nothing, which made `implements` decorative and an
+        // empty interface universal. The ergonomic objection to requiring it -
+        // that a third-party class could then reach no structural position - is
+        // answered by phase 1: an object type asks what a value HAS, and a class
+        // instance reaches every object-typed position without saying anything.
+        && ClassImplements(s, tn.Declaration)) {
         // PLAN-nominal-records.md phase 1: [[Structure]] is declared on the
         // record, so these read fields rather than hoping for them. The casts
         // were what let a reader believe the relation and its callers agreed.

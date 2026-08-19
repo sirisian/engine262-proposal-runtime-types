@@ -32,14 +32,39 @@ test('a class satisfies an interface it declares', () => {
   `)).toBe(true);
 });
 
-test('a class satisfies an interface it does NOT declare', () => {
-  // The case the structural form exists for. A class states a construction and
-  // an identity as well as a shape, so it would be refused by a rule that
-  // compared kinds before members - which is what the specification's kind
-  // guard does, and why the structural form is consulted before it.
-  expect(ok(`
+test('a class does NOT satisfy an interface it never declared', () => {
+  // REWRITTEN by PLAN-interface-satisfaction.md phase 2, and the case it was
+  // protecting is kept below rather than lost.
+  //
+  // It asserted the opposite: that a class with the right shape satisfies an
+  // interface it never mentions. #sec-issubtype relates a class to an interface
+  // only where it REFINES it - "a nominal type whose declaration extends or
+  // implements that type's declaration" - and #sec-object-types says a class has
+  // no structural form to be compared by: "a class states a construction and an
+  // identity as well as a shape, and it is the identity that its type is for".
+  //
+  // The decided rule (ANALYSIS-class-interface-satisfaction.md, D-3) is that an
+  // OBJECT TYPE asks what a value HAS and an INTERFACE asks what a class
+  // PROMISED. The ergonomic objection this test was defending against - that a
+  // class could then reach no structural position - is answered by phase 1, and
+  // that is the second assertion here.
+  expectError(`
     interface I { a: string; }
     class D { a: string = 's'; }
+    function f(x: I) {}
+    f(new D());
+  `);
+  // The same class reaches an OBJECT-typed position, which is where a shape is
+  // what was asked for.
+  expect(ok(`
+    class D { a: string = 's'; }
+    function f(x: { a: string }) {}
+    f(new D());
+  `)).toBe(true);
+  // And saying `implements` is all it takes to reach the interface.
+  expect(ok(`
+    interface I { a: string; }
+    class D implements I { a: string = 's'; }
     function f(x: I) {}
     f(new D());
   `)).toBe(true);
@@ -122,4 +147,34 @@ test('a class only reaches an object type it actually satisfies', () => {
   // "A class states a construction and an identity as well as a shape, and it is
   // the identity that its type is for."
   expect(evaluated('class Point { x: uint8 = 1; } String(Reflect.isAssignable(type { x: uint8 }, type Point));')).toBe('false');
+});
+
+test('the implements clause is walked up the base chain', () => {
+  // A class implements what its superclass implements, so the relation walks
+  // [[Base]] as well as the class's own clause.
+  expect(ok(`
+    interface I { x: uint8; }
+    class Declared implements I { x: uint8 = 1; }
+    class Sub extends Declared { y: uint8 = 2; }
+    function f(p: I) {}
+    f(new Sub());
+  `)).toBe(true);
+  expect(evaluated('interface I { x: uint8; } class Declared implements I { x: uint8 = 1; } '
+    + 'class Sub extends Declared { y: uint8 = 2; } String(Reflect.isAssignable(type Sub, type I));')).toBe('true');
+  // A sibling that inherits nothing declaring it does not satisfy.
+  expect(evaluated('interface I { x: uint8; } class Loose { x: uint8 = 1; } '
+    + 'String(Reflect.isAssignable(type Loose, type I));')).toBe('false');
+});
+
+test('an empty interface is satisfied by a value, not by any class', () => {
+  // Q3 of the plan, decided deliberately: an empty interface is satisfied by
+  // any value with no required members, which is what falls out of the
+  // structural half. Under D-3 a CLASS still has to say so - which is what
+  // keeps `implements` meaningful for a marker interface, the case TypeScript's
+  // `{}` cannot express.
+  expect(evaluated('interface Marker {} String(Reflect.isAssignable(type { q: string }, type Marker));')).toBe('true');
+  expect(evaluated('interface Marker {} class C { q: string = "s"; } '
+    + 'String(Reflect.isAssignable(type C, type Marker));')).toBe('false');
+  expect(evaluated('interface Marker {} class C implements Marker { q: string = "s"; } '
+    + 'String(Reflect.isAssignable(type C, type Marker));')).toBe('true');
 });
