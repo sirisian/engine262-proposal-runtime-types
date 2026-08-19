@@ -242,6 +242,30 @@ function isNumberConversionSource(value: Value): boolean {
 }
 
 /**
+ * proposal-runtime-types #sec-primitiveconvert: what a `boolean` BOUNDARY
+ * admits, which is a Boolean and nothing else.
+ *
+ * ToBoolean is total, which is the reason this reads as tempting and the reason
+ * it is wrong: #sec-requiretype's own rule for the numeric targets is that
+ * coercing first "would make an annotation a coercion rather than a check", and
+ * that a conversion which "could not fail at all" lets "a missing field become
+ * a NaN that surfaces far from the annotation that admitted it". At a `boolean`
+ * target that failure is reachable twice over - a missing field became *false*,
+ * and the string `'false'` became *true* - at the very position a program
+ * annotated in order to catch it.
+ *
+ * A boundary is a STORE and not a question. `if (v)` interrogates a value in
+ * place; a boundary mints a durable answer that no longer carries what it was
+ * made from. A program that means the truthiness writes `Boolean(v)`, and a
+ * CAST still converts: `v := boolean` is an explicit instruction, and
+ * ConvertValue leaves it alone for the same reason it leaves `v := number`
+ * alone.
+ */
+function isBooleanConversionSource(value: Value): boolean {
+  return value instanceof BooleanValue;
+}
+
+/**
  * proposal-runtime-types #sec-union-boundary-selection: the member of a union a
  * value crosses into.
  *
@@ -1046,6 +1070,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         }
         return Q(yield* ToNumber(value));
       case 'boolean':
+        if (!isBooleanConversionSource(value)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
         return ToBoolean(value);
       case 'bigint': {
         // The other direction of the same rule: an integer type's values ARE

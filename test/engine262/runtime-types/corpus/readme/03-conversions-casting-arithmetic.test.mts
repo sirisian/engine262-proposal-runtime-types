@@ -236,10 +236,22 @@ test('Conversions: a string annotation accepts what has a canonical text', () =>
   expect(evaluated('function g(){return undefined;} let s: string = String(g()); s;')).toBe('undefined');
 });
 
-// The boolean arm is deliberately UNCHANGED: ToBoolean is total, every value has
-// a defined truthiness, and `if (x)` is the language's own idiom for it.
-test('Conversions: a boolean annotation still takes any value', () => {
-  expect(evaluated('function g(){return {};} let b: boolean = g(); String(b);')).toBe('true');
-  expect(evaluated('function g(){return undefined;} let b: boolean = g(); String(b);')).toBe('false');
-  expect(evaluated('function g(){return "";} let b: boolean = g(); String(b);')).toBe('false');
+// The boolean arm REFUSES what it once converted. ToBoolean's totality is what
+// disqualifies it at a boundary rather than what recommends it: a conversion
+// that cannot fail cannot report, so a missing field became *false* and the
+// string `'false'` became *true*, both at the annotation written to catch them.
+// #sec-requiretype states that rule for the numeric targets, and `boolean` is
+// not an exception to it. A program that means the truthiness says so.
+test('Conversions: a boolean annotation takes a Boolean, and the truthiness is written', () => {
+  expectThrown('function g(){return {};} let b: boolean = g();');
+  expectThrown('function g(){return undefined;} let b: boolean = g();');
+  expectThrown('function g(){return "";} let b: boolean = g();');
+  expectThrown('function g(){return "false";} let b: boolean = g();');
+  expectThrown('function g(){return 1;} let b: boolean = g();');
+  // A Boolean crosses, and both spellings of the truthiness are available.
+  expect(evaluated('function g(){return true;} let b: boolean = g(); String(b);')).toBe('true');
+  expect(evaluated('function g(){return {};} let b: boolean = Boolean(g()); String(b);')).toBe('true');
+  expect(evaluated('function g(){return "";} let b: boolean = !!g(); String(b);')).toBe('false');
+  // A CAST is an explicit instruction and still converts, as `:= number` does.
+  expect(evaluated('function g(){return 1;} let b: boolean = (g() := boolean); String(b);')).toBe('true');
 });
