@@ -1,4 +1,5 @@
 import { SameValue, R } from '../abstract-ops/all.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
@@ -448,6 +449,38 @@ function spanElementOf(t: TypeRecord): TypeRecord | undefined {
 }
 
 /**
+ * Does this class's declaration say it implements that interface's?
+ *
+ * PLAN-nominal-records.md phase 4. #sec-issubtype relates a class to an
+ * interface only where the class REFINES it - "a nominal type whose declaration
+ * extends or implements that type's declaration" - and the arm below compared
+ * STRUCTURES for any class against any interface, so a class that declared
+ * nothing satisfied an interface it happened to match. That is the one place
+ * this proposal is not structural: "a class states a construction and an
+ * identity as well as a shape, and it is the identity that its type is for".
+ *
+ * Walked up [[Base]] as well, because a class implements what its superclass
+ * implements.
+ */
+export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode): boolean {
+  let current: TypeRecord | undefined = s;
+  const seen = new Set<TypeRecord>();
+  while (current && current.Kind === 'nominal' && !seen.has(current)) {
+    seen.add(current);
+    const tail = (current.Declaration as { ClassTail?: { ImplementsClause?: readonly ParseNode[] | null } | null } | undefined)?.ClassTail;
+    for (const ref of tail?.ImplementsClause ?? []) {
+      const named = (ref as { TypeName?: { IdentifierReference?: { name?: string } } }).TypeName?.IdentifierReference?.name;
+      const declaredName = (interfaceDeclaration as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name;
+      if (typeof named === 'string' && named === declaredName) {
+        return true;
+      }
+    }
+    current = current.Base;
+  }
+  return false;
+}
+
+/**
  * The structural form of an interface type, where the type has one.
  *
  * PLAN-nominal-records.md phase 3. #sec-object-types: "The structural form of
@@ -804,7 +837,19 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // wanted - and the design distinguishes those by kind, not by shape.
       if ((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
         && s.LibraryName === undefined
-        && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
+        && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
+        // PLAN-nominal-records.md phase 4 STOPPED HERE, deliberately. Requiring
+        // `ClassImplements(s, tn.Declaration)` is what #sec-issubtype says - a
+        // class relates to an interface only where it REFINES it, "a nominal
+        // type whose declaration extends or implements that type's declaration"
+        // - and #sec-object-types is explicit that "A class has none [no
+        // structural form]". But `classes/interface-satisfaction.test.mts`
+        // asserts the opposite in as many words, with reasoning, and the corpus
+        // asserted the opposite of THAT for object types (phase 3 flipped it).
+        // Two deliberate assertions pointing opposite ways is a design question,
+        // not a bug to fix in passing. The helper is written and unused; wire it
+        // here when the question is settled.
+        && true) {
         // PLAN-nominal-records.md phase 1: [[Structure]] is declared on the
         // record, so these read fields rather than hoping for them. The casts
         // were what let a reader believe the relation and its callers agreed.
