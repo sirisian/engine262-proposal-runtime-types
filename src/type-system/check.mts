@@ -603,7 +603,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
 
+  /**
+   * Depth of branches whose guard this walk cannot judge yet.
+   *
+   * PLAN-declarative-checker-facts.md phase 3. #sec-declared-narrowing lets a
+   * CALL be the test - `if (isU8(box))` - and the callee's [[Narrows]] is
+   * readable only once its type is, which for a constructed guard means once
+   * its alias has evaluated (phase 2). The PARSE-TIME walk runs before that, so
+   * it sees an unknown callee, narrows nothing, and reported the guarded branch
+   * as an early error - a verdict the later walk, which CAN narrow, was never
+   * able to overturn.
+   *
+   * So the first walk defers instead: inside a branch guarded by a call it
+   * cannot resolve, it collects no errors and leaves the judgment to the walk
+   * that runs after the pre-evaluation. This is the same division of labour
+   * `narrowingRequestOf` already makes for a bounds comparison, expressed as a
+   * suppression because the fact here is not a request to be answered later -
+   * it is the same walk, later, with a type it lacked.
+   */
+  let deferredGuardDepth = 0;
+
   const report = (source: TypeRecord, target: TypeRecord) => {
+    if (deferredGuardDepth > 0) {
+      return;
+    }
     const completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
   };
@@ -4069,8 +4092,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       if (!fact) {
-        walk(whenTrueNode);
-        walk(whenFalseNode);
+        // PLAN-declarative-checker-facts.md phase 3. A CALL that yields no fact
+        // may be a declared guard whose callee this walk cannot type yet - a
+        // constructed guard behind an alias resolves only after the pass
+        // pre-evaluates it, and this walk may be the parse-time one. Judging
+        // the branch now would report what the later walk would narrow away,
+        // and that verdict is unappealable, so defer instead: walk for its
+        // other effects and collect no assignability errors.
+        //
+        // Only for a call whose callee has NO static type here. A call that
+        // types to something without [[Narrows]] yields no fact for a real
+        // reason and is judged normally, which keeps the suppression from
+        // swallowing ordinary errors inside an ordinary `if (f(x))`.
+        // Peeled the way narrowingFactOf peels: `!guard(x)` and `(guard(x))`
+        // are the same test, and the negated form is where the ELSE branch is
+        // the narrowed one - so missing it deferred nothing exactly where the
+        // narrowing lands.
+        let guardTest = test;
+        for (;;) {
+          if (guardTest.type === 'ParenthesizedExpression') {
+            guardTest = (guardTest as unknown as { Expression: ParseNode }).Expression;
+            continue;
+          }
+          if (guardTest.type === 'UnaryExpression' && (guardTest as unknown as { operator?: string }).operator === '!') {
+            guardTest = (guardTest as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+            continue;
+          }
+          break;
+        }
+        const unresolvedGuard = guardTest.type === 'CallExpression'
+          && staticType((guardTest as unknown as { CallExpression?: ParseNode }).CallExpression ?? guardTest) === null;
+        if (unresolvedGuard) {
+          deferredGuardDepth += 1;
+        }
+        try {
+          walk(whenTrueNode);
+          walk(whenFalseNode);
+        } finally {
+          if (unresolvedGuard) {
+            deferredGuardDepth -= 1;
+          }
+        }
         return;
       }
       walkGuardedBranches(fact, whenTrueNode, whenFalseNode);

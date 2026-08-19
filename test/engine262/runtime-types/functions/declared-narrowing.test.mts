@@ -29,21 +29,14 @@ function run(src: string) {
 }
 
 test('a declared guard narrows the argument it names', () => {
-  // MEASURED, NOT DESIRED. The fact is produced - the call arm finds the
-  // callee's [[Narrows]] once the alias resolves - but the PARSE-TIME walk has
-  // already reported `let n: uint8 = box` as an early error, and the second
-  // walk cannot un-report it. Declared narrowing needs the deferral the bounds
-  // narrowing already uses (TakeNarrowingRequests / SetNarrowingResolutions),
-  // which is the remaining half of this phase. Flip to 'normal' when it lands.
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (isU8(box)) { let n: uint8 = box; }`).Type).toBe('throw');
+  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (isU8(box)) { let n: uint8 = box; }`).Type).toBe('normal');
   // And it narrows only under the guard: the same binding outside it is not.
   expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); let n: uint8 = box;`).Type).toBe('throw');
 });
 
 test('the narrowing follows the sense of the test', () => {
   // `!guard(x)` narrows in the OTHER branch.
-  // Same deferral gap as above; the sense itself is right where it is read.
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (!isU8(box)) { } else { let n: uint8 = box; }`).Type).toBe('throw');
+  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (!isU8(box)) { } else { let n: uint8 = box; }`).Type).toBe('normal');
   expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (!isU8(box)) { let n: uint8 = box; }`).Type).toBe('throw');
 });
 
@@ -54,4 +47,28 @@ test('what the guard does not name is not narrowed', () => {
   // A second binding is untouched by a guard on the first.
   expect(run(`${GUARD} let a: uint8 | string = (5 := uint8); let b: uint8 | string = (5 := uint8); `
     + 'if (isU8(a)) { let n: uint8 = b; }').Type).toBe('throw');
+});
+
+test('the deferral does not swallow ordinary errors', () => {
+  // The first walk defers only where the callee has NO static type - a call it
+  // may yet learn to narrow. An ORDINARY guard, whose type is known and carries
+  // no [[Narrows]], is judged as it always was.
+  expect(run('function plain(v) { return true; } '
+    + 'let box: uint8 | string = (5 := uint8); if (plain(box)) { let n: uint8 = box; }').Type).toBe('throw');
+  // And a mistake unrelated to narrowing, inside a DEFERRED branch, is still
+  // caught - by the later walk, which is what the deferral hands it to.
+  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (isU8(box)) { let s: string = (5 := uint8); }`).Type).toBe('throw');
+});
+
+test('a guard narrows only the argument its [[Target]] names', () => {
+  // Two parameters, a narrowing on the SECOND: the target resolves by name, so
+  // the second argument narrows and the first does not.
+  const two = 'function makeGuard2() { return Reflect.makeType({ kind: "function", signatures: [{ '
+    + 'parameters: [{ name: "a", type: type any }, { name: "b", type: type any }], '
+    + 'return: { type: type boolean }, narrows: [{ target: "b", type: type uint8 }] }] }); } '
+    + 'type G2 = makeGuard2(); const pair: G2 = (a, b) => true; ';
+  expect(run(`${two} let x: uint8 | string = (5 := uint8); let y: uint8 | string = (5 := uint8); `
+    + 'if (pair(x, y)) { let n: uint8 = y; }').Type).toBe('normal');
+  expect(run(`${two} let x: uint8 | string = (5 := uint8); let y: uint8 | string = (5 := uint8); `
+    + 'if (pair(x, y)) { let n: uint8 = x; }').Type).toBe('throw');
 });
