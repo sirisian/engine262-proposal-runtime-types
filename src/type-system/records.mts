@@ -850,6 +850,14 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     // parameterizations rather than the word "parameterized".
     case 'parameterized': return `${displayType(t.Base)}.<${displayMetadataValue(t.Metadata)}>`;
     case 'nominal': {
+      // PLAN-declarative-checker-facts.md phase 1b. The SELF MARKER of
+      // #sec-this-adoption is a synthetic nominal standing for "the receiver
+      // this method expects", and it has no declaration to name - so it printed
+      // as `nominal`, which is the same uselessness F57 fixed for classes, one
+      // level in. It prints as `this` because that is what a reader wrote.
+      if ((t.Declaration as { type?: string } | undefined)?.type === 'SelfThisMarker') {
+        return 'this';
+      }
       // A class or interface prints by its declared NAME. It fell through to
       // the default before, so a rejected assignment between two classes read
       // "nominal is not assignable to nominal", which names neither party and

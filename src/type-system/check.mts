@@ -600,6 +600,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** The `this` a non-arrow literal adopted from its contextual signature. */
+  const contextualThisTypes = new Map<ParseNode, Known>();
+  /** The type that OWNS the signature a literal adopted, where one is known. */
+  const contextualThisOwners = new Map<ParseNode, Known>();
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
 
@@ -1235,6 +1239,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? undefined
         : target.Properties.find((prop) => prop.key === key);
       if (declared && def.AssignmentExpression) {
+        // PLAN-declarative-checker-facts.md phase 1b. A method's [[ThisType]]
+        // is the SELF MARKER - "the receiver this method expects" - which has
+        // no members, so a literal adopting it got a `this` that was typed and
+        // unusable. The OWNER is what the marker stands for, and this is the
+        // one place that knows it: the loop is walking `target`'s properties.
+        //
+        // Recorded rather than resolved into the signature: ANALYSIS-self-marker
+        // -resolution.md rules that out, since [[ThisType]] is contravariant and
+        // a real owner in the signature would refuse a richer class where a
+        // narrower interface is wanted - the ordinary use of `implements`. The
+        // marker stays the marker for every comparison; only the reading site
+        // sees a structure.
+        contextualThisOwners.set(def.AssignmentExpression, target as Known);
         requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type);
       }
       // #sec-literal-freshness: "an own property the expected type neither
@@ -1283,8 +1300,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Map<ParseNode, Known>();
-  /** The `this` a non-arrow literal adopted from its contextual signature. */
-  const contextualThisTypes = new Map<ParseNode, Known>();
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
@@ -6961,9 +6976,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // scope for exactly this literal's body. Pushed here rather than inside
         // `enterFunction` because only a literal that MET a contextual type has
         // one, and a declaration never does.
+        // PLAN-declarative-checker-facts.md phase 1b: where the adopted type is
+        // the SELF MARKER and the owner of the signature is known, `this` is
+        // the owner - which is what the marker stands for. Where no owner was
+        // recorded the marker is pushed unchanged, which types `this` without
+        // members, as before.
         const adopted = contextualThisTypes.get(n);
-        if (adopted) {
-          thisTypeFrames.push(adopted);
+        const owner = contextualThisOwners.get(n);
+        const resolved = adopted
+          && owner
+          && (adopted as { Declaration?: { type?: string } }).Declaration?.type === 'SelfThisMarker'
+          ? owner
+          : adopted;
+        if (resolved) {
+          thisTypeFrames.push(resolved);
         }
         try {
           publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {

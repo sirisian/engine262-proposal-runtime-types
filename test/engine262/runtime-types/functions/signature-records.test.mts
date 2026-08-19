@@ -250,3 +250,27 @@ test('a non-arrow literal adopts the `this` its contextual signature declares', 
   // Adoption does not leak past the literal: a program after it is unaffected.
   expect(evaluated(`${iface} let o: I = { v: (1 := uint8), m: function () { return (0 := uint8); } }; String(o.v);`)).toBe('1');
 });
+
+test('an adopted self marker resolves to the owner, and only for reading', () => {
+  // PLAN-declarative-checker-facts.md phase 1b, from
+  // ANALYSIS-self-marker-resolution.md (D-3 + D-5). A method's [[ThisType]] is
+  // the SELF MARKER, which has no members - so a literal adopting it got a
+  // `this` that was typed and unusable. At the READING site the marker resolves
+  // to the type that owns the signature, which is what it stands for.
+  const iface = 'interface I { v: uint8; m(): uint8; } ';
+  expect(evaluated(`${iface} let o: I = { v: (1 := uint8), m: function () { let n: uint8 = this.v; return n; } }; String(o.m());`)).toBe('1');
+  expectStaticTypeError(`${iface} let o: I = { v: (1 := uint8), m: function () { let s: string = this.v; return (0 := uint8); } };`);
+
+  // And ONLY for reading. The analysis rules out resolving it in the SIGNATURE:
+  // [[ThisType]] is contravariant, so an owner there would refuse a richer
+  // class where a narrower interface is wanted - the ordinary use of
+  // `implements`. This is that case, and it must keep working.
+  expect(evaluated('interface Small { m(): uint8; } '
+    + 'class Rich { v: uint8 = 1; w: uint8 = 2; m(): uint8 { return (0 := uint8); } } '
+    + 'let r := new Rich(); let s: Small = r; String(s.m());')).toBe('0');
+
+  // The marker prints as `this` rather than as `nominal`, which named nothing
+  // the reader wrote (D-5).
+  const thrown = expectStaticTypeError(`${iface} let o: I = { v: (1 := uint8), m: function () { let s: string = this; return (0 := uint8); } };`);
+  void thrown;
+});
