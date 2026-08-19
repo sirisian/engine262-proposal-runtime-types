@@ -311,3 +311,22 @@ test('reflection reports a published return type', () => {
     function d(a: uint32): string { return 's'; }
     if (Reflect.typeOf(k) === Reflect.typeOf(d)) { throw new Error('x'); }`);
 });
+
+test('assignability reads the effective return type', () => {
+  // #sec-published-return-types, the second reading. A published type lives in
+  // its own field so that identity, overload-set formation, and ranking keep
+  // reading the declared one; a comparison of two function types has to be told
+  // to look at the other field.
+  //
+  // Refused: `g` returns a `uint32` and the position wants a `string`.
+  expectEarly(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    let cb: () => string = g;`, '() => uint.<32>');
+  // Accepted: the same function at a position that matches what it returns.
+  expectOk(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    let cb: () => uint32 = g;`);
+  // A function that publishes nothing is unaffected, and the shallow function
+  // check admits it as before.
+  expectOk('function g() { return 5; } let cb: () => string = g;');
+});

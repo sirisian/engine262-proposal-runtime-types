@@ -916,9 +916,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-published-return-types, the second reading: subtyping and
+   * assignability read the DECLARED return where one is declared and the
+   * PUBLISHED one otherwise.
+   *
+   * The published type lives in its own field so that identity, overload-set
+   * formation, and ranking keep reading the declared one; a comparison of two
+   * function types has to be told to look at the other field, and this
+   * materializes a record that says what the function actually returns. It is
+   * what lets an unannotated method satisfy an annotated interface, and an
+   * unannotated function be refused by a function-typed position it does not
+   * fit.
+   */
+  const effectiveFunctionType = (t: Known): Known => {
+    if (!t || t.Kind !== 'function') {
+      return t;
+    }
+    const sigs = t.Signatures as readonly { Return: Known, InferredReturn?: Known }[];
+    if (!sigs.some((g) => !g.Return && g.InferredReturn)) {
+      return t;
+    }
+    return {
+      ...t,
+      Signatures: sigs.map((g) => (g.Return || !g.InferredReturn ? g : { ...g, Return: g.InferredReturn })),
+    } as Known;
+  };
+
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
       return;
+    }
+    if (target.Kind === 'function') {
+      source = effectiveFunctionType(source);
     }
     // #sec-primitive-metadata: two parameterizations of one base. Structurally
     // equivalent metadata is one type and passes below; different metadata is
