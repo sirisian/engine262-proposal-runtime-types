@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok } from '../harness.mts';
+import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 import { SequenceAssignment, slotReceiving, type Slot } from '../../../../src/type-system/sequence-assignment.mts';
 
 /**
@@ -226,4 +226,27 @@ test('slotReceiving reads which slot took an item', () => {
   expect(slotReceiving(counts, 1)).toBe(0);
   expect(slotReceiving(counts, 2)).toBe(2);
   expect(slotReceiving(counts, 3)).toBe(-1);
+});
+
+test('a non-arrow literal adopts the `this` its contextual signature declares', () => {
+  // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: "Where a
+  // non-arrow function literal's contextual type is a ~function~ type whose
+  // applicable signature has a [[ThisType]], the literal adopts it: `this`
+  // within the body has that type ... An ARROW adopts nothing, since it has no
+  // `this` of its own to give a type to, and the `this` it closes over is
+  // already typed where it was written."
+  //
+  // An interface method's signature carries a [[ThisType]] - the self marker -
+  // so an object literal satisfying that interface is a contextual position
+  // with a SOURCE spelling, which a constructed signature is not. The marker
+  // has no members, deliberately, so what is observable is that `this` has a
+  // type at all: it had none before, and the assignment below was accepted.
+  const iface = 'interface I { v: uint8; m(): uint8; } ';
+  expectStaticTypeError(`${iface} let o: I = { v: (1 := uint8), m: function () { let s: string = this; return (0 := uint8); } };`);
+  // An arrow nested inside an adopting literal CLOSES OVER that `this`, so it
+  // sees the adopted type rather than starting a frame of its own - which is
+  // the same rule read from the other side.
+  expectStaticTypeError(`${iface} let o: I = { v: (1 := uint8), m: function () { const f = () => { let s: string = this; return 0; }; return (0 := uint8); } };`);
+  // Adoption does not leak past the literal: a program after it is unaffected.
+  expect(evaluated(`${iface} let o: I = { v: (1 := uint8), m: function () { return (0 := uint8); } }; String(o.v);`)).toBe('1');
 });
