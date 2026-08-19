@@ -1914,6 +1914,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!declared) {
           return null;
         }
+        // PLAN-declarative-checker-facts.md phase 2. A |ComputedType| -
+        // `type G = makeG();` - resolves by EVALUATING, not by walking, so
+        // `resolveType` below cannot answer for one and answers ~any~ instead:
+        // the annotation admitted everything and the bad value was refused at
+        // run time, where the inline spelling refuses it here.
+        //
+        // The evaluation has already happened. The pass pre-evaluates this
+        // source text's type declarations before it walks (check-pass.mts), and
+        // it runs after GlobalDeclarationInstantiation, so a callee declared in
+        // the same text is initialized by then - which is why the
+        // pre-evaluation SUCCEEDS and there is an answer to read.
+        if (declared.type === 'ComputedType') {
+          const evaluated = resolvedAlias(
+            surroundingAgent.currentRealmRecord as unknown as object,
+            name,
+          ) as Known;
+          if (evaluated) {
+            return evaluated;
+          }
+        }
         const resolved = resolveType(declared);
         // An alias carrying WHERE CLAUSES is a nominal type wrapping its
         // structure, not the structure itself - that wrapper is where the
