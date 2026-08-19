@@ -198,6 +198,22 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (extent !== undefined && newLen !== extent) {
     return Throw.TypeError('a fixed-extent array cannot be grown');
   }
+  // PLAN-tuple-stores.md phase 3. A tuple's ARITY is part of its type, as an
+  // array's extent is, and a tuple carries its positions rather than a
+  // [[TypedExtent]] - so `t.length = 1` on a `[uint8, string]` walked past the
+  // check above and left the value outside the type it is declared to have.
+  // The store rules already refuse a write past the arity; this is the same
+  // rule reached through `length`, which is how the array case reaches it too.
+  //
+  // A rest collects any number of positions, so a length at or above the fixed
+  // ones is within the type; without a rest the arity is exact.
+  const tuple = (array as { TypedTuple?: { Positions: readonly unknown[], Rest: unknown } }).TypedTuple;
+  if (tuple !== undefined) {
+    const fixed = tuple.Positions.length;
+    if (tuple.Rest === undefined ? newLen !== fixed : newLen < fixed) {
+      return Throw.TypeError('a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(newLen)));
+    }
+  }
   newLenDesc = Descriptor({ ...Desc, Value: F(newLen) });
   const oldLenDesc = OrdinaryGetOwnProperty(array, Value('length'));
   Assert(!(oldLenDesc instanceof UndefinedValue));

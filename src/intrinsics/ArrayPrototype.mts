@@ -20,7 +20,7 @@ import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { assignProps } from './bootstrap.mts';
 import { bootstrapArrayPrototypeShared, SortIndexedProperties } from './ArrayPrototypeShared.mts';
-import { surroundingAgent } from '#self';
+import { RequireType, surroundingAgent } from '#self';
 import {
   ArrayCreate,
   ArraySpeciesCreate,
@@ -875,13 +875,41 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   if (actualIndex >= len || actualIndex < 0) {
     return Throw.RangeError('$1 is out of range', index);
   }
+  // PLAN-tuple-stores.md phase 3. `with` WRITES a position, so
+  // #sec-array-defaults-and-stores' rule that "a method of the array that takes
+  // or returns an ELEMENT takes or returns it at the element type" governs its
+  // value argument - and for a tuple that has to mean the type of the position
+  // it writes, since the positions differ. It checked nothing, so
+  // `a.with(0, "no")` on a `[].<uint8>` answered a copy holding a String; once
+  // phase 2 gave that copy the receiver's element type, the copy was stamped
+  // `uint8` AROUND a String, which is worse than the hole it replaced. The
+  // check belongs here rather than at the stamp: the value is entering a typed
+  // position, and RequireType returns the value OF the type to store.
+  let inserted = value;
+  if (surroundingAgent.feature('runtime-types')) {
+    const typed = O as unknown as {
+      TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined },
+      TypedElement?: TypeRecord,
+    };
+    const tuple = typed.TypedTuple;
+    if (tuple !== undefined) {
+      const positionType = actualIndex < tuple.Positions.length
+        ? tuple.Positions[actualIndex]!
+        : tuple.Rest;
+      if (positionType !== undefined) {
+        inserted = Q(yield* RequireType(value, positionType));
+      }
+    } else if (typed.TypedElement !== undefined) {
+      inserted = Q(yield* RequireType(value, typed.TypedElement));
+    }
+  }
   const A = Q(ArrayCreate(len));
   let k = 0;
   while (k < len) {
     const Pk = X(ToString(F(k)));
     let fromValue;
     if (k === actualIndex) {
-      fromValue = value;
+      fromValue = inserted;
     } else {
       fromValue = Q(yield* Get(O, Pk));
     }

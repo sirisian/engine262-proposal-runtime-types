@@ -38,3 +38,35 @@ test('a copy of a typed array carries its element type', () => {
   // the result's elements do not come from the receiver.
   expect(evaluated(`${a} const r = a.map(v => "text"); r[0] = "more text"; r[0];`)).toBe('more text');
 });
+
+test('with() takes its value at the position it writes', () => {
+  // PLAN-tuple-stores.md phase 3. `with` WRITES a position, so the rule that a
+  // method taking an ELEMENT takes it at the element type governs it - and for
+  // a tuple that means the type of the position written, since the positions
+  // differ. It checked nothing, which mattered more once the copy carried a
+  // type: `a.with(0, "no")` on a `[].<uint8>` produced a copy STAMPED uint8
+  // around a String.
+  const a = 'let a: [].<uint8> = [1, 2]; let bad = {}; bad.v = "no"; ';
+  expectThrown(`${a} a.with(0, bad.v);`);
+  expect(evaluated(`${a} const r = a.with(0, 9); String(r[0]) + "," + String(r[1]);`)).toBe('9,2');
+  const t = 'let t: [uint8, string] = [1, "s"]; let bad = {}; bad.v = "no"; ';
+  expectThrown(`${t} t.with(0, bad.v);`);
+  expect(evaluated(`${t} const r = t.with(1, "ok"); r[1];`)).toBe('ok');
+  // A position the rest collects takes the rest's type.
+  expect(evaluated('let r: [uint8, ...string] = [1, "a", "b"]; r.with(2, "z")[2];')).toBe('z');
+  // An untyped array is untouched.
+  expect(evaluated('const u = [1, 2]; String(u.with(0, "x")[0]);')).toBe('x');
+});
+
+test("a tuple's arity is fixed against length", () => {
+  // The store rules already refuse a write past the arity; this is the same
+  // rule reached through `length`, which is how the fixed-extent array case
+  // reaches it too. A rest collects any number, so a length at or above the
+  // fixed positions is within the type.
+  expectThrown('let t: [uint8, string] = [1, "s"]; t.length = 1;');
+  expect(evaluated('let t: [uint8, string] = [1, "s"]; t.length = 2; String(t.length);')).toBe('2');
+  expect(evaluated('let r: [uint8, ...string] = [1, "a", "b"]; r.length = 2; String(r.length);')).toBe('2');
+  expectThrown('let r: [uint8, ...string] = [1, "a"]; r.length = 0;');
+  // A dynamic array's length is not part of its type.
+  expect(evaluated('let a: [].<uint8> = [1, 2]; a.length = 1; String(a.length);')).toBe('1');
+});

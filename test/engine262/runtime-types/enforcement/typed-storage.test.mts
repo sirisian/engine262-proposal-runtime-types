@@ -173,9 +173,63 @@ test('shortening is not deleting', () => {
   // The rule lives on the delete OPERATOR rather than in [[Delete]], because
   // ArraySetLength truncates by deleting from the top - so a rule in [[Delete]]
   // would refuse `pop`, which removes an element without leaving a hole. A
-  // typed array already allowed pop for that reason, and a tuple now agrees.
-  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"]; String(t.pop());')).toBe('s');
+  // DYNAMIC array's length is not part of its type, so it may shrink.
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.pop());')).toBe('3');
+
+  // A TUPLE's is (PLAN-tuple-stores.md phase 3). This case previously passed
+  // and now throws, and the change is deliberate: `push`, `shift` and `splice`
+  // on a tuple were already refused because the arity is part of the type, and
+  // `pop` reached the same truncation through `length`, which nothing checked.
+  // The comment above records why the rule is not in [[Delete]]; it does not
+  // decide whether a tuple may shrink, and the rest of the design says it may
+  // not - `[uint8, string]` with one position left is not of its type.
+  expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.pop();');
+  expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.length = 1;');
+  // A rest collects any number, so shrinking to the fixed positions is fine.
+  expect(evaluated('type R = [uint8, ...string]; let r: R = [1, "a", "b"]; String(r.pop());')).toBe('b');
+  expectThrown('type R = [uint8, ...string]; let r: R = [1, "a"]; r.length = 0;');
+});
+
+test('a redefinition is checked against the type the position already has', () => {
+  // PLAN-tuple-stores.md phase 1. #table-check-sites names both spellings -
+  // "a value crossing into a typed position through reflection, including
+  // `Reflect.set` and `Reflect.defineProperty`" - and only `Reflect.set` was
+  // wired. The branch above handles a descriptor that CARRIES a type, which
+  // CREATES a typed property; what nothing consulted was the type a position
+  // ALREADY has when the descriptor carries only a value. So a store was
+  // checked and a redefinition of the same position was not.
+  //
+  // A typed field, a typed object property, a typed array element and a tuple
+  // position are the four positions that can hold one, and both spellings
+  // reach the same internal method for each.
+  const cls = 'class C { n: uint8 = 1; } const c = new C(); let bad = {}; bad.v = "no"; ';
+  expectThrown(`${cls} Object.defineProperty(c, "n", { value: bad.v });`);
+  expectThrown(`${cls} Reflect.defineProperty(c, "n", { value: bad.v });`);
+  const obj = 'let o: { p: uint8 } = { p: 1 }; let bad = {}; bad.v = "no"; ';
+  expectThrown(`${obj} Object.defineProperty(o, "p", { value: bad.v });`);
+  const arr = 'let a: [].<uint8> = [1, 2]; let bad = {}; bad.v = "no"; ';
+  expectThrown(`${arr} Object.defineProperty(a, 0, { value: bad.v });`);
+  expectThrown(`${arr} Reflect.defineProperty(a, 0, { value: bad.v });`);
+  const tup = 'let t: [uint8, string] = [1, "s"]; let bad = {}; bad.v = "no"; ';
+  expectThrown(`${tup} Object.defineProperty(t, 0, { value: bad.v });`);
+  // A position beyond a tuple's arity is not a position at all, which is the
+  // answer `push` and a store past the end already give.
+  expectThrown(`${tup} Object.defineProperty(t, 5, { value: 1 });`);
+
+  // What the check must NOT do is refuse a redefinition that is in type, and
+  // RequireType RETURNS the value of the type, so the property holds the
+  // converted one rather than the raw argument.
+  expect(evaluated(`${cls} Object.defineProperty(c, "n", { value: 7 }); String(c.n);`)).toBe('7');
+  expect(evaluated(`${arr} Object.defineProperty(a, 0, { value: 7 }); String(a[0]);`)).toBe('7');
+  expect(evaluated(`${tup} Object.defineProperty(t, 1, { value: "ok" }); t[1];`)).toBe('ok');
+  // A tuple position the rest collects takes the rest's type.
+  expect(evaluated('let r: [uint8, ...string] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
+
+  // A descriptor that stores nothing has nothing to check.
+  expect(evaluated(`${cls} Object.defineProperty(c, "n", { enumerable: false }); String(c.n);`)).toBe('1');
+  // An accessor over a typed property is refused: the declared type is a
+  // promise about what a read answers, and a getter can answer anything.
+  expectThrown(`${cls} Object.defineProperty(c, "n", { get() { return "no"; } });`);
 });
 
 test('a redefinition is checked against the type the position already has', () => {
