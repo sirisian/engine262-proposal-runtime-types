@@ -321,6 +321,24 @@ export type TypeRecord =
     // (F62).
     readonly Underlying?: TypeRecord,
     readonly Structure?: TypeRecord,
+    // PLAN-nominal-records.md phase 1. The class this one EXTENDS, so the
+    // subtype relation has a chain to walk. It was written and read through
+    // `as unknown as` casts on both sides - the checker attaching it, IsSubtype
+    // reading it - which is how the two came to disagree without either being
+    // wrong about the field it thought it had: a runtime class record carries
+    // no [[Base]] at all, and nothing typed said it should.
+    //
+    // Nominal, not structural: two unrelated empty classes stay unrelated,
+    // which is the point of classes being nominal. #sec-issubtype's "a nominal
+    // type whose declaration extends ... that type's declaration" is the
+    // relation this field holds.
+    readonly Base?: TypeRecord,
+    // The WRITE type of each setter, which a derived class checks its own
+    // setters against and which [[Structure]] cannot carry: a property has one
+    // type there, and a getter already claims it. Declared beside [[Base]]
+    // because it travels with it - both are relations the record holds for the
+    // checker, and both were reached through casts.
+    readonly SetterTypes?: ReadonlyMap<string, TypeRecord>,
     // proposal-runtime-types M21: the class constructor whose instances the
     // class type contains. Identity is still by [[Declaration]]; this is the
     // resolved constructor so membership needs no name lookup.

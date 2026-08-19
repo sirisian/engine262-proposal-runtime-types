@@ -748,13 +748,18 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if ((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
         && s.LibraryName === undefined
         && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
-        const sStructure = (s as { Structure?: TypeRecord }).Structure;
-        const tStructure = (tn as { Structure?: TypeRecord }).Structure;
+        // PLAN-nominal-records.md phase 1: [[Structure]] is declared on the
+        // record, so these read fields rather than hoping for them. The casts
+        // were what let a reader believe the relation and its callers agreed.
+        const { Structure: sStructure } = s;
+        const { Structure: tStructure } = tn;
         if (sStructure && tStructure) {
           return IsSubtype(sStructure, tStructure, next);
         }
       }
-      const base = (s as { Base?: TypeRecord }).Base;
+      // PLAN-nominal-records.md phase 1: [[Base]] is declared on the record
+      // now, so this reads a field rather than hoping for one.
+      const { Base: base } = s;
       if (base) {
         return IsSubtype(base, t, next);
       }

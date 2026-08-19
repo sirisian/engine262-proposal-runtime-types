@@ -3984,7 +3984,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // must be assignable to the derived's - the direction that makes a
       // narrowing (`set r(v: Dog)` over `set r(v: Animal)`) the error and a
       // widening legal, which is the reverse of the getter rule above.
-      const baseSetters = (base as { SetterTypes?: Map<string, TypeRecord> } | null)?.SetterTypes;
+      // `base` is a TypeRecord of any kind here; [[SetterTypes]] lives on the
+      // ~nominal~ arm, which is the only kind a heritage clause can name.
+      const baseSetters = base?.Kind === 'nominal' ? base.SetterTypes : undefined;
       if (baseSetters) {
         for (const [skey, ownWrite] of setterTypes) {
           const inheritedWrite = baseSetters.get(skey);
