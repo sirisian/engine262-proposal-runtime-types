@@ -348,3 +348,17 @@ test('a return that NAMES a type parameter is not yet typed', () => {
   // above or the inference this file is otherwise about.
   expectOk('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);');
 });
+
+test('an inference-sourced error says where the type came from', () => {
+  // The gate this document set for itself: participation is non-local on
+  // purpose - an annotation's reach travels through returns - so an error that
+  // names a type the program never wrote has to carry what the reach was.
+  expect(thrown('function k(a: uint32) { return "s"; } const n: number = k(5);'))
+    .toContain('the inferred return type of "k"');
+  expect(thrown('function f(): uint32 { return 5; } function g() { return f(); } const s: string = g();'))
+    .toContain('the inferred return type of "g"');
+  // A DECLARED type is one the program wrote, and needs no explanation.
+  expect(thrown('function d(a: uint32): string { return "s"; } const n: number = d(5);'))
+    .not.toContain('inferred return type');
+  expect(thrown('let x: uint32 = 5; const s: string = x;')).not.toContain('inferred return type');
+});

@@ -680,12 +680,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   let deferredGuardDepth = 0;
 
+  /**
+   * The function whose PUBLISHED return type produced the type currently being
+   * checked, where there is one.
+   *
+   * An inference-sourced error names a type the program never wrote, and
+   * without saying where it came from the reader is left to work out why a
+   * function they did not annotate has a type at all. #sec-inferred-return-types
+   * makes participation non-local on purpose - an annotation's reach travels
+   * through returns - so the diagnostic has to carry what the reach was.
+   */
+  const callProvenance = new WeakMap<object, string>();
+  let provenanceNote: string | null = null;
+
   const report = (source: TypeRecord, target: TypeRecord) => {
     if (deferredGuardDepth > 0) {
       return;
     }
-    const completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+    const completion = (provenanceNote
+      ? Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote))
+      : Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target)))) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
+  };
+
+  /** Run _check_ with the provenance of _initializer_, where it has one. */
+  const withProvenance = (initializer: ParseNode | null | undefined, check: () => void): void => {
+    const previous = provenanceNote;
+    provenanceNote = initializer ? callProvenance.get(initializer as unknown as object) ?? null : null;
+    try {
+      check();
+    } finally {
+      provenanceNote = previous;
+    }
   };
 
   // #sec-contextual-types: a numeric literal whose value fits a numeric value
@@ -3134,6 +3160,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (only.Return || only.InferredReturn) {
+            if (!only.Return && only.InferredReturn) {
+              const named = (node as { CallExpression?: ParseNode }).CallExpression as { type?: string, name?: string } | undefined;
+              if (named?.type === 'IdentifierReference' && named.name) {
+                callProvenance.set(node as unknown as object, named.name);
+              }
+            }
             return only.Return ?? only.InferredReturn ?? null;
           }
           if (inferenceDepth > 0) {
@@ -5917,7 +5949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         frames[frames.length - 1].enumBindings.set(b.BindingIdentifier.name, boundEnum);
       }
       if (b.Initializer) {
-        requireAssignable(staticTypeIn(b.Initializer, declared), declared);
+        withProvenance(b.Initializer, () => requireAssignable(staticTypeIn(b.Initializer, declared), declared));
         walk(b.Initializer);
       }
       // An OPTIONAL parameter may not be supplied, so its type includes
@@ -6911,7 +6943,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (n.Initializer) {
-            requireAssignable(staticTypeIn(n.Initializer, declared), declared);
+            withProvenance(n.Initializer, () => requireAssignable(staticTypeIn(n.Initializer, declared), declared));
             walk(n.Initializer);
           }
           // A `const` bound to a compile-time numeric constant behaves as if
