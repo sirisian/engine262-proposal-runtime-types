@@ -1258,6 +1258,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Map<ParseNode, Known>();
+  /** The `this` a non-arrow literal adopted from its contextual signature. */
+  const contextualThisTypes = new Map<ParseNode, Known>();
+  /** The adopted `this` types of the literals currently being checked, innermost last. */
+  const thisTypeFrames: Known[] = [];
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (!node) {
@@ -1276,6 +1280,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const wanted = contextual.Signatures[0].Return;
       if (wanted) {
         contextualReturnTypes.set(node, wanted as Known);
+      }
+      // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: "Where a
+      // non-arrow function literal's contextual type is a ~function~ type whose
+      // applicable signature has a [[ThisType]], the literal adopts it: `this`
+      // within the body has that type, and the literal's own signature has that
+      // [[ThisType]]. An ARROW adopts nothing, since it has no `this` of its own
+      // to give a type to, and the `this` it closes over is already typed where
+      // it was written."
+      //
+      // Recorded here, where the node meets its contextual type, for the same
+      // reason the return is: this operation is the only place that knows both.
+      // The arrow is excluded at the recording rather than at the reading, so
+      // that an arrow nested in an adopting literal sees the OUTER `this` by
+      // finding no frame of its own - which is what closing over it means.
+      const wantedThis = (contextual.Signatures[0] as { ThisType?: TypeRecord }).ThisType;
+      if (wantedThis !== undefined && node.type === 'FunctionExpression') {
+        contextualThisTypes.set(node, wantedThis as Known);
       }
     }
     // sec-new-expressions: `new.(...)` constructs the type its POSITION requires.
@@ -2642,9 +2663,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // imprecision intended. Adopting the wanted return leaves the
             // block-bodied case exactly as unchecked as it was.
             ?? wantedReturn);
+        // #sec-this-adoption: "the literal's own signature has that
+        // [[ThisType]]". The half that matters downstream - a literal that
+        // adopted a `this` is a method-shaped value, so passing it onward to a
+        // free-function type is refused for the same reason extracting a method
+        // is.
+        const adoptedThis = contextualThisTypes.get(node);
         return {
           Kind: 'function',
-          Signatures: [{ Parameters, Return: (Return ?? anyTypeRecord) as TypeRecord, Untyped: false }],
+          Signatures: [{
+            Parameters,
+            Return: (Return ?? anyTypeRecord) as TypeRecord,
+            Untyped: false,
+            ...(adoptedThis ? { ThisType: adoptedThis as TypeRecord } : {}),
+          }],
         } as unknown as Known;
       }
       case 'PipelineExpression': {
@@ -2716,6 +2748,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'IdentifierReference':
         return lookup((node as { name: string }).name);
+      case 'ThisExpression':
+        // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: within
+        // an adopting literal's body, "`this` has that type". Outside one there
+        // is no frame and `this` keeps the type it had - which for a class body
+        // is the receiver rule that clause leaves alone, and elsewhere is
+        // nothing to say rather than a claimed ~any~.
+        return thisTypeFrames.length > 0 ? thisTypeFrames[thisTypeFrames.length - 1]! : null;
       case 'ParenthesizedExpression':
         return staticType((node as { Expression: ParseNode }).Expression);
       case 'TypedConversionExpression':
@@ -6407,9 +6446,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'FunctionDeclaration':
-      case 'FunctionExpression':
-        enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+      case 'FunctionExpression': {
+        // PLAN-declarative-checker-facts.md phase 1: the adopted `this` is in
+        // scope for exactly this literal's body. Pushed here rather than inside
+        // `enterFunction` because only a literal that MET a contextual type has
+        // one, and a declaration never does.
+        const adopted = contextualThisTypes.get(n);
+        if (adopted) {
+          thisTypeFrames.push(adopted);
+        }
+        try {
+          enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+        } finally {
+          if (adopted) {
+            thisTypeFrames.pop();
+          }
+        }
         return;
+      }
       case 'ArrowFunction':
         enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
         return;
