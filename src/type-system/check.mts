@@ -2133,6 +2133,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return inProgress;
   };
   const classTypeMemo = new Map<ParseNode, Known>();
+  /** Class EXPRESSIONS seen by the walk, which no name registers - task A. */
+  const classExpressionNodes = new Set<ParseNode>();
   const classTypesInProgress = new Set<ParseNode>();
   const classTypeOf = (name: string): Known => {
     const node = classNodes.get(name);
@@ -5787,6 +5789,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const n of classNodes.values()) {
       instanceTypeOf(n);
     }
+    // Class expressions are forced here too, and AFTER the declarations: an
+    // expression may extend a declared class, and the declaration's own record
+    // has to exist before the heritage lookup asks for it.
+    for (const n of classExpressionNodes) {
+      instanceTypeOf(n);
+    }
     // An interface's member walk is lazy for the same reason the class one was,
     // and a rule checked there needs the same forcing: an interface nothing
     // references would never be walked, so its computed keys would never be
@@ -7570,6 +7578,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       case 'ClassDeclaration':
       case 'ClassExpression': {
+        // PLAN-nominal-records.md v2 task A. A class DECLARATION is registered
+        // by name in `classNodes` and forced with the others, which is what
+        // publishes its instance type for the runtime record to read. A class
+        // EXPRESSION is registered nowhere, so `classInstanceType` never ran for
+        // one, `publishedClassTypes` never gained an entry, and the runtime
+        // record built at ClassExpression and NamedEvaluation carried neither
+        // [[Base]] nor [[Structure]] - `Reflect.isAssignable(type CE, type
+        // Base)` was *false* for a class expression extending Base.
+        //
+        // Collected by NODE rather than by name: an anonymous class expression
+        // has no name to key on, and the memo and the published map are both
+        // node-keyed already, so the node is the key that exists everywhere it
+        // is needed.
+        if (n.type === 'ClassExpression') {
+          classExpressionNodes.add(n);
+        }
         // The class's own name is in context for its whole body, so a method
         // reading a protected member is INSIDE and a program outside is not.
         const named = (n as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;

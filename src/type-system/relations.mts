@@ -16,8 +16,43 @@ import { builtinImplements } from './iteration-types.mts';
  */
 interface Assumption { readonly First: TypeRecord, readonly Second: TypeRecord }
 
+/**
+ * Is this pair already assumed to hold?
+ *
+ * PLAN-nominal-records.md v2 task B. Identity alone is not enough for two
+ * NOMINAL types. The assumption list exists so that a comparison of recursive
+ * types terminates - "assume this pair holds and see whether that is
+ * consistent" - and for a nominal pair the thing that recurs is the
+ * DECLARATION, not the record: comparing two interfaces walks their structural
+ * forms, whose member types reach the interfaces again through records built
+ * along the way, and those are not the same objects. An identity compare
+ * therefore never matched and the walk never ended, which is why the
+ * interface-to-interface step could not be routed at all.
+ *
+ * Two records of one declaration with the SAME arguments are the same question.
+ * The arguments matter: `Box.<uint8>` and `Box.<string>` share a declaration
+ * and are not one question, and assuming they were would answer *true* for a
+ * pair nothing has checked.
+ */
 function assumed(assumptions: readonly Assumption[], s: TypeRecord, t: TypeRecord): boolean {
-  return assumptions.some((p) => p.First === s && p.Second === t);
+  return assumptions.some((p) => {
+    if (p.First === s && p.Second === t) {
+      return true;
+    }
+    if (p.First.Kind !== 'nominal' || p.Second.Kind !== 'nominal'
+      || s.Kind !== 'nominal' || t.Kind !== 'nominal') {
+      return false;
+    }
+    return p.First.Declaration === s.Declaration
+      && p.Second.Declaration === t.Declaration
+      && sameArguments(p.First.Arguments, s.Arguments)
+      && sameArguments(p.Second.Arguments, t.Arguments);
+  });
+}
+
+/** Argument lists that name the same instantiation, compared shallowly. */
+function sameArguments(a: readonly (TypeRecord | number)[], b: readonly (TypeRecord | number)[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 /** #sec-sametype */
@@ -734,14 +769,21 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (sourceClassShape && t.Kind === 'object') {
       return IsSubtype(sourceClassShape, t, next);
     }
-    // Interface to interface is NOT routed here yet. It recurses without
-    // terminating: `assumed` compares assumption pairs by IDENTITY, and the
-    // records these two structures are compared through are not the same
-    // objects on the way back round, so the pair never matches and the walk
-    // never ends. It needs the assumption list to key on the DECLARATIONS, or
-    // the structural forms to be interned, and either is a change to how
-    // termination works rather than a step to add here. Recorded, not
-    // attempted: `Big <: Small` for two interfaces stays *false* for now.
+    // Interface to interface, where neither refines the other: both have a
+    // structural form, so the question is width subtyping between them.
+    //
+    // STILL NOT ROUTED, and task B was not the whole reason. Keying `assumed`
+    // on the declaration fixed the case it was diagnosed from - a RECURSIVE
+    // interface against a matching object type now terminates and answers
+    // *true*, where before it could not be attempted - but two DISTINCT
+    // interfaces still blow the stack, and their structures do not mention each
+    // other, so the loop is not the one the assumption list guards.
+    //
+    // Where it goes next: instrument `IsSubtype` for the pair `Big <: Small`
+    // and read the cycle rather than inferring it. The suspect is what an
+    // interface's [[Structure]] actually contains in the RUNTIME record -
+    // reflecting one prints `{"kind":"primitive"}`, which is not an object
+    // record and not what this step assumes it is comparing.
   }
   if (s.Kind !== t.Kind) {
     return false;
@@ -875,7 +917,13 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // reflection context whose members are a superset of another's would
       // satisfy it - `Reflect.ClassField` passing where `Reflect.Class` is
       // wanted - and the design distinguishes those by kind, not by shape.
-      if ((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
+      // PLAN-nominal-records.md v2 task A: a class EXPRESSION is a class. The
+      // guard named only |ClassDeclaration|, so `const D = class X implements I
+      // {}` satisfied nothing even once its record carried a [[Structure]] -
+      // the same omission, one layer up from the one that left the record
+      // empty. `ClassShapeOf` above already accepts both forms.
+      if (((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
+        || (s.Declaration as { type?: string } | undefined)?.type === 'ClassExpression')
         && s.LibraryName === undefined
         && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
         // PLAN-interface-satisfaction.md phase 2, implementing D-3: AN INTERFACE

@@ -178,3 +178,44 @@ test('an empty interface is satisfied by a value, not by any class', () => {
   expect(evaluated('interface Marker {} class C implements Marker { q: string = "s"; } '
     + 'String(Reflect.isAssignable(type C, type Marker));')).toBe('true');
 });
+
+test('a class expression carries the same relations as a declaration', () => {
+  // PLAN-nominal-records.md v2 task A. `check.mts` registered class nodes by
+  // NAME and only for |ClassDeclaration|, so `classInstanceType` never ran for
+  // an expression, nothing was published, and the runtime record built at
+  // ClassExpression and NamedEvaluation carried neither [[Base]] nor
+  // [[Structure]]. Expressions are now collected by NODE - an anonymous one has
+  // no name to key on - and forced after the declarations, since an expression
+  // may extend a declared class.
+  const base = 'class Base { a: uint8 = 1; } interface I { a: uint8 } ';
+  expect(evaluated(`${base} const Anon = class extends Base { c: uint8 = 3; }; `
+    + 'String(Reflect.isAssignable(type Anon, type Base));')).toBe('true');
+  // The NAMED form too: they behaved identically before, and a name-keyed fix
+  // would have split them silently.
+  expect(evaluated(`${base} const Named = class N extends Base { c: uint8 = 3; }; `
+    + 'String(Reflect.isAssignable(type Named, type Base));')).toBe('true');
+  // And into an object type, which is phase 1's rule applied to the same record.
+  expect(evaluated(`${base} const Loose = class { a: uint8 = 1; }; `
+    + 'String(Reflect.isAssignable(type Loose, type { a: uint8 }));')).toBe('true');
+  // A class expression that declares `implements` satisfies the interface - the
+  // arm named only |ClassDeclaration|, which is the same omission one layer up.
+  expect(evaluated(`${base} const Decl = class D implements I { a: uint8 = 1; }; `
+    + 'String(Reflect.isAssignable(type Decl, type I));')).toBe('true');
+  // One that declares nothing does not, exactly as for a declaration.
+  expect(evaluated(`${base} const Loose = class { a: uint8 = 1; }; `
+    + 'String(Reflect.isAssignable(type Loose, type I));')).toBe('false');
+  // And the reverse direction stays refused.
+  expect(evaluated(`${base} const Anon = class extends Base { c: uint8 = 3; }; `
+    + 'String(Reflect.isAssignable(type { a: uint8, c: uint8 }, type Anon));')).toBe('false');
+});
+
+test('a recursive interface terminates against a matching object type', () => {
+  // PLAN-nominal-records.md v2 task B. `assumed` compared assumption pairs by
+  // IDENTITY, and for a nominal pair the thing that recurs is the DECLARATION:
+  // comparing an interface walks its structural form, whose members reach the
+  // interface again through records built along the way, which are not the same
+  // objects. It now keys on the declaration AND the arguments - `Box.<uint8>`
+  // and `Box.<string>` share a declaration and are not one question.
+  expect(evaluated('interface Node2 { next?: Node2 } let o: { next?: Node2 } = {}; '
+    + 'let n: Node2 = o; String(Reflect.isAssignable(type { next?: Node2 }, type Node2));')).toBe('true');
+});
