@@ -481,6 +481,32 @@ export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode):
 }
 
 /**
+ * The members a CLASS has, for comparison against an ~object~ type.
+ *
+ * PLAN-interface-satisfaction.md phase 1. Not `InterfaceStructureOf`: that is
+ * named for what #sec-object-types defines - "The structural form of an
+ * interface type ... Every interface has one. A class has none" - and widening
+ * it would let the interface-to-interface step start matching classes. A class
+ * has no structural FORM and it does have a SHAPE, and this is the one place
+ * the difference matters: an object type asks what a value HAS.
+ *
+ * The shape is the class's [[Structure]], which is its own members merged under
+ * the inherited ones and excludes private fields deliberately - a private
+ * member is not reachable through a member expression, so no object type can
+ * name it.
+ */
+function ClassShapeOf(t: TypeRecord): TypeRecord | undefined {
+  if (t.Kind !== 'nominal' || t.LibraryName !== undefined) {
+    return undefined;
+  }
+  const declared = (t.Declaration as { type?: string } | undefined)?.type;
+  if (declared !== 'ClassDeclaration' && declared !== 'ClassExpression') {
+    return undefined;
+  }
+  return t.Structure;
+}
+
+/**
  * The structural form of an interface type, where the type has one.
  *
  * PLAN-nominal-records.md phase 3. #sec-object-types: "The structural form of
@@ -693,6 +719,20 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     const sourceStructure = InterfaceStructureOf(s);
     if (sourceStructure && t.Kind === 'object') {
       return IsSubtype(sourceStructure, t, next);
+    }
+    // PLAN-interface-satisfaction.md phase 1, and D-3's decided rule: AN OBJECT
+    // TYPE ASKS WHAT A VALUE HAS. A class instance has its members, so it
+    // reaches an object-typed position; what it does not reach without saying
+    // so is an INTERFACE, which asks what a class promised (phase 2).
+    //
+    // Without this a class could reach no structural position at all -
+    // `function f(p: { x: uint8 })` refused `new Point()` while the same value
+    // passed through `any` at run time, and `is` agreed with the run time. The
+    // checker and the run time disagreed, which is the shape of gap D26 exists
+    // to close.
+    const sourceClassShape = ClassShapeOf(s);
+    if (sourceClassShape && t.Kind === 'object') {
+      return IsSubtype(sourceClassShape, t, next);
     }
     // Interface to interface is NOT routed here yet. It recurses without
     // terminating: `assumed` compares assumption pairs by IDENTITY, and the
