@@ -4185,6 +4185,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     signatureTyped: boolean,
     /** A generator, whose inference computes _Y_ and rebuilds its Generator type. */
     generator?: { asyncGenerator: boolean },
+    /** An async function, whose inference is of the type its result RESOLVES with. */
+    asyncFunction?: boolean,
   }[] = [];
 
   /**
@@ -4246,6 +4248,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const rebuilt = generatorDeclaredType(inferredYield, item.generator.asyncGenerator);
             if (rebuilt && (!item.signature.Return || !SameType(item.signature.Return, rebuilt))) {
               item.signature.Return = rebuilt;
+              changed = true;
+            }
+          }
+          continue;
+        }
+        if (item.asyncFunction) {
+          // #sec-inference-and-function-forms: publish `Promise.<T, any>`. The
+          // reject type is never inferred - anything may throw, and the
+          // convention that `undefined` there means a promise that never
+          // rejects is a claim no body supports - so `any` is what an inference
+          // can honestly say about it.
+          const aa = { anchored: false };
+          inferenceDepth += 1;
+          let resolves: Known;
+          try {
+            resolves = inferredReturnType(item.fn, item.parameterTypes, null, aa, 'resolve');
+          } finally {
+            inferenceDepth -= 1;
+          }
+          if (resolves && (item.signatureTyped || aa.anchored)) {
+            const settled = resolves.Kind === 'primitive' && resolves.Name === 'undefined'
+              ? voidTypeRecord
+              : resolves;
+            const published = libraryTypeRecord('Promise', [settled, anyTypeRecord]);
+            if (published && (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, published))) {
+              item.signature.InferredReturn = published;
+              publishedReturnTypes.set(item.fn as unknown as object, published);
               changed = true;
             }
           }
@@ -4347,13 +4376,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }, mode: 'return' | 'yield' = 'return'): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
       ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters
       ?? (fn as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters;
-    if (mode === 'yield') {
+    if (mode === 'resolve') {
+      // #sec-inference-and-function-forms: an async function infers the type its
+      // result RESOLVES with, so a contribution that is itself a promise
+      // contributes what IT resolves with, as `await` would.
+      if (fn.type !== 'AsyncFunctionDeclaration' && fn.type !== 'AsyncFunctionExpression'
+          && fn.type !== 'AsyncArrowFunction' && fn.type !== 'AsyncMethod') {
+        return null;
+      }
+    } else if (mode === 'yield') {
       // #sec-inference-and-function-forms: a generator's _Y_ is the join of what
       // its `yield` operands contribute. The walk is the same one the return
       // contributions use - it stops at a nested function for the same reason -
@@ -4500,6 +4537,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // taken from the contribution.
           if (t.Kind !== 'literal') {
             anchorage.anchored = true;
+          }
+          if (mode === 'resolve' && t.Kind === 'nominal' && t.LibraryName === 'Promise'
+              && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
+            // A promise contribution contributes what it RESOLVES with: an
+            // async function returning a promise resolves with that promise's
+            // value rather than with the promise, which is the flattening
+            // `await` performs and which the published type must match.
+            contributions.push(t.Arguments[0] as TypeRecord);
+            return;
           }
           // #sec-never-type: `never` is the identity of union, so a `never`
           // contribution vanishes from a join that has any other member. That
@@ -4837,7 +4883,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // bare `T` is the YIELD type of a `Generator.<T, void, void>`.
       const isGenerator = n.type === 'GeneratorDeclaration' || n.type === 'AsyncGeneratorDeclaration';
       const isAsyncGenerator = n.type === 'AsyncGeneratorDeclaration';
-      if (n.type !== 'FunctionDeclaration' && !isGenerator) {
+      // An ASYNC declaration was admitted by neither test, so it got no
+      // signature at all and a call of it was ~any~ even where the program
+      // wrote `async function f(): Promise.<uint8, Error>` - the spelling the
+      // design uses throughout (#sec-function-declarations). That is a gap in
+      // the DECLARED path rather than an inference one, and it is fixed here so
+      // that the annotation a program already writes is read.
+      const isAsyncFunction = n.type === 'AsyncFunctionDeclaration';
+      if (n.type !== 'FunctionDeclaration' && !isGenerator && !isAsyncFunction) {
         continue;
       }
       const fn = n as unknown as {
@@ -4909,6 +4962,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
           generator: { asyncGenerator: isAsyncGenerator },
+        });
+      }
+      if (!fn.TypeAnnotation && isAsyncFunction) {
+        pendingInferences.push({
+          signature,
+          fn: n as ParseNode,
+          parameterTypes: annotated.slice(),
+          signatureTyped: annotated.some((t) => t !== null),
+          asyncFunction: true,
         });
       }
       if (!fn.TypeAnnotation && !isGenerator && n.type === 'FunctionDeclaration') {

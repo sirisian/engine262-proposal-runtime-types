@@ -255,3 +255,21 @@ test('yield* contributes conservatively', () => {
   expectEarly('function f(): uint8 { return 1; } function* inner() { yield f(); }'
     + ' function* g(a: uint32) { yield* inner(); } const n: number = g(1);', 'Generator.<any, void, void>');
 });
+
+test('an async declaration reads its declared return type', () => {
+  // Not an inference fix: an `AsyncFunctionDeclaration` was admitted by neither
+  // arm of the declaration pass, so it got no signature at all and a call of it
+  // was ~any~ even where the program wrote the annotation the design uses
+  // throughout - `async function f(): Promise.<uint8, Error>`.
+  expectEarly('async function af(a: uint32): Promise.<string, any> { return "s"; } const n: number = af(1);', 'Promise.<string, any>');
+  expectOk('async function af(a: uint32): Promise.<string, any> { return "s"; } const p: Promise.<string, any> = af(1);');
+});
+
+test('async INFERENCE does not publish yet', () => {
+  // Pinned as a known gap. The declared path above now works, the queue entry
+  // and the resolve-mode collector are in place, and the published type is
+  // still not reaching the call site - so the remaining fault is between the
+  // queue and publication rather than in either end. An unannotated async
+  // function therefore stays legacy, and the message names the VALUE.
+  expect(thrown('async function af(a: uint32) { return "s"; } const n: number = af(1);')).toContain('[object Promise]');
+});
