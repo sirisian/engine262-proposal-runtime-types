@@ -241,6 +241,84 @@ function isNumberConversionSource(value: Value): boolean {
   return value instanceof NumberValue || value instanceof TypedNumberValue;
 }
 
+/**
+ * proposal-runtime-types #sec-union-boundary-selection: the member of a union a
+ * value crosses into.
+ *
+ * Taking the first member that accepts made the choice depend on where a member
+ * was WRITTEN, which a canonical union cannot express: CanonicalizeType orders
+ * members and Type Objects are interned on the canonical record, so
+ * `uint8 | uint32` and `uint32 | uint8` are the same type, and a boundary may
+ * meet that type as a Type Object with no source spelling at all. The
+ * observable cost was worse than the inconsistency: at `string | uint32` a
+ * Number crossed into `string`, so the boundary silently textified it - the
+ * failure the string rule's refuse-list exists to prevent, reachable through
+ * nothing but member order.
+ *
+ * The rungs, in order:
+ *   1. A member the value is ALREADY of, which crosses unchanged.
+ *   2. A numeric member that represents the value exactly, narrowest first,
+ *      with integers before floats for an integer-valued source.
+ *   3. Any remaining member, which is where the canonical-text rung of the
+ *      string rule and every non-numeric conversion land.
+ *
+ * _convert_ is the conversion the caller performs, so the checked and unchecked
+ * boundaries share one selection rule rather than drifting apart.
+ */
+export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
+  const members = t.Members;
+  for (const m of members) {
+    if (Q(yield* IsOfType(value, m))) {
+      return value;
+    }
+  }
+  const numericRank = (m: TypeRecord): number | null => {
+    if (m.Kind !== 'primitive') {
+      return null;
+    }
+    const name = m.Name;
+    const bits = typeof m.Arguments[0] === 'number' ? m.Arguments[0] as number : null;
+    if ((name === 'uint' || name === 'int') && bits !== null) {
+      // An integer member of N bits ranks by width, signed after unsigned of the
+      // same width so a non-negative value takes the tighter of the two.
+      return bits * 2 + (name === 'int' ? 1 : 0);
+    }
+    if (name === 'float16') { return 200; }
+    if (name === 'float32') { return 201; }
+    if (name === 'float64' || name === 'number') { return 202; }
+    if (name === 'float128') { return 203; }
+    if (name === 'decimal32') { return 210; }
+    if (name === 'decimal64') { return 211; }
+    if (name === 'decimal128') { return 212; }
+    return null;
+  };
+  const numericValue: number | bigint | null = value instanceof NumberValue
+    ? value.numberValue()
+    : (isTypedNumber(value) ? (value as TypedNumberValue).numberValue()
+      : (value instanceof BigIntValue ? (value as BigIntValue).bigintValue() : null));
+  if (numericValue !== null) {
+    const exact = members
+      .map((m) => ({ m, rank: numericRank(m) }))
+      .filter((e): e is { m: TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] }, rank: number } => e.rank !== null
+        && e.m.Kind === 'primitive'
+        && fitsNumericType(numericValue, e.m.Name, e.m.Arguments))
+      .sort((a, b) => a.rank - b.rank);
+    for (const e of exact) {
+      const attempt = EnsureCompletion(yield* convert(value, e.m));
+      if (attempt.Type === 'normal') {
+        return attempt.Value;
+      }
+    }
+  }
+  for (const m of members) {
+    const attempt = EnsureCompletion(yield* convert(value, m));
+    if (attempt.Type === 'normal') {
+      return attempt.Value;
+    }
+  }
+  return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+}
+
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // proposal-runtime-types #sec-span-coercion: a coercion to `Span.<T>`
   // MATERIALIZES. The window is a value distinct from the array coerced, so
@@ -363,13 +441,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     return isTypedNumber(atBase) ? new TypedNumberValue(atBase.value, t) : atBase;
   }
   if (t.Kind === 'union') {
-    for (const m of t.Members) {
-      const attempt = EnsureCompletion(yield* ConvertValue(value, m));
-      if (attempt.Type === 'normal') {
-        return attempt.Value;
-      }
-    }
-    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    return yield* ConvertValueToUnion(value, t, ConvertValue);
   }
   if (t.Kind === 'primitive') {
     // proposal-runtime-types #sec-binary-floating-point-types: a float128's
@@ -898,13 +970,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     return carryStringType(value, t);
   }
   if (t.Kind === 'union') {
-    for (const m of t.Members) {
-      const attempt = EnsureCompletion(yield* CheckedConvertValue(value, m));
-      if (attempt.Type === 'normal') {
-        return attempt.Value;
-      }
-    }
-    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    return yield* ConvertValueToUnion(value, t, CheckedConvertValue);
   }
   // sec-type-membership: "A value belongs to an intersection if it belongs to
   // EVERY member" - the opposite quantifier to the union above, which is why the
