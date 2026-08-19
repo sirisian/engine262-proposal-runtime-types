@@ -339,16 +339,18 @@ test('a generic call is typed where its return is concrete', () => {
   expectOk('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);');
 });
 
-test('a return that NAMES a type parameter is not yet typed', () => {
-  // Pinned as a known gap. The call binds `T` to `uint32` and the substitution
-  // that applies it is in place, but the annotation `: T` resolves to nothing
-  // when the signature is collected: a bare type parameter is not a type the
-  // checker has in scope at that point. Type-parameter scoping in resolveType
-  // is what this needs, and it is a separate piece from either the call typing
-  // above or the inference this file is otherwise about.
-  expectOk('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);');
+test('a return that names a type parameter is bound by the call', () => {
+  // #sec-generic-functions. `T` now denotes the parameter its declaration binds
+  // — for the whole signature and body — and a call that supplies type
+  // arguments substitutes them, so `first.<uint32>([1])` is a `uint32`.
+  expectEarly('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
+  expectOk('function first<T>(a: [].<T>): T { return a[0]; } const u: uint32 = first.<uint32>([1]);');
+  // A call that supplies NO type arguments binds nothing, and this proposal
+  // does not yet infer a binding from the arguments, so a parameter or return
+  // that names one is unconstrained there rather than compared against a bare
+  // `T` — which would refuse the ordinary way a generic is called.
+  expectOk('function id<T>(v: T): T { return v; } id(5); id("hi");');
 });
-
 test('an inference-sourced error says where the type came from', () => {
   // The gate this document set for itself: participation is non-local on
   // purpose - an annotation's reach travels through returns - so an error that

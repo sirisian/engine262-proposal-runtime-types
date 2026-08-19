@@ -657,6 +657,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const contextualThisTypes = new Map<ParseNode, Known>();
   /** The type that OWNS the signature a literal adopted, where one is known. */
   const contextualThisOwners = new Map<ParseNode, Known>();
+  /**
+   * The type parameters in scope, innermost last. A generic declaration binds
+   * its parameters for its whole signature and body, so they are pushed while
+   * that declaration is read and popped after.
+   */
+  const typeParameterScopes: Set<string>[] = [];
+
+  const typeParameterInScope = (name: string): boolean => typeParameterScopes.some((scope) => scope.has(name));
+
+  /** Read _declaration_'s type parameter names, or ~none~ where it binds none. */
+  const typeParameterNamesOf = (declaration: ParseNode | null | undefined): readonly string[] | null => {
+    const list = (declaration as unknown as {
+      TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
+    } | null | undefined)?.TypeParameters?.TypeParameterList;
+    if (!list || list.length === 0) {
+      return null;
+    }
+    const names = list.map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
+    return names.length > 0 ? names : null;
+  };
+
+  /** Run _body_ with _declaration_'s type parameters in scope. */
+  const withTypeParameters = <T,>(declaration: ParseNode | null | undefined, body: () => T): T => {
+    const names = typeParameterNamesOf(declaration);
+    if (!names) {
+      return body();
+    }
+    typeParameterScopes.push(new Set(names));
+    try {
+      return body();
+    } finally {
+      typeParameterScopes.pop();
+    }
+  };
+
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
 
@@ -964,6 +999,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type and an assignment of it was unchecked - the DECLARED path, before any
    * question of inferring one.
    */
+  /**
+   * Whether _t_ still mentions a type parameter.
+   *
+   * A call that supplies no type arguments binds nothing, and this proposal
+   * does not yet infer a binding from the arguments, so a parameter or return
+   * that names one is UNCONSTRAINED at such a call: comparing an argument
+   * against a bare `T` would refuse `id(5)` for `function id<T>(v: T): T`,
+   * which is the ordinary way a generic is called.
+   */
+  const mentionsTypeParameter = (t: Known): boolean => {
+    if (!t) {
+      return false;
+    }
+    if (t.Kind === 'parameter') {
+      return true;
+    }
+    const withMembers = t as { Members?: readonly TypeRecord[] };
+    if (withMembers.Members?.some((m) => mentionsTypeParameter(m))) {
+      return true;
+    }
+    const withArgs = t as { Arguments?: readonly (TypeRecord | number)[] };
+    if (withArgs.Arguments?.some((a) => typeof a !== 'number' && mentionsTypeParameter(a))) {
+      return true;
+    }
+    const withElement = t as { Element?: TypeRecord };
+    return !!withElement.Element && mentionsTypeParameter(withElement.Element);
+  };
+
   const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
     if (!t) {
       return t;
@@ -2396,6 +2459,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return userClass;
         }
         const name = node.TypeName.IdentifierReference.name;
+        // #sec-generic-functions: a name a generic declaration BINDS denotes
+        // that type parameter for the whole of the declaration - its parameter
+        // annotations, its return annotation, and its body. Without this a bare
+        // `T` resolved to nothing at all, so `function first<T>(): T {}` had no
+        // return type to read and a call of it was unchecked however completely
+        // it was annotated. Consulted first, because an inner binding shadows.
+        if (typeParameterInScope(name)) {
+          return { Kind: 'parameter', Name: name } as Known;
+        }
         return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
@@ -3158,6 +3230,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return substituteTypeParameters(declaredOrPublished, bindings);
               }
             }
+          }
+          if (only.Return && mentionsTypeParameter(only.Return)) {
+            // A generic return with no binding for its parameters says nothing
+            // this call site can use.
+            return null;
           }
           if (only.Return || only.InferredReturn) {
             if (!only.Return && only.InferredReturn) {
@@ -5390,6 +5467,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const Parameters: ParameterRecord[] = [];
       const annotated: Known[] = [];
       let usable = true;
+      // A generic declaration binds its type parameters for its whole
+      // signature, so they are in scope while the annotations below resolve.
+      const typeParameterScope = typeParameterNamesOf(n as ParseNode);
+      if (typeParameterScope) {
+        typeParameterScopes.push(new Set(typeParameterScope));
+      }
       for (const p of fn.FormalParameters ?? []) {
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
           // A rest or destructuring parameter: no arity to check against, so
@@ -5441,6 +5524,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
+      if (typeParameterScope) {
+        typeParameterScopes.pop();
+      }
       const signature: { Parameters: unknown, Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameterNames?: readonly string[] } = { Parameters, Return: declared, Untyped } as never;
       // #sec-generic-functions: the names a call binds with its type arguments.
       // Recorded here because a call site needs them to substitute into the
@@ -6986,6 +7072,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Parameters: s.Parameters,
                 Function: Value.undefined as unknown as Value,
                 Untyped: (s as unknown as { Untyped?: boolean }).Untyped === true,
+                // Carried so the argument check can bind them; the record is
+                // rebuilt from a subset of fields and dropped them.
+                TypeParameterNames: (s as unknown as { TypeParameterNames?: readonly string[] }).TypeParameterNames,
                 // #sec-overloading-on-return-type: "a signature is identified by
                 // its return type as well as its parameter types". The signature
                 // already carries a Return and this dropped it, so the resolver
@@ -7025,7 +7114,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (i >= chosen.Parameters.length || arg.type === 'AssignmentRestElement') {
                 return;
               }
-              const param = chosen.Parameters[i]?.Type;
+              let param = chosen.Parameters[i]?.Type;
+              // #sec-generic-functions: a call that supplies type arguments
+              // binds them for the whole signature, parameters included. With
+              // the return substituted but not the parameters, `first.<uint32>([1])`
+              // checked its argument against `[].<T>` - the unbound parameter -
+              // and refused a correct program.
+              const generic = (chosen as { TypeParameterNames?: readonly string[] }).TypeParameterNames;
+              if (param && generic && generic.length > 0) {
+                const spec = c.CallExpression as unknown as {
+                  type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+                } | undefined;
+                const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
+                if (argNodes && argNodes.length > 0) {
+                  const bindings = new Map<string, TypeRecord>();
+                  generic.forEach((tpName, k) => {
+                    const bound = argNodes[k] ? resolveType(argNodes[k] as ParseNode.Type) : null;
+                    if (tpName && bound) {
+                      bindings.set(tpName, bound);
+                    }
+                  });
+                  if (bindings.size > 0) {
+                    param = substituteTypeParameters(param, bindings) as TypeRecord;
+                  }
+                }
+              }
               // A FUNCTION LITERAL in a position whose type is a function type
               // takes that type's parameters as its own, which is how a
               // callback learns the element type (F80). Recorded here and read
@@ -7066,6 +7179,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // checked against the parameter at all. Recording the
                 // contextual types is a prerequisite of the check, not a
                 // substitute for it: the literal's own type is built FROM them.
+              }
+              if (mentionsTypeParameter(param)) {
+                // Unbound: nothing to check against until a binding exists.
+                return;
               }
               requireAssignable(staticTypeIn(arg, param), param);
             });
