@@ -4148,6 +4148,79 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
    * operator, which differ only in what they guard (F76).
    */
+  /** A statement whose call this walk cannot type, and so cannot judge after. */
+  const isUnresolvedCallStatement = (statement: ParseNode): boolean => {
+    if (statement.type !== 'ExpressionStatement') {
+      return false;
+    }
+    const expression = (statement as unknown as { Expression?: ParseNode }).Expression;
+    if (!expression || expression.type !== 'CallExpression') {
+      return false;
+    }
+    const callee = (expression as unknown as { CallExpression?: ParseNode }).CallExpression;
+    // A BARE NAME only. A declared assertion is called through a binding of a
+    // constructed guard type, and restricting to that shape is what keeps the
+    // deferral from swallowing ordinary errors: `s.push(x); ...` has an untyped
+    // MEMBER callee for reasons that have nothing to do with narrowing, and
+    // suppressing after it hid real rejections in the span suite.
+    return callee !== undefined
+      && callee.type === 'IdentifierReference'
+      && staticType(callee) === null;
+  };
+
+  /**
+   * The narrowing an ASSERTION statement states, applied to the rest of its
+   * block.
+   *
+   * #sec-declared-narrowing gives [[Narrows]] two forms. The `boolean` one is a
+   * test and narrows a branch, which `narrowingFactOf` reads. The ~void~ one is
+   * an assertion - `assertU8(box);` - and narrows every position the call
+   * dominates, so there is no branch to hang it on and it belongs here, where
+   * the statements it dominates are still to be walked.
+   */
+  const applyAssertionNarrowing = (statement: ParseNode): void => {
+    if (statement.type !== 'ExpressionStatement') {
+      return;
+    }
+    const expression = (statement as unknown as { Expression?: ParseNode }).Expression;
+    if (!expression || expression.type !== 'CallExpression') {
+      return;
+    }
+    const call = expression as unknown as { CallExpression?: ParseNode, Arguments?: ParseNode[] };
+    const callee = call.CallExpression;
+    if (!callee) {
+      return;
+    }
+    const calleeType = staticType(callee);
+    if (!calleeType || calleeType.Kind !== 'function' || calleeType.Signatures.length !== 1) {
+      return;
+    }
+    const signature = calleeType.Signatures[0] as {
+      Return?: TypeRecord,
+      Narrows?: readonly { Target: string, Type: TypeRecord }[],
+      Parameters?: readonly { Name?: string }[],
+    };
+    // The ASSERTION form is the one returning ~void~. A `boolean` guard called
+    // as a statement asserts nothing - its answer was discarded - so narrowing
+    // on it would claim what the program did not test.
+    if (signature.Return !== undefined && signature.Return !== null
+      && (signature.Return as { Kind?: string }).Kind !== 'void') {
+      return;
+    }
+    const args = call.Arguments ?? [];
+    const parameters = signature.Parameters ?? [];
+    for (const rule of signature.Narrows ?? []) {
+      const position = parameters.findIndex((parameter) => parameter.Name === rule.Target);
+      if (position < 0 || position >= args.length) {
+        continue;
+      }
+      const name = narrowableName(args[position]!);
+      if (name !== null) {
+        declareNarrowed(name, rule.Type as Known);
+      }
+    }
+  };
+
   const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     const fact = narrowingFactOf(test);
     // #sec-metadata-narrowing: record the comparison for the checking pass,
@@ -5954,9 +6027,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    // PLAN-declarative-checker-facts.md phase 3, the ~void~ form: a deferral
+    // opened by an assertion statement covers the rest of ITS block and no
+    // further, so the depth is restored with the frame it belongs to.
+    const deferredAtEntry = deferredGuardDepth;
     try {
       return f();
     } finally {
+      deferredGuardDepth = deferredAtEntry;
       frames.pop();
     }
   };
@@ -6332,6 +6410,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(co.CoalesceExpressionHead as ParseNode);
         walk(co.BitwiseORExpression as ParseNode);
+        return;
+      }
+      case 'ExpressionStatement': {
+        // PLAN-declarative-checker-facts.md phase 3, the ~void~ form.
+        // #sec-declared-narrowing: an assertion narrows "every position the
+        // call dominates" rather than a branch, so it is applied AFTER the
+        // statement is walked and takes effect for its siblings - which the
+        // generic walk visits in order, and whose extent is the enclosing
+        // block's frame.
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+            walk(child as ParseNode);
+          }
+        }
+        applyAssertionNarrowing(n);
+        // And the same deferral the guarded branch makes: a call this walk
+        // cannot type may be an assertion it will narrow on once the alias
+        // resolves, so it stops judging until the block ends.
+        if (isUnresolvedCallStatement(n)) {
+          deferredGuardDepth += 1;
+        }
         return;
       }
       case 'Block':

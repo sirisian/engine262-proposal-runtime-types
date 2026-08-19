@@ -72,3 +72,40 @@ test('a guard narrows only the argument its [[Target]] names', () => {
   expect(run(`${two} let x: uint8 | string = (5 := uint8); let y: uint8 | string = (5 := uint8); `
     + 'if (pair(x, y)) { let n: uint8 = x; }').Type).toBe('throw');
 });
+
+const ASSERT = 'function makeAssert() { return Reflect.makeType({ kind: "function", signatures: [{ '
+  + 'parameters: [{ name: "v", type: type any }], narrows: [{ target: "v", type: type uint8 }] }] }); } '
+  + 'type A = makeAssert(); '
+  + 'const assertU8: A = (v) => { if (typeof v !== "number") throw new TypeError("no"); }; ';
+
+test('a void assertion narrows the positions it dominates', () => {
+  // #sec-declared-narrowing gives [[Narrows]] two forms. The `boolean` one is a
+  // TEST and narrows a branch; the ~void~ one is an ASSERTION and narrows
+  // "every position the call dominates", which for a straight-line block is the
+  // statements after it.
+  expect(run(`${ASSERT} { let box: uint8 | string = (5 := uint8); assertU8(box); let n: uint8 = box; }`).Type).toBe('normal');
+  // Before the call it dominates nothing, so it narrows nothing.
+  expect(run(`${ASSERT} { let box: uint8 | string = (5 := uint8); let n: uint8 = box; assertU8(box); }`).Type).toBe('throw');
+});
+
+test('an assertion narrows only what it names, and only when it asserts', () => {
+  // A second binding is untouched.
+  expect(run(`${ASSERT} { let a: uint8 | string = (5 := uint8); let b: uint8 | string = (5 := uint8); `
+    + 'assertU8(a); let n: uint8 = b; }').Type).toBe('throw');
+  // A `boolean` guard CALLED AS A STATEMENT asserts nothing - its answer was
+  // discarded - so it must not narrow. This is the case that separates the two
+  // forms, and reading the signature's return is what separates them.
+  expect(run(`${GUARD} { let box: uint8 | string = (5 := uint8); isU8(box); let n: uint8 = box; }`).Type).toBe('throw');
+});
+
+test('the assertion deferral does not swallow errors after an ordinary call', () => {
+  // The deferral applies only to a call through a BARE NAME whose type this
+  // walk does not know - the shape a declared assertion takes. A method call,
+  // whose callee is untyped for reasons that have nothing to do with
+  // narrowing, must keep reporting what follows it: suppressing after one hid
+  // real rejections in the span suite, which is how this restriction was found.
+  expect(run('let a: [4].<uint32> = [1, 2, 3, 4]; let b = {}; b.v = 1; '
+    + 'a.slice(); let s: string = (5 := uint8);').Type).toBe('throw');
+  // And a call through a name whose type IS known keeps reporting too.
+  expect(run('function plain(v) { return 1; } plain(1); let s: string = (5 := uint8);').Type).toBe('throw');
+});
