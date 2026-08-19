@@ -2,15 +2,18 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * FINDING H (open): symbol-keyed structural membership fails.
+ * FINDING H (fixed): the iteration interfaces are satisfied structurally.
  *
  * Spec: #sec-isoftype (structural membership reads the value's properties),
  * #sec-iteration-types.
  *
- * `IsOfType` checks an ~object~ type by asking HasProperty and Get for each
- * property of the type. That works for a string key and fails for a SYMBOL one,
- * so every type whose shape names `[Symbol.iterator]` refuses values that
- * satisfy it:
+ * `Iterable`, `IterableIterator`, `IteratorResult`, and their async forms were
+ * listed BOTH as structural iteration interfaces and as nominal library types.
+ * The two resolution chains disagree on which wins: the checker reaches
+ * iterationInterfaceRecord before libraryTypeRecord, and the runtime reaches it
+ * after. So one annotation meant two things - a structural shape statically, an
+ * identity dynamically - and every value that satisfied the shape without being
+ * built as the library type was refused at the boundary:
  *
  *   - `Iterator.<uint8>`, whose properties are `next`, `return`, `throw`, all
  *     string keys, ACCEPTS a hand-built iterator and a generator object.
@@ -29,9 +32,10 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * check through an ~any~-typed path fails identically, which is what these
  * cases do.
  *
- * Recorded with `test.fails` so that it is a live reproduction rather than a
- * comment: when the defect is fixed these turn red and are rewritten as
- * ordinary assertions.
+ * `Iterator` was never in the nominal list, which is why it always worked and
+ * is what made the difference legible: the comment beside that list already
+ * said `Iterator.<T>` "stays the interface, so a hand-written iterator still
+ * satisfies it". The same is true of the rest, and both paths now agree.
  */
 
 function run(source: string) {
@@ -62,25 +66,25 @@ test('the value is iterable in fact', () => {
   expectOk("function* g(): uint8 { yield 1; } const x = g(); if (typeof x[Symbol.iterator] !== 'function') { throw new Error('x'); }");
 });
 
-test.fails('a symbol-keyed shape refuses a value that satisfies it (hand-built)', () => {
+test('a hand-built iterable satisfies Iterable', () => {
   expectOk(`const it = { [Symbol.iterator]() { return { next() { return { value: (1 := uint8), done: false }; } }; } };
     function anyv(x) { return x; }
     const i: Iterable.<uint8> = anyv(it);`);
 });
 
-test.fails('a symbol-keyed shape refuses a generator object', () => {
+test('a generator object satisfies Iterable', () => {
   expectOk(`function* g(): uint8 { yield 1; }
     function anyv(x) { return x; }
     const i: Iterable.<uint8> = anyv(g());`);
 });
 
-test.fails('a symbol-keyed shape refuses an array', () => {
+test('an array satisfies Iterable', () => {
   expectOk(`let a: [].<uint8> = [1];
     function anyv(x) { return x; }
     const i: Iterable.<uint8> = anyv(a);`);
 });
 
-test.fails('IterableIterator refuses what Iterator accepts, the difference being the symbol key', () => {
+test('IterableIterator accepts what satisfies both halves', () => {
   expectOk(`const it = { next() { return { value: (1 := uint8), done: false }; }, [Symbol.iterator]() { return this; } };
     function anyv(x) { return x; }
     const i: IterableIterator.<uint8> = anyv(it);`);

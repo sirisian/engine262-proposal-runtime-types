@@ -99,9 +99,18 @@ function objectType(properties: { key: string | symbol, type: TypeRecord, option
   return {
     Kind: 'object',
     Properties: properties.map((p) => ({
+      // A host string or a host symbol is translated; a key that is ALREADY a
+      // SymbolValue is passed through. `IterableIterator` builds itself by
+      // spreading the properties of `Iterator` and `Iterable`, which have been
+      // through this function once, and a second pass read `.description` off a
+      // SymbolValue - which has `Description` - so the lookup produced
+      // *undefined* and the property had no key at all. The composed interface
+      // then matched nothing, and displaying it crashed on the missing key.
       key: typeof p.key === 'string'
         ? p.key
-        : (wellKnownSymbols as unknown as Record<string, unknown>)[p.key.description!],
+        : (typeof p.key === 'symbol'
+          ? (wellKnownSymbols as unknown as Record<string, unknown>)[p.key.description!]
+          : p.key),
       type: p.type,
       optional: p.optional ?? false,
       readonly: false,

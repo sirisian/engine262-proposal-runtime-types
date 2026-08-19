@@ -476,8 +476,16 @@ const libraryTypeNames = new Set([
   // next step has a receiver carrying its element type, which an interface
   // record cannot do. Declared to implement the same interfaces.
   'IteratorHelper', 'AsyncIteratorHelper',
-  'IteratorResult', 'Iterable', 'IterableIterator',
-  'AsyncIterable', 'AsyncIterableIterator',
+  // `IteratorResult`, `Iterable`, `IterableIterator`, `AsyncIterable`, and
+  // `AsyncIterableIterator` are NOT here, for the reason stated just above for
+  // `Iterator`: they are the interfaces a user writes, and a hand-written value
+  // must satisfy them structurally. Listing them here made them ~nominal~ at
+  // RUN TIME while the checker resolved them structurally - its resolution
+  // chain reaches iterationInterfaceRecord before libraryTypeRecord, and the
+  // runtime's reaches it after - so `const i: Iterable.<uint8> = g()` was
+  // accepted by the checker and refused by the boundary, for a generator
+  // object, a hand-written iterable, and an Array alike. #sec-iteration-types
+  // says these are satisfied structurally, and both paths now agree with it.
 ]);
 
 /**
