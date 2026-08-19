@@ -134,18 +134,24 @@ test('a conditional is the join of its arms', () => {
   expectOk('let b = true; const c: uint32 = b ? 1 : 2;');
 });
 
-test('MUTUAL recursion does not publish yet', () => {
-  // Pinned as a known gap. Settling a mutual cycle needs every member of it
-  // marked in progress at once; doing that naively also makes every call to a
-  // not-yet-published function answer `never` during an inference, which is
-  // wrong for the ordinary case and broke 115 tests. The conservative answer
-  // stands until the mark can be scoped to a cycle rather than to the queue.
-  expectOk(`function f(): uint32 { return 5; }
+test('a mutual cycle settles on what its paths give', () => {
+  // #sec-inference-fixpoint. Computing `a`, the call to `b` drives `b`'s
+  // inference with `a` already marked; `b`'s call back to `a` reaches the mark
+  // and contributes `never`, which vanishes from the join, so `b` settles on
+  // its other paths and `a` settles on that. Marking the whole queue instead
+  // makes every call to an unpublished function answer `never` during any
+  // inference, which is wrong for the ordinary wrapper.
+  expectEarly(`function f(): uint32 { return 5; }
     function a(n: uint32) { return n > 0 ? b(n) : f(); }
     function b(n: uint32) { return a(n); }
-    let sink; sink = b;`);
+    let sink: string; sink = b(1);`, 'uint.<32>');
+  // A three-way cycle settles the same way.
+  expectEarly(`function f(): uint32 { return 5; }
+    function p(n: uint32) { return q(n); }
+    function q(n: uint32) { return r(n); }
+    function r(n: uint32) { return n > 0 ? p(n) : f(); }
+    let sink: string; sink = r(1);`, 'uint.<32>');
 });
-
 test('a published type never licenses eliding a check', () => {
   // #sec-published-return-types. Publication makes a call statically typed,
   // which ENABLES an elision that could not fire while the call was ~any~ - so

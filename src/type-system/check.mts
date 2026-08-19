@@ -2926,12 +2926,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return only.Return ?? only.InferredReturn ?? null;
           }
           if (inferenceDepth > 0) {
-            // A call of the function whose inference is running: a recursive
+            // A call of a function whose inference is running: a recursive
             // reference, which contributes `never` rather than an unknown.
             if (inferencesInProgress.has(only as object)) {
               return neverType;
             }
-            return only.ProvisionalReturn ?? null;
+            return only.ProvisionalReturn ?? driveInference(only as object);
           }
           return null;
         }
@@ -4178,6 +4178,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const inferencesInProgress = new Set<object>();
 
+  /**
+   * #sec-inference-fixpoint: the queued inference for a signature, so that a
+   * contribution which CALLS a not-yet-published function can drive that
+   * function's inference on demand.
+   *
+   * This is what settles a mutual cycle. Computing `a`, the call to `b` runs
+   * `b`'s inference with `a` already marked; `b`'s own call to `a` then reaches
+   * the mark and contributes `never`, which vanishes from the join, so `b`
+   * settles on what its other paths give and `a` settles on that. Marking the
+   * whole queue instead - the first attempt - made every call to an unpublished
+   * function answer `never` during any inference, which is wrong for the
+   * ordinary wrapper and broke 115 tests.
+   */
+  const pendingBySignature = new Map<object, {
+    signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
+    fn: ParseNode,
+    parameterTypes: readonly Known[],
+    signatureTyped: boolean,
+  }>();
+
+  /** Compute and cache a queued function's provisional type, on demand. */
+  const driveInference = (only: object): Known => {
+    const item = pendingBySignature.get(only);
+    if (!item || inferencesInProgress.has(only)) {
+      return null;
+    }
+    inferencesInProgress.add(only);
+    inferenceDepth += 1;
+    let inferred: Known;
+    try {
+      inferred = inferredReturnType(item.fn, item.parameterTypes, null, { anchored: false });
+    } finally {
+      inferenceDepth -= 1;
+      inferencesInProgress.delete(only);
+    }
+    if (inferred) {
+      item.signature.ProvisionalReturn = inferred;
+    }
+    return inferred;
+  };
+
   const pendingInferences: {
     signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
     fn: ParseNode,
@@ -4219,6 +4260,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const queue = pendingInferences.splice(0, pendingInferences.length);
+    for (const item of queue) {
+      if (!item.generator && !item.asyncFunction) {
+        pendingBySignature.set(item.signature as object, item);
+      }
+    }
     // Two passes settle a chain written in either order; a third changes
     // nothing that a second did not, absent recursion, which this cycle leaves
     // unpublished rather than iterated to a fixpoint.
@@ -4246,8 +4292,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (inferredYield && (item.signatureTyped || ya.anchored) && inferredYield.Kind !== 'void') {
             const rebuilt = generatorDeclaredType(inferredYield, item.generator.asyncGenerator);
-            if (rebuilt && (!item.signature.Return || !SameType(item.signature.Return, rebuilt))) {
-              item.signature.Return = rebuilt;
+            // Into [[InferredReturn]], not [[Return]]. A generator with no
+            // annotation declares no return type, so writing the refined
+            // Generator type into the declared field would let an INFERRED type
+            // license an elision, which #sec-published-return-types forbids, and
+            // would put it in reach of identity and overload ranking besides.
+            if (rebuilt && (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, rebuilt))) {
+              item.signature.InferredReturn = rebuilt;
               changed = true;
             }
           }
@@ -4935,11 +4986,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // what makes a zero-parameter function typed, which the clause spells
       // out.
       let declared = Return;
+      let baselineGenerator: Known = null;
       if (isGenerator) {
-        declared = generatorDeclaredType(Return, isAsyncGenerator);
-        if (declared === null) {
+        declared = Return ? generatorDeclaredType(Return, isAsyncGenerator) : null;
+        if (!Return) {
+          // An unannotated generator still has a shape - `Generator.<any, ...>` -
+          // but it is not a DECLARED one, so it is published rather than
+          // declared and the fixpoint may refine it.
+          baselineGenerator = generatorDeclaredType(null, isAsyncGenerator);
+        }
+        if (Return && declared === null) {
           // An AsyncGenerator annotation on a synchronous generator, or the
-          // reverse: the annotation names the wrong protocol.
+          // reverse: the annotation names the wrong protocol. Only an
+          // ANNOTATION can name the wrong one - an unannotated generator now
+          // leaves this field null deliberately, since its shape is published
+          // rather than declared.
           const completion = Throw.TypeError('a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           declared = Return;
@@ -4947,6 +5008,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
       const signature: { Parameters: unknown, Return: Known, Untyped: boolean, InferredReturn?: Known } = { Parameters, Return: declared, Untyped } as never;
+      if (baselineGenerator) {
+        signature.InferredReturn = baselineGenerator;
+      }
       signatures.push(signature as never);
       // #sec-inferred-return-types: a function that declares no return type may
       // still publish one. The inference cannot run here, because it reads the
