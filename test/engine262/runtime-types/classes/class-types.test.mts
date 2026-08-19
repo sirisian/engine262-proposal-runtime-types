@@ -59,3 +59,38 @@ test('class expressions bind class types too', () => {
 test('feature off: class-name-as-type stays an error', () => {
   expect(run('class A {} const T = type A;', )).toMatchObject({ Type: 'normal' });
 });
+
+test('reflection answers the class relations the checker decides', () => {
+  // PLAN-nominal-records.md phase 2. `Reflect.isAssignable` is specified as the
+  // checker's judgment "exposed unchanged", and it was not: the relation walks
+  // [[Base]] for the inheritance chain and compares [[Structure]] to decide
+  // that a class satisfies an interface it implements, and the record the
+  // RUNTIME built for a class carried neither. Every answer below was *false*.
+  const decls = 'class Base { a: uint8 = 1; } class Derived extends Base { b: uint8 = 2; } '
+    + 'class Unrelated { a: uint8 = 1; } interface I { a: uint8 } class Impl implements I { a: uint8 = 1; } ';
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type Derived, type Base));`)).toBe('true');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type Impl, type I));`)).toBe('true');
+  // The chain is one-way, and an unrelated class of the same shape is not in it:
+  // "two unrelated empty classes stay unrelated, which is the point of classes
+  // being nominal at all".
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type Base, type Derived));`)).toBe('false');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type Unrelated, type Base));`)).toBe('false');
+  // The corollaries, which were false for the same reason one layer down.
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type (x: Base) => void, type (x: Derived) => void));`)).toBe('true');
+  expect(evaluated(`${decls} String(Reflect.isAssignable(type { readonly v: Derived }, type { readonly v: Base }));`)).toBe('true');
+});
+
+test('a class type is satisfied by construction, not by shape', () => {
+  // The guard phase 2 needed. Giving a runtime class record a [[Structure]] for
+  // SUBTYPING made membership read it too, and `{} instanceof (type A)` became
+  // true for any class with no members. #sec-object-types: "a class states a
+  // construction and an identity as well as a shape, and it is the identity
+  // that its type is for" - so membership follows the prototype chain and
+  // subtyping follows the declaration.
+  expect(evaluated('class A {} const T = type A; String(!({} instanceof T));')).toBe('true');
+  expect(evaluated('class A { a: uint8 = 1; } const T = type A; String(!({ a: 1 } instanceof T));')).toBe('true');
+  expectThrown('class A {} function f(a: A) { return a; } f({});');
+  // An INTERFACE is still satisfied structurally, which is the same field read
+  // for the other question.
+  expect(evaluated('interface I { a: uint8 } let o: I = { a: (1 := uint8) }; String(o.a);')).toBe('1');
+});

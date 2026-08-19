@@ -1478,7 +1478,22 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           && RegisteredEnumOf(m) === undefined
           && SameValue(value, m));
       }
-      if (t.Structure) {
+      // PLAN-nominal-records.md phase 2. A CLASS type is not satisfied
+      // structurally: "a class states a construction and an identity as well as
+      // a shape, and it is the identity that its type is for"
+      // (#sec-object-types). Membership follows the prototype chain, which the
+      // [[Constructor]] arm below decides.
+      //
+      // The guard exists because phase 2 gave a runtime class record a
+      // [[Structure]] for SUBTYPING - the relation needs it to decide that a
+      // class satisfies an interface it implements - and this operation would
+      // otherwise have read the same field as a membership rule, which made
+      // `{} instanceof (type A)` true for any class `A` with no members and let
+      // `f({})` through for `function f(a: A)`. Subtyping and membership are
+      // different questions of the same record.
+      const isClassType = (t.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
+        || (t.Declaration as { type?: string } | undefined)?.type === 'ClassExpression';
+      if (t.Structure && !isClassType) {
         const structurallyMatches = Q(yield* IsOfType(value, t.Structure));
         if (!structurallyMatches) {
           return false;

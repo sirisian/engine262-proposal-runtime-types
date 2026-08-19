@@ -1,4 +1,5 @@
 import { Value } from '../value.mts';
+import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { Q } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -28,7 +29,17 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
   }
   // proposal-runtime-types M21: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
-    AssociateClassType(value, GetTypeObject({ Kind: 'nominal', Declaration: ClassExpression, Arguments: [], Constructor: value }));
+    const published = PublishedClassTypeOf(ClassExpression as unknown as object);
+    AssociateClassType(value, GetTypeObject({
+      Kind: 'nominal',
+      Declaration: ClassExpression,
+      Arguments: [],
+      Constructor: value,
+      // PLAN-nominal-records.md phase 2, as at ClassDeclaration: the relation
+      // reads these two and this record carried neither.
+      Base: published?.Kind === 'nominal' ? published.Base : undefined,
+      Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
+    }));
   }
   return value;
 }

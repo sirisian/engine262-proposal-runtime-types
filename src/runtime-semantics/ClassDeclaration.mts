@@ -8,6 +8,7 @@ import {
   AllDefaultsFrame, pushTypeParameterFrame, popTypeParameterFrame,
 } from '../type-system/runtime.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
+import { PublishedClassTypeOf } from '../type-system/check.mts';
 import {
   InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
   ApplyDecorators, ClassDecoratorContext,
@@ -74,7 +75,21 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
   }
   // proposal-runtime-types M21: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
-    const typeObject = GetTypeObject({ Kind: 'nominal', Declaration: ClassDeclaration, Arguments: [], Constructor: value });
+    const published = PublishedClassTypeOf(ClassDeclaration as unknown as object);
+    const typeObject = GetTypeObject({
+      Kind: 'nominal',
+      Declaration: ClassDeclaration,
+      Arguments: [],
+      Constructor: value,
+      // PLAN-nominal-records.md phase 2: the relation walks [[Base]] for the
+      // inheritance chain and compares [[Structure]] to satisfy an interface,
+      // and this record carried neither - so reflection answered *false* for
+      // relations the checker decides correctly. Taken from the checker's own
+      // record for this declaration rather than rebuilt, since the structure
+      // must include inherited members and there must be exactly one builder.
+      Base: published?.Kind === 'nominal' ? published.Base : undefined,
+      Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
+    });
     AssociateClassType(value, typeObject);
   }
   // 4. Let env be the running execution context's LexicalEnvironment.

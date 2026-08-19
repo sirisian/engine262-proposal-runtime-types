@@ -485,6 +485,18 @@ export function WideIntegerContextLiteral(node: object): { value: bigint, type: 
  */
 const publishedReturnTypes = new WeakMap<object, TypeRecord>();
 
+/**
+ * The instance type the checker built for a class declaration, by its node.
+ *
+ * PLAN-nominal-records.md phase 2: the runtime's own record for the same class
+ * reads [[Base]] and [[Structure]] from here rather than computing them again.
+ */
+const publishedClassTypes = new WeakMap<object, TypeRecord>();
+
+export function PublishedClassTypeOf(declaration: object): TypeRecord | undefined {
+  return publishedClassTypes.get(declaration);
+}
+
 export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
   return publishedReturnTypes.get(declaration);
 }
@@ -4025,6 +4037,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (construct) {
       constructSignatures.set(n, construct);
     }
+    // PLAN-nominal-records.md phase 2. The RUNTIME builds its own nominal
+    // record for this class - at ClassDeclaration, ClassExpression and
+    // NamedEvaluation - and carries neither [[Base]] nor [[Structure]], so
+    // `Reflect.isAssignable(type Derived, type Base)` answered *false* for a
+    // relation the checker decides correctly.
+    //
+    // Published rather than rebuilt there. The structure must include INHERITED
+    // members, which this builder resolves lazily and memoizes precisely
+    // because a base may be declared later than the class that extends it; a
+    // second, eager build at evaluation would have to reproduce that and could
+    // silently disagree. One build, read twice, cannot.
+    publishedClassTypes.set(n as unknown as object, instance as unknown as TypeRecord);
     return instance;
   };
 
