@@ -9,7 +9,7 @@ import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsCheckElided } from '../type-system/check.mts';
+import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { anyType, displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -2424,6 +2424,16 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
   if (returnAnnotationOf(fn)) {
     return true;
   }
+  // A PUBLISHED inferred return type is a boundary as much as a written one
+  // (#sec-inferred-return-types), and this predicate is what decides whether a
+  // function's body is evaluated with boundaries at all. A function whose only
+  // type is inferred has no annotation to find, so without this it took the
+  // fast path and its return was never checked - which is the difference
+  // between publishing a type and publishing a claim.
+  const code = fn.ECMAScriptCode as { parent?: object } | null | undefined;
+  if (code?.parent && PublishedReturnTypeOf(code.parent)) {
+    return true;
+  }
   return ((fn.FormalParameters as readonly ParseNode[] | undefined) ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation);
 }
 
@@ -2572,6 +2582,18 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   }
   const annotation = returnAnnotationOf(fn);
   if (!annotation) {
+    // #sec-inferred-return-types: a function that declares no return type may
+    // PUBLISH one, and the check-site table treats the two alike. Without this
+    // the published type is a claim nothing verifies: the checker hands it to
+    // every caller and no boundary ever tests that the value leaving the
+    // function is of it.
+    const code = fn.ECMAScriptCode as { parent?: object } | null | undefined;
+    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
+    if (published && published.Kind !== 'void') {
+      // `void` is vacuous here for the reason #sec-void-type gives for a
+      // declared one: it constrains the consumer, not the value leaving.
+      return Q(yield* CheckedConvertValue(value, published));
+    }
     return value;
   }
   // proposal-runtime-types #sec-void-type: "A call of a function whose return

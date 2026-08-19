@@ -470,6 +470,23 @@ export function WideIntegerContextLiteral(node: object): { value: bigint, type: 
   return wideIntegerLiterals.get(node);
 }
 
+/**
+ * proposal-runtime-types #sec-inferred-return-types: the published inferred
+ * return type of a function, keyed by its declaration node.
+ *
+ * The run time needs it for the reason it needs a written annotation: the
+ * check-site table gives a `return` in a function with a declared OR PUBLISHED
+ * return type a RequireType, and without that the published type is a claim
+ * nothing verifies - a type the checker hands to callers and the boundary never
+ * tests. It is a WeakMap rather than a field on the function object because the
+ * checker computes it over declarations, before any function object exists.
+ */
+const publishedReturnTypes = new WeakMap<object, TypeRecord>();
+
+export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
+  return publishedReturnTypes.get(declaration);
+}
+
 export function IsCheckElided(annotation: object): boolean {
   return elidableAnnotations.has(annotation);
 }
@@ -4087,6 +4104,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           item.signature.InferredReturn = published;
           changed = true;
         }
+        // The run time enforces what is published, so the type is recorded
+        // against the declaration the boundary will look it up from.
+        publishedReturnTypes.set(item.fn as unknown as object, published);
       }
       if (!changed) {
         break;
@@ -4112,7 +4132,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const annotated = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
           // An ANNOTATION wins over the position, since the program said what
           // it wanted; the position fills a parameter that said nothing.
-          const t = annotated ? resolveType(annotated.Type) : (parameterTypes[i] ?? null);
+          let t = annotated ? resolveType(annotated.Type) : (parameterTypes[i] ?? null);
+          // An OPTIONAL parameter with no default is *undefined* where the call
+          // omits it, so its type in the body is `T | undefined`. Reading it as
+          // `T` published a type the function's own result fails:
+          // `function f(a?: uint8) { return a; }` inferred `uint8`, and `f()`
+          // then threw at its own return handing back the *undefined* the
+          // parameter is defined to hold. The parameter boundary already agrees
+          // - it admits the omitted argument - so this is the body's view
+          // catching up with it.
+          const optional = (prm as { Optional?: boolean }).Optional === true
+            && !(prm as { Initializer?: unknown }).Initializer;
+          if (t && optional) {
+            t = CanonicalizeType({ Kind: 'union', Members: [t, makePrimitive('undefined')] }) as Known;
+          }
           declare((prm as ParseNode.SingleNameBinding).BindingIdentifier!.name, t);
         }
         i += 1;

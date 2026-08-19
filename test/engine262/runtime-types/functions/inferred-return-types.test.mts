@@ -133,3 +133,32 @@ test('a published type never licenses eliding a check', () => {
     f = function () { return 'now-a-string'; };
     const n: uint32 = g();`)).toMatchObject({ Type: 'throw' });
 });
+
+test('a published type is enforced where the function returns', () => {
+  // #sec-published-return-types, the third reading. Without this the published
+  // type is a claim nothing verifies, and the failure below reaches whichever
+  // consumer happens to be annotated - or none at all, as here.
+  expect(run(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    f = function () { return 'now-a-string'; };
+    g();`)).toMatchObject({ Type: 'throw' });
+  // An honest wrapper is untouched, and its result still carries the type.
+  expectOk(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    const n: uint32 = g();`);
+});
+
+test('a published void does not check the returned value', () => {
+  // As for a declared `void` (#sec-void-type): the annotation constrains the
+  // consumer, not the value leaving.
+  expectOk('function w(a: uint32) { } w(1);');
+});
+
+test('an optional parameter is undefined-inclusive in the body', () => {
+  // `f()` hands back the *undefined* the parameter is defined to hold, so the
+  // inferred type must admit it: reading the parameter as `uint8` published a
+  // type the function's own result failed.
+  expectOk('function f(a?: uint8) { return a; } f();');
+  expectOk('function f(a?: uint8) { return a; } f(1);');
+  expectEarly('function f(a?: uint8) { return a; } const n: uint8 = f();', 'uint.<8> | undefined');
+});
