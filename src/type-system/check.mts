@@ -4275,6 +4275,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * publishing nothing for it is the conservative answer, which leaves it
    * exactly as untyped as it was before this operation existed.
    */
+  /** The declared name of a function node, for a diagnostic. */
+  const nameOfDeclaration = (fn: ParseNode): string | null => {
+    const id = (fn as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier;
+    return id?.name ?? null;
+  };
+
   const publishInferredReturns = (): void => {
     if (pendingInferences.length === 0) {
       return;
@@ -4369,7 +4375,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Every queued function gets a PROVISIONAL type, whether or not it
         // participates, so that a participating function asking about this one
         // gets an answer. Publication is the separate step below.
-        if (inferred && item.signature.ProvisionalReturn !== inferred) {
+        // Compared by SameType, not by identity: each pass builds a fresh
+        // record, so an identity test reported a change every time. The
+        // fixpoint then ran its full pass budget on every program and never
+        // detected non-convergence, because it could not tell a type that grows
+        // from one that is merely rebuilt.
+        if (inferred && (!item.signature.ProvisionalReturn
+          || !SameType(item.signature.ProvisionalReturn, inferred))) {
           item.signature.ProvisionalReturn = inferred;
           changed = true;
         }
@@ -4403,6 +4415,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (!changed) {
         break;
+      }
+      if (pass === 7) {
+        // #sec-inference-fixpoint (r19): the repetition did not reach a
+        // fixpoint. That happens when the in-progress type recurs INSIDE a type
+        // constructor - `function w(a: uint32) { return [w(a)]; }` yields
+        // `[].<never>`, then `[].<[].<never>>`, and so on - so there is no type
+        // to publish and inference produces no equirecursive ones. The program
+        // says what it meant with an annotation, and the diagnostic says so
+        // rather than leaving the function silently untyped.
+        for (const item of queue) {
+          if (item.signature.InferredReturn || item.signature.ProvisionalReturn) {
+            const completion = Throw.TypeError('the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+            item.signature.InferredReturn = undefined;
+            item.signature.ProvisionalReturn = undefined;
+          }
+        }
       }
     }
   };
