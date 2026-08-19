@@ -330,3 +330,21 @@ test('assignability reads the effective return type', () => {
   // check admits it as before.
   expectOk('function g() { return 5; } let cb: () => string = g;');
 });
+
+test('a generic call is typed where its return is concrete', () => {
+  // #sec-generic-functions. A generic call had no Static Type at all, because
+  // the CALLEE `g.<uint8>` - a TypeArgumentsExpression - had none, so nothing
+  // downstream could be checked however completely the function was annotated.
+  expectEarly('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const s: string = g.<uint8>(1);', 'uint.<32>');
+  expectOk('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);');
+});
+
+test('a return that NAMES a type parameter is not yet typed', () => {
+  // Pinned as a known gap. The call binds `T` to `uint32` and the substitution
+  // that applies it is in place, but the annotation `: T` resolves to nothing
+  // when the signature is collected: a bare type parameter is not a type the
+  // checker has in scope at that point. Type-parameter scoping in resolveType
+  // is what this needs, and it is a separate piece from either the call typing
+  // above or the inference this file is otherwise about.
+  expectOk('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);');
+});
