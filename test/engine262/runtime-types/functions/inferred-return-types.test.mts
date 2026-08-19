@@ -162,3 +162,39 @@ test('an optional parameter is undefined-inclusive in the body', () => {
   expectOk('function f(a?: uint8) { return a; } f(1);');
   expectEarly('function f(a?: uint8) { return a; } const n: uint8 = f();', 'uint.<8> | undefined');
 });
+
+test('a method publishes into the shape its member belongs to', () => {
+  // #sec-inference-and-function-forms. A member call types through the
+  // published return, so the mistake is the checker's rather than the
+  // boundary's - the message names a TYPE.
+  expectEarly('class C { m(a: uint32) { return "s"; } } const n: number = new C().m(1);', 'string');
+  expectOk('class C { m(a: uint32) { return "s"; } } const s: string = new C().m(1);');
+  // Anchored rather than signature-typed: the method declares nothing and what
+  // it returns derives from a declared type.
+  expectEarly('function f(): uint32 { return 5; } class C { m() { return f(); } } const s: string = new C().m();', 'uint.<32>');
+  // A method with no annotation and no anchor stays legacy.
+  expect(thrown('class C { m() { return "s"; } } const n: number = new C().m();')).toContain('"s" is not assignable');
+});
+
+test('a getter publishes the type its property reads at', () => {
+  // A getter is the single-value position: no parameters, and its returns ARE
+  // the member's type, so it can only participate by anchoring.
+  expectEarly('function f(): uint32 { return 5; } class C { get v() { return f(); } } const s: string = new C().v;', 'uint.<32>');
+  expectOk('function f(): uint32 { return 5; } class C { get v() { return f(); } } const u: uint32 = new C().v;');
+  expect(thrown('class C { get v() { return "s"; } } const n: number = new C().v;')).toContain('"s" is not assignable');
+});
+
+test('a method return is enforced like any other', () => {
+  expect(run(`function f(): uint32 { return 5; }
+    class C { m() { return f(); } }
+    f = function () { return 'now-a-string'; };
+    new C().m();`)).toMatchObject({ Type: 'throw' });
+});
+
+test('an object literal method does not publish yet', () => {
+  // Pinned as a KNOWN GAP rather than left to be discovered: the specification
+  // includes an object literal's method, and only the class element loop
+  // publishes so far. The message names the value, so this is the boundary
+  // deciding, not the checker.
+  expect(thrown('const o = { m(a: uint32) { return "s"; } }; const n: number = o.m(1);')).toContain('"s" is not assignable');
+});

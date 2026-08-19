@@ -3345,8 +3345,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         if (!md.UniqueFormalParameters) {
-          // A getter: the property reads at its declared return type.
-          const t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+          // A getter: the property reads at its declared return type, or at the
+          // one inferred from its body (#sec-inference-and-function-forms). A
+          // getter is the single-value position par excellence - it takes no
+          // parameters and its body's returns ARE the property's type - so
+          // reading it as untyped where a program wrote no annotation loses the
+          // type for every read of the member.
+          let t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+          if (!t) {
+            const anchorage = { anchored: false };
+            inferenceDepth += 1;
+            let inferred: Known;
+            try {
+              inferred = inferredReturnType(el as ParseNode, [], null, anchorage);
+            } finally {
+              inferenceDepth -= 1;
+            }
+            // A getter declares no parameters, so it can only participate by
+            // anchoring: what it returns must derive from a declared type.
+            if (inferred && anchorage.anchored && inferred.Kind !== 'void') {
+              t = inferred;
+              publishedReturnTypes.set(el as unknown as object, inferred);
+            }
+          }
           if (t) {
             Properties.push({ key, type: t, optional: false });
             getterKeys.add(key);
@@ -3373,7 +3394,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
         const Untyped = !md.TypeAnnotation && annotated.every((t) => t === null);
         const sigs = methods.get(key) ?? [];
-        sigs.push({ Parameters, Return, Untyped });
+        const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known } = { Parameters, Return, Untyped };
+        // #sec-inference-and-function-forms: a method's published type joins the
+        // shape its member belongs to, so a member call types through it.
+        if (!Return) {
+          const anchorage = { anchored: false };
+          inferenceDepth += 1;
+          let inferred: Known;
+          try {
+            inferred = inferredReturnType(el as ParseNode, annotated, null, anchorage);
+          } finally {
+            inferenceDepth -= 1;
+          }
+          if (inferred && (annotated.some((t) => t !== null) || anchorage.anchored)) {
+            const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
+              ? voidTypeRecord
+              : inferred;
+            signature.InferredReturn = published;
+            publishedReturnTypes.set(el as unknown as object, published);
+          }
+        }
+        sigs.push(signature);
         methods.set(key, sigs);
         continue;
       }
@@ -4115,10 +4156,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }): Known => {
+    // A method's parameters are its UniqueFormalParameters, and a getter has
+    // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
-      ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
+      ?? (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters
+      ?? (fn as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters;
     if (fn.type !== 'ArrowFunction' && fn.type !== 'FunctionExpression'
-        && fn.type !== 'FunctionDeclaration') {
+        && fn.type !== 'FunctionDeclaration' && fn.type !== 'MethodDefinition') {
       // A generator or async literal's result is an iterator or a promise, not
       // the returned value; those judgments are not this operation's business.
       // #sec-inference-and-function-forms states what each of those publishes;
