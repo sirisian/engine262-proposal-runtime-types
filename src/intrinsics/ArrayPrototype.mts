@@ -13,7 +13,7 @@ import {
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
-import { ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
+import { StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { __ts_cast__ } from '../utils/language.mts';
@@ -207,6 +207,7 @@ function* ArrayProto_filter([callbackfn = Value.undefined, thisArg = Value.undef
     }
     k += 1;
   }
+  propagateElementType(O, A);
   return A;
 }
 
@@ -672,6 +673,7 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
     n += 1;
   }
   Q(yield* Set(A, Value('length'), F(n), Value.true));
+  propagateElementType(O, A);
   return A;
 }
 
@@ -717,6 +719,7 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
     X(CreateDataPropertyOrThrow(A, X(ToString(F(j))), sortedList[j]));
     j += 1;
   }
+  propagateElementType(O, A);
   return A;
 }
 
@@ -885,6 +888,7 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
     X(CreateDataPropertyOrThrow(A, Pk, fromValue));
     k += 1;
   }
+  propagateElementType(O, A);
   return A;
 }
 
@@ -964,6 +968,31 @@ function* ArrayProto_at([index = Value.undefined]: Arguments, { thisValue }: Fun
   return Q(yield* Get(O, X(ToString(F(k)))));
 }
 
+/**
+ * PLAN-tuple-stores.md phase 2: give a COPY the element type of the array it
+ * was copied from.
+ *
+ * `#sec-array-defaults-and-stores` says a method that takes or returns an
+ * ELEMENT does so at the element type, and says nothing about a method that
+ * returns an ARRAY - so `slice()` on a `[].<uint8>` handed back something that
+ * accepted a String at any index and grew without limit. That is a type
+ * laundering hole, not a lenience: the copy holds the receiver's elements, so
+ * it holds values of the receiver's element type.
+ *
+ * Only for methods whose result draws ONLY from the receiver. `map` is
+ * excluded on purpose - its callback returns whatever it likes - and so is
+ * `concat`, whose other operand may have a different element type or none.
+ */
+function propagateElementType(source: Value, copy: Value): void {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const element = (source as { TypedElement?: TypeRecord }).TypedElement;
+  if (element !== undefined && copy instanceof ObjectValue) {
+    StampTypedArray(copy, element);
+  }
+}
+
 /** https://tc39.es/ecma262/#sec-array.prototype.toreversed */
 function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
@@ -977,6 +1006,7 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
     X(CreateDataPropertyOrThrow(A, Pk, fromValue));
     k += 1;
   }
+  propagateElementType(O, A);
   return A;
 }
 

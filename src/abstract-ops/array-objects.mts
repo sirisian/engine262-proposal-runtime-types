@@ -42,7 +42,7 @@ import {
   GeneratorYield,
   Throw,
 } from '#self';
-import { isTypedArrayObject } from '#self';
+import { isTypedArrayObject, RequireType } from '#self';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -50,6 +50,40 @@ const InternalMethods = {
     const array = this;
 
     Assert(IsPropertyKey(P));
+    // PLAN-tuple-stores.md phase 1. `Set` checks a store against the tuple's
+    // position type or the array's element type; a REDEFINITION reached
+    // neither, so `Object.defineProperty(a, 0, { value: "no" })` put a String
+    // in a slot declared `uint8`, and `Reflect.defineProperty` did the same.
+    // Both are spellings #table-check-sites names - "a value crossing into a
+    // typed position through reflection, including `Reflect.set` and
+    // `Reflect.defineProperty`" - and only the first was wired.
+    //
+    // The rules are `Set`'s, so the shape is `Set`'s: a tuple position takes
+    // its own type, a position the rest collects takes the rest's, a position
+    // beyond the arity is not a position, and a typed array's element takes the
+    // element type. RequireType returns the value OF THE TYPE, so the descriptor
+    // carries what it returned - a plain 7 redefining a `uint8` element becomes
+    // that element's uint8, exactly as the store makes it.
+    if (surroundingAgent.feature('runtime-types') && Desc.Value !== undefined && isArrayIndex(P)) {
+      type PositionType = Parameters<typeof RequireType>[1];
+      const typed = array as unknown as {
+        TypedTuple?: { Positions: readonly PositionType[], Rest: PositionType | undefined },
+        TypedElement?: PositionType,
+      };
+      const tuple = typed.TypedTuple;
+      if (tuple !== undefined) {
+        const position = Number((P as JSStringValue).stringValue());
+        if (position < tuple.Positions.length) {
+          Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, tuple.Positions[position]!)) });
+        } else if (tuple.Rest !== undefined) {
+          Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, tuple.Rest)) });
+        } else {
+          return Throw.TypeError('a tuple of $1 positions has no position at index $2', Value(String(tuple.Positions.length)), P);
+        }
+      } else if (typed.TypedElement !== undefined) {
+        Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement)) });
+      }
+    }
     if (P instanceof JSStringValue && P.stringValue() === 'length') {
       return Q(yield* ArraySetLength(array, Desc));
     } else if (isArrayIndex(P)) {

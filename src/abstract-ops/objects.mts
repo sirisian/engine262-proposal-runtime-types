@@ -169,6 +169,42 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     }
     return result;
   }
+  // PLAN-tuple-stores.md phase 1. The branch above handles a descriptor that
+  // CARRIES a type - `defineProperty(o, "x", { type: T, value: v })` - and
+  // records it. What no path consulted is the type a property ALREADY has when
+  // the descriptor carries only a value, so a redefinition walked around the
+  // check that an ordinary store makes. #table-check-sites lists this position
+  // and names the operation: "a value crossing into a typed position through
+  // reflection, including `Reflect.set` and `Reflect.defineProperty` ->
+  // RequireType(_value_, _t_)". `Reflect.set` was wired; this was not, and the
+  // comment above already states the invariant it missed - "the declared type is
+  // recorded on the object so a later write is checked" - where a later WRITE
+  // was and a later REDEFINITION was not.
+  //
+  // Only a data descriptor carrying a value is checked here. A generic
+  // descriptor changing `enumerable` or `configurable` stores nothing, so there
+  // is nothing to check; an ACCESSOR descriptor over a typed data property is
+  // refused outright, because the property's declared type is a promise about
+  // what reading it answers and a getter can answer anything - the same reason
+  // #sec-object-types-semantics refuses deleting one.
+  if (surroundingAgent.feature('runtime-types')) {
+    const declared = (O as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> })
+      .TypedProperties?.get(P instanceof JSStringValue ? P.stringValue() : P);
+    if (declared !== undefined) {
+      if (IsAccessorDescriptor(Desc)) {
+        return Throw.TypeError('a property with a declared type cannot be redefined as an accessor');
+      }
+      if (Desc.Value !== undefined) {
+        // RequireType returns the value OF THE TYPE to be used, so the
+        // descriptor must carry what it returned rather than the raw value -
+        // the same correction F51 made to the typed branch above.
+        const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord));
+        const current = Q(yield* O.GetOwnProperty(P));
+        const extensible = Q(yield* IsExtensible(O));
+        return ValidateAndApplyPropertyDescriptor(O, P, extensible, Descriptor({ ...Desc, Value: converted }), current);
+      }
+    }
+  }
   const current = Q(yield* O.GetOwnProperty(P));
   const extensible = Q(yield* IsExtensible(O));
   return ValidateAndApplyPropertyDescriptor(O, P, extensible, Desc, current);
