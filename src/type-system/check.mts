@@ -3906,6 +3906,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
       }
     }
+    // PLAN-declarative-checker-facts.md phase 3. #sec-declared-narrowing: a
+    // signature may carry [[Narrows]], and "a binding declared of a constructed
+    // guard type narrows at every call through it" - the call IS the test, so
+    // this is where the fact comes from. The engine built the field, reflected
+    // it and checked its variance, and consumed it nowhere; the built-in
+    // `v is T` above drove the same machinery, which is what made the gap
+    // invisible until an annotated binding in the guarded branch was asked for.
+    //
+    // The callee's type is reachable only now that a call-form alias resolves
+    // at an annotation (phase 2): [[Narrows]] has no source spelling, so a
+    // constructed type behind an alias is the ONLY way a program states one.
+    if (e.type === 'CallExpression') {
+      const call = e as unknown as { CallExpression?: ParseNode, Arguments?: ParseNode[] };
+      const callee = call.CallExpression;
+      const args = call.Arguments ?? [];
+      if (callee) {
+        const calleeType = staticType(callee);
+        const signatures = calleeType && calleeType.Kind === 'function' ? calleeType.Signatures : undefined;
+        // One signature only: with overloads, WHICH signature the call selects
+        // decides what it narrows, and resolving that here would duplicate
+        // ResolveOverload's contextual filter for a fact the branch can do
+        // without. An overloaded guard narrows nothing rather than guessing.
+        const narrows = signatures && signatures.length === 1
+          ? (signatures[0] as { Narrows?: readonly { Target: string, Type: TypeRecord }[] }).Narrows
+          : undefined;
+        if (narrows && narrows.length > 0) {
+          // The [[Target]] names a PARAMETER, so the argument in that position
+          // is what narrows - and only where that argument is a name there is
+          // something to narrow. `guard(o.x)` and `guard(1)` narrow nothing.
+          const parameters = (signatures![0] as { Parameters?: readonly { Name?: string }[] }).Parameters ?? [];
+          for (const rule of narrows) {
+            const position = parameters.findIndex((parameter) => parameter.Name === rule.Target);
+            if (position < 0 || position >= args.length) {
+              continue;
+            }
+            const argument = args[position]!;
+            const name = narrowableName(argument);
+            if (name === null) {
+              continue;
+            }
+            return { name, type: rule.Type, negated };
+          }
+        }
+      }
+    }
     return undefined;
   };
 
