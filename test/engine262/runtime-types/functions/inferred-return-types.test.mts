@@ -43,6 +43,15 @@ function thrown(source: string): string {
   return '';
 }
 
+/** The completion value of _source_, as a string. */
+function value(source: string): string {
+  const completion = run(source) as unknown as { Type: string, Value: { stringValue(): string } };
+  if (completion.Type !== 'normal') {
+    throw new Error(`expected a normal completion, got ${completion.Type}`);
+  }
+  return completion.Value.stringValue();
+}
+
 function expectOk(source: string) {
   expect(run(source)).toMatchObject({ Type: 'normal' });
 }
@@ -341,14 +350,15 @@ test('a generic call is typed where its return is concrete', () => {
 
 test('a return that names a type parameter is bound by the call', () => {
   // #sec-generic-functions. `T` now denotes the parameter its declaration binds
-  // — for the whole signature and body — and a call that supplies type
+  // â€” for the whole signature and body â€” and a call that supplies type
   // arguments substitutes them, so `first.<uint32>([1])` is a `uint32`.
   expectEarly('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
   expectOk('function first<T>(a: [].<T>): T { return a[0]; } const u: uint32 = first.<uint32>([1]);');
-  // A call that supplies NO type arguments binds nothing, and this proposal
-  // does not yet infer a binding from the arguments, so a parameter or return
-  // that names one is unconstrained there rather than compared against a bare
-  // `T` — which would refuse the ordinary way a generic is called.
+  // A call that supplies no type arguments binds them from what it PASSES.
+  expectEarly('let x: uint32 = 5; function id<T>(v: T): T { return v; } const s: string = id(x);', 'uint.<32>');
+  expectOk('let x: uint32 = 5; function id<T>(v: T): T { return v; } const u: uint32 = id(x);');
+  // An argument that says nothing about `T` leaves it unbound, and an unbound
+  // type parameter constrains nothing rather than refusing the call.
   expectOk('function id<T>(v: T): T { return v; } id(5); id("hi");');
 });
 test('an inference-sourced error says where the type came from', () => {
@@ -363,4 +373,53 @@ test('an inference-sourced error says where the type came from', () => {
   expect(thrown('function d(a: uint32): string { return "s"; } const n: number = d(5);'))
     .not.toContain('inferred return type');
   expect(thrown('let x: uint32 = 5; const s: string = x;')).not.toContain('inferred return type');
+});
+
+test('a generic function infers a return over its type parameters', () => {
+  // #sec-inference-and-function-forms: the inference runs over the
+  // UNINSTANTIATED body, so a contribution may mention the declaration's type
+  // parameters and the published type is an expression over them, substituted
+  // at each call.
+  expectEarly('function first<T>(a: [].<T>) { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
+  expectOk('function first<T>(a: [].<T>) { return a[0]; } const u: uint32 = first.<uint32>([1]);');
+  // Bound from the argument rather than written.
+  expectEarly('let x: uint32 = 5; function id<T>(v: T) { return v; } const s: string = id(x);', 'uint.<32>');
+  // A binding reached through a container.
+  expectEarly('let a: [].<uint32> = [1]; function first<T>(x: [].<T>): T { return x[0]; } const s: string = first(a);', 'uint.<32>');
+});
+
+test('a published type over type parameters is not enforced at the boundary', () => {
+  // Such a type means something only once a call binds them, and the boundary
+  // sees one function for every instantiation - so enforcing it there would
+  // refuse `id(5)` against a bare `T`. The checker publishes it and substitutes
+  // per call; the run time is told nothing.
+  expectOk('function id<T>(v: T) { return v; } id(5); id("hi"); id({});');
+});
+
+test('an inferred reference return is a location', () => {
+  // #sec-inference-and-function-forms and #sec-location-consuming-contexts. A
+  // function that returns a `ref` and declares no return type still makes its
+  // call a location, which is the implicit-auto philosophy at the one place a
+  // return type reaches grammar-adjacent semantics.
+  const arr = 'let arr: [].<uint32> = [1, 2]; ';
+  const at = 'function at(a: [].<uint32>, i: uint32) { return ref a[i]; } ';
+  expect(value(arr + at + 'at(arr, 0) = 7; String(arr[0]);')).toBe('7');
+  expect(value(arr + at + 'at(arr, 0)++; String(arr[0]);')).toBe('2');
+  expect(value(arr + at + 'function g(ref x: uint32) { x = 8; } g(ref at(arr, 0)); String(arr[0]);')).toBe('8');
+  // Everywhere else it decays to the element's value, so writing to the copy
+  // leaves the array alone.
+  expect(value(arr + at + 'let v = at(arr, 0); v = 9; String(arr[0]) + ":" + String(v);')).toBe('1:9');
+});
+
+test('a mixed reference and value body is decided at the assignment', () => {
+  // Where the contributions MIX a reference with a value the call's return type
+  // is not statically one or the other, so the check is the deferred run-time
+  // one: the branch that returned a reference writes through, and the branch
+  // that returned a value reports that there is no location to assign to.
+  // Refusing the declaration outright is the stricter reading (r15) and is not
+  // what the implementation does.
+  const setup = 'let arr: [].<uint32> = [1, 2]; '
+    + 'function m(b, a: [].<uint32>) { if (b) { return ref a[0]; } return 0; } ';
+  expect(value(setup + 'm(1, arr) = 5; String(arr[0]);')).toBe('5');
+  expect(run(setup + 'm(0, arr) = 5;')).toMatchObject({ Type: 'throw' });
 });

@@ -1039,6 +1039,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return !!withElement.Element && mentionsTypeParameter(withElement.Element);
   };
 
+  /**
+   * #sec-generic-functions: bind a signature's type parameters from the
+   * ARGUMENTS of a call that supplies none explicitly.
+   *
+   * `id(5)` says what `T` is as plainly as `id.<uint8>(5)` does, and without
+   * reading it the argument check has nothing to compare against and the call
+   * has no Static Type. Matching walks the parameter type and the argument type
+   * together and binds a parameter position to whatever stands opposite it; the
+   * first binding for a name wins, since a later disagreement is the caller's
+   * error rather than a reason to rebind.
+   */
+  const bindTypeParametersFromArguments = (
+    parameters: readonly { Type?: Known }[],
+    argumentTypes: readonly Known[],
+    names: ReadonlySet<string>,
+    into: Map<string, TypeRecord>,
+  ): void => {
+    const match = (param: Known, arg: Known): void => {
+      if (!param || !arg) {
+        return;
+      }
+      if (param.Kind === 'parameter') {
+        const name = (param as { Name: string }).Name;
+        if (names.has(name) && !into.has(name)) {
+          into.set(name, widen(arg) as TypeRecord);
+        }
+        return;
+      }
+      const pArgs = (param as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+      const aArgs = (arg as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+      if (pArgs && aArgs) {
+        pArgs.forEach((pa, i) => {
+          const aa = aArgs[i];
+          if (typeof pa !== 'number' && aa !== undefined && typeof aa !== 'number') {
+            match(pa, aa);
+          }
+        });
+        return;
+      }
+      const pEl = (param as { Element?: TypeRecord }).Element;
+      const aEl = (arg as { Element?: TypeRecord }).Element;
+      if (pEl && aEl) {
+        match(pEl, aEl);
+      }
+    };
+    parameters.forEach((p, i) => match(p.Type ?? null, argumentTypes[i] ?? null));
+  };
+
   const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
     if (!t) {
       return t;
@@ -3229,14 +3277,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
             } | undefined;
             const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
-            if (argNodes && argNodes.length > 0) {
+            {
               const bindings = new Map<string, TypeRecord>();
-              only.TypeParameterNames.forEach((name, i) => {
-                const bound = argNodes[i] ? resolveType(argNodes[i] as ParseNode.Type) : null;
+              (argNodes ?? []).forEach((argNode, i) => {
+                const name = only.TypeParameterNames![i];
+                const bound = resolveType(argNode as ParseNode.Type);
                 if (name && bound) {
                   bindings.set(name, bound);
                 }
               });
+              if (bindings.size === 0) {
+                // No explicit arguments: read them from what was passed.
+                const passed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])
+                  .map((a) => staticType(a as ParseNode));
+                bindTypeParametersFromArguments(
+                  (only as unknown as { Parameters?: readonly { Type?: Known }[] }).Parameters ?? [],
+                  passed,
+                  new Set(only.TypeParameterNames),
+                  bindings,
+                );
+              }
               const declaredOrPublished = only.Return ?? only.InferredReturn ?? null;
               if (declaredOrPublished && bindings.size > 0) {
                 return substituteTypeParameters(declaredOrPublished, bindings);
@@ -4707,6 +4767,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     fn: ParseNode,
     parameterTypes: readonly Known[],
     signatureTyped: boolean,
+    /**
+     * The type parameters the declaration binds, which must be in scope while
+     * its body is read: the inference runs after the collection loop that
+     * pushed them, so it pushes them again or `T` resolves to nothing and the
+     * body types as ~any~.
+     */
+    typeParameterNames?: readonly string[],
     /** A generator, whose inference computes _Y_ and rebuilds its Generator type. */
     generator?: { asyncGenerator: boolean },
     /** An async function, whose inference is of the type its result RESOLVES with. */
@@ -4821,6 +4888,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         const anchorage = { anchored: false };
+        if (item.typeParameterNames) {
+          typeParameterScopes.push(new Set(item.typeParameterNames));
+        }
         inferenceDepth += 1;
         // Only the signature being computed is marked. Marking the whole queue
         // would let a MUTUAL cycle settle, but it also makes every call to a
@@ -4834,6 +4904,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } finally {
           inferencesInProgress.delete(item.signature as object);
           inferenceDepth -= 1;
+          if (item.typeParameterNames) {
+            typeParameterScopes.pop();
+          }
         }
         // Every queued function gets a PROVISIONAL type, whether or not it
         // participates, so that a participating function asking about this one
@@ -4873,8 +4946,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           changed = true;
         }
         // The run time enforces what is published, so the type is recorded
-        // against the declaration the boundary will look it up from.
-        publishedReturnTypes.set(item.fn as unknown as object, published);
+        // against the declaration the boundary will look it up from - EXCEPT
+        // where the published type is an expression over the declaration's type
+        // parameters. Such a type means something only once a call binds them,
+        // and the boundary sees one function for every instantiation, so
+        // enforcing it there refused `id(5)` against a bare `T`. The checker
+        // still publishes it, and substitutes it per call.
+        if (!mentionsTypeParameter(published)) {
+          publishedReturnTypes.set(item.fn as unknown as object, published);
+        }
       }
       if (!changed) {
         break;
@@ -5581,6 +5661,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
+          typeParameterNames: typeParameterScope ?? undefined,
           generator: { asyncGenerator: isAsyncGenerator },
         });
       }
@@ -5590,6 +5671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
+          typeParameterNames: typeParameterScope ?? undefined,
           asyncFunction: true,
         });
       }
@@ -5599,6 +5681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: fn as unknown as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
+          typeParameterNames: typeParameterScope ?? undefined,
         });
       }
       collected.set(name, signatures);
