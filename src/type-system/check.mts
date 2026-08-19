@@ -367,7 +367,10 @@ const elidableAnnotations = new WeakSet<object>();
  * about conversions that do something, and `Span.<T>` is only today's instance.
  */
 function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
-  return !!target && target.Kind === 'nominal'
+  if (!target) {
+    return false;
+  }
+  return target.Kind === 'nominal'
     && (target as { LibraryName?: string }).LibraryName === 'Span';
 }
 
@@ -1731,7 +1734,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'array') {
       checkArrayLiteralAgainst(node as ParseNode.ArrayLiteral, contextual);
-      return contextual;
+      // The elements are checked above; the LITERAL still reports no type.
+      //
+      // Reporting the target instead manufactured assignability, and the
+      // boundary was then elided as already-satisfied - so the conversion that
+      // builds an Array carrying the element type never ran, and
+      // `function f(): [].<uint8> { return [1]; }` handed back plain Numbers
+      // while every neighbouring spelling converted. Reporting nothing leaves
+      // the boundary in place, which is where the typed array is built.
+      //
+      // Withholding the type here rather than declaring the conversion
+      // effectful is what keeps a widening VIEW an alias: `let wide: [].<any> =
+      // narrow` has a source type of its own, is assignable, and is elided as
+      // before, so a store through the wide view still reaches the narrow
+      // array's storage and is checked against its element type
+      // (#sec-array-types).
+      return null;
     }
     if (node.type === 'ObjectLiteral' && contextual) {
       const shape = structureOf(contextual);
