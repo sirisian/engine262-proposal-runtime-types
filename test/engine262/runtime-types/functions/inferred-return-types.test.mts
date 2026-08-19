@@ -115,11 +115,35 @@ test('an unknown contribution publishes nothing', () => {
     .toContain('is not assignable');
 });
 
-test('a recursive function is left unpublished rather than guessed at', () => {
-  // The fixpoint of #sec-inference-fixpoint is not yet iterated to convergence;
-  // a function that reaches its own unpublished signature contributes something
-  // unknown and publishes nothing, which is the conservative answer.
-  expectOk('function fac(n: uint32) { return n > 1 ? fac(n) : 1; } fac(1);');
+test('a self-recursive function publishes what its base case gives', () => {
+  // #sec-inference-fixpoint: the recursive reference contributes `never`, which
+  // vanishes from the join as the identity of union, so the base case decides.
+  expectEarly('function f(): uint32 { return 5; } function r(n: uint32) { return n > 1 ? r(n) : f(); } const s: string = r(1);', 'uint.<32>');
+  expectOk('function f(): uint32 { return 5; } function r(n: uint32) { return n > 1 ? r(n) : f(); } const u: uint32 = r(1);');
+  // A function that only calls itself produces no value, and `never` is what
+  // an empty contribution set joins to.
+  expectOk('function loop(a: uint32) { return loop(a); } let sink; sink = loop;');
+});
+
+test('a conditional is the join of its arms', () => {
+  // `? :` produces one of its ARMS, like a short-circuit operator, and had no
+  // Static Type at all - which made the most common shape of a two-valued
+  // return uninferable.
+  expectEarly('function c(b, a: uint32) { return b ? a : a; } const s: string = c(1, 5);', 'uint.<32>');
+  // A literal arm takes the position's type.
+  expectOk('let b = true; const c: uint32 = b ? 1 : 2;');
+});
+
+test('MUTUAL recursion does not publish yet', () => {
+  // Pinned as a known gap. Settling a mutual cycle needs every member of it
+  // marked in progress at once; doing that naively also makes every call to a
+  // not-yet-published function answer `never` during an inference, which is
+  // wrong for the ordinary case and broke 115 tests. The conservative answer
+  // stands until the mark can be scoped to a cycle rather than to the queue.
+  expectOk(`function f(): uint32 { return 5; }
+    function a(n: uint32) { return n > 0 ? b(n) : f(); }
+    function b(n: uint32) { return a(n); }
+    let sink; sink = b;`);
 });
 
 test('a published type never licenses eliding a check', () => {

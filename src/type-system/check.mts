@@ -1368,6 +1368,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || node.type === 'CoalesceExpression') {
       return logicalResultType(node, (part) => staticTypeIn(part, contextual), contextual);
     }
+    if (node.type === 'ConditionalExpression') {
+      // As for the short-circuit operators: the contextual type applies to the
+      // ARMS, since it is an arm that is produced, so `let c: uint32 = b ? 1 : 2`
+      // builds both literals at `uint32`.
+      const c = node as unknown as { AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+      const a = staticTypeIn(c.AssignmentExpression_a as ParseNode, contextual);
+      const b = staticTypeIn(c.AssignmentExpression_b as ParseNode, contextual);
+      if (!a || !b) {
+        return null;
+      }
+      // #sec-type-propagation-to-literals, as for a short-circuit operand: a
+      // literal arm IS of the position's type where it fits, and a literal
+      // inside the joined union would otherwise never meet the target.
+      const adopt = (t: TypeRecord): TypeRecord => (contextual && t.Kind === 'literal'
+        && (IsAssignable(t, contextual) || literalFitsNumericType(t, contextual))
+        ? contextual
+        : t);
+      return joinTypes(adopt(a), adopt(b));
+    }
     if (node.type === 'RangeExpression') {
       const r = node as ParseNode.RangeExpression;
       const contextualElement = contextual && contextual.Kind === 'nominal'
@@ -2883,8 +2902,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // overload-set formation, ranking, and viability can read the
           // declared one alone.
           const only = callee.Signatures[0] as { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known };
-          return only.Return ?? only.InferredReturn
-            ?? (inferenceDepth > 0 ? only.ProvisionalReturn ?? null : null);
+          if (only.Return || only.InferredReturn) {
+            return only.Return ?? only.InferredReturn ?? null;
+          }
+          if (inferenceDepth > 0) {
+            // A call of the function whose inference is running: a recursive
+            // reference, which contributes `never` rather than an unknown.
+            if (inferencesInProgress.has(only as object)) {
+              return neverType;
+            }
+            return only.ProvisionalReturn ?? null;
+          }
+          return null;
         }
         return null;
       }
@@ -3222,6 +3251,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalORExpression':
       case 'CoalesceExpression':
         return logicalResultType(node, staticType);
+      case 'ConditionalExpression': {
+        // `t ? a : b` produces one of its ARMS, so its type is their join, the
+        // same shape the short-circuit operators have. It had no case at all,
+        // which made the most common way to write a two-valued result ~any~ -
+        // and made every function whose body is one conditional uninferable,
+        // since an ~any~ contribution poisons a join.
+        const c = node as unknown as { AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+        const a = staticType(c.AssignmentExpression_a as ParseNode);
+        const b = staticType(c.AssignmentExpression_b as ParseNode);
+        if (!a || !b) {
+          return null;
+        }
+        return joinTypes(a, b);
+      }
       default:
         return null; // ~any~
     }
@@ -4102,6 +4145,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   let inferenceDepth = 0;
 
+  /**
+   * #sec-inference-fixpoint: the signatures whose inference is running right
+   * now. A contribution that reaches one of them is a recursive reference, and
+   * it contributes `never` - which vanishes from a join that has any other
+   * member, because `never` is the identity of union. So a function with a base
+   * case publishes what the base case gives, and one that only calls itself
+   * publishes `never`, which is what a function that never returns a value has.
+   *
+   * Without this a recursive call typed as unknown and poisoned the join, so
+   * every recursive function published nothing at all.
+   */
+  const inferencesInProgress = new Set<object>();
+
   const pendingInferences: {
     signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
     fn: ParseNode,
@@ -4142,15 +4198,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Two passes settle a chain written in either order; a third changes
     // nothing that a second did not, absent recursion, which this cycle leaves
     // unpublished rather than iterated to a fixpoint.
-    for (let pass = 0; pass < 2; pass += 1) {
+    // Iterate to convergence. Two passes settle a chain written in either
+    // order; a cycle needs one pass per edge before it stops changing, and the
+    // bound is what keeps a body whose type grows at every step - a
+    // self-reference under a type constructor - from iterating forever. Such a
+    // function simply does not publish, which is the conservative answer this
+    // increment gives in place of the error #sec-inference-fixpoint specifies.
+    for (let pass = 0; pass < 8; pass += 1) {
       let changed = false;
       for (const item of queue) {
         const anchorage = { anchored: false };
         inferenceDepth += 1;
+        // Only the signature being computed is marked. Marking the whole queue
+        // would let a MUTUAL cycle settle, but it also makes every call to a
+        // not-yet-published function answer `never` during an inference, which
+        // is wrong for the ordinary case and for query inference alike - it
+        // broke 115 tests. Mutual recursion therefore does not publish yet.
+        inferencesInProgress.add(item.signature as object);
         let inferred: Known;
         try {
           inferred = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
         } finally {
+          inferencesInProgress.delete(item.signature as object);
           inferenceDepth -= 1;
         }
         // Every queued function gets a PROVISIONAL type, whether or not it
@@ -4300,6 +4369,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (t.Kind !== 'literal') {
             anchorage.anchored = true;
           }
+          // #sec-never-type: `never` is the identity of union, so a `never`
+          // contribution vanishes from a join that has any other member. That
+          // is what makes the recursion rule work - the recursive reference
+          // contributes `never` and the base case decides the type - and
+          // without dropping it here the published type read
+          // `never | uint.<32>`, naming a member no value can inhabit.
+          if (t.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0) {
+            return;
+          }
           contributions.push(widen(t));
           return;
         }
@@ -4327,7 +4405,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         contributions.push(makePrimitive('undefined'));
       }
       if (contributions.length === 0) {
-        return null;
+        // #sec-inferred-result-type as harmonized: an EMPTY contribution set -
+        // no path returns a value and none can complete - joins to `never`.
+        // A body whose only contribution was a recursive reference reaches
+        // here, since that contribution vanishes as the identity of union, and
+        // `never` is the honest answer: the function does not produce a value.
+        // A literal with no contributions at all is a different case and keeps
+        // its previous answer of nothing, since it is not being published.
+        return anchorage.anchored || inferenceDepth > 0 ? neverType : null;
       }
       const Members: TypeRecord[] = [];
       for (const c of contributions) {
