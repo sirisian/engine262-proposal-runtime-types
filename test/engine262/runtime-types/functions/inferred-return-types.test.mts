@@ -286,3 +286,28 @@ test('an async function infers the type its result resolves with', () => {
   // With no annotation and no anchor it stays legacy, and the boundary decides.
   expect(thrown('async function af() { return "s"; } const n: number = af();')).toContain('[object Promise]');
 });
+
+test('reflection reports a published return type', () => {
+  // #sec-inferred-return-types and the RuntimeTypeOf note. The point of
+  // inferring is that a program need not repeat what its body already says, and
+  // that only holds if the inferred type can be READ: a type enforced at the
+  // boundary and denied by reflection would be the one fact about a value a
+  // program could not get at.
+  //
+  // Asserted by INTERNING rather than by display: a published signature must be
+  // the same Type Object as the written annotation, not merely print alike.
+  expectOk(`function k(a: uint32) { return 's'; }
+    function d(a: uint32): string { return 's'; }
+    if (Reflect.typeOf(k) !== Reflect.typeOf(d)) { throw new Error('x'); }`);
+  // An anchored wrapper reports what it publishes.
+  expectOk(`function f(): uint32 { return 5; }
+    function g() { return f(); }
+    function d(): uint32 { return 5; }
+    if (Reflect.typeOf(g) !== Reflect.typeOf(d)) { throw new Error('x'); }`);
+  // A function that publishes nothing reports no signature, which is the
+  // unannotated rule the note protects: reporting an all-`any` signature for a
+  // function that declared none would be inference the program did not ask for.
+  expectOk(`function k() { return 's'; }
+    function d(a: uint32): string { return 's'; }
+    if (Reflect.typeOf(k) === Reflect.typeOf(d)) { throw new Error('x'); }`);
+});

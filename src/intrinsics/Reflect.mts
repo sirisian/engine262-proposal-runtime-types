@@ -2,6 +2,7 @@ import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts'
 import { Q } from '../completion.mts';
 import {
   LookupClassType, SignaturesOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
+import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
@@ -256,8 +257,28 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // `any` or a return type was written.
     const declared = overloads.filter((o) => o.ReturnType !== undefined
       || o.Parameters.some((parameter) => (parameter.Type as { Kind?: string } | undefined)?.Kind !== 'any'));
+    // #sec-inferred-return-types: a function that PUBLISHES an inferred return
+    // type is reported with it. The rule just above - that a signature counts as
+    // declared only where a type was WRITTEN - is what keeps an unannotated
+    // `g(a)` from being given a synthesised all-`any` signature, and it stays;
+    // publication is a different case, because the program did ask by
+    // annotating what the inference derives from, and the published type is
+    // enforced when the function returns. An enforced type that reflection
+    // denied would be the one fact about a value a program could not read.
+    const code = (value as { ECMAScriptCode?: { parent?: object } }).ECMAScriptCode;
+    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
+    if (published && declared.length === 0 && overloads.length === 1) {
+      const Signatures = [{ Parameters: overloads[0].Parameters, Return: published }];
+      return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
+    }
     if (declared.length > 0) {
-      const Signatures = declared.map((o) => ({ Parameters: o.Parameters, Return: o.ReturnType ?? null }));
+      const Signatures = declared.map((o) => ({
+        Parameters: o.Parameters,
+        // A signature whose parameters were written but whose return was not
+        // reports the published return, so the two halves of one signature are
+        // reported on the same footing.
+        Return: o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
+      }));
       return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
     }
   }
