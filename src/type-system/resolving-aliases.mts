@@ -55,3 +55,40 @@ export function tieAliasKnot(placeholder: TypeRecord, resolved: TypeRecord): voi
   }
   Object.assign(target, resolved);
 }
+
+/**
+ * What a type alias RESOLVED TO, by name, per realm.
+ *
+ * PLAN-declarative-checker-facts.md phase 2. The checker resolves an annotation
+ * by walking the Type node, and a |ComputedType| - `type G = makeG();` -
+ * resolves by EVALUATING rather than by walking, so the walk answers nothing
+ * and every annotation of `G` degrades to ~any~.
+ *
+ * Two earlier attempts keyed this on the DECLARATION NODE, and both failed for
+ * reasons worth keeping: a node key is unreachable from a source text that only
+ * MENTIONS the alias and declares nothing, which is the whole cross-text case;
+ * and within one source text the record does not exist yet when the checker
+ * runs. The name is the key a mention has. The realm scopes it, because two
+ * realms may bind the same name to different types and a module map would let
+ * one see the other's.
+ *
+ * This does not by itself fix the same-source-text case: `type G = makeG()`
+ * cannot be pre-evaluated while `makeG` is an uninitialized binding of the text
+ * being checked. It fixes the case where the alias evaluated earlier - another
+ * script, or an imported module - and it is the registry any fix for the first
+ * case would write into.
+ */
+const resolvedByRealm = new WeakMap<object, Map<string, TypeRecord>>();
+
+export function recordResolvedAlias(realm: object, name: string, record: TypeRecord): void {
+  let byName = resolvedByRealm.get(realm);
+  if (byName === undefined) {
+    byName = new Map();
+    resolvedByRealm.set(realm, byName);
+  }
+  byName.set(name, record);
+}
+
+export function resolvedAlias(realm: object | undefined, name: string): TypeRecord | undefined {
+  return realm === undefined ? undefined : resolvedByRealm.get(realm)?.get(name);
+}

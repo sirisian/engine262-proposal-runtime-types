@@ -20,7 +20,7 @@ import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { beginResolvingAlias, endResolvingAlias, tieAliasKnot } from '../type-system/resolving-aliases.mts';
+import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { toNumericArgument,
@@ -122,6 +122,15 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       } else {
         value = GetTypeObject(record);
       }
+      // PLAN-declarative-checker-facts.md phase 2: publish what the alias
+      // resolved to, under its NAME in this realm, so a later source text's
+      // checker can read an annotation whose Type node it cannot walk - a
+      // |ComputedType| resolves by EVALUATING, which is what just happened.
+      recordResolvedAlias(
+        surroundingAgent.currentRealmRecord as unknown as object,
+        name.stringValue(),
+        (value as { TypeRecord?: TypeRecord }).TypeRecord ?? record,
+      );
     }
   } else if (node.type === 'EnumDeclaration') {
     // Enum members take their initializer's value, or the previous numeric

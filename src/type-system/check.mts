@@ -1,6 +1,8 @@
 import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { surroundingAgent } from '../execution-context/Agent.mts';
+import { resolvedAlias } from './resolving-aliases.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
@@ -1929,6 +1931,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } finally {
         resolvingAliases.delete(name);
       }
+    }
+    // PLAN-declarative-checker-facts.md phase 2. Nothing in THIS source text
+    // answers: either the alias is only mentioned here and declared elsewhere,
+    // or its Type is a |ComputedType| - `type G = makeG();` - which resolves by
+    // EVALUATING rather than by walking, so no walk of it can answer. Where
+    // that evaluation has already happened in this realm the record is
+    // published under the alias's name, and reading it is what keeps an
+    // annotation of `G` from degrading to ~any~.
+    //
+    // LAST, deliberately. A declaration in this text wins over a name the realm
+    // happens to carry, so a source text that redeclares an alias is judged
+    // against its own and not against an earlier text's.
+    const published = resolvedAlias(
+      surroundingAgent.currentRealmRecord as unknown as object,
+      name,
+    ) as Known;
+    if (published) {
+      return published;
     }
     return null;
   };
