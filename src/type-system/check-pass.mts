@@ -81,11 +81,23 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   const items = root.type === 'Script'
     ? root.ScriptBody?.StatementList
     : root.ModuleBody?.ModuleItemList;
+  // PLAN-declarative-checker-facts.md phase 2. A |ComputedType| alias -
+  // `type G = makeG();` - resolves by EVALUATING, so the walk that runs at
+  // PARSE time cannot know what it denotes: nothing has evaluated yet, the
+  // annotation reads ~any~, and a bad value is left to the run-time boundary.
+  // The loop below is where it becomes knowable, and the walk below THAT is
+  // where it can be used - but that walk only runs when narrowing recorded
+  // something, so an alias-annotated binding never reached it.
+  let computedAliasResolved = false;
   for (const item of items ?? []) {
     if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
+        if (item.type === 'TypeAliasDeclaration'
+          && (item as { Type?: { type?: string } }).Type?.type === 'ComputedType') {
+          computedAliasResolved = true;
+        }
       }
     } else if (item.type === 'MetaDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item));
@@ -159,7 +171,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   //
   // Only when something was recorded (A3.4): a program that never compares a
   // bounded value must pay none of this, and must keep reporting at parse time.
-  if (requests.length > 0) {
+  // ... or when this source text declared a call-form alias that has only just
+  // become resolvable: the first walk read it as ~any~, and this one reads what
+  // it denotes. Gated on that rather than run always, so a text with no such
+  // alias pays nothing - the same discipline the narrowing gate applies.
+  if (requests.length > 0 || computedAliasResolved) {
     const errors = CheckScript(root as ParseNode.Script);
     if (errors.length > 0) {
       return Throw(errors[0]!);

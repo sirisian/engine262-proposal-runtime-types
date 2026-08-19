@@ -35,3 +35,36 @@ test('a good value at the same alias is accepted', () => {
   const good = r.evaluateScriptSkipDebugger('let g: G = (x) => x; String(typeof g);');
   expect((good as { Type?: string }).Type).toBe('normal');
 });
+
+test('a call-form alias types its own source text statically', () => {
+  const r = realm();
+  // The parse-time walk reads a |ComputedType| as ~any~ - nothing has evaluated
+  // when it runs - so the alias was only knowable after the pass pre-evaluates
+  // this text's type declarations. The walk that can USE that ran only when
+  // narrowing had recorded something; it now also runs when a call-form alias
+  // resolved, which is what moves this refusal to check time.
+  const bad = r.evaluateScriptSkipDebugger(
+    `${DECL} globalThis.reached = 0; let bad: G = "not a function"; globalThis.reached = 1;`);
+  expect((bad as { Type?: string }).Type).toBe('throw');
+  const marker = r.evaluateScriptSkipDebugger('String(globalThis.reached)');
+  expect(String(((marker as { Value?: { stringValue?(): string } }).Value)?.stringValue?.())).toBe('undefined');
+});
+
+test('a call-form alias admits a good value, and types a parameter', () => {
+  const r = realm();
+  expect((r.evaluateScriptSkipDebugger(`${DECL} let g: G = (x) => x; globalThis.ok = 1;`) as { Type?: string }).Type).toBe('normal');
+  // A parameter annotation is the other position the clause names.
+  const bad = r.evaluateScriptSkipDebugger(
+    `${DECL} globalThis.ran = 0; function takes(v: G) { return 1; } takes("not a function"); globalThis.ran = 1;`);
+  expect((bad as { Type?: string }).Type).toBe('throw');
+  const marker = r.evaluateScriptSkipDebugger('String(globalThis.ran)');
+  expect(String(((marker as { Value?: { stringValue?(): string } }).Value)?.stringValue?.())).toBe('undefined');
+});
+
+test('a source text with no call-form alias pays nothing', () => {
+  // The second walk is gated: a text that declares no |ComputedType| alias must
+  // not run the checker twice, which is the same discipline the narrowing gate
+  // applies.
+  const r = realm();
+  expect((r.evaluateScriptSkipDebugger('type P = uint8; let p: P = 5; globalThis.p = 1;') as { Type?: string }).Type).toBe('normal');
+});
