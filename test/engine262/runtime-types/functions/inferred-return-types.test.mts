@@ -215,10 +215,22 @@ test('a method return is enforced like any other', () => {
     new C().m();`)).toMatchObject({ Type: 'throw' });
 });
 
-test('an object literal method does not publish yet', () => {
-  // Pinned as a KNOWN GAP rather than left to be discovered: the specification
-  // includes an object literal's method, and only the class element loop
-  // publishes so far. The message names the value, so this is the boundary
-  // deciding, not the checker.
+test('a function literal publishes for its RETURN, not for its call sites', () => {
+  // A binding without an annotation has the ~any~ Static Type whatever its
+  // initializer, so the call site of an arrow or a function expression stays
+  // legacy - that is the committed no-binding-inference rule, not a gap. An
+  // object literal's method is the same case, since the object reaches its
+  // binding no better than the arrow does.
+  expect(thrown('const k = (a: uint32) => "s"; const n: number = k(5);')).toContain('"s" is not assignable');
   expect(thrown('const o = { m(a: uint32) { return "s"; } }; const n: number = o.m(1);')).toContain('"s" is not assignable');
+
+  // What publication buys a literal is the RETURN BOUNDARY: a replaced
+  // dependency's lie is reported at the function rather than passed on.
+  const lie = (g: string) => `function f(): uint32 { return 5; } ${g} f = function () { return 'now-a-string'; }; g();`;
+  expect(run(lie('const g = () => f();'))).toMatchObject({ Type: 'throw' });
+  expect(run(lie('const g = () => { return f(); };'))).toMatchObject({ Type: 'throw' });
+  expect(run(lie('const g = function () { return f(); };'))).toMatchObject({ Type: 'throw' });
+  // An honest one is untouched, in both spellings.
+  expectOk('function f(): uint32 { return 5; } const g = () => f(); const n: uint32 = g();');
+  expectOk('function f(): uint32 { return 5; } const g = () => { return f(); }; const n: uint32 = g();');
 });

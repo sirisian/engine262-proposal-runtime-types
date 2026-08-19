@@ -3215,7 +3215,15 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
 export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null> {
   const annotation = returnAnnotationOf(fn as AnnotatedFunction);
   if (!annotation) {
-    return null;
+    // A CONCISE arrow body never produces a `return` completion, so the return
+    // boundary of one is not EnforceReturnType but the contextual type pushed
+    // around its body - which is read from here. A published inferred type has
+    // to be visible at this point too, or `() => f()` enforces nothing while
+    // `() => { return f(); }` enforces, which is the same function written two
+    // ways (#sec-inferred-return-types).
+    const code = (fn as AnnotatedFunction).ECMAScriptCode as { parent?: object } | null | undefined;
+    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
+    return published && published.Kind !== 'void' && published.Kind !== 'parameter' ? published : null;
   }
   const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
   if (attempted.Type !== 'normal') {

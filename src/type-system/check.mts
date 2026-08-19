@@ -4263,6 +4263,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-inferred-return-types for a function LITERAL: an arrow or a function
+   * expression.
+   *
+   * A literal publishes for one purpose only, and it is worth saying which.
+   * Its CALL SITES are unaffected, because a binding without an annotation has
+   * the ~any~ Static Type whatever its initializer - `const k = (a: uint32) =>
+   * 's'` leaves `k` untyped, and `:=` or an annotation is what carries the type
+   * to a caller. What publication buys here is the RETURN BOUNDARY: without it
+   * a literal that derives its result from a declared type hands back whatever
+   * its body produced, so a replaced dependency's lie leaves the function
+   * unreported, which is the case #sec-published-return-types exists to close.
+   */
+  const publishLiteralReturn = (fn: ParseNode, parameterTypes: readonly Known[]): void => {
+    if ((fn as { TypeAnnotation?: unknown }).TypeAnnotation) {
+      return;
+    }
+    const anchorage = { anchored: false };
+    inferenceDepth += 1;
+    let inferred: Known;
+    try {
+      inferred = inferredReturnType(fn, parameterTypes, null, anchorage);
+    } finally {
+      inferenceDepth -= 1;
+    }
+    if (!inferred) {
+      return;
+    }
+    const signatureTyped = parameterTypes.some((t) => t !== null);
+    if (!signatureTyped && !anchorage.anchored) {
+      return;
+    }
+    const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
+      ? voidTypeRecord
+      : inferred;
+    if (published.Kind !== 'void') {
+      publishedReturnTypes.set(fn as unknown as object, published);
+    }
+  };
+
   const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
@@ -4326,7 +4366,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // that record, while `() => "wrong"` at a `uint8` gives a literal string
         // type and is refused. Using the WANTED type as the answer instead
         // would make every unannotated literal trivially conform.
-        return wanted ? staticTypeIn(body!, wanted) : staticType(body!);
+        const conciseType = wanted ? staticTypeIn(body!, wanted) : staticType(body!);
+        // The concise body IS the return, so it is the contribution, and
+        // anchoring is read off it exactly as the block collector reads it off
+        // each `return`. Without this a concise arrow never counted as
+        // participating, so `() => f()` published nothing while
+        // `() => { return f(); }` published - the two spellings of one function
+        // disagreeing, which is what #sec-inferred-result-type exists to
+        // prevent.
+        if (conciseType && conciseType.Kind !== 'literal') {
+          anchorage.anchored = true;
+        }
+        return conciseType;
       });
     }
 
@@ -6541,6 +6592,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           thisTypeFrames.push(adopted);
         }
         try {
+          publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {
+            const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+            return ann ? resolveType(ann.Type) : null;
+          }));
           enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
         } finally {
           if (adopted) {
@@ -6550,6 +6605,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'ArrowFunction':
+        publishLiteralReturn(n as ParseNode, (n.ArrowParameters ?? []).map((prm) => {
+          const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          return ann ? resolveType(ann.Type) : null;
+        }));
         enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
         return;
       case 'MethodDefinition':
