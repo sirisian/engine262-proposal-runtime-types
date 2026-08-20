@@ -28,7 +28,7 @@ export function nullishType(): TypeRecord {
   return {
     Kind: 'union',
     Members: [
-      { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') },
+      makePrimitive('null'),
       // proposal-runtime-types #sec-null-and-undefined-types: the nullish half
       // is the `undefined` TYPE, not a literal over ~void~. Built over ~void~ it
       // shared no member with a `T | undefined` annotation, so `x ?? d` on the

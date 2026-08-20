@@ -119,3 +119,27 @@ test('a function that can fall off its end returns undefined into the optional u
   expectOk('function v(b) { if (b) { return 5; } } let r: number | undefined = v(false);');
   expectOk('function v(b) { if (b) { return 5; } } let r: number | undefined = v(true);');
 });
+
+test('null is a primitive type named for its value', () => {
+  // #sec-null-and-undefined-types: `null` is described by
+  // { [[Kind]]: ~primitive~, [[Name]]: *"null"* }. It was represented as a
+  // literal over `object`, which worked and reported itself as "a literal type
+  // of object" in every diagnostic - so a mistake at a `null` annotation named
+  // a type the program never wrote.
+  expectTypeError('let x: null = 5;');
+  expectTypeError('let x: null = null; const s: string = x;');
+  // The diagnostic names `null` rather than a type the program never wrote.
+  expect(value('try { eval("let x: null = 5;"); } catch (e) { `${e.message}`; }')).toContain('"null"');
+  // Everything the old representation carried still holds.
+  expectOk('let x: null = null;');
+  expectOk('let x: uint32 | null = null; x = 5;');
+  expectOk('let x: uint32 | null = null; if (x !== null) { const y: uint32 = x; }');
+  // A nullable union defaults to null, and a plain `null` binding does too.
+  expect(value('let x: uint32 | null; `${x}`;')).toBe('null');
+  expect(value('let a: [].<uint8> | null; `${a}`;')).toBe('null');
+  expect(value('let x: null; `${x}`;')).toBe('null');
+  // A recursive alias terminated by `| null` still has a finite layout.
+  expect(value('type L = { v: uint8, next: L | null }; let l: L = { v: 1, next: null }; `${l.v}`;')).toBe('1');
+  // And `using` accepts it, disposing nothing.
+  expectOk('{ using r: null = null; }');
+});

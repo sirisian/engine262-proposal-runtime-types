@@ -52,6 +52,19 @@ function fromBits(bitLength: number): Layout {
  * reference types, a `[].<T>` with no length, and a union of value types do not,
  * because their size is a property of the value rather than of the type.
  */
+/**
+ * Whether _t_ is the `null` or `undefined` type.
+ *
+ * #sec-null-and-undefined-types describes both as PRIMITIVE types named for
+ * their one value. They were represented as literal types before, so the tests
+ * below recognized them by their ~literal~ kind; a nullable union's default and
+ * its finite layout both depend on spotting them, and both stopped working when
+ * the representation caught up with the clause.
+ */
+function isNullOrUndefinedPrimitive(t: { Kind?: string, Name?: string }): boolean {
+  return t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined');
+}
+
 export function LayoutOf(t: TypeRecord): Layout | null {
   if (t.Kind === 'array') {
     // A fixed-length array lays out as its element repeated; one with no length is
@@ -148,7 +161,7 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // a 64-bit pointer. The clause leaves it open deliberately, so nothing here
     // is normative beyond "it has one and the recursion stops".
     const nullable = t.Members.length === 2
-      && t.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void')
+      && t.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m))
       && t.Members.some((m) => m.Kind === 'nominal');
     return nullable ? { bitLength: 64, byteLength: 8, alignment: 8 } : null;
   }
@@ -530,7 +543,7 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
           // stops there rather than descending - which is what makes a linked
           // list expressible.
           const nullable = p.type.Kind === 'union'
-            && p.type.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void');
+            && p.type.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m));
           const found = walk(p.type, within, nullable ? here : crossed, typeof p.key === 'string' ? p.key : String(p.key));
           if (found !== null) {
             return found;
@@ -547,7 +560,7 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
       case 'union':
       case 'intersection': {
         const nullable = record.Kind === 'union'
-          && record.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void');
+          && record.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m));
         for (const m of record.Members) {
           const found = walk(m, within, nullable ? here : crossed, memberName);
           if (found !== null) {

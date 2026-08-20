@@ -635,6 +635,12 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // the very union that clause names as the position an erased system reaches
     // with an optional.
     case 'undefined': return makePrimitive('undefined');
+    // #sec-null-and-undefined-types: `null` is "the type whose one value is
+    // *null*", described by { [[Kind]]: ~primitive~, [[Name]]: *"null"* }.
+    // Representing it as a literal over `object` instead worked, and reported
+    // itself as "a literal type of object" in every diagnostic that named it -
+    // so `let x: null = 5` complained about a type the program never wrote.
+    case 'null': return makePrimitive('null');
     case 'boolean1': return makePrimitive('uint', [1]);
     // proposal-runtime-types: `object` names the object type with no required
     // properties, to which every Object is assignable (spec: the primitive names

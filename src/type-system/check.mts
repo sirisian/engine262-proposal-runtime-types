@@ -2561,7 +2561,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
-        return node.keyword === 'void' ? voidType : { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
+        return node.keyword === 'void' ? voidType : makePrimitive('null');
       case 'ParenthesizedType':
         return resolveType(node.Type);
       case 'UnionType':
@@ -4310,7 +4310,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const t = loose
             ? nullishType()
             : (against.type === 'NullLiteral'
-              ? { Kind: 'literal' as const, Value: Value.null, Base: makePrimitive('object') }
+              ? makePrimitive('null')
               : makePrimitive('undefined'));
           return { name, type: t as TypeRecord, negated: negated !== inverted };
         }
@@ -6450,6 +6450,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return v === Value.null || v === Value.undefined;
       }
       case 'primitive':
+        // `null` and `undefined` are primitive types named for their one value
+        // (#sec-null-and-undefined-types), and a `using` declaration accepts
+        // either - the disposal is simply skipped. They were literal types
+        // before, and the case above answered for them.
+        return (t as { Name?: string }).Name === 'null' || (t as { Name?: string }).Name === 'undefined';
       case 'void':
         return false;
       default:

@@ -636,7 +636,7 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   if (value === Value.undefined) {
     return makePrimitive('undefined');
   }
-  return { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
+  return makePrimitive('null');
 }
 
 /**
@@ -813,9 +813,18 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
     case 'any':
       return Value.undefined;
     case 'void':
-      // The `undefined` type is represented as `void` here; its default is undefined.
       return Value.undefined;
     case 'primitive': {
+      // #sec-null-and-undefined-types: each is the type of its one value, so
+      // that value is its default. They were literal types before, and the
+      // ~literal~ case below answered for them; naming them as the clause does
+      // moved them here.
+      if ((t as { Name?: string }).Name === 'null') {
+        return Value.null;
+      }
+      if ((t as { Name?: string }).Name === 'undefined') {
+        return Value.undefined;
+      }
       const name = t.Name;
       if (name === 'number') {
         // PLAN-parameterized-defaults.md phase 2. `number` was stamped here
@@ -913,16 +922,21 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // The one value of a literal type is its default.
       return t.Value as Value;
     case 'union': {
-      // A union defaults to null or undefined only when it admits one.
+      // A union defaults to null or undefined only when it admits one. Both are
+      // now PRIMITIVE types named for their value (#sec-null-and-undefined-types),
+      // so the member is recognized by name; the literal and ~void~ forms are
+      // still accepted, since a union may be built from either.
       for (const m of t.Members) {
-        if (m.Kind === 'literal' && (m.Value as Value) === Value.null) {
- return Value.null; 
-}
+        if ((m.Kind === 'literal' && (m.Value as Value) === Value.null)
+            || (m.Kind === 'primitive' && (m as { Name?: string }).Name === 'null')) {
+          return Value.null;
+        }
       }
       for (const m of t.Members) {
-        if (m.Kind === 'void') {
- return Value.undefined; 
-}
+        if (m.Kind === 'void'
+            || (m.Kind === 'primitive' && (m as { Name?: string }).Name === 'undefined')) {
+          return Value.undefined;
+        }
       }
       return undefined;
     }
@@ -1747,6 +1761,8 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
     // value was not a member of the very type RuntimeTypeOf reports for it.
     case 'undefined':
       return value === Value.undefined;
+    case 'null':
+      return value === Value.null;
     case 'uint':
     case 'int':
     case 'float16':
@@ -2340,7 +2356,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (node.keyword === 'void') {
         return voidType;
       }
-      return { Kind: 'literal', Value: Value.null, Base: makePrimitive('object') };
+      return makePrimitive('null');
     case 'UnionType': {
       const Members: TypeRecord[] = [];
       for (const m of node.Types) {
