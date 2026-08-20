@@ -2862,6 +2862,15 @@ export namespace ParseNode {
   export interface MetaDeclaration extends BaseParseNode {
     readonly type: 'MetaDeclaration';
     readonly TypeName: TypeName;
+    /**
+     * PLAN-generic-meta-declarations.md phase 1. #sec-meta-declarations:
+     * `meta` [no LineTerminator here] TypeName TypeParameters? `{` MetaHookList `}`
+     *
+     * The production has carried `TypeParameters?` and this node did not, so
+     * `meta NumberBounds<T: Ordered.<T>> { … }` - primitivemetadata.md's central
+     * worked example - did not parse.
+     */
+    readonly TypeParameters?: TypeParameters | null;
     readonly MetaHookList: readonly MetaHook[];
   }
 

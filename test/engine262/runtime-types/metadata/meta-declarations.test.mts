@@ -414,3 +414,40 @@ test('a builder that names ambient state is not compile-time evaluable', () => {
     + 'type B = b(); let v: B = { x: (1 := uint8) }; String(v.x);';
   expect(run(ok)).toMatchObject({ Type: 'normal' });
 });
+
+test('a meta declaration may be generic', () => {
+  // PLAN-generic-meta-declarations.md. #sec-meta-declarations has carried
+  // `TypeParameters?` in the production; the parser read a TypeName and went
+  // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { … }` - the
+  // central worked example of primitivemetadata.md - did not parse.
+  const ord = 'interface Ordered<T> { v: T; } ';
+  expect(run(`type NB<T> = { nonZero?: boolean }; meta NB<T> { default = {}; subtype(a, b) { return true; } } "ok";`)).toMatchObject({ Type: 'normal' });
+  // The constrained form comes along, because parseTypeParameters is the same
+  // one `type`, `interface` and `primitive` already call.
+  expect(run(`${ord} type NB2<T: Ordered.<T>> = { nonZero?: boolean }; `
+    + 'meta NB2<T: Ordered.<T>> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
+  // D1: a hook may name the parameter in its annotations.
+  expect(run(`${ord} type NB3<T: Ordered.<T>> = { nonZero?: boolean }; `
+    + 'meta NB3<T: Ordered.<T>> { default = {}; subtype(sub: NB3.<T>, sup: NB3.<T>): boolean { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
+  // The non-generic form is unchanged, and an empty parameter list is refused by
+  // parseTypeParameters rather than by a rule of its own - `type E<> = …` is
+  // already a SyntaxError, and this pins that it keeps coming from there.
+  expect(run('type NB4 = { nonZero?: boolean }; meta NB4 { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
+  expect(run('type NB5<> = { nonZero?: boolean };')).toMatchObject({ Type: 'throw' });
+  // D2: claiming does not depend on the argument, so one type declared twice is
+  // still refused whatever parameters are written.
+  expect(run('type NB6<T> = { nonZero?: boolean }; meta NB6<T> { default = {}; subtype(a, b) { return true; } } '
+    + 'meta NB6<U> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'throw' });
+});
+
+test('a base-form meta type has no type parameters to bind', () => {
+  // D4. #sec-meta-declarations: a meta declaration "may instead name a PRIMITIVE
+  // type rather than an object type, declaring a base-form meta type" - and a
+  // primitive has no parameter to bind. The production allows `TypeParameters?`
+  // after any TypeName, so this is an early error rather than a parse failure,
+  // and it is refused rather than accepted-and-ignored: a program that wrote it
+  // would have no way to discover the parameter did nothing.
+  expect(run('meta uint8<T> { default = 0; subtype(a, b) { return true; } }')).toMatchObject({ Type: 'throw' });
+  // The base form itself still works without parameters.
+  expect(run('meta uint8 { default = 0; subtype(a, b) { return a === b; } } let x: uint8; String(x);')).toMatchObject({ Type: 'normal' });
+});

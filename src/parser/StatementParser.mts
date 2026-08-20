@@ -1,3 +1,4 @@
+import { builtinTypeRecord } from '../type-system/records.mts';
 import type { Mutable } from '../utils/language.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
 import { TypeParser } from './TypeParser.mts';
@@ -299,6 +300,25 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.MetaDeclaration>();
     this.expect('meta');
     node.TypeName = this.parseTypeName();
+    // PLAN-generic-meta-declarations.md phase 1. The same line `type`,
+    // `interface` and `primitive` already carry above and below - a `meta`
+    // declaration was the only one in this file that did not take parameters,
+    // though #sec-meta-declarations gives it `TypeParameters?`.
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    // PLAN-generic-meta-declarations.md phase 3 (D4). #sec-meta-declarations: a
+    // meta declaration "may instead name a PRIMITIVE type rather than an object
+    // type, declaring a base-form meta type". A primitive has no parameter to
+    // bind, so `meta uint8<T> { … }` states something the language cannot mean.
+    //
+    // An early error rather than a parse failure, because the production allows
+    // `TypeParameters?` after ANY TypeName - and refused now rather than
+    // accepted-and-ignored, since a program that writes it would have no way to
+    // discover the parameter did nothing, and refusing it later would break.
+    const named = builtinTypeRecord(node.TypeName.IdentifierReference.name);
+    if (node.TypeParameters && node.TypeName.MemberNames.length === 0
+        && named !== undefined && named !== null && named.Kind === 'primitive') {
+      this.addEarlyError(Throw.SyntaxError('a base-form meta type has no type parameters to bind'), node.TypeParameters);
+    }
     // #sec-meta-hooks: at most one meta declaration per type.
     const typeKey = node.TypeName.IdentifierReference.name + node.TypeName.MemberNames.map((m) => `.${m.name}`).join('');
     if (!this.declaredMetaTypes) {
