@@ -327,3 +327,25 @@ test('the object shape is conservative where it cannot read a member', () => {
   // for the reason every other reassigned binding does.
   expectNotInferred('let o = { p: g() }; o = { p: 5 }; return o.p;');
 });
+
+test.fails('a parameter does not shadow an outer binding of the same name', () => {
+  // Found by the two-pass experiment and PRE-EXISTING: with the binding declared
+  // BEFORE the function, the parameter `a` does not shadow the module-scope `a`,
+  // and the body reads the outer one - reporting its `length` type rather than
+  // the parameter's. The suite does not see it because its own program declares
+  // the binding after the function.
+  //
+  // The cause is that a parameter is bound by resolving its annotation, and an
+  // annotation naming an unbound type parameter - `[N].<uint8>` - does not
+  // resolve, so the name is never bound at all. The type is unknown; the
+  // BINDING should not be optional.
+  //
+  // Binding it unconditionally is a two-line change and it exposes the layer
+  // beneath: `a.length` on a value-generic `[N].<uint8>` types as `uint64`,
+  // which the function's declared `: uint32` refuses. That assertion currently
+  // passes only because the shadowing bug hands it a `[4].<uint8>` instead. Both
+  // want fixing together.
+  expect(value('let a: [4].<uint8> = [7, 8, 9, 10];'
+    + ' function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; }'
+    + ' `${Number(f.<4>(a))}`;')).toBe('4');
+});
