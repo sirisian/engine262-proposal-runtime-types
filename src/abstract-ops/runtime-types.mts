@@ -632,6 +632,37 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // stands, which is what the boundary would have done anyway - the difference
   // is that no user code runs, which is how the elision is observable at all.
   if (IsCheckElided(annotation)) {
+    // ISSUES-found-while-writing-examples.md I1. The elision returns the value
+    // AS IT STANDS, and for an array that is not the same value the boundary
+    // would have produced: the conversion is also where an array acquires its
+    // [[TypedElement]], so eliding it left `let b: [].<uint8> = [(1 := uint8)]`
+    // holding an array with NO element type - the store check had nothing to
+    // read, `b[0] = "no"` was accepted, and the capacity surface was absent.
+    //
+    // Only this literal form was affected, which is why it read as a missing
+    // surface rather than a hole: `[1]` and `[1, 2]` are not already of the
+    // type, so their conversion runs and stamps. `[(1 := uint8)]` IS already of
+    // it, the checker proves the boundary cannot fail, and the elision skips
+    // the stamp along with the check.
+    //
+    // #sec-elision-stability is the rule this breaks: eliding a check must not
+    // change what a value IS. So the stamp is applied here rather than the
+    // elision being abandoned - the check really is unnecessary, and only its
+    // side effect was load-bearing.
+    // Only where the array carries NO element type yet. Re-stamping would
+    // destroy the one it has, and the wider-view case is exactly where that
+    // bites: `const b: [].<any> = a` for a `[].<uint8>` is the same object seen
+    // through a wider reference, and overwriting its element type with `any`
+    // let `b[0] = 300` through - the store check reads the type the VALUE
+    // carries, which is the whole of why the covariance is sound.
+    const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+    const unstamped = (value as { TypedElement?: unknown }).TypedElement === undefined;
+    if (unstamped && elided.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      StampTypedArray(value, elided.Element);
+      if (elided.Extent !== 'dynamic') {
+        (value as { TypedExtent?: number }).TypedExtent = elided.Extent as number;
+      }
+    }
     return value;
   }
   // #sec-contextual-types: the binding boundary applies the CHECKED conversion

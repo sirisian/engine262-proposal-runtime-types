@@ -301,3 +301,36 @@ test('a tuple carries its type even when it needed no conversion', () => {
   expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
     + ' a[0] = (9 := uint8); String(a[0]);')).toBe('9');
 });
+
+test('an elided check still leaves the array carrying its element type', () => {
+  // ISSUES-found-while-writing-examples.md I1. The conversion is where an array
+  // acquires its [[TypedElement]], and #sec-check-elision lets the checker skip
+  // the conversion where it proves the boundary cannot fail - so the stamp went
+  // with it. Only ONE literal form was affected, which is why this read as a
+  // missing `capacity` rather than as a hole: `[1]` is not already of type
+  // `[].<uint8>` so its conversion runs, while `[(1 := uint8)]` IS, and the
+  // check is elided.
+  //
+  // #sec-elision-stability is the rule: eliding a check must not change what a
+  // value IS. The check really was unnecessary; only its side effect mattered.
+  expect(evaluated('let b: [].<uint8> = [(1 := uint8)]; String(Reflect.typeOf(b[0]) === uint8);')).toBe('true');
+  expectThrown('let b: [].<uint8> = [(1 := uint8)]; let bad = {}; bad.v = "no"; b[0] = bad.v;');
+  // The capacity surface is part of the same stamp, and was the symptom that
+  // led here.
+  expect(evaluated('let b: [].<uint8> = [(1 := uint8)]; String(typeof b.reserve);')).toBe('function');
+  expect(evaluated('let b: [].<uint8> = [(1 := uint8)]; b.reserve(8); String(b.capacity);')).toBe('8');
+  // The forms that already worked keep working.
+  expect(evaluated('let b: [].<uint8> = [1, 2]; String(typeof b.reserve);')).toBe('function');
+  expect(evaluated('let b: [].<uint8> = []; String(typeof b.reserve);')).toBe('function');
+});
+
+test('a wider view does not restamp the array it names', () => {
+  // The guard the fix needed. `const b: [].<any> = a` is the SAME object seen
+  // through a wider reference, and stamping it with `any` destroyed the element
+  // type the store check reads - which is the whole of why the covariance is
+  // sound. Only an array carrying no element type is stamped.
+  expect(evaluated('const a: [].<uint8> = [1]; const b: [].<any> = a; '
+    + 'function big() { return 300; } try { b[0] = big(); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+  expect(evaluated('const a: [].<uint8> = [(1 := uint8)]; const b: [].<any> = a; '
+    + 'function big() { return 300; } try { b[0] = big(); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+});
