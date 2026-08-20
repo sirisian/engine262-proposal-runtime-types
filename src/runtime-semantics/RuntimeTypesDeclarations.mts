@@ -47,7 +47,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterTypeDefault, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -1169,7 +1169,32 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     if (hook.type === 'MetaDefaultHook') {
       const ref = Q(yield* Evaluate(hook.AssignmentExpression));
       const v = Q(yield* GetValue(ref));
-      RegisterTypeDefault(typeObject, v);
+      // PLAN-meta-default-scope.md phase 1. `RegisterTypeDefault(typeObject, v)`
+      // stood here and is gone.
+      //
+      // #table-meta-hooks scopes this hook to METADATA - "the unconstrained
+      // constraint: what a value carries where it has no field of this meta
+      // type" - and says nothing about what a binding of the constraint shape
+      // holds before it is assigned. #sec-defaultvalueof gives an ~object~ type
+      // no default at all. Registering the hook's value as the constraint
+      // shape's DEFAULT VALUE conflated the two, so declaring a meta type
+      // silently changed the defaulting of the type it names:
+      //
+      //   type M = { m: number }; meta M { default = { m: 0 }; ... }
+      //   let x: M;            // {"m":0} - #sec-defaultvalueof says type error
+      //   meta uint8 { default = 7; ... }
+      //   let y: uint8;        // 7 - the zero of a PRIMITIVE, redefined
+      //
+      // The plan expected to keep the registration for a non-object shape,
+      // whose comment claimed it "keeps its scalar default for the
+      // annotated-binding path". Instrumenting `LookupTypeDefault` found that
+      // path to be the two ordinary default-value consumers - the checking pass
+      // and the binding evaluation - and the uint8 case above is what they do
+      // with it. So the registration was wrong for every shape and the split
+      // the plan reserved was not needed.
+      //
+      // What the hook IS for is below: the SNAPSHOT, which MetadataPortion
+      // reads and which is the only store the metadata protocol needs.
       // sec-metadataportion copies the default, so where the constraint shape
       // is an OBJECT type the default must be an object, and it is snapshotted
       // here, once, into the host metadata-record shape: a getter on it runs

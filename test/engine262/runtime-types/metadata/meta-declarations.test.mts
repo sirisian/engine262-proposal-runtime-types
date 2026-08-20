@@ -26,14 +26,23 @@ function evaluated(source: string): string {
   return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
 }
 
-test('the default hook supplies uninitialized annotated bindings', () => {
-  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8; x === (7 := uint8) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T; s === "d" ? "ok" : "no";')).toBe('ok');
-  // Without a registered meta-default, a binding still takes its type's
-  // structural default per #sec-default-values: a string is '', not undefined.
-  // (A registered `default` hook, when present, takes precedence over this.)
+test('the default hook does not supply uninitialized annotated bindings', () => {
+  // REWRITTEN by PLAN-meta-default-scope.md phase 1, the third test that
+  // asserted the conflation and the one that stated it most plainly - its title
+  // was the behaviour.
+  //
+  // #table-meta-hooks: `default` is "the unconstrained constraint: what a value
+  // carries where it has no field of this meta type". A binding holds its
+  // TYPE's default, which #sec-defaultvalueof decides and which no meta
+  // declaration participates in. Registering the hook as the constraint shape's
+  // default let a `meta` declaration redefine the zero of `uint8`.
+  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8; x === (0 := uint8) ? "ok" : "no";')).toBe('ok');
+  expect(run('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T;')).toMatchObject({ Type: 'throw' });
+  // A binding still takes its type's STRUCTURAL default per #sec-default-values:
+  // a string is '', not undefined. Unchanged, and now unconditionally so - the
+  // parenthetical that said a registered `default` takes precedence is gone.
   expect(evaluated('let y: uint8 = 3; let z: string; z === "" && y === (3 := uint8) ? "ok" : "no";')).toBe('ok');
-  // An initializer wins over the default.
+  // An initializer wins over the default, which was never in question.
   expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8 = 2; x === (2 := uint8) ? "ok" : "no";')).toBe('ok');
 });
 

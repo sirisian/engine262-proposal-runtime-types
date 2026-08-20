@@ -51,6 +51,18 @@ test('at most one meta declaration per type', () => {
   expect(run('meta uint8 { subtype(a, b) { return true; } default = 0; } meta uint16 { subtype(a, b) { return true; } default = 1; }')).toMatchObject({ Type: 'normal' });
 });
 
-test('the default hook still supplies bindings (regression)', () => {
-  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8; x === (7 := uint8) ? "ok" : "no";')).toBe('ok');
+test('the default hook does NOT supply a binding of the constraint shape', () => {
+  // REWRITTEN by PLAN-meta-default-scope.md phase 1, and the reasoning matters
+  // because this test was written to protect the old behaviour.
+  //
+  // It asserted that `meta uint8 { default = 7; } let x: uint8;` yields 7 - a
+  // `meta` declaration redefining the zero of a PRIMITIVE. #table-meta-hooks
+  // scopes the hook to metadata: "the unconstrained constraint: what a value
+  // carries where it has no field of this meta type". It says nothing about
+  // what a binding holds before it is assigned, and #sec-defaultvalueof gives
+  // `uint8` the zero 0 whatever any meta type says.
+  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let x: uint8; x === (0 := uint8) ? "ok" : "no";')).toBe('ok');
+  // And the metadata half, which is what the hook is for: an unparameterized
+  // value carries the unconstrained constraint.
+  expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let y: uint8.<7> = (7 := uint8.<7>); String(y);')).toBe('7');
 });

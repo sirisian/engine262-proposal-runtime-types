@@ -325,12 +325,18 @@ test('a generic parameter is exempt', () => {
   expectOk('class Box<T> { value: T; } const b = new Box.<uint8>();');
 });
 
-test('a registered meta default satisfies the rule', () => {
-  // A `meta` default supplies a default for a type with no structural one, and
-  // it registers when the MetaDeclaration EVALUATES - which is why this rule is
-  // applied after that lookup rather than in the checking pass.
-  expectOk('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T;');
-  expect(value('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T; s;')).toBe('d');
+test('a registered meta default does NOT satisfy the rule', () => {
+  // REWRITTEN by PLAN-meta-default-scope.md phase 1. This asserted that a
+  // `meta` default "supplies a default for a type with no structural one", so
+  // `type T = uint8 | string; meta T { default = "d"; } let s: T;` was legal.
+  //
+  // #table-meta-hooks scopes the hook to metadata - "the unconstrained
+  // constraint" - and #sec-defaultvalueof says a union of two non-nullables
+  // "has two candidate zeros and no reason to prefer either, so it requires an
+  // initializer". A declaration about metadata does not answer that.
+  expectTypeError('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T;');
+  // With an initializer it is ordinary, and the meta type is irrelevant to it.
+  expect(value('type T = uint8 | string; meta T { subtype(a, b) { return true; } default = "d"; } let s: T = "x"; s;')).toBe('x');
 });
 
 test('a function parameter is not a declaration with no initializer', () => {
@@ -482,10 +488,17 @@ test('the pass does not answer where it has not processed what supplies the defa
   // Two guards, both found by this suite rather than by the plan.
   //
   // A `meta` declaration nested in a block is not reached by the pre-evaluation
-  // loop, which scans top-level items - but it registers a default perfectly
-  // well at run time, so the pass must stand down and let the evaluation-time
-  // site answer.
-  expect(value('type T = uint8 | string; { meta T { subtype(a, b) { return true; } default = "d"; } } let s: T; String(s);')).toBe('d');
+  // loop, which scans top-level items, so the pass stands down for a type such
+  // a declaration names and the evaluation-time site answers.
+  //
+  // The guard's ORIGINAL example is gone: it relied on a nested `meta` default
+  // supplying a value for `T`, which PLAN-meta-default-scope.md phase 1 removed
+  // as a conflation - a `meta` declaration says what a value CARRIES, not what a
+  // binding HOLDS. Both sites now refuse this program, which is the right
+  // answer; what the guard still buys is that the refusal comes from the site
+  // that can see the whole picture. Asserted as a refusal so the guard's
+  // remaining behaviour is pinned rather than assumed.
+  expectTypeError('type T = uint8 | string; { meta T { subtype(a, b) { return true; } default = "d"; } } let s: T;');
   // A value type class's default is an INSTANCE, which exists only once the
   // class has evaluated; a class declaration is not among the declarations the
   // pass pre-processes. So a tuple of them is left to the run time too.
