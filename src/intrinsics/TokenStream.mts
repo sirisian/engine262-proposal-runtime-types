@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, JSStringValue, NumberValue,
+  Value, ObjectValue, JSStringValue, NumberValue, isTypedNumber, unwrapToNumber,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
@@ -195,11 +195,27 @@ export function TokenRecordsFrom(value: Value): readonly TokenRecord[] | undefin
     return undefined;
   }
   const lengthValue = X(Get(value, Value('length')));
-  if (!(lengthValue instanceof NumberValue)) {
+  // A TYPED length is still a length.
+  //
+  // An array whose type is WRITTEN DOWN carries `length` as a
+  // TypedNumberValue, which extends PrimitiveValue rather than NumberValue - so
+  // a guard admitting only NumberValue refused every macro that annotated its
+  // return, `: []` and `: [].<Token>` alike, including the very type this
+  // operation exists to read. A macro was punished for declaring what it
+  // returns.
+  //
+  // It refused them as "did not return tokens" - the message for a macro that
+  // produced the wrong thing - so the report named the macro's author as the
+  // party at fault while the returned array was correct in every particular.
+  // That is the expensive half of the bug: it sent anyone who hit it to re-read
+  // a body that was already right.
+  if (!(lengthValue instanceof NumberValue) && !isTypedNumber(lengthValue)) {
     return undefined;
   }
   const out: TokenRecord[] = [];
-  const length = Number(R(lengthValue));
+  // `unwrapToNumber` is this codebase's single named way to read a typed number
+  // and passes a plain Number through unchanged, so one call covers both.
+  const length = Number(R(unwrapToNumber(lengthValue)));
   for (let i = 0; i < length; i += 1) {
     const element = X(Get(value, Value(String(i))));
     if (!(element instanceof ObjectValue)) {
