@@ -49,7 +49,7 @@ test('Variable Declaration: var/let/const accept annotations', () => {
   expect(ok('var v: boolean = true; v;')).toBe(true);
 });
 
-test('Variable Declaration: typed let without initializer takes the default; const stays required', () => {
+test('Variable Declaration: a typed binding without an initializer takes the default, const included', () => {
   // A typed `let` with no initializer takes the type's default (DefaultValueOf):
   // numeric 0, '' for string, false for boolean, null for a nullable union.
   expect(evaluated('let d: uint32; d + 1;')).toBe('1'); // default 0
@@ -57,9 +57,24 @@ test('Variable Declaration: typed let without initializer takes the default; con
   expect(evaluated('let b: boolean; String(b);')).toBe('false'); // default false
   expect(evaluated('let n: bigint; String(n === 0n);')).toBe('true'); // default 0n
   expect(evaluated('let x: uint8 | null; String(x === null);')).toBe('true'); // nullable -> null
-  // Per the normative spec, a `const` without an initializer remains a Syntax
-  // Error whether or not it is typed (the README prose is superseded here).
-  expectError('const d: uint32; d;');
+  // PLAN-typed-const-default.md. This asserted the opposite - "a `const` without
+  // an initializer remains a Syntax Error whether or not it is typed (the README
+  // prose is superseded here)" - and #sec-typed-bindings now says the README was
+  // right: the annotation is what makes the initializer redundant rather than
+  // absent, so `const c: [].<uint8>;` needs no `= []`.
+  expect(evaluated('const d: uint32; d + 1;')).toBe('1');
+  // All three keywords agree, which is what the clause's first line already
+  // claimed: "`var`, `let`, and `const` accept the same annotations".
+  expect(evaluated('var v2: uint8; let l2: uint8; const c2: uint8; `${v2}${l2}${c2}`;')).toBe('000');
+  // What `const` promises is unchanged, because it is a promise about the
+  // BINDING: the contents of a defaulted aggregate are still mutable, and
+  // rebinding is still refused.
+  expect(evaluated('const arr: [4].<uint8>; arr[0] = (7 := uint8); String(arr[0]);')).toBe('7');
+  expectError('const r: uint8; r = (1 := uint8);');
+  // UNTYPED const is untouched, and so is `ref`, which needs an initializer for
+  // a different reason: it aliases the storage its initializer names.
+  expectError('const u;');
+  expectError('const ref rr: uint8;');
   // A type with no meaningful zero (symbol) has no default. The engine used to
   // leave such a binding undefined; #sec-defaultvalueof refuses the declaration
   // instead - "it is a type error to declare a binding or a field with a type
