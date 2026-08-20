@@ -4,7 +4,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
-  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord,
+  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
@@ -2642,6 +2642,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
+            // A QUALIFIED name - `Reflect.Region`. This answered null
+            // unconditionally, and a null type is treated as no constraint, so
+            // every annotation naming one was silently never compared:
+            // `PLAN-checker-type-resolution.md stage A`, R2.
+            //
+            // Resolved from the registry the intrinsics fill as they bind these
+            // names, so the checker gets the SAME record the runtime walks the
+            // binding to reach, rather than a second one built here. Type
+            // ARGUMENTS on a qualified name are still out of reach and keep the
+            // old answer.
+            if (!node.TypeArguments) {
+              const written = [
+                node.TypeName.IdentifierReference.name,
+                ...node.TypeName.MemberNames.map((m) => m.name),
+              ].join('.');
+              return (BoundTypeRecordForName(written) as Known | undefined) ?? null;
+            }
             return null;
           }
           for (const a of node.TypeArguments!.TypeArgumentList) {
@@ -2768,7 +2785,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (typeParameterInScope(name)) {
           return { Kind: 'parameter', Name: name } as Known;
         }
-        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? namedNumericLiteralRecord(name);
+        // `BoundTypeRecordForName` covers `Token` and the 27 metadata interfaces,
+        // which the runtime resolves off the global and this resolver did not
+        // know: `PLAN-checker-type-resolution.md stage A`, R1.
+        //
+        // It sits LAST among the name lookups, after `interfaceTypeOf`, because
+        // `partial interface ClassFieldMetadata { ... }` completes exactly these
+        // names. Ahead of it, the intrinsic record - which declares no members -
+        // shadowed the completed one and the added member stopped being checked,
+        // silently. That is the failure `local-binding-transparency` pins, and
+        // its comment predicts it: "Restricting that to builtin names made it
+        // worse, since `partial interface` extends exactly those."
+        //
+        // Last is also the conservative place: this lookup answers only for a
+        // name nothing else in the chain claims.
+        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (BoundTypeRecordForName(name) as Known | undefined) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');

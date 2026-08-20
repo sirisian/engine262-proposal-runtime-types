@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * The outcome of a program that may fail EARLY, through `eval` so the error
@@ -146,7 +146,11 @@ test('a reflection context is a STRUCTURAL type, as the design writes it', () =>
   // An object of the wrong shape is not of the type, so the judgment is doing
   // work rather than admitting any object.
   expectThrownKind('let x: Reflect.ClassField = { kind: "nope" };', 'TypeError');
-  expectThrownKind('let x: Reflect.ClassField = 5;', 'TypeError');
+  // The wrong KIND is refused before evaluation, since
+  // `PLAN-checker-type-resolution.md stage A` taught the checker to resolve a
+  // qualified name. The shape row above stays a runtime judgment: a `kind`
+  // string is read off the value, not from the source text.
+  expectStaticTypeError('let x: Reflect.ClassField = 5;');
   // `Reflect.Type` is the exception the design already names: it "is the one
   // reflection target that is not also a decorator context", and its
   // reflection is discriminated by the STRUCTURE it reports rather than by the

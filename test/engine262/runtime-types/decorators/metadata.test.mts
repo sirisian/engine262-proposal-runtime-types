@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, expectThrown, expectThrownKind,
+  evaluated, expectThrown, expectStaticTypeError,
 } from '../harness.mts';
 
 /**
@@ -202,9 +202,11 @@ test('an intrinsic metadata interface declares nothing', () => {
   // An interface declaring no members admits any object: before a partial has
   // contributed, there is nothing for a value to lack.
   expect(evaluated('let m: ClassMetadata = {}; "admitted";')).toBe('admitted');
-  // And it is still an OBJECT type. A value of the wrong kind is a TypeError
-  // (wrong kind is a TypeError, out of range a RangeError).
-  expectThrownKind('let m: ClassMetadata = 5;', 'TypeError');
+  // And it is still an OBJECT type, so a value of the wrong kind is refused.
+  // Refused STATICALLY since `PLAN-checker-type-resolution.md stage A` taught the
+  // checker the intrinsic names: no partial can make `5` an object, so the kind
+  // is decidable from the source text however the shape later completes.
+  expectStaticTypeError('let m: ClassMetadata = 5;');
 });
 
 test('a partial interface completes an intrinsic, and the members are required', () => {
@@ -258,19 +260,24 @@ test('what bounds a symbol-keyed metadata member', () => {
   const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
   expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
   expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('TypeError');
-  // 2. The static checker does not know the intrinsic names: the same wrong
-  // kind a user interface rejects in a never-called function (the
-  // convention) passes here, and only the runtime boundary refuses. That is
-  // DELIBERATE for now rather than an oversight: the checker judges shapes it
-  // reads from the source text, and an intrinsic's shape is completed by
-  // whichever partials have EVALUATED - so a static judgment over the empty
-  // declaration would accept an object a later partial makes insufficient.
-  // Measured: a partial-touched USER interface is exactly as unknown to the
-  // checker, so the intrinsics match the engine's existing behavior for
-  // interfaces whose shape moves at evaluation.
-  expect(evaluated('function f() { let m: ClassMetadata = 5; } "unjudged";')).toBe('unjudged');
-  // The runtime backstop, asserted beside the static miss.
-  expectThrownKind('let m: ClassMetadata = 5;', 'TypeError');
+  // 2. The checker now KNOWS the intrinsic names, so a wrong kind is rejected in
+  // a never-called function exactly as a user interface's is - the convention
+  // this used to be the documented exception to
+  // (`PLAN-checker-type-resolution.md stage A`).
+  //
+  // The reason the exception existed still holds and is still honoured: an
+  // intrinsic's SHAPE is completed by whichever partials have evaluated, so a
+  // static judgment over the empty declaration must not accept an object a later
+  // partial makes insufficient. It does not, because the checker reads a
+  // partial-completed record where one exists and this registry answers only for
+  // a name no declaration claims. The three shape rows below pin that; only the
+  // KIND row moved, and no partial can make `5` an object.
+  expectStaticTypeError('function f() { let m: ClassMetadata = 5; }');
+  expectStaticTypeError('let m: ClassMetadata = 5;');
+  // The shape rules the exception was protecting, unchanged.
+  expect(evaluated('let m: ClassMetadata = {}; "admitted";')).toBe('admitted');
+  expect(outcome('partial interface ClassMetadata { c: string; } let m: ClassMetadata = {};')).toBe('TypeError');
+  expect(outcome('partial interface ClassMetadata { c: string; } let m: ClassMetadata = { c: "x" };')).toBe('ACCEPTED');
 });
 
 // -- partial interface -----------------------------------------------------------

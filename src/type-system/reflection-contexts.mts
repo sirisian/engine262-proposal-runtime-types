@@ -1,5 +1,6 @@
 import type { ObjectValue, Value } from '../value.mts';
 import type { TypeRecord } from './records.mts';
+import { RegisterBoundTypeRecord } from './records.mts';
 
 /**
  * proposal-runtime-types #sec-decorator-application: "A decorator is an
@@ -50,7 +51,21 @@ export function RegisterReflectionContexts(reflect: ObjectValue): void {
     const name = (key as unknown as { stringValue?: () => string }).stringValue?.();
     const held = descriptor?.Value as unknown as { TypeRecord?: TypeRecord } | undefined;
     const record = held?.TypeRecord;
-    if (!name || !record || record.Kind !== 'nominal') {
+    if (!name || !record) {
+      continue;
+    }
+    // EVERY type `Reflect` binds, under the name a program writes for it, which
+    // is qualified: an annotation says `Reflect.Region`, never `Region`.
+    // `PLAN-checker-type-resolution.md stage A` - the checker's resolver refused
+    // every qualified name outright, so all 47 of these were unresolvable to it
+    // while the runtime resolved them by walking the binding.
+    //
+    // Registered before the context filter below, and without it: `Reflect.never`
+    // is a type a program may write and is not a context, so a filter that keeps
+    // only contexts would leave exactly that one name behind - which is what the
+    // first attempt at this did.
+    RegisterBoundTypeRecord(`Reflect.${name}`, record);
+    if (record.Kind !== 'nominal') {
       continue;
     }
     const declaration = record.Declaration as unknown as { type?: string, name?: string };

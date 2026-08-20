@@ -539,6 +539,43 @@ function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
 }
 
 /**
+ * The records of the types bound BY NAME in a realm, keyed by the name a
+ * program writes: `Token`, `ClassMetadata`, `Reflect.Region`.
+ *
+ * `PLAN-checker-type-resolution.md stage A`. The checker resolves an annotation
+ * with `resolveType`, a second resolver that mirrors `TypeNodeToTypeRecord`; a
+ * name the runtime resolves and the checker does not resolves to NOTHING there,
+ * and a null type is then treated as no constraint, so the annotation is never
+ * compared. `Token`, the 27 metadata interfaces and all 47 `Reflect.*` names
+ * were unresolvable to the checker for that reason.
+ *
+ * Filled by READING BACK the records the intrinsics already build, for the
+ * reason `RegisterReflectionContexts` gives for doing the same: a list here
+ * would be a second copy of the table, and a name added to the intrinsics
+ * without a matching line would go on resolving to nothing - the drift this
+ * registry exists to end, reappearing in the place it is least visible.
+ *
+ * Keyed by the written name rather than by namespace so that nothing here needs
+ * to know that `Reflect` is the only namespace a type name may be qualified by.
+ */
+const boundTypeRecords = new Map<string, TypeRecord>();
+
+/** Register a type under the name a program writes to reach it. */
+export function RegisterBoundTypeRecord(name: string, record: TypeRecord): void {
+  boundTypeRecords.set(name, record);
+}
+
+/**
+ * The record for a written type name, or undefined where no realm has bound
+ * one. Realm-independent in practice: these records are built from
+ * module-level sentinel declarations, and library types compare by
+ * [[LibraryName]] rather than by declaration identity.
+ */
+export function BoundTypeRecordForName(name: string): TypeRecord | undefined {
+  return boundTypeRecords.get(name);
+}
+
+/**
  * Build the library generic type of the given name applied to the given
  * arguments, or null when the name is not a library type. Identity is by name and
  * arguments, so two writings of `Promise.<uint32>` are one interned type.

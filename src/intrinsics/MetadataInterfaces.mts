@@ -2,7 +2,7 @@ import { Value, ObjectValue } from '../value.mts';
 import { X } from '../completion.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { anyType, makePrimitive } from '../type-system/records.mts';
+import { anyType, makePrimitive, RegisterBoundTypeRecord } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import {
   Descriptor, Realm, surroundingAgent,
@@ -162,15 +162,24 @@ export function bindMetadataInterfaceGlobals(realmRec: Realm) {
     return;
   }
   const global = realmRec.GlobalObject as ObjectValue;
+  const token = tokenRecord();
+  // Registered as it is bound, so the checker resolves exactly the record the
+  // runtime does - `PLAN-checker-type-resolution.md stage A`. Building a second
+  // record for the checker is what stage A's disproved first attempt did:
+  // `Token` resolved to a bare nominal tested by a prototype chain rather than
+  // to this one, whose [[Structure]] is what an object literal satisfies.
+  RegisterBoundTypeRecord('Token', token);
   X(global.DefineOwnProperty(Value('Token'), Descriptor({
-    Value: GetTypeObject(tokenRecord(), realmRec),
+    Value: GetTypeObject(token, realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.true,
   })));
   for (const name of metadataInterfaceNames) {
+    const record = metadataInterfaceRecord(name);
+    RegisterBoundTypeRecord(name, record);
     X(global.DefineOwnProperty(Value(name), Descriptor({
-      Value: GetTypeObject(metadataInterfaceRecord(name), realmRec),
+      Value: GetTypeObject(record, realmRec),
       Writable: Value.false,
       Enumerable: Value.false,
       Configurable: Value.true,
