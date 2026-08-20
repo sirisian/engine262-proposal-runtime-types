@@ -247,17 +247,33 @@ test('destructuring transparency keeps the same guards', () => {
 });
 
 test('an OUTER binding is not visible to the inference', () => {
-  // Not caused by transparency and not specific to destructuring: a binding
-  // declared outside the function is invisible to the inference pass, so
-  // anything read from it contributes nothing. Publication runs when the
-  // signatures are collected, which is before the statement walk declares
-  // module-scope bindings - so the name is not yet declared when the body is
-  // read.
-  //
-  // A FUNCTION declared outside is visible, because signatures are collected
-  // first; that asymmetry is the evidence for the ordering.
+  // A binding declared outside the function is invisible to the inference, so
+  // anything read from it contributes nothing - while a FUNCTION declared
+  // outside IS visible, because signatures are collected before publication and
+  // bindings are not. That asymmetry is the evidence for the ordering.
   expectNotInferred('return outerArr[0];');
   expectNotInferred('const v = outerArr[0]; return v;');
   expectNotInferred('const [e] = outerArr; return e;');
   expectInferred('return g();');
+});
+
+test('what an attempt to fix the ordering must survive', () => {
+  // Declaring the bindings before publication works and breaks two things, both
+  // measured; recorded so the next attempt starts from them.
+  //
+  // (1) The declarations must not outlive the publication. Left in the frame,
+  // a module-scope binding was seen where a function's own PARAMETER of the
+  // same name shadows it - this program read the module's `a` and reported its
+  // `length` type rather than the parameter's.
+  expect(value('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; }'
+    + ' let a: [4].<uint8> = [7, 8, 9, 10]; `${Number(f.<4>(a))}`;')).toBe('4');
+  // (2) Resolving an annotation early MEMOIZES what it resolves. Resolving
+  // `let m: I` before the walk reached `const k` gave the interface a record
+  // whose computed symbol key was unresolved, and that record was cached - so
+  // the member stopped being checked at all, in both directions, silently.
+  // Rolling back reported errors does not help, because no error is reported.
+  const decl = 'const k = Symbol("k"); interface I { [k]: string; } ';
+  expectThrows(`${decl}let m: I = { [k]: 5 };`);
+  expectOk(`${decl}let m: I = { [k]: "ok" };`);
+  expectThrows(`${decl}let m: I = { [k]: "ok" }; m[k] = 5;`);
 });
