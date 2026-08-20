@@ -183,3 +183,23 @@ test('a const initialized with a literal publishes the widened type', () => {
   expectThrows(`${SETUP}function f(x: number) { const k = 1; return k; } const a: (x: number) => string = f;`);
   expectOk(`${SETUP}function f(x: number) { const k = 1; return k; } const a: (x: number) => number = f;`);
 });
+
+test.fails('an annotation inside a binding pattern applies', () => {
+  // Q2-pre. The design writes `let [a: uint8, b: uint8] = [1, 2]`, and the
+  // annotation currently does NOTHING: no type, and no check either - a value
+  // out of range binds, and a value of another type binds.
+  //
+  // The fix is one call, `EnforceAnnotation` where the element's value is
+  // settled in IteratorBindingInitialization, and it works for every shape
+  // tried: the README form, a single element, a nested pattern, a default, a
+  // rest element, and a parameter pattern. It is not landed because that same
+  // operation binds FORMAL PARAMETERS, whose types are enforced elsewhere with
+  // the call's type-parameter bindings in hand - so enforcing here refused
+  // `function g<T extends []>(v: T)` for every argument, and skipping
+  // annotations that mention a type parameter did not clear it. Separating the
+  // parameter case from the declaration case is the work.
+  expect(value('let [a: uint8] = [1]; `${a is uint8}`;')).toBe('true');
+  expectThrows('let [a: uint8] = [300];');
+  expectThrows('let [a: uint8] = ["s"];');
+  expect(value('let [a: uint8, ...[b: uint8]] = [1, 2]; `${a is uint8}`;')).toBe('true');
+});
