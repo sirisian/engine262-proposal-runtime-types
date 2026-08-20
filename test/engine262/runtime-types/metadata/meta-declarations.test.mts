@@ -451,3 +451,27 @@ test('a base-form meta type has no type parameters to bind', () => {
   // The base form itself still works without parameters.
   expect(run('meta uint8 { default = 0; subtype(a, b) { return a === b; } } let x: uint8; String(x);')).toMatchObject({ Type: 'normal' });
 });
+
+test('a generic meta declaration parses but does not yet claim its keys', () => {
+  // PLAN-generic-meta-declarations.md phase 4. RECORDED, not asserted as
+  // correct: phase 1 made the form parse and the evaluation half does not
+  // follow. `type G` named without arguments is "not a type", so
+  // Evaluate_MetaDeclaration finds no Type Object, returns early, and neither
+  // the key claim nor the hook registration happens.
+  //
+  // The non-generic form of the same declaration reaches an ASSIGNABILITY error
+  // instead, which is the proof its key WAS claimed.
+  const generic = 'type G<T> = { gkey?: boolean }; '
+    + 'meta G<T> { default = { gkey: false }; subtype(a, b) { return true; } } '
+    + 'let v: uint8.<{ gkey: true }> = (1 := uint8.<{ gkey: true }>); "ok";';
+  const plain = 'type F = { fkey?: boolean }; '
+    + 'meta F { default = { fkey: false }; subtype(a, b) { return true; } } '
+    + 'let v: uint8.<{ fkey: true }> = (1 := uint8.<{ fkey: true }>); "ok";';
+  // Both throw today, and the MESSAGES are the finding: one says the key is
+  // unclaimed, the other has got past claiming.
+  expect(run(generic)).toMatchObject({ Type: 'throw' });
+  expect(run(plain)).toMatchObject({ Type: 'throw' });
+  // The declaration itself evaluates silently - no error, and no effect.
+  expect(run('type G2<T> = { g2?: boolean }; meta G2<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+});

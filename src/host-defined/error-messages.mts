@@ -280,6 +280,7 @@ export interface Throw {
   | 'Duplicate __proto__ property'
   | 'Duplicate constructor'
   | 'Duplicate meta declaration'
+  | 'a base-form meta type has no type parameters to bind'
   | 'Exponent of bigint must be positive'
   | 'FinalizationRegistry cannot be invoked without new'
   | 'Host does not set a module loader'
