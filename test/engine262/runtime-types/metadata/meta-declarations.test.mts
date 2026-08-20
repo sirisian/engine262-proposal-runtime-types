@@ -495,6 +495,22 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
     + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(errorMessage(`${hooked} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
     .toMatch(/is not assignable to/);
+  // The DEFAULT supplies the unconstrained constraint, which is the fourth
+  // registry and the one that fails most quietly: without the snapshot a
+  // generic meta type claims its keys, runs its hooks, and still refuses a
+  // plain value crossing into a constrained position, because MetadataPortion
+  // has nothing to compare against. Both forms admit it.
+  const dflt = (n: string) => `let plain: uint8 = (5 := uint8); let wide: uint8.<{ ${n}: false }> = plain; String(wide);`;
+  expect(evaluated('type GD<T> = { gd?: boolean }; '
+    + 'meta GD<T> { default = { gd: false }; subtype(sub, sup) { return sup.gd === undefined || sub.gd === sup.gd; } } '
+    + dflt('gd'))).toBe('5');
+  expect(evaluated('type PD = { pd?: boolean }; '
+    + 'meta PD { default = { pd: false }; subtype(sub, sup) { return sup.pd === undefined || sub.pd === sup.pd; } } '
+    + dflt('pd'))).toBe('5');
+  // A refused crossing reports the same way from either form.
+  const refuse = (n: string) => `let a: uint8.<{ ${n}: false }> = (1 := uint8.<{ ${n}: false }>); let b: uint8.<{ ${n}: true }> = a;`;
+  expect(errorMessage('type GR<T> = { gr?: boolean }; meta GR<T> { default = { gr: false }; subtype(s, u) { return false; } } '
+    + refuse('gr'))).toMatch(/is not assignable to/);
   // The non-generic path is untouched, and a name resolving to nothing still
   // returns quietly rather than throwing.
   expect(run('type G2<T> = { g2?: boolean }; meta G2<T> { default = {}; subtype(a, b) { return true; } } "ok";'))

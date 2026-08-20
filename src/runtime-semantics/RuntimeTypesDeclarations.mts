@@ -1231,7 +1231,15 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       // keys, so no portion of it exists to complete. The full C5 rule, that
       // the default is a VALUE OF the constraint shape, waits on the plan's
       // P1f verdict about optional-key membership.
-      if (shape && shape.Kind === 'object') {
+      // PLAN-generic-meta-evaluation.md phase 5. The RESOLVED shape here too,
+      // for the same reason the claim loop needs it: a generic constraint shape
+      // is a nominal record, so this guard saw no ~object~ and registered no
+      // default snapshot - and MetadataPortion reads that snapshot to decide
+      // what a meta type governs. Without it a generic meta type claimed its
+      // keys, ran its hooks, and still refused a plain value crossing into a
+      // constrained position, because the unconstrained constraint had nowhere
+      // to come from.
+      if (claimShape && claimShape.Kind === 'object') {
         if (!(v instanceof ObjectValue)) {
           return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
         }
@@ -1245,7 +1253,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         // matrix's P1c caught the live-object check reading it a second time,
         // which the pre-Phase-4 probes structurally could not see (F46).
         const snapshot = Q(yield* SnapshotMetadataValue(v));
-        if (!Q(yield* IsOfType(MetadataAsObject(snapshot), shape))) {
+        if (!Q(yield* IsOfType(MetadataAsObject(snapshot), claimShape))) {
           return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
         }
         RegisterMetaDefaultSnapshot(typeObject, snapshot);
