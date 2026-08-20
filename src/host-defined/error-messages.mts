@@ -239,6 +239,7 @@ export interface Throw {
   | 'A typed destructuring member must bind a single name'
   | 'AbstractModuleSource cannot be constructed'
   | 'An abstract method requires an abstract class'
+  | '$1 cannot be abstract, so it requires a body'
   | 'Array length must be uint32.'
   | 'Array length too big.'
   | 'ArrayBuffer cannot be invoked without new'

@@ -3056,11 +3056,30 @@ export abstract class ExpressionParser extends FunctionParser {
 
   // ClassElement :
   //   `abstract` ClassElementName `(` UniqueFormalParameters `)` TypeAnnotation? `;`
-  private parseAbstractMethodDefinition(): ParseNode.AbstractMethodDefinition {
-    const node = this.startNode<ParseNode.AbstractMethodDefinition>();
+  /**
+   * PLAN-signature-listings.md phase 2. Shared by both spellings of an abstract
+   * member, so `abstract m(): T;` and `m(): T;` fail identically in a class that
+   * is not declared `abstract` - with the rule named, rather than with a caret
+   * on a token.
+   */
+  /** Is this the constructor? It reaches the MethodDefinition branch like any other member. */
+  private classElementNameIsConstructor(name: ParseNode.ClassElementName | null | undefined): boolean {
+    if (!name) {
+      return false;
+    }
+    return (name.type === 'IdentifierName' && name.name === 'constructor')
+      || (name.type === 'StringLiteral' && name.value === 'constructor');
+  }
+
+  private requireAbstractClass(): void {
     if (!this.currentClassModifiers || !this.currentClassModifiers.includes('abstract')) {
       this.raise(Throw.SyntaxError('An abstract method requires an abstract class'));
     }
+  }
+
+  private parseAbstractMethodDefinition(): ParseNode.AbstractMethodDefinition {
+    const node = this.startNode<ParseNode.AbstractMethodDefinition>();
+    this.requireAbstractClass();
     this.expect('abstract');
     node.static = false;
     node.ClassElementName = this.parseClassElementName();
@@ -3671,6 +3690,8 @@ export abstract class ExpressionParser extends FunctionParser {
     // names the rule instead of reporting an unexpected token - the reading
     // that cost a full investigation when a generic METHOD, which is a real
     // gap, was mistaken for a limitation of the call syntax.
+    /** PLAN-signature-listings.md phase 2: set where the member has no body. */
+    let isAbstractMember = false;
     const isSpecialMethod = isGenerator
       || ((isSetter || isGetter || isAsync) && !this.test(Token.LPAREN) && !isAsyncShorthandProperty);
 
@@ -3786,6 +3807,45 @@ export abstract class ExpressionParser extends FunctionParser {
         (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
+      // PLAN-signature-listings.md phase 2. #sec-abstract-classes: "A member is
+      // abstract because it has no body; the `abstract` keyword before it is
+      // optional and says the same thing earlier." A `;` here rather than a `{`
+      // is that absence, so the member is the abstract one and there is no body
+      // to parse.
+      //
+      // Everything shares this function, which is what makes the change small
+      // and the exclusions load-bearing: `get`/`set` reach it and ARE abstract
+      // members - an accessor has an override site and its annotation types the
+      // implementations. `static`, a constructor, and the async and generator
+      // forms reach it too and are NOT: they have nothing for an implementation
+      // to supply, so they keep needing a body and say so by their own rules.
+      if (surroundingAgent.feature('runtime-types')
+          && this.test(Token.SEMICOLON)
+          && !node.static
+          && !isAsync
+          && !isGenerator
+          && !this.classElementNameIsConstructor(node.ClassElementName)) {
+        this.requireAbstractClass();
+        this.semicolon();
+        isAbstractMember = true;
+      } else if (surroundingAgent.feature('runtime-types') && this.test(Token.SEMICOLON)) {
+        // The excluded forms reach here with the same `;` and must say WHY they
+        // are not abstract members, or the reader gets `Unexpected token` on a
+        // semicolon and learns nothing - which is the diagnostic this whole
+        // change exists to remove.
+        const which = node.static
+          ? 'a static member'
+          : isAsync
+            ? (isGenerator ? 'an async generator method' : 'an async method')
+            : isGenerator
+              ? 'a generator method'
+              : 'a constructor';
+        this.raise(Throw.SyntaxError('$1 cannot be abstract, so it requires a body', Value(which)));
+      }
+
+      if (isAbstractMember) {
+        return;
+      }
       this.scope.with({
         superCall: !isSpecialMethod
                    && !node.static
@@ -3810,6 +3870,12 @@ export abstract class ExpressionParser extends FunctionParser {
         }
       });
     });
+
+    if (isAbstractMember) {
+      const abstractNode = node as unknown as ParseNode.Unfinished<ParseNode.AbstractMethodDefinition>;
+      abstractNode.static = false;
+      return this.finishNode(abstractNode, 'AbstractMethodDefinition') as unknown as ParseNode.MethodDefinitionLike;
+    }
 
     let name: ParseNode.MethodDefinitionLike['type'];
     if (isAsync) {
