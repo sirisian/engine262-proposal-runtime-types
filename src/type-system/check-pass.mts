@@ -7,17 +7,115 @@ import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValu
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { Value } from '../value.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import {
   CheckScript,
   TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
-  TakeDefaultRequirements, TakeBlockScopedMetaNames,
+  TakeDefaultRequirements,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { Throw } from '#self';
+
+/**
+ * Does this type's default depend on a CLASS declared in this source text?
+ *
+ * PLAN-default-timing.md phase 2, widened by the suite. A value type class's
+ * default is "the instance of _t_ each of whose fields holds the default of the
+ * field's type" - an object that only exists once the class has evaluated. The
+ * pass pre-processes type aliases, interfaces, `meta` declarations and
+ * `primitive` blocks; a CLASS DECLARATION is an ordinary declaration evaluated
+ * with the body, so at check time there is nothing to instantiate and
+ * `DefaultValueOf` answers ~none~ for a type that has a perfectly good default
+ * at run time. `class P { a: uint8; } let d: [P, P];` is the case
+ * `typed-bindings.test.mts` caught.
+ *
+ * Same shape as D4's guard and the same resolution: where the pass has not
+ * processed what supplies the default, it does not answer, and the
+ * evaluation-time site does.
+ */
+function defaultNeedsEvaluatedClass(t: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean {
+  if (seen.has(t)) {
+    return false;
+  }
+  seen.add(t);
+  if (t.Kind === 'nominal') {
+    const declared = (t.Declaration as { type?: string } | undefined)?.type;
+    return declared === 'ClassDeclaration' || declared === 'ClassExpression';
+  }
+  if (t.Kind === 'tuple') {
+    return t.Elements.some((e) => defaultNeedsEvaluatedClass(e.Type, seen));
+  }
+  if (t.Kind === 'array') {
+    return defaultNeedsEvaluatedClass(t.Element, seen);
+  }
+  if (t.Kind === 'union' || t.Kind === 'intersection') {
+    return t.Members.some((m) => defaultNeedsEvaluatedClass(m, seen));
+  }
+  return false;
+}
+
+/**
+ * Type names named by a `meta` declaration this pass did NOT pre-process.
+ *
+ * PLAN-default-timing.md, D4. The pre-evaluation loop scans a Script's or
+ * Module's TOP-LEVEL items, so a `meta` declaration nested in a block is
+ * invisible to it - and perfectly visible to the running program, which
+ * registers its `default` when the block evaluates. This program works and must
+ * keep working:
+ *
+ *   type T = uint8 | string;
+ *   { meta T { subtype(a, b) { return true; } default = "d"; } }
+ *   let s: T;                                   // "d"
+ *
+ * Answering "no default" for `T` here would reject it. So the names such a
+ * declaration could supply a default for are collected, and the check stands
+ * down for them; the evaluation-time site answers instead.
+ *
+ * Collected by scanning rather than from the walk: the checker has no
+ * |MetaDeclaration| arm - meta hooks register when the declaration EVALUATES,
+ * which is why the walk never needed one - and adding a walk arm for a set this
+ * pass consumes would put the knowledge further from its only reader.
+ */
+function nestedMetaTypeNames(root: ParseNode): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: ParseNode): void => {
+    if (node.type === 'MetaDeclaration') {
+      // Keyed on what the LOOP PROCESSED, not on what is top-level. A top-level
+      // BLOCK is itself a top-level item, so skipping top-level items skipped
+      // the block whose contents are the whole point - the scan found nothing
+      // and the guard never fired.
+      if (!preEvaluatedTypeDeclarations.has(node)) {
+        const named = (node as unknown as { TypeName?: { IdentifierReference?: { name?: string } } })
+          .TypeName?.IdentifierReference?.name;
+        if (typeof named === 'string') {
+          names.add(named);
+        }
+      }
+      return;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+        continue;
+      }
+      const child = (node as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(child)) {
+        for (const c of child) {
+          if (c && typeof c === 'object' && 'type' in (c as object)) {
+            visit(c as ParseNode);
+          }
+        }
+      } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+        visit(child as ParseNode);
+      }
+    }
+  };
+  visit(root);
+  return names;
+}
 
 /**
  * proposal-runtime-types #sec-type-errors: the CHECKING PASS. It runs per
@@ -100,6 +198,23 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           && (item as { Type?: { type?: string } }).Type?.type === 'ComputedType') {
           computedAliasResolved = true;
         }
+      }
+    } else if (item.type === 'PrimitiveOperatorDeclaration') {
+      // PLAN-default-timing.md phase 2, found by the suite rather than by the
+      // plan. #sec-type-errors lists what the pass processes before applying a
+      // judgment that consults it: "its type aliases, its interfaces, its
+      // `meta` declarations, AND THE IMPLICIT CAST OPERATORS OF ITS `primitive`
+      // BLOCKS". The loop had the first three.
+      //
+      // It mattered the moment a default was decided here: a parameterization's
+      // default is its base's zero HAVING CROSSED, and a cast is one of the two
+      // ways through - so `primitive float64 { operator float64.<{ m: 1 }>... }
+      // let d: Meter;` has a default only if that operator has been processed.
+      // Without this the pass answered "no default" and refused a program the
+      // run time accepts, which `typed-bindings.test.mts` caught.
+      const attempt = EnsureCompletion(yield* Evaluate_PrimitiveOperatorDeclaration(item));
+      if (attempt.Type === 'normal') {
+        preEvaluatedTypeDeclarations.add(item);
       }
     } else if (item.type === 'MetaDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item));
@@ -204,14 +319,16 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // site said a checking-pass test would refuse `type T = ...; meta T { default
   // = "d"; } let s: T;` - that was true before the pass pre-processed type
   // declarations and is not true now.
-  const nestedMetaNames = TakeBlockScopedMetaNames(root);
+  const nestedMetaNames = nestedMetaTypeNames(root);
   for (const requirement of TakeDefaultRequirements(root)) {
     // D4's guard: a `meta` declaration nested where this loop cannot see it -
     // the loop scans TOP-LEVEL items - may register a default for this very
     // type at run time, and `{ meta T { default = "d"; } } let s: T;` works
     // today. Where such a declaration names the type, the question is left to
     // the evaluation-time site rather than answered wrongly here.
-    if (nestedMetaNames.has(requirement.display)) {
+    const namedByNestedMeta = requirement.annotationName !== undefined
+      && nestedMetaNames.has(requirement.annotationName);
+    if (namedByNestedMeta || nestedMetaNames.has(requirement.display) || defaultNeedsEvaluatedClass(requirement.type)) {
       continue;
     }
     let dflt = LookupTypeDefault(GetTypeObject(requirement.type));

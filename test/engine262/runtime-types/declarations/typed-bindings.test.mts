@@ -455,3 +455,39 @@ test('a TOP-LEVEL var enforces its type, through the property that holds it', ()
   // A redeclaration keeps the annotation, since it is the same binding.
   expect(value('var v: uint8 = 1; var v = 2; String(v is uint8);')).toBe('true');
 });
+
+test('the no-default answer arrives before the source text runs', () => {
+  // PLAN-default-timing.md. #sec-defaultvalueof makes this a type error and
+  // #sec-type-errors makes a type error determinable before the text runs an
+  // Early Error - "a source text that contains one is rejected rather than
+  // evaluated". The engine answered at DECLARATION EVALUATION, so the marker
+  // below ran first and a declaration in a branch that never executed was never
+  // checked at all.
+  //
+  // The assertion is TIMING, not that an error occurs: both behaviours throw.
+  expectTypeError('globalThis.ran = 1; interface I { a: uint8 } let x: I;');
+  // The eval'd text is a Script and the pass runs for it too, so the refusal
+  // arrives before that text runs - which is why `expectTypeError` on the outer
+  // program is the wrong shape here and the throw is caught instead.
+  expect(value('let seen = "none"; try { eval("interface J { a: uint8 } let y: J; globalThis.ran = 1;"); } catch (e) { seen = "refused"; } seen;')).toBe('refused');
+  // Dead code is now checked, which is the point of an Early Error and the
+  // change most likely to read as a regression.
+  expectTypeError('interface I { a: uint8 } if (false) { let x: I; }');
+  expectTypeError('interface I { a: uint8 } function never() { let x: I; }');
+  // A type WITH a default is unaffected, and still holds the zero.
+  expect(value('let n: uint8; String(n);')).toBe('0');
+});
+
+test('the pass does not answer where it has not processed what supplies the default', () => {
+  // Two guards, both found by this suite rather than by the plan.
+  //
+  // A `meta` declaration nested in a block is not reached by the pre-evaluation
+  // loop, which scans top-level items - but it registers a default perfectly
+  // well at run time, so the pass must stand down and let the evaluation-time
+  // site answer.
+  expect(value('type T = uint8 | string; { meta T { subtype(a, b) { return true; } default = "d"; } } let s: T; String(s);')).toBe('d');
+  // A value type class's default is an INSTANCE, which exists only once the
+  // class has evaluated; a class declaration is not among the declarations the
+  // pass pre-processes. So a tuple of them is left to the run time too.
+  expect(value('class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
+});

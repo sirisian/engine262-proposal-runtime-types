@@ -110,15 +110,19 @@ test('primitive metadata: two meta types gate one crossing independently', () =>
   expectThrown(`${dims}${bounds} let c: float64.<{ m: 2, lo: 0 }>;`);
 });
 
-test('primitive metadata: the no-default answer arrives at the declaration, not at first use', () => {
-  // #sec-type-errors makes this an Early Error found by the checking pass, and
-  // this engine answers it when the declaration EVALUATES instead - which is
-  // observable: a declaration inside a function that is never called does not
-  // throw. Recorded here rather than asserted as correct, so that the day the
-  // pass takes it over this test says what changed.
+test('primitive metadata: the no-default answer arrives from the checking pass', () => {
+  // THIS IS THE DAY. The test above recorded the divergence and said what would
+  // change: "#sec-type-errors makes this an Early Error found by the checking
+  // pass, and this engine answers it when the declaration EVALUATES instead -
+  // which is observable: a declaration inside a function that is never called
+  // does not throw."
+  //
+  // PLAN-default-timing.md moved it. The declaration is now refused whether or
+  // not the function is ever called, which is what an Early Error means: "a
+  // source text that contains one is rejected rather than evaluated".
   const dims = 'type Dim = { m: number }; '
     + 'meta Dim { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } } '
     + 'type Meter = float64.<{ m: 1 }>; ';
-  expect(evaluated(`${dims} function never() { let d: Meter; return d; } String("reached");`)).toBe('reached');
+  expectThrown(`${dims} function never() { let d: Meter; return d; } String("reached");`);
   expectThrown(`${dims} function never() { let d: Meter; return d; } never();`);
 });

@@ -260,6 +260,15 @@ export interface DefaultRequirement {
   readonly node: ParseNode;
   readonly type: TypeRecord;
   readonly display: string;
+  /**
+   * The name the annotation WROTE, where it wrote one.
+   *
+   * D4's guard compares against the name a `meta` declaration targets, and a
+   * meta declaration targets a NAME - `meta T { ... }` - while [[Display]] is
+   * the resolved type, `uint.<8> | string` for the same annotation. Comparing
+   * displays found nothing and the guard never fired.
+   */
+  readonly annotationName?: string;
 }
 const defaultRequirements = new WeakMap<object, readonly DefaultRequirement[]>();
 
@@ -7394,7 +7403,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // will bind, so a generic's field is checked at its specialization".
           // The evaluation-time site has that exemption and this matches it.
           if (declared && declared.Kind !== 'parameter' && !n.Initializer && !n.TypedInitializer) {
-            defaultsNeeded.push({ node: n as ParseNode, type: declared as TypeRecord, display: displayType(declared as TypeRecord) });
+            const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
+            defaultsNeeded.push({
+              node: n as ParseNode,
+              type: declared as TypeRecord,
+              display: displayType(declared as TypeRecord),
+              annotationName: written?.type === 'TypeReference' ? written.TypeName?.IdentifierReference?.name : undefined,
+            });
           }
           if (n.TypeAnnotation && declared && n.Initializer) {
             const src = staticType(n.Initializer);
