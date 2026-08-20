@@ -12,7 +12,7 @@ import type { Value } from '../value.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { anyType, restElementType } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
-import { IsAssignable } from './relations.mts';
+import { ClassImplements, IsAssignable, SameType } from './relations.mts';
 import { RuntimeTypeOf } from './runtime.mts';
 
 /**
@@ -184,12 +184,19 @@ function assignArguments(params: readonly OverloadParameter[], argTypes: readonl
 const enum Tier {
   // Lower is better. The argument's type is exactly the parameter's type.
   Exact = 0,
+  // #table-argument-match-ranks rank 2: the argument satisfies a ~nominal~
+  // parameter type STRUCTURALLY, being neither that type nor a refinement of
+  // it. An interface and a structurally identical alias are mutually assignable,
+  // so both scored Exact and every call between them was ambiguous; this is the
+  // rank that separates "has the shape exactly" from "has the members an
+  // interface asks for".
+  StructuralNominal = 1,
   // An untyped literal argument taking the parameter's type (literal-overload-ranking).
-  Literal = 1,
+  Literal = 2,
   // The argument is assignable to the parameter by an ordinary widening.
-  Assignable = 2,
+  Assignable = 3,
   // The parameter is the `any` type: an untyped catch-all that accepts anything.
-  CatchAll = 3,
+  CatchAll = 4,
 }
 
 /**
@@ -217,13 +224,38 @@ function isNumericValueType(t: TypeRecord): boolean {
  * which is the distinction literal-overload-ranking draws.
  */
 function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
+
   if (paramType.Kind === 'any') {
     return Tier.CatchAll;
   }
   if (IsAssignable(argType, paramType)) {
     // Exact identity is mutual assignability: the argument type is the parameter
-    // type when each is assignable to the other. This is the best tier.
+    // type when each is assignable to the other. This is the best tier - EXCEPT
+    // where the parameter is a ~nominal~ type the argument is not and does not
+    // refine, which is rank 2 rather than rank 1: `{ a: uint8 }` has the shape
+    // of `interface I { a: uint8 }` exactly, and mutual assignability cannot
+    // tell that from being the interface, so an interface competing with a
+    // structurally identical alias tied and the call was ambiguous.
     if (IsAssignable(paramType, argType)) {
+      // Where a ~nominal~ type is on EITHER side, an exact match means identity
+      // or refinement, and anything else is the structural rank. SameType is not
+      // the test: it compares an interface to its structural form as equal,
+      // which is the very equality that made the two signatures tie.
+      //
+      // Both directions matter, and the asymmetric form of this rule left the
+      // mirror case ambiguous - an argument of the interface's own type, or of a
+      // class that implements it, tied against a structurally identical alias.
+      // The rule is about the RELATION: a match that holds only because the
+      // shapes agree ranks below one that holds because a declaration says so.
+      const argNominal = argType.Kind === 'nominal';
+      const paramNominal = paramType.Kind === 'nominal';
+      if (argNominal || paramNominal) {
+        const sameDeclaration = argNominal && paramNominal
+          && (argType as { Declaration?: unknown }).Declaration === (paramType as { Declaration?: unknown }).Declaration;
+        const refines = argNominal && paramNominal
+          && ClassImplements(argType, (paramType as { Declaration: ParseNode }).Declaration);
+        return sameDeclaration || refines ? Tier.Exact : Tier.StructuralNominal;
+      }
       return Tier.Exact;
     }
     // A literal argument assignable to the parameter, where the parameter is the

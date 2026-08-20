@@ -121,7 +121,7 @@ test('an interface-typed overload resolves against a disjoint one', () => {
   expect(value(`${OV}f("q");`)).toBe('s');
 });
 
-test.fails('an exact structural match outranks an interface that also accepts', () => {
+test('an exact structural match outranks an interface that also accepts', () => {
   // Test B. Both signatures are viable and #table-argument-match-ranks has no
   // rank that separates "matched a structural target exactly" from "satisfied a
   // nominal contract structurally", so the pair is ambiguous. The table wants a
@@ -132,7 +132,7 @@ test.fails('an exact structural match outranks an interface that also accepts', 
   expect(value(`${OV}f({ a: (1 := uint8) });`)).toBe('exact');
 });
 
-test.fails('the ranking does not depend on declaration order', () => {
+test('the ranking does not depend on declaration order', () => {
   // The same pair written the other way round. Recorded beside the case above
   // because a fix that reads the first viable signature would pass one and fail
   // the other, and the difference is invisible in a single test.
@@ -182,19 +182,14 @@ test('two interfaces of one shape stay ambiguous', () => {
     + 'f({ a: (1 := uint8) });');
 });
 
-test('the three argument kinds reach the resolution by different paths', () => {
-  // A literal argument, a typed argument, and an `any` argument report
-  // DIFFERENT messages for the same ambiguity, which means a fix applied to one
-  // path leaves the others. Every acceptance case for the ranking change has to
-  // be run in all three forms.
+test('all three argument kinds rank the same way', () => {
+  // A literal argument, a typed argument, and an `any` argument reach the
+  // resolution by different paths, and reported different messages while they
+  // were ambiguous - which is why every case is run in all three forms. A fix
+  // to one path would have left the other two.
   const OV = 'interface I { a: uint8 } type O = { a: uint8 }; '
     + 'function f(x: I): string { return "iface"; } function f(x: O): string { return "exact"; } ';
-  const literal = thrownMessage(`${OV}f({ a: (1 := uint8) });`);
-  const typed = thrownMessage(`${OV}let v: O = { a: (1 := uint8) }; f(v);`);
-  const anyArg = thrownMessage(`${OV}function anyv() { return { a: (1 := uint8) }; } f(anyv());`);
-  expect(literal).toContain('ambiguous');
-  expect(typed).toContain('ambiguous');
-  expect(anyArg).toContain('ambiguous');
-  // Recorded because the difference is the evidence: two messages, so two paths.
-  expect(literal).not.toBe(typed);
+  expect(value(`${OV}f({ a: (1 := uint8) });`)).toBe('exact');
+  expect(value(`${OV}let v: O = { a: (1 := uint8) }; f(v);`)).toBe('exact');
+  expect(value(`${OV}function anyv() { return { a: (1 := uint8) }; } f(anyv());`)).toBe('exact');
 });
