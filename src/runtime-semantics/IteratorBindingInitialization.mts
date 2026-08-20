@@ -14,7 +14,7 @@ import {
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
-import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
+import { EnforceAnnotation, IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
 import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { restElementType } from '../type-system/records.mts';
@@ -172,6 +172,26 @@ function IteratorBindingInitialization_BindingElement(BindingElement: ParseNode.
   return IteratorBindingInitialization_SingleNameBinding(BindingElement, iteratorRecord, environment);
 }
 
+/**
+ * Whether _node_ is an element of a destructuring PATTERN rather than a plain
+ * formal parameter or a plain declaration, both of which have their own
+ * boundary elsewhere.
+ */
+function isPatternElement(node: ParseNode): boolean {
+  let up = (node as { parent?: ParseNode }).parent;
+  for (let i = 0; up && i < 4; i += 1) {
+    if (up.type === 'ArrayBindingPattern' || up.type === 'ObjectBindingPattern') {
+      return true;
+    }
+    if (up.type === 'FormalParameters' || up.type === 'LexicalBinding'
+      || up.type === 'VariableDeclaration' || up.type === 'FunctionDeclaration') {
+      return false;
+    }
+    up = (up as { parent?: ParseNode }).parent;
+  }
+  return false;
+}
+
 // SingleNameBinding : BindingIdentifier Initializer?
 function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.SingleNameBinding, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
   const { BindingIdentifier, Initializer } = node;
@@ -234,6 +254,22 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   const annotatedRef = node.TypeAnnotation?.Type?.type === 'ReferenceType';
   if (v instanceof ReferenceValue && !annotatedRef) {
     v = Q(yield* DecayReferenceValue(v));
+  }
+  // proposal-runtime-types #table-check-sites: a binding with a |TypeAnnotation|
+  // is a boundary, and an element of a PATTERN is no exception. The design
+  // writes `let [a: uint8, b: uint8] = [1, 2]` and
+  // `function f([a: uint8])`, and the annotation was read here only to decide
+  // whether a reference decays - so the element bound unchecked and
+  // unconverted: `let [a: uint8] = [300]` bound 300 and `["s"]` bound a string,
+  // where the same annotation on a plain binding refuses both.
+  //
+  // Only an element INSIDE a pattern. A plain formal parameter reaches this
+  // operation too, and its type is enforced by EnforceParameterTypes with the
+  // call's type-parameter bindings in hand; enforcing it here as well refused
+  // `function g<T extends []>(v: T)` for every argument, because `T` is unbound
+  // at this point. The pattern element is the case with no other boundary.
+  if (node.TypeAnnotation && !annotatedRef && isPatternElement(node)) {
+    v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
   }
   // 6. If environment is undefined, return ? PutValue(lhs, v).
   if (environment === Value.undefined) {

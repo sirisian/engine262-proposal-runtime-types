@@ -184,22 +184,34 @@ test('a const initialized with a literal publishes the widened type', () => {
   expectOk(`${SETUP}function f(x: number) { const k = 1; return k; } const a: (x: number) => number = f;`);
 });
 
-test.fails('an annotation inside a binding pattern applies', () => {
+test('an annotation inside a binding pattern applies', () => {
   // Q2-pre. The design writes `let [a: uint8, b: uint8] = [1, 2]`, and the
-  // annotation currently does NOTHING: no type, and no check either - a value
-  // out of range binds, and a value of another type binds.
-  //
-  // The fix is one call, `EnforceAnnotation` where the element's value is
-  // settled in IteratorBindingInitialization, and it works for every shape
-  // tried: the README form, a single element, a nested pattern, a default, a
-  // rest element, and a parameter pattern. It is not landed because that same
-  // operation binds FORMAL PARAMETERS, whose types are enforced elsewhere with
-  // the call's type-parameter bindings in hand - so enforcing here refused
-  // `function g<T extends []>(v: T)` for every argument, and skipping
-  // annotations that mention a type parameter did not clear it. Separating the
-  // parameter case from the declaration case is the work.
+  // annotation did NOTHING: no type, and no check either - a value out of range
+  // bound, and a value of another type bound, where the same annotation on a
+  // plain binding refuses both.
   expect(value('let [a: uint8] = [1]; `${a is uint8}`;')).toBe('true');
   expectThrows('let [a: uint8] = [300];');
   expectThrows('let [a: uint8] = ["s"];');
+  expect(value('let [a: uint8, b: uint8] = [1, 2]; `${a is uint8}`;')).toBe('true');
   expect(value('let [a: uint8, ...[b: uint8]] = [1, 2]; `${a is uint8}`;')).toBe('true');
+  // A default is converted at the position it fills, and a rest element still
+  // collects the surplus.
+  expect(value('let [a: uint8 = 5] = []; `${a is uint8}:${a}`;')).toBe('true:5');
+  expect(value('let [a: uint8, ...rest] = [1, 2, 3]; `${a is uint8}:${rest.length}`;')).toBe('true:2');
+  // A parameter's pattern element too, which had no boundary of its own: the
+  // parameter check enforces the PARAMETER's type, and a pattern element is a
+  // binding inside it.
+  expect(value('function f([a: uint8]) { return a is uint8; } `${f([1])}`;')).toBe('true');
+  expectThrows('function f([a: uint8]) { return a; } f([300]);');
+});
+
+test('a plain parameter keeps its own boundary, unchanged', () => {
+  // The scope of the rule above. A plain formal parameter reaches the same
+  // operation and is enforced by EnforceParameterTypes with the call's
+  // type-parameter bindings in hand; enforcing it a second time refused
+  // `function g<T extends []>(v: T)` for every argument, because `T` is unbound
+  // at that point. Pattern elements are the case with no other boundary.
+  expectThrows('function f(a: uint8) { return a; } f(300);');
+  expectOk('function g<T extends []>(v: T): string { return "ok"; } const a: [].<number> = [1]; g(a);');
+  expectOk('function g<T>(v: [].<T>) { return v[0]; } g(["a"]);');
 });
