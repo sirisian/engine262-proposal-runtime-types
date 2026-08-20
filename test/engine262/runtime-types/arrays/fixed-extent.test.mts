@@ -50,7 +50,16 @@ test('a value generic may be the extent', () => {
   // SameValue - so requiring a plain Number rejected `[N].<T>` with a
   // value-generic extent, which is the shape #sec-check-elision is written about.
   expect(evaluated('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4, 2>(a)));')).toBe('9');
-  expect(evaluated('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4>(a)));')).toBe('4');
+  // `length` is a `uint64` for every array, and deliberately: it is one type
+  // with `capacity` so that "a capacity is at least a length" is stateable, and
+  // it is not literal-typed on a fixed extent because `a.length` evaluates to a
+  // TYPED value where `a.capacity` gives a plain Number. So a function returning
+  // it declares `uint64`; `uint32` is a narrowing the program has to write.
+  //
+  // This read `uint32` and passed only because the parameter `a` did not shadow
+  // the module-scope `a` of the same name - the body was reading a
+  // `[4].<uint8>`. With that fixed, the declared type has to be the real one.
+  expect(evaluated('function f<N: uint32>(a: [N].<uint8>): uint64 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4>(a)));')).toBe('4');
   // The extent still has to match the argument.
   expectThrownKind('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; f.<3>(a);', 'TypeError');
   // A bare value generic index is NOT proven - inside the body nothing relates

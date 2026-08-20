@@ -623,7 +623,38 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
 }
 
 export function CheckScript(script: ParseNode.Script): ObjectValue[] {
-  return CheckStatementList(script.ScriptBody?.StatementList ?? null, script);
+  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script);
+}
+
+/**
+ * Check _list_ twice: once to DECLARE, and once to report.
+ *
+ * Inferred return types are published before the walk, because a call's Static
+ * Type must be settled before the walk checks the calls. That order left a body
+ * reading anything the list itself declares - a module-scope
+ * `let arr: [].<uint8>` - with nothing to read, while a body CALLING a function
+ * declared beside it published, because signatures ARE collected first. The
+ * asymmetry was invisible except as an inference that silently did not happen.
+ *
+ * Declaring the bindings earlier does not work, and the reason is not the order
+ * but the memoization: a type is not complete until the walk has seen every
+ * declaration that adds to it - an interface whose computed key waits on a
+ * `const`, or any name a `partial interface` extends - and resolving an
+ * annotation early CACHES the incomplete record. Both were measured, and both
+ * are silent: the member simply stops being checked.
+ *
+ * So the declarations are made by a whole first pass, in order, with its
+ * diagnostics discarded; the frame it produces is handed to the second pass,
+ * whose publication then sees every type in its final form. The second pass
+ * reports. Everything a pass accumulates is local to the call, so the second
+ * starts clean.
+ */
+function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
+  const declaring: CheckSession = session
+    ? { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) }
+    : CreateCheckSession();
+  CheckStatementList(statementList, root, declaring);
+  return CheckStatementList(statementList, root, declaring);
 }
 
 /**
@@ -646,6 +677,11 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
   // walked structurally, and their inner declarations checked as usual.
   const session = CreateCheckSession();
+  // Declared first, reported second - see checkInTwoPasses. A module's own
+  // top-level bindings are invisible to its inference for the same reason a
+  // script's are, so the same two passes apply; the frame is already threaded
+  // here, which is what the pass needs.
+  CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
   const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
   // Every top-level declaration of the module, keyed by its LOCAL name. An
   // importer resolves an import to the exporting module and a binding name -

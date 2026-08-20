@@ -257,47 +257,38 @@ test('destructuring transparency keeps the same guards', () => {
   expectNotInferred('let t3: [uint8, string] = [1, "s"]; const [e0 = 5] = t3; return e0;');
 });
 
-test('an OUTER binding is not visible to the inference', () => {
-  // A binding declared outside the function is invisible to the inference, so
-  // anything read from it contributes nothing - while a FUNCTION declared
-  // outside IS visible, because signatures are collected before publication and
-  // bindings are not. That asymmetry is the evidence for the ordering.
-  expectNotInferred('return outerArr[0];');
-  expectNotInferred('const v = outerArr[0]; return v;');
-  expectNotInferred('const [e] = outerArr; return e;');
+test('an OUTER binding is visible to the inference', () => {
+  // Signatures are collected before publication so a function may call one
+  // declared later; BINDINGS had no such pass, so a body reading a module-scope
+  // `let outerArr: [].<uint8>` saw an undeclared name and contributed nothing.
+  // The list is now checked TWICE - once to declare, once to report - so
+  // publication sees every type in its final form.
+  expectInferred('return outerArr[0];');
+  expectInferred('const v = outerArr[0]; return v;');
+  expectInferred('const [e] = outerArr; return e;');
   expectInferred('return g();');
+  expectThrows('function f(x: number) { return later[0]; } let later: [].<uint8> = [1];'
+    + ' const a: (x: number) => number = f;');
 });
 
-test('what an attempt to fix the ordering must survive', () => {
-  // Declaring the bindings before publication works and breaks two things, both
-  // measured; recorded so the next attempt starts from them.
+test('the two passes leave the completed types alone', () => {
+  // What ruled out every cheaper fix: a type is not complete until the walk has
+  // seen every declaration that adds to it, and resolution MEMOIZES. Declaring
+  // bindings before publication cached an interface record whose computed symbol
+  // key was still unresolved, and the member stopped being checked at all -
+  // silently, with no error to roll back. Restricting that to builtin names made
+  // it worse, since `partial interface` extends exactly those.
   //
-  // (1) The declarations must not outlive the publication. Left in the frame,
-  // a module-scope binding was seen where a function's own PARAMETER of the
-  // same name shadows it - this program read the module's `a` and reported its
-  // `length` type rather than the parameter's.
-  expect(value('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; }'
-    + ' let a: [4].<uint8> = [7, 8, 9, 10]; `${Number(f.<4>(a))}`;')).toBe('4');
-  // (2) Resolving an annotation early MEMOIZES what it resolves, and a type is
-  // not COMPLETE until the walk has seen every declaration that adds to it.
-  // Resolving `let m: I` before the walk reached `const k` cached an interface
-  // record whose computed symbol key was unresolved, and the member stopped
-  // being checked at all, silently - no error is reported, so rolling errors
-  // back does not help.
-  //
-  // Restricting the pre-pass to annotations built from BUILTIN names does not
-  // avoid it and makes it worse: `partial interface` extends exactly those
-  // names, so `let m: ClassFieldMetadata` resolved early captures the record
-  // before the partial declaration adds its member. The hazard is that the type
-  // is completed later, not that the name is user-declared - which is why no
-  // pre-pass is sound, and why the fix is to move PUBLICATION after a pass that
-  // declares everything, rather than to move declarations earlier.
+  // A whole first pass avoids it: it resolves in the same order the single pass
+  // did, and publication happens in the second.
   const decl = 'const k = Symbol("k"); interface I { [k]: string; } ';
   expectThrows(`${decl}let m: I = { [k]: 5 };`);
   expectOk(`${decl}let m: I = { [k]: "ok" };`);
   expectThrows(`${decl}let m: I = { [k]: "ok" }; m[k] = 5;`);
+  // And a partial declaration still completes a builtin name.
+  expectThrows('const k2 = Symbol("k2"); partial interface ClassFieldMetadata { [k2]: string; }'
+    + ' let m2: ClassFieldMetadata = { [k2]: 5 };');
 });
-
 test('an object literal initializer is read for the transparency', () => {
   // Q1b. `const o = { p: g() }; return o.p;` published nothing: an object
   // literal has no Static Type, so a local initialized with one had nothing to
