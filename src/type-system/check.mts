@@ -321,6 +321,17 @@ interface Frame {
    */
   readonly constLiterals: Set<string>;
 
+  /**
+   * The literal type of each such `const`'s initializer.
+   *
+   * #sec-static-type-of-an-expression: a use of one "produces the value the
+   * initializer would have produced had it been written at that position", so a
+   * position that refuses the written literal must refuse the use. The names
+   * alone could not answer that - `const k = 300; let a: uint8 = k` reported at
+   * RUN TIME where `let a: uint8 = 300` reports before the program runs.
+   */
+  readonly constLiteralTypes: Map<string, TypeRecord>;
+
   /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
   readonly letConstants: Set<string>;
 
@@ -357,6 +368,7 @@ function emptyFrame(): Frame {
   return {
     bindings: new Map(),
     constLiterals: new Set<string>(),
+    constLiteralTypes: new Map<string, TypeRecord>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -381,6 +393,7 @@ function cloneFrame(frame: Frame): Frame {
   return {
     bindings: new Map(frame.bindings),
     constLiterals: new Set(frame.constLiterals),
+    constLiteralTypes: new Map(frame.constLiteralTypes),
     immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
@@ -1872,6 +1885,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return libraryTypeRecord('RangeTo', [element, ordinal(r.RangeEndBound)]);
     }
+    // #sec-static-type-of-an-expression: a use of an unannotated `const` whose
+    // initializer is a compile-time numeric constant "produces the value the
+    // initializer would have produced had it been written at that position". So
+    // at a position that WANTS a numeric type, the use reports the initializer's
+    // literal type and is judged exactly as the written literal is:
+    // `const k = 300; let a: uint8 = k` is refused before the program runs,
+    // where it previously reported at run time, and `const k = 3` still fits.
+    //
+    // Only where a contextual type asks. Elsewhere the binding keeps the ~any~
+    // Static Type this proposal gives every unannotated one, so `Reflect.typeOf`
+    // still reads the value and nothing else about the binding changes. A `let`
+    // is excluded by the clause, and is excluded here: its frame records it
+    // separately.
+    if (contextual && node.type === 'IdentifierReference') {
+      const useName = (node as unknown as { name?: string }).name;
+      if (typeof useName === 'string') {
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          const literal = frames[i].constLiteralTypes.get(useName);
+          if (literal) {
+            return literal;
+          }
+          if (frames[i].declaredNames.has(useName) || frames[i].letConstants.has(useName)) {
+            break;
+          }
+        }
+      }
+    }
     if (node.type === 'ParenthesizedExpression') {
       const inner = (node as unknown as { Expression?: ParseNode }).Expression;
       if (inner && inner.type === 'ArrayLiteral' && contextual
@@ -3238,7 +3278,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindings.set(TOPIC_NAME, topic);
         }
         frames.push({
-          bindings, constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         try {
           return staticType(p.Body);
@@ -4713,7 +4753,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
         const newFrame = () => ({
-          bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         frames.push(newFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
@@ -6751,7 +6791,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
@@ -6803,7 +6843,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // PLAN-declarative-checker-facts.md phase 3, the ~void~ form: a deferral
     // opened by an assertion statement covers the rest of ITS block and no
     // further, so the depth is restored with the frame it belongs to.
@@ -7369,7 +7409,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
@@ -7660,6 +7700,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const frame = frames[frames.length - 1];
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
               .add(n.BindingIdentifier.name);
+            if (isConstDeclaration) {
+              const literal = staticType(n.Initializer);
+              if (literal && literal.Kind === 'literal') {
+                frame.constLiteralTypes.set(n.BindingIdentifier.name, literal);
+              }
+            }
           }
           // A `const` cannot be reassigned, so a call through it reaches the
           // function the checker read a signature from (#sec-check-elision).

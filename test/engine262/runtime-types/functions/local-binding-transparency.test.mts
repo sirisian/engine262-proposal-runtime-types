@@ -29,6 +29,22 @@ function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
+/** The message of the error _source_ produces. */
+function thrownMessage(source: string): string {
+  const completion = run(source) as unknown as {
+    Type: string, Value: { properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }> },
+  };
+  if (completion.Type !== 'throw') {
+    throw new Error(`expected a throw completion for: ${source}`);
+  }
+  for (const [k, v] of completion.Value.properties ?? []) {
+    if (k.stringValue?.() === 'message') {
+      return v.Value?.stringValue?.() ?? '';
+    }
+  }
+  return '';
+}
+
 function expectOk(source: string) {
   expect(run(source)).toMatchObject({ Type: 'normal' });
 }
@@ -149,34 +165,29 @@ test('a local whose initializer has no type stays unknown', () => {
   expectNotInferred('return legacy();');
 });
 
-test('an unannotated local reaches a typed position by the BOUNDARY, not statically', () => {
-  // Measured while auditing the plan, and it is what rules out the larger fix.
-  // These work because the binding is ~any~ and the boundary converts. Give the
-  // binding its initializer's type and `number` is not assignable to `uint8`,
-  // so both are refused - the visible/blind split of #sec-the-boundary-check
-  // applied to every unannotated local at once.
+test('a const numeric constant is judged where the literal would be', () => {
+  // #sec-static-type-of-an-expression: a use of an unannotated `const` whose
+  // initializer is a compile-time numeric constant "produces the value the
+  // initializer would have produced had it been written at that position". The
+  // rule was not implemented as a static one - the value reached the boundary
+  // as ~any~ and was converted there, so an out-of-range constant reported at
+  // RUN TIME where the written literal reports before the program runs. Now the
+  // two agree.
   expect(value('function h(a: uint8) { return a; } const k = 3; `${h(k)}`;')).toBe('3');
-  expect(value('function h(a: uint8) { return a; } const k = 3; let a: uint8 = k; `${a is uint8}`;')).toBe('true');
-  // The out-of-range case is caught at RUN TIME, naming the value; a static rule
-  // would have refused it before the program ran, as a written literal is
-  // refused. That is the evidence the conversion is the boundary's, and that
-  // #sec-static-type-of-an-expression's constant-propagation rule is not what
-  // is running here.
-  const late = run('function h(a: uint8) { return a; } const k = 300; h(k);') as unknown as {
-    Type: string, Value: { properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }> },
-  };
-  expect(late.Type).toBe('throw');
-  let message = '';
-  for (const [k, d] of late.Value.properties ?? []) {
-    if (k.stringValue?.() === 'message') {
-      message = d.Value?.stringValue?.() ?? '';
-    }
-  }
-  expect(message).toContain('300');
-  // A `let` behaves identically, though that rule excludes `let`.
-  expect(value('let j = 3; let b: uint8 = j; `${b is uint8}`;')).toBe('true');
+  expect(value('const k = 3; let a: uint8 = k; `${a is uint8}`;')).toBe('true');
+  expect(value('const K = 3.14; let a: float32 = K; `${a is float32}`;')).toBe('true');
+  // Out of range, at a binding and at an argument, now refused early - the
+  // message names a TYPE where it used to name the value.
+  expect(thrownMessage('const k = 300; let a: uint8 = k;')).toContain('literal type');
+  expect(thrownMessage('function h(a: uint8) { return a; } const k = 300; h(k);')).toContain('literal type');
+  expect(thrownMessage('const k = 1.5; let a: uint8 = k;')).toContain('literal type');
+  // A `let` is excluded by the clause - "a binding that may be reassigned must
+  // have a type its assignments are checked against" - and its value still
+  // reaches the boundary, which reports it there.
+  expect(thrownMessage('let k = 300; let a: uint8 = k;')).toContain('300');
+  // And a `const` whose initializer is not a constant expression is untouched.
+  expect(thrownMessage('function g(): number { return 300; } const k = g(); let a: uint8 = k;')).toContain('300');
 });
-
 test('a const initialized with a literal publishes the widened type', () => {
   // `const K = 1; return K;` must publish `number`, exactly as `return 1` does.
   // The constant-propagation rule could be misread as giving `K` the literal
