@@ -5451,6 +5451,84 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
+          // A DESTRUCTURING pattern binds names too, and each takes the type of
+          // the position it destructures: a property's type for an object
+          // pattern, the element type for an array pattern. The same condition
+          // applies - a `const`, or a `let` this function never assigns - and
+          // the same limit: this gives the bindings no type of their own, it
+          // answers what a contribution reads.
+          //
+          // Defaults and rest elements are left alone in this phase. A default
+          // makes the binding the union of the position's type and the
+          // default's, and a rest element of an object pattern collects a
+          // remainder this proposal may not be able to write; guessing at either
+          // would state something the program does not.
+          for (const b of list.BindingList ?? list.VariableDeclarationList ?? []) {
+            const pattern = (b as unknown as { BindingPattern?: ParseNode | null }).BindingPattern;
+            const init = (b as unknown as { Initializer?: ParseNode | null }).Initializer;
+            if (!pattern || !init) {
+              continue;
+            }
+            const sourceType = staticType(init);
+            if (!sourceType) {
+              continue;
+            }
+            const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
+            const bindElement = (element: ParseNode | null | undefined, positionType: Known): void => {
+              if (!element || !positionType) {
+                return;
+              }
+              const el = element as unknown as {
+                BindingIdentifier?: { name?: string } | null,
+                TypeAnnotation?: ParseNode.TypeAnnotation | null,
+                Initializer?: ParseNode | null,
+              };
+              // An annotated element says its own type, and a defaulted one is
+              // this phase's exclusion.
+              if (el.TypeAnnotation || el.Initializer) {
+                return;
+              }
+              const name = el.BindingIdentifier?.name;
+              if (!name || !(kind === 'const' || !assignedNames.has(name))) {
+                return;
+              }
+              declare(name, widen(positionType));
+            };
+            if (pattern.type === 'ObjectBindingPattern') {
+              const props = (pattern as unknown as { BindingPropertyList?: readonly ParseNode[] }).BindingPropertyList ?? [];
+              const shape = structureOf(sourceType);
+              if (!shape || shape.Kind !== 'object') {
+                continue;
+              }
+              for (const prop of props) {
+                const pr = prop as unknown as {
+                  PropertyName?: { name?: string, value?: string } | null,
+                  BindingElement?: ParseNode | null,
+                  BindingIdentifier?: { name?: string } | null,
+                };
+                // Shorthand `{ p }` carries the identifier directly; `{ p: q }`
+                // names the property and the binding separately.
+                const key = pr.PropertyName?.name ?? pr.PropertyName?.value ?? pr.BindingIdentifier?.name;
+                const member = key ? shape.Properties.find((q) => q.key === key) : undefined;
+                if (member) {
+                  bindElement((pr.BindingElement ?? prop) as ParseNode, member.type as Known);
+                }
+              }
+            } else if (pattern.type === 'ArrayBindingPattern') {
+              const elements = (pattern as unknown as { BindingElementList?: readonly ParseNode[] }).BindingElementList ?? [];
+              const src = sourceType as { Kind: string, Element?: TypeRecord, Elements?: readonly { Type?: TypeRecord, Rest?: boolean }[] };
+              elements.forEach((element, i) => {
+                if (src.Kind === 'array' && src.Element) {
+                  bindElement(element as ParseNode, src.Element as Known);
+                } else if (src.Kind === 'tuple' && src.Elements) {
+                  const position = src.Elements[i];
+                  if (position && !position.Rest && position.Type) {
+                    bindElement(element as ParseNode, position.Type as Known);
+                  }
+                }
+              });
+            }
+          }
           // Fall through to the walk, so an initializer containing a function
           // literal is still skipped and a nested return is still found.
         } else if (n.type === 'ReturnStatement') {

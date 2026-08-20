@@ -46,7 +46,8 @@ function value(source: string): string {
   return completion.Value.stringValue();
 }
 
-const SETUP = 'class C { m(): string { return "s"; } } function g(): string { return "s"; } ';
+const SETUP = 'class C { m(): string { return "s"; } } function g(): string { return "s"; } '
+  + 'let outerArr: [].<uint8> = [1]; ';
 
 /** Assert that a body returning a string is REFUSED at a number-returning position. */
 function expectInferred(body: string) {
@@ -214,4 +215,49 @@ test('a plain parameter keeps its own boundary, unchanged', () => {
   expectThrows('function f(a: uint8) { return a; } f(300);');
   expectOk('function g<T extends []>(v: T): string { return "ok"; } const a: [].<number> = [1]; g(a);');
   expectOk('function g<T>(v: [].<T>) { return v[0]; } g(["a"]);');
+});
+
+test('a destructured binding carries the type of its position', () => {
+  // Q2a. A pattern binds names, and each takes the type of the position it
+  // destructures: a property's type for an object pattern, the element type for
+  // an array pattern, the positional type for a tuple. Same condition as a plain
+  // local - a `const`, or a `let` this function never assigns - and the same
+  // limit: the bindings get no type of their own, this answers what a
+  // contribution reads.
+  const obj = 'const o: { p: string } = { p: "s" }; ';
+  expectInferred(`${obj}const { p } = o; return p;`);
+  expectInferred(`${obj}const { p: q } = o; return q;`);
+  // An array's element type, and a tuple read position-wise. The source is a
+  // LOCAL here for the reason the test below records.
+  expectInferred('let arr: [].<uint8> = [1]; const [e] = arr; return e;');
+  expectInferred('let t: [uint8, string] = [1, "s"]; const [e0] = t; return e0;');
+  expectInferred('let t2: [uint8, string] = [1, "s"]; const [e0, e1] = t2; return e1;');
+});
+
+test('destructuring transparency keeps the same guards', () => {
+  // A destructured `let` that the function assigns publishes nothing, for the
+  // reason a plain one does: the published type is enforced at the return.
+  expectNotInferred('const o: { p: string } = { p: "s" }; let { p } = o; p = 5; return p;');
+  // A source whose type is unknown yields nothing to read.
+  expectNotInferred('function legacy() { return { p: "s" }; } const { p } = legacy(); return p;');
+  // A DEFAULTED element is left alone in this phase: its type is the union of
+  // the position's and the default's, and guessing at one of them would state
+  // something the program does not.
+  expectNotInferred('let t3: [uint8, string] = [1, "s"]; const [e0 = 5] = t3; return e0;');
+});
+
+test('an OUTER binding is not visible to the inference', () => {
+  // Not caused by transparency and not specific to destructuring: a binding
+  // declared outside the function is invisible to the inference pass, so
+  // anything read from it contributes nothing. Publication runs when the
+  // signatures are collected, which is before the statement walk declares
+  // module-scope bindings - so the name is not yet declared when the body is
+  // read.
+  //
+  // A FUNCTION declared outside is visible, because signatures are collected
+  // first; that asymmetry is the evidence for the ordering.
+  expectNotInferred('return outerArr[0];');
+  expectNotInferred('const v = outerArr[0]; return v;');
+  expectNotInferred('const [e] = outerArr; return e;');
+  expectInferred('return g();');
 });
