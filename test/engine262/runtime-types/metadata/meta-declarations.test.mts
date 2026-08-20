@@ -500,3 +500,31 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
   expect(run('type G2<T> = { g2?: boolean }; meta G2<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
 });
+
+test('a hook annotation naming the type parameter fails when the hook runs', () => {
+  // PLAN-generic-meta-evaluation.md phase 5, RECORDED not asserted as correct.
+  // The declaration is accepted - annotations are not name-checked at
+  // declaration (D36) - and the annotation is enforced when the hook is CALLED,
+  // where `T` is not bound:
+  //
+  //   ReferenceError: "T" is not defined
+  //
+  // This corrects PLAN-generic-meta-declarations.md's conclusion that scoping the
+  // parameter into hook annotations was vacuous. It is not: the scoping is
+  // needed at the RUNTIME ENFORCEMENT site rather than in the checker, because
+  // that is the only place a hook annotation is read.
+  const decl = 'type GG<T> = { gg?: boolean }; '
+    + 'meta GG<T> { default = { gg: false }; '
+    + 'subtype(sub: GG.<T>, sup: GG.<T>): boolean { return sup.gg === undefined || sub.gg === sup.gg; } } ';
+  // Declaring it is fine.
+  expect(run(`${decl} "ok";`)).toMatchObject({ Type: 'normal' });
+  // Invoking it is not.
+  expect(errorMessage(`${decl} let a: uint8.<{ gg: false }> = (1 := uint8.<{ gg: false }>); let b: uint8.<{ gg: true }> = a;`))
+    .toMatch(/"T" is not defined/);
+  // The same hook UNANNOTATED governs the crossing correctly, which is what
+  // isolates the annotation as the cause rather than the generic form.
+  const bare = 'type GB<T> = { gb?: boolean }; '
+    + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
+  expect(errorMessage(`${bare} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
+    .toMatch(/is not assignable to/);
+});
