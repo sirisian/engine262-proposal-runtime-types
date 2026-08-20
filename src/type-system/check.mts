@@ -66,6 +66,20 @@ const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataChec
 /** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
 
+/**
+ * The [[ThisType]] a METHOD carries, as one record.
+ *
+ * PLAN-nominal-records.md v2 item 2.3. The checker built this per class and per
+ * interface, which is fine because identity of a ~nominal~ is its
+ * [[Declaration]] and they all share SELF_THIS. It is exported because the
+ * RUNTIME record for an interface has to attach the SAME marker: a class's
+ * method member carries it, and [[ThisType]] is contravariant with absence
+ * meaning something - so a marked source against an unmarked target is refused,
+ * and a method-bearing interface could not be satisfied by the class that
+ * declared it.
+ */
+export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
+
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
 }

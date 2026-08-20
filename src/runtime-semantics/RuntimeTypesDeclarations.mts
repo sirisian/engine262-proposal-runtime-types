@@ -1,4 +1,5 @@
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
+import { SelfThisTypeRecord } from '../type-system/check.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
 import {
@@ -25,7 +26,7 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName } from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature } from '../type-system/runtime.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
@@ -373,7 +374,29 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
           resolved = attempt.Value as TypeRecord;
         }
       } else if (m.MethodSignature) {
-        resolved = { Kind: 'function', Signatures: [] };
+        // PLAN-nominal-records.md v2 item 2.3. This was a STUB - a function type
+        // with NO signatures - so every comparison against a method member
+        // failed and `Reflect.isAssignable` answered *false* for a
+        // method-bearing interface from a declaring class and from a matching
+        // object type alike, while the checker accepted all of them. The same
+        // family as D26: the runtime record carrying less than the checker's.
+        //
+        // Resolved through the operation the ~function~ TYPE node already uses,
+        // so a method member and a `(x: uint8) => uint8` member reach the same
+        // record from the same code.
+        const method = m.MethodSignature as ParseNode.MethodSignature;
+        const attempt = EnsureCompletion(yield* functionRecordFromSignature(
+          method.FunctionTypeParameterList,
+          method.TypeAnnotation,
+        ));
+        // The marker a METHOD's [[ThisType]] is, attached as the checker
+        // attaches it: a class's method member carries it, [[ThisType]] is
+        // contravariant, and absence is not a wildcard - so an unmarked
+        // interface member refused the class that declared it.
+        const built = attempt.Type === 'normal' ? attempt.Value as TypeRecord : undefined;
+        resolved = built && built.Kind === 'function'
+          ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }
+          : { Kind: 'function', Signatures: [] };
       }
       // The DECLARED DEFAULT travels with the member: a typed composite
       // creation fills it before freezing, so it is part of the contents that

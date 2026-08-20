@@ -248,3 +248,26 @@ test('two interfaces relate by width, and only where they are two', () => {
   expect(evaluated('interface P<out T> { get(): T } '
     + 'String(Reflect.isAssignable(type P.<uint8>, type P.<uint8 | string>));')).toBe('true');
 });
+
+test('a method-bearing interface is satisfiable through reflection', () => {
+  // PLAN-nominal-records.md v2 item 2.3. An interface's method member resolved
+  // to `{ Kind: 'function', Signatures: [] }` in the RUNTIME record - a stub,
+  // never filled - so every comparison against it failed and
+  // `Reflect.isAssignable` answered *false* for a method-bearing interface,
+  // from a declaring class and from a matching object type alike, while the
+  // checker accepted all of them. The same family as D26: the runtime record
+  // carrying less than the checker's.
+  const iface = 'interface IM { m(): uint8 } ';
+  expect(evaluated(`${iface} class Impl implements IM { m(): uint8 { return (0 := uint8); } } `
+    + 'String(Reflect.isAssignable(type Impl, type IM));')).toBe('true');
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { m(): uint8 }, type IM));`)).toBe('true');
+  // A member written `m: () => uint8` declares a function-valued PROPERTY, not
+  // a method, so it does not satisfy one: method syntax means "expects a
+  // receiver", said through [[ThisType]], and absence is not a wildcard. The
+  // checker refuses the same pair, which is what makes this the right answer
+  // rather than a convenient one.
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { m: () => uint8 }, type IM));`)).toBe('false');
+  // And the signature is really resolved now, not merely present: a wrong
+  // return type is refused.
+  expect(evaluated(`${iface} String(Reflect.isAssignable(type { m(): string }, type IM));`)).toBe('false');
+});

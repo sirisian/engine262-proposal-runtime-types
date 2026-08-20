@@ -38,6 +38,7 @@ import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { IsAssignable } from './relations.mts';
+import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
@@ -2535,7 +2536,16 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         if (member.TypeAnnotation) {
           type = Q(yield* TypeNodeToTypeRecord(member.TypeAnnotation.Type));
         } else if (member.MethodSignature) {
-          type = Q(yield* functionRecordFromSignature(member.MethodSignature.FunctionTypeParameterList, member.MethodSignature.TypeAnnotation));
+          // PLAN-nominal-records.md v2 item 2.3: a METHOD member carries the
+          // self marker as its [[ThisType]], here as in an interface and as in a
+          // class. Method syntax means "expects a receiver", and [[ThisType]] is
+          // where that is said; a member written `m: () => uint8` says the
+          // opposite and is left unmarked, which is the distinction the syntax
+          // draws.
+          const built = Q(yield* functionRecordFromSignature(member.MethodSignature.FunctionTypeParameterList, member.MethodSignature.TypeAnnotation));
+          type = built.Kind === 'function'
+            ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }
+            : built;
         } else {
           type = anyType;
         }
@@ -2822,7 +2832,7 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
 }
 
-function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null): PlainEvaluator<TypeRecord> {
+export function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null): PlainEvaluator<TypeRecord> {
   const Parameters: ParameterRecord[] = [];
   let ThisType: TypeRecord | null = null;
   for (const p of params) {
