@@ -5221,6 +5221,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * its body produced, so a replaced dependency's lie leaves the function
    * unreported, which is the case #sec-published-return-types exists to close.
    */
+  /**
+   * The object type an OBJECT LITERAL describes, for the transparency rule only.
+   *
+   * `function f(x: number) { const o = { p: g() }; return o.p; }` published
+   * nothing, because an object literal has no Static Type and so a local
+   * initialized with one had nothing to read. With the object ANNOTATED the
+   * member read carries its type, so the gap is the literal rather than the
+   * member read.
+   *
+   * Computed HERE rather than given to the literal as its Static Type, for the
+   * reason the array-literal cycle measured: typing an expression form for every
+   * consumer reaches library signatures, where literal propagation builds an
+   * argument at the element type and changes what an untyped program means. This
+   * type has one consumer - the contribution - and appears in no expression's
+   * Static Type.
+   *
+   * Conservative by construction: a spread, a computed key, a method, an
+   * accessor, or a member whose own type is unknown yields nothing at all,
+   * rather than an object type that omits what it could not read and thereby
+   * describes a value with fewer members than it has.
+   */
+  const objectLiteralShape = (node: ParseNode | null | undefined): Known => {
+    if (!node || node.type !== 'ObjectLiteral') {
+      return null;
+    }
+    const members = (node as unknown as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList ?? [];
+    if (members.length === 0) {
+      return null;
+    }
+    const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    for (const member of members) {
+      if (!member || member.type !== 'PropertyDefinition') {
+        return null;
+      }
+      const prop = member as unknown as {
+        PropertyName?: { name?: string, value?: string, type?: string } | null,
+        AssignmentExpression?: ParseNode | null,
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+      };
+      const key = prop.PropertyName?.name ?? prop.PropertyName?.value;
+      if (!key || prop.PropertyName?.type === 'ComputedPropertyName' || !prop.AssignmentExpression) {
+        return null;
+      }
+      const declaredMember = prop.TypeAnnotation ? resolveType(prop.TypeAnnotation.Type) : null;
+      // Recursive: a member that is itself an object literal has no Static Type
+      // either, and `{ inner: { p: g() } }` is an ordinary shape.
+      const memberType = declaredMember
+        ?? staticType(prop.AssignmentExpression)
+        ?? objectLiteralShape(prop.AssignmentExpression);
+      if (!memberType) {
+        return null;
+      }
+      Properties.push({ key, type: widen(memberType) as TypeRecord, optional: false });
+    }
+    return { Kind: 'object', Properties, IndexSignatures: [] } as Known;
+  };
+
   const publishLiteralReturn = (fn: ParseNode, parameterTypes: readonly Known[]): void => {
     if ((fn as { TypeAnnotation?: unknown }).TypeAnnotation) {
       return;
@@ -5445,7 +5502,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const cannotChange = kind === 'const' || !assignedNames.has(bname);
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
             if (cannotChange && init) {
-              const initType = staticType(init);
+              const initType = staticType(init) ?? objectLiteralShape(init);
               if (initType) {
                 declare(bname, widen(initType));
               }

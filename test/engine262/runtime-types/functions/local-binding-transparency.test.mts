@@ -277,3 +277,33 @@ test('what an attempt to fix the ordering must survive', () => {
   expectOk(`${decl}let m: I = { [k]: "ok" };`);
   expectThrows(`${decl}let m: I = { [k]: "ok" }; m[k] = 5;`);
 });
+
+test('an object literal initializer is read for the transparency', () => {
+  // Q1b. `const o = { p: g() }; return o.p;` published nothing: an object
+  // literal has no Static Type, so a local initialized with one had nothing to
+  // read. With the object ANNOTATED the member read already carried its type,
+  // so the gap was the literal.
+  //
+  // The shape is computed for the CONTRIBUTION only and is not given to the
+  // literal as its Static Type - the array-literal cycle measured what typing
+  // an expression form for every consumer costs, and this has one consumer.
+  expectInferred('const o = { p: g() }; return o.p;');
+  expectInferred('const o = { p: g(), q: 1 }; return o.p;');
+  expectInferred('const o = { inner: { p: g() } }; return o.inner.p;');
+  expectInferred('const o = { p: g() }; const { p } = o; return p;');
+  // The typed own-property form states the member's type directly.
+  expectInferred('const o = { (p: string): "s" }; return o.p;');
+});
+
+test('the object shape is conservative where it cannot read a member', () => {
+  // A spread, a computed key, and a method each yield NOTHING rather than an
+  // object type that omits what could not be read - such a type would describe
+  // a value with fewer members than it has, and the contribution would state
+  // it.
+  expectNotInferred('const base = { p: g() }; const o = { ...base }; return o.p;');
+  expectNotInferred('const k = "p"; const o = { [k]: g() }; return o.p;');
+  expectNotInferred('const o = { m() { return g(); } }; return o.m();');
+  // A `let` holding a literal that the function reassigns publishes nothing,
+  // for the reason every other reassigned binding does.
+  expectNotInferred('let o = { p: g() }; o = { p: 5 }; return o.p;');
+});
