@@ -141,17 +141,34 @@ test('the ranking does not depend on declaration order', () => {
   expect(value(`${OV}f({ a: (1 := uint8) });`)).toBe('exact');
 });
 
-test('two structurally identical ALIASES are ambiguous, with no interface present', () => {
-  // Found by auditing the plan, and it reframes the ranking issue: the failure
-  // is not peculiar to interfaces. Two aliases of one shape are one signature
-  // declared twice, which #sec-overload-resolution says is a type error where it
-  // is WRITTEN - "it is a type error to declare a signature that is viable for
-  // the same argument list as an existing one at the same rank". The declaration
-  // is accepted here and every call fails instead.
-  const g = 'type O1 = { a: uint8 }; type O2 = { a: uint8 }; '
-    + 'function g(x: O1): string { return "1"; } function g(x: O2): string { return "2"; } ';
-  expectOk(`${g}`);                       // declared without complaint...
-  expectThrows(`${g}g({ a: (1 := uint8) });`); // ...and unusable
+test('one signature written twice is refused where it is written', () => {
+  // #sec-overload-resolution: "it is a type error to declare a signature that is
+  // viable for the same argument list as an existing one at the same rank". Two
+  // aliases of one shape are that case, and so is a literal repetition, and so
+  // is an alias of a primitive beside the primitive - the declaration was
+  // accepted and every call failed instead, with nothing at the declaration to
+  // say why.
+  expectThrows('type O1 = { a: uint8 }; type O2 = { a: uint8 }; '
+    + 'function g(x: O1): string { return "1"; } function g(x: O2): string { return "2"; }');
+  expectThrows('function g(x: uint8): string { return "a"; } function g(x: uint8): string { return "b"; }');
+  expectThrows('type U = uint8; function g(x: U): string { return "u"; } function g(x: uint8): string { return "p"; }');
+});
+
+test('the duplicate rule does not reach the pairs that are legitimately distinct', () => {
+  // Return-type overloading: same parameters, different returns, distinguished
+  // by the contextual type of a call (#sec-overloading-on-return-type).
+  expectOk('function g(x: uint8): string { return "a"; } function g(x: uint8): uint8 { return (0 := uint8); }');
+  // Different arity.
+  expectOk('function g(x: uint8): string { return "1"; } function g(x: uint8, y: uint8): string { return "2"; }');
+  // An interface and a structurally identical alias are DIFFERENT parameter
+  // types, by the same reading the ranking uses - a ~nominal~ type is
+  // identified by its declaration. Reading them as one would refuse the pair
+  // the rank exists to order.
+  expectOk('interface I { a: uint8 } type O = { a: uint8 }; '
+    + 'function f(x: I): string { return "i"; } function f(x: O): string { return "o"; }');
+  // A parameter type this pass cannot resolve proves nothing, so a pair built
+  // from two of them is left alone rather than refused.
+  expectOk('function f(c: Reflect.ClassField) { } function f(c: Reflect.ClassAccessor) { }');
 });
 
 test('ranking works where the shapes differ', () => {

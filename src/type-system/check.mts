@@ -5912,6 +5912,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (baselineGenerator) {
         signature.InferredReturn = baselineGenerator;
       }
+      // #sec-overload-resolution: "two signatures declared for one name must not
+      // be ambiguous for any argument list", and it is a type error "to declare
+      // a signature that is viable for the same argument list as an existing one
+      // at the same rank". A signature repeating another's parameter types AND
+      // return type is that case in its purest form - one signature written
+      // twice - and it was accepted here, leaving every call of the name
+      // ambiguous with nothing at the declaration to say why.
+      //
+      // Return-type overloading is untouched: two signatures differing in their
+      // return are distinguished by the contextual type of a call
+      // (#sec-overloading-on-return-type), so they are not this case.
+      //
+      // Parameter identity is the same notion the RANKING uses
+      // (#table-argument-match-ranks rank 2): a ~nominal~ type is identified by
+      // its declaration, so an interface and a structurally identical alias are
+      // different parameter types here exactly as they are there. Reading them
+      // as the same would refuse the pair the ranking exists to order.
+      const sameForOverloading = (a: Known, b: Known): boolean => {
+        if (!a || !b) {
+          // An unresolved type proves nothing. Reading two unknowns as equal
+          // made every pair of signatures whose parameter types this pass
+          // cannot resolve look like one signature written twice - it refused
+          // `f(c: Reflect.ClassField)` beside `f(c: Reflect.ClassAccessor)`,
+          // which are different types the checker simply does not resolve here.
+          // Under-reporting a duplicate is the safe direction: the call-site
+          // ambiguity still catches it.
+          return false;
+        }
+        const aNominal = a.Kind === 'nominal';
+        const bNominal = b.Kind === 'nominal';
+        if (aNominal || bNominal) {
+          return aNominal && bNominal
+            && (a as { Declaration?: unknown }).Declaration === (b as { Declaration?: unknown }).Declaration;
+        }
+        return SameType(a, b);
+      };
+      const duplicate = signatures.some((existing) => {
+        const e = existing as unknown as { Parameters: readonly { Type?: Known }[], Return: Known };
+        if (e.Parameters.length !== Parameters.length) {
+          return false;
+        }
+        if (!e.Parameters.every((p, i) => sameForOverloading(p.Type ?? null, Parameters[i]?.Type ?? null))) {
+          return false;
+        }
+        return sameForOverloading(e.Return, declared);
+      });
+      if (duplicate) {
+        const completion = Throw.TypeError('$1 is declared twice with the same parameter types and return type', Value(name)) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
       signatures.push(signature as never);
       // #sec-inferred-return-types: a function that declares no return type may
       // still publish one. The inference cannot run here, because it reads the

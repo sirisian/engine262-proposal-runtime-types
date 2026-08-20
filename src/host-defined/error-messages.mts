@@ -520,6 +520,7 @@ export interface Throw {
   | 'the buffer does not hold this SoA view'
   | 'the bytes beneath this array are specified but not implemented in this engine'
   | 'the call is ambiguous between two declared signatures'
+  | '$1 is declared twice with the same parameter types and return type'
   | 'the comparison is ambiguous among its result forms; write the result type'
   | 'the complex numbers are not ordered, so this operator is not defined for a complex'
   | 'the default of a meta type must be a value of its constraint shape'
