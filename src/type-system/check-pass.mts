@@ -1,8 +1,9 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { DefaultValueOf } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -12,6 +13,7 @@ import { displayType } from './records.mts';
 import {
   CheckScript,
   TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
+  TakeDefaultRequirements, TakeBlockScopedMetaNames,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
@@ -185,6 +187,49 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
       return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
+    }
+  }
+  // PLAN-default-timing.md phase 2. #sec-defaultvalueof: "It is a type error to
+  // declare a binding or a field with a type _t_ and no initializer when
+  // DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
+  // determinable before the text runs an Early Error - so a source text
+  // containing one is rejected rather than evaluated. The engine answered at
+  // DECLARATION EVALUATION, which meant the error arrived after the program had
+  // begun and a declaration in a branch that never ran was never checked.
+  //
+  // Adjudicated HERE for the reason the two channels above are: the answer
+  // needs `DefaultValueOf`, an evaluator the synchronous walk cannot call, and
+  // it needs this text's `meta` declarations processed, which the loop at the
+  // top of this pass has just done. An older comment at the evaluation-time
+  // site said a checking-pass test would refuse `type T = ...; meta T { default
+  // = "d"; } let s: T;` - that was true before the pass pre-processed type
+  // declarations and is not true now.
+  const nestedMetaNames = TakeBlockScopedMetaNames(root);
+  for (const requirement of TakeDefaultRequirements(root)) {
+    // D4's guard: a `meta` declaration nested where this loop cannot see it -
+    // the loop scans TOP-LEVEL items - may register a default for this very
+    // type at run time, and `{ meta T { default = "d"; } } let s: T;` works
+    // today. Where such a declaration names the type, the question is left to
+    // the evaluation-time site rather than answered wrongly here.
+    if (nestedMetaNames.has(requirement.display)) {
+      continue;
+    }
+    let dflt = LookupTypeDefault(GetTypeObject(requirement.type));
+    if (dflt === undefined) {
+      const attempt = EnsureCompletion(yield* DefaultValueOf(requirement.type));
+      if (attempt.Type !== 'normal') {
+        return attempt;
+      }
+      dflt = attempt.Value as Value | undefined;
+    }
+    if (dflt === undefined) {
+      // A budget exhaustion is NOT "no default": answering so would reject a
+      // valid program for running out of steps, so the budget error below is
+      // what reports, and this check stands down.
+      if (IsBudgetExhausted()) {
+        break;
+      }
+      return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
     }
   }
   // #sec-evaluation-budget: "the evaluation is abandoned, and

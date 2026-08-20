@@ -235,6 +235,45 @@ export interface UnclaimedKeyCheck {
 }
 const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
 
+/**
+ * A binding declared with a type and NO initializer, held for the pass.
+ *
+ * PLAN-default-timing.md phase 1. #sec-defaultvalueof: "It is a type error to
+ * declare a binding or a field with a type _t_ and no initializer when
+ * DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
+ * determinable before the text runs an Early Error. The engine reported it at
+ * DECLARATION EVALUATION instead, so `if (false) { let x: I; }` was never
+ * checked at all and the diagnostic arrived after the program had begun.
+ *
+ * Collected here and DECIDED in the pass, for the reason the two channels above
+ * are: the answer needs `DefaultValueOf`, which is an evaluator, and it needs
+ * the source text's own `meta` declarations to have been processed - a
+ * registered `default` supplies one for a type that has no structural zero.
+ * This walk is synchronous and runs before that, so it can only collect.
+ *
+ * [[MetaNamesUnprocessed]] carries D4's guard: the names of types that a `meta`
+ * declaration the pre-evaluation loop did NOT process could supply a default
+ * for. The loop scans a Script's top-level items, so a `meta` nested in a block
+ * is invisible to it while being perfectly visible to the running program.
+ */
+export interface DefaultRequirement {
+  readonly node: ParseNode;
+  readonly type: TypeRecord;
+  readonly display: string;
+}
+const defaultRequirements = new WeakMap<object, readonly DefaultRequirement[]>();
+
+export function TakeDefaultRequirements(root: object): readonly DefaultRequirement[] {
+  return defaultRequirements.get(root) ?? [];
+}
+
+/** Type names a `meta` declaration nested where the pass cannot see it names. */
+const blockScopedMetaNames = new WeakMap<object, ReadonlySet<string>>();
+
+export function TakeBlockScopedMetaNames(root: object): ReadonlySet<string> {
+  return blockScopedMetaNames.get(root) ?? new Set();
+}
+
 export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
   return unclaimedKeyChecks.get(root) ?? [];
 }
@@ -628,6 +667,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
   const unclaimed: UnclaimedKeyCheck[] = [];
+  /** PLAN-default-timing.md phase 1: declarations the pass must answer for. */
+  const defaultsNeeded: DefaultRequirement[] = [];
+  /** D4: type names named by a `meta` the pre-evaluation loop cannot reach. */
+  const nestedMetaNames = new Set<string>();
   // The outermost frame is the session's where there is one, so a console entry
   // sees what earlier entries declared. It is already a copy (see
   // CheckScriptInSession), so checking writes the next state into it and the
@@ -7340,6 +7383,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return;
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+          // PLAN-default-timing.md phase 1. A binding with a type and NO
+          // initializer holds its type's default, and #sec-defaultvalueof makes
+          // it a type error where there is none. Deciding that needs
+          // `DefaultValueOf` - an evaluator - and needs this text's `meta`
+          // declarations processed, so the walk records the question and the
+          // pass answers it (check-pass.mts).
+          //
+          // A ~parameter~ is exempt: "nothing is known about what an application
+          // will bind, so a generic's field is checked at its specialization".
+          // The evaluation-time site has that exemption and this matches it.
+          if (declared && declared.Kind !== 'parameter' && !n.Initializer && !n.TypedInitializer) {
+            defaultsNeeded.push({ node: n as ParseNode, type: declared as TypeRecord, display: displayType(declared as TypeRecord) });
+          }
           if (n.TypeAnnotation && declared && n.Initializer) {
             const src = staticType(n.Initializer);
             if (src && src.Kind !== 'any' && src.Kind !== 'literal'
@@ -7877,5 +7933,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);
+  defaultRequirements.set(root, defaultsNeeded);
+  blockScopedMetaNames.set(root, nestedMetaNames);
   return errors;
 }
