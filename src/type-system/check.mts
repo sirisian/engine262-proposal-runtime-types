@@ -5410,10 +5410,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               TypeAnnotation?: ParseNode.TypeAnnotation | null,
             };
             const bname = bound.BindingIdentifier?.name;
-            if (bname && bound.TypeAnnotation) {
+            if (!bname) {
+              continue;
+            }
+            if (bound.TypeAnnotation) {
               const bt = resolveType(bound.TypeAnnotation.Type);
               if (bt) {
                 declare(bname, bt);
+              }
+              continue;
+            }
+            // An UNANNOTATED local that cannot change is a name for its
+            // initializer's value, and a contribution that reads it is the
+            // initializer's type widened. Without this, extracting a
+            // subexpression into a local - the most ordinary refactor there is -
+            // silently dropped the function's inferred return type:
+            // `function f(x: number) { const v = "s"; return v; }` published
+            // nothing, while `return "s"` published `string`.
+            //
+            // This gives the BINDING no type. It stays ~any~ for every other
+            // purpose - a wrong annotation over it is still the boundary's
+            // business, and `Reflect.typeOf` still reads the value - because the
+            // frame this declares into belongs to the inference pass alone. The
+            // reading generalizes the one #sec-static-type-of-an-expression
+            // already describes for a numeric constant, which "decides which
+            // VALUE a use produces" rather than giving the binding a type.
+            //
+            // "Cannot change" is the condition, not "is a `const`": a `let`
+            // never assigned is as transparent as a `const`, and a `let` that IS
+            // assigned must yield nothing, because a published type is enforced
+            // at the return - reading only the initializer would make
+            // `let v = g(); v = 5; return v;` throw on a program that runs.
+            const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
+            const cannotChange = kind === 'const' || !assignedNames.has(bname);
+            const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
+            if (cannotChange && init) {
+              const initType = staticType(init);
+              if (initType) {
+                declare(bname, widen(initType));
               }
             }
           }

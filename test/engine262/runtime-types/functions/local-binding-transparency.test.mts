@@ -74,25 +74,37 @@ test('an ANNOTATED local carries its type', () => {
   expectInferred('let v: string = "s"; return v;');
 });
 
-test.fails('an unannotated const carries its initializer type', () => {
+test('an unannotated const carries its initializer type', () => {
   expectInferred('const v = "s"; return v;');
   expectInferred('const c = new C(); return c.m();');
   expectInferred('const v = g(); return v;');
 });
 
-test.fails('an unannotated let that is never assigned carries it too', () => {
+test('an unannotated let that is never assigned carries it too', () => {
   expectInferred('let v = "s"; return v;');
   expectInferred('let v = g(); return v;');
 });
 
-test.fails('transparency reaches the shapes an ordinary body uses', () => {
-  // A typed parameter, a cast, a second hop, a nested block, and a closure
-  // capture. Each is an unannotated local holding a value whose type is known.
-  expectInferred('const v = x; return v;');            // the parameter is a `number`... see below
+test('transparency reaches the shapes an ordinary body uses', () => {
+  // A cast, a second hop, a nested block, and a closure capture. Each is an
+  // unannotated local holding a value whose type is known.
+  //
+  // A local holding the PARAMETER is checked separately below, because
+  // `const v = x; return v` returns a `number` at a `=> number` position and
+  // being accepted there is correct - the first draft of this file asserted a
+  // refusal for it and was simply wrong.
   expectInferred('const v = (1 := uint8); return v;');
   expectInferred('const a1 = g(); const b1 = a1; return b1;');
   expectInferred('{ const v = g(); return v; }');
   expectInferred('const v = g(); const h = () => v; return h();');
+});
+
+test('a local holding a typed parameter carries the PARAMETER\'s type', () => {
+  // Not `number`: a `uint8` parameter read through an unannotated local
+  // publishes `uint8`, which a `=> number` position refuses because numeric
+  // types are invariant. The matching position is accepted.
+  expectThrows('function f(x: uint8) { const v = x; return v; } const a: (x: uint8) => number = f;');
+  expectOk('function f(x: uint8) { const v = x; return v; } const a: (x: uint8) => uint8 = f;');
 });
 
 test('a REASSIGNED let must not publish, and its program must still run', () => {
@@ -136,7 +148,35 @@ test('a local whose initializer has no type stays unknown', () => {
   expectNotInferred('return legacy();');
 });
 
-test.fails('a const initialized with a literal publishes the widened type', () => {
+test('an unannotated local reaches a typed position by the BOUNDARY, not statically', () => {
+  // Measured while auditing the plan, and it is what rules out the larger fix.
+  // These work because the binding is ~any~ and the boundary converts. Give the
+  // binding its initializer's type and `number` is not assignable to `uint8`,
+  // so both are refused - the visible/blind split of #sec-the-boundary-check
+  // applied to every unannotated local at once.
+  expect(value('function h(a: uint8) { return a; } const k = 3; `${h(k)}`;')).toBe('3');
+  expect(value('function h(a: uint8) { return a; } const k = 3; let a: uint8 = k; `${a is uint8}`;')).toBe('true');
+  // The out-of-range case is caught at RUN TIME, naming the value; a static rule
+  // would have refused it before the program ran, as a written literal is
+  // refused. That is the evidence the conversion is the boundary's, and that
+  // #sec-static-type-of-an-expression's constant-propagation rule is not what
+  // is running here.
+  const late = run('function h(a: uint8) { return a; } const k = 300; h(k);') as unknown as {
+    Type: string, Value: { properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }> },
+  };
+  expect(late.Type).toBe('throw');
+  let message = '';
+  for (const [k, d] of late.Value.properties ?? []) {
+    if (k.stringValue?.() === 'message') {
+      message = d.Value?.stringValue?.() ?? '';
+    }
+  }
+  expect(message).toContain('300');
+  // A `let` behaves identically, though that rule excludes `let`.
+  expect(value('let j = 3; let b: uint8 = j; `${b is uint8}`;')).toBe('true');
+});
+
+test('a const initialized with a literal publishes the widened type', () => {
   // `const K = 1; return K;` must publish `number`, exactly as `return 1` does.
   // The constant-propagation rule could be misread as giving `K` the literal
   // type, which would publish something no annotation can write.
