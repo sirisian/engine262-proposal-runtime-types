@@ -1049,6 +1049,35 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
  */
 function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extract<TypeRecord, { Kind: 'function' }>, assumptions: readonly Assumption[]): boolean {
   return t.Signatures.every((tg) => s.Signatures.some((sg) => {
+    // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
+    //
+    // FIRST, before the arity and parameter steps, because an untyped signature
+    // is a catch-all: [[Untyped]] is a syntactic property - *true* when the
+    // signature "declares no parameter type and no return type", "however much
+    // is inferred for it" - so there is nothing declared for those steps to
+    // judge it against.
+    //
+    // Its absence was not cosmetic. Reaching the arity step, an untyped
+    // `function f(x, y, z) {}` was REFUSED at `(x: number) => number` for
+    // requiring more arguments than the position supplies, and an untyped
+    // callback that names parameters the caller does not pass is the ordinary
+    // shape of existing ECMAScript - the compatibility this proposal keeps by
+    // making such a function a catch-all in the first place.
+    //
+    // AND publishing nothing. [[Untyped]] is syntactic, so it is *true* of
+    // `function g() { return f(); }` - which declares neither - while `g` still
+    // PARTICIPATES in inference, because a contribution of it is anchored by
+    // `f`'s declared return, and so publishes one. #sec-inferred-return-types
+    // says subtyping reads "the published one otherwise", and an unconditional
+    // step 1 returns before that reading can happen: `g` would satisfy
+    // `() => string` while publishing `uint32`.
+    //
+    // So the catch-all is for a signature with nothing to judge it BY, which is
+    // what step 1 means and what [[Untyped]] alone does not establish.
+    if ((sg as { Untyped?: boolean }).Untyped === true
+        && (sg as { InferredReturn?: unknown }).InferredReturn === undefined) {
+      return true;
+    }
     // proposal-runtime-types #sec-this-adoption: a signature's [[ThisType]] "is
     // contravariant, as a parameter is", so the SOURCE's `this` must be the
     // wider one - a body demanding more than the position promises would be
