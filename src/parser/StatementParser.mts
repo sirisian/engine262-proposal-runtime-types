@@ -314,6 +314,19 @@ export abstract class StatementParser extends TypeParser {
     // `TypeParameters?` after ANY TypeName - and refused now rather than
     // accepted-and-ignored, since a program that writes it would have no way to
     // discover the parameter did nothing, and refusing it later would break.
+    // PLAN-meta-hook-signatures.md phase 2. #sec-meta-declarations: "It is an
+    // early error for a |MetaDeclaration| to declare more than one type
+    // parameter". The parameter is not an ordinary generic one - it "is bound to
+    // the base at each parameterization the meta type governs … the name of what
+    // the base IS", and `uint8.<{ bounds: 1..=6 }>` binds it to `uint8` because
+    // `uint8` is what is being parameterized. There is one base, so there is at
+    // most one parameter.
+    if (node.TypeParameters && (node.TypeParameters.TypeParameterList?.length ?? 0) > 1) {
+      this.addEarlyError(
+        Throw.SyntaxError('a meta declaration may declare at most one type parameter, which names its base'),
+        node.TypeParameters,
+      );
+    }
     const named = builtinTypeRecord(node.TypeName.IdentifierReference.name);
     if (node.TypeParameters && node.TypeName.MemberNames.length === 0
         && named !== undefined && named !== null && named.Kind === 'primitive') {
