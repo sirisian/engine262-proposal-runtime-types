@@ -723,7 +723,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
             && importedModule instanceof SourceTextModuleRecord) {
           const exported = ExportedTypesOf(importedModule.ECMAScriptCode);
           if (exported) {
-            const names = new Set(importedModule.GetExportedNames().map((v) => (typeof v === 'string' ? v : (v as JSStringValue).stringValue())));
+            const names = new Set(importedModule.GetExportedNames([]).map((v) => (typeof v === 'string' ? v : (v as JSStringValue).stringValue())));
             const Properties = [];
             for (const [local, t] of exported) {
               if (names.has(local) && t) {

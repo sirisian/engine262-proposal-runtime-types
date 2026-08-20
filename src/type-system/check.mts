@@ -711,7 +711,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   }
   const session = CreateCheckSession();
   for (const [name, t] of imported) {
-    session.frame.bindings.set(name, t as Known);
+    session.frame.bindings.set(name, t as TypeRecord);
     session.frame.declaredNames.add(name);
     // An import binding cannot be assigned, so a call through it is stable for
     // #sec-elision-stability - the exporting module's own mutation is what the
@@ -808,19 +808,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return names.length > 0 ? names : null;
   };
 
-  /** Run _body_ with _declaration_'s type parameters in scope. */
-  const withTypeParameters = <T,>(declaration: ParseNode | null | undefined, body: () => T): T => {
-    const names = typeParameterNamesOf(declaration);
-    if (!names) {
-      return body();
-    }
-    typeParameterScopes.push(new Set(names));
-    try {
-      return body();
-    } finally {
-      typeParameterScopes.pop();
-    }
-  };
 
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
@@ -919,7 +906,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (offending.length === 1) {
         const origin = originNotes.find((o) => SameType(o.type, offending[0]!));
         if (origin) {
-          const completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
+          const completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return;
         }
@@ -927,9 +914,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     let completion: ThrowCompletion;
     if (provenanceNote && anchorNote) {
-      completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
+      completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
     } else if (provenanceNote) {
-      completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
+      completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
     } else {
       completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
     }
@@ -1320,7 +1307,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return {
       ...t,
       Signatures: sigs.map((g) => (g.Return || !g.InferredReturn ? g : { ...g, Return: g.InferredReturn })),
-    } as Known;
+    } as unknown as Known;
   };
 
   const requireAssignable = (source: Known, target: Known) => {
@@ -1328,7 +1315,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (target.Kind === 'function') {
-      source = effectiveFunctionType(source);
+      // Reassigning from a helper that may answer null loses the narrowing the
+      // early return above established, and every use below then reads as
+      // possibly-null. The effective type of a non-null source is non-null.
+      const effective = effectiveFunctionType(source);
+      if (!effective) {
+        return;
+      }
+      source = effective;
     }
     // #sec-primitive-metadata: two parameterizations of one base. Structurally
     // equivalent metadata is one type and passes below; different metadata is
@@ -4141,7 +4135,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // type for every read of the member.
           let t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
           if (!t) {
-            const anchorage = { anchored: false };
+            const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
             inferenceDepth += 1;
             let inferred: Known;
             try {
@@ -4186,7 +4180,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-inference-and-function-forms: a method's published type joins the
         // shape its member belongs to, so a member call types through it.
         if (!Return) {
-          const anchorage = { anchored: false };
+          const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
           inferenceDepth += 1;
           let inferred: Known;
           try {
@@ -5086,7 +5080,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * derives from an annotation somewhere, and an unknown one derives from
    * nothing at all.
    */
-  const contributionIsAnchored = (t: Known): boolean => !!t && t.Kind !== 'literal';
 
   /** Array literals every element of which is a literal; they anchor nothing. */
   const literalDerivedArrays = new WeakSet<object>();
@@ -5186,7 +5179,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        const anchorage = { anchored: false };
+        const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
         if (item.typeParameterNames) {
           typeParameterScopes.push(new Set(item.typeParameterNames));
         }
@@ -5351,14 +5344,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       Properties.push({ key, type: widen(memberType) as TypeRecord, optional: false });
     }
-    return { Kind: 'object', Properties, IndexSignatures: [] } as Known;
+    return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
   };
 
   const publishLiteralReturn = (fn: ParseNode, parameterTypes: readonly Known[]): void => {
     if ((fn as { TypeAnnotation?: unknown }).TypeAnnotation) {
       return;
     }
-    const anchorage = { anchored: false };
+    const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
     inferenceDepth += 1;
     let inferred: Known;
     try {

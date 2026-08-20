@@ -29,14 +29,14 @@ function graph(sources: Record<string, string>, entry: string): string {
   const agent = new Agent({
     features: ['runtime-types'],
     hostHooks: {
-      HostLoadImportedModule(referrer, moduleRequest, hostDefined, payload) {
+      HostLoadImportedModule(referrer: unknown, moduleRequest: unknown, _hostDefined: unknown, payload: unknown) {
         const spec = (moduleRequest as { Specifier: unknown }).Specifier as { stringValue?(): string };
         const asked = typeof spec.stringValue === 'function' ? spec.stringValue() : String(spec);
         const key = asked.replace(/^\.\//, '');
         if (!cache.has(key)) {
           cache.set(key, realmRef.compileModule(sources[key]));
         }
-        FinishLoadingImportedModule(referrer, moduleRequest, payload, cache.get(key) as never);
+        FinishLoadingImportedModule(referrer as never, moduleRequest as never, payload as never, cache.get(key) as never);
       },
     },
   } as never);

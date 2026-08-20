@@ -2671,7 +2671,8 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   // against a type with no values made `function f(): void { return; }` a
   // TypeError while the identical `function f(): void { }` passed, which is the
   // same function written two ways.
-  if ((yield* TypeNodeToTypeRecord(annotation.Type)).Kind === 'void') {
+  const annotationRecord = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+  if (annotationRecord.Kind === 'void') {
     return value;
   }
   return Q(yield* EnforceAnnotation(annotation, value));

@@ -794,7 +794,8 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // `B.<uint8> <: B.<uint8 | string>` *true* for a declaration that carries
     // no modifier - "the conservative default" - which the generics suite
     // caught.
-    if (sourceStructure && targetStructure && s.Declaration !== t.Declaration) {
+    const declarationOf = (r: TypeRecord): unknown => (r as { Declaration?: unknown }).Declaration;
+    if (sourceStructure && targetStructure && declarationOf(s) !== declarationOf(t)) {
       return IsSubtype(sourceStructure, targetStructure, next);
     }
   }

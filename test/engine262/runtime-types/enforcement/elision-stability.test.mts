@@ -35,10 +35,6 @@ function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
-function expectOk(source: string) {
-  expect(run(source)).toMatchObject({ Type: 'normal' });
-}
-
 function expectThrows(source: string) {
   expect(run(source)).toMatchObject({ Type: 'throw' });
 }

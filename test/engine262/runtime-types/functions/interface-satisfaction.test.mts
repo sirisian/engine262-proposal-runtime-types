@@ -39,21 +39,6 @@ function value(source: string): string {
   return completion.Value.stringValue();
 }
 
-/** The message of the error _source_ produces. */
-function thrownMessage(source: string): string {
-  const completion = run(source) as unknown as {
-    Type: string, Value: { properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }> },
-  };
-  if (completion.Type !== 'throw') {
-    throw new Error('expected a throw completion');
-  }
-  for (const [k, v] of completion.Value.properties ?? []) {
-    if (k.stringValue?.() === 'message') {
-      return v.Value?.stringValue?.() ?? '';
-    }
-  }
-  return '';
-}
 
 const SMALL = 'interface Small { m(): uint8; } ';
 const RICH = 'class Rich { v: uint8 = 1; m(): uint8 { return (0 := uint8); } } ';

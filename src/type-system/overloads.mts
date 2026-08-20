@@ -12,7 +12,7 @@ import type { Value } from '../value.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { anyType, restElementType } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
-import { ClassImplements, IsAssignable, SameType } from './relations.mts';
+import { ClassImplements, IsAssignable } from './relations.mts';
 import { RuntimeTypeOf } from './runtime.mts';
 
 /**

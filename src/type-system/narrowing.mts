@@ -1,6 +1,5 @@
-import { Value } from '../value.mts';
 import {
-  makePrimitive, voidType, type TypeRecord,
+  makePrimitive, type TypeRecord,
 } from './records.mts';
 import { IsAssignable } from './relations.mts';
 

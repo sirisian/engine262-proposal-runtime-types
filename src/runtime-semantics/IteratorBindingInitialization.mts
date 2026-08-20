@@ -183,8 +183,11 @@ function isPatternElement(node: ParseNode): boolean {
     if (up.type === 'ArrayBindingPattern' || up.type === 'ObjectBindingPattern') {
       return true;
     }
-    if (up.type === 'FormalParameters' || up.type === 'LexicalBinding'
-      || up.type === 'VariableDeclaration' || up.type === 'FunctionDeclaration') {
+    // A formal parameter list is not a ParseNode of its own - the parameters
+    // hang off the function node - so the boundary is the function itself.
+    const stopAt: readonly string[] = ['LexicalBinding', 'VariableDeclaration', 'FunctionDeclaration',
+      'FunctionExpression', 'ArrowFunction', 'MethodDefinition', 'AsyncArrowFunction'];
+    if (stopAt.includes(up.type)) {
       return false;
     }
     up = (up as { parent?: ParseNode }).parent;
