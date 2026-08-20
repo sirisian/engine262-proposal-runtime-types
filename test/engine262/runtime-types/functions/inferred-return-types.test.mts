@@ -456,3 +456,24 @@ test('a typed local binding anchors a contribution', () => {
   expectEarly('function g(a: uint8) { return a; } const s: string = g(1);', 'uint.<8>');
   expectEarly('function f(): uint8 { return 1; } function g(a: uint32) { return f(); } const s: string = g(1);', 'uint.<8>');
 });
+
+test('a refused union names the member that does not fit, and its return', () => {
+  // The finer half of the gate (D3). Naming the function answers "why does this
+  // have a type"; naming the anchor answers "which annotation"; a union leaves
+  // the question a reader of a multi-return function actually asks - of
+  // `uint32 | string` refused at a `string`, WHICH return produced the
+  // `uint.<32>`.
+  const h = 'function f(): uint32 { return 5; } function g1() { return "foo"; }'
+    + ' function h(b) { if (b) { return f(); } return g1(); } ';
+  expect(thrown(`${h} const s: string = h(0);`)).toContain('whose "uint.<32>" comes from "f"');
+  // The other member offends at the other target, and is named instead.
+  expect(thrown(`${h} const u: uint32 = h(0);`)).toContain('whose "string" comes from "g1"');
+  // Where MORE than one member fails there is no single answer, so the message
+  // falls back to the anchor rather than picking one.
+  const both = thrown(`${h} const t: boolean = h(0);`);
+  expect(both).toContain('inferred return type of "h"');
+  expect(both).not.toContain('comes from');
+  // A non-union keeps the D4 form.
+  expect(thrown('function f(): uint32 { return 5; } function g() { return f(); } const s: string = g();'))
+    .toContain('which is what "f" declares');
+});

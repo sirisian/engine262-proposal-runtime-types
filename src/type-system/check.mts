@@ -789,12 +789,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The anchor a published type was derived from, by declaration node. */
   const publishedAnchors = new WeakMap<object, string>();
   const callAnchors = new WeakMap<object, string>();
+
+  /**
+   * Where each member of a published union came from.
+   *
+   * Naming the function answers "why does this have a type"; naming the anchor
+   * answers "which annotation". A union leaves a third question, and it is the
+   * one a reader of a multi-return function actually asks: of `uint32 | string`
+   * refused at a `string`, WHICH return produced the `uint.<32>`. The members
+   * are joined from contributions, so the answer exists at the moment they are
+   * collected and nowhere afterwards.
+   */
+  const publishedOrigins = new WeakMap<object, { type: TypeRecord, from: string }[]>();
+  const callOrigins = new WeakMap<object, { type: TypeRecord, from: string }[]>();
   let provenanceNote: string | null = null;
   let anchorNote: string | null = null;
+  let originNotes: { type: TypeRecord, from: string }[] | null = null;
 
   const report = (source: TypeRecord, target: TypeRecord) => {
     if (deferredGuardDepth > 0) {
       return;
+    }
+    // #sec-published-return-types, the diagnostic: where a published UNION is
+    // refused, name the member that does not fit and the return it came from.
+    if (provenanceNote && originNotes && source.Kind === 'union') {
+      const offending = (source as { Members: readonly TypeRecord[] }).Members
+        .filter((m) => !IsAssignable(m, target));
+      if (offending.length === 1) {
+        const origin = originNotes.find((o) => SameType(o.type, offending[0]!));
+        if (origin) {
+          const completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return;
+        }
+      }
     }
     let completion: ThrowCompletion;
     if (provenanceNote && anchorNote) {
@@ -811,13 +839,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const withProvenance = (initializer: ParseNode | null | undefined, check: () => void): void => {
     const previous = provenanceNote;
     const previousAnchor = anchorNote;
+    const previousOrigins = originNotes;
     provenanceNote = initializer ? callProvenance.get(initializer as unknown as object) ?? null : null;
     anchorNote = initializer ? callAnchors.get(initializer as unknown as object) ?? null : null;
+    originNotes = initializer ? callOrigins.get(initializer as unknown as object) ?? null : null;
     try {
       check();
     } finally {
       provenanceNote = previous;
       anchorNote = previousAnchor;
+      originNotes = previousOrigins;
     }
   };
 
@@ -3444,6 +3475,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (anchor) {
                   callAnchors.set(node as unknown as object, anchor);
                 }
+                const origins = publishedOrigins.get(only as object);
+                if (origins) {
+                  callOrigins.set(node as unknown as object, origins);
+                }
               }
             }
             return only.Return ?? only.InferredReturn ?? null;
@@ -5084,6 +5119,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (anchorage.from) {
           publishedAnchors.set(item.signature as object, anchorage.from);
         }
+        if (anchorage.origins && anchorage.origins.length > 0) {
+          publishedOrigins.set(item.signature as object, anchorage.origins);
+        }
         // The run time enforces what is published, so the type is recorded
         // against the declaration the boundary will look it up from - EXCEPT
         // where the published type is an expression over the declaration's type
@@ -5158,7 +5196,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
@@ -5349,6 +5387,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (t.Kind !== 'literal' && !literalDerivedArrays.has(expr as unknown as object)) {
             anchorage.anchored = true;
             anchorage.from = anchorage.from ?? anchorDescription(expr);
+          }
+          {
+            // Recorded whether or not it anchors: a literal contribution is
+            // still the answer to "which return produced this member".
+            const origin = anchorDescription(expr) ?? (expr.type === 'StringLiteral' || expr.type === 'NumericLiteral' ? 'a literal' : null);
+            if (origin) {
+              (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
+            }
           }
           if (mode === 'resolve' && t.Kind === 'nominal' && t.LibraryName === 'Promise'
               && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
