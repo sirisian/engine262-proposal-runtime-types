@@ -1123,6 +1123,31 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     if (!positionsOk) {
       return false;
     }
+    // #sec-issignaturesubtype, the return steps. An ABSENT return here means the
+    // signature declares none and publishes none, and that is a specified
+    // outcome rather than a gap: "a function whose result is unknown is
+    // indistinguishable from one that never participated"
+    // (#sec-inferred-return-types), so it is required nothing in this position
+    // exactly as an [[Untyped]] signature is.
+    //
+    // It is NOT the same as declaring `any`. `function f(x: uint8): any`
+    // promises nothing and so does not satisfy a promise of `uint8` - the
+    // comparison below refuses it, because IsSubtype(any, uint8) is false. The
+    // unannotated function made no promise to break. The engine keeps the two
+    // apart by leaving [[Return]] absent for the second, which is also what
+    // makes them different signatures.
+    //
+    // What this must NOT absorb is a RESOLUTION FAILURE, and nothing in the
+    // value distinguishes the two: a declared return the checker could not read
+    // also arrives absent. `PLAN-checker-type-resolution.md` R1/R2 is that
+    // second meaning masquerading as this one - `(x: number) => Token`
+    // satisfied `(x: number) => number` for 75 type names, because `Token` was
+    // unresolvable and so indistinguishable from undeclared here.
+    //
+    // Stage A removed the failures at their source. Guarding this step instead
+    // would be guarding a symptom: the resolvers agreeing is the property that
+    // matters, and stage C2 asserts it directly, over every type-node kind,
+    // where a divergence is attributable.
     if (sg.Return && tg.Return) {
       return IsSubtype(sg.Return, tg.Return, assumptions);
     }
