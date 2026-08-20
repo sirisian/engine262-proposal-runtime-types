@@ -219,3 +219,32 @@ test('a recursive interface terminates against a matching object type', () => {
   expect(evaluated('interface Node2 { next?: Node2 } let o: { next?: Node2 } = {}; '
     + 'let n: Node2 = o; String(Reflect.isAssignable(type { next?: Node2 }, type Node2));')).toBe('true');
 });
+
+test('two interfaces relate by width, and only where they are two', () => {
+  // PLAN-nominal-records.md v2 task B, completed. The step existed in
+  // #sec-issubtype and could not be routed: it blew the stack. Two things were
+  // wrong, and only the first was diagnosed at the time.
+  //
+  // `assumed` compared assumption pairs by IDENTITY, which a recursive
+  // interface needs keyed on the DECLARATION. And this step's own guard called
+  // `SameType(s, t)`, which re-enters IsSubtype from the top - instrumenting
+  // showed the step re-entered with an assumption list of length ZERO every
+  // time, so nothing was recursing through the list at all and no keying could
+  // have helped. Identical types are answered above by
+  // SameTypeWithAssumptions, so the guard was redundant as well as fatal.
+  const ifaces = 'interface Big { x: uint8, y: uint8 } interface Small { x: uint8 } '
+    + 'interface Other { z: string } ';
+  expect(evaluated(`${ifaces} String(Reflect.isAssignable(type Big, type Small));`)).toBe('true');
+  expect(evaluated(`${ifaces} String(Reflect.isAssignable(type Small, type Big));`)).toBe('false');
+  expect(evaluated(`${ifaces} String(Reflect.isAssignable(type Other, type Small));`)).toBe('false');
+  expect(evaluated(`${ifaces} String(Reflect.isAssignable(type Small, type Small));`)).toBe('true');
+
+  // Two instantiations of ONE declaration are excluded from this step: they are
+  // the declaration-site variance question, and comparing their structures made
+  // every generic interface covariant by inference. A declaration carrying no
+  // modifier is invariant, "the conservative default".
+  expect(evaluated('interface B<T> { get(): T } '
+    + 'String(Reflect.isAssignable(type B.<uint8>, type B.<uint8 | string>));')).toBe('false');
+  expect(evaluated('interface P<out T> { get(): T } '
+    + 'String(Reflect.isAssignable(type P.<uint8>, type P.<uint8 | string>));')).toBe('true');
+});

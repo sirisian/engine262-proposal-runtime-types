@@ -772,18 +772,31 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // Interface to interface, where neither refines the other: both have a
     // structural form, so the question is width subtyping between them.
     //
-    // STILL NOT ROUTED, and task B was not the whole reason. Keying `assumed`
-    // on the declaration fixed the case it was diagnosed from - a RECURSIVE
-    // interface against a matching object type now terminates and answers
-    // *true*, where before it could not be attempted - but two DISTINCT
-    // interfaces still blow the stack, and their structures do not mention each
-    // other, so the loop is not the one the assumption list guards.
+    // Interface to interface, where neither refines the other: both have a
+    // structural form, so the question is width subtyping between them.
     //
-    // Where it goes next: instrument `IsSubtype` for the pair `Big <: Small`
-    // and read the cycle rather than inferring it. The suspect is what an
-    // interface's [[Structure]] actually contains in the RUNTIME record -
-    // reflecting one prints `{"kind":"primitive"}`, which is not an object
-    // record and not what this step assumes it is comparing.
+    // Routed at last, and NOT by task B alone. Two things had to change. The
+    // assumption list had to key a nominal pair on its [[Declaration]], which
+    // task B did and which a recursive interface needs. And this guard could
+    // not call `SameType(s, t)`: instrumenting the pair showed the step being
+    // re-entered with an assumption list of length ZERO every time, so nothing
+    // was recursing THROUGH the list at all - `SameType` on two nominals
+    // re-enters IsSubtype from the top, and the two called each other forever.
+    // Identical types are already answered above by
+    // `SameTypeWithAssumptions(s, t, assumptions)`, so the guard was redundant
+    // as well as fatal.
+    //
+    // Two instantiations of ONE declaration are excluded, and that is not the
+    // self-comparison the removed `SameType` guard was reaching for: they are
+    // the DECLARATION-SITE VARIANCE question, which the nominal arm below
+    // answers from the `in`/`out` modifiers. Comparing their structures here
+    // made every generic interface covariant by inference and turned
+    // `B.<uint8> <: B.<uint8 | string>` *true* for a declaration that carries
+    // no modifier - "the conservative default" - which the generics suite
+    // caught.
+    if (sourceStructure && targetStructure && s.Declaration !== t.Declaration) {
+      return IsSubtype(sourceStructure, targetStructure, next);
+    }
   }
   if (s.Kind !== t.Kind) {
     return false;
