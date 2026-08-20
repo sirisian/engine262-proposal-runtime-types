@@ -328,24 +328,26 @@ test('the object shape is conservative where it cannot read a member', () => {
   expectNotInferred('let o = { p: g() }; o = { p: 5 }; return o.p;');
 });
 
-test.fails('a parameter does not shadow an outer binding of the same name', () => {
-  // Found by the two-pass experiment and PRE-EXISTING: with the binding declared
-  // BEFORE the function, the parameter `a` does not shadow the module-scope `a`,
-  // and the body reads the outer one - reporting its `length` type rather than
-  // the parameter's. The suite does not see it because its own program declares
-  // the binding after the function.
+test('a parameter shadows an outer binding of the same name', () => {
+  // Found by the two-pass experiment and PRE-EXISTING. With the binding declared
+  // BEFORE the function, the parameter `a` did not shadow the module-scope `a`,
+  // and the body read the OUTER one. The suite did not see it because its own
+  // program declares the binding after the function.
   //
-  // The cause is that a parameter is bound by resolving its annotation, and an
+  // The cause: a parameter is bound by resolving its annotation, and an
   // annotation naming an unbound type parameter - `[N].<uint8>` - does not
-  // resolve, so the name is never bound at all. The type is unknown; the
-  // BINDING should not be optional.
+  // resolve, so the name was never bound at all. The type is unknown; the
+  // BINDING is not optional.
   //
-  // Binding it unconditionally is a two-line change and it exposes the layer
-  // beneath: `a.length` on a value-generic `[N].<uint8>` types as `uint64`,
-  // which the function's declared `: uint32` refuses. That assertion currently
-  // passes only because the shadowing bug hands it a `[4].<uint8>` instead. Both
-  // want fixing together.
-  expect(value('let a: [4].<uint8> = [7, 8, 9, 10];'
-    + ' function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; }'
-    + ' `${Number(f.<4>(a))}`;')).toBe('4');
+  // The program below is now REFUSED, and correctly: `a.length` is a `uint64`
+  // for every array (#sec-array-types keeps `length` and `capacity` one type so
+  // that "a capacity is at least a length" is stateable), and the function
+  // declares `uint32`. Reading the outer `[4].<uint8>` was what made it pass.
+  expectThrows('let a: [4].<uint8> = [7, 8, 9, 10];'
+    + ' function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } f.<4>(a);');
+  // Declaring the length's actual type is what the program should say.
+  expectOk('let a2: [4].<uint8> = [7, 8, 9, 10];'
+    + ' function f2<N: uint32>(a2: [N].<uint8>): uint64 { return a2.length; } f2.<4>(a2);');
+  // An ordinary parameter shadows too, which always worked.
+  expect(value('let v: string = "s"; function f3(v: uint8): uint8 { return v; } `${f3(3)}`;')).toBe('3');
 });

@@ -6806,6 +6806,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (fromContext && !annotated && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
           declare((p as ParseNode.SingleNameBinding).BindingIdentifier!.name, fromContext);
         }
+        // A parameter SHADOWS an outer binding of the same name, whether or not
+        // its own type resolves. The name is bound by resolving the annotation,
+        // and an annotation naming an unbound type parameter - `[N].<uint8>` -
+        // does not resolve, so the name went unbound and a module-scope binding
+        // of the same name was read in the body instead. The TYPE is unknown;
+        // the binding is not optional.
+        const named = p.type === 'SingleNameBinding'
+          ? (p as ParseNode.SingleNameBinding).BindingIdentifier?.name
+          : undefined;
+        if (named && !frames[frames.length - 1].declaredNames.has(named)) {
+          declare(named, annotated ? resolveType(annotated.Type) : null);
+        }
       }
       index += 1;
     }
