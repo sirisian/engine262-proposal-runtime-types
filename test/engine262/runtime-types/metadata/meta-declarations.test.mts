@@ -392,3 +392,25 @@ test('meta: `validate` stays optional, which is what a brand needs', () => {
     String((1 := float32) is float32.<{ brandish: 7 }>);
   `)).toBe('false');
 });
+
+test('a builder that names ambient state is not compile-time evaluable', () => {
+  // ISSUES-found-while-writing-examples.md I8. #sec-iscompiletimeevaluable puts
+  // the discipline on what the code can NAME - "a property of what the code can
+  // name rather than a wall around what it does" - and the engine applied it to
+  // a REPLACEMENT DECORATOR and not to a BUILDER, which is the other place user
+  // code runs during checking.
+  const rand = 'function r() { const x = Math.random(); '
+    + 'return Reflect.makeType({ kind: "object", properties: [] }); } type R = r();';
+  expect(run(rand)).toMatchObject({ Type: 'throw' });
+  const ambient = 'function s() { globalThis.side = 1; '
+    + 'return Reflect.makeType({ kind: "object", properties: [] }); } type S = s();';
+  expect(run(ambient)).toMatchObject({ Type: 'throw' });
+
+  // And what the fragment DOES admit still works, which is what keeps the rule
+  // from reading as a ban on builders: the library floor includes `Map`, "whose
+  // keys Type Objects serve as by interned identity".
+  const ok = 'function b() { const seen = new Map(); seen.set(uint8, 1); '
+    + 'return Reflect.makeType({ kind: "object", properties: [{ name: "x", type: type uint8 }] }); } '
+    + 'type B = b(); let v: B = { x: (1 := uint8) }; String(v.x);';
+  expect(run(ok)).toMatchObject({ Type: 'normal' });
+});

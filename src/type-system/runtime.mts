@@ -1,3 +1,6 @@
+import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
+import { wrappedParse } from '../parse.mts';
+import type { Parser } from '../parser/Parser.mts';
 import { OutOfRange } from '../utils/language.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
@@ -2910,6 +2913,38 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
     }
     const ref = Q(yield* Evaluate(a));
     args.push(Q(yield* GetValue(ref)));
+  }
+  // ISSUES-found-while-writing-examples.md I8. #sec-iscompiletimeevaluable puts
+  // the discipline on what the code can NAME: a compile-time-evaluable function
+  // "reads only its parameters, its own local bindings, immutable bindings whose
+  // initializers are compile-time evaluable, and other compile-time-evaluable
+  // functions ... which is why the discipline is a property of what the code can
+  // name rather than a wall around what it does".
+  //
+  // The engine applied that to a REPLACEMENT DECORATOR (parse.mts, through
+  // FirstEvaluabilityViolation) and not to a BUILDER, so `type R = r();` for an
+  // `r` naming `Math.random` or writing through `globalThis` evaluated happily
+  // at check time - one surface short of the same rule. A builder is the other
+  // place user code runs during checking, so it is the other place the rule has
+  // to hold.
+  // The builder's own source is on the function object, as a macro's is, so
+  // this needs nothing loaded and no second parse of the program.
+  const source = (callee as { SourceText?: string } | undefined)?.SourceText;
+  if (typeof source === 'string') {
+    const parsed = wrappedParse<ParseNode.Script>(
+      { source: `(${source})`, specifier: 'builder' },
+      (pp: Parser) => pp.parseScript(),
+    );
+    if (!Array.isArray(parsed)) {
+      const violation = FirstEvaluabilityViolation(parsed);
+      if (violation !== undefined) {
+        return Throw.TypeError(
+          'a builder is not compile-time evaluable: it names $1 ($2)',
+          Value(violation.name),
+          Value(violation.why),
+        );
+      }
+    }
   }
   return Q(yield* Call(callee as never, Value.undefined, args));
 }
