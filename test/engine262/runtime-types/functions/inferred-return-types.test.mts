@@ -423,3 +423,36 @@ test('a mixed reference and value body is decided at the assignment', () => {
   expect(value(setup + 'm(1, arr) = 5; String(arr[0]);')).toBe('5');
   expect(run(setup + 'm(0, arr) = 5;')).toMatchObject({ Type: 'throw' });
 });
+
+test('an inference-sourced error names the annotation it came from', () => {
+  // The second half of the gate (D4). Participation is non-local by design: an
+  // annotation's reach travels through returns, so a function nobody annotated
+  // acquires a type, and the question left is not "which return" but "which
+  // annotation". Naming the callee closes it.
+  expect(thrown('function f(): uint32 { return 5; } function g() { return f(); } const s: string = g();'))
+    .toContain('which is what "f" declares');
+  // A chain names the IMMEDIATE anchor, which is the one a reader can act on.
+  expect(thrown('function f(): uint32 { return 5; } function g() { return f(); }'
+    + ' function h() { return g(); } const s: string = h();')).toContain('which is what "g" declares');
+  // A function typed by its own signature has no anchor to name, and says only
+  // that the type was inferred.
+  const own = thrown('function k(a: uint32) { return "s"; } const n: number = k(5);');
+  expect(own).toContain('inferred return type of "k"');
+  expect(own).not.toContain('declares');
+  // A declared type is one the program wrote and needs no explanation at all.
+  expect(thrown('function d(a: uint32): string { return "s"; } const n: number = d(5);'))
+    .not.toContain('inferred return type');
+});
+
+test('a typed local binding anchors a contribution', () => {
+  // #sec-anchored-contributions names "a binding's annotation" among the things
+  // that anchor. The inference pass declared the PARAMETERS and nothing else,
+  // so a body's own typed bindings were invisible to it: the contribution read
+  // as unknown and the function published nothing, while the same function
+  // returning its parameter or a declared call published correctly.
+  expectEarly('function g(a: uint32) { let t: uint8 = 1; return t; } const s: string = g(1);', 'uint.<8>');
+  expectEarly('function g(a: uint32) { const t: uint8 = 1; return t; } const s: string = g(1);', 'uint.<8>');
+  // The two that already worked, as the comparison that found this.
+  expectEarly('function g(a: uint8) { return a; } const s: string = g(1);', 'uint.<8>');
+  expectEarly('function f(): uint8 { return 1; } function g(a: uint32) { return f(); } const s: string = g(1);', 'uint.<8>');
+});

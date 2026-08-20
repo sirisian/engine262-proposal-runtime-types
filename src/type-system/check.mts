@@ -754,27 +754,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * makes participation non-local on purpose - an annotation's reach travels
    * through returns - so the diagnostic has to carry what the reach was.
    */
+  /**
+   * What ANCHORED a contribution, phrased for a diagnostic.
+   *
+   * Participation is non-local by design (#sec-anchored-contributions): an
+   * annotation's reach travels through returns, so a function nobody annotated
+   * can acquire a type, and the question a reader is left with is not "which
+   * return" but "which annotation". `function g() { return f(); }` publishes
+   * because `f` declares a return type, possibly in another module, and naming
+   * `f` is the sentence that closes the gap.
+   */
+  const anchorDescription = (expr: ParseNode | null | undefined): string | null => {
+    if (!expr || typeof expr !== 'object') {
+      return null;
+    }
+    // A call: the callee is what supplied the type.
+    if (expr.type === 'CallExpression') {
+      const callee = (expr as { CallExpression?: ParseNode }).CallExpression as { type?: string, name?: string } | undefined;
+      if (callee?.type === 'IdentifierReference' && callee.name) {
+        return callee.name;
+      }
+      return null;
+    }
+    // A read of an annotated name: the name is what supplied it.
+    if (expr.type === 'IdentifierReference') {
+      const name = (expr as unknown as { name?: string }).name;
+      return name ?? null;
+    }
+    return null;
+  };
+
   const callProvenance = new WeakMap<object, string>();
+
+  /** The anchor a published type was derived from, by declaration node. */
+  const publishedAnchors = new WeakMap<object, string>();
+  const callAnchors = new WeakMap<object, string>();
   let provenanceNote: string | null = null;
+  let anchorNote: string | null = null;
 
   const report = (source: TypeRecord, target: TypeRecord) => {
     if (deferredGuardDepth > 0) {
       return;
     }
-    const completion = (provenanceNote
-      ? Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote))
-      : Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target)))) as ThrowCompletion;
+    let completion: ThrowCompletion;
+    if (provenanceNote && anchorNote) {
+      completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
+    } else if (provenanceNote) {
+      completion = Throw.TypeError('$1 is not assignable to $2, and $1 is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
+    } else {
+      completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+    }
     errors.push(completion.Value as ObjectValue);
   };
 
   /** Run _check_ with the provenance of _initializer_, where it has one. */
   const withProvenance = (initializer: ParseNode | null | undefined, check: () => void): void => {
     const previous = provenanceNote;
+    const previousAnchor = anchorNote;
     provenanceNote = initializer ? callProvenance.get(initializer as unknown as object) ?? null : null;
+    anchorNote = initializer ? callAnchors.get(initializer as unknown as object) ?? null : null;
     try {
       check();
     } finally {
       provenanceNote = previous;
+      anchorNote = previousAnchor;
     }
   };
 
@@ -3397,6 +3440,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const named = (node as { CallExpression?: ParseNode }).CallExpression as { type?: string, name?: string } | undefined;
               if (named?.type === 'IdentifierReference' && named.name) {
                 callProvenance.set(node as unknown as object, named.name);
+                const anchor = publishedAnchors.get(only as object);
+                if (anchor) {
+                  callAnchors.set(node as unknown as object, anchor);
+                }
               }
             }
             return only.Return ?? only.InferredReturn ?? null;
@@ -5034,6 +5081,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           item.signature.InferredReturn = published;
           changed = true;
         }
+        if (anchorage.from) {
+          publishedAnchors.set(item.signature as object, anchorage.from);
+        }
         // The run time enforces what is published, so the type is recorded
         // against the declaration the boundary will look it up from - EXCEPT
         // where the published type is an expression over the declaration's type
@@ -5108,7 +5158,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
@@ -5206,6 +5256,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // prevent.
         if (conciseType && conciseType.Kind !== 'literal') {
           anchorage.anchored = true;
+          anchorage.from = anchorage.from ?? anchorDescription(body as ParseNode);
         }
         return conciseType;
       });
@@ -5252,6 +5303,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             contributions.push(widen(t));
             // Fall through: a `yield` may contain another in its operand.
           }
+        } else if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
+          // #sec-anchored-contributions: "a binding's annotation" anchors a
+          // contribution, so a body's own typed bindings must be in scope while
+          // its returns are read. The pass declares the PARAMETERS and nothing
+          // else, so `function g(a: uint32) { let t: uint8 = 1; return t; }`
+          // saw `t` as undeclared, read the contribution as unknown, and
+          // published nothing - while the same function returning the parameter
+          // or a declared call published correctly. Declared as the walk reaches
+          // them, which is source order, so a declaration precedes the returns
+          // that read it.
+          const list = (n as unknown as { BindingList?: readonly ParseNode[], VariableDeclarationList?: readonly ParseNode[] });
+          for (const b of list.BindingList ?? list.VariableDeclarationList ?? []) {
+            const bound = b as unknown as {
+              BindingIdentifier?: { name?: string } | null,
+              TypeAnnotation?: ParseNode.TypeAnnotation | null,
+            };
+            const bname = bound.BindingIdentifier?.name;
+            if (bname && bound.TypeAnnotation) {
+              const bt = resolveType(bound.TypeAnnotation.Type);
+              if (bt) {
+                declare(bname, bt);
+              }
+            }
+          }
+          // Fall through to the walk, so an initializer containing a function
+          // literal is still skipped and a nested return is still found.
         } else if (n.type === 'ReturnStatement') {
           const expr = (n as { Expression?: ParseNode | null }).Expression;
           if (!expr) {
@@ -5271,6 +5348,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // taken from the contribution.
           if (t.Kind !== 'literal' && !literalDerivedArrays.has(expr as unknown as object)) {
             anchorage.anchored = true;
+            anchorage.from = anchorage.from ?? anchorDescription(expr);
           }
           if (mode === 'resolve' && t.Kind === 'nominal' && t.LibraryName === 'Promise'
               && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
