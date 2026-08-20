@@ -407,13 +407,6 @@ export abstract class StatementParser extends TypeParser {
 
     this.scope.declare(node.BindingList, 'lexical');
     node.BindingList.forEach((b) => {
-      // proposal-runtime-types: a `const` declaration without an initializer
-      // remains a Syntax Error whether or not the binding carries a type
-      // annotation (spec.emu sec-typed-declarations: "A `const` declaration
-      // without an Initializer remains a Syntax Error, whether or not the binding
-      // carries a TypeAnnotation"). This is the normative rule; the README prose
-      // suggesting a typed const may omit its initializer is superseded here. A
-      // typed `let` without an initializer does take the type's default.
       // PLAN-typed-const-default.md phase 2. #sec-typed-bindings: a `const`
       // declaration without an |Initializer| is a Syntax Error "where the
       // binding carries no |TypeAnnotation|" - the annotation is what makes the
@@ -421,11 +414,11 @@ export abstract class StatementParser extends TypeParser {
       // has already said that `c` holds a `uint8` array and therefore an empty
       // one.
       //
-      // The clause said the opposite until this landed, and the comment above
-      // said so - that the README prose was "superseded here". It was the README
-      // that was right: every other typed binding takes its type's default, and
-      // a `const` that could not would be the one place an annotation stops
-      // carrying that meaning.
+      // The clause said the opposite until this landed, and the comment that
+      // stood here said so - that the README prose was "superseded here". It was
+      // the README that was right: every other typed binding takes its type's
+      // default, and a `const` that could not would be the one place an
+      // annotation stops carrying that meaning.
       //
       // Nothing else needed changing for the value to arrive: the defaulting
       // path in Evaluate_LexicalBinding sits in the no-initializer branch and
