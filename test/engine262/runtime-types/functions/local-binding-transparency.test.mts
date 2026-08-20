@@ -278,11 +278,20 @@ test('what an attempt to fix the ordering must survive', () => {
   // `length` type rather than the parameter's.
   expect(value('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; }'
     + ' let a: [4].<uint8> = [7, 8, 9, 10]; `${Number(f.<4>(a))}`;')).toBe('4');
-  // (2) Resolving an annotation early MEMOIZES what it resolves. Resolving
-  // `let m: I` before the walk reached `const k` gave the interface a record
-  // whose computed symbol key was unresolved, and that record was cached - so
-  // the member stopped being checked at all, in both directions, silently.
-  // Rolling back reported errors does not help, because no error is reported.
+  // (2) Resolving an annotation early MEMOIZES what it resolves, and a type is
+  // not COMPLETE until the walk has seen every declaration that adds to it.
+  // Resolving `let m: I` before the walk reached `const k` cached an interface
+  // record whose computed symbol key was unresolved, and the member stopped
+  // being checked at all, silently - no error is reported, so rolling errors
+  // back does not help.
+  //
+  // Restricting the pre-pass to annotations built from BUILTIN names does not
+  // avoid it and makes it worse: `partial interface` extends exactly those
+  // names, so `let m: ClassFieldMetadata` resolved early captures the record
+  // before the partial declaration adds its member. The hazard is that the type
+  // is completed later, not that the name is user-declared - which is why no
+  // pre-pass is sound, and why the fix is to move PUBLICATION after a pass that
+  // declares everything, rather than to move declarations earlier.
   const decl = 'const k = Symbol("k"); interface I { [k]: string; } ';
   expectThrows(`${decl}let m: I = { [k]: 5 };`);
   expectOk(`${decl}let m: I = { [k]: "ok" };`);
