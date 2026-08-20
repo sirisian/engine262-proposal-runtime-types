@@ -1155,8 +1155,34 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   // meta type that governs it, which is how `meta Dimensions` reaches a
   // `float32.<{ m, s }>` it never names.
   const shape = record ?? (isTypeObject(typeObject) ? (typeObject as { TypeRecord?: TypeRecord }).TypeRecord : undefined);
-  if (shape && shape.Kind === 'object') {
-    for (const property of shape.Properties) {
+  // PLAN-generic-meta-evaluation.md phase 2. A GENERIC constraint shape resolves
+  // to the alias's nominal record rather than to its body - `type G<T> = { … }`
+  // binds as `Kind: 'nominal'` with `Declaration` the |TypeAliasDeclaration| -
+  // so the object guard below saw no ~object~ and claimed no keys. The
+  // declaration parsed (PLAN-generic-meta-declarations.md phase 1), registered
+  // its hooks, its default and its name, and then governed nothing, because
+  // claiming is what lets a metadata value FIND the meta type that governs it.
+  //
+  // The body is resolved once with each parameter left FREE - a ~parameter~
+  // record standing for it - because the keys of a constraint shape do not
+  // depend on the argument: `{ bounds?: RangeBounds.<T>, nonZero?: boolean }`
+  // claims `bounds` and `nonZero` for every `T`. That is also why claiming stays
+  // at the declaration rather than moving to each instantiation: two
+  // instantiations claiming one key is what the flat rule forbids.
+  const aliasDeclaration = shape && shape.Kind === 'nominal'
+    ? (shape as { Declaration?: ParseNode.TypeAliasDeclaration }).Declaration
+    : undefined;
+  const claimShape = aliasDeclaration?.type === 'TypeAliasDeclaration' && aliasDeclaration.TypeParameters
+    ? Q(yield* InstantiateGenericAlias(
+      aliasDeclaration,
+      (aliasDeclaration.TypeParameters.TypeParameterList ?? []).map((param) => ({
+        Kind: 'parameter' as const,
+        Name: (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'T',
+      })) as unknown as readonly TypeRecord[],
+    ))
+    : shape;
+  if (claimShape && claimShape.Kind === 'object') {
+    for (const property of claimShape.Properties) {
       const conflict = ClaimMetaKey(property.key, typeObject as object);
       if (conflict !== undefined) {
         return Throw.TypeError('$1 is already claimed by another meta type', propertyKeyValue(property.key));

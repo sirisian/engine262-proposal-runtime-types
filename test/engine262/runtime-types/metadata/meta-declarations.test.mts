@@ -26,6 +26,20 @@ function evaluated(source: string): string {
   return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
 }
 
+function errorMessage(source: string): string {
+  const completion = run(source) as unknown as { Type: string, Value: unknown };
+  if (completion.Type !== 'throw') {
+    return '(no error)';
+  }
+  const v = completion.Value as { properties?: Map<unknown, { Value?: { stringValue(): string } }> };
+  for (const [k, d] of (v.properties ?? new Map())) {
+    if ((k as { stringValue?: () => string }).stringValue?.() === 'message') {
+      return d.Value?.stringValue() ?? '';
+    }
+  }
+  return '';
+}
+
 test('the default hook does not supply uninitialized annotated bindings', () => {
   // REWRITTEN by PLAN-meta-default-scope.md phase 1, the third test that
   // asserted the conflation and the one that stated it most plainly - its title
@@ -452,26 +466,37 @@ test('a base-form meta type has no type parameters to bind', () => {
   expect(run('meta uint8 { default = 0; subtype(a, b) { return a === b; } } let x: uint8; String(x);')).toMatchObject({ Type: 'normal' });
 });
 
-test('a generic meta declaration parses but does not yet claim its keys', () => {
-  // PLAN-generic-meta-declarations.md phase 4. RECORDED, not asserted as
-  // correct: phase 1 made the form parse and the evaluation half does not
-  // follow. `type G` named without arguments is "not a type", so
-  // Evaluate_MetaDeclaration finds no Type Object, returns early, and neither
-  // the key claim nor the hook registration happens.
+test('a generic meta declaration claims its keys and runs its hooks', () => {
+  // PLAN-generic-meta-evaluation.md. The declaration parsed
+  // (PLAN-generic-meta-declarations.md phase 1), registered its hooks, its
+  // default and its name - and governed nothing, because a GENERIC constraint
+  // shape resolves to the alias's nominal record rather than to its body, so the
+  // object guard claimed no keys. Claiming is what lets a metadata value FIND
+  // the meta type that governs it.
   //
-  // The non-generic form of the same declaration reaches an ASSIGNABILITY error
-  // instead, which is the proof its key WAS claimed.
+  // The body is now resolved once with each parameter left FREE, since the keys
+  // of a constraint shape do not depend on the argument - which is also why
+  // claiming stays at the declaration rather than moving to each instantiation.
   const generic = 'type G<T> = { gkey?: boolean }; '
-    + 'meta G<T> { default = { gkey: false }; subtype(a, b) { return true; } } '
-    + 'let v: uint8.<{ gkey: true }> = (1 := uint8.<{ gkey: true }>); "ok";';
+    + 'meta G<T> { default = { gkey: false }; subtype(a, b) { return true; } } ';
   const plain = 'type F = { fkey?: boolean }; '
-    + 'meta F { default = { fkey: false }; subtype(a, b) { return true; } } '
-    + 'let v: uint8.<{ fkey: true }> = (1 := uint8.<{ fkey: true }>); "ok";';
-  // Both throw today, and the MESSAGES are the finding: one says the key is
-  // unclaimed, the other has got past claiming.
-  expect(run(generic)).toMatchObject({ Type: 'throw' });
-  expect(run(plain)).toMatchObject({ Type: 'throw' });
-  // The declaration itself evaluates silently - no error, and no effect.
+    + 'meta F { default = { fkey: false }; subtype(a, b) { return true; } } ';
+  // The key is claimed: the "not claimed by any meta type" refusal is gone, and
+  // both forms now reach the SAME error - which is how the gap was found, since
+  // the non-generic form always reached this one.
+  expect(errorMessage(`${generic} let v: uint8.<{ gkey: true }> = (1 := uint8.<{ gkey: true }>);`))
+    .not.toMatch(/not claimed by any meta type/);
+  expect(errorMessage(`${plain} let v: uint8.<{ fkey: true }> = (1 := uint8.<{ fkey: true }>);`))
+    .not.toMatch(/not claimed by any meta type/);
+  // And the hooks RUN: a `subtype` that refuses a crossing is consulted, which
+  // is the end-to-end assertion - claiming without hooks would pass the checks
+  // above and do nothing.
+  const hooked = 'type GB<T> = { gb?: boolean }; '
+    + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
+  expect(errorMessage(`${hooked} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
+    .toMatch(/is not assignable to/);
+  // The non-generic path is untouched, and a name resolving to nothing still
+  // returns quietly rather than throwing.
   expect(run('type G2<T> = { g2?: boolean }; meta G2<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
 });
