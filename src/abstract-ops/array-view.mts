@@ -5,6 +5,7 @@ import {
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf } from '../type-system/layout.mts';
+import { ToIndexType } from './runtime-types.mts';
 import { BufferElementType } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
@@ -203,9 +204,14 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   // neither reported anything. The stride is last because nothing else in the
   // language has one - `%TypedArray%` cannot address interleaved data at all -
   // so the rare capability takes the rare position.
-  const stride = args.length > 3 ? Number(Q(yield* ToIndex(args[3]!))) : layout.byteLength;
+  // #sec-toindextype (ISSUES I2): both of these are COUNTS, so they are CHECKED
+  // rather than coerced. `ToIndex` accepted anything convertible, so
+  // `Span.<uint8>(b, 0, "4", 1)` was admitted through an `any`-typed value while
+  // the checker refused the same call - the disagreement the clause names for
+  // `reserve` and which reached here through the same door.
+  const stride = args.length > 3 ? Q(yield* ToIndexType(args[3]!)) : layout.byteLength;
   const givenCount = args.length > 2 && args[2] !== Value.undefined
-    ? Number(Q(yield* ToIndex(args[2]!)))
+    ? Q(yield* ToIndexType(args[2]!))
     : undefined;
   // A count given fixes the extent; a count omitted leaves it tracking. An
   // extent from the type still wins, since `[N].<T>(buffer)` states it there.

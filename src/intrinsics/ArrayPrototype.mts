@@ -21,7 +21,7 @@ import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { assignProps } from './bootstrap.mts';
 import { bootstrapArrayPrototypeShared, SortIndexedProperties } from './ArrayPrototypeShared.mts';
-import { RequireType, surroundingAgent } from '#self';
+import { RequireType, surroundingAgent, ToIndexType } from '#self';
 import {
   ArrayCreate,
   ArraySpeciesCreate,
@@ -345,7 +345,11 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
   if (O.TypedElement === undefined) {
     return Throw.TypeError('reserve is available on an array with an element type');
   }
-  const wanted = R(Q(yield* ToLength(n)));
+  // #sec-toindextype (I2): a COUNT is CHECKED, not coerced. `ToLength` stood
+  // here and accepted anything convertible - a String, a negative clamped to 0,
+  // a fraction truncated - so `a.reserve("4")` was admitted at run time while
+  // the checker refused it, which is the disagreement the clause names.
+  const wanted = Q(yield* ToIndexType(n));
   // #sec-array-and-tuple-types: a FIXED extent is part of the type, and
   // references.md states that such an array never moves. There is therefore no
   // allocation to grow: a reserve PAST the extent is the same refusal `push`

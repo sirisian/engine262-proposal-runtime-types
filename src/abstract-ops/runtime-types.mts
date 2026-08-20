@@ -1660,6 +1660,41 @@ export function LookupClassOperator(value: Value, opText: string): Value | null 
 }
 
 /**
+ * ToIndexType ( _value_ ) - #sec-toindextype.
+ *
+ * "It checks that _value_ is a count and answers its mathematical value.
+ *  1. If _value_ is not a value of the index type, throw a *TypeError*
+ *     exception.
+ *  1. Return the mathematical value of _value_."
+ *
+ * ISSUES-found-while-writing-examples.md I2. A COUNT is CHECKED rather than
+ * coerced, and the clause gives the reason: "`length` and `capacity` READ at the
+ * index type, so a count that could be written as a String and silently
+ * converted would make the operations that accept a count disagree with the
+ * ones that report one - `a.reserve(\"4\")` would be accepted while `a.length`
+ * could never be a String."
+ *
+ * `reserve` and `Span.<T>` used `ToLength`, which coerces: through an
+ * `any`-typed value they accepted a String, a negative, and a fraction, all
+ * silently. `withCapacity` had the check written inline, with a comment saying
+ * both clauses now say ToIndexType - so the operation existed in three
+ * different states across three call sites, which is what this replaces.
+ */
+export function* ToIndexType(value: Value): PlainEvaluator<number> {
+  if (!isTypedNumber(value) && !(value instanceof NumberValue)) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value('the index type'));
+  }
+  const n = Number(Q(yield* ToNumber(value)).numberValue());
+  // A count is a non-negative INTEGER. `ToLength` clamped both of these away -
+  // a negative became 0 and a fraction was truncated - so `reserve(-1)` and
+  // `reserve(2.5)` were accepted as `reserve(0)` and `reserve(2)`.
+  if (!Number.isInteger(n) || n < 0) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value('the index type'));
+  }
+  return n;
+}
+
+/**
  * proposal-runtime-types (operatoroverloading.md): operator dispatch keys on the
  * LEFT operand, so a class operator declared by the value on the RIGHT is never
  * reached when the left operand is not an Object. The design closes this with a

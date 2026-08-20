@@ -97,3 +97,28 @@ test('a copy of a tuple carries the shape the operation produced', () => {
   // A tuple with a REST is left alone: its positions are not a fixed list.
   expect(evaluated('let r: [uint8, ...string] = [1, "a"]; const c = r.toReversed(); c[0] = 5; String(c[0]);')).toBe('5');
 });
+
+test('a count is checked as a count, not coerced', () => {
+  // ISSUES-found-while-writing-examples.md I2. #sec-toindextype: "If value is
+  // not a value of the index type, throw a TypeError exception", and the clause
+  // gives the reason - "`length` and `capacity` READ at the index type, so a
+  // count that could be written as a String and silently converted would make
+  // the operations that accept a count disagree with the ones that report one".
+  //
+  // `reserve` and the Span builder used `ToLength`/`ToIndex`, which coerce, so
+  // through an `any`-typed value they accepted a String, a negative clamped to
+  // 0, and a fraction truncated - all silently, while the checker refused the
+  // same calls written literally.
+  const anyv = 'let bad = {}; bad.s = "4"; bad.n = -1; bad.f = 2.5; ';
+  const arr = 'let a: [].<uint8> = []; a.push((1 := uint8)); ';
+  expectThrown(`${anyv}${arr} a.reserve(bad.s);`);
+  expectThrown(`${anyv}${arr} a.reserve(bad.n);`);
+  expectThrown(`${anyv}${arr} a.reserve(bad.f);`);
+  expectThrown(`${anyv} [].<uint8>.withCapacity(bad.s);`);
+  expectThrown(`${anyv} Span.<uint8>(new ArrayBuffer(4), 0, bad.s, 1);`);
+  // A real count still works everywhere, which is what keeps the check from
+  // being a refusal of the operation itself.
+  expect(evaluated(`${arr} a.reserve(8); String(a.capacity);`)).toBe('8');
+  expect(evaluated('String([].<uint8>.withCapacity(4).capacity);')).toBe('4');
+  expect(evaluated('String(Span.<uint8>(new ArrayBuffer(4), 0, 4, 1).length);')).toBe('4');
+});
