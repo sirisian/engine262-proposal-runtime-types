@@ -266,8 +266,22 @@ test('an adopted self marker resolves to the owner, and only for reading', () =>
   // class where a narrower interface is wanted - the ordinary use of
   // `implements`. This is that case, and it must keep working.
   expect(evaluated('interface Small { m(): uint8; } '
-    + 'class Rich { v: uint8 = 1; w: uint8 = 2; m(): uint8 { return (0 := uint8); } } '
+    + 'class Rich implements Small { v: uint8 = 1; w: uint8 = 2; m(): uint8 { return (0 := uint8); } } '
     + 'let r := new Rich(); let s: Small = r; String(s.m());')).toBe('0');
+  // The `implements` clause is what makes the class usable AS the interface:
+  // #sec-issubtype relates two ~nominal~ types along declared inheritance, and
+  // an interface's type is ~nominal~. Without it the assignment is refused, and
+  // that refusal is the rule rather than a gap - the value question is separate
+  // and structural, so `new Rich() is Small` is *true* either way. This
+  // assertion originally omitted the clause and had been red since it was
+  // written; the comment above says it is testing "the ordinary use of
+  // `implements`", which is what it now does.
+  expectStaticTypeError('interface Small { m(): uint8; } '
+    + 'class Plain { m(): uint8 { return (0 := uint8); } } '
+    + 'let s: Small = new Plain();');
+  expect(evaluated('interface Small { m(): uint8; } '
+    + 'class Plain { m(): uint8 { return (0 := uint8); } } '
+    + 'String(new Plain() is Small);')).toBe('true');
 
   // The marker prints as `this` rather than as `nominal`, which named nothing
   // the reader wrote (D-5).

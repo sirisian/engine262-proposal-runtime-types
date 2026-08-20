@@ -39,6 +39,22 @@ function value(source: string): string {
   return completion.Value.stringValue();
 }
 
+/** The message of the error _source_ produces. */
+function thrownMessage(source: string): string {
+  const completion = run(source) as unknown as {
+    Type: string, Value: { properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }> },
+  };
+  if (completion.Type !== 'throw') {
+    throw new Error('expected a throw completion');
+  }
+  for (const [k, v] of completion.Value.properties ?? []) {
+    if (k.stringValue?.() === 'message') {
+      return v.Value?.stringValue?.() ?? '';
+    }
+  }
+  return '';
+}
+
 const SMALL = 'interface Small { m(): uint8; } ';
 const RICH = 'class Rich { v: uint8 = 1; m(): uint8 { return (0 := uint8); } } ';
 
@@ -80,13 +96,20 @@ test('a shape that does not satisfy the interface is refused whatever the rule',
   expectThrows(`${SMALL}class Bad { m(): string { return "s"; } } let s: Small = new Bad();`);
 });
 
-test.fails('a class satisfies an interface it did not declare', () => {
-  // Test A. Asserted by `signature-records`, refused by the implementation, and
-  // the refusal conforms to #sec-issubtype. Recorded here as the ONE case that
-  // failing test is about, so the decision it needs is visible: either the test
-  // is stale (the arm removed exactly this behaviour, deliberately) or the
-  // subtype rule should be relaxed - which is a spec change, not a fix.
-  expectOk(`${SMALL}${RICH}let s: Small = new Rich();`);
+test('a class that did not declare the interface is refused, and the escapes work', () => {
+  // Issue A, adjudicated: the implementation is right and the assertion in
+  // `signature-records` was stale. That test's own comment says it is exercising
+  // "the ordinary use of `implements`" and its code omitted the clause; adding
+  // it makes the test do what it says.
+  //
+  // The refusal is coherent rather than merely conformant. The checker can see
+  // the source is a `Rich` and refuses a claim no declaration made; the value
+  // question is separate and answers *true*; and stating the claim takes one
+  // token.
+  expectThrows(`${SMALL}${RICH}let s: Small = new Rich();`);
+  expect(value(`${SMALL}${RICH}\`\${new Rich() is Small}\`;`)).toBe('true');
+  expect(value(`${SMALL}${RICH}let s: Small = (new Rich() := Small); \`\${s.m()}\`;`)).toBe('0');
+  expectOk(`${SMALL}class R2 implements Small { m(): uint8 { return (0 := uint8); } } let s: Small = new R2();`);
 });
 
 test('an interface-typed overload resolves against a disjoint one', () => {
@@ -118,6 +141,38 @@ test.fails('the ranking does not depend on declaration order', () => {
   expect(value(`${OV}f({ a: (1 := uint8) });`)).toBe('exact');
 });
 
+test('two structurally identical ALIASES are ambiguous, with no interface present', () => {
+  // Found by auditing the plan, and it reframes the ranking issue: the failure
+  // is not peculiar to interfaces. Two aliases of one shape are one signature
+  // declared twice, which #sec-overload-resolution says is a type error where it
+  // is WRITTEN - "it is a type error to declare a signature that is viable for
+  // the same argument list as an existing one at the same rank". The declaration
+  // is accepted here and every call fails instead.
+  const g = 'type O1 = { a: uint8 }; type O2 = { a: uint8 }; '
+    + 'function g(x: O1): string { return "1"; } function g(x: O2): string { return "2"; } ';
+  expectOk(`${g}`);                       // declared without complaint...
+  expectThrows(`${g}g({ a: (1 := uint8) });`); // ...and unusable
+});
+
+test('ranking works where the shapes differ', () => {
+  // The guard that says the machinery orders overloads and fails on one
+  // relation, rather than being absent. Both of these resolve today.
+  expect(value('interface I { a: uint8 } type O = { b: uint8 }; '
+    + 'function f(x: I): string { return "i"; } function f(x: O): string { return "o"; } '
+    + 'f({ a: (1 := uint8) });')).toBe('i');
+  expect(value('interface I { a: uint8 } type O = { a: uint8, b: uint8 }; '
+    + 'function f(x: I): string { return "i"; } function f(x: O): string { return "o"; } '
+    + 'f({ a: (1 := uint8), b: (2 := uint8) });')).toBe('o');
+});
+
+test('a generic interface is satisfied structurally', () => {
+  // The declaration site takes `<T>` and the use site `.<T>`; an earlier probe
+  // used the use-site spelling in both places and reported a parse error, which
+  // went into the plan as an open question. It is not one.
+  expectOk('interface Box<T> { get(): T; } class C { get(): uint8 { return (1 := uint8); } } '
+    + 'let b: Box.<uint8> = new C();');
+});
+
 test('two interfaces of one shape stay ambiguous', () => {
   // Neither is an exact match, so a rank that orders interface below exact must
   // not accidentally order these - they remain a declaration the program should
@@ -125,4 +180,21 @@ test('two interfaces of one shape stay ambiguous', () => {
   expectThrows('interface A1 { a: uint8 } interface B1 { a: uint8 } '
     + 'function f(x: A1): string { return "a"; } function f(x: B1): string { return "b"; } '
     + 'f({ a: (1 := uint8) });');
+});
+
+test('the three argument kinds reach the resolution by different paths', () => {
+  // A literal argument, a typed argument, and an `any` argument report
+  // DIFFERENT messages for the same ambiguity, which means a fix applied to one
+  // path leaves the others. Every acceptance case for the ranking change has to
+  // be run in all three forms.
+  const OV = 'interface I { a: uint8 } type O = { a: uint8 }; '
+    + 'function f(x: I): string { return "iface"; } function f(x: O): string { return "exact"; } ';
+  const literal = thrownMessage(`${OV}f({ a: (1 := uint8) });`);
+  const typed = thrownMessage(`${OV}let v: O = { a: (1 := uint8) }; f(v);`);
+  const anyArg = thrownMessage(`${OV}function anyv() { return { a: (1 := uint8) }; } f(anyv());`);
+  expect(literal).toContain('ambiguous');
+  expect(typed).toContain('ambiguous');
+  expect(anyArg).toContain('ambiguous');
+  // Recorded because the difference is the evidence: two messages, so two paths.
+  expect(literal).not.toBe(typed);
 });
