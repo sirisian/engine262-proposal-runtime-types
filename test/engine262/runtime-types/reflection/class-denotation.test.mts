@@ -23,8 +23,12 @@ test('and `typeof` is untouched', () => {
   // The constraint that rules out attaching the record.
   expect(evaluated('class K { } typeof K;')).toBe('function');
   expect(evaluated('class Box<T> { v: T; } typeof Box;')).toBe('function');
-  // While every other type object reports "object", as the spec requires.
-  expect(evaluated('typeof uint8;')).toBe('object');
+  // While every other type object reports "object", as the spec requires - in a
+  // text that ADMITS. `#sec-type-names` excepts `typeof` from admitting, so a
+  // probe alone leaves the name unbound, which is what keeps an existing
+  // `typeof string === "undefined"` true.
+  expect(evaluated('typeof uint8;')).toBe('undefined');
+  expect(evaluated('type A = uint8; typeof uint8;')).toBe('object');
   expect(evaluated('typeof [].<uint32>;')).toBe('object');
   expect(evaluated('type U = uint8 | string; typeof U;')).toBe('object');
 });

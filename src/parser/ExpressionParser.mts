@@ -164,21 +164,27 @@ function containsMatching(node: unknown, predicate: (type: string, n: unknown) =
 }
 
 
-
-
 /**
  * Mark a reference as NOT admitting, where it turned out to sit in one of the two
  * positions `#sec-type-names` excepts. The candidate was recorded when the
  * identifier was parsed, because neither position is known until its enclosing
  * production is finished.
  */
-function exceptFromAdmitting(node: unknown): void {
+function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
   let target = node as { type?: string, Expression?: unknown, exceptedFromAdmitting?: boolean };
   while (target && target.type === 'ParenthesizedExpression') {
     target = target.Expression as typeof target;
   }
   if (target && target.type === 'IdentifierReference') {
     target.exceptedFromAdmitting = true;
+    if (alsoFromResolution) {
+      // #sec-type-names: only the ASSIGNMENT target is excepted from resolution.
+      // `typeof` is excepted from admitting alone - a text that does not admit
+      // has nothing bound for the probe to find, which is all existing code
+      // needs, and a text that DOES admit opted in, so reporting the Type Object
+      // there is what its author asked for.
+      (target as { exceptedFromResolution?: boolean }).exceptedFromResolution = true;
+    }
   }
 }
 
@@ -598,7 +604,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // #sec-type-names: the other excepted position. A sloppy-mode assignment
         // to an undeclared name creates a global rather than throwing, so it is
         // the second idiom existing code can already use these names with.
-        exceptFromAdmitting(left);
+        exceptFromAdmitting(left, true);
         node.LeftHandSideExpression = left;
         // NOTE: This cast isn't strictly sound as it depends on an expectation that `this.next.value` is correlated
         //       to `this.peek().type` which cannot be verified by the type system.

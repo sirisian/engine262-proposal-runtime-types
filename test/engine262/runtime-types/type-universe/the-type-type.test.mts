@@ -24,7 +24,8 @@ test('the name resolves in type position', () => {
 
 test('the name resolves in expression position', () => {
   // a Type Object is nameable where a value is expected
-  expect(evaluated('String(typeof type);')).toBe('object');
+  // #sec-type-names excepts `typeof` from admitting; a probe alone does not admit.
+  expect(evaluated('String(typeof type);')).toBe('undefined');
   expect(evaluated('let t: type = type; String(t is type);')).toBe('true');
 });
 

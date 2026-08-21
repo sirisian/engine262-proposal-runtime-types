@@ -1,8 +1,8 @@
+import type { Realm } from './Realm.mts';
+import { DeclarativeEnvironmentRecord } from './Environment.mts';
 import {
   Value, X, surroundingAgent, type JSStringValue,
 } from '#self';
-import type { Realm } from './Realm.mts';
-import { DeclarativeEnvironmentRecord } from './Environment.mts';
 
 /**
  * proposal-runtime-types `#sec-type-names`: the environment the built-in type
@@ -55,6 +55,12 @@ export function RunningSourceTextAdmitsTypeNames(): boolean {
   const ctx = surroundingAgent.runningExecutionContext;
   if (!ctx) {
     return false;
+  }
+  // An eval context carries its own answer (the union of its text and the text it
+  // runs inside), because the eval'd code is a source text that ScriptOrModule
+  // does not name.
+  if ((ctx as { AdmitsTypeNames?: boolean }).AdmitsTypeNames === true) {
+    return true;
   }
   const unit = ctx.ScriptOrModule as { AdmitsTypeNames?: boolean } | null | undefined;
   if (unit && unit.AdmitsTypeNames === true) {

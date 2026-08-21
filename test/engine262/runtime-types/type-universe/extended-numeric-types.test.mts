@@ -16,7 +16,12 @@ import { evaluated, ok, bool, expectThrown, expectThrownKind } from '../harness.
 
 // -- float128 and decimal type names -------------------------------------------
 test('numeric types: float128 is a registered type name', () => {
-  expect(evaluated('typeof float128;')).toBe('object');
+  // #sec-type-names excepts `typeof` from ADMITTING, so a text containing only a
+  // probe does not admit and the name is unbound - which is what keeps an
+  // existing `typeof string === "undefined"` true. Where the text admits for any
+  // other reason the probe reports the Type Object, as the next line shows.
+  expect(evaluated('typeof float128;')).toBe('undefined');
+  expect(evaluated('type A = float128; typeof float128;')).toBe('object');
   expect(evaluated('Reflect.getReflection(float128).kind;')).toBe('primitive');
   // interns and is distinct from float64
   expect(ok('type A = float128; type B = float128; A === B;')).toBe(true);
@@ -24,9 +29,10 @@ test('numeric types: float128 is a registered type name', () => {
 });
 
 test('numeric types: the decimal types are registered type names', () => {
-  expect(evaluated('typeof decimal128;')).toBe('object');
-  expect(evaluated('typeof decimal64;')).toBe('object');
-  expect(evaluated('typeof decimal32;')).toBe('object');
+  expect(evaluated('typeof decimal128;')).toBe('undefined');
+  expect(evaluated('type D = decimal128; typeof decimal128;')).toBe('object');
+  expect(evaluated('typeof decimal64;')).toBe('undefined');
+  expect(evaluated('typeof decimal32;')).toBe('undefined');
   // distinct from one another and from float128
   expect(bool('String(decimal128 === decimal64);')).toBe(false);
   expect(bool('String(decimal128 === float128);')).toBe(false);

@@ -1084,7 +1084,7 @@ export type EnvironmentRecordWithThisBinding = FunctionEnvironmentRecord | Globa
 import { TypeNameEnvironmentFor, RunningSourceTextAdmitsTypeNames } from './TypeNames.mts';
 import { surroundingAgent as agentForTypeNames } from '#self';
 
-export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSStringValue, strict: BooleanValue): PlainEvaluator<ReferenceRecord> {
+export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSStringValue, strict: BooleanValue, exceptedFromTypeNames?: boolean): PlainEvaluator<ReferenceRecord> {
   // 1. If lex is the value null, then
   if (env === null) {
     // proposal-runtime-types #sec-type-names: the scope chain is exhausted, which
@@ -1098,7 +1098,14 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
     // property is one object shared by every Script and Module in the realm, so
     // a single typed module would change `typeof string` for every untyped
     // script beside it - the outcome the clause exists to prevent.
-    const typeNames = TypeNameEnvironmentFor(agentForTypeNames.currentRealmRecord);
+    // #sec-type-names: the two excepted positions are excepted from RESOLUTION as
+    // well as from admitting. Without that, a script that creates an implicit
+    // global - `string = 5;` with no declaration - and then reads it would admit
+    // by the read, and its assignment would reach the immutable type name instead
+    // of the global it creates today.
+    const typeNames = exceptedFromTypeNames === true
+      ? undefined
+      : TypeNameEnvironmentFor(agentForTypeNames.currentRealmRecord);
     if (typeNames && RunningSourceTextAdmitsTypeNames()) {
       const found = Q(yield* typeNames.HasBinding(name));
       if (found === Value.true) {
@@ -1133,6 +1140,6 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
     // a. Let outer be env.[[OuterEnv]].
     const outer = env.OuterEnv;
     // b. Return ? GetIdentifierReference(outer, name, strict).
-    return yield* GetIdentifierReference(outer, name, strict);
+    return yield* GetIdentifierReference(outer, name, strict, exceptedFromTypeNames);
   }
 }

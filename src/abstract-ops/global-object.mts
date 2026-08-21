@@ -199,6 +199,14 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   evalContext.Realm = evalRealm;
   // 22. Set evalContext's ScriptOrModule to runningContext's ScriptOrModule.
   evalContext.ScriptOrModule = runningContext.ScriptOrModule;
+  // proposal-runtime-types #sec-type-names: the eval'd code is a source text of
+  // its own and admits on its own terms; a DIRECT eval also admits where the text
+  // it runs inside does. The union, not the inheritance: an eval'd string that
+  // contains type syntax admits even from an untyped caller, and a bare type name
+  // inside an eval resolves where it would just outside it.
+  (evalContext as { AdmitsTypeNames?: boolean }).AdmitsTypeNames =
+    (script as { admitsTypeNames?: boolean }).admitsTypeNames === true
+    || (runningContext.ScriptOrModule as { AdmitsTypeNames?: boolean } | null)?.AdmitsTypeNames === true;
   // 23. Set evalContext's VariableEnvironment to varEnv.
   evalContext.VariableEnvironment = varEnv;
   // 24. Set evalContext's LexicalEnvironment to lexEnv.

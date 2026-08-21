@@ -138,7 +138,7 @@ export function GetActiveScriptOrModule() {
 }
 
 /** https://tc39.es/ecma262/#sec-resolvebinding */
-export function ResolveBinding(name: JSStringValue, env?: EnvironmentRecord | UndefinedValue | NullValue, strict?: boolean) {
+export function ResolveBinding(name: JSStringValue, env?: EnvironmentRecord | UndefinedValue | NullValue, strict?: boolean, exceptedFromTypeNames?: boolean) {
   // 1. If env is not present or if env is undefined, then
   if (env === undefined || env === Value.undefined) {
     // a. Set env to the running execution context's LexicalEnvironment.
@@ -148,7 +148,7 @@ export function ResolveBinding(name: JSStringValue, env?: EnvironmentRecord | Un
   Assert(env instanceof EnvironmentRecord);
   // 3. If the code matching the syntactic production that is being evaluated is contained in strict mode code, let strict be true; else let strict be false.
   // 4. Return ? GetIdentifierReference(env, name, strict).
-  return GetIdentifierReference(env, name, strict ? Value.true : Value.false);
+  return GetIdentifierReference(env, name, strict ? Value.true : Value.false, exceptedFromTypeNames);
 }
 
 /** https://tc39.es/ecma262/#sec-getthisenvironment */
