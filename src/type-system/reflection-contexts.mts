@@ -60,10 +60,11 @@ export function RegisterReflectionContexts(reflect: ObjectValue): void {
     // every qualified name outright, so all 47 of these were unresolvable to it
     // while the runtime resolved them by walking the binding.
     //
-    // Registered before the context filter below, and without it: `Reflect.never`
+    // Registered before the context filter below, and without it: `Reflect.Type`
     // is a type a program may write and is not a context, so a filter that keeps
     // only contexts would leave exactly that one name behind - which is what the
-    // first attempt at this did.
+    // first attempt at this did. (`Reflect.never` was the other such name, until
+    // it was removed in favour of `type never`.)
     RegisterBoundTypeRecord(`Reflect.${name}`, record);
     if (record.Kind !== 'nominal') {
       continue;

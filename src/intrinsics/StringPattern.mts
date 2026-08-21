@@ -69,7 +69,7 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
 
 /**
  * Declare the meta type. It runs after %Type.prototype% exists, for the same
- * reason `Reflect.never` does: a Type Object needs that prototype.
+ * reason the `never` Type Object does: a Type Object needs that prototype.
  */
 export function bootstrapStringPattern(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {

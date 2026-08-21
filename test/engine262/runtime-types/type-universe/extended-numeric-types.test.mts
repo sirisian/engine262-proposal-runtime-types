@@ -403,7 +403,7 @@ test('memory layout: a field reports its offset through the ClassField reflectio
 
   // A context is used in TYPE position, so it has to BE a type for the call to
   // resolve; `Reflect.ClassField` is a Type Object for the same reason
-  // `Reflect.never` is one.
+  // `never` is one.
   expect(evaluated('String(typeof Reflect.ClassField);')).toBe('object');
 
   // A class with no layout now READS, and reports no placement. The reflection

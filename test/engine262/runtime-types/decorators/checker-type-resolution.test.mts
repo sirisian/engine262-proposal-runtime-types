@@ -38,7 +38,7 @@ test('a QUALIFIED type name is resolved', () => {
   expectStaticTypeError(mismatch('Reflect.Class'));
   expectStaticTypeError(mismatch('Reflect.ClassFieldLayout'));
   // Not a context, and so left behind by a registration that kept only contexts.
-  expectStaticTypeError(mismatch('Reflect.never'));
+  expectStaticTypeError(mismatch('never'));
 });
 
 test('one unresolvable parameter no longer defeats a whole signature', () => {

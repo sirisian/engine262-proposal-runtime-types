@@ -59,7 +59,7 @@ import { bootstrapParseInt } from '../intrinsics/parseInt.mts';
 import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
 import { bootstrapProxy } from '../intrinsics/Proxy.mts';
-import { bootstrapReflect, bootstrapReflectClassField, bootstrapReflectNever } from '../intrinsics/Reflect.mts';
+import { bootstrapReflect, bootstrapReflectClassField } from '../intrinsics/Reflect.mts';
 import { bootstrapComposite } from '../intrinsics/Composite.mts';
 import { bootstrapAbortController } from '../intrinsics/AbortController.mts';
 import { bootstrapAtomics } from '../intrinsics/Atomics.mts';
@@ -254,9 +254,8 @@ export function CreateIntrinsics(realmRec: Realm) {
   // inherits from %Type.prototype%, so it follows it.
   bootstrapEnumPrototype(realmRec);
   // proposal-runtime-types: needs %Type.prototype%, so it follows it.
-  bootstrapReflectNever(realmRec);
   // proposal-runtime-types: the ClassField reflection context, a type, so it
-  // follows %Type.prototype% for the same reason %Reflect.never% does.
+  // follows %Type.prototype% for the same reason the `never` Type Object does.
   bootstrapReflectClassField(realmRec);
   // proposal-runtime-types (soa.md): the structure-of-arrays container.
   bootstrapSoAPrototype(realmRec);
