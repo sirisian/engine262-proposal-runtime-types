@@ -4054,6 +4054,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return receiver.Element;
           }
+          // PLAN-parameter-composition Stage B. The third arm. A computed access
+          // with a String LITERAL key reads a declared property, and is the same
+          // operation the annotation `T["n"]` denotes - so both call
+          // `IndexedAccessTypeRecord` and cannot drift apart, which is what
+          // `#sec-indexed-access-types` was written for.
+          //
+          // Before this, `o["n"]` had no Static Type at all while `o.n` did, so
+          // `let v: string = o["n"]` was accepted for a `uint8` property. The
+          // two spellings read the same property and now answer the same type.
+          //
+          // A key that is not a String literal type - `o[k]` for a `k: string` -
+          // yields null here, as `IndexedTypeOf` yields ~empty~ for it, and
+          // falls through to the same untyped result as before. That is correct:
+          // such a key does not name a property.
+          if (receiver) {
+            const keyType = staticType(m.Expression as ParseNode);
+            if (keyType) {
+              const indexed = IndexedAccessTypeRecord(receiver, keyType);
+              if (indexed) {
+                return indexed as Known;
+              }
+            }
+          }
         }
         return null;
       }

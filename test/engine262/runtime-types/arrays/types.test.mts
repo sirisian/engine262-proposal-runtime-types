@@ -110,7 +110,14 @@ test('the runtime type agrees with membership', () => {
 });
 
 test('an element type is inferred from an array argument', () => {
-  expect(evaluated("function g<T>(v: [].<T>): string { let x: T = 'z'; return x; } g(['a']);")).toBe('z');
+  // Shown with a well-typed body. The original form was
+  // `function g<T>(v: [].<T>): string { let x: T = 'z'; return x; }`, and both
+  // of its halves are now refused, correctly: nothing but a `T` is a `T`, so
+  // `let x: T = 'z'` is ill typed, and an unconstrained `T` is not a subtype of
+  // `string`, so returning one is too. `#sec-issubtype`, and
+  // `PLAN-parameter-composition` Stage A. The inference being demonstrated -
+  // `T` bound to the element type of the argument - is unaffected.
+  expect(evaluated("function g<T>(v: [].<T>): T { return v[0]; } g(['a']);")).toBe('a');
   expect(evaluated('function g<T>(v: [].<T>): T { return v[0]; } String(g([(1 := int32)]));')).toBe('1');
 });
 

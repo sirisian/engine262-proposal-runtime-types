@@ -88,3 +88,27 @@ test('IndexedTypeOf distributes over a union operand and a union key', () => {
   expect(evaluated('type T = { a: uint8, b: string }; type R = T["a" | "b"]; String("s" is R);')).toBe('true');
   expect(evaluated('type T = { a: uint8, b: string }; type R = T["a" | "b"]; String((1 := uint8) is R);')).toBe('true');
 });
+
+test('a computed access with a String literal key is TYPED', () => {
+  // PLAN-parameter-composition Stage B. `o["n"]` and `o.n` read the same
+  // property, so they answer the same type - and both go through
+  // `IndexedAccessTypeRecord`, which is the operation the ANNOTATION `T["n"]`
+  // denotes, so the three cannot drift apart.
+  expect(evaluated('let o: { n: uint8 } = { n: 1 }; let v: uint8 = o["n"]; String(v);')).toBe('1');
+  expectError('let o: { n: uint8 } = { n: 1 }; let v: string = o["n"];');
+  // A property that does not exist is an error, as in a type position.
+  expectError('let o: { n: uint8 } = { n: 1 }; let v: uint8 = o["zz"];');
+});
+
+test('a key that is not a String literal TYPE stays untyped', () => {
+  // `IndexedTypeOf` answers ~empty~ for such a key, so there is no property
+  // named and nothing to check. This reads as an omission beside the case above
+  // and is not one: the key genuinely does not name a member.
+  expect(evaluated('let o: { n: uint8 } = { n: 1 }; let k: string = "n"; let v: string = o[k]; String(v);')).toBe('1');
+});
+
+test('the other computed receivers are unchanged', () => {
+  expectError('let a: [].<uint8> = [1]; let v: string = a[0];');
+  expectError('let a: [].<uint8> = [1]; let i: uint8 = 0; let v: string = a[i];');
+  expectError('let o: { n: uint8 } = { n: 1 }; let v: string = o.n;');
+});
