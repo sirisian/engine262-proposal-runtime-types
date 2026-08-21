@@ -281,6 +281,8 @@ export interface Throw {
   | 'Duplicate constructor'
   | 'Duplicate meta declaration'
   | 'a base-form meta type has no type parameters to bind'
+  | 'a meta declaration may declare at most one type parameter, which names its base'
+  | 'a meta type takes $1 type parameter(s) and its constraint shape takes $2'
   | 'Exponent of bigint must be positive'
   | 'FinalizationRegistry cannot be invoked without new'
   | 'Host does not set a module loader'

@@ -1172,6 +1172,26 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   const aliasDeclaration = shape && shape.Kind === 'nominal'
     ? (shape as { Declaration?: ParseNode.TypeAliasDeclaration }).Declaration
     : undefined;
+  // PLAN-meta-hook-signatures.md phase 3. #sec-meta-declarations: it is an early
+  // error "for its constraint shape to take a number of type parameters other
+  // than the number the declaration takes". The parameter names the BASE and is
+  // threaded into the shape, so a shape that takes a different number has
+  // nowhere to put it - or expects one the declaration never supplies.
+  //
+  // Checked HERE rather than at the parser because the count on the other side
+  // belongs to the constraint shape, which is not known until the |TypeName| is
+  // resolved. The parser checks the declaration's own count, which it has.
+  const declaredParameterCount = node.TypeParameters?.TypeParameterList?.length ?? 0;
+  const shapeParameterCount = aliasDeclaration?.type === 'TypeAliasDeclaration'
+    ? (aliasDeclaration.TypeParameters?.TypeParameterList?.length ?? 0)
+    : 0;
+  if (declaredParameterCount !== shapeParameterCount) {
+    return Throw.TypeError(
+      'a meta type takes $1 type parameter(s) and its constraint shape takes $2',
+      Value(String(declaredParameterCount)),
+      Value(String(shapeParameterCount)),
+    );
+  }
   const claimShape = aliasDeclaration?.type === 'TypeAliasDeclaration' && aliasDeclaration.TypeParameters
     ? Q(yield* InstantiateGenericAlias(
       aliasDeclaration,
