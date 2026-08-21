@@ -2688,6 +2688,48 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
  * Record; it is a type error when this returns empty. These are also the rules
  * of the kit's `keysOf`, so operator and helper cannot drift.
  */
+/**
+ * `T[K]` over resolved operands: the union, over each arm of _T_ and each literal
+ * key of _K_, of the type of that arm's property, with an optional property's
+ * access admitting `undefined`.
+ *
+ * Shared by the runtime resolver and the checker's `resolveType`
+ * (`PLAN-checker-type-resolution.md stage E`). It returns ~null~ where the
+ * runtime raises a type error, so the checker can answer "no type" without
+ * throwing while the runtime keeps reporting which of the three ways it failed.
+ * Extracted rather than copied because a second copy of this walk is how the
+ * two resolvers diverge, which is the defect that plan exists to close.
+ */
+export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeRecord): TypeRecord | null {
+  const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
+  const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
+  const results: TypeRecord[] = [];
+  for (const armRaw of arms) {
+    let arm = armRaw;
+    while ((arm.Kind === 'nominal' && arm.Structure) || arm.Kind === 'parameterized') {
+      arm = arm.Kind === 'parameterized' ? arm.Base : arm.Structure!;
+    }
+    if (arm.Kind !== 'object') {
+      return null;
+    }
+    for (const key of keys) {
+      if (key.Kind !== 'literal' || !(key.Value instanceof JSStringValue)) {
+        return null;
+      }
+      const keyName = key.Value.stringValue();
+      const prop = arm.Properties.find((p) => p.key === keyName);
+      if (!prop) {
+        return null;
+      }
+      const undefinedType: TypeRecord = makePrimitive('undefined');
+      results.push(prop.optional
+        ? CanonicalizeType({ Kind: 'union', Members: [prop.type, undefinedType] })
+        : prop.type);
+    }
+  }
+  return CanonicalizeType({ Kind: 'union', Members: results });
+}
+
 export function KeyTypesOf(t: TypeRecord): TypeRecord {
   if (t.Kind === 'object') {
     const keys: TypeRecord[] = [];

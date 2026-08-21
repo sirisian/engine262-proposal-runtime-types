@@ -69,26 +69,43 @@ const rows: readonly Row[] = [
 ];
 
 /**
- * Kinds the checker does not resolve today, each measured rather than assumed.
+ * Kinds the checker cannot resolve, and the reason it cannot.
  *
- * Every one is a `case` the runtime resolver has and `resolveType` does not, and
- * every one is the R1/R2 defect in a different node: an annotation naming one is
- * unchecked statically and unelidable. Closing one makes this list stale and the
- * staleness test below fails, which is the point - the list is a record of work
- * outstanding, not a permission.
+ * Three of the seven this test first reported are closed
+ * (`PLAN-checker-type-resolution.md stage E`): `ReferenceType` is a structural
+ * record, and `KeyOfType` and `IndexedAccessType` compute from resolved operands
+ * through the SAME helpers the runtime uses.
  *
- * `PLAN-checker-type-resolution.md` stage E - reporting an unresolvable
- * annotation as a user error - is gated on this list being empty. Erroring while
- * it has members would turn every one of these valid annotations into a false
- * error in a program that wrote a type the runtime resolves.
+ * The remaining four are gaps of three different KINDS, which is the finding
+ * that matters more than the count.
+ *
+ * `SharedType` and `PatternType` are resolvable - their records are trivial -
+ * and were resolved, and reverted. Each exposed a judgment downstream that does
+ * not match the runtime's: `let s: shared uint8 = 1;` became an early error,
+ * because a numeric literal reaches `uint8` by CONVERSION rather than by
+ * subtyping and the checker's conversion path does not look through the `shared`
+ * marker, and `float32.<{ p: /^a/ }>` failed once a pattern reached a metadata
+ * argument. Closing these is a change to those paths, not to the resolver: the
+ * annotation is readable, and reading it is not by itself enough.
+ *
+ * `TypeQueryType` and `ComputedType` are different in kind rather than in
+ * difficulty. Resolving them requires
+ * EVALUATING THE PROGRAM: `typeof x` reads the value bound to a name
+ * (`ResolveTypeName` then `GetValue`), and `Composite({ x: 1 })` calls its
+ * callee. A checker that runs before evaluation has no value to read and no call
+ * to make, so this list can never be emptied by better resolution.
+ *
+ * That matters beyond this test. `PLAN-checker-type-resolution.md` Q6/D3 gates
+ * reporting an unresolvable annotation as a user error on this set being EMPTY,
+ * and it cannot become empty - so that gate needs restating as "empty of kinds
+ * decidable without evaluation" before stage E can proceed. An annotation naming
+ * `typeof x` is valid, and the checker's inability to read it is a property of
+ * when the checker runs, not a defect in the program.
  */
 const KNOWN_CHECKER_GAPS = new Set([
   'SharedType',
-  'ReferenceType',
-  'KeyOfType',
-  'TypeQueryType',
-  'IndexedAccessType',
   'PatternType',
+  'TypeQueryType',
   'ComputedType',
 ]);
 

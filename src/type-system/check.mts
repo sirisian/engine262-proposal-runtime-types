@@ -24,7 +24,7 @@ import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
-import { MetadataObjectFromType, fitsNumericType } from './runtime.mts';
+import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord } from './runtime.mts';
 import { isWideIntegerType } from './arithmetic.mts';
 import { resolveOverloadByTypes } from './overloads.mts';
 import { wrapToType } from './arithmetic.mts';
@@ -2805,6 +2805,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return node.keyword === 'void' ? voidType : makePrimitive('null');
       case 'ParenthesizedType':
         return resolveType(node.Type);
+      // `PLAN-checker-type-resolution.md stage E`, closing the resolver gaps C2
+      // reports. Each mirrors its arm of `TypeNodeToTypeRecord` exactly - the
+      // record shape is the contract between the two resolvers, and building a
+      // different one here is the mistake stage A's first attempt made with
+      // `Token`.
+      //
+      // `SharedType` is deliberately NOT resolved here yet, and the reason is
+      // recorded in `resolver-parity.test.mts`: resolving it made
+      // `let s: shared uint8 = 1;` an early error. `IsSubtype` looks through
+      // `shared` (relations.mts), but a numeric literal reaches `uint8` by
+      // CONVERSION rather than by subtyping, and the checker's conversion path
+      // does not look through the marker - so a value the runtime converts and
+      // admits was refused statically. Closing this gap means teaching that path
+      // about `shared`, which is a separate change from resolving the annotation.
+      // The references extension: `ref T` is { Kind: 'reference', Target }.
+      case 'ReferenceType': {
+        const Target = resolveType(node.Type);
+        return Target ? { Kind: 'reference', Target } as Known : null;
+      }
+      // `PatternType` is likewise NOT resolved here yet, for the same shape of
+      // reason as `SharedType`: the record is two fields, and building it made
+      // `float32.<{ p: /^a/ }>` fail - a pattern reaching a metadata argument
+      // that the checker then judges differently from the runtime. Resolvable,
+      // blocked downstream.
+      // #sec-keyof: the Type Record `KeyTypesOf` answers for the operand. That
+      // operation is already a plain function over records, so both resolvers
+      // call the one implementation.
+      case 'KeyOfType': {
+        const operand = resolveType(node.Type);
+        return operand ? (KeyTypesOf(operand) as Known) : null;
+      }
+      // typeprogramming.md 4.1: `T[K]`. The walk is shared with the runtime
+      // resolver rather than copied - see `IndexedAccessTypeRecord`. It answers
+      // null where the runtime raises a type error, which is the difference
+      // between the two resolvers' jobs: this one decides whether the annotation
+      // denotes a type, and the boundary reports why it does not.
+      case 'IndexedAccessType': {
+        const objectType = resolveType(node.ObjectType);
+        const indexType = resolveType(node.IndexType);
+        if (!objectType || !indexType) {
+          return null;
+        }
+        return IndexedAccessTypeRecord(objectType, indexType) as Known | null;
+      }
       case 'UnionType':
       case 'IntersectionType': {
         const Members: TypeRecord[] = [];
