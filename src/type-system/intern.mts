@@ -1,6 +1,6 @@
-import type { ObjectValue, Arguments } from '../value.mts';
+import type { Arguments } from '../value.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
-import { VectorValue } from '../value.mts';
+import { VectorValue, ObjectValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
@@ -25,7 +25,22 @@ export type TypeObject = ObjectValue & { TypeRecord: TypeRecord };
 type CallableTypeObject = TypeObject & { Call(thisArgument: Value, argumentsList: Arguments): ValueEvaluator };
 
 export function isTypeObject(value: unknown): value is TypeObject {
-  return !!value && typeof value === 'object' && 'TypeRecord' in (value as object);
+  // `TypeObject` is `ObjectValue & { TypeRecord }`, and BOTH halves are load
+  // bearing. A typed primitive carries a [[TypeRecord]] too - that is how
+  // `RuntimeTypeOf` reports the type of `(5 := uint8)` - so testing only for the
+  // slot admitted every typed value here.
+  //
+  // The consequence was a language feature nobody wrote: a binding holding a
+  // typed value could be used AS a type, so `const q: uint8 = 1; let v: q = 2;`
+  // resolved `q` to `uint.<8>` while `const s: string = "a"; let v: s` did not,
+  // the difference being whether the value happened to carry a record. It also
+  // crashed the host for `decimal128`. A type position names a type; a value
+  // that has one is reached with `Reflect.typeOf` or named with `type`.
+  // The slot must also be FILLED. `'TypeRecord' in value` is true of a slot that
+  // exists and holds nothing, which is how `decimal128` reached the walk below
+  // and crashed the host on `record.Kind`.
+  return value instanceof ObjectValue
+    && (value as { TypeRecord?: unknown }).TypeRecord !== undefined;
 }
 
 /** #sec-canonicalizetype */

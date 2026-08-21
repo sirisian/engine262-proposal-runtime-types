@@ -53,7 +53,10 @@ test('a call on an enum type is a TypeError for a value that is not an enumerato
 
 // -- typeof is unchanged -------------------------------------------------------
 test('typeof a Type Object is object even though it is callable', () => {
-  expect(evaluated('typeof uint8;')).toBe('object');
+  // `#sec-type-names` excepts `typeof` from ADMITTING, so a text holding only a
+  // probe does not admit and the name is unbound. Shown with a text that admits.
+  expect(evaluated('typeof uint8;')).toBe('undefined');
+  expect(evaluated('type A = uint8; typeof uint8;')).toBe('object');
   expect(evaluated('enum E { A, B } typeof E;')).toBe('object');
   expect(evaluated('type U = uint8; typeof U;')).toBe('object');
   // and the type object is still callable
