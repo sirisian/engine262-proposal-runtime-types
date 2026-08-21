@@ -79,7 +79,16 @@ test('lexical and variable declarations take annotations and typed initializers'
   expect(firstStatement('var w := 4;')).toMatchObject({
     VariableDeclarationList: [{ TypedInitializer: { type: 'TypedInitializer' } }],
   });
-  expectParseError('const k: uint8;'); // const still requires an initializer
+  // `const` without an initializer is a Syntax Error only where the binding
+  // carries NO annotation. #sec-lexical-declarations amends ECMA-262's early
+  // error so it "does not apply to a LexicalBinding whose BindingIdentifier
+  // carries one": such a binding takes the default value of its type, as a `let`
+  // of that type does. This assertion read the unamended rule.
+  expectParseError('const k;');
+  expect(firstStatement('const k: uint8;')).toMatchObject({
+    type: 'LexicalDeclaration',
+    BindingList: [{ TypeAnnotation: { type: 'TypeAnnotation' }, Initializer: null }],
+  });
 });
 
 test('for-of bindings take annotations', () => {
