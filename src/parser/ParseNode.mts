@@ -182,6 +182,7 @@ export namespace ParseNode {
   //   TemplateLiteral
   //   CoverParenthesizedExpressionAndArrowParameterList
   export type PrimaryExpression =
+    | ContractReturn
     | ThisExpression
     | IdentifierReference
     | Literal
@@ -3356,6 +3357,17 @@ export namespace ParseNode {
   }
 
   // WhereClause : `where` RefinementPredicate
+  /**
+   * PLAN-where-on-methods.md D1. #sec-checked-contracts: "Within a |WhereClause|
+   * of a function declaration, `return` is a |PrimaryExpression| denoting the
+   * value the function returns. It is a Syntax Error for `return` to occur as an
+   * expression anywhere else, which costs nothing, since the token is
+   * ungrammatical in expression position today and no program can be using it."
+   */
+  export interface ContractReturn extends BaseParseNode {
+    readonly type: 'ContractReturn';
+  }
+
   export interface WhereClause extends BaseParseNode {
     readonly type: 'WhereClause';
     readonly RefinementPredicate: RefinementPredicate;
@@ -3689,6 +3701,7 @@ export namespace ParseNode.RegExp {
 }
 
 export type ParseNode =
+  | ParseNode.ContractReturn
   | ParseNode.ConstantExpression
   | ParseNode.ModedRegion
   | ParseNode.PipelineExpression

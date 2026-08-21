@@ -1691,6 +1691,20 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parsePrimaryExpression(): ParseNode.PrimaryExpression {
+    // PLAN-where-on-methods.md D1. #sec-checked-contracts: "Within a
+    // |WhereClause| of a function declaration, `return` is a |PrimaryExpression|
+    // denoting the value the function returns. It is a Syntax Error for `return`
+    // to occur as an expression anywhere else, which costs nothing, since the
+    // token is ungrammatical in expression position today and no program can be
+    // using it."
+    //
+    // The second sentence is why this needs no guard against ambiguity: outside
+    // a predicate the token still falls through to the ordinary error.
+    if (this.test(Token.RETURN) && (this as { inRefinementPredicate?: boolean }).inRefinementPredicate) {
+      const node = this.startNode<ParseNode.ContractReturn>();
+      this.next();
+      return this.finishNode(node, 'ContractReturn') as unknown as ParseNode.PrimaryExpression;
+    }
     // proposal-runtime-types: ClassExpression : ClassModifiers? `class` ...
     if (this.testClassModifierRun()) {
       return this.parseClassExpression();

@@ -1,3 +1,4 @@
+import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
 } from './completion.mts';
@@ -210,6 +211,12 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     // Expressions
     case 'CommaOperator':
       return yield* Evaluate_CommaOperator(node);
+    case 'ContractReturn':
+      // PLAN-where-on-methods.md D1. #sec-checked-contracts: within a
+      // |WhereClause| of a function declaration, `return` denotes the value the
+      // function returns. It is only ever evaluated while a contract is being
+      // checked, which is the only time the stack is non-empty.
+      return CurrentContractReturn() ?? Value.undefined;
     case 'ThisExpression':
       return Evaluate_This(node);
     case 'IdentifierReference':

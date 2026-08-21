@@ -1031,7 +1031,16 @@ export abstract class TypeParser extends ExpressionParser {
     while (this.test('where')) {
       const node = this.startNode<ParseNode.WhereClause>();
       this.next();
-      node.RefinementPredicate = this.parseRefinementPredicate();
+      // PLAN-where-on-methods.md D1. `return` is a |PrimaryExpression| only
+      // HERE, so the flag is raised across the predicate and lowered after it
+      // rather than being a property of the expression parser.
+      const outer = (this as { inRefinementPredicate?: boolean }).inRefinementPredicate;
+      (this as { inRefinementPredicate?: boolean }).inRefinementPredicate = true;
+      try {
+        node.RefinementPredicate = this.parseRefinementPredicate();
+      } finally {
+        (this as { inRefinementPredicate?: boolean }).inRefinementPredicate = outer;
+      }
       clauses.push(this.finishNode(node, 'WhereClause'));
     }
     return clauses;

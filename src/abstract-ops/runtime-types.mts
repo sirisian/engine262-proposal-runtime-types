@@ -19,8 +19,7 @@ import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate,
-} from '#self';
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
@@ -2691,6 +2690,97 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
 }
 
 /** Applies the return annotation to a return value. */
+/**
+ * The value a contract's `return` denotes, for the innermost evaluation.
+ *
+ * PLAN-where-on-methods.md D1. #sec-checked-contracts: a contract "is VERIFIED:
+ * at every concrete evaluation of the builder, once [it] has a result, each
+ * clause is evaluated with `return` bound to it". The binding is a stack rather
+ * than a field on the function, because a clause may CALL the builder - or
+ * another one - while being checked, and the inner evaluation's `return` must
+ * not displace the outer's.
+ */
+const contractReturnValues: Value[] = [];
+
+export function CurrentContractReturn(): Value | undefined {
+  return contractReturnValues.length === 0 ? undefined : contractReturnValues[contractReturnValues.length - 1];
+}
+
+export function PushContractReturn(value: Value): void {
+  contractReturnValues.push(value);
+}
+
+export function PopContractReturn(): void {
+  contractReturnValues.pop();
+}
+
+/**
+ * The VERIFIED half of a checked contract.
+ *
+ * PLAN-where-on-methods.md D1. #sec-checked-contracts: "at every concrete
+ * evaluation of the builder, once [it] has a result, each clause is evaluated
+ * with `return` bound to it, and a clause that is falsy is a type error naming
+ * the builder, the arguments it was given, and the clause. A contract is never
+ * trusted."
+ *
+ * Only clauses that NAME `return` are contracts. A `where` over generic
+ * parameters alone is the compile-time bound, already checked at the
+ * application, and evaluating it again here would run it twice and report the
+ * second failure at the wrong site.
+ */
+export function* VerifyContracts(fn: object, result: Value): ValueEvaluator {
+  const clauses = functionWhereClauses(fn as never);
+  if (!clauses || clauses.length === 0) {
+    return Value.undefined;
+  }
+  for (const clause of clauses) {
+    const predicate = (clause as unknown as { RefinementPredicate?: object }).RefinementPredicate;
+    if (!predicate || !mentionsContractReturn(predicate)) {
+      continue;
+    }
+    PushContractReturn(result);
+    let verdict;
+    try {
+      verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+    } finally {
+      PopContractReturn();
+    }
+    if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+      return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+    }
+  }
+  return Value.undefined;
+}
+
+function mentionsContractReturn(node: object, seen = new Set<object>()): boolean {
+  if (!node || typeof node !== 'object' || seen.has(node)) {
+    return false;
+  }
+  seen.add(node);
+  if ((node as { type?: string }).type === 'ContractReturn') {
+    return true;
+  }
+  // Own enumerable keys only, and read through a guard: a Parse Node carries
+  // accessors - `source` among them - that throw when read outside the context
+  // that defined them, and Object.values reads every one.
+  for (const key of Object.keys(node)) {
+    let value;
+    try {
+      value = (node as Record<string, unknown>)[key];
+    } catch {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      if (value.some((v) => mentionsContractReturn(v as object, seen))) {
+        return true;
+      }
+    } else if (value && typeof value === 'object' && mentionsContractReturn(value as object, seen)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
   // An IMPLICIT CAST's declared type names what its result BECOMES, not a
   // boundary its body must already satisfy: the body computes a raw value -

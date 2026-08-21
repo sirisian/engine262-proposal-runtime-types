@@ -36,6 +36,7 @@ import {
   functionHasAnnotations,
   EnforceParameterTypes,
   EnforceReturnType,
+  VerifyContracts,
   InferGenericCallBindings,
   functionTypeParameters,
 } from '#self';
@@ -104,7 +105,18 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
         popContextualType();
       }
       if (result.Type === 'return') {
-        return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+        const enforced = Q(yield* EnforceReturnType(functionObject, result.Value as Value));
+        // PLAN-where-on-methods.md D1, the VERIFIED half. #sec-checked-contracts:
+        // "at every concrete evaluation of the builder, once [it] has a result,
+        // each clause is evaluated with `return` bound to it, and a clause that
+        // is falsy is a type error". Checked HERE because this is the first
+        // moment a result exists - the clause's other reading, the ASSUMED one,
+        // is the checker's and runs where no result does.
+        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, enforced as Value));
+        if (contract.Type === 'throw') {
+          return contract;
+        }
+        return new Completion({ Type: 'return', Value: enforced });
       }
       return result;
     } finally {
