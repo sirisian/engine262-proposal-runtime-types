@@ -8284,12 +8284,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (resolved) {
           thisTypeFrames.push(resolved);
         }
+        // #sec-generic-functions: "a name a generic declaration BINDS denotes
+        // that type parameter for the whole of the declaration - its parameter
+        // annotations, its return annotation, AND ITS BODY". The signature's
+        // scope is pushed and popped where the signature is built, so without
+        // this the body was walked with no type parameter in scope: `T` there
+        // resolved to nothing, and `let v: T = 5` inside `function f<T>` was
+        // accepted because there was no constraint to violate.
+        //
+        // `FINDING-generic-body-unchecked.md`. What the parameter record then
+        // gives is the relation `relations.mts` already states - a parameter is
+        // opaque, a subtype of itself and of its constraint, and NOTHING ELSE
+        // relates to it - so assigning any concrete value into a `T` is refused,
+        // which is right: `T` may be instantiated with a literal type, so not
+        // even a String is known to be a `T: string`.
+        const bodyTypeParams = typeParameterNamesOf(n as ParseNode);
         try {
+          // PUBLISHED FIRST, and deliberately outside the scope below. A
+          // published signature is what the CALL BOUNDARY reads, and a parameter
+          // annotation resolved to an opaque `T` there would refuse `id(5)`
+          // against a bare `T` - which `#sec-inference-and-function-forms` says
+          // must not happen, since the boundary sees one function for every
+          // instantiation. The scope is for the BODY only.
           publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {
             const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
             return ann ? resolveType(ann.Type) : null;
           }));
-          enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+          if (bodyTypeParams) {
+            typeParameterScopes.push(new Set(bodyTypeParams));
+          }
+          try {
+            enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+          } finally {
+            if (bodyTypeParams) {
+              typeParameterScopes.pop();
+            }
+          }
         } finally {
           if (adopted) {
             thisTypeFrames.pop();

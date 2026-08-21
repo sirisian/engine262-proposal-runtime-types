@@ -6,18 +6,18 @@ import { evaluated, expectError, ok } from '../harness.mts';
  * inside a generic declaration evaluates at each specialization, once every
  * generic parameter it reads is bound."
  *
- * `FINDING-generic-body-unchecked.md`. Only part of that happens: the SIGNATURE's
- * parameter positions are evaluated at specialization, and the body's annotations
- * and return are not. This file pins the boundary between what works, what is
- * deliberately accepted, and what the specification says should be refused, so
- * the difference is written down rather than rediscovered:
+ * `FINDING-generic-body-unchecked.md`. The body used to be walked with no type
+ * parameter in scope, so `T` there resolved to nothing and `let v: T = 5` was
+ * accepted for want of a constraint to violate. This file pins the three things
+ * that boundary turns on:
  *
- *   - what already works, which must not regress;
- *   - what is CORRECTLY accepted, because refusing it would be wrong;
- *   - what should be refused, marked `test.fails` until it is.
+ *   - what is enforced at the CALL, which must not regress;
+ *   - what a generic BODY may and may not do;
+ *   - the boundary case that decides how the fix had to be scoped.
  *
- * The `test.fails` cases are the specification's behaviour. When one starts
- * passing, this file fails and says so, which is the point.
+ * The body cases were `test.fails` while the gap stood. They pass now: the
+ * checker pushes the declaration's type parameters around the body walk, and
+ * the opaque-parameter relation `relations.mts` already stated does the rest.
  */
 
 const okSrc = (s: string) => expect(ok(s), `expected accepted: ${s}`).toBe(true);
@@ -45,38 +45,49 @@ test('a generic body that is correct still runs', () => {
 // -- what is CORRECTLY accepted ------------------------------------------------
 
 test('a value OF THE BOUND is not a value of the parameter', () => {
-  // The case a fix must not break, and the reason the rule has to be "refute
-  // against the upper bound" rather than "check against it": `T` may be a
-  // literal subtype of `string`, so assigning a String is not refutable.
-  okSrc('function f<T: string>(x: T) { let v: T = "s"; }');
-  // and with no constraint there is nothing to refute against at all
-  okSrc('function f<T>(x: T) { let v: T = 5; }');
+  // NOT the other way round, which an earlier draft of this file asserted. `T`
+  // may be instantiated with a literal type - `f.<"abc">("abc")` is accepted -
+  // so a String is not known to be a `T: string`, and assigning one is refused.
+  // A parameter is opaque: a subtype of itself and of its constraint, and
+  // nothing relates to IT.
+  expectError('function f<T: string>(x: T) { let v: T = "s"; }');
+  expectError('function f<T>(x: T) { let v: T = 5; }');
+});
+
+test('but a T IS a T, which is what makes a generic body writable', () => {
+  okSrc('function f<T>(x: T) { let v: T = x; }');
+  okSrc('function f<T>(x: T): T { return x; }');
+  okSrc('function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; }');
 });
 
 // -- what the specification says should be refused -----------------------------
 
-test.fails('a CONSTRAINED parameter should refute an impossible body binding', () => {
+test('a CONSTRAINED parameter should refute an impossible body binding', () => {
   // Wrong for EVERY binding of `T`: every `T` is a subtype of `string`, and 5 is
   // not a String. Decidable from the bound alone - no specialization needed.
   expectError('function f<T: string>(x: T) { let v: T = 5; }');
 });
 
-test.fails('a CONSTRAINED parameter should refute an impossible return', () => {
+test('a CONSTRAINED parameter should refute an impossible return', () => {
   expectError('function f<T: string>(x: T): T { return 5; }');
 });
 
-test.fails('a body annotation should be evaluated at each specialization', () => {
+test('a body annotation should be evaluated at each specialization', () => {
   // Needs the binding: `T` is unconstrained, so this is only wrong once the call
   // binds `T` to `string`.
   expectError('function f<T>(x: T) { let v: T = 5; } let s: string = "a"; f(s);');
 });
 
-test.fails('a return should be evaluated at each specialization', () => {
+test('a return should be evaluated at each specialization', () => {
   expectError('function f<T>(x: T): T { return 5; } let s: string = "a"; f(s);');
 });
 
-test.fails('an indexed-access return should be evaluated too', () => {
-  // The case that led here: `T[K]` parses and runs in a generic return position,
-  // and returning something else from it is accepted.
-  expectError('function p<T, K: keyof T>(o: T, k: K): T[K] { return 5; } let u = { n: "x" }; p(u, "n");');
+test.fails('an indexed access over a parameter is a SEPARATE gap, still open', () => {
+  // `keyof T` over an opaque parameter refuses `return 5`; `T[K]` does not, and
+  // neither does `let v: T[K] = 5`. So composing an INDEXED ACCESS over a
+  // parameter resolves to nothing where `keyof` resolves to something, which is
+  // a gap in the composition rather than in the scope this file's other cases
+  // turned on - the type parameters ARE in scope here, and `T` alone is refused
+  // two tests above.
+  expectError('function p<T, K: keyof T>(o: T, k: K): T[K] { return 5; }');
 });
