@@ -1018,6 +1018,24 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         continue;
       }
       if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
+        // PLAN-abstract-implementation.md phase 2a. An AbstractMethodDefinition
+        // is intercepted here and never reaches ClassElementEvaluation, which is
+        // where every other member is recorded - so `abstract` in a
+        // MemberDeclaration was a field nothing could set, and the registry had
+        // no idea which members were contracts.
+        //
+        // #sec-abstract-classes needs it: "a type error if a class not declared
+        // `abstract` leaves an inherited abstract method unimplemented" is a
+        // question about the chain, and AllMemberDeclarationsOf walks it.
+        //
+        // The kind is the one the member's SHAPE implies, so the kind-filtered
+        // walk finds an abstract accessor under the same kind as a concrete one.
+        if (surroundingAgent.feature('runtime-types') && e.type === 'AbstractMethodDefinition') {
+          const abstractKind = e.Accessor === 'get'
+            ? 'ClassGetter'
+            : e.Accessor === 'set' ? 'ClassSetter' : 'ClassMethod';
+          Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, MemberKeyOf(e, undefined), proto as ObjectValue));
+        }
         // proposal-runtime-types: named operators with bodies register in the
         // class operator table; abstract methods have no runtime behaviour.
         if (e.type === 'OperatorDefinition' && e.OperatorName && e.FunctionBody && e.FormalParameters) {
@@ -1237,7 +1255,10 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
               return Throw.TypeError(
                 '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
                 Value(typeof classBinding === 'object' && classBinding instanceof JSStringValue ? classBinding.stringValue() : 'the class'),
-                Value(String(key)),
+                // The storage key carries a kind qualifier after a NUL - see
+                // "the member's name AS DECLARED, the storage key carrying a
+                // static qualifier" - so the message takes the name before it.
+                Value(String(key).split('\u0000')[0]),
               );
             }
           }

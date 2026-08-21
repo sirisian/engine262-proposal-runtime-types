@@ -91,3 +91,46 @@ test('an accessor is an abstract member; four other forms are not', () => {
   // A field is still a field, not a nullary method.
   expect(ok('class I2 { x: uint8; }')).toBe(true);
 });
+
+test('a concrete class must implement what it inherits with no body', () => {
+  // PLAN-abstract-implementation.md phase 2b. #sec-abstract-classes: "a type
+  // error if a class not declared `abstract` leaves an inherited abstract
+  // method unimplemented". Until now the class declared, constructed, and
+  // reported only when the missing member was CALLED - "h.m is not a function",
+  // which names the symptom rather than the contract.
+  //
+  // Newly reachable at all: `m(): uint8;` without the keyword, and accessors as
+  // abstract members, both arrived with PLAN-signature-listings Part A.
+  const G = 'abstract class G { m(): uint8; } ';
+  expect(errorMessage(`${G} class H extends G { }`)).toMatch(/inherits "m" with no body/);
+  // Both accessor forms, which a kind-filtered walk is likeliest to miss - an
+  // abstract getter recorded under the method kind is invisible to the walk that
+  // asks for getters.
+  expect(errorMessage('abstract class P { get x(): uint8; } class Q extends P { }'))
+    .toMatch(/inherits "x" with no body/);
+  expect(errorMessage('abstract class R { set x(v: uint8); } class S extends R { }'))
+    .toMatch(/inherits "x" with no body/);
+  // Through two levels, and the message names the CONCRETE class rather than the
+  // one that declared the member.
+  expect(errorMessage(`${G} abstract class K extends G { } class H2 extends K { }`))
+    .toMatch(/"H2" inherits "m"/);
+});
+
+test('the branches that already worked still do', () => {
+  // These are what the check must not break, and each was measured as accepted
+  // before it went in.
+  const G = 'abstract class G { m(): uint8; } ';
+  // An abstract subclass may leave it - it is still a contract, not a gap.
+  expect(ok(`${G} abstract class K extends G { }`)).toBe(true);
+  // A concrete subclass that implements it is accepted and callable.
+  expect(evaluated(`${G} class J extends G { m(): uint8 { return (1 := uint8); } } String(new J().m());`)).toBe('1');
+  // Implementing at a MIDDLE level satisfies everything below: the walk stops at
+  // the nearest declaration, so K2's body is what H2 inherits.
+  expect(evaluated(`${G} abstract class K2 extends G { m(): uint8 { return (1 := uint8); } } `
+    + 'class H2 extends K2 { } String(new H2().m());')).toBe('1');
+  // A class with no abstract ancestor is untouched.
+  expect(ok('class A { m(): uint8 { return (0 := uint8); } } class B extends A { }')).toBe(true);
+  // And a static cannot be abstract at all, so none can reach the walk - refused
+  // at parse by Part A rather than here.
+  expect(errorMessage('abstract class T { static s(): uint8; }')).toMatch(/static member.*requires a body/);
+});
