@@ -807,9 +807,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * its parameters for its whole signature and body, so they are pushed while
    * that declaration is read and popped after.
    */
-  const typeParameterScopes: Set<string>[] = [];
+  // PLAN-parameter-composition Stage A. A scope maps each name to its RESOLVED
+  // constraint, or null where it declares none. It was a `Set<string>` - names
+  // only - which is why `#sec-issubtype`'s [[Constraint]] step had nothing to
+  // read and `function f<T: string>(x: T): string { return x; }` was refused.
+  const typeParameterScopes: Map<string, Known | null>[] = [];
 
   const typeParameterInScope = (name: string): boolean => typeParameterScopes.some((scope) => scope.has(name));
+
+  /** The innermost resolved constraint bound to _name_, or null where it has none. */
+  const typeParameterConstraintOf = (name: string): Known | null => {
+    for (let i = typeParameterScopes.length - 1; i >= 0; i -= 1) {
+      const scope = typeParameterScopes[i];
+      if (scope.has(name)) {
+        return scope.get(name) ?? null;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Push _declaration_'s type parameters, each with its RESOLVED constraint.
+   *
+   * The scope is pushed BEFORE the constraints resolve and filled in order,
+   * because a constraint may read an earlier parameter - `<T, K: keyof T>` is
+   * the ordinary case - and `#sec-generic-functions` evaluates them in
+   * declaration order for that reason. A parameter is entered with a null
+   * constraint before its OWN constraint resolves, so a self-reference
+   * terminates rather than recurring.
+   */
+  const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined): boolean => {
+    const list = (declaration as unknown as {
+      TypeParameters?: {
+        TypeParameterList?: readonly {
+          BindingIdentifier?: { name?: string },
+          TypeParameterConstraint?: ParseNode.Type | null,
+        }[],
+      },
+    } | null | undefined)?.TypeParameters?.TypeParameterList;
+    if (!list || list.length === 0) {
+      return false;
+    }
+    const scope = new Map<string, Known | null>();
+    typeParameterScopes.push(scope);
+    for (const tp of list) {
+      const name = tp.BindingIdentifier?.name;
+      if (!name) {
+        continue;
+      }
+      scope.set(name, null);
+      if (tp.TypeParameterConstraint) {
+        scope.set(name, resolveType(tp.TypeParameterConstraint));
+      }
+    }
+    return true;
+  };
+
+  /** A scope of names with no constraints, for a site that has only names. */
+  const scopeOfNames = (names: Iterable<string>): Map<string, Known | null> => {
+    const scope = new Map<string, Known | null>();
+    for (const n of names) {
+      scope.set(n, null);
+    }
+    return scope;
+  };
 
   /** Read _declaration_'s type parameter names, or ~none~ where it binds none. */
   const typeParameterNamesOf = (declaration: ParseNode | null | undefined): readonly string[] | null => {
@@ -2837,7 +2898,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // return type to read and a call of it was unchecked however completely
         // it was annotated. Consulted first, because an inner binding shadows.
         if (typeParameterInScope(name)) {
-          return { Kind: 'parameter', Name: name } as Known;
+          // #sec-issubtype: a parameter is a subtype of its constraint, so the
+          // record has to carry one for that step to fire.
+          const constraint = typeParameterConstraintOf(name);
+          return (constraint
+            ? { Kind: 'parameter', Name: name, Constraint: constraint }
+            : { Kind: 'parameter', Name: name }) as Known;
         }
         // `BoundTypeRecordForName` covers `Token` and the 27 metadata interfaces,
         // which the runtime resolves off the global and this resolver did not
@@ -5339,7 +5405,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
         if (item.typeParameterNames) {
-          typeParameterScopes.push(new Set(item.typeParameterNames));
+          typeParameterScopes.push(scopeOfNames(item.typeParameterNames));
         }
         inferenceDepth += 1;
         // Only the signature being computed is marked. Marking the whole queue
@@ -6236,10 +6302,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let usable = true;
       // A generic declaration binds its type parameters for its whole
       // signature, so they are in scope while the annotations below resolve.
+      // The NAMES are still wanted downstream, for the pending inferences; the
+      // push is what carries the constraints.
       const typeParameterScope = typeParameterNamesOf(n as ParseNode);
-      if (typeParameterScope) {
-        typeParameterScopes.push(new Set(typeParameterScope));
-      }
+      const pushedTypeParameters = pushTypeParameterScopeOf(n as ParseNode);
       for (const p of fn.FormalParameters ?? []) {
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
           // A rest or destructuring parameter: no arity to check against, so
@@ -6291,7 +6357,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       const Untyped = !fn.TypeAnnotation && annotated.every((t) => t === null);
-      if (typeParameterScope) {
+      if (pushedTypeParameters) {
         typeParameterScopes.pop();
       }
       const signature: { Parameters: unknown, Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameterNames?: readonly string[] } = { Parameters, Return: declared, Untyped } as never;
@@ -8298,7 +8364,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // relates to it - so assigning any concrete value into a `T` is refused,
         // which is right: `T` may be instantiated with a literal type, so not
         // even a String is known to be a `T: string`.
-        const bodyTypeParams = typeParameterNamesOf(n as ParseNode);
+        let bodyTypeParams = false;
         try {
           // PUBLISHED FIRST, and deliberately outside the scope below. A
           // published signature is what the CALL BOUNDARY reads, and a parameter
@@ -8310,9 +8376,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
             return ann ? resolveType(ann.Type) : null;
           }));
-          if (bodyTypeParams) {
-            typeParameterScopes.push(new Set(bodyTypeParams));
-          }
+          bodyTypeParams = pushTypeParameterScopeOf(n as ParseNode);
           try {
             enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
           } finally {
