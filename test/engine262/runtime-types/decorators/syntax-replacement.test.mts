@@ -121,12 +121,15 @@ test('an ordinary import introduces nothing', () => {
   expect(names('import { derive } from "./m.js" with { type: "json" };')).toBe('(none)');
 });
 
-test('only NamedImports contribute - three forms that parse and provide nothing', () => {
-  // A default import, a namespace import and a bare specifier introduce no name
-  // a DECORATION can be spelled with under the Strict Lexical Rule. All three
-  // parse, so a developer can write them and get a preprocessor module that
-  // provides no decorators - which is why each is asserted rather than assumed.
-  expect(names('import d from "./m.js" with { preprocessor: "true" };')).toBe('(none)');
+test('a DEFAULT import contributes; a namespace and a bare specifier do not', () => {
+  // The line is what a DECORATION can be spelled with. `import d from …` binds
+  // `d`, and `@d { … }` names it, so a default import contributes - and it is
+  // the common shape, since a preprocessor module usually provides one macro.
+  expect(names('import d from "./m.js" with { preprocessor: "true" };')).toBe('d');
+  expect(names('import d, { n } from "./m.js" with { preprocessor: "true" };')).toBe('d,n');
+  // A namespace import binds only `ns`, reached as `ns.d` - a member access, not
+  // an IdentifierReference, so it cannot appear in a decoration at all. A bare
+  // specifier binds nothing. Both parse, so both are asserted.
   expect(names('import * as ns from "./m.js" with { preprocessor: "true" };')).toBe('(none)');
   expect(names('import "./m.js" with { preprocessor: "true" };')).toBe('(none)');
 });

@@ -217,7 +217,12 @@ export function realmWithMacro(name: string, macroExpression: string): ManagedRe
  */
 export function realmWithMacros(macros: Record<string, string>): ManagedRealm {
   const source = Object.keys(macros)
-    .map((name) => `export const ${name} = ${macros[name]};`)
+    // `default` is not a binding name, so it takes the export form that has no
+    // name. A preprocessor module providing one macro is the common shape, and
+    // `export default` is how it is written.
+    .map((name) => (name === 'default'
+      ? `export default ${macros[name]};`
+      : `export const ${name} = ${macros[name]};`))
     .join('\n');
   return realmWithPreprocessors(new Proxy({}, {
     get: () => source,

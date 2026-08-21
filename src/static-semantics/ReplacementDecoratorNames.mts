@@ -30,12 +30,26 @@ export function ReplacementDecoratorNames(module: ParseNode.Module | ParseNode.M
     if (!IsPreprocessorImport(item)) {
       continue;
     }
-    // **Only NamedImports contribute.** A default import, a namespace import and
-    // a bare ModuleSpecifier introduce no name a DECORATION can be spelled with
-    // under the Strict Lexical Rule, so a preprocessor module imported any of
-    // those ways provides no replacement decorators. Three forms that all parse
-    // and none of which works is worth a test each.
-    const clause = (item as { ImportClause?: { NamedImports?: { ImportsList?: readonly ParseNode[] } } }).ImportClause;
+    // A DEFAULT import and NamedImports both contribute; a namespace import and
+    // a bare ModuleSpecifier do not.
+    //
+    // The line is what the decoration can be SPELLED with. `import jsx from …`
+    // binds `jsx`, and `@jsx { … }` names it - so a default import introduces
+    // exactly the kind of name a decoration takes, and is the common shape,
+    // since a preprocessor module usually provides one macro. A namespace import
+    // binds only `ns`, reached as `ns.jsx`, which is a member access rather than
+    // an IdentifierReference and cannot appear in a decoration at all; a bare
+    // specifier binds nothing.
+    const clause = (item as {
+      ImportClause?: {
+        ImportedDefaultBinding?: { ImportedBinding?: ParseNode },
+        NamedImports?: { ImportsList?: readonly ParseNode[] },
+      },
+    }).ImportClause;
+    const dflt = clause?.ImportedDefaultBinding?.ImportedBinding;
+    if (dflt) {
+      names.push(StringValue(dflt as ParseNode.BindingIdentifier).stringValue());
+    }
     for (const spec of clause?.NamedImports?.ImportsList ?? []) {
       const binding = (spec as { ImportedBinding?: ParseNode }).ImportedBinding;
       if (binding) {

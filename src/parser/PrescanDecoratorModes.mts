@@ -25,7 +25,7 @@
  * loaded. Loading it - which is what the specification says happens - needs to
  * know where from.
  */
-const IMPORT_WITH_ATTRIBUTES = /\bimport\s*\{([^}]*)\}\s*from\s*('[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
+const IMPORT_WITH_ATTRIBUTES = /\bimport\s*(?:([A-Za-z_$][\w$]*)\s*,\s*)?(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s*from\s*('[^']*'|"[^"]*")\s*with\s*\{([^}]*)\}/g;
 
 /** Matches `key: "value"` or `key: 'value'` inside a with-clause. */
 const ATTRIBUTE = /([A-Za-z_$][\w$]*|'[^']*'|"[^"]*")\s*:\s*(?:'([^']*)'|"([^"]*)")/g;
@@ -67,7 +67,14 @@ export function PrescanPreprocessorNames(source: string): ReadonlyMap<string, Pr
   IMPORT_WITH_ATTRIBUTES.lastIndex = 0;
   let match = IMPORT_WITH_ATTRIBUTES.exec(source);
   while (match !== null) {
-    const [, namedImports, specifier, withClause] = match;
+    // `import d from …`, `import { a, b } from …`, and `import d, { a } from …`.
+    // A default binding contributes its own name bound to the `default` export;
+    // sec-static-semantics-replacementdecoratornames admits it because `@d` is
+    // exactly the kind of name a decoration is spelled with, and a preprocessor
+    // module providing one macro is the common shape.
+    const [, defaultWithNamed, braced, defaultOnly, specifier, withClause] = match;
+    const namedImports = braced ?? '';
+    const defaultBinding = defaultWithNamed ?? defaultOnly;
     let isPreprocessor = false;
     ATTRIBUTE.lastIndex = 0;
     let attribute = ATTRIBUTE.exec(withClause);
@@ -78,6 +85,9 @@ export function PrescanPreprocessorNames(source: string): ReadonlyMap<string, Pr
       attribute = ATTRIBUTE.exec(withClause);
     }
     if (isPreprocessor) {
+      if (defaultBinding) {
+        found.set(defaultBinding, { Specifier: unquote(specifier), ExportName: 'default' });
+      }
       for (const clause of namedImports.split(',')) {
         const text = clause.trim();
         if (text === '') {
