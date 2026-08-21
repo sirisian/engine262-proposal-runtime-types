@@ -18,7 +18,8 @@ export abstract class LanguageParser extends ModuleParser {
     // parsed, so a production or a call anywhere in it admits - including one in
     // a branch that never runs, since what a name means may not depend on
     // control flow.
-    node.admitsTypeNames = this.state.admitsTypeNames;
+    node.admitsTypeNames = this.state.admitsTypeNames
+      || this.state.typeNameReferences.some((ref) => ref.exceptedFromAdmitting !== true);
     Object.defineProperty(node, 'sourceText', {
       configurable: true,
       get: () => this.source,
@@ -68,7 +69,8 @@ export abstract class LanguageParser extends ModuleParser {
         this.addEarlyError(Throw.SyntaxError('Module undefined export $1', name), importNode);
       });
       node.hasTopLevelAwait = this.state.hasTopLevelAwait;
-      node.admitsTypeNames = this.state.admitsTypeNames;
+      node.admitsTypeNames = this.state.admitsTypeNames
+      || this.state.typeNameReferences.some((ref) => ref.exceptedFromAdmitting !== true);
       Object.defineProperty(node, 'sourceText', {
         configurable: true,
         get: () => this.source,

@@ -9,7 +9,32 @@ import { BaseParser } from './BaseParser.mts';
 import type { ParseNode } from './ParseNode.mts';
 import { type Locatable } from './Lexer.mts';
 
+
+/**
+ * The closed set of names `#sec-type-names` governs. Syntactic and name-based:
+ * scope-first means a program that binds one of these itself is unaffected, since
+ * its own binding is found before the type name ever is.
+ */
+export function isBuiltinTypeNameString(name: unknown): boolean {
+  if (typeof name !== 'string') {
+    return false;
+  }
+  if (/^(u?int|float|decimal|complex|boolean)(1|8|16|32|64|128|256)$/.test(name)) {
+    return true;
+  }
+  if (/^(u?int|float|boolean)(8|16|32|64)x(2|4|8|16|32)$/.test(name)) {
+    return true;
+  }
+  return name === 'string' || name === 'number' || name === 'boolean'
+    || name === 'bigint' || name === 'symbol' || name === 'object'
+    || name === 'any' || name === 'never' || name === 'type';
+}
+
 export abstract class IdentifierParser extends BaseParser {
+  protected abstract readonly state: {
+    typeNameReferences: { exceptedFromAdmitting?: boolean }[];
+  };
+
   // Supplied by TypeParser further down the chain; declared here so a function
   // declaration can take the  clauses #sec-function-declarations gives it.
   protected abstract parseWhereClauses(): ParseNode.WhereClause[];
@@ -113,7 +138,19 @@ export abstract class IdentifierParser extends BaseParser {
       }
     }
     this.validateIdentifierReference(node.name, token);
-    return this.finishNode(node, 'IdentifierReference');
+    const finishedRef = this.finishNode(node, 'IdentifierReference');
+    // proposal-runtime-types #sec-type-names: a reference to a built-in type name
+    // is a CANDIDATE for admitting. It is not decided here, because the two
+    // positions the clause excepts - the operand of `typeof` and the target of an
+    // assignment - are only known once their enclosing production is parsed, and
+    // they mark the candidate then. The rule is stated as an exception rather
+    // than as a list of admitting positions because a list cannot be finished:
+    // a call, a member object, an argument, a property value and a comparison
+    // operand are the same use of the same name.
+    if (isBuiltinTypeNameString(finishedRef.name)) {
+      this.state.typeNameReferences.push(finishedRef as { exceptedFromAdmitting?: boolean });
+    }
+    return finishedRef;
   }
 
   validateIdentifierReference(name: string, token: Locatable) {

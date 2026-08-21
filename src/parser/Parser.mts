@@ -31,6 +31,7 @@ export class Parser extends LanguageParser {
      * than of the realm.
      */
     admitsTypeNames: boolean;
+    typeNameReferences: { exceptedFromAdmitting?: boolean }[];
     hasTopLevelAwait: boolean;
     strict: boolean;
     json: boolean;
@@ -88,6 +89,7 @@ export class Parser extends LanguageParser {
     this.decoratorModes = grammars;
     this.state = {
       admitsTypeNames: false,
+      typeNameReferences: [],
       hasTopLevelAwait: false,
       strict: false,
       json,

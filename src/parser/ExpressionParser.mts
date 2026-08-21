@@ -164,26 +164,22 @@ function containsMatching(node: unknown, predicate: (type: string, n: unknown) =
 }
 
 
+
+
 /**
- * Whether a call's callee is a bare reference to one of the built-in type names
- * (`#sec-type-names`). Syntactic and name-based: the scope-first rule means a
- * program that binds the name itself is unaffected either way, since its own
- * binding is found before the type name ever is.
+ * Mark a reference as NOT admitting, where it turned out to sit in one of the two
+ * positions `#sec-type-names` excepts. The candidate was recorded when the
+ * identifier was parsed, because neither position is known until its enclosing
+ * production is finished.
  */
-function isBuiltinTypeName(callee: { type?: string, name?: string } | null | undefined): boolean {
-  if (!callee || callee.type !== 'IdentifierReference' || typeof callee.name !== 'string') {
-    return false;
+function exceptFromAdmitting(node: unknown): void {
+  let target = node as { type?: string, Expression?: unknown, exceptedFromAdmitting?: boolean };
+  while (target && target.type === 'ParenthesizedExpression') {
+    target = target.Expression as typeof target;
   }
-  const name = callee.name;
-  if (/^(u?int|float|decimal|complex|boolean)(1|8|16|32|64|128|256)$/.test(name)) {
-    return true;
+  if (target && target.type === 'IdentifierReference') {
+    target.exceptedFromAdmitting = true;
   }
-  if (/^(u?int|float|boolean)(8|16|32|64)x(2|4|8|16|32)$/.test(name)) {
-    return true;
-  }
-  return name === 'string' || name === 'number' || name === 'boolean'
-    || name === 'bigint' || name === 'symbol' || name === 'object'
-    || name === 'any' || name === 'never' || name === 'type';
 }
 
 export abstract class ExpressionParser extends FunctionParser {
@@ -253,8 +249,9 @@ export abstract class ExpressionParser extends FunctionParser {
       || this.testAhead('partial');
   }
 
-  protected abstract readonly state: {
+  protected abstract override readonly state: {
     admitsTypeNames: boolean;
+    typeNameReferences: { exceptedFromAdmitting?: boolean }[];
     hasTopLevelAwait: boolean;
     strict: boolean;
     json: boolean;
@@ -598,6 +595,10 @@ export abstract class ExpressionParser extends FunctionParser {
         assignmentInfo.clear();
         const node = this.startNode<ParseNode.AssignmentExpression>(left);
         this.validateAssignmentTarget(left);
+        // #sec-type-names: the other excepted position. A sloppy-mode assignment
+        // to an undeclared name creates a global rather than throwing, so it is
+        // the second idiom existing code can already use these names with.
+        exceptFromAdmitting(left);
         node.LeftHandSideExpression = left;
         // NOTE: This cast isn't strictly sound as it depends on an expectation that `this.next.value` is correlated
         //       to `this.peek().type` which cannot be verified by the type system.
@@ -1192,6 +1193,14 @@ export abstract class ExpressionParser extends FunctionParser {
           const node = this.startNode<ParseNode.UnaryExpression>();
           node.operator = this.next().value as ParseNode.UnaryExpression['operator']; // NOTE: unsound cast
           node.UnaryExpression = this.parseUnaryExpression();
+          // proposal-runtime-types #sec-type-names: `typeof` is one of the two
+          // positions the clause excepts. It is excepted because it is the only
+          // position in which a reference to an UNDECLARED name does not throw,
+          // which makes it the idiom existing feature detection is written with -
+          // `typeof string === "undefined"` must keep answering as it does today.
+          if (node.operator === 'typeof') {
+            exceptFromAdmitting(node.UnaryExpression);
+          }
           if (node.operator === 'delete') {
             let target: ParseNode.Expression = node.UnaryExpression;
             while (target.type === 'ParenthesizedExpression') {
@@ -1367,13 +1376,6 @@ export abstract class ExpressionParser extends FunctionParser {
           node.IdentifierName = null;
           node.Expression = this.parseExpression();
           this.expect(Token.RBRACK);
-          // #sec-type-names, the member half: a type name is also reached as an
-          // OBJECT - `uint64.byteLength`, `decimal128.parse("19.99")` - which is
-          // neither a type production nor a call to the name, and would otherwise
-          // leave a program using only static members with an unresolvable name.
-          if (isBuiltinTypeName(node.MemberExpression)) {
-            this.state.admitsTypeNames = true;
-          }
           finished = this.finishNode(node, 'MemberExpression');
           break;
         }
@@ -1390,13 +1392,6 @@ export abstract class ExpressionParser extends FunctionParser {
             node.PrivateIdentifier = null;
           }
           node.Expression = null;
-          // #sec-type-names, the member half: a type name is also reached as an
-          // OBJECT - `uint64.byteLength`, `decimal128.parse("19.99")` - which is
-          // neither a type production nor a call to the name, and would otherwise
-          // leave a program using only static members with an unresolvable name.
-          if (isBuiltinTypeName(node.MemberExpression)) {
-            this.state.admitsTypeNames = true;
-          }
           finished = this.finishNode(node, 'MemberExpression');
           break;
         }
@@ -1417,19 +1412,6 @@ export abstract class ExpressionParser extends FunctionParser {
             this.scope.exitArrowParameterCandidate();
             node.arrowInfo = this.scope.popArrowInfo();
             node.arrowInfo.hasTrailingComma = trailingComma;
-          }
-          // proposal-runtime-types #sec-type-names: the CALL half of ADMITS TYPE
-          // NAMES. The type names are reachable as values with none of this
-          // proposal's syntax present - `decimal128("1.0")`, `float32x4(1,2,3,4)`
-          // and `complex64(1, 2)` are how those values are CREATED, and a program
-          // computing with them may write no annotation at all. Without this the
-          // name is a ReferenceError in exactly the texts that need it most.
-          //
-          // A `typeof` probe and an assignment are deliberately NOT here: those
-          // are the idioms existing code is written with, and admitting on them
-          // would give back the compatibility break the clause exists to prevent.
-          if (isBuiltinTypeName(node.CallExpression)) {
-            this.state.admitsTypeNames = true;
           }
           finished = this.finishNode(node, 'CallExpression');
           break;

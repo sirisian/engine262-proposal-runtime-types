@@ -2384,6 +2384,7 @@ export namespace ParseNode {
     readonly type: 'Module';
     readonly ModuleBody: ModuleBody | null;
     readonly admitsTypeNames: boolean;
+    readonly typeNameReferences: { exceptedFromAdmitting?: boolean }[];
     readonly hasTopLevelAwait: boolean;
   }
 
