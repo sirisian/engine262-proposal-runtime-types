@@ -2013,6 +2013,8 @@ export namespace ParseNode {
   //   `get` ClassElementName `(` `)` `{` FunctionBody `}`
   //   `set` ClassElementName `(` PropertySetParameterList `)` `{` FunctionBody `}`
   export interface MethodDefinition extends BaseParseNode {
+    /** PLAN-where-on-methods.md D2: the method's `where` clauses, if any. */
+    readonly WhereClauses?: readonly WhereClause[];
     readonly type: 'MethodDefinition';
 
     // proposal-runtime-types #sec-generics: type parameters this method

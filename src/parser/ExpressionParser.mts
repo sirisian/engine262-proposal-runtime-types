@@ -3860,6 +3860,19 @@ export abstract class ExpressionParser extends FunctionParser {
         (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
+      // PLAN-where-on-methods.md D2. #sec-type-annotations, as amended: a method
+      // takes |WhereClauses| the same way a function declaration does, between
+      // the return annotation and the body. The rule needs no restatement -
+      // "checked at each specialization once its parameters are bound" - because
+      // a generic method specializes as a generic function does.
+      //
+      // A method's clause may name the parameters of its CLASS as well as its
+      // own; both are bound at the specialization the clause is checked at.
+      if (surroundingAgent.feature('runtime-types') && this.test('where')) {
+        (node as ParseNode.Unfinished<ParseNode.MethodDefinition> & { WhereClauses?: ParseNode.WhereClause[] })
+          .WhereClauses = this.parseWhereClauses();
+      }
+
       // PLAN-signature-listings.md phase 2. #sec-abstract-classes: "A member is
       // abstract because it has no body; the `abstract` keyword before it is
       // optional and says the same thing earlier." A `;` here rather than a `{`
