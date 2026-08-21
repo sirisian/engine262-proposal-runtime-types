@@ -134,3 +134,32 @@ test('the branches that already worked still do', () => {
   // at parse by Part A rather than here.
   expect(errorMessage('abstract class T { static s(): uint8; }')).toMatch(/static member.*requires a body/);
 });
+
+test('an implementation must have a signature the declaration accepts', () => {
+  // PLAN-abstract-implementation.md phase 3, rule 1. #sec-abstract-classes: an
+  // abstract method's "annotation types the implementations: it is a type error
+  // if a subclass implements an inherited abstract method with a signature the
+  // abstract declaration does not accept".
+  //
+  // The SUBTYPE relation (D3), which is what interface satisfaction already uses
+  // for the same question - `class C implements I { m(): uint8 }` for an `I`
+  // declaring `m(): number` is refused, and an abstract `m(): number` accepting
+  // it was the engine answering one question two ways.
+  const G = 'abstract class G { m(): uint8; } ';
+  expect(errorMessage(`${G} class L extends G { m(): string { return "s"; } }`))
+    .toMatch(/signature the declaration does not accept/);
+  expect(errorMessage(`${G} class N extends G { m(a: uint8): uint8 { return a; } }`))
+    .toMatch(/signature the declaration does not accept/);
+  // `uint8` is NOT a narrower `number` in this design: the numeric families are
+  // mutually unrelated, no boundary admits the value, and the override that is
+  // accepted today produces a result every `number` position rejects. This case
+  // is why D3 was reopened, and it is refused rather than preserved.
+  expect(errorMessage('abstract class R { m(): number; } class S extends R { m(): uint8 { return (1 := uint8); } }'))
+    .toMatch(/signature the declaration does not accept/);
+  // Where the design DOES have a subtype, it is accepted: a literal type sits
+  // under its base, so `m(): 3` implements `m(): number`.
+  expect(evaluated('abstract class P { m(): number; } class Q extends P { m(): 3 { return 3; } } String(new Q().m());'))
+    .toBe('3');
+  // And an exact match is untouched.
+  expect(evaluated(`${G} class M extends G { m(): uint8 { return (2 := uint8); } } String(new M().m());`)).toBe('2');
+});

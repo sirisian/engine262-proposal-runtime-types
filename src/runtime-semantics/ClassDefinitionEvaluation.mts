@@ -1,3 +1,4 @@
+import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
@@ -1248,9 +1249,50 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // what makes implementing at a middle level satisfy the contract for
       // everything below it - the question is "is the collected declaration
       // abstract", not "is any declaration in the chain abstract".
+      // PLAN-abstract-implementation.md phase 3, rule 1. #sec-abstract-classes:
+      // an abstract method's "annotation types the implementations: it is a type
+      // error if a subclass implements an inherited abstract method with a
+      // signature the abstract declaration does not accept".
+      //
+      // The SUBTYPE relation (D3), which is what interface satisfaction already
+      // uses for the same question - `class C implements I { m(): uint8 }` for an
+      // `I` declaring `m(): number` is refused, and an abstract `m(): number`
+      // accepting it was the engine answering one question two ways.
+      //
+      // `uint8` is not a narrower `number` here: the numeric families are
+      // mutually unrelated, no boundary admits the value, and the override that
+      // is accepted today produces a result every `number` position rejects -
+      // refused at the use, having been accepted at the override.
+      //
+      // Own members against INHERITED ones, because the two must be seen apart:
+      // AllMemberDeclarationsOf collapses the chain to the nearest, which is the
+      // implementation itself once there is one.
+      const superConstructor = Q(yield* (F as ObjectValue).GetPrototypeOf());
+      if (superConstructor instanceof ObjectValue) {
+        for (const kind of ['ClassMethod', 'ClassGetter', 'ClassSetter']) {
+          const inheritedMembers = AllMemberDeclarationsOf(superConstructor, kind, false, false);
+          for (const [key, own] of AllMemberDeclarationsOf(F, kind, true, false)) {
+            const inherited = inheritedMembers.get(key);
+            if (own.abstract === true || inherited?.abstract !== true) {
+              continue;
+            }
+            if (own.type !== undefined && inherited.type !== undefined
+                && !IsSubtype(own.type, inherited.type, [])) {
+              return Throw.TypeError(
+                '$1 implements an inherited $2 with a signature the declaration does not accept',
+                Value(typeof classBinding === 'object' && classBinding instanceof JSStringValue ? classBinding.stringValue() : 'the class'),
+                Value(String(key).split('\u0000')[0]),
+              );
+            }
+          }
+        }
+      }
       if (!modifiers.includes('abstract')) {
         for (const kind of ['ClassMethod', 'ClassGetter', 'ClassSetter']) {
-          for (const [key, declaration] of AllMemberDeclarationsOf(proto, kind, false, false)) {
+          // The registry keys on the CONSTRUCTOR - RecordMemberDeclarationFor
+          // derives its owner from the home object via `constructor` - so the
+          // prototype answers empty for every class, concrete or not.
+          for (const [key, declaration] of AllMemberDeclarationsOf(F, kind, false, false)) {
             if (declaration.abstract === true) {
               return Throw.TypeError(
                 '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
