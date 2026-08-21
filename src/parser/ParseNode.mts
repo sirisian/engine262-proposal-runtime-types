@@ -2366,6 +2366,7 @@ export namespace ParseNode {
   // Script :
   //   ScriptBody?
   export interface Script extends BaseParseNode {
+    readonly admitsTypeNames?: boolean;
     readonly type: 'Script';
     readonly ScriptBody: ScriptBody | null;
   }
@@ -2382,6 +2383,7 @@ export namespace ParseNode {
   export interface Module extends BaseParseNode {
     readonly type: 'Module';
     readonly ModuleBody: ModuleBody | null;
+    readonly admitsTypeNames: boolean;
     readonly hasTopLevelAwait: boolean;
   }
 

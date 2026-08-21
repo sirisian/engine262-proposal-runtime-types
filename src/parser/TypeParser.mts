@@ -24,6 +24,11 @@ export abstract class TypeParser extends ExpressionParser {
   // cover is checked for `=>` here and refined to ParenthesizedType everywhere
   // else, which is exactly the grammar's precedence.
   parseType(): ParseNode.Type {
+    // proposal-runtime-types #sec-type-names: every type production funnels
+    // through here, so recording it once is enough for the "contains a production
+    // this proposal adds" half of ADMITS TYPE NAMES. The call half is recorded
+    // where a call is parsed.
+    this.state.admitsTypeNames = true;
     if (this.test(Token.LPAREN)) {
       const node = this.startNode<ParseNode.FunctionType | ParseNode.ParenthesizedType>();
       const { list, trailingComma } = this.parseCoverParenthesizedTypeAndFunctionTypeParameters();

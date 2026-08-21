@@ -23,6 +23,14 @@ export class Parser extends LanguageParser {
   protected readonly specifier?: string;
 
   readonly state: {
+    /**
+     * proposal-runtime-types #sec-type-names: whether this source text ADMITS
+     * TYPE NAMES. Set when a production this proposal adds is parsed, or when a
+     * call names a built-in type; read once the text is parsed and fixed for its
+     * lifetime, which is what makes the property one of the SOURCE TEXT rather
+     * than of the realm.
+     */
+    admitsTypeNames: boolean;
     hasTopLevelAwait: boolean;
     strict: boolean;
     json: boolean;
@@ -79,6 +87,7 @@ export class Parser extends LanguageParser {
     }
     this.decoratorModes = grammars;
     this.state = {
+      admitsTypeNames: false,
       hasTopLevelAwait: false,
       strict: false,
       json,

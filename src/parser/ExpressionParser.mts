@@ -163,6 +163,29 @@ function containsMatching(node: unknown, predicate: (type: string, n: unknown) =
   return false;
 }
 
+
+/**
+ * Whether a call's callee is a bare reference to one of the built-in type names
+ * (`#sec-type-names`). Syntactic and name-based: the scope-first rule means a
+ * program that binds the name itself is unaffected either way, since its own
+ * binding is found before the type name ever is.
+ */
+function isBuiltinTypeName(callee: { type?: string, name?: string } | null | undefined): boolean {
+  if (!callee || callee.type !== 'IdentifierReference' || typeof callee.name !== 'string') {
+    return false;
+  }
+  const name = callee.name;
+  if (/^(u?int|float|decimal|complex|boolean)(1|8|16|32|64|128|256)$/.test(name)) {
+    return true;
+  }
+  if (/^(u?int|float|boolean)(8|16|32|64)x(2|4|8|16|32)$/.test(name)) {
+    return true;
+  }
+  return name === 'string' || name === 'number' || name === 'boolean'
+    || name === 'bigint' || name === 'symbol' || name === 'object'
+    || name === 'any' || name === 'never' || name === 'type';
+}
+
 export abstract class ExpressionParser extends FunctionParser {
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
   // the conditional's own colon, so arrow return annotations are suppressed
@@ -231,6 +254,7 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   protected abstract readonly state: {
+    admitsTypeNames: boolean;
     hasTopLevelAwait: boolean;
     strict: boolean;
     json: boolean;
@@ -1343,6 +1367,13 @@ export abstract class ExpressionParser extends FunctionParser {
           node.IdentifierName = null;
           node.Expression = this.parseExpression();
           this.expect(Token.RBRACK);
+          // #sec-type-names, the member half: a type name is also reached as an
+          // OBJECT - `uint64.byteLength`, `decimal128.parse("19.99")` - which is
+          // neither a type production nor a call to the name, and would otherwise
+          // leave a program using only static members with an unresolvable name.
+          if (isBuiltinTypeName(node.MemberExpression)) {
+            this.state.admitsTypeNames = true;
+          }
           finished = this.finishNode(node, 'MemberExpression');
           break;
         }
@@ -1359,6 +1390,13 @@ export abstract class ExpressionParser extends FunctionParser {
             node.PrivateIdentifier = null;
           }
           node.Expression = null;
+          // #sec-type-names, the member half: a type name is also reached as an
+          // OBJECT - `uint64.byteLength`, `decimal128.parse("19.99")` - which is
+          // neither a type production nor a call to the name, and would otherwise
+          // leave a program using only static members with an unresolvable name.
+          if (isBuiltinTypeName(node.MemberExpression)) {
+            this.state.admitsTypeNames = true;
+          }
           finished = this.finishNode(node, 'MemberExpression');
           break;
         }
@@ -1379,6 +1417,19 @@ export abstract class ExpressionParser extends FunctionParser {
             this.scope.exitArrowParameterCandidate();
             node.arrowInfo = this.scope.popArrowInfo();
             node.arrowInfo.hasTrailingComma = trailingComma;
+          }
+          // proposal-runtime-types #sec-type-names: the CALL half of ADMITS TYPE
+          // NAMES. The type names are reachable as values with none of this
+          // proposal's syntax present - `decimal128("1.0")`, `float32x4(1,2,3,4)`
+          // and `complex64(1, 2)` are how those values are CREATED, and a program
+          // computing with them may write no annotation at all. Without this the
+          // name is a ReferenceError in exactly the texts that need it most.
+          //
+          // A `typeof` probe and an assignment are deliberately NOT here: those
+          // are the idioms existing code is written with, and admitting on them
+          // would give back the compatibility break the clause exists to prevent.
+          if (isBuiltinTypeName(node.CallExpression)) {
+            this.state.admitsTypeNames = true;
           }
           finished = this.finishNode(node, 'CallExpression');
           break;

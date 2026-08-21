@@ -188,6 +188,9 @@ export class ScriptRecord {
 
   readonly ECMAScriptCode: ParseNode.Script;
 
+  /** proposal-runtime-types #sec-type-names: fixed at parse (see `TypeNames.mts`). */
+  readonly AdmitsTypeNames?: boolean;
+
   readonly LoadedModules: LoadedModuleRequestRecord[];
 
   readonly HostDefined: ParseScriptHostDefined;
@@ -201,6 +204,7 @@ export class ScriptRecord {
     this.Realm = record.Realm;
     this.LoadedModules = record.LoadedModules;
     this.HostDefined = record.HostDefined;
+    this.AdmitsTypeNames = record.AdmitsTypeNames;
   }
 }
 export interface ParseScriptHostDefined {
@@ -319,6 +323,9 @@ function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: Parse
   const script = new ScriptRecord({
     Realm: realm,
     ECMAScriptCode: body,
+    // proposal-runtime-types #sec-type-names: carried from the parse and fixed
+    // for this text's lifetime.
+    AdmitsTypeNames: body.admitsTypeNames === true,
     LoadedModules: [],
     HostDefined: hostDefined,
   });
@@ -622,6 +629,7 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
     OptionalIndirectExportEntries: optionalIndirectExportEntries,
     CycleRoot: undefined,
     HasTLA: body.hasTopLevelAwait ? Value.true : Value.false,
+    AdmitsTypeNames: body.admitsTypeNames === true,
     AsyncEvaluationOrder: 'unset',
     TopLevelCapability: undefined,
     AsyncParentModules: [],

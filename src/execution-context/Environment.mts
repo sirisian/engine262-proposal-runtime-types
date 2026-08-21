@@ -1080,9 +1080,36 @@ export class GlobalEnvironmentRecord extends EnvironmentRecord {
 export type EnvironmentRecordWithThisBinding = FunctionEnvironmentRecord | GlobalEnvironmentRecord | ModuleEnvironmentRecord;
 
 /** https://tc39.es/ecma262/#sec-getidentifierreference */
+// eslint-disable-next-line import-x/order
+import { TypeNameEnvironmentFor, RunningSourceTextAdmitsTypeNames } from './TypeNames.mts';
+import { surroundingAgent as agentForTypeNames } from '#self';
+
 export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSStringValue, strict: BooleanValue): PlainEvaluator<ReferenceRecord> {
   // 1. If lex is the value null, then
   if (env === null) {
+    // proposal-runtime-types #sec-type-names: the scope chain is exhausted, which
+    // is the clause's "no user binding of the name exists". A type name resolves
+    // HERE and only here, so a program's own binding always wins, and only in a
+    // source text that ADMITS TYPE NAMES - the property the clause makes a
+    // property of the source text rather than of the realm.
+    //
+    // Consulting a separate environment at the terminal step, rather than
+    // defining global properties, is what makes it per-source-text: a global
+    // property is one object shared by every Script and Module in the realm, so
+    // a single typed module would change `typeof string` for every untyped
+    // script beside it - the outcome the clause exists to prevent.
+    const typeNames = TypeNameEnvironmentFor(agentForTypeNames.currentRealmRecord);
+    if (typeNames && RunningSourceTextAdmitsTypeNames()) {
+      const found = Q(yield* typeNames.HasBinding(name));
+      if (found === Value.true) {
+        return NormalCompletion(new ReferenceRecord({
+          Base: typeNames,
+          ReferencedName: name,
+          Strict: strict,
+          ThisValue: undefined,
+        }));
+      }
+    }
     // a. Return the Reference Record { [[Base]]: unresolvable, [[ReferencedName]]: name, [[Strict]]: strict, [[ThisValue]]: empty }.
     return NormalCompletion(new ReferenceRecord({
       Base: 'unresolvable',

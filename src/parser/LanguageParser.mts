@@ -14,6 +14,11 @@ export abstract class LanguageParser extends ModuleParser {
     } else {
       node.ScriptBody = this.parseScriptBody();
     }
+    // proposal-runtime-types #sec-type-names: fixed here, once the whole text is
+    // parsed, so a production or a call anywhere in it admits - including one in
+    // a branch that never runs, since what a name means may not depend on
+    // control flow.
+    node.admitsTypeNames = this.state.admitsTypeNames;
     Object.defineProperty(node, 'sourceText', {
       configurable: true,
       get: () => this.source,
@@ -63,6 +68,7 @@ export abstract class LanguageParser extends ModuleParser {
         this.addEarlyError(Throw.SyntaxError('Module undefined export $1', name), importNode);
       });
       node.hasTopLevelAwait = this.state.hasTopLevelAwait;
+      node.admitsTypeNames = this.state.admitsTypeNames;
       Object.defineProperty(node, 'sourceText', {
         configurable: true,
         get: () => this.source,

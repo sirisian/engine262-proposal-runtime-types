@@ -157,7 +157,7 @@ export abstract class AbstractModuleRecord {
 
 export { AbstractModuleRecord as ModuleRecord };
 
-export type CyclicModuleRecordInit = AbstractModuleInit & Readonly<Pick<CyclicModuleRecord, 'Status' | 'EvaluationError' | 'DFSAncestorIndex' | 'RequestedModules' | 'LoadedModules' | 'CycleRoot' | 'HasTLA' | 'AsyncEvaluationOrder' | 'TopLevelCapability' | 'AsyncParentModules' | 'PendingAsyncDependencies'>>;
+export type CyclicModuleRecordInit = AbstractModuleInit & Readonly<Pick<CyclicModuleRecord, 'AdmitsTypeNames' | 'Status' | 'EvaluationError' | 'DFSAncestorIndex' | 'RequestedModules' | 'LoadedModules' | 'CycleRoot' | 'HasTLA' | 'AsyncEvaluationOrder' | 'TopLevelCapability' | 'AsyncParentModules' | 'PendingAsyncDependencies'>>;
 export type CyclicModuleRecordStatus = 'new' | 'unlinked' | 'linking' | 'linked' | 'evaluating' | 'evaluating-async' | 'evaluated';
 /** https://tc39.es/ecma262/#sec-cyclic-module-records */
 export abstract class CyclicModuleRecord extends AbstractModuleRecord {
@@ -172,6 +172,9 @@ export abstract class CyclicModuleRecord extends AbstractModuleRecord {
   readonly LoadedModules: LoadedModuleRequestRecord[];
 
   readonly HasTLA: BooleanValue;
+
+  /** proposal-runtime-types #sec-type-names: fixed at parse (see `TypeNames.mts`). */
+  readonly AdmitsTypeNames?: boolean;
 
   AsyncEvaluationOrder: 'unset' | number | 'done';
 
@@ -192,6 +195,7 @@ export abstract class CyclicModuleRecord extends AbstractModuleRecord {
     this.LoadedModules = init.LoadedModules;
     this.CycleRoot = init.CycleRoot;
     this.HasTLA = init.HasTLA;
+    this.AdmitsTypeNames = init.AdmitsTypeNames;
     this.AsyncEvaluationOrder = init.AsyncEvaluationOrder;
     this.TopLevelCapability = init.TopLevelCapability;
     this.AsyncParentModules = init.AsyncParentModules;

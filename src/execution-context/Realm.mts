@@ -116,6 +116,7 @@ import {
   OrdinaryObjectCreate,
   surroundingAgent,
 } from '#self';
+import { BindTypeName } from './TypeNames.mts';
 
 /** https://tc39.es/ecma262/#sec-code-realms */
 export abstract class Realm {
@@ -427,12 +428,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     ]) {
       const record = builtinTypeRecord(name);
       if (record) {
-        X(global.DefineOwnProperty(Value(name), Descriptor({
-          Value: GetTypeObject(record, realmRec),
-          Writable: Value.false,
-          Enumerable: Value.false,
-          Configurable: Value.true,
-        })));
+        // proposal-runtime-types #sec-type-names: into the realm's type-name
+        // environment, NOT onto the global object. A global property is shared by
+        // every source text of the realm, and the clause makes admitting a
+        // property of the source text - see `TypeNames.mts`.
+        BindTypeName(realmRec, name, GetTypeObject(record, realmRec));
       }
     }
 
