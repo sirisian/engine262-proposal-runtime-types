@@ -158,6 +158,12 @@ export function PrepareForOrdinaryCall(F: ECMAScriptFunctionObject, newTarget: O
   calleeContext.Realm = calleeRealm;
   // 7. Set the ScriptOrModule of calleeContext to F.[[ScriptOrModule]].
   calleeContext.ScriptOrModule = F.ScriptOrModule;
+  // #sec-type-names: a function built by `Function` has no Script or Module to
+  // carry the answer, so it carries its own (see CreateDynamicFunction).
+  const dynamicAdmits = (F as { AdmitsTypeNames?: boolean }).AdmitsTypeNames;
+  if (dynamicAdmits !== undefined) {
+    (calleeContext as { AdmitsTypeNames?: boolean }).AdmitsTypeNames = dynamicAdmits;
+  }
   calleeContext.HostDefined ??= {};
   calleeContext.HostDefined.scriptId = F.scriptId;
   // 8. Let localEnv be NewFunctionEnvironment(F, newTarget).

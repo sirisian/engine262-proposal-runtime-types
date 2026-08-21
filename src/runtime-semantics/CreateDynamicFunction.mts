@@ -107,12 +107,20 @@ export function* CreateDynamicFunction(constructor: FunctionObject, newTarget: F
   // NOTE: The parameters and body are parsed separately to ensure that each is valid alone. For example, new Function("/*", "*/ ) {") does not evaluate to a function.
   // NOTE: If this step is reached, sourceText must have the syntax of exprSym (although the reverse implication does not hold). The purpose of the next two steps is to enforce any Early Error rules which apply to exprSym directly.
   let scriptId: string | undefined;
+  let admitsTypeNames = false;
   let parametersNode: ParseNode.FormalParameters;
   let bodyNode;
   {
     const expr = wrappedParse({ source: sourceString }, (p) => {
       const r = exprSym(p);
       p.expect(Token.EOS);
+      // proposal-runtime-types #sec-type-names: the text handed to `Function` is a
+      // source text of its own and admits on its own terms. There is no enclosing
+      // text for it to also admit from - that is what separates it from a direct
+      // `eval` - and no Script node for the flag to ride, so it is read from the
+      // parser here and carried on the function object.
+      admitsTypeNames = p.state.admitsTypeNames
+        || p.state.typeNameReferences.some((ref) => ref.exceptedFromAdmitting !== true);
       return r;
     });
     scriptId = surroundingAgent.addDynamicParsedSource(surroundingAgent.currentRealmRecord, sourceString, expr);
@@ -136,6 +144,7 @@ export function* CreateDynamicFunction(constructor: FunctionObject, newTarget: F
   const privateEnv = null;
   const F = OrdinaryFunctionCreate(proto, sourceText, parametersNode, bodyNode, 'non-lexical-this', env, privateEnv);
   F.scriptId = scriptId;
+  (F as { AdmitsTypeNames?: boolean }).AdmitsTypeNames = admitsTypeNames;
   SetFunctionName(F, Value('anonymous'));
   if (kind === 'generator') {
     const prototype = OrdinaryObjectCreate(surroundingAgent.intrinsic('%GeneratorFunction.prototype.prototype%'));

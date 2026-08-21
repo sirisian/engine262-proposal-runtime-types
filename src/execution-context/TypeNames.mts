@@ -56,19 +56,22 @@ export function RunningSourceTextAdmitsTypeNames(): boolean {
   if (!ctx) {
     return false;
   }
-  // An eval context carries its own answer (the union of its text and the text it
-  // runs inside), because the eval'd code is a source text that ScriptOrModule
-  // does not name.
-  if ((ctx as { AdmitsTypeNames?: boolean }).AdmitsTypeNames === true) {
-    return true;
+  // A context may carry its own answer, and where it does that answer is
+  // AUTHORITATIVE rather than an override: `eval` and `Function` produce source
+  // texts that [[ScriptOrModule]] does not name, and a dynamic function's
+  // [[ScriptOrModule]] is the text that CREATED it - so falling through to it
+  // would let `Function("return typeof string")` admit because its caller did,
+  // which is exactly the inheritance #sec-type-names denies an indirect form.
+  const own = (ctx as { AdmitsTypeNames?: boolean }).AdmitsTypeNames;
+  if (own !== undefined) {
+    return own;
   }
   const unit = ctx.ScriptOrModule as { AdmitsTypeNames?: boolean } | null | undefined;
   if (unit && unit.AdmitsTypeNames === true) {
     return true;
   }
-  // A host that evaluates without a Script or Module record of its own - the
-  // console entry, an implementation-defined boundary - carries the session's
-  // state instead, which the clause requires so that a name does not resolve on
-  // one entry and fail on the next.
-  return (surroundingAgent as { admitsTypeNamesFallback?: boolean }).admitsTypeNamesFallback === true;
+  // A console evaluates each entry as its own Script, and carries the session's
+  // state by setting that Script's flag before it runs (see the inspector), so
+  // there is nothing further to consult here.
+  return false;
 }

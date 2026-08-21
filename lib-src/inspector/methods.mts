@@ -164,6 +164,20 @@ export const Runtime: RuntimeNamespace = {
     if (!parsed) {
       throw new Error('No parsed result');
     }
+    // proposal-runtime-types #sec-type-names: a console evaluates each entry as
+    // its own source text, and the clause requires the admitting state to be
+    // carried across the entries of ONE SESSION - otherwise a name introduced by
+    // an earlier entry resolves on that line and not on the next, which is the
+    // one place the per-source-text rule reads as a bug rather than as a
+    // guarantee. The session latches: once an entry admits, later entries do.
+    if (!Array.isArray(parsed)) {
+      const session = context as { admitsTypeNames?: boolean };
+      if ((parsed as { AdmitsTypeNames?: boolean }).AdmitsTypeNames === true) {
+        session.admitsTypeNames = true;
+      } else if (session.admitsTypeNames === true) {
+        (parsed as { AdmitsTypeNames?: boolean }).AdmitsTypeNames = true;
+      }
+    }
     if (Array.isArray(parsed)) {
       const e = context.createExceptionDetails(ThrowCompletion(parsed[0]), false);
       // Note: this message is what triggers devtools' line wrap, so it is used
