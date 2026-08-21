@@ -45,9 +45,9 @@ test('type builders: the is operator tests a value against a type', () => {
 });
 
 // -- The typeof and indexed-access operators -----------------------------------
-test('type builders: the typeof type operator is the type of a value', () => {
-  // typeprogramming.md 4.1: `typeof x` is the type of the value x, the query
-  // Reflect.typeOf(x) performs.
+test('type builders: Reflect.typeOf in type position is the type of a value', () => {
+  // typeprogramming.md 4.1: `Reflect.typeOf(x)` in type position IS the type
+  // query - "typeof x needs no builder", which is why there is no such operator.
   expect(evaluated('let x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
   // a value of that type passes the membership test, one not of it does not
   expect(evaluated('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');

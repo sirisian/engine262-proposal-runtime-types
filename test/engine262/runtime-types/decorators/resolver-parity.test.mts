@@ -87,12 +87,10 @@ const rows: readonly Row[] = [
  * argument. Closing these is a change to those paths, not to the resolver: the
  * annotation is readable, and reading it is not by itself enough.
  *
- * `TypeQueryType` and `ComputedType` are different in kind rather than in
- * difficulty. Resolving them requires
- * EVALUATING THE PROGRAM: `typeof x` reads the value bound to a name
- * (`ResolveTypeName` then `GetValue`), and `Composite({ x: 1 })` calls its
- * callee. A checker that runs before evaluation has no value to read and no call
- * to make, so this list can never be emptied by better resolution.
+ * `ComputedType` is different in kind rather than in difficulty. Resolving it
+ * requires EVALUATING THE PROGRAM: `Composite({ x: 1 })` calls its callee. A
+ * checker that runs before evaluation has no call to make, so this list can never
+ * be emptied by better resolution.
  *
  * That matters beyond this test. `PLAN-checker-type-resolution.md` Q6/D3 gates
  * reporting an unresolvable annotation as a user error on this set being EMPTY,

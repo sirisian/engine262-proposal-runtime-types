@@ -2750,7 +2750,7 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord {
         static?: boolean,
         ClassElementName?: { type?: string, name?: string },
       };
-      // A static belongs to the constructor, reached through `keyof typeof C`.
+      // A static belongs to the constructor, reached through `keyof Reflect.typeOf(C)`.
       // A private name is not a property key and cannot be written as one. A
       // computed name is not known here, so it contributes nothing rather than
       // a guess.
