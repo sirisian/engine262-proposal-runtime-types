@@ -164,6 +164,25 @@ test('an implementation must have a signature the declaration accepts', () => {
   expect(evaluated(`${G} class M extends G { m(): uint8 { return (2 := uint8); } } String(new M().m());`)).toBe('2');
 });
 
+test('the signature rule is an Early Error too', () => {
+  // PLAN-abstract-implementation.md, the checking-pass migration, rule 1. It was
+  // evaluation-time only after phase 3: the marker before the class ran, then
+  // the override threw. Both rules of #sec-abstract-classes are now Early
+  // Errors, which is what D1's recorded deviation asked for.
+  //
+  // The assertion is TIMING - both behaviours throw.
+  expect(evaluated('globalThis.ran = 0; try { eval("abstract class G { m(): uint8; } '
+    + 'class L extends G { m(): string { return String(globalThis.ran = 1); } }"); } catch (e) { } '
+    + 'String(globalThis.ran);')).toBe('0');
+  // It runs whether or not the overriding class is itself abstract: a wrong
+  // override is wrong at ITS declaration, not at the first concrete class below.
+  expectThrown('abstract class G { m(): uint8; } abstract class K extends G { m(): string { return "s"; } }');
+  // And the accepted branches are untouched - an exact match, and a genuine
+  // subtype where the design has one.
+  expect(ok('abstract class G { m(): uint8; } class M extends G { m(): uint8 { return (2 := uint8); } }')).toBe(true);
+  expect(ok('abstract class P { m(): number; } class Q extends P { m(): 3 { return 3; } }')).toBe(true);
+});
+
 test('the unimplemented rule is an Early Error', () => {
   // PLAN-abstract-implementation.md, the checking-pass migration. D1 recorded a
   // deviation: both rules refused at class definition EVALUATION, so a marker

@@ -8352,6 +8352,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The modifiers live on the CLASS node, which the evaluator reaches as
         // `ClassTail.parent.ClassModifiers`; here the node IS the class.
         const classModifiers = (n as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+        // PLAN-abstract-implementation.md, the checking-pass migration, rule 1.
+        // #sec-abstract-classes: an abstract method's "annotation types the
+        // implementations: it is a type error if a subclass implements an
+        // inherited abstract method with a signature the abstract declaration
+        // does not accept". Reported HERE for the same reason as rule 2 -
+        // #sec-type-errors makes a determinable type error an Early Error - with
+        // the evaluation-time check kept as the backstop.
+        //
+        // The SUBTYPE relation, which is what interface satisfaction already
+        // uses for the same question. It runs whether or not the class is
+        // `abstract`: an abstract subclass that overrides a member wrongly is
+        // wrong at its own declaration, not at the first concrete class below it.
+        {
+          const ownTypes = new Map<string, TypeRecord | null>();
+          for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+            if (el.type !== 'MethodDefinition') {
+              continue;
+            }
+            const md = el as unknown as {
+              ClassElementName?: { name?: string, value?: string } | null,
+              TypeAnnotation?: ParseNode.TypeAnnotation | null,
+              static?: boolean,
+            };
+            const k = md.ClassElementName?.name ?? md.ClassElementName?.value;
+            if (typeof k === 'string' && !md.static) {
+              ownTypes.set(k, md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null);
+            }
+          }
+          let ancestor = (PublishedClassTypeOf(n as unknown as object) as unknown as { Base?: { Declaration?: object } } | undefined)?.Base;
+          const walked = new Set<object>();
+          while (ancestor?.Declaration && !walked.has(ancestor.Declaration)) {
+            walked.add(ancestor.Declaration);
+            for (const [key, declaredType] of PublishedAbstractMembersOf(ancestor.Declaration) ?? []) {
+              const mine = ownTypes.get(key);
+              if (mine === undefined || mine === null || declaredType === null || declaredType === undefined) {
+                continue;
+              }
+              if (!IsSubtype(mine, declaredType, [])) {
+                errors.push(Throw.TypeError(
+                  '$1 implements an inherited $2 with a signature the declaration does not accept',
+                  Value(named ?? 'the class'),
+                  Value(key),
+                ).Value as ObjectValue);
+                return;
+              }
+            }
+            ancestor = (ancestor as { Base?: { Declaration?: object } }).Base;
+          }
+        }
         if (!classModifiers.includes('abstract')) {
           const own = new Set<string>();
           for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
