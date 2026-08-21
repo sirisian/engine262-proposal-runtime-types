@@ -8380,11 +8380,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ownTypes.set(k, md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null);
             }
           }
+          // The NEAREST declaration for a key governs, which is why the chain is
+          // collected before anything is compared rather than compared as it is
+          // walked. A class may RE-DECLARE an inherited abstract member -
+          // `abstract class B extends A { m(): uint8; }` over an `A` declaring
+          // `m(): number` - and an implementation below B keeps B's contract,
+          // not A's. Comparing against every ancestor blamed the implementation
+          // for a mismatch its base introduced: `C` was named for a narrowing
+          // `B` wrote.
+          //
+          // Whether B's own re-declaration is legal against A is a separate
+          // question this does not answer - abstract-against-abstract is not
+          // compared. Recorded rather than guessed at, since the clause speaks
+          // of a subclass that IMPLEMENTS.
+          const governing = new Map<string, TypeRecord | null>();
           let ancestor = (PublishedClassTypeOf(n as unknown as object) as unknown as { Base?: { Declaration?: object } } | undefined)?.Base;
           const walked = new Set<object>();
           while (ancestor?.Declaration && !walked.has(ancestor.Declaration)) {
             walked.add(ancestor.Declaration);
             for (const [key, declaredType] of PublishedAbstractMembersOf(ancestor.Declaration) ?? []) {
+              if (!governing.has(key)) {
+                governing.set(key, declaredType);
+              }
+            }
+            ancestor = (ancestor as { Base?: { Declaration?: object } }).Base;
+          }
+          {
+            for (const [key, declaredType] of governing) {
               const mine = ownTypes.get(key);
               if (mine === undefined || mine === null || declaredType === null || declaredType === undefined) {
                 continue;
@@ -8398,7 +8420,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return;
               }
             }
-            ancestor = (ancestor as { Base?: { Declaration?: object } }).Base;
           }
         }
         if (!classModifiers.includes('abstract')) {

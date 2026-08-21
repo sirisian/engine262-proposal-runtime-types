@@ -201,3 +201,42 @@ test('the unimplemented rule is an Early Error', () => {
   // type error and a [[Construct]] refusal.
   expect(ok('abstract class G { m(): uint8; } class J extends G { m(): uint8 { return (1 := uint8); } }')).toBe(true);
 });
+
+test('both rules follow a chain of any depth', () => {
+  // PLAN-abstract-implementation.md. The plan's own tests went two levels; these
+  // are A / B extends A / C extends B and deeper, which is where the two walks
+  // stop being obviously equivalent.
+  //
+  // An obligation survives any number of ABSTRACT links.
+  expectThrown('abstract class A { m(): uint8; } abstract class B extends A { } class C extends B { }');
+  expectThrown('abstract class A { m(): uint8; } abstract class B extends A { } '
+    + 'abstract class C extends B { } class D extends C { }');
+  // An implementation anywhere in the chain discharges it for everything below.
+  expect(evaluated('abstract class A { m(): uint8; } abstract class B extends A { m(): uint8 { return (1 := uint8); } } '
+    + 'class C extends B { } String(new C().m());')).toBe('1');
+  expect(evaluated('abstract class A { m(): uint8; } class B extends A { m(): uint8 { return (1 := uint8); } } '
+    + 'class C extends B { } String(new C().m());')).toBe('1');
+  // A middle link may ADD an obligation, and the concrete class owes both.
+  expect(errorMessage('abstract class A { m(): uint8; } abstract class B extends A { n(): uint8; } '
+    + 'class C extends B { m(): uint8 { return (1 := uint8); } }')).toMatch(/inherits "n" with no body/);
+  expect(ok('abstract class A { m(): uint8; } abstract class B extends A { n(): uint8; } '
+    + 'class C extends B { m(): uint8 { return (1 := uint8); } n(): uint8 { return (2 := uint8); } }')).toBe(true);
+  // Rule 1 reaches past an intermediate that adds nothing.
+  expect(errorMessage('abstract class A { m(): uint8; } abstract class B extends A { } '
+    + 'class C extends B { m(): string { return "s"; } }')).toMatch(/signature the declaration does not accept/);
+});
+
+test('a re-declared abstract member is governed by the nearest declaration', () => {
+  // The case that made the first chain walk wrong. `B` re-declares `m` narrower
+  // than `A` does, and `C` implements what B declared. Comparing against every
+  // ancestor blamed C for a narrowing B wrote - the error named the wrong class.
+  //
+  // The nearest declaration governs, which mirrors rule 2 stopping at the first
+  // implementation.
+  expect(evaluated('abstract class A { m(): number; } abstract class B extends A { m(): uint8; } '
+    + 'class C extends B { m(): uint8 { return (1 := uint8); } } String(new C().m());')).toBe('1');
+  // A wrong override at an ABSTRACT middle link is still reported, and at that
+  // link rather than at the concrete class below it.
+  expect(errorMessage('abstract class A { m(): uint8; } abstract class B extends A { m(): string { return "s"; } } '
+    + 'class C extends B { }')).toMatch(/"B" implements an inherited "m"/);
+});
