@@ -2061,6 +2061,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * Whether a name is bound by the PROGRAM, and so shadows anything the engine
+   * would otherwise resolve it to.
+   *
+   * `#sec-type-name-resolution`: a built-in type name resolves "through the
+   * ordinary scope chain first and through the built-in table only where no user
+   * binding of the name exists". The rule is there for compatibility - `string`,
+   * `object` and their kin are among the most common identifiers in existing
+   * code - and it applies to every name the engine binds, `Token` and the
+   * `Reflect` namespace included.
+   *
+   * `PLAN-checker-type-resolution.md` stage A read its registry by written name
+   * and never consulted scope, so the checker answered with the intrinsic where
+   * the runtime, which walks the scope chain, answered with the binding. That is
+   * a checker/runtime divergence about what an annotation MEANS - the defect that
+   * plan exists to remove, reintroduced by it.
+   *
+   * Where a name IS shadowed the checker answers nothing rather than guessing:
+   * it cannot know statically what a value binding holds, and the runtime
+   * boundary already resolves it correctly. Abstaining is what makes the two
+   * agree.
+   */
+  const shadowedByProgram = (name: string): boolean => {
+    // `declaredNames`, not `bindings`: `declare` records a TYPE only where one is
+    // known, and the shadow that matters most is exactly the one whose type is
+    // not - `const Token = uint8;` binds the name while telling the checker
+    // nothing about it. Asking `bindings` answers false for those and leaves the
+    // divergence in place, which is what the first attempt at this did.
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].declaredNames.has(name)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /**
    * The structural shape behind a type, where it has one: an object type is its
    * own, and a nominal type - a class or an interface - carries one in
    * [[Structure]]. Reading a member goes through here so that a class's fields
@@ -2653,10 +2689,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // ARGUMENTS on a qualified name are still out of reach and keep the
             // old answer.
             if (!node.TypeArguments) {
-              const written = [
-                node.TypeName.IdentifierReference.name,
-                ...node.TypeName.MemberNames.map((m) => m.name),
-              ].join('.');
+              // The BASE name decides: `Reflect.Region` means the intrinsic only
+              // where the program has not bound `Reflect` itself.
+              const base = node.TypeName.IdentifierReference.name;
+              if (shadowedByProgram(base)) {
+                return null;
+              }
+              const written = [base, ...node.TypeName.MemberNames.map((m) => m.name)].join('.');
               return (BoundTypeRecordForName(written) as Known | undefined) ?? null;
             }
             return null;
@@ -2799,7 +2838,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Last is also the conservative place: this lookup answers only for a
         // name nothing else in the chain claims.
-        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (BoundTypeRecordForName(name) as Known | undefined) ?? namedNumericLiteralRecord(name);
+        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name);
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
