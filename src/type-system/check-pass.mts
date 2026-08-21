@@ -419,7 +419,7 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
     // This is not hypothetical: the pass runs BEFORE evaluation, so a hook
     // touching anything the script initializes throws a TDZ ReferenceError, and
     // propagating it would fail every program whose meta type does so.
-    const attempt = EnsureCompletion(yield* ApplyMetaHook(metaType, 'narrow', [portion, Value(operator), constant]));
+    const attempt = EnsureCompletion(yield* ApplyMetaHook(metaType, 'narrow', [portion, Value(operator), constant], subject.Base));
     if (attempt.Type !== 'normal') {
       continue;
     }
@@ -463,13 +463,13 @@ function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<b
     const verdict = Q(yield* ApplyMetaHook(metaType, 'subtype', [
       MetadataPortion(s, metaType),
       MetadataPortion(t, metaType),
-    ]));
+    ], pair.source.Base));
     if (verdict !== Value.true) {
       return false;
     }
   }
   const baseObject = GetTypeObject(pair.source.Base);
-  const verdict = Q(yield* ApplyMetaHook(baseObject as unknown as object, 'subtype', [s, t]));
+  const verdict = Q(yield* ApplyMetaHook(baseObject as unknown as object, 'subtype', [s, t], pair.source.Base));
   if (verdict !== undefined && verdict !== Value.true) {
     return false;
   }

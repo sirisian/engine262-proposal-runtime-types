@@ -517,32 +517,92 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
     .toMatchObject({ Type: 'normal' });
 });
 
-test('a hook annotation naming the type parameter fails when the hook runs', () => {
-  // PLAN-generic-meta-evaluation.md phase 5, RECORDED not asserted as correct.
-  // The declaration is accepted - annotations are not name-checked at
-  // declaration (D36) - and the annotation is enforced when the hook is CALLED,
-  // where `T` is not bound:
+test('a hook may name the meta type\'s type parameter in its annotations', () => {
+  // PLAN-hook-parameter-binding.md. The declaration was accepted and the
+  // annotation was enforced when the hook was CALLED, where `T` was not bound:
+  // `ReferenceError: "T" is not defined`. A generic meta type therefore worked
+  // only if its hooks were written unannotated - which the design documents do
+  // not do.
   //
-  //   ReferenceError: "T" is not defined
-  //
-  // This corrects PLAN-generic-meta-declarations.md's conclusion that scoping the
-  // parameter into hook annotations was vacuous. It is not: the scoping is
-  // needed at the RUNTIME ENFORCEMENT site rather than in the checker, because
-  // that is the only place a hook annotation is read.
-  const decl = 'type GG<T> = { gg?: boolean }; '
+  // #sec-meta-declarations says what to bind: the parameter "is bound to the
+  // base at each parameterization the meta type governs … the name of what the
+  // base IS". So it is bound per invocation, from the base the caller is
+  // deciding about, and the frame is pushed around the Call in ApplyMetaHook -
+  // EvaluateBody pushes one only from the FUNCTION's own type parameters, and a
+  // hook function has none.
+  const hooked = 'type GG<T> = { gg?: boolean }; '
     + 'meta GG<T> { default = { gg: false }; '
     + 'subtype(sub: GG.<T>, sup: GG.<T>): boolean { return sup.gg === undefined || sub.gg === sup.gg; } } ';
-  // Declaring it is fine.
-  expect(run(`${decl} "ok";`)).toMatchObject({ Type: 'normal' });
-  // Invoking it is not.
-  expect(errorMessage(`${decl} let a: uint8.<{ gg: false }> = (1 := uint8.<{ gg: false }>); let b: uint8.<{ gg: true }> = a;`))
-    .toMatch(/"T" is not defined/);
-  // The same hook UNANNOTATED governs the crossing correctly, which is what
-  // isolates the annotation as the cause rather than the generic form.
+  expect(errorMessage(`${hooked} let a: uint8.<{ gg: false }> = (1 := uint8.<{ gg: false }>); let b: uint8.<{ gg: true }> = a;`))
+    .toMatch(/is not assignable to/);
+  // An unannotated hook is unchanged - the form every generic meta type is
+  // written in today.
   const bare = 'type GB<T> = { gb?: boolean }; '
     + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(errorMessage(`${bare} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
     .toMatch(/is not assignable to/);
+  // A non-generic meta type pushes no frame and is untouched.
+  expect(run('type PB = { pb?: boolean }; meta PB { default = { pb: false }; subtype(a, b) { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+  // `describe` builds a diagnostic with no crossing in progress, so no base is
+  // bound - and it must not throw for want of one.
+  expect(run('type DD<T> = { dd?: boolean }; '
+    + 'meta DD<T> { default = { dd: false }; subtype(a, b) { return true; } describe(c) { return "d"; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+});
+
+test('a meta declaration takes one type parameter, matching its constraint shape', () => {
+  // PLAN-meta-hook-signatures.md. #sec-meta-declarations: "It is an early error
+  // for a MetaDeclaration to declare more than one type parameter, or for its
+  // constraint shape to take a number of type parameters other than the number
+  // the declaration takes."
+  //
+  // The parameter is not an ordinary generic one - it "is bound to the base at
+  // each parameterization the meta type governs … the name of what the base IS",
+  // and `uint8.<{ bounds: 1..=6 }>` binds it to `uint8` because `uint8` is what
+  // is being parameterized. One base, one parameter, and the shape must take the
+  // same number because the shape is what the parameter is threaded into.
+  //
+  // All three became reachable only when `meta X<T>` started parsing; they were
+  // unenforceable before because the form did not exist.
+  expect(errorMessage('type M2<T, U> = { m2?: boolean }; meta M2<T, U> { default = {}; subtype(a, b) { return true; } }'))
+    .toMatch(/at most one type parameter/);
+  expect(errorMessage('type M3<T, U> = { m3?: boolean }; meta M3<T> { default = {}; subtype(a, b) { return true; } }'))
+    .toMatch(/constraint shape takes/);
+  expect(errorMessage('type M4 = { m4?: boolean }; meta M4<T> { default = {}; subtype(a, b) { return true; } }'))
+    .toMatch(/constraint shape takes/);
+  // The matching cases are what the count check must not break, and both were
+  // measured as accepted before it went in.
+  expect(run('type MB<T> = { mb?: boolean }; meta MB<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+  expect(run('type MC = { mc?: boolean }; meta MC { default = {}; subtype(a, b) { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+  // A base-form meta type keeps its OWN message, which says why a primitive can
+  // never have a parameter rather than only that the counts differ.
+  expect(errorMessage('meta uint8<T> { default = 0; subtype(a, b) { return true; } }'))
+    .toMatch(/base-form meta type has no type parameters to bind/);
+});
+
+test('a hook signature is its ARITY, which is what the table gives', () => {
+  // PLAN-meta-hook-signatures.md §1, and the reason D36 was withdrawn.
+  // #table-meta-hooks writes each hook as `subtype(sub, sup)` - names and counts,
+  // NO types - so "a hook whose signature does not match the table" is the arity.
+  expect(run('type MD = { md?: boolean }; meta MD { default = {}; subtype(a) { return true; } }'))
+    .toMatchObject({ Type: 'throw' });
+  expect(run('type ME = { me?: boolean }; meta ME { default = {}; subtype(a, b, c) { return true; } }'))
+    .toMatchObject({ Type: 'throw' });
+  // DELIBERATELY accepted, both of them - this test is the record that the
+  // acceptance is a reading of the table rather than an oversight.
+  //
+  // An annotation naming an undefined type: the table states no types for it to
+  // mismatch against.
+  expect(run('type MF = { mf?: boolean }; meta MF { default = {}; subtype(sub: Zzz, sup: MF): boolean { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
+  // Parameter names differing from the table's: those names exist so the table's
+  // Meaning column can refer to them, and the hook's own NAME is checked by a
+  // separate clause.
+  expect(run('type MG = { mg?: boolean }; meta MG { default = {}; subtype(zzz, qqq) { return true; } } "ok";'))
+    .toMatchObject({ Type: 'normal' });
 });
 
 test('a meta declaration takes one type parameter, matching its constraint shape', () => {

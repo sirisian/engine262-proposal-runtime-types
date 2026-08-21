@@ -14,7 +14,7 @@ import { anyType, displayType, builtinTypeRecord, type TypeRecord, propertyKeyVa
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
-import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings } from '../type-system/runtime.mts';
+import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
@@ -1906,6 +1906,28 @@ export function LookupMetaTypeName(typeObject: object): string | undefined {
 }
 
 /**
+ * The NAME of a meta type's type parameter, where it declares one.
+ *
+ * PLAN-hook-parameter-binding.md phase 3. A type-parameter frame maps a NAME to
+ * a record, so binding the parameter at a hook invocation needs the name the
+ * declaration wrote - and nothing kept it. #sec-meta-declarations: the parameter
+ * "is bound to the base at each parameterization the meta type governs … the
+ * name of what the base IS".
+ *
+ * Registered beside the meta type's own name, for the same reason: both are
+ * facts about the declaration that an invocation far away needs.
+ */
+const metaTypeParameterNames = new WeakMap<object, string>();
+
+export function RegisterMetaTypeParameterName(typeObject: object, name: string): void {
+  metaTypeParameterNames.set(typeObject, name);
+}
+
+export function LookupMetaTypeParameterName(typeObject: object): string | undefined {
+  return metaTypeParameterNames.get(typeObject);
+}
+
+/**
  * A meta type's own description of a portion, where it defines `describe`.
  * The clause asks for it in both failure messages, and the hook has been
  * declarable since cycle 37 with no consumer at all: the engine threw its
@@ -1915,7 +1937,9 @@ export function* DescribePortion(metaType: object, portion: Value): PlainEvaluat
   if (metaHooks.get(metaType)?.get('describe') === undefined) {
     return undefined;
   }
-  const described = Q(yield* ApplyMetaHook(metaType, 'describe', [portion]));
+  // No crossing is in progress - this builds a message about one - so there is
+  // no base to bind and an annotation naming the parameter admits.
+  const described = Q(yield* ApplyMetaHook(metaType, 'describe', [portion], undefined));
   return described instanceof JSStringValue ? described.stringValue() : undefined;
 }
 
@@ -1990,7 +2014,7 @@ export function MetadataPortion(metadata: Value, metaType: object): Value {
 }
 
 /** Apply a named hook of a meta type, or *undefined* where it defines none. */
-export function* ApplyMetaHook(typeObject: object, name: string, args: readonly Value[]): PlainEvaluator<Value | undefined> {
+export function* ApplyMetaHook(typeObject: object, name: string, args: readonly Value[], base: TypeRecord | undefined): PlainEvaluator<Value | undefined> {
   const fn = metaHooks.get(typeObject)?.get(name);
   if (!fn) {
     return undefined;
@@ -2004,7 +2028,36 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     return undefined;
   }
   ConsumeEvaluationSteps(1);
-  return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+  // PLAN-hook-parameter-binding.md phase 1. A hook may annotate its parameters
+  // with the meta type's type parameter, and #sec-meta-declarations says what
+  // that parameter is: "bound to the base at each parameterization the meta type
+  // governs … the name of what the base IS". So it is bound HERE, per
+  // invocation, from the base the caller is deciding about - not at the
+  // declaration, where the base is not yet known.
+  //
+  // The frame is pushed around the Call rather than inside the hook because
+  // EvaluateBody pushes one only from the FUNCTION's own type parameters
+  // (InferGenericCallBindings), and a hook function has none - the parameter
+  // belongs to the |MetaDeclaration|. currentTypeParameterFrame flattens the
+  // whole stack, so a frame pushed here is visible to EnforceParameterTypes
+  // inside the call.
+  //
+  // Where the caller has no base - `describe` building a diagnostic, with no
+  // crossing in progress - nothing is pushed and the annotation fails to
+  // resolve, which ADMITS. That is what the parameter distribution already does
+  // with an out-of-scope substitution, and a `describe` that threw would turn a
+  // vague diagnostic into none.
+  const parameterName = base === undefined ? undefined : LookupMetaTypeParameterName(typeObject);
+  if (parameterName !== undefined && base !== undefined) {
+    pushTypeParameterFrame(new Map([[parameterName, base]]));
+  }
+  try {
+    return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+  } finally {
+    if (parameterName !== undefined && base !== undefined) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 /**
@@ -2184,7 +2237,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
       // nothing, so the meta type takes no part in the crossing either.
       continue;
     }
-    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType)));
+    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
     // *undefined* is "this meta type defines no `validate`", which the clause's
     // step reads as nothing to check rather than as a refusal.
     if (verdict === false) {
@@ -2198,7 +2251,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
   }
   // A hook declared against the BASE judges the whole metadata, as it does in
   // IsOfType's parameterized arm.
-  const baseVerdict = Q(yield* ApplyValidateHook(GetTypeObject(t.Base), value, t.Metadata));
+  const baseVerdict = Q(yield* ApplyValidateHook(GetTypeObject(t.Base), value, t.Metadata, t.Base));
   if (baseVerdict === false) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
@@ -2239,7 +2292,7 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
     }
     const fp = MetadataPortion(Value.undefined, metaType);
     const tp = MetadataPortion(t.Metadata, metaType);
-    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp]));
+    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], t.Base));
     if (admits !== Value.true) {
       const named = LookupMetaTypeName(metaType) ?? 'a meta type';
       const described = Q(yield* DescribePortion(metaType, tp));
@@ -2284,7 +2337,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   for (const metaType of participating) {
     const fp = MetadataPortion(from.Metadata, metaType);
     const tp = MetadataPortion(to.Metadata, metaType);
-    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp]));
+    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], to.Base));
     if (admits === Value.true) {
       continue;
     }
@@ -2309,7 +2362,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     const f = Q(yield* ApplyMetaHook(metaType, 'conversionFactor', [
       MetadataPortion(from.Metadata, metaType),
       MetadataPortion(to.Metadata, metaType),
-    ]));
+    ], to.Base));
     if (f !== undefined && f instanceof NumberValue) {
       factor *= R(f) as number;
     }
@@ -2325,7 +2378,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     const q = Q(yield* ApplyMetaHook(metaType, 'quantize', [
       converted,
       MetadataPortion(to.Metadata, metaType),
-    ]));
+    ], to.Base));
     if (q !== undefined) {
       converted = q;
     }
@@ -2365,7 +2418,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
       }
       const rescaled = Q(yield* ApplyMetaHook(metaType, 'rescale', [
         MetadataPortion(from.Metadata, metaType), Value(factor),
-      ]));
+      ], to.Base));
       const snap = EnsureCompletion(yield* SnapshotMetadataValue(rescaled as Value));
       if (snap.Type !== 'normal') {
         continue;
@@ -2398,12 +2451,26 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   return converted;
 }
 
-export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value): PlainEvaluator<boolean | undefined> {
-  const fn = metaHooks.get(typeObject)?.get('validate');
-  if (!fn) {
+/**
+ * PLAN-hook-parameter-binding.md phase 0. This looked the hook up itself and
+ * called it, so a hook was invoked from TWO operations rather than one - and
+ * `validate` is among the hooks most likely to carry an annotation, so anything
+ * placed in ApplyMetaHook missed exactly the hook a reader would test with.
+ *
+ * It also missed the EVALUATION BUDGET. ApplyMetaHook meters it, with a comment
+ * saying why - "this is where the type machinery runs USER CODE, so it is where
+ * the meter belongs" - and this path had neither the exhaustion check nor the
+ * step consumption, so a `validate` hook ran unmetered. Delegating closes that
+ * as a side effect rather than as a second change.
+ *
+ * What stays here is the only thing that differed: the return conversion, since
+ * `validate` answers a Boolean where the other hooks answer a Value.
+ */
+export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value, base: TypeRecord | undefined): PlainEvaluator<boolean | undefined> {
+  const result = Q(yield* ApplyMetaHook(typeObject, 'validate', [value, metadata], base));
+  if (result === undefined) {
     return undefined;
   }
-  const result = Q(yield* Call(fn as never, Value.undefined, [value, MetadataAsObject(metadata)]));
   return result === Value.true;
 }
 

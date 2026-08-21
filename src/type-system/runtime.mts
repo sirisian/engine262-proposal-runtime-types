@@ -1339,7 +1339,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // (the audit's C2 named three call sites; this was the unlisted
         // fourth, and the reason a two-key `validate` saw undefined where the
         // defaulted key should be).
-        const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType)));
+        const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
         if (verdict === undefined) {
           // The meta type claims a key here and offers no judgment, so it
           // constrains without admitting. This is the brand case.
@@ -1350,7 +1350,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
       }
       const baseObject = GetTypeObject(t.Base);
-      const verdict = Q(yield* ApplyValidateHook(baseObject, value, t.Metadata));
+      const verdict = Q(yield* ApplyValidateHook(baseObject, value, t.Metadata, t.Base));
       return verdict === undefined ? true : verdict;
     }
     case 'literal':

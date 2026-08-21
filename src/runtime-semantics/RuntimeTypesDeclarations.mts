@@ -47,7 +47,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -1292,6 +1292,13 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         const fn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'meta hook', params, body, 'non-lexical-this', env, privEnv);
         RegisterMetaHook(typeObject, hookName, fn);
         RegisterMetaTypeName(typeObject as object, name);
+        // PLAN-hook-parameter-binding.md phase 3: the parameter's NAME, which a
+        // hook invocation needs to key its frame on. Kept here because this is
+        // the only place the declaration is in hand.
+        const parameterName = node.TypeParameters?.TypeParameterList?.[0]?.BindingIdentifier?.name;
+        if (typeof parameterName === 'string') {
+          RegisterMetaTypeParameterName(typeObject as object, parameterName);
+        }
       }
     }
   }
