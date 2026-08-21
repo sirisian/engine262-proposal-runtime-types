@@ -80,3 +80,11 @@ test('an INTERFACE is reached; a class instance type is not', () => {
   // Early, since the checker reads the annotation before anything runs.
   expectError('class C { n: uint8 = 1; } type A = C["n"];');
 });
+
+test('IndexedTypeOf distributes over a union operand and a union key', () => {
+  // The two loops of `#sec-indexedtypeof`, which the other tests reach only in
+  // their one-arm, one-key form.
+  expect(evaluated('type A = { n: uint8 }; type B = { n: uint8 }; type U = A | B; type R = U["n"]; String(R === uint8);')).toBe('true');
+  expect(evaluated('type T = { a: uint8, b: string }; type R = T["a" | "b"]; String("s" is R);')).toBe('true');
+  expect(evaluated('type T = { a: uint8, b: string }; type R = T["a" | "b"]; String((1 := uint8) is R);')).toBe('true');
+});
