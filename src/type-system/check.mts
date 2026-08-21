@@ -575,6 +575,21 @@ export function PublishedClassTypeOf(declaration: object): TypeRecord | undefine
   return publishedClassTypes.get(declaration);
 }
 
+/**
+ * The ABSTRACT members a class declares, by name, with their declared types.
+ *
+ * PLAN-abstract-implementation.md, the checking-pass migration. Published beside
+ * the class record because the two rules of #sec-abstract-classes are questions
+ * about a CHAIN - "a class not declared `abstract` leaves an inherited abstract
+ * method unimplemented" - and the chain is walked through [[Base]], whose
+ * declarations this is keyed by.
+ */
+const publishedAbstractMembers = new WeakMap<object, ReadonlyMap<string, TypeRecord | null>>();
+
+export function PublishedAbstractMembersOf(declaration: object): ReadonlyMap<string, TypeRecord | null> | undefined {
+  return publishedAbstractMembers.get(declaration);
+}
+
 export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
   return publishedReturnTypes.get(declaration);
 }
@@ -4186,12 +4201,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // contributes nothing yet, and is the natural next step for checking a
     // store through an accessor.
     const methods = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
+    /**
+     * PLAN-abstract-implementation.md, the checking-pass migration.
+     * #sec-type-errors makes a determinable type error an Early Error, and both
+     * abstract rules refused at class definition EVALUATION - so the marker
+     * before the class ran, and a class in dead code was never checked.
+     *
+     * The checker skipped `AbstractMethodDefinition` entirely: this walk handles
+     * `MethodDefinition` and nothing else, so an abstract member was absent from
+     * the class structure and there was nothing to reason about. Collected here,
+     * keyed the way the member push below keys everything, so the inherited walk
+     * can find them by name.
+     */
+    const abstractMembers = new Map<string, TypeRecord | null>();
     const unusable = new Set<string>();
     let construct: { Parameters: ParameterRecord[] } | null = null;
     const accessorKeys = new Set<string>();
     const getterKeys = new Set<string>();
     const setterTypes = new Map<string, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
+      if (el.type === 'AbstractMethodDefinition') {
+        // A member is abstract because it has no body; the keyword is optional.
+        // Its annotation "types the implementations", so it is recorded with its
+        // declared type where there is one - that is what rule 1 compares
+        // against.
+        const am = el as unknown as {
+          ClassElementName?: { type?: string, name?: string, value?: string } | null,
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        };
+        const akey = am.ClassElementName?.name ?? am.ClassElementName?.value;
+        if (typeof akey === 'string' && am.ClassElementName?.type !== 'PrivateIdentifier') {
+          abstractMembers.set(akey, am.TypeAnnotation ? resolveType(am.TypeAnnotation.Type) : null);
+        }
+        continue;
+      }
       if (el.type === 'MethodDefinition') {
         const md = el as unknown as {
           TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -4511,6 +4554,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // second, eager build at evaluation would have to reproduce that and could
     // silently disagree. One build, read twice, cannot.
     publishedClassTypes.set(n as unknown as object, instance as unknown as TypeRecord);
+    publishedAbstractMembers.set(n as unknown as object, abstractMembers);
     return instance;
   };
 
@@ -8289,6 +8333,62 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(el);
         }
         classContext.pop();
+        // PLAN-abstract-implementation.md, the checking-pass migration.
+        // #sec-abstract-classes: "a type error if a class not declared
+        // `abstract` leaves an inherited abstract method unimplemented".
+        //
+        // Reported HERE rather than only at class definition evaluation, because
+        // #sec-type-errors makes a determinable type error an Early Error - "a
+        // source text that contains one is rejected rather than evaluated". The
+        // evaluation-time check stays as the backstop for what the pass does not
+        // cover, which is the same division the neighbouring rule uses: `new C()`
+        // on an abstract class is BOTH a static type error and a [[Construct]]
+        // refusal.
+        //
+        // The chain is walked through the base's DECLARATION, since that is what
+        // the abstract members are published by, and it stops at the first
+        // implementation: a class that declares the member concretely satisfies
+        // it for everything below.
+        // The modifiers live on the CLASS node, which the evaluator reaches as
+        // `ClassTail.parent.ClassModifiers`; here the node IS the class.
+        const classModifiers = (n as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+        if (!classModifiers.includes('abstract')) {
+          const own = new Set<string>();
+          for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+            const nm = (el as { ClassElementName?: { name?: string, value?: string } | null }).ClassElementName;
+            const k = nm?.name ?? nm?.value;
+            if (typeof k === 'string' && el.type !== 'AbstractMethodDefinition') {
+              own.add(k);
+            }
+          }
+          let base = (PublishedClassTypeOf(n as unknown as object) as unknown as { Base?: { Declaration?: object } } | undefined)?.Base;
+          const seen = new Set<object>();
+          while (base?.Declaration && !seen.has(base.Declaration)) {
+            seen.add(base.Declaration);
+            // A class BETWEEN this one and the declaration may implement it -
+            // `abstract class K extends G { m() { … } }` satisfies `G`'s member
+            // for everything below K - so each level's concrete members join the
+            // set before that level's abstract ones are asked about.
+            for (const el of (base.Declaration as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+              const bn = (el as { ClassElementName?: { name?: string, value?: string } | null }).ClassElementName;
+              const bk = bn?.name ?? bn?.value;
+              if (typeof bk === 'string' && el.type !== 'AbstractMethodDefinition') {
+                own.add(bk);
+              }
+            }
+            for (const [key] of PublishedAbstractMembersOf(base.Declaration) ?? []) {
+              if (!own.has(key)) {
+                errors.push(Throw.TypeError(
+                  '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
+                  Value(named ?? 'the class'),
+                  Value(key),
+                ).Value as ObjectValue);
+                return;
+              }
+            }
+            base = (base as { Base?: { Declaration?: object } }).Base;
+          }
+        }
         return;
       }
       case 'MemberExpression': {

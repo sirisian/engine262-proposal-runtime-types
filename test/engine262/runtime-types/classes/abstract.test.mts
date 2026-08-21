@@ -163,3 +163,22 @@ test('an implementation must have a signature the declaration accepts', () => {
   // And an exact match is untouched.
   expect(evaluated(`${G} class M extends G { m(): uint8 { return (2 := uint8); } } String(new M().m());`)).toBe('2');
 });
+
+test('the unimplemented rule is an Early Error', () => {
+  // PLAN-abstract-implementation.md, the checking-pass migration. D1 recorded a
+  // deviation: both rules refused at class definition EVALUATION, so a marker
+  // before the class ran and a class in dead code was never checked.
+  // #sec-type-errors wants "a source text that contains one is rejected rather
+  // than evaluated", which is what PLAN-default-timing settled for the
+  // no-default rule.
+  //
+  // The assertion is TIMING, not that an error occurs - both behaviours throw.
+  expect(evaluated('globalThis.ran = 0; try { eval("abstract class G { m(): uint8; } class H extends G { }"); } '
+    + 'catch (e) { } String(globalThis.ran);')).toBe('0');
+  // A class in DEAD CODE is now checked, which is the point of an Early Error.
+  expectThrown('abstract class G { m(): uint8; } if (false) { class H extends G { } }');
+  // The evaluation-time check stays as the backstop, which is the same division
+  // the neighbouring rule uses: `new C()` on an abstract class is both a static
+  // type error and a [[Construct]] refusal.
+  expect(ok('abstract class G { m(): uint8; } class J extends G { m(): uint8 { return (1 := uint8); } }')).toBe(true);
+});
