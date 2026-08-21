@@ -56,3 +56,31 @@ test('a class field reaches it too', () => {
   expectThrown(`${pairOf} class Box<T> { p: pairOf(T); }`
     + ' const b = new Box.<uint8>(); b.p[0] = "wrong";');
 });
+
+test('a method may carry a where clause naming its class\'s parameters', () => {
+  // PLAN-where-on-methods.md D2. #sec-type-annotations, as amended: a method
+  // takes |WhereClauses| the same way a function declaration does. The rule
+  // needs no restatement - "checked at each specialization once its parameters
+  // are bound" - because a generic method specializes as a generic function
+  // does.
+  //
+  // The part that is NEW: a method's clause may name the parameters of its CLASS
+  // as well as its own. `N` is bound at the instantiation and `I` at the call,
+  // and no clause before this one had to resolve across two scopes.
+  const V = 'class V<N: uint32> { lane<I: uint32>(): uint32 where I < N { return (1 := uint32); } } ';
+  expect(evaluated(`${V} String(new V.<4>().lane.<1>());`)).toBe('1');
+  expectThrown(`${V} new V.<4>().lane.<9>();`);
+  // The class frame is pushed UNDER the method's, so a method parameter shadows
+  // a class parameter of the same name - `N > 2` reads the method's 5, not the
+  // class's 0.
+  expect(evaluated('class X<N: uint32> { m<N: uint32>(): uint32 where N > 2 { return (1 := uint32); } } '
+    + 'String(new X.<0>().m.<5>());')).toBe('1');
+  // A non-generic class contributes no frame, and a method-only clause still
+  // works - which is the case that would break if the frame were pushed
+  // unconditionally.
+  expect(evaluated('class Y { m<I: uint32>(): uint32 where I < 3 { return (1 := uint32); } } '
+    + 'String(new Y().m.<1>());')).toBe('1');
+  // The two positions that already worked are untouched.
+  expect(evaluated('function f<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } String(f.<3>());')).toBe('1');
+  expectThrown('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();');
+});

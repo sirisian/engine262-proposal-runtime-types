@@ -107,6 +107,42 @@ function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: O
 // CallExpression :
 //   CoverCallExpressionAndAsyncArrowHead
 //   CallExpression Arguments
+/**
+ * The type-parameter frame a METHOD's receiver contributes.
+ *
+ * PLAN-where-on-methods.md D2, phase 4. A method's `where` clause may name its
+ * CLASS's parameters, and those are bound at the instantiation - `V.<4>` binds
+ * `N` - which the receiver carries and the call does not. Pairs the receiver's
+ * type ARGUMENTS with the class declaration's parameter NAMES, in order.
+ *
+ * Answers null for anything that is not a parameterized nominal receiver, which
+ * is every ordinary call: a function's own clause needs no such frame, and
+ * pushing an empty one would only cost a pop.
+ */
+function classTypeParameterFrame(ref: unknown): Map<string, TypeRecord> | null {
+  const base = (ref as { Base?: Value } | undefined)?.Base;
+  if (!base || typeof base !== 'object') {
+    return null;
+  }
+  const record = RuntimeTypeOf(base as Value) as unknown as {
+    Arguments?: readonly TypeRecord[],
+    Declaration?: { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] } },
+  };
+  const args = record?.Arguments;
+  const params = record?.Declaration?.TypeParameters?.TypeParameterList;
+  if (!args || !params || args.length === 0 || params.length === 0) {
+    return null;
+  }
+  const frame = new Map<string, TypeRecord>();
+  for (let i = 0; i < params.length && i < args.length; i += 1) {
+    const name = params[i]?.BindingIdentifier?.name;
+    if (typeof name === 'string' && args[i]) {
+      frame.set(name, args[i]!);
+    }
+  }
+  return frame.size === 0 ? null : frame;
+}
+
 export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpression): ValueEvaluator {
   // 1. Let expr be CoveredCallExpression of CoverCallExpressionAndAsyncArrowHead.
   const expr = CallExpression;
@@ -1081,6 +1117,20 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // the Syntax Error it replaced.
       const whereClauses = functionWhereClauses(func as never);
       if (whereClauses && whereClauses.length > 0) {
+        // PLAN-where-on-methods.md D2, phase 4. A METHOD's clause may name the
+        // parameters of its CLASS as well as its own - `lane<I>(): T where I < N`
+        // for a `class vector<T, N>` reads both - and the frame built above holds
+        // only the call's own bindings, so `N` was "not defined".
+        //
+        // The class's bindings come from the RECEIVER: `new V.<4>().lane.<1>()`
+        // binds `N` at the instantiation, which the instance carries and the
+        // call does not. Pushed UNDER the method's frame, so a method parameter
+        // shadows a class parameter of the same name - the flattening in
+        // currentTypeParameterFrame is innermost-last.
+        const classFrame = classTypeParameterFrame(ref);
+        if (classFrame) {
+          pushTypeParameterFrame(classFrame);
+        }
         pushTypeParameterFrame(frame);
         try {
           for (const clause of whereClauses) {
@@ -1095,6 +1145,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           }
         } finally {
           popTypeParameterFrame();
+          if (classFrame) {
+            popTypeParameterFrame();
+          }
         }
       }
       explicitFrame = frame;
