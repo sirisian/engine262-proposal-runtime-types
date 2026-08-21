@@ -1215,6 +1215,34 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // TypeError when NewTarget is that constructor itself, while super() from a
       // concrete subclass (a concrete NewTarget) runs it as a constructor body.
       (F as { IsAbstract?: boolean }).IsAbstract = modifiers.includes('abstract');
+      // PLAN-abstract-implementation.md phase 2b. #sec-abstract-classes: "a type
+      // error if a class not declared `abstract` leaves an inherited abstract
+      // method unimplemented". Until now the class declared, constructed, and
+      // reported only when the missing member was CALLED - "h.m is not a
+      // function", which names the symptom rather than the contract.
+      //
+      // Three kinds, because an abstract member may be a method or either
+      // accessor and the walk is kind-filtered: a check written for methods
+      // alone silently passes every accessor.
+      //
+      // AllMemberDeclarationsOf collects innermost-first and guards each insert
+      // with `!collected.has(key)`, so the NEAREST declaration wins. That is
+      // what makes implementing at a middle level satisfy the contract for
+      // everything below it - the question is "is the collected declaration
+      // abstract", not "is any declaration in the chain abstract".
+      if (!modifiers.includes('abstract')) {
+        for (const kind of ['ClassMethod', 'ClassGetter', 'ClassSetter']) {
+          for (const [key, declaration] of AllMemberDeclarationsOf(proto, kind, false, false)) {
+            if (declaration.abstract === true) {
+              return Throw.TypeError(
+                '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
+                Value(typeof classBinding === 'object' && classBinding instanceof JSStringValue ? classBinding.stringValue() : 'the class'),
+                Value(String(key)),
+              );
+            }
+          }
+        }
+      }
     }
     // 30. For each PrivateElement method of staticPrivateMethods, do
     for (const method of staticPrivateMethods) {
@@ -1387,6 +1415,25 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
         RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
+      }
+      // PLAN-abstract-implementation.md phase 2a. An AbstractMethodDefinition is
+      // intercepted here and never reaches ClassElementEvaluation, which is
+      // where every other member is recorded - so `abstract` in a
+      // MemberDeclaration was a field that could never be true, and the
+      // registry had no idea which members were contracts.
+      //
+      // #sec-abstract-classes needs it: "a type error if a class not declared
+      // `abstract` leaves an inherited abstract method unimplemented" is a
+      // question about the chain, and AllMemberDeclarationsOf is what walks it.
+      //
+      // The kind is the one the member's SHAPE implies, so the kind-filtered
+      // walk finds an abstract accessor under the same kind as a concrete one -
+      // a check written for methods alone would silently pass every accessor.
+      if (surroundingAgent.feature('runtime-types') && e.type === 'AbstractMethodDefinition') {
+        const abstractKind = e.Accessor === 'get'
+          ? 'ClassGetter'
+          : e.Accessor === 'set' ? 'ClassSetter' : 'ClassMethod';
+        Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, MemberKeyOf(e, undefined), (e.static ? F : proto) as ObjectValue));
       }
       if (surroundingAgent.feature('runtime-types') && e.type === 'OperatorDefinition') {
         Q(yield* ApplySubTargetDecorators(e as never, 'ClassOperator', Value(operatorTableKey(e)), (e.static ? F : proto) as Value));

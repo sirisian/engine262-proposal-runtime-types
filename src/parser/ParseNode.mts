@@ -2914,6 +2914,15 @@ export namespace ParseNode {
   export interface AbstractMethodDefinition extends BaseParseNode {
     readonly type: 'AbstractMethodDefinition';
     readonly static: false;
+    /**
+     * PLAN-abstract-implementation.md phase 2a. Which accessor form this is,
+     * where it is one. Part A made `get x(): T;` and `set x(v: T);` abstract
+     * members and finished both as this node type - deliberately, so nothing
+     * downstream learns a second one - but nothing recorded WHICH, and the
+     * member registry is kind-filtered: an abstract getter recorded as a method
+     * is invisible to a walk asking for getters.
+     */
+    readonly Accessor?: 'get' | 'set' | undefined;
     readonly PropertySetParameterList?: undefined;
     readonly ClassElementName: ClassElementName;
     readonly UniqueFormalParameters: FormalParameters;

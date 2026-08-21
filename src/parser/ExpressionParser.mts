@@ -3874,6 +3874,11 @@ export abstract class ExpressionParser extends FunctionParser {
     if (isAbstractMember) {
       const abstractNode = node as unknown as ParseNode.Unfinished<ParseNode.AbstractMethodDefinition>;
       abstractNode.static = false;
+      // PLAN-abstract-implementation.md phase 2a: which accessor form, where it
+      // is one. Both finish as this node type by design; the member registry is
+      // kind-filtered, so an abstract getter recorded as a method would be
+      // invisible to the walk that looks for getters.
+      abstractNode.Accessor = isGetter ? 'get' : isSetter ? 'set' : undefined;
       return this.finishNode(abstractNode, 'AbstractMethodDefinition') as unknown as ParseNode.MethodDefinitionLike;
     }
 

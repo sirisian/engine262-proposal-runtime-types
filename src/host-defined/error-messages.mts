@@ -574,6 +574,7 @@ export interface Throw {
   | '$1 can only be used with v flag'
   | '$1 cannot be bound by ref here'
   | '$1 cannot be extended by a partial class'
+  | '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract'
   | '$1 cannot be inverted'
   | '$1 cannot be invoked without new'
   | '$1 cannot be stored as columns'
