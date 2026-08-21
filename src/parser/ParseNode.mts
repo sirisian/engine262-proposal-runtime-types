@@ -2790,7 +2790,6 @@ export namespace ParseNode {
     | SharedType
     | ReferenceType
     | KeyOfType
-    | TypeQueryType
     | IndexedAccessType
     | PredefinedType
     | LiteralType
@@ -3155,14 +3154,6 @@ export namespace ParseNode {
   export interface KeyOfType extends BaseParseNode {
     readonly type: 'KeyOfType';
     readonly Type: Type;
-  }
-
-  // TypeQueryType : `typeof` TypeName
-  // The `typeof` type operator queries the type of a value binding: `typeof x` is
-  // the type of the value `x`, the same query `Reflect.typeOf(x)` performs.
-  export interface TypeQueryType extends BaseParseNode {
-    readonly type: 'TypeQueryType';
-    readonly ExpressionName: TypeName;
   }
 
   // IndexedAccessType : PostfixType `[` Type `]`
@@ -3850,7 +3841,6 @@ export type ParseNode =
   | ParseNode.SharedType
   | ParseNode.ReferenceType
   | ParseNode.KeyOfType
-  | ParseNode.TypeQueryType
   | ParseNode.IndexedAccessType
   | ParseNode.PredefinedType
   | ParseNode.LiteralType

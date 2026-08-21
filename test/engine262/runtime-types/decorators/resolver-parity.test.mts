@@ -53,7 +53,6 @@ const rows: readonly Row[] = [
   { kind: 'SharedType', setup: '', ty: 'shared number', bad: '"nope"' },
   { kind: 'ReferenceType', setup: '', ty: 'ref number', bad: '"nope"' },
   { kind: 'KeyOfType', setup: 'interface IK { a: number; } ', ty: 'keyof IK', bad: '5' },
-  { kind: 'TypeQueryType', setup: 'const q: uint8 = 1; ', ty: 'typeof q', bad: 'true' },
   { kind: 'IndexedAccessType', setup: 'interface IX { a: number; } ', ty: 'IX["a"]', bad: '"nope"' },
   { kind: 'PredefinedType', setup: '', ty: 'string', bad: '5' },
   { kind: 'LiteralType', setup: '', ty: '5', bad: '"nope"' },
@@ -105,7 +104,6 @@ const rows: readonly Row[] = [
 const KNOWN_CHECKER_GAPS = new Set([
   'SharedType',
   'PatternType',
-  'TypeQueryType',
   'ComputedType',
 ]);
 

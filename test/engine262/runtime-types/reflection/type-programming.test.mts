@@ -48,10 +48,10 @@ test('type builders: the is operator tests a value against a type', () => {
 test('type builders: the typeof type operator is the type of a value', () => {
   // typeprogramming.md 4.1: `typeof x` is the type of the value x, the query
   // Reflect.typeOf(x) performs.
-  expect(evaluated('let x = (5 := uint8); type T = typeof x; (T === uint8) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('let x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
   // a value of that type passes the membership test, one not of it does not
-  expect(evaluated('let s = "hi"; ("world" is typeof s) ? "yes" : "no";')).toBe('yes');
-  expect(evaluated('let s = "hi"; (42 is typeof s) ? "yes" : "no";')).toBe('no');
+  expect(evaluated('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('let s = "hi"; (42 is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('no');
 });
 
 test('type builders: an indexed-access type is the type of the named property', () => {
@@ -79,7 +79,7 @@ test('typeof and indexed access compose and round-trip through reflection', () =
   // resolves stepwise to the nested property type.
   expect(evaluated('type T = { a: { b: uint8 } }; type A = T["a"]["b"]; (A === uint8) ? "yes" : "no";')).toBe('yes');
   // the typeof operand may be a qualified member expression, not only a bare name
-  expect(evaluated('let o = { n: (5 := uint8) }; type A = typeof o.n; (A === uint8) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('let o = { n: (5 := uint8) }; type A = Reflect.typeOf(o.n); (A === uint8) ? "yes" : "no";')).toBe('yes');
   // a type reached through an operator round-trips through the reflection model,
   // the same interned object coming back from getReflection then makeType
   expect(evaluated('type T = { a: uint8 }; type A = T["a"]; (Reflect.makeType(Reflect.getReflection(A)) === A) ? "yes" : "no";')).toBe('yes');

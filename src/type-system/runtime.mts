@@ -2608,21 +2608,6 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const operand = Q(yield* TypeNodeToTypeRecord(node.Type));
       return KeyTypesOf(operand);
     }
-    case 'TypeQueryType': {
-      // proposal-runtime-types (typeprogramming.md 4.1): `typeof x` is the type of
-      // the value bound to the entity name, the query `Reflect.typeOf(x)` performs.
-      const baseName = node.ExpressionName.IdentifierReference.name;
-      const ref = Q(yield* ResolveTypeName(Value(baseName)));
-      let value = Q(yield* GetValue(ref));
-      for (const part of node.ExpressionName.MemberNames) {
-        if (!(value instanceof ObjectValue)) {
-          const path = `typeof ${baseName}.${part.name}`;
-          return Throw.TypeError('$1 is not a type', Value(path));
-        }
-        value = Q(yield* Get(value, Value(part.name)));
-      }
-      return RuntimeTypeOf(value);
-    }
     case 'IndexedAccessType': {
       // proposal-runtime-types (typeprogramming.md 4.1): `T[K]` is the union, over
       // each arm _t_ of `T` and each literal key _k_ of `K`, of the type of _t_'s

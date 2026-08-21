@@ -76,23 +76,25 @@ function evaluated(source: string): string {
   return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
 }
 
-test('a prefix takes a `typeof` operand, which is a PrimaryType like any other', () => {
-  // The lookahead that decides whether `keyof` is an operator or an ordinary
-  // type reference did not list `typeof`, so `keyof typeof E` read `keyof` as a
-  // NAME and the `typeof` after it was unexpected - while `keyof (typeof E)` and
-  // a two-step alias both parsed. It is the spelling an enum's enumerator names
-  // are reached by, and the one a reader coming from TypeScript writes.
-  expect(parseType('keyof typeof E')).toMatchObject({
-    type: 'KeyOfType', Type: { type: 'TypeQueryType' },
+test('a prefix takes a CALL operand, which is a PrimaryType like any other', () => {
+  // The lookahead that decides whether `keyof` is an operator or an ordinary type
+  // reference has to admit whatever begins a PrimaryType, or `keyof` reads as a
+  // NAME and what follows is unexpected.
+  //
+  // `Reflect.typeOf(x)` is the type query (typeprogramming.md 4.1) and parses as
+  // a ComputedType, so it is the operand this exercises the lookahead with. It is
+  // also the spelling an enum's enumerator names are reached by.
+  expect(parseType('keyof Reflect.typeOf(E)')).toMatchObject({
+    type: 'KeyOfType', Type: { type: 'ComputedType' },
   });
-  expect(parseType('shared typeof v')).toMatchObject({
-    type: 'SharedType', Type: { type: 'TypeQueryType' },
+  expect(parseType('shared Reflect.typeOf(v)')).toMatchObject({
+    type: 'SharedType', Type: { type: 'ComputedType' },
   });
-  expect(parseType('ref typeof v')).toMatchObject({
-    type: 'ReferenceType', Type: { type: 'TypeQueryType' },
+  expect(parseType('ref Reflect.typeOf(v)')).toMatchObject({
+    type: 'ReferenceType', Type: { type: 'ComputedType' },
   });
   // The grouping the parenthesized form already had is unchanged.
-  expect(parseType('keyof (typeof E)')).toMatchObject({ type: 'KeyOfType' });
+  expect(parseType('keyof (Reflect.typeOf(E))')).toMatchObject({ type: 'KeyOfType' });
 });
 
 test('predefined and literal types', () => {
@@ -275,7 +277,7 @@ test('keyof a type with no keys is the empty type, not an error', () => {
   expect(evaluated('enum C { Zero } type K = keyof C; String("Zero" is K);')).toBe('false');
   // The enumerator NAMES are reached through the enum object's type, which is a
   // different question and still answers.
-  expect(evaluated('enum C { Zero } type K = keyof typeof C; String("Zero" is K);')).toBe('true');
+  expect(evaluated('enum C { Zero } type K = keyof Reflect.typeOf(C); String("Zero" is K);')).toBe('true');
 });
 
 test('a keyless member of an intersection contributes nothing, rather than voiding it', () => {
@@ -304,7 +306,7 @@ test('a class type answers with its declared instance members', () => {
   expect(evaluated(`${C}type K = keyof C; String(("a" is K) && ("b" is K));`)).toBe('true');
   // Methods are keys, as they are for an interface.
   expect(evaluated(`${C}type K = keyof C; String("m" is K);`)).toBe('true');
-  // A static belongs to the constructor, reached through `keyof typeof C`.
+  // A static belongs to the constructor, reached through `keyof Reflect.typeOf(C)`.
   expect(evaluated(`${C}type K = keyof C; String("s" is K);`)).toBe('false');
   // A private name is not a property key and cannot be written as one.
   expect(evaluated(`${C}type K = keyof C; String("p" is K);`)).toBe('false');
