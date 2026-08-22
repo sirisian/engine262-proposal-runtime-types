@@ -100,7 +100,11 @@ const rows: readonly Row[] = [
  * when the checker runs, not a defect in the program.
  */
 const KNOWN_CHECKER_GAPS = new Set([
-  'SharedType',
+  // `SharedType` was here, and is closed: resolving it once made
+  // `let s: shared uint8 = 1;` an early error because the checker's CONVERSION
+  // path did not look through the marker, so the annotation was left unreadable
+  // instead. `literalFitsNumericType` now looks through it, and the annotation
+  // is resolved and judged - `let s: shared uint8 = "x";` is refused.
   'PatternType',
   'ComputedType',
 ]);

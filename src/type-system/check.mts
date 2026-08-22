@@ -1020,7 +1020,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // type is assignable to it; the boundary constructs the typed value. This is
   // the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
   // space is genuinely distinct, and this is how a plain literal enters it.
-  const literalFitsNumericType = (source: TypeRecord, target: TypeRecord): boolean => {
+  const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord): boolean => {
+    // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` already
+    // looks through the marker (relations.mts), but a numeric literal reaches a
+    // numeric type by CONVERSION rather than by subtyping, and this path did not
+    // - so `let s: shared uint8 = 1;` was refused the moment the annotation
+    // resolved, while the runtime converted and admitted it.
+    //
+    // PLAN-checker-type-resolution, C2's `SharedType` gap: the annotation was
+    // left UNRESOLVED to avoid that refusal, which bought silence at the cost of
+    // the whole annotation being unchecked. Looking through here is what lets it
+    // be resolved.
+    const source = sourceRaw.Kind === 'shared' ? sourceRaw.Target as TypeRecord : sourceRaw;
+    const target = targetRaw.Kind === 'shared' ? targetRaw.Target as TypeRecord : targetRaw;
     if (source.Kind === 'literal' && target.Kind === 'primitive'
         && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint'].includes(target.Name)
         && source.Value instanceof NumberValue
@@ -2931,14 +2943,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // different one here is the mistake stage A's first attempt made with
       // `Token`.
       //
-      // `SharedType` is deliberately NOT resolved here yet, and the reason is
-      // recorded in `resolver-parity.test.mts`: resolving it made
-      // `let s: shared uint8 = 1;` an early error. `IsSubtype` looks through
-      // `shared` (relations.mts), but a numeric literal reaches `uint8` by
-      // CONVERSION rather than by subtyping, and the checker's conversion path
-      // does not look through the marker - so a value the runtime converts and
-      // admits was refused statically. Closing this gap means teaching that path
-      // about `shared`, which is a separate change from resolving the annotation.
+      // #sec-shared-types: `shared T` is a marker over its target. Resolving it
+      // once made `let s: shared uint8 = 1;` an early error, because a numeric
+      // literal reaches `uint8` by CONVERSION and that path did not look through
+      // the marker; `literalFitsNumericType` now does, so the annotation can be
+      // resolved and judged rather than left unreadable.
+      case 'SharedType': {
+        const Target = resolveType(node.Type);
+        return Target ? { Kind: 'shared', Target } as Known : null;
+      }
       // The references extension: `ref T` is { Kind: 'reference', Target }.
       case 'ReferenceType': {
         const Target = resolveType(node.Type);
