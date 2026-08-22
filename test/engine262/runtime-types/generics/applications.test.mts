@@ -136,6 +136,16 @@ test('the where positions the plan claimed were covered', () => {
 });
 
 test('the deferred application record kind exists and relates by identity', () => {
+  // Steps 1, 3 and 4 of five: the ~application~ kind, its IsSubtype arm, and its
+  // CanonicalizeType case. Step 4 is what makes step 3's `s.Builder ===
+  // t.Builder` meaningful - "two mentions of one deferred call are one type by
+  // interning, and two different calls are unrelated until they evaluate" -
+  // since without interning two spellings of one call would compare unequal.
+  //
+  // Nothing PRODUCES one yet (step 2, see the plan), so what is asserted here is
+  // that the kind's arrival disturbs nothing: every existing relation holds, and
+  // a computed type over a BOUND parameter still evaluates rather than
+  // deferring, which is the case step 2 must not capture.
   // PLAN-where-on-methods.md, unblocking D1's assumed half. Steps 1 and 3 of the
   // five: the ~application~ Type Record kind, and the IsSubtype arm.
   //

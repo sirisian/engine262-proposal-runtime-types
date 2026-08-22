@@ -2759,6 +2759,72 @@ function clauseSourceText(clause: object): string | undefined {
   }
 }
 
+/**
+ * The FACTS a builder's contract states about a deferred call of it.
+ *
+ * #sec-checked-contracts, the ASSUMED half: "before specialization, where the
+ * application is deferred and no result exists, the checker takes each clause as
+ * a known fact about the ~application~ Type Record."
+ *
+ * Only one clause shape carries an edge - `Reflect.isAssignable(X, return)`,
+ * which states `X <: thisApplication`, the LOWER bound a generic body producing
+ * the result needs (`typeprogramming.md` §6.2: "Direction is everything here,
+ * and it is easy to get backwards"). A clause asserting a kind carries none and
+ * yields no fact; it is verified at each evaluation instead.
+ *
+ * `resolveArgument` maps a clause's argument expression to a Type Record where
+ * it can; the caller supplies it, because what a name means differs between the
+ * checker and the evaluator.
+ */
+export function ContractFactsOf(
+  fn: object,
+  resolveArgument: (node: object) => TypeRecord | undefined,
+): readonly { readonly LowerBound?: TypeRecord }[] {
+  const clauses = functionWhereClauses(fn as never);
+  if (!clauses || clauses.length === 0) {
+    return [];
+  }
+  const facts: { readonly LowerBound?: TypeRecord }[] = [];
+  for (const clause of clauses) {
+    const predicate = (clause as unknown as { RefinementPredicate?: object }).RefinementPredicate;
+    const call = predicate as {
+      type?: string,
+      CallExpression?: { MemberExpression?: unknown },
+      Arguments?: readonly object[],
+    } | undefined;
+    if (!call || call.type !== 'CallExpression' || !Array.isArray(call.Arguments)
+        || call.Arguments.length !== 2) {
+      continue;
+    }
+    if (!calleeIsReflectIsAssignable(call)) {
+      continue;
+    }
+    const [source, target] = call.Arguments as readonly object[];
+    // The edge points from the FIRST argument to `return`, and only where the
+    // second IS `return`: `isAssignable(X, return)` is a lower bound, while
+    // `isAssignable(return, X)` is an upper one and is not read here.
+    if ((target as { type?: string })?.type !== 'ContractReturn') {
+      continue;
+    }
+    const lower = resolveArgument(source);
+    if (lower) {
+      facts.push({ LowerBound: lower });
+    }
+  }
+  return facts;
+}
+
+function calleeIsReflectIsAssignable(call: object): boolean {
+  const text = (() => {
+    try {
+      return sourceTextOf(call as never) ?? '';
+    } catch {
+      return '';
+    }
+  })();
+  return /\bReflect\s*\.\s*isAssignable\s*\(/.test(text);
+}
+
 export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = []): ValueEvaluator {
   const clauses = functionWhereClauses(fn as never);
   if (!clauses || clauses.length === 0) {

@@ -265,6 +265,25 @@ export interface TupleElementRecord {
   readonly Initial: Value | 'none';
 }
 
+/**
+ * A fact a checked contract states about a deferred application.
+ *
+ * #sec-checked-contracts: "the checker takes each clause as a known fact about
+ * the ~application~ Type Record". A fact is a SUBTYPE EDGE, and the clause says
+ * which way it points - `typeprogramming.md` §6.2: "Direction is everything
+ * here, and it is easy to get backwards."
+ *
+ * `LowerBound` is what `Reflect.isAssignable(X, return)` states: every X value
+ * is a value of this application, so `X <: thisApplication`. It is the bound a
+ * generic body PRODUCING the result needs.
+ *
+ * A clause carrying no edge - a kind assertion, say - yields no fact: it is
+ * verified at every evaluation instead, which is the half that already runs.
+ */
+export interface ContractFact {
+  readonly LowerBound?: TypeRecord;
+}
+
 export type TypeRecord =
   | { readonly Kind: 'any' }
   /**
@@ -286,6 +305,22 @@ export type TypeRecord =
     readonly Kind: 'application',
     readonly Builder: unknown,
     readonly Arguments: readonly (TypeRecord | Value)[],
+    /**
+     * The builder's `where` clauses, as FACTS about this deferred call.
+     *
+     * #sec-checked-contracts: a contract "is ASSUMED: before specialization,
+     * where the application is deferred and no result exists, the checker takes
+     * each clause as a known fact about the ~application~ Type Record".
+     *
+     * The record is where they attach, so the field is here rather than looked
+     * up from [[Builder]] at each comparison: two mentions of one call intern to
+     * one record, and the facts intern with it.
+     *
+     * Absent where the builder declares none, which is every deferred call that
+     * is not a contract - and the general rule then applies unchanged: "a
+     * deferred ~application~ is a subtype only of itself and of the `any` type".
+     */
+    readonly Facts?: readonly ContractFact[],
   }
   | { readonly Kind: 'void' }
   /**

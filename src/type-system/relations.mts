@@ -295,6 +295,29 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // and two different calls are unrelated until they evaluate."
       //
       // `any` is handled by its own arm above, so identity is the whole of this.
+      // `any` is handled by its own arm above, so identity is the whole of this
+      // WHERE THERE ARE NO FACTS.
+      //
+      // #sec-checked-contracts: a contract "is ASSUMED: before specialization …
+      // the checker takes each clause as a known fact about the ~application~
+      // Type Record. The second is sound because of the first: any
+      // specialization that would falsify an assumption is stopped at the
+      // builder, before the code that relied on it runs."
+      //
+      // So a deferred call carrying facts may relate to MORE than itself - that
+      // is the whole purpose of a contract, and the reason `omit`'s caller can
+      // learn that dropping properties widens. Consulting them is the remaining
+      // step; until a fact is produced, `Facts` is absent and this reduces to
+      // identity, which is the conservative reading the clause gives for a call
+      // with no contract.
+      // A LOWER bound licensed by a fact: `where Reflect.isAssignable(X, return)`
+      // says every X value is a `return` value, so `X <: thisApplication`. That
+      // is the direction `typeprogramming.md` §6.2 warns is easy to reverse -
+      // "checking a generic body that PRODUCES the result needs a lower bound,
+      // and for `omit` the true one is `T <: return`".
+      if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
+        return true;
+      }
       return t.Kind === 'application'
         && s.Builder === t.Builder
         && SameArgumentList(
@@ -584,6 +607,36 @@ function InterfaceStructureOf(t: TypeRecord): TypeRecord | undefined {
 /** A literal type whose value is a Number, which a complex position may lift. */
 function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
   return s.Value instanceof NumberValue || isTypedNumber(s.Value as Value);
+}
+
+/**
+ * Whether a deferred application's contract licenses `s <: t`.
+ *
+ * #sec-checked-contracts: before specialization "the checker takes each clause
+ * as a known fact about the ~application~ Type Record". A fact is a SUBTYPE
+ * EDGE, and the clause says which way it points: `Reflect.isAssignable(X, return)`
+ * gives `X <: thisApplication`.
+ *
+ * Only that shape is read. A clause asserting a KIND - `reflect(return).kind ===
+ * 'object'` - carries no edge and licenses nothing here; it is verified at every
+ * evaluation instead, which is the half that already runs.
+ */
+function licensesLowerBound(
+  t: TypeRecord & { Kind: 'application' },
+  s: TypeRecord,
+  assumptions: readonly Assumption[],
+): boolean {
+  const facts = (t as { Facts?: readonly unknown[] }).Facts;
+  if (!facts || facts.length === 0) {
+    return false;
+  }
+  for (const fact of facts) {
+    const lower = (fact as { LowerBound?: TypeRecord }).LowerBound;
+    if (lower && SameTypeWithAssumptions(s, lower, assumptions)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {

@@ -123,6 +123,30 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   if (t.Kind === 'tuple') {
     return { Kind: 'tuple', Elements: t.Elements.map((e) => ({ Type: CanonicalizeType(e.Type, copies), Rest: e.Rest, Initial: e.Initial })) };
   }
+  if (t.Kind === 'application') {
+    // PLAN-where-on-methods.md, unblocking D1, step 4. #sec-canonicalizetype:
+    // "If _t_.[[Kind]] is ~application~ … for each element _a_ of
+    // _t_.[[Arguments]], if _a_ is a Type Record append CanonicalizeType(_a_),
+    // else append _a_."
+    //
+    // Interning is what makes IDENTITY the relation the kind is compared by:
+    // "two mentions of one deferred call are one type by interning, and two
+    // different calls are unrelated until they evaluate". Without this the
+    // subtype arm's `s.Builder === t.Builder` would hold while the argument
+    // lists compared unequal for two spellings of the same call.
+    return {
+      Kind: 'application',
+      Builder: t.Builder,
+      // The facts intern WITH the record, so two mentions of one contract call
+      // carry one fact list rather than two equal ones.
+      Facts: t.Facts,
+      Arguments: t.Arguments.map((a) => (
+        a && typeof a === 'object' && 'Kind' in a
+          ? CanonicalizeType(a as TypeRecord, copies)
+          : a
+      )),
+    } as TypeRecord;
+  }
   if (t.Kind === 'array') {
     return { Kind: 'array', Element: CanonicalizeType(t.Element, copies), Extent: t.Extent };
   }
