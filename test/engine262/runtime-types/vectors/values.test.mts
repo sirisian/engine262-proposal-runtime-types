@@ -16,9 +16,15 @@ import { ok, evaluated, expectThrown } from '../harness.mts';
 test('a vector type name is a callable Type Object', () => {
   // `typeof uint8` is 'object' and `uint8(5)` constructs; a vector shorthand
   // now behaves the same way, which is the model it follows.
-  expect(evaluated('String(typeof float32x4);')).toBe('object');
-  expect(evaluated('String(typeof int32x4);')).toBe('object');
-  expect(evaluated('String(typeof boolean8);')).toBe('object');
+  //
+  // Each probe sits in a text that ADMITS TYPE NAMES. `#sec-type-names` excepts
+  // `typeof` from admitting, so a text holding only a probe leaves the name
+  // unbound - which is what keeps an existing `typeof string === "undefined"`
+  // true - and the probe answers about the name only where something else in
+  // the text opted in.
+  expect(evaluated('type _ = uint8; String(typeof float32x4);')).toBe('object');
+  expect(evaluated('type _ = uint8; String(typeof int32x4);')).toBe('object');
+  expect(evaluated('type _ = uint8; String(typeof boolean8);')).toBe('object');
 });
 
 test('a vector constructs from its lanes', () => {
@@ -541,12 +547,16 @@ test('an alias of a vector type has its accessors and a wrapping class does not'
 test('a bare parameterized primitive is not a value', () => {
   // The convention the note above describes, asserted so that a later change
   // to it is deliberate rather than accidental.
-  expect(evaluated('String(typeof uint);')).toBe('undefined');
-  expect(evaluated('String(typeof int);')).toBe('undefined');
-  expect(evaluated('String(typeof vector);')).toBe('undefined');
+  // In an ADMITTING text, so that the distinction being asserted is the bare
+  // versus applied one and not whether the text opted in at all: without the
+  // annotation every line below answers 'undefined' and the test would pass
+  // while measuring nothing.
+  expect(evaluated('type _ = uint8; String(typeof uint);')).toBe('undefined');
+  expect(evaluated('type _ = uint8; String(typeof int);')).toBe('undefined');
+  expect(evaluated('type _ = uint8; String(typeof vector);')).toBe('undefined');
   // While an APPLIED one is.
-  expect(evaluated('String(typeof uint8);')).toBe('object');
-  expect(evaluated('String(typeof float32x4);')).toBe('object');
+  expect(evaluated('type _ = uint8; String(typeof uint8);')).toBe('object');
+  expect(evaluated('type _ = uint8; String(typeof float32x4);')).toBe('object');
 });
 
 /**

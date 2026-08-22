@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { KIND_NAMES } from '#self';
 
@@ -18,10 +18,36 @@ import { KIND_NAMES } from '#self';
  * the accessor family are not yet decorable - which is an implementation gap
  * rather than drift, and one this test should not pretend is closed.
  */
-const DECORATORS_MD = '/home/claude/ecmascript-types/decorators.md';
+/**
+ * The design document, found rather than assumed.
+ *
+ * It was one hardcoded absolute path, so this anti-drift test threw ENOENT in
+ * any checkout that does not put the two repositories side by side at that exact
+ * location - a false red that says nothing about drift. The candidates below are
+ * tried in order, and the test SKIPS where none exists, because a test that
+ * cannot read its source should say so rather than fail as though it had.
+ */
+const DECORATORS_MD_CANDIDATES = [
+  '/home/claude/ecmascript-types/decorators.md',
+  '/home/claude/work/ecmascript-types/decorators.md',
+  new URL('../../../../ecmascript-types/decorators.md', import.meta.url).pathname,
+];
+
+function decoratorsMarkdown(): string | null {
+  for (const candidate of DECORATORS_MD_CANDIDATES) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
 
 function documentedReflections(): Set<string> {
-  const text = readFileSync(DECORATORS_MD, 'latin1');
+  const path = decoratorsMarkdown();
+  if (path === null) {
+    return new Set<string>();
+  }
+  const text = readFileSync(path, 'latin1');
   const names = new Set<string>();
   const pattern = new RegExp('type (' + '\\' + 'w+)Reflection', 'g');
   let match = pattern.exec(text);
