@@ -71,3 +71,22 @@ test('and the concrete cases are untouched', () => {
   expectError('type T = { a: uint8 }; type A = T[number];');
   expectError('type T = { a: uint8 }; type A = T["zz"];');
 });
+
+test('a PARENTHESIZED type may be indexed, as the grammar says', () => {
+  // `PostfixType : PrimaryType`, and a parenthesized type is one. The parser
+  // rejoined the grammar at the INTERSECTION level after looking past `(` to
+  // tell a FunctionType from a parenthesized one, so it skipped the postfix
+  // level: `(A | B)["n"]` was a SyntaxError while `U["n"]` for a named alias was
+  // not. Parenthesising is the only way to index a union written inline.
+  expect(evaluated('type A = ({ n: uint8 })["n"]; String(A === uint8);')).toBe('true');
+  expect(evaluated('type A = ({ n: uint8 } | { n: uint8 })["n"]; String(A === uint8);')).toBe('true');
+  // and the two forms `(` still has to distinguish are unaffected
+  expect(evaluated('type F = (a: uint8) => string; String(typeof F);')).toBe('object');
+  expect(evaluated('type A = (uint8); String(A === uint8);')).toBe('true');
+});
+
+test('the deferred case reaches inside a UNION operand', () => {
+  // `mentionsParameter` recurses through union and intersection members, so a
+  // union with a parameter arm defers rather than resolving to nothing.
+  expectError('function p<T>(o: T) { let v: (T | { n: uint8 })["n"] = 1; }');
+});

@@ -38,7 +38,7 @@ export abstract class TypeParser extends ExpressionParser {
         return this.finishNode(node, 'FunctionType');
       }
       const paren = this.refineParenthesizedType(node, list, trailingComma);
-      return this.parseUnionTypeRest(this.parseIntersectionTypeRest(paren));
+      return this.parseUnionTypeRest(this.parseIntersectionTypeRest(this.parsePostfixTypeRest(paren)));
     }
     return this.parseUnionType();
   }
@@ -107,7 +107,21 @@ export abstract class TypeParser extends ExpressionParser {
   // Indexed access binds tighter than `keyof`/`typeof` and than union and
   // intersection, so `A | T[K]` is `A | (T[K])` and `T[K][J]` chains left.
   private parsePostfixType(): ParseNode.Type {
-    let type = this.parsePrimaryType();
+    return this.parsePostfixTypeRest(this.parsePrimaryType());
+  }
+
+  /**
+   * The postfix loop, resumable from an already-parsed |PrimaryType|.
+   *
+   * The parenthesized form is parsed ABOVE this level - `parseType` has to look
+   * past `(` to tell a |FunctionType| from a parenthesized one - and it rejoined
+   * the grammar at the intersection level, skipping the postfix one. So
+   * `(A | B)["n"]` was a SyntaxError while `U["n"]` for a named alias was not,
+   * which the grammar does not say: |PostfixType| is |PrimaryType|, and a
+   * parenthesized type is one.
+   */
+  private parsePostfixTypeRest(primary: ParseNode.Type): ParseNode.Type {
+    let type = primary;
     while (this.test(Token.LBRACK)) {
       const node = this.startNode<ParseNode.IndexedAccessType>(type);
       node.ObjectType = type;
