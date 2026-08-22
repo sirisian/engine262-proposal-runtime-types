@@ -106,30 +106,56 @@ export function ResolveReplacementDecorator(
 }
 
 /**
- * Whether _macro_ declares that it decorates a captured region.
+ * Whether _macro_ is a replacement decorator, read from its WHOLE signature.
  *
- * `#sec-preprocessor-modules`: "Whether the region's text is ECMAScript is the
- * macro's to declare, and it declares it in its SIGNATURE. A replacement
- * decorator is called with `(tokens, context, args)`, so its second parameter is
- * the context it takes; where that parameter's type is `Reflect.Region`, the
- * region is captured ... Otherwise the region is a Block, parsed."
- *
- * The second parameter POSITIONALLY, because `#sec-syntax-replacement` fixes the
- * calling convention: the context IS the second argument. A macro that annotates
- * no context, or annotates a context of another kind, takes a parsed Block -
- * which is what a macro declaring no `capture` property took, so no program
- * changes meaning by this rule alone.
+ * `#sec-syntax-replacement`: "What a decorator RECEIVES is a TokenStream and
+ * what it RETURNS is a token sequence". That pair is what identifies one, and it
+ * is what this reads - a first parameter of `TokenStream` and a return of
+ * `[].<Token>`. Neither half alone says much: plenty of functions take a stream,
+ * and plenty return an array.
  */
-function TakesARegionContext(macro: ObjectValue): boolean {
-  const signature = EnsureCompletion(skipDebugger(OverloadSignatureOf(macro, true))) as {
-    Type: string,
-    Value?: { Parameters?: readonly { Type?: { LibraryName?: string } }[] },
-  };
-  if (signature.Type !== 'normal') {
+function IsReplacementDecorator(signature: {
+  Parameters?: readonly { Type?: { LibraryName?: string } }[],
+  ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
+}): boolean {
+  const first = signature.Parameters?.[0];
+  if (first?.Type?.LibraryName !== 'TokenStream') {
     return false;
   }
-  const context = signature.Value?.Parameters?.[1];
-  return context?.Type?.LibraryName === 'Reflect.Region';
+  const ret = signature.ReturnType;
+  return ret?.Kind === 'array' && ret.Element?.LibraryName === 'Token';
+}
+
+/**
+ * Whether _macro_ declares that it decorates a CAPTURED region.
+ *
+ * The signature says two things and they are separable, which is why both are
+ * read from it rather than one being inferred from the other:
+ *
+ *   - `(TokenStream, …) => [].<Token>` says it is a replacement decorator at all;
+ *   - a `Reflect.Region` CONTEXT says the region it takes is captured.
+ *
+ * A decorator with the first and not the second is an ordinary replacement
+ * decorator over a parsed |Block|, which is what a macro declaring no `capture`
+ * property was. The context is the SECOND parameter because
+ * `#sec-syntax-replacement` fixes the calling convention as
+ * `(tokens, context, args)`.
+ */
+function TakesARegionContext(macro: ObjectValue): boolean {
+  const resolved = EnsureCompletion(skipDebugger(OverloadSignatureOf(macro, true))) as {
+    Type: string,
+    Value?: {
+      Parameters?: readonly { Type?: { LibraryName?: string } }[],
+      ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
+    },
+  };
+  if (resolved.Type !== 'normal' || resolved.Value === undefined) {
+    return false;
+  }
+  if (!IsReplacementDecorator(resolved.Value)) {
+    return false;
+  }
+  return resolved.Value.Parameters?.[1]?.Type?.LibraryName === 'Reflect.Region';
 }
 
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
