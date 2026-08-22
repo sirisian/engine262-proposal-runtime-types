@@ -6436,6 +6436,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const Return = fn.TypeAnnotation ? resolveType(fn.TypeAnnotation.Type) : null;
+      // Whether a return annotation was WRITTEN, which `Return` alone cannot say:
+      // it is null both where none was written and where one was written and did
+      // not resolve. The duplicate check below needs to tell those apart.
+      const returnWasWritten = !!fn.TypeAnnotation;
       const signatures = collected.get(name) ?? [];
       // #sec-overload-resolution's [[Untyped]]: a signature with no annotation
       // anywhere is the catch-all that ranks last. Declaring a return type is
@@ -6466,7 +6470,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (pushedTypeParameters) {
         typeParameterScopes.pop();
       }
-      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameterNames?: readonly string[] } = { Parameters, Return: declared, Untyped } as never;
+      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameterNames?: readonly string[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
       // #sec-generic-functions: the names a call binds with its type arguments.
       // Recorded here because a call site needs them to substitute into the
       // return type, and the declaration node is not reachable from the
@@ -6517,12 +6521,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return SameType(a, b);
       };
       const duplicate = signatures.some((existing) => {
-        const e = existing as unknown as { Parameters: readonly { Type?: Known }[], Return: Known };
+        const e = existing as unknown as {
+          Parameters: readonly { Type?: Known }[], Return: Known, ReturnWasWritten?: boolean,
+        };
         if (e.Parameters.length !== Parameters.length) {
           return false;
         }
         if (!e.Parameters.every((p, i) => sameForOverloading(p.Type ?? null, Parameters[i]?.Type ?? null))) {
           return false;
+        }
+        // Neither declaring a return is the SAME declared return, not two
+        // unknowns. `sameForOverloading` refuses to equate absent types on
+        // purpose - an annotation this pass cannot resolve proves nothing - but
+        // "no annotation was written" is not that case: it is a declaration of
+        // nothing, and two of them declare the same nothing.
+        //
+        // Without this, `function f() {} function f() {}` was two signatures the
+        // checker could not tell apart, accepted at the declarations and then
+        // ambiguous at EVERY call - an error naming neither of them. The
+        // annotated pair was already refused here, early; this is the same rule
+        // reaching the case that declares nothing. `PLAN-module-scope-overloads`
+        // Q6.
+        if (Return === null && !returnWasWritten && e.ReturnWasWritten === false) {
+          return true;
         }
         return sameForOverloading(e.Return, declared);
       });
