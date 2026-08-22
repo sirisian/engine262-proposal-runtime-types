@@ -1416,6 +1416,8 @@ export namespace ParseNode {
   // BindingElement (partial) :
   //   BindingPattern Initializer?
   export interface BindingElement extends BaseParseNode {
+    /** OUTSTANDING item H: a destructured binding's annotation types the value being destructured. */
+    readonly TypeAnnotation?: TypeAnnotation | null;
     readonly type: 'BindingElement';
 
     // proposal-runtime-types

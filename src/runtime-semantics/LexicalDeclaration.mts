@@ -255,7 +255,12 @@ function* Evaluate_LexicalBinding_BindingPattern(LexicalBinding: ParseNode.Lexic
   const rhs = Q(yield* Evaluate(Initializer!));
   const value = Q(yield* GetValue(rhs));
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
-  return yield* BindingInitialization(BindingPattern!, value, env);
+  // OUTSTANDING item H: the annotation types the value BEING destructured, so it
+  // is enforced before the pattern takes names out of it - the same rule as the
+  // parameter path, at the declaration's own site.
+  const annotated = (LexicalBinding as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  const bound = annotated ? Q(yield* EnforceAnnotation(annotated, value)) : value;
+  return yield* BindingInitialization(BindingPattern!, bound, env);
 }
 
 export function* Evaluate_LexicalBinding(LexicalBinding: ParseNode.LexicalBinding) {

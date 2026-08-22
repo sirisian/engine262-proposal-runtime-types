@@ -520,6 +520,17 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.BindingElementLike>();
     if (this.test(Token.LBRACE) || this.test(Token.LBRACK)) {
       node.BindingPattern = this.parseBindingPattern();
+      // OUTSTANDING item H. #sec-type-annotations, as amended:
+      //   BindingElement : BindingPattern TypeAnnotation? Initializer?
+      //
+      // A destructured binding takes its annotation the same way a named one
+      // does. The rest form already admitted `...{ a, b }: T`, and this branch
+      // did not admit `{ a, b }: T` - "a distinction the grammar drew and
+      // nothing else did", and the largest single cause of syntax errors in the
+      // design corpus at 24 blocks.
+      if (surroundingAgent.feature('runtime-types') && this.test(Token.COLON)) {
+        node.TypeAnnotation = this.parseTypeAnnotation();
+      }
     } else {
       node.BindingIdentifier = this.parseBindingIdentifier();
       if (surroundingAgent.feature('runtime-types')) {

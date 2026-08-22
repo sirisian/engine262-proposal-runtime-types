@@ -345,7 +345,7 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
   }
 }
 
-function* IteratorBindingInitialization_BindingPattern({ BindingPattern, Initializer }: ParseNode.BindingElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+function* IteratorBindingInitialization_BindingPattern({ BindingPattern, Initializer, TypeAnnotation }: ParseNode.BindingElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
   let v: Value = Value.undefined;
   // 1. If iteratorRecord.[[Done]] is false, then
   if (iteratorRecord.Done === Value.false) {
@@ -366,6 +366,17 @@ function* IteratorBindingInitialization_BindingPattern({ BindingPattern, Initial
     v = Q(yield* GetValue(defaultValue));
   }
   // 4. Return the result of performing BindingInitialization of BindingPattern with v and environment as the arguments.
+  // OUTSTANDING item H. The annotation on a DESTRUCTURED binding types the value
+  // BEING destructured, so it is enforced here - before the pattern takes names
+  // out of it - rather than on the names, which have their own types from the
+  // annotated type's members.
+  //
+  // Parsing it without enforcing would be the failure the `where` work already
+  // met: "parsing the clause without checking it would let it be written and
+  // silently ignored, which is worse than the Syntax Error it replaced."
+  if (TypeAnnotation) {
+    v = Q(yield* EnforceAnnotation(TypeAnnotation, X(v)));
+  }
   return yield* BindingInitialization(BindingPattern, X(v), environment);
 }
 

@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { evaluated, ok, expectThrown } from '../harness.mts';
 import {
   Agent, ManagedRealm, Parser, setSurroundingAgent,
 } from '#self';
@@ -226,4 +227,27 @@ test('feature off: annotation syntax stays an error, conditionals unaffected', (
   expect(firstStatement('c ? (a) : b => c2;', false)).toMatchObject({
     Expression: { type: 'ConditionalExpression', AssignmentExpression_b: { type: 'ArrowFunction' } },
   });
+});
+
+test('a destructured binding may carry a type annotation', () => {
+  // OUTSTANDING item H. #sec-type-annotations, as amended:
+  //   BindingElement : BindingPattern TypeAnnotation? Initializer?
+  //
+  // The rest form already admitted `...{ a, b }: T` and the non-rest form did
+  // not - a distinction the grammar drew and nothing else did. It was the
+  // largest single cause of syntax errors in the design corpus, 24 blocks, 19 of
+  // them in `decorators.md`.
+  const Point = 'type Point = { a: uint8, b: uint8 }; ';
+  const obj = 'let o = {}; o.a = (1 := uint8); o.b = (2 := uint8); ';
+  expect(evaluated(`${Point} ${obj} const { a }: Point = o; String(a);`)).toBe('1');
+  expect(ok(`${Point} function f({ a, b }: Point) { return a; }`)).toBe(true);
+  // The annotation types the value BEING destructured, so it is enforced before
+  // the pattern takes names out of it - at the declaration site and at the
+  // parameter site both. Parsing without enforcing would be the failure the
+  // `where` work already met: written and silently ignored is worse than the
+  // Syntax Error it replaced.
+  expectThrown(`${Point} let bad = {}; bad.a = "no"; const { a }: Point = bad;`);
+  expectThrown(`${Point} function f({ a }: Point) { return a; } let w = {}; w.a = "no"; f(w);`);
+  // The rest form is untouched.
+  expect(ok(`${Point} function g(...{ a }: Point) { return a; }`)).toBe(true);
 });
