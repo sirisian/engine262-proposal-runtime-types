@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, run } from '../harness.mts';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
 //
@@ -83,4 +83,30 @@ test('a method may carry a where clause naming its class\'s parameters', () => {
   // The two positions that already worked are untouched.
   expect(evaluated('function f<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } String(f.<3>());')).toBe('1');
   expectThrown('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();');
+});
+
+test('a checked contract names the builder, the arguments and the clause', () => {
+  // PLAN-where-on-methods.md D1, the VERIFIED half. #sec-checked-contracts: "a
+  // clause that is falsy is a type error naming the builder, the arguments it
+  // was given, and the clause" - THREE things, and a DIFFERENT requirement from
+  // the generic bound's, which is "reported against the clause's source".
+  //
+  // The first implementation reused the bound's message and named none of them.
+  const src = 'function widen(n: uint32): uint32 where return > 10 { return n; } widen((3 := uint32));';
+  const completion = run(src) as unknown as { Type: string, Value: { properties?: Map<unknown, { Value?: { stringValue(): string } }> } };
+  expect(completion.Type).toBe('throw');
+  let message = '';
+  for (const [k, d] of (completion.Value.properties ?? new Map())) {
+    if ((k as { stringValue?: () => string }).stringValue?.() === 'message') {
+      message = d.Value?.stringValue() ?? '';
+    }
+  }
+  expect(message).toMatch(/widen/);            // the builder
+  expect(message).toMatch(/3/);                // the arguments it was given
+  expect(message).toMatch(/where return > 10/); // the clause, as written
+  // A satisfied contract is silent, and `return` outside a clause is still a
+  // Syntax Error - the clause says that costs nothing "since the token is
+  // ungrammatical in expression position today".
+  expect(evaluated('function ok(): uint32 where return > 0 { return (5 := uint32); } String(ok());')).toBe('5');
+  expectThrown('const x = return;');
 });

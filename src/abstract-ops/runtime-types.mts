@@ -1,3 +1,4 @@
+import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
@@ -2728,7 +2729,37 @@ export function PopContractReturn(): void {
  * application, and evaluating it again here would run it twice and report the
  * second failure at the wrong site.
  */
-export function* VerifyContracts(fn: object, result: Value): ValueEvaluator {
+function safeDisplay(v: Value): string {
+  try {
+    if (v === Value.undefined || v === Value.null) {
+      return String(v === Value.null ? 'null' : 'undefined');
+    }
+    const s2 = (v as { stringValue?: () => string }).stringValue?.();
+    if (typeof s2 === 'string') {
+      return JSON.stringify(s2);
+    }
+    const n = (v as { numberValue?: () => number }).numberValue?.();
+    if (typeof n === 'number') {
+      return String(n);
+    }
+    const t = (v as { value?: unknown }).value;
+    return t === undefined ? 'a value' : String(t);
+  } catch {
+    return 'a value';
+  }
+}
+
+/** The clause AS WRITTEN, which is the third thing the diagnostic must name. */
+function clauseSourceText(clause: object): string | undefined {
+  try {
+    const text = sourceTextOf(clause as never);
+    return typeof text === 'string' && text.trim() !== '' ? text.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = []): ValueEvaluator {
   const clauses = functionWhereClauses(fn as never);
   if (!clauses || clauses.length === 0) {
     return Value.undefined;
@@ -2746,7 +2777,22 @@ export function* VerifyContracts(fn: object, result: Value): ValueEvaluator {
       PopContractReturn();
     }
     if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
-      return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+      // #sec-checked-contracts: "a clause that is falsy is a type error naming
+      // THE BUILDER, THE ARGUMENTS IT WAS GIVEN, AND THE CLAUSE" - three things,
+      // and a different requirement from the generic bound's, which is "reported
+      // against the clause's source". Reusing the bound's message named none of
+      // them.
+      const name = (fn as { properties?: Map<unknown, { Value?: Value }> }).properties === undefined
+        ? 'the builder' : 'the builder';
+      const declared = (fn as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } })
+        .ECMAScriptCode?.parent?.BindingIdentifier?.name;
+      const shown = args.length === 0 ? '()' : `(${args.map((a) => safeDisplay(a)).join(', ')})`;
+      return Throw.TypeError(
+        'the contract of $1 is not satisfied by $2: $3',
+        Value(declared ?? name),
+        Value(shown),
+        Value(clauseSourceText(clause as object) ?? 'the clause'),
+      );
     }
   }
   return Value.undefined;

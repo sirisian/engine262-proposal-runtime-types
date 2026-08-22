@@ -787,6 +787,7 @@ export interface Throw {
   | 'Unsupported import attribute $1'
   | 'Variable $1 already declared'
   | 'a $1 clause is not satisfied by this application'
+  | 'the contract of $1 is not satisfied by $2: $3'
   | 'a call assigned to must return a ref, and $1 does not'
   | 'a call in a ++ or -- operand must return a ref, and $1 does not'
   | 'a constant expression may not read $1 from outside itself'

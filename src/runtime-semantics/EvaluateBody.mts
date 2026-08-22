@@ -112,11 +112,11 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
         // is falsy is a type error". Checked HERE because this is the first
         // moment a result exists - the clause's other reading, the ASSUMED one,
         // is the checker's and runs where no result does.
-        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, enforced as Value));
+        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, enforced as Value, argumentsList as readonly Value[]));
         if (contract.Type === 'throw') {
           return contract;
         }
-        return new Completion({ Type: 'return', Value: enforced });
+        return new Completion({ Type: 'return', Value: enforced, Target: undefined });
       }
       return result;
     } finally {
