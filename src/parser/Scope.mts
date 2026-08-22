@@ -139,6 +139,8 @@ export interface ScopeInfo {
   readonly lexicals: Set<string>;
   readonly variables: Set<string>;
   readonly functions: Set<string>;
+  /** Names declared here by a FUNCTION declaration, for recognising a later one as a possible overload. */
+  readonly lexicalFunctions: Set<string>;
   readonly parameters: Set<string>;
 }
 
@@ -302,6 +304,7 @@ export class Scope {
         lexicals: new Set(),
         variables: new Set(),
         functions: new Set(),
+        lexicalFunctions: new Set(),
         parameters: new Set(),
       });
     }
@@ -469,7 +472,10 @@ export class Scope {
         }
         case 'function': {
           const scope = this.lexicalScope();
-          if (scope.lexicals.has(d.name)) {
+          // proposal-runtime-types: a repeat of a name ALREADY DECLARED BY A
+          // FUNCTION may be an OVERLOAD; a name bound by `let`, `const` or
+          // `class` never is. The DUPLICATE is caught by the checker, early.
+          if (scope.lexicals.has(d.name) && !scope.lexicalFunctions.has(d.name)) {
             this.parser.addEarlyError(Throw.SyntaxError('Function $1 already declared', d.name), d.node);
           }
           if (scope.flags.variableFunctions) {
@@ -479,6 +485,7 @@ export class Scope {
               this.parser.addEarlyError(Throw.SyntaxError('Function $1 already declared', d.name), d.node);
             }
             scope.lexicals.add(d.name);
+            scope.lexicalFunctions.add(d.name);
           }
           if (scope === this.scopeStack[0] && this.undefinedExports.has(d.name)) {
             this.undefinedExports.delete(d.name);

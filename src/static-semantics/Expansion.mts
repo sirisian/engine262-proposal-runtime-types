@@ -2,6 +2,13 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ReplacementDecoratorNames } from './ReplacementDecoratorNames.mts';
 
 /**
+ * Answered by the `call` callback where the decorated position is one no
+ * REPLACEMENT overload of the name accepts. Not a failure: the decoration stays
+ * as written, for an ordinary decorator of that name at decoration time.
+ */
+export const DECLINED: unique symbol = Symbol('replacement-declined');
+
+/**
  * proposal-runtime-types `sec-expansion` and `sec-when-expansion-happens`.
  *
  * Expansion is the phase in which replacement decorators run. It occurs after a
@@ -190,6 +197,7 @@ export function ExpandSource(
   tokensOfRange: (from: number, to: number, mode?: string) => unknown,
   checkEvaluable: (fn: unknown) => string | undefined,
   call: (fn: unknown, tokens: unknown, args: unknown, target: ParseNode) => unknown,
+
   textOf: (tokens: unknown) => string | undefined,
 ): { text: string, expanded: number, failures: readonly { kind: 'threw' | 'not-tokens' | 'not-evaluable', name: string, detail?: string }[] } {
   // `sec-expansion` expands ONE site per pass - "let _d_ be the outermost such
@@ -263,6 +271,20 @@ export function ExpandSource(
     const regionText = (site.target as { RegionText?: string }).RegionText;
     const streamStart = regionText === undefined ? decoratorEnd : end - regionText.length;
     const returned = call(fn, tokensOfRange(streamStart, end, site.mode), argTokens, site.target);
+    if (returned === DECLINED) {
+      // proposal-runtime-types: the name has no REPLACEMENT overload that accepts
+      // this position, so there is no replacement to apply here and the
+      // decoration is left exactly as written - for an ORDINARY decorator of the
+      // same name to handle at decoration time.
+      //
+      // `#sec-syntax-replacement`: "Where a name carries both, the replacement
+      // runs at expansion and the ordinary one at decoration, in that order." A
+      // name carrying both is the point of this: `@jsx { … }` expands and
+      // `@jsx class C {}` decorates, and the second is not a failure of the
+      // first. Distinct from a macro THROWING, which is how a macro rejects what
+      // it was given and which must not be ignored.
+      continue;
+    }
     if (returned === undefined) {
       // `sec-applyreplacementdecorator`: an ABRUPT completion from a macro
       // becomes a Syntax Error at the DECORATION SITE carrying the macro's own

@@ -25,7 +25,7 @@ import { avoid_using_children } from './parser/utils.mts';
 import { ReplacementDecoratorNames } from './static-semantics/ReplacementDecoratorNames.mts';
 import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyErrors.mts';
 import { FirstEvaluabilityViolation } from './static-semantics/PreprocessorEvaluability.mts';
-import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
+import { DECLINED, EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
 import { Call } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
@@ -33,6 +33,7 @@ import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
 import { OverloadSignatureOf, SignaturesOf } from './abstract-ops/runtime-types.mts';
+import { resolveOverload, type OverloadSignature } from './type-system/overloads.mts';
 import { KindOfDecoratedNode, LabelOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
 import {
   ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
@@ -629,6 +630,29 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
         const callArgs = args === undefined
           ? [tokens as Value, context as Value]
           : [tokens as Value, context as Value, args as Value];
+        // Where the name carries SEVERAL overloads and none of them accepts
+        // this position, there is no replacement to apply - the decoration is
+        // declined rather than failed, and an ORDINARY overload of the same name
+        // handles it at decoration time.
+        //
+        // Only where the name carries SEVERAL overloads: declining is meaningful
+        // exactly when another overload may handle the position. A macro that is
+        // a name's only declaration and does not accept where it is written is an
+        // error, as it was - measured, extending this to a single declaration
+        // fixed nothing and would have made a lone mismatched macro silent.
+        //
+        // Asked of resolution rather than inferred from the error it would
+        // throw: "no overload matches" from a macro's own BODY is a real failure
+        // and must stay one, and the two are indistinguishable by message.
+        // `#sec-syntax-replacement`, and
+        // `FINDING-overload-resolution-host-nominals.md` 9.3.
+        const declared = EnsureCompletion(skipDebugger(SignaturesOf(fn as ObjectValue))) as {
+          Type: string, Value?: readonly OverloadSignature[],
+        };
+        if (declared.Type === 'normal' && declared.Value !== undefined && declared.Value.length > 1
+            && resolveOverload(declared.Value, callArgs as Value[], undefined).Kind === 'none') {
+          return DECLINED;
+        }
         const result = EnsureCompletion(skipDebugger(Call(fn as ObjectValue, Value.undefined, callArgs)));
         return result.Type === 'normal' ? result.Value : undefined;
       },
