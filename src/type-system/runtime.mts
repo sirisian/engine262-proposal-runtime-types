@@ -2615,6 +2615,22 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // (whose type is `void`). This is the operator form of the kit's `indexed`.
       const objectType = Q(yield* TypeNodeToTypeRecord(node.ObjectType));
       const indexType = Q(yield* TypeNodeToTypeRecord(node.IndexType));
+      // PLAN-parameter-composition Stage E. Where a type PARAMETER is involved
+      // the access is deferred rather than refused, and the two resolvers have to
+      // agree about that: `#sec-indexedtypeof` states one operation, and a
+      // checker that defers while the runtime raises is exactly the drift the
+      // shared record was extracted to prevent.
+      //
+      // It was not prevented. `IndexedAccessTypeRecord` had two callers, both in
+      // the checker, while this arm kept its own copy of the walk - so
+      // `class Box<T, K: keyof T> { v: T[K]; }` was refused here and deferred
+      // there. The deferred case now comes from the one implementation; the walk
+      // below still runs for everything else, because it raises three DISTINCT
+      // errors where the shared helper answers a single null.
+      const deferred = IndexedAccessTypeRecord(objectType, indexType);
+      if (deferred && deferred.Kind === 'parameter') {
+        return deferred;
+      }
       const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
       const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
       const results: TypeRecord[] = [];
