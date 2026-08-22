@@ -165,3 +165,31 @@ test('the deferred application record kind exists and relates by identity', () =
   expect(evaluated('function widen(T: type): type { return T; } '
     + 'function f<T>(v: T): widen(T) { return v; } String(f.<uint8>((1 := uint8)));')).toBe('1');
 });
+
+test('a checked contract is ASSUMED before specialization', () => {
+  // PLAN-where-on-methods.md D1, the assumed half. #sec-checked-contracts: a
+  // contract "is ASSUMED: before specialization, where the application is
+  // deferred and no result exists, the checker takes each clause as a known fact
+  // about the ~application~ Type Record. The second is sound because of the
+  // first: any specialization that would falsify an assumption is stopped at the
+  // builder, before the code that relied on it runs."
+  //
+  // The fact is a SUBTYPE EDGE and its direction is the whole point -
+  // `typeprogramming.md` §6.2: "checking a generic body that PRODUCES the result
+  // needs a lower bound, and for `omit` the true one is `T <: return`".
+  const omit = 'function omit(T: type, k: string): type where Reflect.isAssignable(T, return) { return T; } ';
+  // ADMITTED by the fact: a body returning a `T` where `omit(T, …)` is declared.
+  // Nothing structural relates them - `omit(T, "password")` cannot be evaluated
+  // with `T` unbound - so this passes only because the contract says so.
+  expect(ok(`${omit} function good<T>(value: T): omit(T, "password") { return value; }`)).toBe(true);
+  // REFUSED at the DECLARATION, never instantiated - which is what the assumed
+  // half buys. Before it, a body contradicting its declared return was accepted
+  // until someone called it.
+  expectThrown(`${omit} function bad<T>(value: T): omit(T, "password") { return "no"; }`);
+  // A builder with NO contract is untouched: it produces no record, `resolveType`
+  // answers null, and the boundary is left to specialization - which is what the
+  // corpus showed is correct for a deferred call nothing is assumed about.
+  const pairOf = 'function pairOf(T) { return Reflect.makeType({ kind: "tuple", '
+    + 'elements: [{ type: T, rest: false }, { type: T, rest: false }] }); } ';
+  expect(ok(`${pairOf} function f<T>(a: pairOf(T)): pairOf(T) { return a; }`)).toBe(true);
+});

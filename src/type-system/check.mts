@@ -2997,7 +2997,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Producing a record for every computed type refused programs
         // specialization admits; this is that lesson, narrowed.
         const computed = node as unknown as ParseNode.ComputedType;
-        const calleeName = (computed.Callee as unknown as { name?: string })?.name;
+        // The callee is a |TypeReference|, so the name is on its |TypeName| -
+        // reading `.name` off the reference itself answers undefined and the
+        // producer never finds a builder.
+        const calleeRef = computed.Callee as unknown as {
+          TypeName?: { IdentifierReference?: { name?: string } }, name?: string,
+        };
+        const calleeName = calleeRef?.TypeName?.IdentifierReference?.name ?? calleeRef?.name;
         const builderNode = typeof calleeName === 'string' ? functionNodes.get(calleeName) : undefined;
         if (!builderNode) {
           return null as unknown as Known;

@@ -658,6 +658,19 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     return true;
   }
   const next = [...assumptions, { First: s, Second: t }];
+  // PLAN-where-on-methods.md, the ASSUMED half. A checked contract's fact is a
+  // LOWER bound on a deferred application - `T <: return` - so it is consulted
+  // where the application is the TARGET. #sec-checked-contracts: "the checker
+  // takes each clause as a known fact about the ~application~ Type Record", and
+  // `typeprogramming.md` §6.2: "checking a generic body that PRODUCES the result
+  // needs a lower bound, and for `omit` the true one is `T <: return`".
+  //
+  // Here rather than in the `case 'application':` arm of SameTypeWithAssumptions:
+  // that arm fires when the application is the SOURCE, and it is reached only
+  // after a kind-equality guard that a `~parameter~` source never passes.
+  if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
+    return true;
+  }
   if (t.Kind === 'any') {
     return true;
   }
