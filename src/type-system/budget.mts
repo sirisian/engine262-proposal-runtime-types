@@ -116,19 +116,35 @@ export function CountConstructedTypeRecord(): void {
  * A DEPTH rather than a flag: a hook may call another, and the charge must
  * continue across the inner call rather than stop when it returns.
  */
-let hookDepth = 0;
+/**
+ * The hooks being evaluated, innermost last.
+ *
+ * PLAN-crossing-budget.md phase 4. #sec-evaluation-budget forbids an evaluation
+ * that "ends in a way no program can observe and NO DIAGNOSTIC NAMES, which is
+ * the outcome this clause exists to prevent" - so exhaustion inside a hook has
+ * to name the hook, as `InstantiateGenericAlias` names its alias.
+ *
+ * A STACK rather than a counter: a hook may call another, and the diagnostic
+ * should name the one that was running, not the one that started the chain.
+ */
+const hookSubjects: string[] = [];
 
-export function EnterMetaHookEvaluation(): void {
-  hookDepth += 1;
+export function EnterMetaHookEvaluation(subject = 'a meta hook'): void {
+  hookSubjects.push(subject);
 }
 
 export function ExitMetaHookEvaluation(): void {
-  hookDepth -= 1;
+  hookSubjects.pop();
+}
+
+/** The innermost hook being evaluated, for the diagnostic. */
+export function CurrentMetaHookSubject(): string {
+  return hookSubjects.length > 0 ? hookSubjects[hookSubjects.length - 1]! : 'a meta hook';
 }
 
 /** Whether a node evaluation is happening inside a meta hook. */
 export function InMetaHookEvaluation(): boolean {
-  return hookDepth > 0;
+  return hookSubjects.length > 0;
 }
 
 export function IsBudgetExhausted(): boolean {

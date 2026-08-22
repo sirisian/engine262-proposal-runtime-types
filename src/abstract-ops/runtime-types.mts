@@ -2067,7 +2067,10 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     // instantiation still shares ONE budget - which is the property
     // `runtime.mts` already relies on for recursion.
     BeginTypeEvaluation();
-    EnterMetaHookEvaluation();
+    // The subject the diagnostic will name: the meta type's declared name where
+    // one is registered, and the hook that was running. #sec-evaluation-budget
+    // forbids an evaluation "no diagnostic names".
+    EnterMetaHookEvaluation(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`);
     try {
       return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
     } finally {

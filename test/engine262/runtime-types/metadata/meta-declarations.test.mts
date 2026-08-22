@@ -690,11 +690,14 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 120000 }, () 
   expect(errorMessage('type LB = { lb?: boolean }; '
     + `meta LB { default = { lb: false }; subtype(sub, sup) { ${loop} } } `
     + 'let a: uint8.<{ lb: false }> = (1 := uint8.<{ lb: false }>); let b: uint8.<{ lb: true }> = a;'))
-    .toMatch(/budget was exhausted/);
+    // And it NAMES the hook. #sec-evaluation-budget: an evaluation that "ends in
+    // a way no program can observe and no diagnostic names" is "the outcome this
+    // clause exists to prevent" - so "a meta hook" was not enough.
+    .toMatch(/exhausted at "LB's subtype hook"/);
   expect(errorMessage('type VB = { vb?: boolean }; '
     + `meta VB { default = { vb: false }; subtype(a, b) { return true; } validate(v, c) { ${loop} } } `
     + 'let p: uint8 = (5 := uint8); let w: uint8.<{ vb: true }> = p;'))
-    .toMatch(/budget was exhausted/);
+    .toMatch(/exhausted at "VB's validate hook"/);
   // A hook that TERMINATES is unaffected, and its cost does not leak into the
   // next crossing - the charge is per evaluation, not cumulative across them.
   // The RECORD limit rides on the same frame (PLAN-crossing-budget.md phase 3):

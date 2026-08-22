@@ -1,5 +1,5 @@
 import { Throw } from './host-defined/error-messages.mts';
-import { InMetaHookEvaluation, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
+import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
@@ -135,7 +135,7 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
   if (InMetaHookEvaluation()) {
     ConsumeEvaluationSteps(1);
     if (IsBudgetExhausted()) {
-      return Throw.TypeError('the type evaluation budget was exhausted at $1', Value('a meta hook'));
+      return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(CurrentMetaHookSubject()));
     }
   }
 
