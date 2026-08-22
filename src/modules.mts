@@ -915,7 +915,11 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
         // is driven here rather than yielded, as other non-generator callers of
         // a generator operation do.
         const overloaded = X(skipDebugger(MakeOverloadedFunction(name, functions as Value[])));
-        X(env.InitializeBinding(name, overloaded as Value));
+        // SET, not initialize: the loop above already initialized this binding
+        // with the FIRST declaration's function, so initializing it again
+        // asserts `binding.initialized === false`. The script path uses
+        // SetMutableBinding here for the same reason.
+        X(skipDebugger(env.SetMutableBinding(name, overloaded as Value, Value.false)));
       }
     }
     // 25. Remove moduleContext from the execution context stack.

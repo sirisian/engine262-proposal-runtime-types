@@ -23,8 +23,10 @@ function bothRoles(ordinaryParams: string): string {
   return [
     // The replacement half: a TokenStream in, a token sequence out.
     'function jsx(t: TokenStream, c: Reflect.Region): [].<Token> {',
-    '  return t.concat([{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
-    '                   { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }]);',
+    // REPLACING the region, not appending to it: the region's text is not
+    // ECMAScript, so concatenating it back would emit something unparseable.
+    '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
+    '          { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }];',
     '}',
     // The ordinary half: takes a class, returns one.
     `function jsx(${ordinaryParams}) { return c; }`,
@@ -83,8 +85,10 @@ test('a name with ONLY a replacement overload is unaffected', () => {
   // case, which is every macro written today.
   const only = [
     'function jsx(t: TokenStream, c: Reflect.Region): [].<Token> {',
-    '  return t.concat([{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
-    '                   { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }]);',
+    // REPLACING the region, not appending to it: the region's text is not
+    // ECMAScript, so concatenating it back would emit something unparseable.
+    '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
+    '          { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }];',
     '}',
     'export { jsx };',
   ].join('\n');
