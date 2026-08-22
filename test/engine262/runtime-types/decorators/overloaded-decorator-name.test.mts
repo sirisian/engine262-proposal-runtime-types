@@ -22,7 +22,10 @@ import { Agent, setSurroundingAgent } from '#self';
 function bothRoles(ordinaryParams: string): string {
   return [
     // The replacement half: a TokenStream in, a token sequence out.
-    'function jsx(t: TokenStream, c: Reflect.Region): [].<Token> {',
+    // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
+    // calls a replacement decorator `(tokens, context, args)`, so a macro that may
+    // be written `@jsx(1) { … }` must declare it or no signature has that arity.
+    'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.
     '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
@@ -66,6 +69,18 @@ test('… and with ARGUMENTS on the decoration', () => {
   expect(out.text).toContain('EXPANDED');
 });
 
+// The two below are the LAST piece, and they are a design question rather than a
+// defect: with a name carrying both roles and the decoration on a CLASS, the
+// expansion phase calls the dispatcher with a `Reflect.Class` context, no
+// REPLACEMENT overload accepts one, and resolution answers `none`. That should
+// mean "no replacement applies here, leave the decoration for decoration time" -
+// which is the whole point of one name carrying both - and today it is reported
+// as the macro rejecting what it decorates.
+//
+// Measured: `[disp] sigs=2 args=2 kind=none params=[3,1]`. The set is right, the
+// arity is right, and the context genuinely does not match - the answer is
+// correct and what is done with it is not.
+// `FINDING-overload-resolution-host-nominals.md` §9.
 test('the ordinary overload still decorates its own position', () => {
   // The same name on a CLASS is the ordinary decoration: the replacement half
   // does not claim it, and the class is not a region.
@@ -84,7 +99,10 @@ test('a name with ONLY a replacement overload is unaffected', () => {
   // The control: everything above must hold without changing the single-overload
   // case, which is every macro written today.
   const only = [
-    'function jsx(t: TokenStream, c: Reflect.Region): [].<Token> {',
+    // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
+    // calls a replacement decorator `(tokens, context, args)`, so a macro that may
+    // be written `@jsx(1) { … }` must declare it or no signature has that arity.
+    'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.
     '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
