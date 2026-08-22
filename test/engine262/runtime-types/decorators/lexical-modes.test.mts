@@ -33,11 +33,12 @@ const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true" };'
  */
 // `#sec-preprocessor-modules`: a macro declares a captured region in its
 // SIGNATURE - a `TokenStream` it receives, a `[].<Token>` it returns, and a
-// `Reflect.Region` context. These macros are written as bare function
-// expressions, so the annotations are added here.
+// context that ADMITS a `Reflect.Region`. The context is a UNION because these
+// macros decorate classes and declarations as well as regions: admitting a region
+// declares the mode, admitting the rest keeps the positions open.
 const asCaptured = (macroSource: string) => (macroSource.includes('(function (t, c')
-  ? macroSource.replace('(function (t, c', '(function (t: TokenStream, c: Reflect.Region')
-  : macroSource.replace('(function (t', '(function (t: TokenStream, ctx: Reflect.Region'))
+  ? macroSource.replace('(function (t, c', '(function (t: TokenStream, c: Reflect.Region | Reflect.Class')
+  : macroSource.replace('(function (t', '(function (t: TokenStream, ctx: Reflect.Region | Reflect.Class'))
   .replace(') {', '): [].<Token> {');
 const withJsxGrammar = (macroSource: string) => asCaptured(macroSource);
 const PLAIN_IMPORT = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;

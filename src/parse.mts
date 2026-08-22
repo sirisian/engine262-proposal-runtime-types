@@ -146,6 +146,34 @@ function IsReplacementDecorator(
 }
 
 /**
+ * Whether a context parameter's type ADMITS a region context.
+ *
+ * Not "is `Reflect.Region`". A macro may decorate a region AND something else -
+ * `@jsx class C {}` is an ordinary decoration - and it says so by taking a
+ * context that admits both:
+ *
+ *   function jsx(t: TokenStream, c: Reflect.Region | Reflect.Class): [].<Token>
+ *
+ * Requiring the type to BE `Reflect.Region` made those two facts one decision:
+ * declaring the mode would have forbidden every other position, because the
+ * annotation is enforced where the macro is CALLED. Admitting a region declares
+ * the mode; admitting the rest keeps the positions open, which is what the
+ * `capture` property kept separate by saying nothing about position at all.
+ */
+function AdmitsARegionContext(type: {
+  LibraryName?: string, Kind?: string, Members?: readonly { LibraryName?: string }[],
+} | undefined): boolean {
+  if (type === undefined) {
+    return false;
+  }
+  if (type.LibraryName === 'Reflect.Region') {
+    return true;
+  }
+  return type.Kind === 'union'
+    && (type.Members ?? []).some((member) => member.LibraryName === 'Reflect.Region');
+}
+
+/**
  * Whether _macro_ declares that it decorates a CAPTURED region.
  *
  * The signature says two things and they are separable, which is why both are
@@ -174,7 +202,7 @@ function TakesARegionContext(macro: ObjectValue): boolean {
   if (!IsReplacementDecorator(resolved.Value, macro)) {
     return false;
   }
-  return resolved.Value.Parameters?.[1]?.Type?.LibraryName === 'Reflect.Region';
+  return AdmitsARegionContext(resolved.Value.Parameters?.[1]?.Type);
 }
 
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
