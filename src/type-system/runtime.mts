@@ -40,6 +40,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
+import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import { IsAssignable } from './relations.mts';
 import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
@@ -590,6 +591,19 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   // as reflections are stamped; a hand-made object still satisfies the context
   // structurally but reports the shape it has.
   if (value instanceof ObjectValue) {
+    // A TokenStream answers its LIBRARY NOMINAL, not the `array` its backing
+    // shape would give. `TokenStream` is in the library-nominal list precisely so
+    // `function jsx(tokens: TokenStream)` can be written, and a value whose type
+    // does not answer that name cannot be MATCHED against it by overload
+    // resolution - which is what stopped one name carrying both a replacement
+    // and an ordinary decorator.
+    // `FINDING-overload-resolution-host-nominals.md`.
+    if (isTokenStream(value)) {
+      const stream = libraryTypeRecord('TokenStream', []);
+      if (stream) {
+        return stream;
+      }
+    }
     const reflected = ReflectionContextRecordOf(value);
     if (reflected) {
       return reflected;
