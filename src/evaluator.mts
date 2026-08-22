@@ -1,3 +1,5 @@
+import { Throw } from './host-defined/error-messages.mts';
+import { InMetaHookEvaluation, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
@@ -120,6 +122,22 @@ export function Evaluate(node: ParseNode.Expression | ParseNode.RefExpression): 
 export function Evaluate(node: ParseNode): StatementEvaluator
 export function* Evaluate(node: ParseNode): Evaluator<unknown> {
   surroundingAgent.runningExecutionContext.callSite.setLocation(node);
+
+  // PLAN-crossing-budget.md phase 1. #sec-evaluation-budget: "The budget bounds a
+  // computation, which either completes or is abandoned and reported." A meta
+  // hook that loops forever did NEITHER: the budget charged one step per hook
+  // CALL, so a hook that never returned was never charged again.
+  //
+  // Charged HERE, the single funnel every node evaluation passes through, and
+  // only while a hook is running - `InMetaHookEvaluation` is a depth counter set
+  // by ApplyMetaHook. Ordinary code pays one boolean read; the type machinery
+  // pays the meter it is owed.
+  if (InMetaHookEvaluation()) {
+    ConsumeEvaluationSteps(1);
+    if (IsBudgetExhausted()) {
+      return Throw.TypeError('the type evaluation budget was exhausted at $1', Value('a meta hook'));
+    }
+  }
 
   if (surroundingAgent.hostDefinedOptions.onNodeEvaluation) {
     surroundingAgent.hostDefinedOptions.onNodeEvaluation(node, surroundingAgent.currentRealmRecord);

@@ -1,7 +1,7 @@
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
-import { ConsumeEvaluationSteps, IsBudgetExhausted } from '../type-system/budget.mts';
+import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
@@ -2052,7 +2052,16 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     pushTypeParameterFrame(new Map([[parameterName, base]]));
   }
   try {
-    return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+    // PLAN-crossing-budget.md phase 1. The charge above is one step per hook
+    // CALL; this marks the span in which the ordinary evaluator charges per
+    // NODE, so a hook that loops is bounded by the work it does rather than by
+    // returning to be charged again.
+    EnterMetaHookEvaluation();
+    try {
+      return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+    } finally {
+      ExitMetaHookEvaluation();
+    }
   } finally {
     if (parameterName !== undefined && base !== undefined) {
       popTypeParameterFrame();

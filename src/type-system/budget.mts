@@ -103,6 +103,34 @@ export function CountConstructedTypeRecord(): void {
 }
 
 /** Whether the enclosing type-position evaluation has been abandoned. */
+/**
+ * Depth of meta-hook evaluation, so the step meter can charge WHILE user code
+ * runs rather than only when a hook is entered.
+ *
+ * PLAN-crossing-budget.md phase 1. The budget charged one step per hook CALL, so
+ * a hook that looped forever never returned to be charged again and the bound
+ * never bit. #sec-evaluation-budget: "The budget bounds a computation, which
+ * either completes or is abandoned and reported" - a loop inside a hook body
+ * does neither.
+ *
+ * A DEPTH rather than a flag: a hook may call another, and the charge must
+ * continue across the inner call rather than stop when it returns.
+ */
+let hookDepth = 0;
+
+export function EnterMetaHookEvaluation(): void {
+  hookDepth += 1;
+}
+
+export function ExitMetaHookEvaluation(): void {
+  hookDepth -= 1;
+}
+
+/** Whether a node evaluation is happening inside a meta hook. */
+export function InMetaHookEvaluation(): boolean {
+  return hookDepth > 0;
+}
+
 export function IsBudgetExhausted(): boolean {
   return current()?.exhausted != null;
 }
