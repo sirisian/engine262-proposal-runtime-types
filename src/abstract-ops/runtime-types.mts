@@ -2780,7 +2780,13 @@ export function ContractFactsOf(
   fn: object,
   resolveArgument: (node: object) => TypeRecord | undefined,
 ): readonly { readonly LowerBound?: TypeRecord }[] {
-  const clauses = functionWhereClauses(fn as never);
+  // A function OBJECT carries its clauses at `ECMAScriptCode.parent`; a
+  // DECLARATION NODE carries them directly. The checker only ever has the node -
+  // it never touches the realm's global - so both routes are read here rather
+  // than making the caller know which it holds.
+  const clauses = functionWhereClauses(fn as never)
+    ?? (fn as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses
+    ?? null;
   if (!clauses || clauses.length === 0) {
     return [];
   }
