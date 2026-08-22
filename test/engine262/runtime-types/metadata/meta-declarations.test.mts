@@ -711,6 +711,30 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 120000 }, () 
     + 'Reflect.makeType({ kind: "tuple", elements: [{ type: Reflect.typeOf(i), rest: false }] }); } return true; } } '
     + 'let a: uint8.<{ rd: false }> = (1 := uint8.<{ rd: false }>); let b: uint8.<{ rd: true }> = a;'))
     .toMatch(/budget was exhausted/);
+  // A hook reached THROUGH a generic alias instantiation is bounded too, and
+  // named. BeginTypeEvaluation joins an enclosing frame rather than opening a
+  // new one, so the alias's budget and the hook's are ONE - the property
+  // `runtime.mts` relies on for recursion, here exercised from the other side.
+  expect(errorMessage('type NB = { nb?: boolean }; '
+    + 'meta NB { default = { nb: false }; subtype(sub, sup) { while (true) { } return true; } } '
+    + 'type Wrap<T> = uint8.<{ nb: true }>; '
+    + 'let a: uint8.<{ nb: false }> = (1 := uint8.<{ nb: false }>); let b: Wrap.<uint8> = a;'))
+    .toMatch(/exhausted at "NB's subtype hook"/);
+  // Cost does NOT leak between crossings: three crossings each spending most of
+  // a budget all complete, because the budget is per top-level type-position
+  // evaluation rather than cumulative. A leak would have made the third fail.
+  const spend = 'type LK = { lk?: boolean }; '
+    + 'meta LK { default = { lk: false }; subtype(sub, sup) { let n = 0; '
+    + 'for (let i = 0; i < 600000; i += 1) { n += i; } return true; } } '
+    + 'let a: uint8.<{ lk: false }> = (1 := uint8.<{ lk: false }>); ';
+  expect(evaluated(`${spend} let b: uint8.<{ lk: false }> = a; let c: uint8.<{ lk: false }> = a; `
+    + 'let d: uint8.<{ lk: false }> = a; String(d);')).toBe('1');
+  // NOT COVERED, and recorded rather than faked: Q3's mutual recursion between
+  // two meta types. Every probe for it is refused before the recursion starts -
+  // a hook's body cannot construct a constrained value to cross, because
+  // `(1 := uint8.<{ k: true }>)` is itself refused (a limitation shared with the
+  // D37 work). The per-CALL charge that bounds it is untouched by this entry, so
+  // the property is preserved rather than newly at risk, but it is untested.
   const ok1 = 'type GB = { gb?: boolean }; '
     + 'meta GB { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(evaluated(`${ok1} let p: uint8 = (5 := uint8); let w: uint8.<{ gb: false }> = p; String(w);`)).toBe('5');
