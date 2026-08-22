@@ -1,5 +1,6 @@
-import { Value } from '../value.mts';
+import { Value, type JSStringValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
+import { collectOverloadGroups, MakeOverloadedFunction } from '../abstract-ops/runtime-types.mts';
 import { Q } from '../completion.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import {
@@ -26,9 +27,20 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
   // 3. Let privateEnv be the running execution context's PrivateEnvironment.
   const privateEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
   // 4. For each element d in declarations, do
+  //
+  // proposal-runtime-types: a name may be declared more than once here, as an
+  // OVERLOAD, so the binding is created by the FIRST declaration of it and the
+  // rest join the overload set below. ECMA-262 could not reach this - a second
+  // lexical declaration of one name was an early error - which is why the
+  // ordinary steps create a binding per declaration without checking.
+  const lexicallyBound = new Set<string>();
   for (const d of declarations) {
     // a. For each element dn of the BoundNames of d, do
     for (const dn of BoundNames(d)) {
+      if (lexicallyBound.has(dn.stringValue())) {
+        continue;
+      }
+      lexicallyBound.add(dn.stringValue());
       // i. If IsConstantDeclaration of d is true, then
       if (IsConstantDeclaration(d)) {
         // 1. Perform ! env.CreateImmutableBinding(dn, true).
@@ -49,6 +61,28 @@ export function* BlockDeclarationInstantiation(code: ParseNode.StatementList | P
         // iii. Perform env.InitializeBinding(fn, fo).
         yield* env.InitializeBinding(fn, fo);
       }
+    }
+  }
+  // proposal-runtime-types: the overload SET, as GlobalDeclarationInstantiation
+  // builds it for a script and InitializeEnvironment for a module. The loop
+  // above bound the FIRST declaration of a repeated name; this replaces it with
+  // the dispatcher built from all of them in source order.
+  if (surroundingAgent.feature('runtime-types')) {
+    const groups = collectOverloadGroups(
+      declarations as unknown as { type: string }[],
+      (d) => (BoundNames(d as ParseNode)[0] as JSStringValue).stringValue(),
+    );
+    for (const [, decls] of groups) {
+      const name = BoundNames(decls[0] as ParseNode)[0] as JSStringValue;
+      const functions = decls.map((d) => InstantiateFunctionObject(d as ParseNode.FunctionDeclaration, env, privateEnv));
+      // `X`, not `Q`: this operation's only throw is the ambiguous-overload case,
+      // which `check.mts` refuses EARLY - "$1 is declared twice with the same
+      // parameter types and return type" - so it cannot reach here, and
+      // `BlockDeclarationInstantiation`'s callers do not propagate a throw.
+      const overloaded = X(yield* MakeOverloadedFunction(name, functions as Value[]));
+      // SET, not initialize: the loop already initialized this binding with the
+      // first declaration's function.
+      X(yield* env.SetMutableBinding(name, overloaded, Value.false));
     }
   }
 }
