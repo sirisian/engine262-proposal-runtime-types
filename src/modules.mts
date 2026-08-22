@@ -13,6 +13,8 @@ import {
 } from './static-semantics/all.mts';
 import { CheckModuleWithImports, ExportedTypesOf } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
+import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
+import { skipDebugger } from './evaluator.mts';
 import {
   Completion,
   NormalCompletion,
@@ -872,6 +874,34 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
           // 2. Call env.InitializeBinding(dn, fo).
           X(env.InitializeBinding(dn, fo));
         }
+      }
+    }
+    // proposal-runtime-types: the overload SET, as
+    // GlobalDeclarationInstantiation builds it for a script.
+    //
+    // The loop above bound each declaration in turn, so the LAST one of a
+    // repeated name is in place; this replaces it with the dispatcher built from
+    // all of them in source order. Without it a module's second declaration
+    // silently won and the first was unreachable - which is why this lands
+    // BEFORE the parser stops refusing the pair, not after.
+    // `PLAN-module-scope-overloads` §7.
+    //
+    // `#sec-module-semantics` binds a module's functions LEXICALLY, so the
+    // rebinding is an initialized lexical binding rather than the script's
+    // SetMutableBinding on a global object.
+    if (surroundingAgent.feature('runtime-types')) {
+      const groups = collectOverloadGroups(
+        lexDeclarations as unknown as { type: string }[],
+        (d) => (BoundNames(d as ParseNode)[0] as JSStringValue).stringValue(),
+      );
+      for (const [, decls] of groups) {
+        const name = BoundNames(decls[0] as ParseNode)[0] as JSStringValue;
+        const functions = decls.map((d) => InstantiateFunctionObject(d as ParseNode.FunctionDeclaration, env, null));
+        // `InitializeEnvironment` is not a generator, so the abstract operation
+        // is driven here rather than yielded, as other non-generator callers of
+        // a generator operation do.
+        const overloaded = X(skipDebugger(MakeOverloadedFunction(name, functions as Value[])));
+        X(env.InitializeBinding(name, overloaded as Value));
       }
     }
     // 25. Remove moduleContext from the execution context stack.
