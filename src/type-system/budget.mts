@@ -104,8 +104,8 @@ export function CountConstructedTypeRecord(): void {
 
 /** Whether the enclosing type-position evaluation has been abandoned. */
 /**
- * Depth of meta-hook evaluation, so the step meter can charge WHILE user code
- * runs rather than only when a hook is entered.
+ * Depth of meta-hook evaluation, so the step meter charges WHILE user code runs
+ * rather than only when a hook is entered.
  *
  * PLAN-crossing-budget.md phase 1. The budget charged one step per hook CALL, so
  * a hook that looped forever never returned to be charged again and the bound

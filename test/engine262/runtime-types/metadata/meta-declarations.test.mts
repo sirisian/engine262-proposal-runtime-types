@@ -671,3 +671,44 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
   expect(run('type MG = { mg?: boolean }; meta MG { default = {}; subtype(zzz, qqq) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
 });
+
+test('a meta hook is bounded by the evaluation budget', { timeout: 120000 }, () => {
+  // PLAN-crossing-budget.md. #sec-evaluation-budget: "The budget bounds a
+  // computation, which either completes or is abandoned and reported." A hook
+  // that looped forever did NEITHER - the engine hung.
+  //
+  // TWO causes, one per crossing, which is why the original item named only
+  // `validate` and a fix for it alone would have left the other open:
+  //   - the meter charged one step per hook CALL, so a hook that never returned
+  //     was never charged again
+  //   - a crossing from an UNCONSTRAINED value opened no budget frame at all,
+  //     so the charge had nothing to charge
+  //
+  // The timeout on this test is load-bearing: the failure mode is a hang, and a
+  // hanging test reads as a slow one.
+  const loop = 'while (true) { }';
+  expect(errorMessage('type LB = { lb?: boolean }; '
+    + `meta LB { default = { lb: false }; subtype(sub, sup) { ${loop} } } `
+    + 'let a: uint8.<{ lb: false }> = (1 := uint8.<{ lb: false }>); let b: uint8.<{ lb: true }> = a;'))
+    .toMatch(/budget was exhausted/);
+  expect(errorMessage('type VB = { vb?: boolean }; '
+    + `meta VB { default = { vb: false }; subtype(a, b) { return true; } validate(v, c) { ${loop} } } `
+    + 'let p: uint8 = (5 := uint8); let w: uint8.<{ vb: true }> = p;'))
+    .toMatch(/budget was exhausted/);
+  // A hook that TERMINATES is unaffected, and its cost does not leak into the
+  // next crossing - the charge is per evaluation, not cumulative across them.
+  // The RECORD limit rides on the same frame (PLAN-crossing-budget.md phase 3):
+  // `CountConstructedTypeRecord` reads the same `current()` frame the step
+  // counter does, so phase 2's frame makes BOTH limits live at a crossing. A
+  // hook constructing types in a loop is bounded - by steps in practice, since
+  // the default step limit binds long before a million records, but the record
+  // counter is charged and would bind on a host that sets the limits otherwise.
+  expect(errorMessage('type RD = { rd?: boolean }; meta RD { default = { rd: false }; '
+    + 'subtype(sub, sup) { for (let i = 0; i < 1200000; i += 1) { '
+    + 'Reflect.makeType({ kind: "tuple", elements: [{ type: Reflect.typeOf(i), rest: false }] }); } return true; } } '
+    + 'let a: uint8.<{ rd: false }> = (1 := uint8.<{ rd: false }>); let b: uint8.<{ rd: true }> = a;'))
+    .toMatch(/budget was exhausted/);
+  const ok1 = 'type GB = { gb?: boolean }; '
+    + 'meta GB { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
+  expect(evaluated(`${ok1} let p: uint8 = (5 := uint8); let w: uint8.<{ gb: false }> = p; String(w);`)).toBe('5');
+});

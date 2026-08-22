@@ -1,7 +1,7 @@
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
-import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation } from '../type-system/budget.mts';
+import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
 import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
@@ -2056,11 +2056,23 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     // CALL; this marks the span in which the ordinary evaluator charges per
     // NODE, so a hook that loops is bounded by the work it does rather than by
     // returning to be charged again.
+    // PLAN-crossing-budget.md phase 2. The meter needs a FRAME to charge, and a
+    // crossing from an unconstrained value opens none - measured `open=false`
+    // there, where a constrained crossing measured `open=true`. So the two
+    // failing probes had two different causes: one unmetered span, one absent
+    // frame.
+    //
+    // BeginTypeEvaluation joins an enclosing frame rather than opening a new
+    // one, so a hook reached from the checking pass or from an alias
+    // instantiation still shares ONE budget - which is the property
+    // `runtime.mts` already relies on for recursion.
+    BeginTypeEvaluation();
     EnterMetaHookEvaluation();
     try {
       return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
     } finally {
       ExitMetaHookEvaluation();
+      EndTypeEvaluation();
     }
   } finally {
     if (parameterName !== undefined && base !== undefined) {
