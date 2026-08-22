@@ -105,7 +105,8 @@ const KNOWN_CHECKER_GAPS = new Set([
   // path did not look through the marker, so the annotation was left unreadable
   // instead. `literalFitsNumericType` now looks through it, and the annotation
   // is resolved and judged - `let s: shared uint8 = "x";` is refused.
-  'PatternType',
+  // `PatternType` was here and is closed; see `check.mts`. `ComputedType` needs
+  // EVALUATION, so it does not count against Q8/D2's gate - which is now met.
   'ComputedType',
 ]);
 

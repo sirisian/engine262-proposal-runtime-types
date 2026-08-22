@@ -23,7 +23,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ApplyValidateHook, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
+import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
@@ -2182,11 +2182,45 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (metadataRecord) {
         const base = builtinTypeRecord(name);
         if (base) {
-          return {
+          const record = {
             Kind: 'parameterized',
             Base: base,
             Metadata: MetadataObjectFromType(metadataRecord),
           } as TypeRecord;
+          // #sec-meta-declarations: "A metadata object whose own key no meta type
+          // claims is a type error at the parameterization that writes it."
+          //
+          // The CHECKER enforced this and the runtime did not, so
+          // `type float32.<{ p: 1 }>` was accepted here while
+          // `(1 := float32) is float32.<{ p: 1 }>` was refused there - one rule,
+          // two answers. `FINDING-unclaimed-metadata-key.md`.
+          //
+          // This could not be added until a SHAPE parameterization stopped
+          // arriving in this branch: `Composite.<{ x: uint8 }>` reached it too,
+          // and the check refused `x` as an unclaimed metadata key. A composite
+          // is now built above, where the clause says it belongs, so everything
+          // still here is genuinely metadata.
+          //
+          // The base-form waiver is the checker's, for its reason: a meta
+          // registered against the BASE receives the whole metadata object, so it
+          // speaks for every key of a parameterization of that base, which is how
+          // a brand is written.
+          if (!HasMetaHooks(GetTypeObject(base) as unknown as object)) {
+            for (const prop of (metadataRecord as { Properties?: readonly { key?: unknown }[] }).Properties ?? []) {
+              const key = prop.key;
+              const keyName = typeof key === 'string'
+                ? key
+                : (key as { stringValue?: () => string })?.stringValue?.();
+              if (typeof keyName === 'string' && MetaTypeClaiming(keyName) === undefined) {
+                return Throw.TypeError(
+                  '$1 is not claimed by any meta type, in $2',
+                  Value(keyName),
+                  Value(displayType(record)),
+                );
+              }
+            }
+          }
+          return record;
         }
       }
       const builtin = builtinTypeRecord(name, argRecords.map(toNumericArgument));

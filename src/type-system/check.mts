@@ -2957,11 +2957,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Target = resolveType(node.Type);
         return Target ? { Kind: 'reference', Target } as Known : null;
       }
-      // `PatternType` is likewise NOT resolved here yet, for the same shape of
-      // reason as `SharedType`: the record is two fields, and building it made
-      // `float32.<{ p: /^a/ }>` fail - a pattern reaching a metadata argument
-      // that the checker then judges differently from the runtime. Resolvable,
-      // blocked downstream.
+      // table-metadata-values: source and flags, never a RegExp object - the same
+      // two fields the runtime reads, from the same node.
+      //
+      // The last blocking entry in C2's gap list. What blocked it was not
+      // patterns: resolving it let the checker's unclaimed-key rule reach a
+      // pattern metadata value as it already reached a numeric one, and the
+      // RUNTIME did not enforce that rule at all, so tests written with an
+      // unclaimed key failed. The runtime enforces it now
+      // (`FINDING-unclaimed-metadata-key.md`), which needed a composite shape to
+      // be built where the clause says it belongs first
+      // (`FINDING-composite-shape-ignored.md`). Three findings, one order.
+      case 'PatternType':
+        return { Kind: 'pattern', Source: node.Source, Flags: node.Flags } as Known;
       // #sec-keyof: the Type Record `KeyTypesOf` answers for the operand. That
       // operation is already a plain function over records, so both resolvers
       // call the one implementation.
