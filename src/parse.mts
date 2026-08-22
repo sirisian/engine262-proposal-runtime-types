@@ -25,11 +25,12 @@ import { FirstReplacementEarlyError } from './static-semantics/ReplacementEarlyE
 import { FirstEvaluabilityViolation } from './static-semantics/PreprocessorEvaluability.mts';
 import { EXPANSION_LIMIT, ExpandSource, Expansion } from './static-semantics/Expansion.mts';
 import { CreateTokenStream, TokenRecordsFrom, TokenStreamText } from './intrinsics/TokenStream.mts';
-import { Call, Get } from './abstract-ops/all.mts';
+import { Call } from './abstract-ops/all.mts';
 import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
+import { OverloadSignatureOf } from './abstract-ops/runtime-types.mts';
 import { KindOfDecoratedNode, LabelOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
 import {
   ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
@@ -104,6 +105,33 @@ export function ResolveReplacementDecorator(
   return undefined;
 }
 
+/**
+ * Whether _macro_ declares that it decorates a captured region.
+ *
+ * `#sec-preprocessor-modules`: "Whether the region's text is ECMAScript is the
+ * macro's to declare, and it declares it in its SIGNATURE. A replacement
+ * decorator is called with `(tokens, context, args)`, so its second parameter is
+ * the context it takes; where that parameter's type is `Reflect.Region`, the
+ * region is captured ... Otherwise the region is a Block, parsed."
+ *
+ * The second parameter POSITIONALLY, because `#sec-syntax-replacement` fixes the
+ * calling convention: the context IS the second argument. A macro that annotates
+ * no context, or annotates a context of another kind, takes a parsed Block -
+ * which is what a macro declaring no `capture` property took, so no program
+ * changes meaning by this rule alone.
+ */
+function TakesARegionContext(macro: ObjectValue): boolean {
+  const signature = EnsureCompletion(skipDebugger(OverloadSignatureOf(macro, true))) as {
+    Type: string,
+    Value?: { Parameters?: readonly { Type?: { LibraryName?: string } }[] },
+  };
+  if (signature.Type !== 'normal') {
+    return false;
+  }
+  const context = signature.Value?.Parameters?.[1];
+  return context?.Type?.LibraryName === 'Reflect.Region';
+}
+
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
   const grammars = new Map<string, string>();
   if (!surroundingAgent.feature('runtime-types')) {
@@ -113,11 +141,7 @@ function DecoratorGrammars(source: string, specifier: string | undefined): Reado
     const macro = ResolveReplacementDecorator(source, specifier, name);
     let captured = false;
     if (macro instanceof ObjectValue) {
-      // EnsureCompletion, because `skipDebugger` answers the VALUE rather than a
-      // Completion Record - reading `.Type` off it is always undefined, and the
-      // flag silently read as absent.
-      const declared = EnsureCompletion(skipDebugger(Get(macro, Value('capture')))) as { Type: string, Value?: unknown };
-      captured = declared.Type === 'normal' && declared.Value === Value.true;
+      captured = TakesARegionContext(macro);
     }
     grammars.set(name, captured ? 'captured' : 'parsed');
   }
