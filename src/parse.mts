@@ -32,7 +32,7 @@ import { EnsureCompletion } from './completion.mts';
 import { skipDebugger } from './evaluator.mts';
 import { tokenizeText, TokensFromParse, type TokenRecord } from './parser/TokensOf.mts';
 import { PrescanPreprocessorNames } from './parser/PrescanDecoratorModes.mts';
-import { OverloadSignatureOf } from './abstract-ops/runtime-types.mts';
+import { OverloadSignatureOf, SignaturesOf } from './abstract-ops/runtime-types.mts';
 import { KindOfDecoratedNode, LabelOfDecoratedNode, SyntaxContextFor } from './syntax-context.mts';
 import {
   ClearPreprocessorRefusal, LoadPreprocessorModule, PreprocessorExport, TakePreprocessorRefusal,
@@ -189,6 +189,38 @@ function AdmitsARegionContext(type: {
  * `(tokens, context, args)`.
  */
 function TakesARegionContext(macro: ObjectValue): boolean {
+  // EVERY overload, not the one `OverloadSignatureOf` picks.
+  //
+  // `#sec-syntax-replacement`: "A name denotes one REPLACEMENT decorator ... A
+  // name may nonetheless carry an ORDINARY decorator as well, since the two are
+  // told apart by their signatures rather than by their arguments." So a name
+  // may be `jsx` twice - once taking a TokenStream, once taking a class - and
+  // reading a single signature would see whichever was declared last and miss
+  // the macro half of it.
+  //
+  // `SignaturesOf` answers the set and establishes the declaring context itself,
+  // which is what makes the type names in those signatures resolve as they would
+  // where they were written.
+  const all = EnsureCompletion(skipDebugger(SignaturesOf(macro))) as {
+    Type: string,
+    Value?: readonly {
+      Parameters?: readonly { Type?: { LibraryName?: string } }[],
+      ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
+    }[],
+  };
+  const signatures = all.Type === 'normal' && all.Value !== undefined
+    ? all.Value
+    : [];
+  const candidates = signatures.length > 0 ? signatures : SingleSignatureOf(macro);
+  return candidates.some((signature) => IsReplacementDecorator(signature, macro)
+    && AdmitsARegionContext(signature.Parameters?.[1]?.Type));
+}
+
+/** The one signature of a function that declares no overloads. */
+function SingleSignatureOf(macro: ObjectValue): readonly {
+  Parameters?: readonly { Type?: { LibraryName?: string } }[],
+  ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
+}[] {
   const resolved = EnsureCompletion(skipDebugger(OverloadSignatureOf(macro, true))) as {
     Type: string,
     Value?: {
@@ -196,13 +228,7 @@ function TakesARegionContext(macro: ObjectValue): boolean {
       ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
     },
   };
-  if (resolved.Type !== 'normal' || resolved.Value === undefined) {
-    return false;
-  }
-  if (!IsReplacementDecorator(resolved.Value, macro)) {
-    return false;
-  }
-  return AdmitsARegionContext(resolved.Value.Parameters?.[1]?.Type);
+  return resolved.Type === 'normal' && resolved.Value !== undefined ? [resolved.Value] : [];
 }
 
 function DecoratorGrammars(source: string, specifier: string | undefined): ReadonlyMap<string, string> {
