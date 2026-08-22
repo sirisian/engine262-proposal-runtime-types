@@ -2,6 +2,7 @@ import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
+import { ContractFactsOf } from '../abstract-ops/runtime-types.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
@@ -2209,6 +2210,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const classNodes = new Map<string, ParseNode>();
   /**
+   * Function declarations by name, for reading a BUILDER's contract.
+   *
+   * PLAN-where-on-methods.md, the assumed half. A contract's facts live on the
+   * builder's |WhereClauses|, which are on its declaration node - and the
+   * checker cannot reach a function OBJECT (it never touches the realm's
+   * global), so the node is the only route. Collected the way `classNodes`
+   * already is, and for the same reason: a callee may be declared after the
+   * annotation that names it.
+   */
+  const functionNodes = new Map<string, ParseNode>();
+  /**
    * A sealed class's direct subclasses, keyed by DECLARATION NODE.
    *
    * README: "A `sealed` class restricts `extends` to the module that declares
@@ -2973,6 +2985,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-keyof: the Type Record `KeyTypesOf` answers for the operand. That
       // operation is already a plain function over records, so both resolvers
       // call the one implementation.
+      case 'ComputedType': {
+        // PLAN-where-on-methods.md, the ASSUMED half. #sec-checked-contracts:
+        // "before specialization, where the application is deferred and no
+        // result exists, the checker takes each clause as a known fact about the
+        // ~application~ Type Record."
+        //
+        // ONLY where the builder carries a contract. A deferred call with no
+        // clauses has nothing assumable about it, and answering `null` - which
+        // the default arm does - is what leaves the boundary to specialization.
+        // Producing a record for every computed type refused programs
+        // specialization admits; this is that lesson, narrowed.
+        const computed = node as unknown as ParseNode.ComputedType;
+        const calleeName = (computed.Callee as unknown as { name?: string })?.name;
+        const builderNode = typeof calleeName === 'string' ? functionNodes.get(calleeName) : undefined;
+        if (!builderNode) {
+          return null as unknown as Known;
+        }
+        const facts = ContractFactsOf(builderNode as unknown as object, (argNode) => {
+          const bare = (argNode as { type?: string, name?: string }).type === 'IdentifierReference'
+            ? (argNode as { name?: string }).name
+            : undefined;
+          if (typeof bare === 'string' && typeParameterInScope(bare)) {
+            const c = typeParameterConstraintOf(bare);
+            return (c ? { Kind: 'parameter', Name: bare, Constraint: c } : { Kind: 'parameter', Name: bare }) as TypeRecord;
+          }
+          return undefined;
+        });
+        if (facts.length === 0) {
+          return null as unknown as Known;
+        }
+        const args: Known[] = [];
+        for (const a of (computed.Arguments as unknown as readonly ParseNode[]) ?? []) {
+          const bare = (a as { type?: string, name?: string }).type === 'IdentifierReference'
+            ? (a as { name?: string }).name
+            : undefined;
+          if (typeof bare === 'string' && typeParameterInScope(bare)) {
+            const c = typeParameterConstraintOf(bare);
+            args.push((c ? { Kind: 'parameter', Name: bare, Constraint: c } : { Kind: 'parameter', Name: bare }) as Known);
+          } else {
+            args.push(resolveType(a as ParseNode.Type));
+          }
+        }
+        return { Kind: 'application', Builder: builderNode, Arguments: args, Facts: facts } as unknown as Known;
+      }
       case 'KeyOfType': {
         const operand = resolveType(node.Type);
         return operand ? (KeyTypesOf(operand) as Known) : null;
@@ -6517,6 +6573,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
     for (const n of list) {
+      if (n.type === 'FunctionDeclaration') {
+        const fnName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        if (fnName) {
+          functionNodes.set(fnName, n);
+        }
+      }
       if (n.type === 'ClassDeclaration') {
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
