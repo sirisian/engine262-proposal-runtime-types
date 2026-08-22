@@ -122,16 +122,16 @@ test('the where positions the plan claimed were covered', () => {
   expectThrown('class C<N: uint32> where N > 0 { }');
   // A TYPE ALIAS clause parses.
   expect(evaluated('type P<N: uint32> = uint32 where N > 0; let x: P.<3> = (1 := uint32); String(x);')).toBe('1');
-  // RECORDED, not asserted as correct: a VIOLATED alias clause is admitted,
-  // where the function position refuses. #sec-generic-where: "checked at each
-  // specialization once its parameters are bound. Where the expression is false
-  // for an application's bindings, that application is a type error" - and an
-  // alias application is a specialization.
+  // FIXED (PLAN-alias-where-enforcement.md, OUTSTANDING item K). This was
+  // recorded as a MEASUREMENT while the alias position parsed its clause and
+  // never ran it - "so the day the alias position enforces, the test says what
+  // changed". It did: this assertion is the one that failed when the fix landed.
   //
-  // The engine's own comment at the function site names this failure mode:
-  // "parsing the clause without checking it would let `where U < 4` be written
-  // and silently ignored, which is worse than the Syntax Error it replaced."
-  expect(ok('type Q<N: uint32> = uint32 where N > 0; let y: Q.<0> = (1 := uint32);')).toBe(true);
+  // #sec-generic-where: "checked at each specialization once its parameters are
+  // bound" - an alias application IS a specialization, so it refuses now, as the
+  // function position always did.
+  expectThrown('type Q<N: uint32> = uint32 where N > 0; let y: Q.<0> = (1 := uint32);');
+  expect(evaluated('type P2<N: uint32> = uint32 where N > 0; let x: P2.<3> = (1 := uint32); String(x);')).toBe('1');
   expectThrown('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();');
 });
 

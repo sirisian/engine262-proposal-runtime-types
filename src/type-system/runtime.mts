@@ -1,3 +1,4 @@
+import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
 import type { Parser } from '../parser/Parser.mts';
@@ -260,6 +261,20 @@ function* OrderNamedTypeArguments(
   return ordered;
 }
 
+/** Whether any clause reads `this`, which makes it the dependent-record form. */
+function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
+  for (const clause of clauses) {
+    try {
+      if (/\bthis\b/.test(sourceTextOf(clause as never) ?? '')) {
+        return true;
+      }
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // #sec-generics: a trailing parameter with a DEFAULT may be omitted, so an
@@ -325,7 +340,35 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
     });
     typeParameterFrames.push(frame);
     try {
-      return Q(yield* TypeNodeToTypeRecord(declaration.Type));
+      const body = Q(yield* TypeNodeToTypeRecord(declaration.Type));
+      // PLAN-alias-where-enforcement.md phase 2, the BACKSTOP. #sec-generic-where:
+      // a `where` clause is "checked at each specialization once its parameters
+      // are bound. Where the expression is *false* for an application's
+      // bindings, that application is a type error."
+      //
+      // The clauses were DROPPED here: a generic alias binds as a nominal record
+      // carrying its Declaration, but instantiation returned the resolved body
+      // and nothing carried them forward - so `Pos.<0>` was admitted while the
+      // same alias written bare, `Deflt`, refused.
+      //
+      // Checked with the parameter frame still pushed, which is the only place
+      // the bindings exist. The early check (phase 1) is what a developer should
+      // usually meet; this catches an application the checker did not see.
+      // Only a generic TYPE ALIAS. A dependent-record declaration also carries
+      // `WhereClauses`, and its predicates read `this` - evaluating one here,
+      // with no value to read, answers the wrong question rather than none.
+      const clauses = (declaration as { type?: string, WhereClauses?: readonly ParseNode.WhereClause[] | null }).type === 'TypeAliasDeclaration'
+        ? (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+        : null;
+      if (clauses && clauses.length > 0 && !mentionsThis(clauses)) {
+        for (const clause of clauses) {
+          const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
+          if (holds === false) {
+            return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+          }
+        }
+      }
+      return body;
     } finally {
       typeParameterFrames.pop();
     }
