@@ -267,6 +267,26 @@ export interface TupleElementRecord {
 
 export type TypeRecord =
   | { readonly Kind: 'any' }
+  /**
+   * proposal-runtime-types #table-type-record-kinds: a DEFERRED compile-time
+   * application - "a call of a compile-time-evaluable function at least one of
+   * whose arguments involves an unbound generic parameter, carried as a type
+   * until specialization evaluates it".
+   *
+   * PLAN-where-on-methods.md, unblocking D1's assumed half. The kind was listed
+   * among those "declared for the later milestones" and nothing produced one, so
+   * `#sec-computed-types` had nowhere to carry a call it could not evaluate and
+   * a checked contract had nothing to attach its facts to.
+   *
+   * [[Arguments]] holds a Type Record or an ECMAScript language value per
+   * argument, and a ~parameter~ record where the argument reads an unbound
+   * parameter.
+   */
+  | {
+    readonly Kind: 'application',
+    readonly Builder: unknown,
+    readonly Arguments: readonly (TypeRecord | Value)[],
+  }
   | { readonly Kind: 'void' }
   /**
    * proposal-runtime-types table-type-record-kinds: a generic parameter,
@@ -986,6 +1006,17 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       const open = t.StartBound === 'open' ? '<' : '';
       const close = t.EndBound === 'closed' ? '=' : '';
       return `${endpoint(t.Start)}.${open}.${close}${endpoint(t.End)}`;
+    }
+    case 'application': {
+      // A deferred application is named by its builder and arguments, because
+      // "two mentions of one deferred call are one type by interning, and two
+      // different calls are unrelated until they evaluate" - so the display has
+      // to distinguish two calls of the same builder.
+      const builderName = (t.Builder as { name?: { stringValue?: () => string } } | undefined)
+        ?.name?.stringValue?.() ?? 'a builder';
+      return `${builderName}.<${t.Arguments.map((a) => (
+        a && typeof a === 'object' && 'Kind' in a ? displayType(a as TypeRecord) : String(a)
+      )).join(', ')}>`;
     }
     // A kind with no case above renders as its KIND NAME, which is what
     // produced `is not assignable to "object"` for four kinds at once. The

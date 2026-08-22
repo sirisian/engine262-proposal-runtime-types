@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, run } from '../harness.mts';
+import { evaluated, expectThrown, run, ok } from '../harness.mts';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
 //
@@ -109,4 +109,49 @@ test('a checked contract names the builder, the arguments and the clause', () =>
   // ungrammatical in expression position today".
   expect(evaluated('function ok(): uint32 where return > 0 { return (5 := uint32); } String(ok());')).toBe('5');
   expectThrown('const x = return;');
+});
+
+test('the where positions the plan claimed were covered', () => {
+  // PLAN-where-on-methods.md §6, audited. Three of its required tests had no
+  // assertion, and writing them found one behaviour it had asserted wrongly.
+  //
+  // An ABSTRACT method carries a clause, since `simd.md` writes them bodiless.
+  expect(ok('abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; }')).toBe(true);
+  // A class-level `where` is still refused - nothing writes one, and D3 leaves
+  // the dependent-record form to its extension.
+  expectThrown('class C<N: uint32> where N > 0 { }');
+  // A TYPE ALIAS clause parses.
+  expect(evaluated('type P<N: uint32> = uint32 where N > 0; let x: P.<3> = (1 := uint32); String(x);')).toBe('1');
+  // RECORDED, not asserted as correct: a VIOLATED alias clause is admitted,
+  // where the function position refuses. #sec-generic-where: "checked at each
+  // specialization once its parameters are bound. Where the expression is false
+  // for an application's bindings, that application is a type error" - and an
+  // alias application is a specialization.
+  //
+  // The engine's own comment at the function site names this failure mode:
+  // "parsing the clause without checking it would let `where U < 4` be written
+  // and silently ignored, which is worse than the Syntax Error it replaced."
+  expect(ok('type Q<N: uint32> = uint32 where N > 0; let y: Q.<0> = (1 := uint32);')).toBe(true);
+  expectThrown('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();');
+});
+
+test('the deferred application record kind exists and relates by identity', () => {
+  // PLAN-where-on-methods.md, unblocking D1's assumed half. Steps 1 and 3 of the
+  // five: the ~application~ Type Record kind, and the IsSubtype arm.
+  //
+  // #sec-computed-types: "A deferred ~application~ is a subtype only of itself
+  // and of the `any` type. Before specialization nothing finer than identity is
+  // known about its result, so nothing finer is assumed."
+  //
+  // Nothing PRODUCES one yet (step 2), so this asserts what the kind's arrival
+  // must not disturb: every existing relation is unchanged, and the
+  // exhaustiveness check in displayType - which caught the new kind as a compile
+  // error, exactly as its own comment says it should - still has a case for it.
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type uint8));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type number));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type 3, type number));')).toBe('true');
+  // A computed type over a BOUND parameter still evaluates rather than
+  // deferring, which is the case the producing site must not capture.
+  expect(evaluated('function widen(T: type): type { return T; } '
+    + 'function f<T>(v: T): widen(T) { return v; } String(f.<uint8>((1 := uint8)));')).toBe('1');
 });

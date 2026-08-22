@@ -285,6 +285,23 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'any':
     case 'void':
       return true;
+    case 'application':
+      // #sec-issubtype: "If _s_.[[Kind]] is ~application~ … if _s_.[[Builder]]
+      // and _t_.[[Builder]] are not the same function, return *false*; return
+      // SameArgumentList(…)". And #sec-computed-types: "A deferred ~application~
+      // is a subtype only of itself and of the `any` type. Before specialization
+      // nothing finer than identity is known about its result, so nothing finer
+      // is assumed: two mentions of one deferred call are one type by interning,
+      // and two different calls are unrelated until they evaluate."
+      //
+      // `any` is handled by its own arm above, so identity is the whole of this.
+      return t.Kind === 'application'
+        && s.Builder === t.Builder
+        && SameArgumentList(
+          s.Arguments as readonly (TypeRecord | number)[],
+          t.Arguments as readonly (TypeRecord | number)[],
+          next,
+        );
     case 'primitive':
       return t.Kind === 'primitive' && s.Name === t.Name && SameArgumentList(s.Arguments, t.Arguments, next);
     case 'literal':
