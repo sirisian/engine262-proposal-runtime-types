@@ -2685,7 +2685,56 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
  * Extracted rather than copied because a second copy of this walk is how the
  * two resolvers diverge, which is the defect that plan exists to close.
  */
+
+/**
+ * The name of the deferred indexed access of _objectType_ by _indexType_, or
+ * null where the access can be computed instead.
+ *
+ * Deferred exactly when a parameter is involved on either side, which is the
+ * only case in which the walk below cannot proceed for a reason that is not an
+ * error.
+ */
+function deferredIndexedName(objectType: TypeRecord, indexType: TypeRecord): string | null {
+  const mentionsParameter = (t: TypeRecord): boolean => {
+    if (t.Kind === 'parameter') {
+      return true;
+    }
+    if (t.Kind === 'union' || t.Kind === 'intersection') {
+      return (t.Members as readonly TypeRecord[]).some(mentionsParameter);
+    }
+    return false;
+  };
+  if (!mentionsParameter(objectType) && !mentionsParameter(indexType)) {
+    return null;
+  }
+  // A parameter contributes its NAME, not its display: `displayType` renders a
+  // constrained parameter as `K: keyof T`, which would put the constraint inside
+  // the composed name. That reads badly in an error - `T[K: never]` - and, worse,
+  // makes IDENTITY depend on the constraint being resolved identically on both
+  // sides. The name is the identity, so it has to be the one thing about the
+  // parameter that cannot vary.
+  const part = (t: TypeRecord): string => (t.Kind === 'parameter' ? t.Name : displayType(t));
+  return `${part(objectType)}[${part(indexType)}]`;
+}
+
 export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeRecord): TypeRecord | null {
+  // PLAN-parameter-composition Stage C. Where either side is a type PARAMETER
+  // the access cannot be computed - within the declaration nothing is known
+  // about `T` - but it is not an error either, and answering null made it one
+  // by omission: the annotation `T[K]` resolved to nothing, so `return 5` from
+  // it was accepted for want of anything to check against.
+  //
+  // It answers a DEFERRED type instead, opaque like the parameters it is
+  // composed from: it relates to itself and to nothing concrete. It is spelled
+  // as a ~parameter~ record with a composed [[Name]] rather than as a new kind,
+  // which is what makes `o[k]` and the annotation `T[K]` agree - both reach
+  // here, both build the same name, and the existing parameter relation gives
+  // identity for free. A composed name cannot collide with a declared one,
+  // since `T["n"]` is not an identifier.
+  const deferredName = deferredIndexedName(objectType, indexType);
+  if (deferredName !== null) {
+    return { Kind: 'parameter', Name: deferredName };
+  }
   const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
   const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
   const results: TypeRecord[] = [];
