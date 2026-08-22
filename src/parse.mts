@@ -1,6 +1,8 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
 import type { ExecutionContext } from './execution-context/ExecutionContext.mts';
-import { CheckModule, CheckScript, TakeNarrowingRequests } from './type-system/check.mts';
+import {
+  CheckModule, CheckScript, PublishedReturnTypeOf, TakeNarrowingRequests,
+} from './type-system/check.mts';
 import { RegExpParser, type RegExpParserContext } from './parser/RegExpParser.mts';
 import {
   SourceTextModuleRecord, SyntheticModuleRecord, type LoadedModuleRequestRecord, type ModuleRecordHostDefined,
@@ -114,15 +116,32 @@ export function ResolveReplacementDecorator(
  * `[].<Token>`. Neither half alone says much: plenty of functions take a stream,
  * and plenty return an array.
  */
-function IsReplacementDecorator(signature: {
-  Parameters?: readonly { Type?: { LibraryName?: string } }[],
-  ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
-}): boolean {
+function IsReplacementDecorator(
+  signature: {
+    Parameters?: readonly { Type?: { LibraryName?: string } }[],
+    ReturnType?: { Kind?: string, Element?: { LibraryName?: string } },
+  },
+  macro: ObjectValue,
+): boolean {
   const first = signature.Parameters?.[0];
   if (first?.Type?.LibraryName !== 'TokenStream') {
     return false;
   }
-  const ret = signature.ReturnType;
+  // The DECLARED return, or the one the checker PUBLISHED for it. A macro may
+  // write `: [].<Token>` and many do, but `linq` does not:
+  //
+  //   function linq(tokens: TokenStream, context: Reflect.Region) { … }
+  //
+  // and its return is inferred. `OverloadSignatureOf` fills `ReturnType` from the
+  // ANNOTATION alone, so reading only that made an inferred return look like no
+  // return at all - the macro was not identified, and its region was not
+  // captured, for want of a line its author had no reason to write.
+  //
+  // The published type is what `EnforceReturnType` reads for the same reason, by
+  // the same route.
+  const code = (macro as { ECMAScriptCode?: { parent?: object } }).ECMAScriptCode;
+  const ret = signature.ReturnType
+    ?? (code?.parent ? PublishedReturnTypeOf(code.parent) as typeof signature.ReturnType : undefined);
   return ret?.Kind === 'array' && ret.Element?.LibraryName === 'Token';
 }
 
@@ -152,7 +171,7 @@ function TakesARegionContext(macro: ObjectValue): boolean {
   if (resolved.Type !== 'normal' || resolved.Value === undefined) {
     return false;
   }
-  if (!IsReplacementDecorator(resolved.Value)) {
+  if (!IsReplacementDecorator(resolved.Value, macro)) {
     return false;
   }
   return resolved.Value.Parameters?.[1]?.Type?.LibraryName === 'Reflect.Region';
