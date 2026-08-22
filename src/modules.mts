@@ -853,9 +853,23 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // 22. Let lexDeclarations be the LexicallyScopedDeclarations of code.
     const lexDeclarations = LexicallyScopedDeclarations(code);
     // 24. For each element d in lexDeclarations, do
+    const lexicallyBound = new Set<string>();
     for (const d of lexDeclarations) {
       // a. For each element dn of the BoundNames of d, do
       for (const dn of BoundNames(d)) {
+        // proposal-runtime-types: a name may be declared more than once now, as
+        // an OVERLOAD - the parser admits a second `function` of a name the
+        // first also declared. The binding is created by the FIRST of them and
+        // the rest join its overload set below, so creating it again would
+        // assert. ECMA-262 could not reach this: a second declaration of one
+        // name at module scope was an early error.
+        //
+        // Tracked locally rather than asked of the environment, because
+        // `HasBinding` is an evaluator and this method is not a generator.
+        if (lexicallyBound.has(dn.stringValue())) {
+          continue;
+        }
+        lexicallyBound.add(dn.stringValue());
         // i. If IsConstantDeclaration of d is true, then
         if (IsConstantDeclaration(d)) {
           // 1. Perform ! env.CreateImmutableBinding(dn, true).
