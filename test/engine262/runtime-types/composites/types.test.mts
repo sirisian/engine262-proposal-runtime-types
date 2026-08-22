@@ -63,3 +63,33 @@ test('a shape must be NAMED at the creation site, not inferred', () => {
   // typed-creation.test.mts owns the assertions.
   expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('true');
 });
+
+test('`Composite.<S>` discriminates on its SHAPE', () => {
+  // `FINDING-composite-shape-ignored.md`. Every composite satisfied every shape:
+  // `Composite.<S>` was built as a metadata parameterization, so the shape went
+  // into [[Metadata]] while `#sec-issubtype` reads [[Arguments]] - it found none,
+  // treated the type as the TOP composite, and admitted everything.
+  //
+  // Nothing here covered it, which is why it survived.
+  const K = 'type K = { x: uint8 }; ';
+  expect(evaluated(`${K}String(Composite({ x: (1 := uint8) }) is Composite.<K>);`)).toBe('true');
+  expect(evaluated(`${K}String(Composite({ y: (1 := uint8) }) is Composite.<K>);`)).toBe('false');
+  expect(evaluated(`${K}String(Composite({ x: "s" }) is Composite.<K>);`)).toBe('false');
+  expect(evaluated(`${K}String(Composite({}) is Composite.<K>);`)).toBe('false');
+  // The top composite is still the type of every composite.
+  expect(evaluated(`${K}String(Composite({ x: (1 := uint8) }) is Composite);`)).toBe('true');
+});
+
+test('a composite shape is READONLY however the annotation writes it', () => {
+  // "A composite object is frozen from its creation", and `CompositeShape` marks
+  // every field of a stamped value readonly to match. A mutable member in the
+  // annotation would describe a type NO composite can satisfy - a trap rather
+  // than a distinction - so the shape is normalised. It is also what makes the
+  // clause's covariance sound: depth subtyping goes through a `readonly` one.
+  expect(evaluated('type K = { x: uint8 }; String(Composite({ x: (1 := uint8) }) is Composite.<K>);')).toBe('true');
+  expect(evaluated('type R = { readonly x: uint8 }; String(Composite({ x: (1 := uint8) }) is Composite.<R>);')).toBe('true');
+  // covariance, against a field type that genuinely is wider
+  expect(evaluated('type W = { x: any }; String(Composite({ x: (1 := uint8) }) is Composite.<W>);')).toBe('true');
+  // and a tuple shape, which the clause names beside an object
+  expect(evaluated('type T = [uint8]; String(Composite([(1 := uint8)]) is Composite.<T>);')).toBe('true');
+});

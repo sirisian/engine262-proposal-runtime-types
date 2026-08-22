@@ -2143,6 +2143,39 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // what lets the validate judgment of IsOfType see it and what keeps two
       // different metadata apart. Without this the argument was dropped and every
       // parameterization interned back to its bare base.
+      // #sec-composite-types: "A Type Record is a composite type when its
+      // [[Kind]] is ~primitive~ and its [[Name]] is *"Composite"*. The composite
+      // type over a shape S ... has [[Arguments]] << S >>."
+      //
+      // A SHAPE, not metadata. `Composite.<K>` arrives as a type name applied to
+      // one object-kind argument, which is the shape of a METADATA
+      // parameterization too, and the branch below read every such application as
+      // metadata. So the shape went into [[Metadata]] while `#sec-issubtype`
+      // looks for it in [[Arguments]]: it found none, treated the type as the TOP
+      // composite, and every composite satisfied every shape.
+      // `FINDING-composite-shape-ignored.md`.
+      if (name === 'Composite' && argRecords.length === 1
+          && (argRecords[0]!.Kind === 'object' || argRecords[0]!.Kind === 'tuple')) {
+        // The shape's members are READONLY, whatever the annotation wrote.
+        // "A composite object is frozen from its creation", and CompositeShape
+        // marks every field of a stamped value readonly to match - so a mutable
+        // member here describes a type NO composite can satisfy, which is a trap
+        // rather than a distinction. It is also what makes the covariance the
+        // clause grants sound: "a composite type is covariant in its shape, which
+        // the frozenness of every composite makes sound ... depth subtyping
+        // through a `readonly` one".
+        const shape = argRecords[0]!;
+        const frozen: TypeRecord = shape.Kind === 'object'
+          ? ({
+            ...shape,
+            Properties: shape.Properties.map((prop) => ({ ...prop, readonly: true })),
+          } as unknown as TypeRecord)
+          : shape;
+        const composite = builtinTypeRecord(name, [frozen]);
+        if (composite) {
+          return composite;
+        }
+      }
       const metadataRecord = argRecords.length === 1 && argRecords[0]!.Kind === 'object'
         ? argRecords[0]!
         : null;
