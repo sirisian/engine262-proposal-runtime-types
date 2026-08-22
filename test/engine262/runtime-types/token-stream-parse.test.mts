@@ -18,7 +18,7 @@ const NL = String.fromCharCode(10);
 const IMPORT = 'import { m } from "./m.js" with { preprocessor: "true" };' + NL;
 
 /** A captured macro that reports its raw tokens beside a delegated parse. */
-const DELEGATING = `Object.assign((function (t) {
+const DELEGATING = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
   var s = t[0] ? t[0].span : undefined;
   var text = t.toString();
   var open = text.indexOf("{"), close = text.lastIndexOf("}");
@@ -26,7 +26,7 @@ const DELEGATING = `Object.assign((function (t) {
   function walk(ts) { return (ts || []).map(function (x) {
     return x.kind === "group" ? "G(" + walk(x.tokens || []) + ")" : x.kind[0] + ":" + String(x.value); }).join(" "); }
   return [{ kind: "string", value: JSON.stringify("RAW[" + walk(t) + "] PARSED[" + walk(inner) + "]"), span: s }];
-}), { capture: true })`;
+})`;
 
 function expandWith(macroSource: string, body: string): string {
   // The macro comes from a MODULE the host loads, as `sec-preprocessor-modules`
@@ -61,13 +61,13 @@ test('an unambiguous range parses to the same tokens either way', () => {
 });
 
 test('the goal symbol chooses what the range may be', () => {
-  const withGoal = (goal: string) => `Object.assign((function (t) {
+  const withGoal = (goal: string) => `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
     var s = t[0] ? t[0].span : undefined;
     var text = t.toString();
     var open = text.indexOf("{"), close = text.lastIndexOf("}");
     var inner = t.parse(open + 1, close, ${JSON.stringify(goal)});
     return [{ kind: "string", value: JSON.stringify(inner.length + " tokens"), span: s }];
-  }), { capture: true })`;
+  })`;
   // A statement list is not an expression, so the goal is not decoration.
   expect(expandWith(withGoal('statements'), 'const v = @m { const a = 1; a; };'))
     .toBe('const v = "7 tokens";');
@@ -80,13 +80,13 @@ test('a range that does not parse is refused', () => {
 });
 
 test('an unrecognised goal, and a range outside the source, are refused', () => {
-  const badGoal = `Object.assign((function (t) {
+  const badGoal = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
     return t.parse(0, 1, "module");
-  }), { capture: true })`;
+  })`;
   expect(expandWith(badGoal, 'const v = @m { x };')).toBe('REFUSED');
-  const badRange = `Object.assign((function (t) {
+  const badRange = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
     return t.parse(0, 9999, "expression");
-  }), { capture: true })`;
+  })`;
   expect(expandWith(badRange, 'const v = @m { x };')).toBe('REFUSED');
 });
 
@@ -94,11 +94,11 @@ test('a span exposes the source TEXT its ranges index', () => {
   // `parse(start, end)` indexes the SOURCE, so a macro scanning a captured
   // region needs the same string - and `toString` is a rendering of the tokens,
   // which is not guaranteed to be it. Exposing the source removes the question.
-  const reportsBoth = `Object.assign((function (t) {
+  const reportsBoth = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
     var s = t[0].span;
     return [{ kind: "string", value: JSON.stringify(
       (String(t) === s.source.text ? "same" : "differ") + " " + JSON.stringify(s.source.text)), span: s }];
-  }), { capture: true })`;
+  })`;
   expect(expandWith(reportsBoth, 'const v = @m { x };'))
     .toBe('const v = "same \\"{ x }\\"";');
   // A macro that scans `source.text` and delegates against it cannot be off by

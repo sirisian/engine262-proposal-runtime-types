@@ -31,7 +31,15 @@ const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true" };'
  * that are ECMAScript through `TokenStream.prototype.parse` - which is what let
  * several hundred lines of JSX-specific parsing leave the implementation.
  */
-const withJsxGrammar = (macroSource: string) => `Object.assign(${macroSource}, { capture: true })`;
+// `#sec-preprocessor-modules`: a macro declares a captured region in its
+// SIGNATURE - a `TokenStream` it receives, a `[].<Token>` it returns, and a
+// `Reflect.Region` context. These macros are written as bare function
+// expressions, so the annotations are added here.
+const asCaptured = (macroSource: string) => (macroSource.includes('(function (t, c')
+  ? macroSource.replace('(function (t, c', '(function (t: TokenStream, c: Reflect.Region')
+  : macroSource.replace('(function (t', '(function (t: TokenStream, ctx: Reflect.Region'))
+  .replace(') {', '): [].<Token> {');
+const withJsxGrammar = (macroSource: string) => asCaptured(macroSource);
 const PLAIN_IMPORT = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
 
 /** A macro that rewrites the region's first element to a `_jsx` call. */
@@ -106,7 +114,7 @@ test('a macro declaring no grammar takes an ordinary ECMAScript region', () => {
   // a query language - declares `grammar: "opaque"` and is captured instead.
   expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, KINDS)).toBe('REFUSED');
   expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`,
-    `Object.assign(${KINDS}, { capture: true })`)).toBe('"G(i:a i:b i:c)";');
+    asCaptured(KINDS))).toBe('"G(i:a i:b i:c)";');
 });
 
 
@@ -132,7 +140,7 @@ test('`capture` is a boolean, so there is no unknown value to refuse', () => {
   // saying nothing gets a parsed region; one declaring `capture: true` reads the
   // text itself. There is no set of grammar names for the engine to recognise,
   // so there is no unknown one - the check that policed them went with them.
-  const captured = `Object.assign(${KINDS}, { capture: true })`;
+  const captured = asCaptured(KINDS);
   expect(expandWith('m', `${PLAIN_IMPORT}@m { a b c }`, captured)).toBe('"G(i:a i:b i:c)";');
   // Anything other than `true` leaves the region parsed, so its text must be
   // ECMAScript - and a nonsense value is not an error, merely not a capture.

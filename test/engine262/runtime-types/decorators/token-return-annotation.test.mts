@@ -50,15 +50,21 @@ function compileWithMacro(macro: string, entry: string) {
 const ENTRY = 'import { m } from "./m.js" with { preprocessor: "true" };' + NL
   + 'const v = @m do { <not-ecmascript /> };';
 const RETURNS = `{ return [{ kind: 'string', value: JSON.stringify('EXPANDED') }]; }`;
-const macro = (signature: string) => `function m${signature} ${RETURNS}${NL}m.capture = true;${NL}export { m };`;
+const macro = (signature: string) => `function m${signature} ${RETURNS}${NL}export { m };`;
 
-test('a macro may annotate its return', () => {
-  // Unannotated is the control: it always worked, and is what made the failure
-  // look like something about the annotated forms' VALUES rather than about
-  // the type their length carries.
-  expect(compileWithMacro(macro('(stream, context)'), ENTRY).Type).not.toBe('throw');
-  expect(compileWithMacro(macro('(stream, context): []'), ENTRY).Type).not.toBe('throw');
-  expect(compileWithMacro(macro('(stream, context): [].<Token>'), ENTRY).Type).not.toBe('throw');
+test('a macro ANNOTATES its return, and the annotation is what identifies it', () => {
+  // `#sec-preprocessor-modules`: a macro declares a captured region in its
+  // signature - "what a decorator RECEIVES is a TokenStream and what it RETURNS
+  // is a token sequence". ENTRY's region is not ECMAScript, so it compiles only
+  // where the macro is identified and the region is therefore captured.
+  //
+  // These three were once interchangeable, because a `capture` PROPERTY declared
+  // the mode and the return annotation was free. It is not free now: it is half
+  // of what says this is a replacement decorator at all.
+  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Region): [].<Token>'), ENTRY).Type).not.toBe('throw');
+  // Neither half alone identifies one.
+  expect(compileWithMacro(macro('(stream, context): [].<Token>'), ENTRY).Type).toBe('throw');
+  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Region): []'), ENTRY).Type).toBe('throw');
 });
 
 test('annotating the parameters as well changes nothing', () => {
