@@ -531,7 +531,27 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
  * either way once the reference is read.
  */
 export function ResolveTypeName(name: JSStringValue) {
-  return ResolveBinding(name, undefined, true);
+  // `ResolveBinding` with no environment reads the RUNNING execution context's
+  // LexicalEnvironment, and a BUILTIN's context has none - so every path that
+  // resolves a type name from inside a built-in function reached an Assert and
+  // brought the host down. `Reflect.typeOf(m)` for any `m` annotated with a name
+  // this resolver has to look up is the ordinary way to meet it:
+  //
+  //   function m(c: MyType): uint8 { … }   Reflect.typeOf(m)   AssertError
+  //   function m(c: string): uint8 { … }   Reflect.typeOf(m)   fine
+  //
+  // The second answers only because `builtinTypeRecord` names the primitives
+  // before the scope walk is reached, which is what made this look like a
+  // problem with particular type names rather than with the CALLER.
+  //
+  // Falling back to the realm's global environment resolves what a type name
+  // can be resolved to from a context that has no scope of its own. A name that
+  // is not there is unresolvable, which throws a ReferenceError once the
+  // reference is read - the same answer the paragraph above records for every
+  // other unresolvable name, rather than an Assert.
+  const running = surroundingAgent.runningExecutionContext;
+  const env = running?.LexicalEnvironment ?? surroundingAgent.currentRealmRecord?.GlobalEnv;
+  return ResolveBinding(name, env, true);
 }
 
 export function RuntimeTypeOf(value: Value): TypeRecord {
