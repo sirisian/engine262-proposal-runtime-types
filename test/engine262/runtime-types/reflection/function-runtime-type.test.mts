@@ -91,6 +91,41 @@ test('function runtime type: every callable shape reports a function type (OQ4-C
   expect(evaluated('class C { x: uint8 = 1; } String(Reflect.getReflection(Reflect.typeOf(C)).kind);')).toBe('function');
 });
 
+test('OQ5-B: a class constructor reports what it constructs', () => {
+  // The constructor's BODY-inferred return is `void` - it returns nothing, and
+  // after PLAN-constructor-returns.md phase 1 it may return nothing but `this`.
+  // `void` is not what `new C(...)` produces, and reporting it left every class
+  // with the same constructor parameters sharing ONE type: F129 fixed for
+  // functions and still live for classes.
+  expect(evaluated('class C { x: uint8 = 1; constructor(a: uint8) {} }'
+    + ' const s = Reflect.getReflection(Reflect.typeOf(C)).signatures[0];'
+    + ' String((s.parameters[0].type === uint8) + ":" + (s.return.type === type C));')).toBe('true:true');
+  // F129 for classes: two classes are two types, even with identical parameters
+  expect(evaluated('class C { x: uint8 = 1; } class D { y: string = ""; }'
+    + ' String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('true');
+  expect(evaluated('class C { constructor(a: uint8) {} } class D { constructor(a: uint8) {} }'
+    + ' String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('true');
+  // a derived class reports itself, not its base
+  expect(evaluated('class A { a: uint8 = 1; } class B extends A { b: uint8 = 2; }'
+    + ' String(Reflect.getReflection(Reflect.typeOf(B)).signatures[0].return.type === type B);')).toBe('true');
+  // and an ordinary function is untouched - the derivation is class-only
+  expect(evaluated('function f() {}'
+    + ' String(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].return.type === type void);')).toBe('true');
+});
+
+test('OQ5-B does not disturb OQ3-C - the two answer different questions', () => {
+  // PLAN-constructor-returns.md OQ3-C gives a constructor's DECLARATION
+  // reflection no return entry, because a constructor declares none. This gives
+  // its VALUE's type a return, because a construction yields the class. Both
+  // are right and they must not be collapsed into each other by a later edit
+  // that notices they disagree - so they are asserted side by side.
+  const C = 'class C { x: uint8 = 1; constructor(a: uint8) {} } ';
+  expect(evaluated(`${C}String(Reflect.getReflection`
+    + '.<Reflect.ClassMethod, C>("constructor").signatures[0].return === undefined);')).toBe('true');
+  expect(evaluated(`${C}String(Reflect.getReflection(Reflect.typeOf(C))`
+    + '.signatures[0].return.type === type C);')).toBe('true');
+});
+
 test('a TYPE OBJECT is callable and is NOT a function - the ordering the change exposed', () => {
   // Found by this change and nearly shipped as a regression. The callable
   // branch runs before `RuntimeTypeOf`, which hoists #sec-runtimetypeof step 10

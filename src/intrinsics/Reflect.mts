@@ -313,6 +313,30 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // still reports one. `Reflect.typeOf` answers what a value IS. The two are
     // allowed to differ and this is where.
     const declared = overloads;
+    // PLAN-callable-reflection.md OQ5-B. A CLASS CONSTRUCTOR's body-inferred
+    // return is `void` - the constructor returns nothing, and after
+    // PLAN-constructor-returns.md phase 1 it may return nothing but `this`. But
+    // `void` is not what `new C(...)` produces, and reporting it made every
+    // class with the same constructor parameters share ONE type: `typeOf(C)`
+    // and `typeOf(D)` were equal for `class C { x: uint8 = 1; }` and
+    // `class D { y: string = ""; }`, which is F129 surviving for classes after
+    // it was fixed for functions.
+    //
+    // The class is what a construction yields - #sec-typed-classes says so, and
+    // PLAN-constructor-returns.md phase 1 made it TRUE by refusing any other
+    // `return` - so the return is derivable rather than guessed.
+    //
+    // This does NOT touch PLAN-constructor-returns.md OQ3-C, which gives a
+    // constructor's DECLARATION reflection no return entry because a
+    // constructor declares none. That rule is about what was WRITTEN and lives
+    // in the class-member reflection path; this is about what a VALUE is. The
+    // two answers differ on purpose and a test asserts both.
+    const classType = value instanceof ObjectValue && !isTypeObject(value)
+      ? LookupClassType(value as unknown as object)
+      : undefined;
+    const constructedType = classType !== undefined
+      ? (classType as unknown as TypeObject).TypeRecord
+      : undefined;
     // #sec-inferred-return-types: a function that PUBLISHES an inferred return
     // type is reported with it. The rule just above - that a signature counts as
     // declared only where a type was WRITTEN - is what keeps an unannotated
@@ -333,7 +357,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
         // A signature whose parameters were written but whose return was not
         // reports the published return, so the two halves of one signature are
         // reported on the same footing.
-        Return: o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
+        Return: constructedType ?? o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
       }));
       return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
     }
