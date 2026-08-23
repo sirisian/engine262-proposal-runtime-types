@@ -334,6 +334,31 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // a later milestone.
     // The interface's structure is a real ~object~ record now; membership
     // rides the structural IsOfType case, while identity stays nominal.
+    // PLAN-generic-interface-membership.md phase 1b (runtime half). A generic
+    // interface's members were resolved with its type parameters OUT of scope,
+    // so `T` fell to ~any~ and [[Structure]] was `{ x: any }` for EVERY
+    // application. Membership then admitted any argument - `o is P.<string>`
+    // for a `uint8` field - and object-to-interface subtyping admitted it too,
+    // because both read this structure.
+    //
+    // The frame is pushed so `TypeNodeToTypeRecord` answers a ~parameter~
+    // record, which `lookupTypeParameter` already does for any bound name. The
+    // CHECKER builds its own structure and needs the same push there; neither
+    // half shows any effect without the other, nor without the substitution at
+    // the membership site.
+    const ifaceParams = (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } })
+      .TypeParameters?.TypeParameterList ?? [];
+    const ifaceFrame = new Map<string, TypeRecord>();
+    for (const tp of ifaceParams) {
+      const pname = (tp as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name;
+      if (typeof pname === 'string') {
+        ifaceFrame.set(pname, { Kind: 'parameter', Name: pname } as TypeRecord);
+      }
+    }
+    if (ifaceFrame.size > 0) {
+      pushTypeParameterFrame(ifaceFrame);
+    }
+    try {
     const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean, initial?: Value }[] = [];
     for (const member of node.InterfaceMemberList) {
       if (member.type !== 'TypeMember') {
@@ -468,6 +493,11 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Structure: { Kind: 'object', Properties, IndexSignatures: [] },
     };
     value = GetTypeObject(record);
+    } finally {
+      if (ifaceFrame.size > 0) {
+        popTypeParameterFrame();
+      }
+    }
   }
   // #sec-provenance: record the declaration site this type came from. Interning
   // has already merged structurally identical shapes, so recording here IS the

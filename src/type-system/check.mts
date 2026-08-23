@@ -2400,7 +2400,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Structure: { Kind: 'object', Properties, IndexSignatures: [] },
     } as unknown as Known;
     interfaceTypeMemo.set(node, inProgress);
-    const decl = node as unknown as { InterfaceMemberList?: readonly ParseNode[] | null };
+    const decl = node as unknown as {
+      InterfaceMemberList?: readonly ParseNode[] | null,
+      TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+    };
+    // PLAN-generic-interface-membership.md phase 1b (checker half). The same
+    // erasure as the runtime's, in a separate structure: the checker keeps its
+    // own `interfaceTypeMemo`, so `T` has to be in scope HERE too or the
+    // checking pass compares against `{ x: any }` exactly as membership did.
+    const ifaceParamNames = (decl.TypeParameters?.TypeParameterList ?? [])
+      .map((tp) => (tp as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name)
+      .filter((n): n is string => typeof n === 'string');
+    if (ifaceParamNames.length > 0) {
+      typeParameterScopes.push(scopeOfNames(ifaceParamNames));
+    }
+    try {
     for (const member of decl.InterfaceMemberList ?? []) {
       if (member.type !== 'TypeMember') {
         continue;
@@ -2482,6 +2496,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
       if (t) {
         Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly });
+      }
+    }
+    } finally {
+      if (ifaceParamNames.length > 0) {
+        typeParameterScopes.pop();
       }
     }
     // `Properties` is the array inside the record published above, filled in

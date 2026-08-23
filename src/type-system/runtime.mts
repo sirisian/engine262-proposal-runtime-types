@@ -1392,6 +1392,70 @@ export function* EvaluateWhereClauses(value: Value, whereClauses: readonly Parse
   return true;
 }
 
+/**
+ * A structure with a declaration's type parameters replaced by an application's
+ * arguments, positionally.
+ *
+ * A structure that mentions no parameter is returned UNCHANGED, so an interface
+ * with an unused parameter still admits every application - the case a rule
+ * phrased as "the argument must match" gets backwards.
+ */
+function SubstituteTypeArguments(
+  structure: TypeRecord,
+  declaration: unknown,
+  args: readonly (TypeRecord | number)[] | undefined,
+): TypeRecord {
+  const params = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } } | undefined)
+    ?.TypeParameters?.TypeParameterList;
+  if (!params || params.length === 0 || !args || args.length === 0) {
+    return structure;
+  }
+  const byName = new Map<string, TypeRecord>();
+  for (let i = 0; i < params.length && i < args.length; i += 1) {
+    const name = (params[i] as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name;
+    const arg = args[i];
+    if (typeof name === 'string' && arg && typeof arg === 'object') {
+      byName.set(name, arg as TypeRecord);
+    }
+  }
+  if (byName.size === 0) {
+    return structure;
+  }
+  // A visited map, because a generic interface may be recursive -
+  // `interface Rec<T> { x: T; next: Rec.<T> | null; }` parses today - and the
+  // walk would otherwise not terminate. CanonicalizeType carries one for the
+  // same hazard.
+  const seen = new Map<TypeRecord, TypeRecord>();
+  const walk = (r: TypeRecord): TypeRecord => {
+    if (!r || typeof r !== 'object') {
+      return r;
+    }
+    const already = seen.get(r);
+    if (already !== undefined) {
+      return already;
+    }
+    if (r.Kind === 'parameter') {
+      return byName.get((r as { Name?: string }).Name ?? '') ?? r;
+    }
+    if (r.Kind === 'object') {
+      const out = { Kind: 'object', Properties: r.Properties, IndexSignatures: r.IndexSignatures } as TypeRecord;
+      seen.set(r, out);
+      (out as { Properties: unknown }).Properties = r.Properties.map((prop) => ({
+        ...prop, type: walk(prop.type as TypeRecord),
+      }));
+      return out;
+    }
+    if (r.Kind === 'union' || r.Kind === 'intersection') {
+      const out = { Kind: r.Kind, Members: r.Members } as TypeRecord;
+      seen.set(r, out);
+      (out as { Members: unknown }).Members = r.Members.map((m) => walk(m as TypeRecord));
+      return out;
+    }
+    return r;
+  };
+  return walk(structure);
+}
+
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
@@ -1727,7 +1791,19 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       const isClassType = (t.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
         || (t.Declaration as { type?: string } | undefined)?.type === 'ClassExpression';
       if (t.Structure && !isClassType) {
-        const structurallyMatches = Q(yield* IsOfType(value, t.Structure));
+        // PLAN-generic-interface-membership.md phase 1c. The structure now
+        // carries ~parameter~ records (phase 1b, in the checker AND the runtime
+        // - each builds its own), so an application's arguments can replace
+        // them. Without this the parameters would reach a membership test that
+        // cannot compare them; without phase 1b there would be nothing here to
+        // replace. The three edits are one fix.
+        //
+        // Substituted rather than STORED, because [[Structure]] is read for
+        // subtyping too - `relations.mts` at 833 and 837 - and the comment above
+        // says why that matters: "Subtyping and membership are different
+        // questions of the same record."
+        const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
+        const structurallyMatches = Q(yield* IsOfType(value, substituted));
         if (!structurallyMatches) {
           return false;
         }
