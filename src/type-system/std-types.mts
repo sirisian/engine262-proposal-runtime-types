@@ -48,16 +48,31 @@ import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptR
  *         returns the BARE BASE - a wrong type rather than an error. The write
  *         form is the `generic` KIND.
  *
- * BLOCKED, and on what. `brand`, `suffixed` and `stringPattern` build
- * `parameterized` nodes, which the read side emits and the write side rejects
- * (F110); `instanceType` reads a construct signature's return, which a
- * constructor's reflection does not carry (F119). They are exported as written
- * so that the failure names the gap rather than the caller.
+ * THE EXPORT SET IS 71, and three decisions moved it after this module first
+ * landed at 73. Each is recorded at the definition it touches:
  *
- * `keysOf` is not exported. PLAN-std-types.md OQ1 recommends shipping it as a
- * one-line forwarder to the operator; v1 of the plan, which this phase follows,
- * says it does not ship at all. Adding it is one line and no other change:
- *   export function keysOf(T: type): type { return type keyof T; }
+ *   OQ1-C   `keys` ADDED - the function form of `keyof`, forwarding to the
+ *           operator rather than reimplementing it. Named for the kit's own
+ *           convention, where an `Of` suffix constructs and a bare plural
+ *           extracts; `keysOf`, which three sources advertise, would be the
+ *           first extractor carrying `Of`.
+ *   OQ8-C   `suffixed` and `stringPattern` WITHHELD - written, unexported,
+ *           reversible in one word. The `pattern` claim they depend on is
+ *           provisional.
+ *   OQ10-C  `instanceType` RETIRED - the identity for a class, `returnType`
+ *           under a second name for a factory.
+ *
+ * BLOCKED, and on what. `brand` alone, and twice over: it builds a
+ * `parameterized` node, which the read side emits and the write side rejects
+ * (F110), and no meta type claims the `brand` key, so even the syntactic
+ * `uint32.<{ brand: 'X' }>` is refused (F126). It needs OQ6-A and OQ9-A. It is
+ * exported as written so the failure names the gap rather than the caller.
+ *
+ * NOT blocked, contrary to an earlier note: a walk over a struct CONTAINING a
+ * branded or enum field works, because a field's type rides as a Type Object
+ * and a walk's default arm passes it through untouched. `deepPartial`,
+ * `traverse` and `deepMap` are fine; only reconstruction of the parameterized
+ * or enum type ITSELF fails.
  */
 export const STD_TYPES_SPECIFIER = 'std:types';
 
@@ -334,6 +349,25 @@ export function deepMap(T: type, leaf): type { return traverse(T, { leaf }); }
 
 // ---- keys and indexing, promises, routes, and the maximal set — §4.1, §4.3, §4.4, §6 ----
 
+export function keys(T: type): type {
+  // OQ1-C. The function form of \`keyof\`, and literally the operator: not a
+  // reimplementation over reflection, which could not agree with it. \`keyof\`
+  // reads a class body and a nominal's structure; reflection collapses both to
+  // an opaque \`primitive\` leaf, so a version written over \`reflect()\` would
+  // give a DIFFERENT answer on a nominal - the one thing annex-standard-kit
+  // forbids. Forwarding satisfies the agreement obligation by construction.
+  //
+  // Named \`keys\`, not \`keysOf\`, which is what three sources advertise. The
+  // kit's convention is unambiguous across ten names: an \`Of\` suffix
+  // CONSTRUCTS (\`objectOf\`, \`tupleOf\`, \`arrayOf\`) and a bare plural
+  // EXTRACTS (\`arms\`, \`parameters\`, \`paths\`, \`discriminants\`, \`getters\`,
+  // \`elementTypes\`, \`tupleElements\`). This extracts. \`paths\` is the exact
+  // model - a bare plural returning a union of literal types.
+  //
+  // OQ5-D: keyless is \`never\`, not an error. \`keys(uint8)\` is \`never\`; the
+  // refusal lives at the USE, which \`indexed\` below performs.
+  return type keyof T;
+}
 export function indexed(T: type, K: type): type {
   // F105: §4.1's \`js\` block is missing from the design document. This
   // reproduces #sec-indexed-access-types / IndexedAccessTypeRecord: distribute
@@ -388,7 +422,14 @@ export function options(Data: type, Methods: type): type {
 export function brand(T: type, tag: string | symbol): type {
   return Reflect.makeType({ kind: 'parameterized', base: T, metadata: { brand: tag } });
 }
-export function suffixed(suffix: string): type {
+// NOT EXPORTED - OQ8-C. Written and kept so the decision is reversible in one
+// word, but withheld while the \`pattern\` claim is provisional. \`StringPattern\`
+// is a hardcoded intrinsic claiming a good name out of a flat, first-come
+// namespace, and its \`subtype\` judgment is at the floor of reflexivity and not
+// consulted anywhere yet - so the reservation currently buys nothing over
+// interning. Export both when §6.4's exact automaton subtyping lands, or sooner
+// if a scoping design for claims arrives.
+function suffixed(suffix: string): type {
   return Reflect.makeType({ kind: 'parameterized', base: string,
     metadata: { pattern: new RegExp(\`^.*\${RegExp.escape(suffix)}$\`) } });
 }
@@ -402,20 +443,16 @@ export function constructorParameters(C: type): type {
   return Reflect.makeType({ kind: 'tuple',
     elements: signatures[0].parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
 }
-export function instanceType(C: type): type {
-  const node = reflect(C);
-  if (node.kind === 'function' && node.signatures.length > 0) return returnType(C);
-  const { signatures } = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor');
-  // F119: a constructor's reflected signature carries no \`return\` slot, so
-  // "a class constructs its own type object" is not derivable through
-  // reflection today. BLOCKED; the call signature path above works.
-  const first = signatures === undefined ? undefined : signatures[0];
-  if (first === undefined || first.return === undefined)
-    throw new TypeError(\`instanceType: \${String(C)} has no readable construct return (F119)\`);
-  return first.return.type;
-}
+// RETIRED - OQ10-C. For a class it is the IDENTITY: §4.3 says "a class's type
+// object is the class and the class name is its instance type - there is no
+// \`typeof C\` constructor-type / instance-type split", and §4.11's coverage
+// table says "a class is its own". For a function type it is \`returnType\`
+// under a second name. Shipping it would advertise a split this proposal
+// deliberately does not have, which is the reasoning §4.12 used to decline
+// \`isEqual\`. Use \`returnType\` for the factory case.
 
-export function stringPattern(pattern, ...holes) {
+// NOT EXPORTED - OQ8-C, see \`suffixed\` above.
+function stringPattern(pattern, ...holes) {
   // §6.4. Callable with a RegExp, or as a template tag where each hole
   // contributes the sub-pattern its type matches. BLOCKED on F110 in the same
   // way \`brand\` and \`suffixed\` are: it builds a \`parameterized\` node.

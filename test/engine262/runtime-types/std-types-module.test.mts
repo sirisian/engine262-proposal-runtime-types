@@ -64,7 +64,7 @@ test('the phase gate: `import { partial } from "std:types"` resolves with no loa
   expect(await evaluate(realm, source)).toBe('evaluated');
 });
 
-test('the whole module evaluates - every one of the 73 exports is reachable', async () => {
+test('the whole module evaluates - every one of the 71 exports is reachable', async () => {
   const realm = bareRealm(['runtime-types']);
   // A namespace import forces the module body to completion, so a helper whose
   // DEFINITION does not evaluate fails here rather than at its first call in
@@ -72,7 +72,7 @@ test('the whole module evaluates - every one of the 73 exports is reachable', as
   // (`import { ... }` and `import * as std`), so both are exercised.
   const source = 'import * as std from "std:types";' + NL
     + 'const names = Object.keys(std);' + NL
-    + 'if (names.length !== 73) { throw new Error("export count is " + names.length); }';
+    + 'if (names.length !== 71) { throw new Error("export count is " + names.length); }';
   expect(await evaluate(realm, source)).toBe('evaluated');
 });
 
