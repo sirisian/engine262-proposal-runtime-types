@@ -55,7 +55,7 @@ export function RegisterReflectionContexts(reflect: ObjectValue): void {
       continue;
     }
     // EVERY type `Reflect` binds, under the name a program writes for it, which
-    // is qualified: an annotation says `Reflect.Region`, never `Region`.
+    // is qualified: an annotation says `Reflect.Block`, never `Region`.
     // `PLAN-checker-type-resolution.md stage A` - the checker's resolver refused
     // every qualified name outright, so all 47 of these were unresolvable to it
     // while the runtime resolved them by walking the binding.

@@ -131,7 +131,7 @@ function IsReplacementDecorator(
   // The DECLARED return, or the one the checker PUBLISHED for it. A macro may
   // write `: [].<Token>` and many do, but `linq` does not:
   //
-  //   function linq(tokens: TokenStream, context: Reflect.Region) { … }
+  //   function linq(tokens: TokenStream, context: Reflect.Block) { … }
   //
   // and its return is inferred. `OverloadSignatureOf` fills `ReturnType` from the
   // ANNOTATION alone, so reading only that made an inferred return look like no
@@ -154,7 +154,7 @@ function IsReplacementDecorator(
  * read from it rather than one being inferred from the other:
  *
  *   - `(TokenStream, …) => [].<Token>` says it is a replacement decorator at all;
- *   - a `Reflect.Region` CONTEXT says the region it takes is captured.
+ *   - a `Reflect.Block` CONTEXT says the region it takes is captured.
  *
  * A decorator with the first and not the second is an ordinary replacement
  * decorator over a parsed |Block|, which is what a macro declaring no `capture`
@@ -194,7 +194,7 @@ function TakesARegionContext(macro: ObjectValue): boolean {
   //
   // The context type used to decide it, and that made declaring the MODE the
   // same act as declaring which POSITIONS the macro takes: a macro annotating
-  // `Reflect.Region` could not decorate a class, because the annotation is
+  // `Reflect.Block` could not decorate a class, because the annotation is
   // enforced where the macro is called. Working around it meant a union
   // enumerating every position a macro might appear in - measured at EIGHTEEN,
   // and one more whenever the language gains a position.

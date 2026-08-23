@@ -595,7 +595,7 @@ function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
 
 /**
  * The records of the types bound BY NAME in a realm, keyed by the name a
- * program writes: `Token`, `ClassMetadata`, `Reflect.Region`.
+ * program writes: `Token`, `ClassMetadata`, `Reflect.Block`.
  *
  * `PLAN-checker-type-resolution.md stage A`. The checker resolves an annotation
  * with `resolveType`, a second resolver that mirrors `TypeNodeToTypeRecord`; a

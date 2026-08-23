@@ -2778,7 +2778,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
-            // A QUALIFIED name - `Reflect.Region`. This answered null
+            // A QUALIFIED name - `Reflect.Block`. This answered null
             // unconditionally, and a null type is treated as no constraint, so
             // every annotation naming one was silently never compared:
             // `PLAN-checker-type-resolution.md stage A`, R2.
@@ -2789,7 +2789,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // ARGUMENTS on a qualified name are still out of reach and keep the
             // old answer.
             if (!node.TypeArguments) {
-              // The BASE name decides: `Reflect.Region` means the intrinsic only
+              // The BASE name decides: `Reflect.Block` means the intrinsic only
               // where the program has not bound `Reflect` itself.
               const base = node.TypeName.IdentifierReference.name;
               if (shadowedByProgram(base)) {

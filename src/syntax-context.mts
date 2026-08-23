@@ -78,12 +78,12 @@ export function KindOfDecoratedNode(node: ParseNode): string | undefined {
 export function SyntaxContextFor(realm: Realm, kind: string, label?: string): ObjectValue {
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   // Stamped with the reflection context its `kind` names, so `RuntimeTypeOf`
-  // answers `Reflect.Region` (or `Reflect.Class`, and the rest) rather than the
+  // answers `Reflect.Block` (or `Reflect.Class`, and the rest) rather than the
   // bare `object` an unstamped literal gives.
   //
   // Without it a macro's context argument had no nominal type, and OVERLOAD
   // RESOLUTION - which selects on argument types - could not match a parameter
-  // annotated `Reflect.Region`. A direct call accepted the same value, because
+  // annotated `Reflect.Block`. A direct call accepted the same value, because
   // parameter enforcement judges it differently; that asymmetry is what made
   // one name carrying both a replacement and an ordinary decorator impossible.
   // `FINDING-overload-resolution-host-nominals.md`.
