@@ -27,7 +27,10 @@ function expectThrown(source: string) {
 
 
 function ok(source: string): boolean {
-  return run(source).Type === 'normal';
+  // `run` answers a ValueCompletion, whose NORMAL case is a bare value rather
+  // than a record - `BigIntValue` has no `Type` - so the union has to be
+  // narrowed before the tag is read. The shared harness's `ok` does the same.
+  return (run(source) as { Type: string }).Type === 'normal';
 }
 
 function errorMessage(source: string): string {
