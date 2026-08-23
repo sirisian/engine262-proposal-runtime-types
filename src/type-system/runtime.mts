@@ -1400,7 +1400,7 @@ export function* EvaluateWhereClauses(value: Value, whereClauses: readonly Parse
  * with an unused parameter still admits every application - the case a rule
  * phrased as "the argument must match" gets backwards.
  */
-function SubstituteTypeArguments(
+export function SubstituteTypeArguments(
   structure: TypeRecord,
   declaration: unknown,
   args: readonly (TypeRecord | number)[] | undefined,

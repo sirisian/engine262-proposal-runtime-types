@@ -3,7 +3,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
-import { fitsNumericType } from './runtime.mts';
+import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
@@ -830,13 +830,23 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // so a class that declares no `implements` must not satisfy an interface by
   // shape; the class-satisfies-interface arm below handles the declared case.
   {
+    // PLAN-generic-interface-membership.md. A generic interface's [[Structure]]
+    // carries ~parameter~ records, so an application's arguments have to be
+    // substituted here as they are at the membership site - these are the two
+    // consumers the same erasure damaged, and fixing membership alone left an
+    // object type comparing against unsubstituted parameters and matching
+    // nothing.
+    //
+    // The comment above says these are "different questions of the same record";
+    // they are, and they need the same substitution to ask them of the right
+    // structure.
     const targetStructure = InterfaceStructureOf(t);
     if (targetStructure && s.Kind === 'object') {
-      return IsSubtype(s, targetStructure, next);
+      return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
     }
     const sourceStructure = InterfaceStructureOf(s);
     if (sourceStructure && t.Kind === 'object') {
-      return IsSubtype(sourceStructure, t, next);
+      return IsSubtype(SubstituteTypeArguments(sourceStructure, (s as { Declaration?: unknown }).Declaration, (s as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), t, next);
     }
     // PLAN-interface-satisfaction.md phase 1, and D-3's decided rule: AN OBJECT
     // TYPE ASKS WHAT A VALUE HAS. A class instance has its members, so it
