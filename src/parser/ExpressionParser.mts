@@ -6,7 +6,7 @@ import {
   ContainsArguments,
 } from '../static-semantics/all.mts';
 import type { Mutable } from '../utils/language.mts';
-import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
+import { FirstFreeReference, FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { ScanBalancedRun } from './ScanBalancedRun.mts';
 import {
   Token,
@@ -2397,6 +2397,39 @@ export abstract class ExpressionParser extends FunctionParser {
               && (m as { static?: boolean }).static
               && (m as { ClassElementName?: { name?: string } }).ClassElementName?.name === 'default') {
             (node as { DeclaredZero?: ParseNode }).DeclaredZero = m;
+            // PLAN-type-declared-zero.md phase 4. #sec-declared-zero: the
+            // |AssignmentExpression| "must be compile-time evaluable and it is a
+            // type error otherwise, and it is evaluated ONCE, when the class is
+            // declared".
+            //
+            // The restriction is what keeps the zero a FILL rather than a loop
+            // of calls: `let d: [1000].<Transform>;` takes the zero a thousand
+            // times, and a value that could observe or mutate the program would
+            // make those thousand copies distinguishable.
+            //
+            // PARTIAL, and deliberately so. `FirstEvaluabilityViolation` answers
+            // the PREPROCESSOR's question - it flags a fixed set of ambient
+            // names like `Date` and `globalThis` - while
+            // #sec-iscompiletimeevaluable asks something stricter: a reference
+            // to a binding is evaluable only where the binding "is immutable and
+            // its initializer is compile-time evaluable". That needs the
+            // binding's MUTABILITY, which is a scope fact the parser does not
+            // have, and the engine has no IsCompileTimeEvaluable to ask.
+            //
+            // So `static default = (Date.now(), …)` is refused and
+            // `let c = 0; static default = (c += 1, …)` is not. The check is a
+            // floor rather than the rule; see PLAN-type-declared-zero.md phase 4.
+            const initializer = (m as { Initializer?: ParseNode | null }).Initializer;
+            const violation = initializer ? FirstEvaluabilityViolation(initializer) : undefined;
+            if (violation) {
+              this.addEarlyError(
+                Throw.SyntaxError(
+                  'a declared zero is not compile-time evaluable: it names $1',
+                  Value(violation.name),
+                ),
+                m,
+              );
+            }
           }
           if (m.type === 'ClassStaticBlock') {
             continue;
