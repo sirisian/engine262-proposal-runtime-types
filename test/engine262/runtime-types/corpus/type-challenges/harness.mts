@@ -70,12 +70,24 @@ function keyVals(K) { return new Set(arms(K).map(a => reflect(a).value)); }
 `;
 
 /**
+ * The kit's exports also reachable as `std.<name>`, which is how
+ * typechallenges.md's "With std:types" blocks are written - the corpus document
+ * imports the module as a namespace. Built by scraping the export names out of
+ * the source rather than listing them, so a helper added to the kit is reachable
+ * both ways without editing this file.
+ */
+const STD_NAMESPACE = `const std = { ${STD_TYPES_SOURCE.split('\n')
+  .filter((line) => line.startsWith('export function '))
+  .map((line) => line.slice('export function '.length).split('(')[0])
+  .join(', ')} };`;
+
+/**
  * The full corpus prelude: the shipped kit, plus the three value-level helpers
  * above. Exported as `KIT` because that is the name the challenges already use,
  * and because a challenge should not have to know which of the two halves a
  * helper came from - it only has to know that neither is written here twice.
  */
-export const KIT = `${KIT_ONLY}\n${CORPUS_LOCAL}`;
+export const KIT = `${KIT_ONLY}\n${CORPUS_LOCAL}\n${STD_NAMESPACE}`;
 
 /** A challenge program with the corpus prelude in scope. */
 export const kit = (program: string) => `${KIT}\n${program}`;
