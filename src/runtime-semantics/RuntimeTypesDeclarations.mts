@@ -1520,6 +1520,29 @@ function specializationKeyOf(record: TypeRecord): string {
 /** One specialization per declaration and argument list. */
 const classSpecializations = new Map<unknown, Map<string, Value>>();
 
+/**
+ * The constructor a generic class's application produced, if one has been built.
+ *
+ * PLAN-generic-instance-membership.md phase 1. `SpecializeGenericClass` builds a
+ * distinct constructor per argument list and registers a record naming it; an
+ * ANNOTATION resolving `Box.<uint8>` builds its own record and would otherwise
+ * carry the declaration's constructor, which a specialized instance's prototype
+ * chain never reaches.
+ *
+ * Answers undefined where no application has been evaluated yet - the annotation
+ * then keeps the record it had, which is what it did before.
+ */
+export function SpecializedClassConstructor(
+  declaration: unknown,
+  argRecords: readonly (TypeRecord | number)[],
+): Value | undefined {
+  const byArgs = classSpecializations.get(declaration as never);
+  if (byArgs === undefined) {
+    return undefined;
+  }
+  return byArgs.get(argRecords.map((a) => specializationKeyOf(a as never)).join(','));
+}
+
 function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const args = node.TypeArguments.TypeArgumentList;

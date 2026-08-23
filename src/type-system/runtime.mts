@@ -1,3 +1,4 @@
+import { SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
@@ -2669,6 +2670,23 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
                 Value(displayType(bad.argument)), Value(String(bad.supplied)),
                 Value(bad.parameter), Value(String(bad.wanted)),
               );
+          }
+          // PLAN-generic-instance-membership.md phase 1. The spread carries
+          // baseRecord's [[Constructor]] - the UNSPECIALIZED one - so a
+          // `Box.<uint8>` annotation described the right type with the wrong
+          // constructor, and membership tested a specialized instance against a
+          // prototype it is never on. Measured: the two chains are disjoint,
+          // `Object.getPrototypeOf(spec.prototype) === Box.prototype` is false,
+          // so no prototype walk reaches it either.
+          //
+          // `SpecializeGenericClass` already builds the correct record - same
+          // Declaration and Arguments, but the SPECIALIZATION's Constructor -
+          // and registers it with `AssociateClassType`. Reusing it here is what
+          // makes the annotation and the value expression describe one type
+          // rather than two.
+          const specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords);
+          if (specializedCtor !== undefined) {
+            return { ...baseRecord, Arguments: argRecords, Constructor: specializedCtor };
           }
           return { ...baseRecord, Arguments: argRecords };
         }
