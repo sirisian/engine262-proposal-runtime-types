@@ -25,19 +25,29 @@ import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. Of the 46 blocks, 7 hold against the shipped kit and 39 do not.
+ * TRIAGE STATE. 8 of 46 blocks hold; 38 do not, and the failures are FINDINGS
+ * rather than defects in this file - these blocks had never been executed, so
+ * the document has been advertising 42 helpers with demonstrations nobody could
+ * check.
  *
- * That is the finding, not a defect in this file: these blocks have never been
- * executed, so the document has been advertising 42 helpers with demonstrations
- * nobody could check. Sampling the failures shows they are real claims that do
- * not hold - `std.head(type [])` expects `never` but `type []` parses as an
- * ARRAY rather than an empty tuple (F115), and one block passes `Function`
- * where a type is required.
+ * Bucketed by cause, the failing ASSERTIONS (62 before triage, 21 after the
+ * document fixes so far):
  *
- * The failing blocks are `test.todo` rather than deleted or weakened, each
- * naming the claim it makes, so the list is the triage queue. Each one is a
- * separate judgement - the document may be wrong, the kit may be wrong, or the
- * engine may be - and answering 39 of those is its own pass.
+ *   A  the document said `keysOf`; the kit ships `keys`     - FIXED in the document
+ *   D  a bare constructor where a type is required          - partly fixed
+ *   B  a name the "With std:types" block uses that its `// Builder` block never
+ *      declares - the block was written against the challenge's PROSE
+ *   C  the challenge declares a function whose name and annotated signature
+ *      match a kit export, so the two form a duplicate OVERLOAD rather than a
+ *      shadow. This is a hazard of the script prelude, not of either program.
+ *   E  `std.head(type [])` expects `never`, but `type []` parses as an ARRAY
+ *      rather than an empty tuple (F115)
+ *   F  genuine semantic disagreement, two cases
+ *
+ * NOTE, unreconciled: per-ASSERTION triage counts 21 failures while per-BLOCK
+ * counts 38, and 38 blocks cannot fail on 21 assertions. One of the two
+ * measurements is wrong and the discrepancy has not been chased. Trust the
+ * bucket NAMES, which are reproducible, over either count.
  */
 
 test('with std:types - 4  Pick', () => {
@@ -81,17 +91,17 @@ Frozen === type { readonly title: string, readonly description: string, readonly
 \nString(std.readonly(Todo) === Frozen);`));
 });
 
-test.todo('with std:types - 14  First of Array - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 14  First of Array - see TRIAGE STATE');
 
-test.todo('with std:types - 43  Exclude - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 43  Exclude - see TRIAGE STATE');
 
-test.todo('with std:types - 189  Awaited - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 189  Awaited - see TRIAGE STATE');
 
-test.todo('with std:types - 533  Concat - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 533  Concat - see TRIAGE STATE');
 
-test.todo('with std:types - 3057  Push - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 3057  Push - see TRIAGE STATE');
 
-test.todo('with std:types - 3060  Unshift - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 3060  Unshift - see TRIAGE STATE');
 
 test('with std:types - 3312  Parameters', () => {
   expectBuilderTrue(kit(`function myParameters(F: type): type {
@@ -108,7 +118,7 @@ myParameters(Reflect.typeOf(baz)) === type [];
 \nString(std.parameters(Reflect.typeOf(foo)) === type [string, uint32]);`));
 });
 
-test.todo('with std:types - 2  Get Return Type - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2  Get Return Type - see TRIAGE STATE');
 
 test('with std:types - 3  Omit', () => {
   expectBuilderTrue(kit(`function myOmit(T: type, K: type): type {
@@ -122,7 +132,7 @@ myOmit(Todo, type 'description' | 'completed') === type { readonly title: string
 \nString(std.omit(Todo, type 'description' | 'completed') === type { readonly title: string });`));
 });
 
-test.todo('with std:types - 8  Readonly 2 - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 8  Readonly 2 - see TRIAGE STATE');
 
 test('with std:types - 9  Deep Readonly', () => {
   expectBuilderTrue(kit(`function deepReadonly(T: type): type {
@@ -149,17 +159,17 @@ deepReadonly(type { a: string } | { b: uint32 }) === type { readonly a: string }
 \nString(std.traverse(X, { property: p => ({ ...p, readonly: true }) }) === deepReadonly(X));`));
 });
 
-test.todo('with std:types - 10  Tuple to Union - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 10  Tuple to Union - see TRIAGE STATE');
 
-test.todo('with std:types - 15  Last of Array - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 15  Last of Array - see TRIAGE STATE');
 
-test.todo('with std:types - 20  Promise.all - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 20  Promise.all - see TRIAGE STATE');
 
-test.todo('with std:types - 62  Type Lookup - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 62  Type Lookup - see TRIAGE STATE');
 
-test.todo('with std:types - 110  Capitalize - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 110  Capitalize - see TRIAGE STATE');
 
-test.todo('with std:types - 191  Append Argument - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 191  Append Argument - see TRIAGE STATE');
 
 test('with std:types - 527  Append to object', () => {
   expectBuilderTrue(kit(`function appendToObject(T: type, key: string | symbol, V: type): type {
@@ -171,31 +181,45 @@ appendToObject(Test, 'home', boolean) === type { key: 'cat', value: 'green', hom
 \nString(std.merge(Test, std.record(type 'home', boolean)) === type { key: 'cat', value: 'green', home: boolean });`));
 });
 
-test.todo('with std:types - 599  Merge - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 599  Merge - see TRIAGE STATE');
 
-test.todo('with std:types - 645  Diff - block does not hold against the shipped kit; see TRIAGE STATE');
+test('with std:types - 645  Diff', () => {
+  expectBuilderTrue(kit(`function diff(A: type, B: type): type {
+  const inA = new Set(reflect(A).properties.map(p => p.name));
+  const inB = new Set(reflect(B).properties.map(p => p.name));
+  return objectOf([
+    ...reflect(A).properties.filter(p => !inB.has(p.name)),
+    ...reflect(B).properties.filter(p => !inA.has(p.name)),
+  ]);
+}
 
-test.todo('with std:types - 2595  PickByType - block does not hold against the shipped kit; see TRIAGE STATE');
+type Foo = { name: string, age: string };
+type Coo = { name: string, gender: uint32 };
+diff(Foo, Coo) === type { age: string, gender: uint32 };
+\nString(std.merge(std.omit(Foo, std.keys(Coo)), std.omit(Coo, std.keys(Foo))) === type { age: string, gender: uint32 });`));
+});
 
-test.todo('with std:types - 2757  PartialByKeys - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2595  PickByType - see TRIAGE STATE');
 
-test.todo('with std:types - 2759  RequiredByKeys - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2757  PartialByKeys - see TRIAGE STATE');
 
-test.todo('with std:types - 2793  Mutable - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2759  RequiredByKeys - see TRIAGE STATE');
 
-test.todo('with std:types - 2852  OmitByType - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2793  Mutable - see TRIAGE STATE');
 
-test.todo('with std:types - 3062  Shift - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 2852  OmitByType - see TRIAGE STATE');
 
-test.todo('with std:types - 3192  Reverse - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 3062  Shift - see TRIAGE STATE');
 
-test.todo('with std:types - 3196  Flip Arguments - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 3192  Reverse - see TRIAGE STATE');
 
-test.todo('with std:types - 4471  Zip - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 3196  Flip Arguments - see TRIAGE STATE');
 
-test.todo('with std:types - 9616  Parse URL Params - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 4471  Zip - see TRIAGE STATE');
 
-test.todo('with std:types - 16259  ToPrimitive - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 9616  Parse URL Params - see TRIAGE STATE');
+
+test.todo('with std:types - 16259  ToPrimitive - see TRIAGE STATE');
 
 test('with std:types - 17973  DeepMutable', () => {
   expectBuilderTrue(kit(`function deepMutable(T: type): type {
@@ -215,26 +239,26 @@ deepMutable(X) === type { a: () => 22, b: string, c: { d: boolean } };
 \nString(std.traverse(X, { property: p => ({ ...p, readonly: false }) }) === deepMutable(X));`));
 });
 
-test.todo('with std:types - 29650  ExtractToObject - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 29650  ExtractToObject - see TRIAGE STATE');
 
-test.todo('with std:types - 35991  MyUppercase - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 35991  MyUppercase - see TRIAGE STATE');
 
-test.todo('with std:types - 6  Simple Vue - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 6  Simple Vue - see TRIAGE STATE');
 
-test.todo('with std:types - 55  Union to Intersection - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 55  Union to Intersection - see TRIAGE STATE');
 
-test.todo('with std:types - 213  Vue Basic Props - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 213  Vue Basic Props - see TRIAGE STATE');
 
-test.todo('with std:types - 270  Typed Get - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 270  Typed Get - see TRIAGE STATE');
 
-test.todo('with std:types - 1383  Camelize - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 1383  Camelize - see TRIAGE STATE');
 
-test.todo('with std:types - 9160  Assign - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 9160  Assign - see TRIAGE STATE');
 
-test.todo('with std:types - 9775  Capitalize Nest Object Keys - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 9775  Capitalize Nest Object Keys - see TRIAGE STATE');
 
-test.todo('with std:types - 13580  Replace Union - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 13580  Replace Union - see TRIAGE STATE');
 
-test.todo('with std:types - 19458  SnakeCase - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 19458  SnakeCase - see TRIAGE STATE');
 
-test.todo('with std:types - 33763  Union to Object from key - block does not hold against the shipped kit; see TRIAGE STATE');
+test.todo('with std:types - 33763  Union to Object from key - see TRIAGE STATE');
