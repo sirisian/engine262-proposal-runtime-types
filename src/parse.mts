@@ -146,33 +146,6 @@ function IsReplacementDecorator(
   return ret?.Kind === 'array' && ret.Element?.LibraryName === 'Token';
 }
 
-/**
- * Whether a context parameter's type ADMITS a region context.
- *
- * Not "is `Reflect.Region`". A macro may decorate a region AND something else -
- * `@jsx class C {}` is an ordinary decoration - and it says so by taking a
- * context that admits both:
- *
- *   function jsx(t: TokenStream, c: Reflect.Region | Reflect.Class): [].<Token>
- *
- * Requiring the type to BE `Reflect.Region` made those two facts one decision:
- * declaring the mode would have forbidden every other position, because the
- * annotation is enforced where the macro is CALLED. Admitting a region declares
- * the mode; admitting the rest keeps the positions open, which is what the
- * `capture` property kept separate by saying nothing about position at all.
- */
-function AdmitsARegionContext(type: {
-  LibraryName?: string, Kind?: string, Members?: readonly { LibraryName?: string }[],
-} | undefined): boolean {
-  if (type === undefined) {
-    return false;
-  }
-  if (type.LibraryName === 'Reflect.Region') {
-    return true;
-  }
-  return type.Kind === 'union'
-    && (type.Members ?? []).some((member) => member.LibraryName === 'Reflect.Region');
-}
 
 /**
  * Whether _macro_ declares that it decorates a CAPTURED region.
@@ -213,8 +186,20 @@ function TakesARegionContext(macro: ObjectValue): boolean {
     ? all.Value
     : [];
   const candidates = signatures.length > 0 ? signatures : SingleSignatureOf(macro);
-  return candidates.some((signature) => IsReplacementDecorator(signature, macro)
-    && AdmitsARegionContext(signature.Parameters?.[1]?.Type));
+  // Capture follows from BEING a replacement decorator, not from the context a
+  // macro annotates. `#sec-preprocessor-modules`: "A replacement decorator's
+  // region is captured, always, because it is a replacement decorator ...
+  // Capture is not a mode a macro selects; it follows from what a replacement
+  // decorator is."
+  //
+  // The context type used to decide it, and that made declaring the MODE the
+  // same act as declaring which POSITIONS the macro takes: a macro annotating
+  // `Reflect.Region` could not decorate a class, because the annotation is
+  // enforced where the macro is called. Working around it meant a union
+  // enumerating every position a macro might appear in - measured at EIGHTEEN,
+  // and one more whenever the language gains a position.
+  // `PLAN-region-context-removal` §20.
+  return candidates.some((signature) => IsReplacementDecorator(signature, macro));
 }
 
 /** The one signature of a function that declares no overloads. */
