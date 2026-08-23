@@ -128,19 +128,42 @@ test('overloads: annotating nothing is not annotating as any', () => {
     + ' String(r.signatures[0].parameters[1].type === any);')).toBe('true');
 });
 
-test('overloads: an UNANNOTATED member has no signatures, constructor or not', () => {
-  // A SEPARATE gap, and not a constructor one: MemberFunctionTypeRecord answers
-  // *undefined* where nothing is annotated, so an unannotated method has no
-  // `signatures` either. The shape table's "length 1 where the method is not
-  // overloaded" says both are wrong; whether an unannotated member has a
-  // one-arm signature of untyped parameters is a question for every member
-  // kind, so it is pinned here rather than decided by a constructor fix.
+test('overloads: an unannotated METHOD has no signatures; a constructor always does', () => {
+  // This test previously asserted the two agree, and pinned WHY it would not
+  // decide between them: "whether an unannotated member has a one-arm signature
+  // of untyped parameters is a question for every member kind, so it is pinned
+  // here rather than decided by a constructor fix." That was right to refuse a
+  // constructor-shaped answer to a general question.
+  //
+  // PLAN-constructor-returns.md OQ3-C answers the CONSTRUCTOR half, and only
+  // that half, on a ground that does not generalise: after OQ1-E a typed class
+  // may not `return` anything but `this`, so a construction yields its class BY
+  // RULE. A constructor's signature is therefore DERIVED - parameters are
+  // syntactically present, the result is fixed, nothing is guessed - where a
+  // method's would be INFERRED, which is the thing the unannotated rule
+  // refuses. `m(a) {}` still has no signatures, and `m(a)` still differs from
+  // `m(a: any)`, both asserted below.
+  //
+  // The asymmetry is real and is meant to be visible: the general member
+  // question stays open (F127), and if it is decided the same way the two
+  // converge. Until then a constructor is the one member whose signature does
+  // not need the program to have asked.
   const has = (decl: string, member: string) => `class A { ${decl} }`
     + ` const r = Reflect.getReflection.<Reflect.ClassMethod, A>('${member}');`
     + " String(r.signatures === undefined ? 'absent' : r.signatures.length);";
   expect(evaluated(has('m(a) {}', 'm'))).toBe('absent');
-  expect(evaluated(has('constructor(a) {}', 'constructor'))).toBe('absent');
+  expect(evaluated(has('constructor(a) {}', 'constructor'))).toBe('1');
   // annotated, both answer
   expect(evaluated(has('m(a: uint8) {}', 'm'))).toBe('1');
   expect(evaluated(has('constructor(a: uint8) {}', 'constructor'))).toBe('1');
+  // the derived arm carries the parameter's NAME and `any` for its type, and no
+  // `return` slot - #sec-published-return-types: "a constructor has none to
+  // infer", and after OQ1-E none can be written either
+  expect(evaluated("class A { constructor(a) {} }"
+    + " const s = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor').signatures[0];"
+    + " String(s.parameters[0].name + ':' + (s.parameters[0].type === any) + ':' + (s.return === undefined));")).toBe('a:true:true');
+  // the IMPLICIT constructor of a class that writes none answers too
+  expect(evaluated("class A { x: uint8 = 1; }"
+    + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor');"
+    + ' String(r.signatures.length + \':\' + r.signatures[0].parameters.length);')).toBe('1:0');
 });

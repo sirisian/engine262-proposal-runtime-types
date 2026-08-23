@@ -16,7 +16,7 @@ import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import type { TypeRecord } from '../type-system/records.mts';
+import { anyType, type TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { EnsureCompletion } from '../completion.mts';
@@ -25,6 +25,7 @@ import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { X } from '../completion.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
@@ -37,7 +38,6 @@ import {
   PerformEval,
   SameValue,
 } from '#self';
-import { GetTypeObject } from '../type-system/intern.mts';
 
 /**
  * proposal-runtime-types: the reflection of one PART of a member - a parameter,
@@ -884,6 +884,39 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
             X(CreateDataProperty(reflection, Value('signatures'),
               Q(yield* SignatureListReflection(signatures))));
           }
+        }
+        // PLAN-constructor-returns.md phase 1 (OQ3-C). A CONSTRUCTOR always
+        // reflects exactly one signature, whether or not it declares anything -
+        // including the implicit constructor of a class that writes none.
+        //
+        // This does NOT reach the general rule that an unannotated callable
+        // stays unannotated. That rule exists because synthesising an all-`any`
+        // signature for `function g(a) {}` would be inference the program did
+        // not ask for, and it is why `type` is still left absent above. A
+        // constructor is the case where nothing is being inferred: its
+        // parameters are syntactically present, so their names and arity are
+        // known, and its RESULT is fixed by the rule - a typed class yields its
+        // class, which phase 1 made true by refusing any other `return`. So the
+        // signature is DERIVED, not guessed.
+        //
+        // No `return` slot, which #sec-published-return-types requires: "a
+        // constructor has none to infer", and after phase 1 none can be
+        // written either.
+        //
+        // Not scoped to typed classes: reflection describes what a thing IS,
+        // and an untyped class is constructible too. Only OQ1's RULE is scoped.
+        const isConstructorMember = declaration.kind === 'ClassMethod'
+          && !declaration.static
+          && memberName.stringValue() === 'constructor';
+        if (isConstructorMember && !declaration.type) {
+          const derived = (declaration.parameters || []).map((parameter) => ({
+            Name: parameter.name,
+            Type: anyType,
+            Optional: false,
+            Rest: false,
+          }));
+          X(CreateDataProperty(reflection, Value('signatures'),
+            Q(yield* SignatureListReflection([{ Parameters: derived, Return: null }]))));
         }
         const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base, memberName.stringValue())));
