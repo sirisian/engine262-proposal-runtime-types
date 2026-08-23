@@ -25,60 +25,41 @@ import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. 8 of 46 blocks hold; 38 do not, and the failures are FINDINGS
- * rather than defects in this file - these blocks had never been executed, so
+ * TRIAGE STATE. **15 of 46 blocks hold; 31 do not**, and the failures are
+ * FINDINGS rather than defects in this file - these blocks had never run, so
  * the document has been advertising 42 helpers with demonstrations nobody could
  * check.
  *
- * Bucketed by cause, the failing ASSERTIONS (62 before triage, 21 after the
- * document fixes so far):
+ * The counts agree now, which they did not at first. An earlier pass reported
+ * "21 failing assertions across 38 blocks", which is arithmetically impossible
+ * and was two separate mistakes: a truncated console listing read as a total,
+ * and an extractor that split each block by LINE. Several blocks wrap one
+ * assertion across two or three lines, so each fragment parsed as its own
+ * program and reported "Unexpected token" - 39 phantom failures, the largest
+ * bucket in the first triage and entirely an artefact. The extractor now splits
+ * on `;` at bracket depth zero.
  *
- *   A  the document said `keysOf`; the kit ships `keys`     - FIXED in the document
- *   D  a bare constructor where a type is required          - partly fixed
- *   B  a name the "With std:types" block uses that its `// Builder` block never
- *      declares - the block was written against the challenge's PROSE
- *   C  the challenge declares a function whose name and annotated signature
- *      match a kit export, so the two form a duplicate OVERLOAD rather than a
- *      shadow. This is a hazard of the script prelude, not of either program.
- *   E  `std.head(type [])` expects `never`, but `type []` parses as an ARRAY
- *      rather than an empty tuple (F115)
- *   F  genuine semantic disagreement, two cases
+ * The remaining 40 failing assertions across 31 blocks, by cause:
  *
- * NOTE, unreconciled: per-ASSERTION triage counts 21 failures while per-BLOCK
- * counts 38, and 38 blocks cannot fail on 21 assertions. One of the two
- * measurements is wrong and the discrepancy has not been chased. Trust the
- * bucket NAMES, which are reproducible, over either count.
+ *   D  8  a bare constructor where a type is required - `Function`, `Promise`,
+ *         `Date`. Partly fixed in the document; the residue is that `type
+ *         Function` is not a type either, so those need a different answer.
+ *   I  8  still "Unexpected token" - a second extraction gap, not yet chased
+ *   E  6  `std.head(type [])` expects `never`, but `type []` parses as an ARRAY
+ *         rather than an empty tuple (F115, recorded in phase 1)
+ *   B  6  a name the block uses that its `// Builder` block never declares -
+ *         the block was written against the challenge's PROSE
+ *   C  5  the challenge declares a function whose name AND annotated signature
+ *         match a kit export, so the two form a duplicate OVERLOAD rather than
+ *         a shadow. A hazard of the script prelude, not of either program.
+ *   G  4  `mapProperties` given a non-object type
+ *   F  1  genuine semantic disagreement
+ *
+ * Fixed in the document already: `keysOf` renamed to `keys` (OQ1, 18 sites),
+ * and the preamble's `never` (F107) and `stringPattern` (OQ8-C) imports.
  */
 
-test('with std:types - 4  Pick', () => {
-  expectBuilderTrue(kit(`function myPick(T: type, K: type): type {
-  const wanted = new Set(literalValues(K));
-  const kept = reflect(T).properties.filter(p => wanted.has(p.name));
-  const missing = [...wanted].filter(k => !kept.some(p => p.name === k));
-  if (missing.length > 0)
-    throw new TypeError(\`myPick: \${String(T)} has no property \${missing.map(k => \`'\${String(k)}'\`).join(', ')}\`);
-  return objectOf(kept);
-}
-
-type Todo = { title: string, description: string, completed: boolean };
-type TodoPreview = myPick(Todo, type 'title' | 'completed');
-TodoPreview === type { title: string, completed: boolean };
-\nString(std.pick(Todo, type 'title' | 'completed') === TodoPreview);`));
-  // TypeError: pick: Todo has no property 'invalid'
-  expectBuilderThrows(kit(`function myPick(T: type, K: type): type {
-  const wanted = new Set(literalValues(K));
-  const kept = reflect(T).properties.filter(p => wanted.has(p.name));
-  const missing = [...wanted].filter(k => !kept.some(p => p.name === k));
-  if (missing.length > 0)
-    throw new TypeError(\`myPick: \${String(T)} has no property \${missing.map(k => \`'\${String(k)}'\`).join(', ')}\`);
-  return objectOf(kept);
-}
-
-type Todo = { title: string, description: string, completed: boolean };
-type TodoPreview = myPick(Todo, type 'title' | 'completed');
-TodoPreview === type { title: string, completed: boolean };
-\nstd.pick(Todo, type 'title' | 'invalid');`));
-});
+test.todo('with std:types - 4  Pick - see TRIAGE STATE');
 
 test('with std:types - 7  Readonly', () => {
   expectBuilderTrue(kit(`function myReadonly(T: type): type {
@@ -159,15 +140,72 @@ deepReadonly(type { a: string } | { b: uint32 }) === type { readonly a: string }
 \nString(std.traverse(X, { property: p => ({ ...p, readonly: true }) }) === deepReadonly(X));`));
 });
 
-test.todo('with std:types - 10  Tuple to Union - see TRIAGE STATE');
+test('with std:types - 10  Tuple to Union', () => {
+  expectBuilderTrue(kit(`function tupleToUnion(T: type): type {
+  const node = reflect(T);
+  if (node.kind === 'tuple') return union(node.elements.map(e => e.type));
+  if (node.kind === 'array') return node.element;
+  throw new TypeError(\`tupleToUnion: \${String(T)} is not an array or tuple type\`);
+}
+
+tupleToUnion(type [123, '456', true]) === type 123 | '456' | true;
+tupleToUnion(type [123]) === type 123;                 // union of one arm is that arm
+tupleToUnion([].<string | uint32>) === type string | uint32;
+\nString(std.union(std.elementTypes(type [123, '456', true])) === type 123 | '456' | true);`));
+  expectBuilderTrue(kit(`function tupleToUnion(T: type): type {
+  const node = reflect(T);
+  if (node.kind === 'tuple') return union(node.elements.map(e => e.type));
+  if (node.kind === 'array') return node.element;
+  throw new TypeError(\`tupleToUnion: \${String(T)} is not an array or tuple type\`);
+}
+
+tupleToUnion(type [123, '456', true]) === type 123 | '456' | true;
+tupleToUnion(type [123]) === type 123;                 // union of one arm is that arm
+tupleToUnion([].<string | uint32>) === type string | uint32;
+\nString(std.flatten([].<string | uint32>) === type string | uint32);`));
+});
 
 test.todo('with std:types - 15  Last of Array - see TRIAGE STATE');
 
 test.todo('with std:types - 20  Promise.all - see TRIAGE STATE');
 
-test.todo('with std:types - 62  Type Lookup - see TRIAGE STATE');
+test('with std:types - 62  Type Lookup', () => {
+  expectBuilderTrue(kit(`function lookUp(U: type, T: type): type {
+  return union(arms(U).filter(arm => Reflect.isAssignable(arm, objectOf([prop('type', T)]))));
+}
 
-test.todo('with std:types - 110  Capitalize - see TRIAGE STATE');
+interface Cat { type: 'cat'; breeds: 'Abyssinian' | 'Shorthair' }
+interface Dog { type: 'dog'; breeds: 'Hound' | 'Boxer'; color: 'brown' | 'white' }
+type Animal = Cat | Dog;
+
+lookUp(Animal, type 'dog') === Dog;
+lookUp(Animal, type 'cat') === Cat;
+lookUp(Animal, type 'bird') === never;
+\nString(std.extract(Animal, std.objectOf([std.prop('type', type 'dog')])) === Dog);`));
+  expectBuilderTrue(kit(`function lookUp(U: type, T: type): type {
+  return union(arms(U).filter(arm => Reflect.isAssignable(arm, objectOf([prop('type', T)]))));
+}
+
+interface Cat { type: 'cat'; breeds: 'Abyssinian' | 'Shorthair' }
+interface Dog { type: 'dog'; breeds: 'Hound' | 'Boxer'; color: 'brown' | 'white' }
+type Animal = Cat | Dog;
+
+lookUp(Animal, type 'dog') === Dog;
+lookUp(Animal, type 'cat') === Cat;
+lookUp(Animal, type 'bird') === never;
+\nString(std.byKind(Animal, 'dog', 'type') === Dog);`));
+});
+
+test('with std:types - 110  Capitalize', () => {
+  expectBuilderTrue(kit(`function myCapitalize(s: string): type {
+  return literal(s.charAt(0).toUpperCase() + s.slice(1));
+}
+
+myCapitalize('foo bar') === type 'Foo bar';
+myCapitalize('FOOBAR') === type 'FOOBAR';
+myCapitalize('') === type '';
+\nString(std.capitalized(type 'foo bar') === type 'Foo bar');`));
+});
 
 test.todo('with std:types - 191  Append Argument - see TRIAGE STATE');
 
@@ -217,7 +255,24 @@ test.todo('with std:types - 3196  Flip Arguments - see TRIAGE STATE');
 
 test.todo('with std:types - 4471  Zip - see TRIAGE STATE');
 
-test.todo('with std:types - 9616  Parse URL Params - see TRIAGE STATE');
+test('with std:types - 9616  Parse URL Params', () => {
+  expectBuilderTrue(kit(`function parseUrlParams(path: string): type {
+  return union(path.split('/').filter(seg => seg.startsWith(':')).map(seg => literal(seg.slice(1))));
+}
+
+parseUrlParams('') === never;
+parseUrlParams('posts/:id') === type 'id';
+parseUrlParams('posts/:id/:user/like') === type 'id' | 'user';
+\nString(std.keys(std.routeParams('posts/:id/:user/like')) === type 'id' | 'user');`));
+  expectBuilderTrue(kit(`function parseUrlParams(path: string): type {
+  return union(path.split('/').filter(seg => seg.startsWith(':')).map(seg => literal(seg.slice(1))));
+}
+
+parseUrlParams('') === never;
+parseUrlParams('posts/:id') === type 'id';
+parseUrlParams('posts/:id/:user/like') === type 'id' | 'user';
+\nString(std.keys(std.routeParams('')) === never);`));
+});
 
 test.todo('with std:types - 16259  ToPrimitive - see TRIAGE STATE');
 
@@ -241,7 +296,24 @@ deepMutable(X) === type { a: () => 22, b: string, c: { d: boolean } };
 
 test.todo('with std:types - 29650  ExtractToObject - see TRIAGE STATE');
 
-test.todo('with std:types - 35991  MyUppercase - see TRIAGE STATE');
+test('with std:types - 35991  MyUppercase', () => {
+  expectBuilderTrue(kit(`function myUppercase(s: string): type {
+  return literal(s.toUpperCase());
+}
+
+myUppercase('a') === type 'A';
+myUppercase('Z') === type 'Z';
+myUppercase('A z h yy ??cda\\n\\t  a   ') === type 'A Z H YY ??CDA\\n\\t  A   ';
+\nString(std.uppercase(type 'a') === type 'A');`));
+  expectBuilderTrue(kit(`function myUppercase(s: string): type {
+  return literal(s.toUpperCase());
+}
+
+myUppercase('a') === type 'A';
+myUppercase('Z') === type 'Z';
+myUppercase('A z h yy ??cda\\n\\t  a   ') === type 'A Z H YY ??CDA\\n\\t  A   ';
+\nString(std.uppercase(type 'a' | 'z') === type 'A' | 'Z');`));
+});
 
 test.todo('with std:types - 6  Simple Vue - see TRIAGE STATE');
 
@@ -253,12 +325,56 @@ test.todo('with std:types - 270  Typed Get - see TRIAGE STATE');
 
 test.todo('with std:types - 1383  Camelize - see TRIAGE STATE');
 
-test.todo('with std:types - 9160  Assign - see TRIAGE STATE');
+test('with std:types - 9160  Assign', () => {
+  expectBuilderTrue(kit(`function assign(T: type, sources: [].<type>): type {
+  const byName = new Map(reflect(T).properties.map(p => [p.name, p]));
+  for (const source of sources)
+    for (const p of reflect(source).properties) byName.set(p.name, p);
+  return objectOf([...byName.values()]);
+}
 
-test.todo('with std:types - 9775  Capitalize Nest Object Keys - see TRIAGE STATE');
+assign(type {}, [type { a: 'a' }]) === type { a: 'a' };
+assign(type { a: 'a', b: 'b' }, [type { a: 1 }, type { c: 'c' }]) === type { a: 1, b: 'b', c: 'c' };
+\nString([type { a: 1 }, type { c: 'c' }].reduce((acc, source) => std.merge(acc, source), type { a: 'a', b: 'b' })
+  === type { a: 1, b: 'b', c: 'c' });`));
+});
+
+test('with std:types - 9775  Capitalize Nest Object Keys', () => {
+  expectBuilderTrue(kit(`function capitalizeNestObjectKeys(T: type): type {
+  const node = reflect(T);
+  switch (node.kind) {
+    case 'object': return objectOf(node.properties.map(p => ({
+      ...p,
+      name: typeof p.name === 'string' ? \`\${p.name[0].toUpperCase()}\${p.name.slice(1)}\` : p.name,
+      type: capitalizeNestObjectKeys(p.type),
+    })));
+    case 'tuple': return tupleOf(node.elements.map(e => capitalizeNestObjectKeys(e.type)));
+    default: return T;
+  }
+}
+
+type T = { foo: 1, bar: { baz: [{ deep: 2 }] } };
+capitalizeNestObjectKeys(T) === type { Foo: 1, Bar: { Baz: [{ Deep: 2 }] } };
+\nString(std.traverse(T, { property: p => ({ ...p,
+  name: typeof p.name === 'string' ? \`\${p.name[0].toUpperCase()}\${p.name.slice(1)}\` : p.name }) })
+  === capitalizeNestObjectKeys(T));`));
+});
 
 test.todo('with std:types - 13580  Replace Union - see TRIAGE STATE');
 
-test.todo('with std:types - 19458  SnakeCase - see TRIAGE STATE');
+test('with std:types - 19458  SnakeCase', () => {
+  expectBuilderTrue(kit(`function snakeCase(T: type): type {
+  return union(arms(T).map(a =>
+    literal(literalValues(a)[0].replace(/\\p{Lu}/gu, c => \`_\${c.toLowerCase()}\`))));
+}
+
+snakeCase(type 'hello') === type 'hello';
+snakeCase(type 'userName') === type 'user_name';
+snakeCase(type 'getElementById') === type 'get_element_by_id';
+snakeCase(type 'getElementById' | 'getElementByClassNames')
+  === type 'get_element_by_id' | 'get_element_by_class_names';
+\nString(std.mapLiterals(type 'getElementById' | 'getElementByClassNames',
+  s => s.replace(/\\p{Lu}/gu, c => \`_\${c.toLowerCase()}\`)) === type 'get_element_by_id' | 'get_element_by_class_names');`));
+});
 
 test.todo('with std:types - 33763  Union to Object from key - see TRIAGE STATE');
