@@ -5,7 +5,7 @@ import { TypeParser } from './TypeParser.mts';
 import { FunctionKind } from './FunctionParser.mts';
 import { getDeclarations, type LabelType } from './Scope.mts';
 import type { ParseNode } from './ParseNode.mts';
-import { surroundingAgent, Throw } from '#self';
+import { surroundingAgent, Throw, Value } from '#self';
 
 export abstract class StatementParser extends TypeParser {
   // proposal-runtime-types: meta-declared type names seen in this parse.
@@ -367,7 +367,45 @@ export abstract class StatementParser extends TypeParser {
           // conversion path that does not exist yet, describe's is reflection.
           quantize: 2, rescale: 2, describe: 1,
         };
-        if (typeof hookName !== 'string' || !(hookName in hookArity)) {
+        // PLAN-meta-hook-form-diagnostics.md phase 1. #sec-meta-declarations
+        // gives a MetaHook exactly two forms:
+        //
+        //   MetaHook : `default` `=` AssignmentExpression `;`
+        //            | MethodDefinition
+        //
+        // so a table name in the OTHER form is ungrammatical. Both mistakes
+        // arrive here - `default(a,b) {}` as a MethodDefinition named "default",
+        // and `subtype = 5` as a FieldDefinition named "subtype" - and neither
+        // was diagnosed: the first fell to the name check below and was told its
+        // name was invalid, though `default` IS named in #table-meta-hooks, and
+        // the second passed both checks because `Array.isArray(params)` is false
+        // for a field, so the arity check skipped it silently.
+        //
+        // The silent one is the worse of the two: the declaration looked
+        // complete, `sawSubtype` was set from the NAME ALONE, and the meta type
+        // was accepted and then inert - failing at a use with a message about
+        // the value.
+        const isMethod = (hook as { type?: string }).type === 'MethodDefinition';
+        if (hookName === 'default') {
+          if (!isMethod) {
+            // A `default` that is neither the assignment form (handled above)
+            // nor a method is some third spelling; the name check reports it.
+            this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);
+          } else {
+            this.addEarlyError(
+              Throw.SyntaxError('$1 is an assignment, not a method', Value('default')),
+              hook,
+            );
+          }
+        } else if (typeof hookName === 'string' && (hookName in hookArity) && !isMethod) {
+          // A table name carried by anything but a MethodDefinition. Required
+          // and optional hooks alike: the grammar draws no line between them,
+          // so `validate = 5` is exactly as ungrammatical as `subtype = 5`.
+          this.addEarlyError(
+            Throw.SyntaxError('$1 is a method, not an assignment', Value(hookName)),
+            hook,
+          );
+        } else if (typeof hookName !== 'string' || !(hookName in hookArity)) {
           this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);
         } else {
           const params = (hook as { UniqueFormalParameters?: readonly ParseNode.FormalParameter[] }).UniqueFormalParameters;

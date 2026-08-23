@@ -317,6 +317,8 @@ export interface Throw {
   | 'Invalid left-hand side in for-in/of statement'
   | 'Invalid length'
   | 'Invalid meta hook name'
+  | '$1 is an assignment, not a method'
+  | '$1 is a method, not an assignment'
   | 'Invalid month'
   | 'Invalid normalization form'
   | 'Invalid receiver'

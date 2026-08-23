@@ -772,3 +772,65 @@ test('the built-in StringPattern meta type validates a string against its patter
   // `#sec-defaultvalueof`, not something to settle in a test.
   expectThrown('let s: { pattern: any };');
 });
+
+test('a meta hook written in the wrong FORM says so', () => {
+  // OUTSTANDING item D, and its mirror. #sec-meta-declarations gives a MetaHook
+  // exactly two forms:
+  //
+  //   MetaHook : `default` `=` AssignmentExpression `;`
+  //            | MethodDefinition
+  //
+  // so a table name in the other form is ungrammatical, and the clause makes it
+  // an early error: "a method of any other name is an early error".
+  const M = 'type M = { m?: number }; ';
+  const D = 'default = { m: 0 }; ';
+  const S = 'subtype(a, b) { return true; } ';
+  // Item D as filed: `default` IS in the table, so "Invalid meta hook name" was
+  // false. It is an assignment, the only table row with no parameter list.
+  expect(errorMessage(`${M} meta M { default(a, b) { return { m: 0 }; } ${S} }`))
+    .toMatch(/"default" is an assignment, not a method/);
+  // The mirror, which item D did not report and which was the worse half: this
+  // was ACCEPTED, and the meta type was then inert - `sawSubtype` is set from
+  // the NAME ALONE, so the missing-hook check was satisfied too.
+  expect(errorMessage(`${M} meta M { ${D} subtype = 5; }`))
+    .toMatch(/"subtype" is a method, not an assignment/);
+  // An OPTIONAL hook in the wrong form is exactly as ungrammatical: the grammar
+  // draws no line between required and optional, both are MethodDefinition.
+  expect(errorMessage(`${M} meta M { ${D} ${S} validate = 5; }`))
+    .toMatch(/"validate" is a method, not an assignment/);
+});
+
+test('the four meta hook diagnostics that already worked still do', () => {
+  // The guard for the test above. Four checks live in these fifteen lines, and
+  // the risk of adding a fifth is silencing one of them.
+  const M = 'type M = { m?: number }; ';
+  const D = 'default = { m: 0 }; ';
+  const S = 'subtype(a, b) { return true; } ';
+  expect(errorMessage(`${M} meta M { ${D} ${S} notAHook(x) { return 1; } }`))
+    .toMatch(/Invalid meta hook name/);
+  expect(errorMessage(`${M} meta M { ${D} ${S} notAHook = 5; }`))
+    .toMatch(/Invalid meta hook name/);
+  expect(errorMessage(`${M} meta M { ${D} }`)).toMatch(/requires a "subtype" hook/);
+  expect(errorMessage(`${M} meta M { ${S} }`)).toMatch(/without a default hook/);
+  expect(errorMessage(`${M} meta M { ${D} subtype(a) { return true; } }`))
+    .toMatch(/signature does not match the table/);
+  expect(evaluated(`${M} meta M { ${D} ${S} } String(1);`)).toBe('1');
+});
+
+test('meta hook spellings this entry deliberately leaves open', () => {
+  // PLAN-meta-hook-form-diagnostics.md §9. All four are ungrammatical - a
+  // MetaHook is `default =` or a MethodDefinition, and none of these is either -
+  // and all four are ACCEPTED. They are recorded rather than fixed because each
+  // needs a decision the form rule does not: which duplicate wins, whether an
+  // accessor is a third form, whether a static hook is a different hook.
+  //
+  // Asserted as CURRENT behaviour, not as correct. A later fix flips these, and
+  // this test is what tells its author the scope changed on purpose.
+  const M = 'type M = { m?: number }; ';
+  const D = 'default = { m: 0 }; ';
+  const S = 'subtype(a, b) { return true; } ';
+  expect(evaluated(`${M} meta M { ${D} ${S} default = { m: 1 }; } String(1);`)).toBe('1');
+  expect(evaluated(`${M} meta M { ${D} ${S} subtype(a, b) { return false; } } String(1);`)).toBe('1');
+  expect(evaluated(`${M} meta M { ${D} ${S} get subtype() { return 1; } } String(1);`)).toBe('1');
+  expect(evaluated(`${M} meta M { ${D} ${S} static subtype(a, b) { return true; } } String(1);`)).toBe('1');
+});
