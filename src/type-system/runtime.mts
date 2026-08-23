@@ -275,6 +275,99 @@ function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
   return false;
 }
 
+/**
+ * The clauses of a WRITTEN generic-alias application, checked early.
+ *
+ * PLAN-alias-where-enforcement.md phase 1. #sec-generic-where: a `where` clause
+ * is "checked at each specialization once its parameters are bound", and a
+ * written application's arguments are in the SOURCE - so the bound is
+ * determinable without running the program, and #sec-type-errors then makes it
+ * an Early Error.
+ *
+ * Checked ONCE, where the application is written, rather than at each boundary
+ * crossing: a bound over type arguments answers the same question every time,
+ * and putting a user predicate in a hot function's inner loop to re-answer it
+ * would be a real cost for no information.
+ */
+/**
+ * Applications whose clauses the EARLY check already verified.
+ *
+ * PLAN-alias-where-enforcement.md, closing test P3. The backstop in
+ * `InstantiateGenericAlias` re-resolves the annotation on every crossing, so a
+ * `Pos.<3>` in a hot function's signature ran its predicate once per CALL - the
+ * measured 10-for-5 that Q0(b) said a parameter bound must not pay.
+ *
+ * A bound over type arguments answers the same question every time, so once the
+ * pass has answered it for a (declaration, arguments) pair, the backstop skips
+ * it. Keyed on the interned argument RECORDS, which are identity-comparable, so
+ * `Pos.<3>` and `Pos.<0>` remain separate answers.
+ */
+const verifiedAliasApplications = new WeakMap<object, Set<string>>();
+
+function applicationKey(args: readonly TypeRecord[]): string {
+  return args.map((a) => displayType(a)).join(',');
+}
+
+function markVerified(declaration: object, args: readonly TypeRecord[]): void {
+  let seen = verifiedAliasApplications.get(declaration);
+  if (seen === undefined) {
+    seen = new Set();
+    verifiedAliasApplications.set(declaration, seen);
+  }
+  seen.add(applicationKey(args));
+}
+
+function alreadyVerified(declaration: object, args: readonly TypeRecord[]): boolean {
+  return verifiedAliasApplications.get(declaration)?.has(applicationKey(args)) ?? false;
+}
+
+export function* EvaluateAliasApplicationClauses(
+  declaration: ParseNode.TypeAliasDeclaration,
+  application: ParseNode.TypeReference,
+): PlainEvaluator<void> {
+  const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+  if (!clauses || clauses.length === 0 || mentionsThis(clauses)) {
+    return undefined;
+  }
+  const params = declaration.TypeParameters?.TypeParameterList ?? [];
+  const written = (application as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } })
+    .TypeArguments?.TypeArgumentList ?? [];
+  if (params.length === 0 || written.length === 0) {
+    return undefined;
+  }
+  const frame = new Map<string, TypeRecord>();
+  for (let i = 0; i < params.length && i < written.length; i += 1) {
+    const name = (params[i] as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name;
+    if (typeof name !== 'string') {
+      return undefined;
+    }
+    const record = EnsureCompletion(yield* TypeNodeToTypeRecord(written[i] as ParseNode.Type));
+    if (record.Type === 'throw') {
+      // Not this rule's error to report - an unresolvable argument is refused by
+      // the resolver, where the message names it.
+      return undefined;
+    }
+    frame.set(name, record.Value as TypeRecord);
+  }
+  typeParameterFrames.push(frame);
+  try {
+    for (const clause of clauses) {
+      const holds = EnsureCompletion(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
+      if (holds.Type === 'throw') {
+        return undefined;
+      }
+      if (holds.Value === false) {
+        surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
+        return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+      }
+    }
+    markVerified(declaration as object, [...frame.values()]);
+  } finally {
+    typeParameterFrames.pop();
+  }
+  return undefined;
+}
+
 export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // #sec-generics: a trailing parameter with a DEFAULT may be omitted, so an
@@ -360,7 +453,8 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
       const clauses = (declaration as { type?: string, WhereClauses?: readonly ParseNode.WhereClause[] | null }).type === 'TypeAliasDeclaration'
         ? (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
         : null;
-      if (clauses && clauses.length > 0 && !mentionsThis(clauses)) {
+      if (clauses && clauses.length > 0 && !mentionsThis(clauses)
+          && !alreadyVerified(declaration as object, [...frame.values()])) {
         for (const clause of clauses) {
           const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
           if (holds === false) {

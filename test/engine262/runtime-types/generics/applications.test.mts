@@ -226,3 +226,23 @@ test('a violated alias where clause reports against the clause', () => {
   expect(messageOf('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();'))
     .toMatch(/a "where" clause is not satisfied/);
 });
+
+test('an alias where clause is an EARLY error and costs nothing per call', () => {
+  // PLAN-alias-where-enforcement.md phases 1-3, tests P1-P3 and row 13.
+  //
+  // #sec-generic-where puts a violated clause at the specialization, and
+  // #sec-type-errors makes a determinable one an Early Error: "a source text
+  // that contains one is rejected rather than evaluated".
+  const Pos = 'type Pos<N: uint32> = uint32 where N > 0; ';
+  // P1: rejected BEFORE evaluation - a violated application in a source with
+  // side effects runs none of them.
+  expectThrown(`${Pos} globalThis.ran = true; let y: Pos.<0> = (1 := uint32);`);
+  // P2: dead code is still refused. An Early Error checks the SOURCE, not the
+  // path taken - the run-time backstop alone would never see this.
+  expectThrown(`${Pos} if (false) { let x: Pos.<0> = (1 := uint32); }`);
+  // Row 13: a satisfied application must not mask a violated one. The early
+  // check memoises per (declaration, arguments), so `Pos.<3>` cannot vouch for
+  // `Pos.<0>`.
+  expectThrown(`${Pos} let a: Pos.<3> = (1 := uint32); let b: Pos.<0> = (1 := uint32);`);
+  expect(evaluated(`${Pos} let a: Pos.<3> = (1 := uint32); String(a);`)).toBe('1');
+});

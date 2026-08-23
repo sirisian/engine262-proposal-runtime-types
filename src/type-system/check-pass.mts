@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DefaultValueOf } from './runtime.mts';
+import { DefaultValueOf, EvaluateAliasApplicationClauses } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -189,6 +189,77 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // where it can be used - but that walk only runs when narrowing recorded
   // something, so an alias-annotated binding never reached it.
   let computedAliasResolved = false;
+  // PLAN-alias-where-enforcement.md phase 1. #sec-generic-where: a violated
+  // clause is a type error at the SPECIALIZATION, and a written application's
+  // arguments are in the source - so it is determinable, and #sec-type-errors
+  // then makes it an Early Error: "a source text that contains one is rejected
+  // rather than evaluated".
+  //
+  // Collected here rather than checked in `check.mts` because the checker is
+  // SYNCHRONOUS and a predicate reaches user code through `yield*`. This loop is
+  // a generator and runs before the checker walks, which is the same shape the
+  // ComputedType pre-evaluation above already uses.
+  //
+  // Keyed by the APPLICATION node, not the alias name: `Pos.<3>` and `Pos.<0>`
+  // are two applications of one name and must not share a verdict.
+  const aliasDeclarations = new Map<string, ParseNode>();
+  for (const item of items ?? []) {
+    if (item.type === 'TypeAliasDeclaration') {
+      const declName = (item as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      const cls = (item as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses;
+      if (typeof declName === 'string' && cls && cls.length > 0
+          && (item as { TypeParameters?: unknown }).TypeParameters) {
+        aliasDeclarations.set(declName, item);
+      }
+    }
+  }
+  if (aliasDeclarations.size > 0) {
+    const applications: { node: ParseNode, declaration: ParseNode }[] = [];
+    // A visited set, because a Parse Node graph has PARENT links: `node.parent`
+    // points back up, so a plain recursive walk revisits forever. The same trap
+    // the contract-fact walk met, and the reason that one carries a set too.
+    const seen = new Set<object>();
+    const seek = (node: ParseNode | null | undefined, depth = 0): void => {
+      if (!node || typeof node !== 'object' || depth > 40 || seen.has(node)) {
+        return;
+      }
+      seen.add(node);
+      if ((node as { type?: string }).type === 'TypeReference'
+          && (node as { TypeArguments?: unknown }).TypeArguments) {
+        const named = (node as { TypeName?: { IdentifierReference?: { name?: string } } })
+          .TypeName?.IdentifierReference?.name;
+        const decl = typeof named === 'string' ? aliasDeclarations.get(named) : undefined;
+        if (decl) {
+          applications.push({ node, declaration: decl });
+        }
+      }
+      for (const key of Object.keys(node)) {
+        if (key === 'parent' || key === 'location' || key === 'source') {
+          continue;
+        }
+        let value;
+        try {
+          value = (node as unknown as Record<string, unknown>)[key];
+        } catch {
+          continue;
+        }
+        if (Array.isArray(value)) {
+          value.forEach((v) => seek(v as ParseNode, depth + 1));
+        } else if (value && typeof value === 'object') {
+          seek(value as ParseNode, depth + 1);
+        }
+      }
+    };
+    (items ?? []).forEach((i) => seek(i));
+    for (const applied of applications) {
+      const verdict = EnsureCompletion(yield* EvaluateAliasApplicationClauses(
+        applied.declaration as never, applied.node as never,
+      ));
+      if (verdict.Type === 'throw') {
+        return verdict;
+      }
+    }
+  }
   for (const item of items ?? []) {
     if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));

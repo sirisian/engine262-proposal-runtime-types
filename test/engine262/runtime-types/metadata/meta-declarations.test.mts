@@ -672,7 +672,11 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
     .toMatchObject({ Type: 'normal' });
 });
 
-test('a meta hook is bounded by the evaluation budget', { timeout: 120000 }, () => {
+// 300s: the record-limit probe drives 1.2M iterations to reach its bound, and a
+// bounded runaway still takes real time to GET there. Measured at ~162s on this
+// machine, which is why 120s was not enough - the bound works, the wait is the
+// cost of proving it.
+test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () => {
   // PLAN-crossing-budget.md. #sec-evaluation-budget: "The budget bounds a
   // computation, which either completes or is abandoned and reported." A hook
   // that looped forever did NEITHER - the engine hung.
