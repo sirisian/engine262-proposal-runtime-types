@@ -60,10 +60,14 @@ function documentedReflections(): Set<string> {
 
 test('every kind the engine produces is a reflection the document defines', () => {
   const documented = documentedReflections();
-  // `Region` is the one value that is new: a captured region is not a position
-  // `decorators.md` had, and Phase 2 of the plan adds it there.
-  const expectedNew = new Set(['Region']);
-  const undocumented = KIND_NAMES.filter((k) => !documented.has(k) && !expectedNew.has(k));
+  // No exemptions. `Region` was the one value the document did not have, and it
+  // is gone: a captured region reports `Block`, which `decorators.md` already
+  // defines. `PLAN-region-context-removal` Q2/Q3.
+  //
+  // Kept as a plain filter rather than an empty exemption set, so that adding a
+  // kind the document does not define fails here rather than being waved
+  // through by a set someone forgot to empty.
+  const undocumented = KIND_NAMES.filter((k) => !documented.has(k));
   expect(undocumented).toEqual([]);
 });
 

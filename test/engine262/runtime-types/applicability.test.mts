@@ -62,7 +62,10 @@ test('an untyped context parameter is not a declaration', () => {
   // where the macro may be used.
   const reads = '(function (t, c) { return [{ kind: "string",'
     + ' value: JSON.stringify(c.kind), span: t[0] && t[0].span }]; })';
-  expect(outcome(reads, 'const v = @m { x };')).toBe('const v = "Region";');
+  // `Block`, not `Region`: a captured region IS a block, and the engine not
+  // parsing its text is a fact about the DECORATOR rather than a second
+  // position. `PLAN-region-context-removal` Q2/Q3.
+  expect(outcome(reads, 'const v = @m { x };')).toBe('const v = "Block";');
   expect(outcome(reads, '@m class C {}')).toBe('"Class"');
 });
 

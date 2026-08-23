@@ -13,7 +13,8 @@ import { realmWithMacro } from './harness.mts';
  *
  * The `kind` vocabulary is `decorators.md`'s: "Every reflection below carries a
  * `kind`, a string naming the context it came from - `'ClassField'`,
- * `'FunctionParameter'`, and so on." `'Region'` is the one new value.
+ * `'FunctionParameter'`, and so on." A captured region reports `'Block'`: it IS
+ * a block, and the engine not parsing its text is a fact about the DECORATOR.
  */
 const NL = String.fromCharCode(10);
 const REPORT = '(function (t, c) { return [{ kind: "string",'
@@ -33,7 +34,7 @@ function reported(source: string, macro = REPORT): string {
 }
 
 test('the context names the position it decorates', () => {
-  expect(reported('const v = @m { x };')).toBe('const v = "Region|kind";');
+  expect(reported('const v = @m { x };')).toBe('const v = "Block|kind";');
   expect(reported('@m class C {}')).toBe('"Class|kind"');
   expect(reported('@m function f() {}')).toBe('"Function|kind"');
   expect(reported('@m if (c) { y; }')).toBe('"IfBlock|kind"');
@@ -49,8 +50,8 @@ test('a decoration followed by `{` is a REGION, whatever the position', () => {
   // the specification states for not requiring `do`. So those two kinds are
   // unreachable for a preprocessor decoration, by the same rule that makes
   // `@m { a: 1 }` a region rather than an object literal.
-  expect(reported('@m { y; }')).toBe('"Region|kind";');
-  expect(reported('const v = @m do { y; };')).toBe('const v = "Region|kind";');
+  expect(reported('@m { y; }')).toBe('"Block|kind";');
+  expect(reported('const v = @m do { y; };')).toBe('const v = "Block|kind";');
 });
 
 test('the context carries NOTHING but kind', () => {
@@ -67,7 +68,7 @@ test('the context is frozen', () => {
   const writes = '(function (t, c) { var threw = false;'
     + ' try { c.kind = "Other"; } catch (e) { threw = true; }'
     + ' return [{ kind: "string", value: JSON.stringify(threw + ":" + c.kind), span: t[0] && t[0].span }]; })';
-  expect(reported('const v = @m { x };', writes)).toMatch(/"(true|false):Region"/);
+  expect(reported('const v = @m { x };', writes)).toMatch(/"(true|false):Block"/);
 });
 
 test('arguments move to the THIRD parameter', () => {
@@ -89,7 +90,7 @@ test('a label reaches the macro, being the one thing the tokens cannot carry', (
   // `label?: string` on every block reflection.
   const report = '(function (t, c) { return [{ kind: "string",'
     + ' value: JSON.stringify(c.kind + "/" + String(c.label)), span: t[0] && t[0].span }]; })';
-  expect(reported('lbl: @m { y; }', report)).toBe('lbl: "Region/lbl";');
+  expect(reported('lbl: @m { y; }', report)).toBe('lbl: "Block/lbl";');
   expect(reported('lbl: @m while (c) { y; }', report)).toBe('lbl: "WhileBlock/lbl"');
 });
 
@@ -103,11 +104,16 @@ test('an unlabelled decoration reports no label at all', () => {
 });
 
 test('a labelled decoration is not a different POSITION from an unlabelled one', () => {
-  // `lbl: @m { y; }` used to report Block where `@m { y; }` reported Region,
-  // because the labelled path reached the statement parser by a different route
-  // and the region rule did not apply. A label is not a position.
+  // `lbl: @m { y; }` used to report a DIFFERENT kind from `@m { y; }`, because
+  // the labelled path reached the statement parser by a different route and the
+  // region rule did not apply. A label is not a position.
+  //
+  // Both report `Block` now - a captured region IS a block
+  // (`PLAN-region-context-removal` Q2) - so the two spellings can no longer
+  // disagree by naming different things. That they AGREE is still the subject,
+  // and the assertion still fails if the labelled route diverges again.
   const kindOnly = '(function (t, c) { return [{ kind: "string",'
     + ' value: JSON.stringify(c.kind), span: t[0] && t[0].span }]; })';
-  expect(reported('@m { y; }', kindOnly)).toBe('"Region";');
-  expect(reported('lbl: @m { y; }', kindOnly)).toBe('lbl: "Region";');
+  expect(reported('@m { y; }', kindOnly)).toBe('"Block";');
+  expect(reported('lbl: @m { y; }', kindOnly)).toBe('lbl: "Block";');
 });
