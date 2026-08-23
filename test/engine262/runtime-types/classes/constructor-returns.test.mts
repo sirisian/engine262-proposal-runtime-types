@@ -208,26 +208,24 @@ test('OQ3-C: no constructor signature carries a `return` slot', () => {
   }
 });
 
-test('F127 anchor: an unannotated callable still reports `kind: "object"`', () => {
-  // RECORDED, NOT FIXED. `f` is callable and its reflection says it is a
-  // record - the same node shape `type { a: uint8 }` produces, with no key a
-  // consumer could read to tell them apart. A kit walker does not fail on it,
-  // it succeeds WRONGLY: `mapProperties` takes the properties branch and
-  // returns a record type built out of a function.
+test('F127 closed: an unannotated callable reports `kind: "function"`', () => {
+  // This was an ANCHOR - written failing-by-design, asserting `'object'` with
+  // F127 named, so that landing the fix would break it and whoever landed it
+  // would read the note. That worked: PLAN-callable-reflection.md phase 2
+  // landed and this is the rewrite.
   //
-  // Not fixed here because it is broader than constructors - it touches
-  // `recordToNode` for every callable - and because `Reflect.typeOf` carries a
-  // deliberate rationale against synthesising signatures for undeclared code,
-  // which the constructor case escapes only because its result is fixed BY RULE
-  // and its parameters are syntactically present.
-  //
-  // This assertion is failing-by-design: when F127 lands it should break, and
-  // whoever lands it should read this comment before changing the expectation.
+  // What it protected: `f` is callable and its reflection said it was a record,
+  // with the same node shape `type { a: uint8 }` produces. A kit walker did not
+  // fail on it, it succeeded WRONGLY - `mapProperties` took the properties
+  // branch and returned a record type built out of a function.
   expect(evaluated('function f() { return 1; }'
-    + ' String(Reflect.getReflection(Reflect.typeOf(f)).kind);')).toBe('object');
-  // while an annotated one is a function node, which is the disagreement
+    + ' String(Reflect.getReflection(Reflect.typeOf(f)).kind);')).toBe('function');
   expect(evaluated('function g(x: uint8) {}'
     + ' String(Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('function');
+  // the two no longer differ, which was the whole disagreement
+  expect(evaluated('function f() {} function g(x: uint8) {}'
+    + ' String(Reflect.getReflection(Reflect.typeOf(f)).kind'
+    + ' === Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('true');
 });
 
 test('a class whose constructor returns is refused before it can be constructed', () => {

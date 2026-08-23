@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrown } from '../harness.mts';
 
 /**
  * Spec: #sec-runtimetypeof. "If _value_ is callable and has declared
@@ -35,14 +35,78 @@ test('function runtime type: an overloaded function reports every arm', () => {
     + ' String(Reflect.getReflection(Reflect.typeOf(h)).signatures.length);')).toBe('2');
 });
 
-test('function runtime type: a function that declares nothing is unchanged', () => {
-  // "has declared signatures" means a type was WRITTEN, not that parameters
-  // exist - `g(a)` has a parameter and declares nothing. Reporting a function
-  // type for it would synthesise the all-`any` signature the unannotated rule
-  // refuses, the same rule that leaves an unannotated member without
-  // `signatures`.
-  expect(evaluated('function g(a) {} String(Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('object');
-  expect(evaluated('function g() {} String(Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('object');
+test('function runtime type: a function that declares nothing reports one anyway', () => {
+  // PLAN-callable-reflection.md phase 2 (OQ1-B). This test used to assert the
+  // opposite, on the rationale that reporting all-`any` parameters "would
+  // synthesise the signature the unannotated rule refuses".
+  //
+  // The rationale did not hold. The checker ALREADY performs that inference and
+  // prints it: `function g(a) { return 1; }` is reported as `(a: any) => void`
+  // when it fails an annotation. So the old behaviour did not decline to INVENT
+  // a type, it declined to REPORT one the engine holds - and the cost was that
+  // `Reflect.typeOf` answered differently from the checker about the same value,
+  // in both directions, which is the thing #sec-runtimetypeof's own paragraph
+  // says step 10 exists to prevent.
+  expect(evaluated('function g(a) {} String(Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('function');
+  expect(evaluated('function g() {} String(Reflect.getReflection(Reflect.typeOf(g)).kind);')).toBe('function');
+  // the parameter keeps its NAME and is `any`, which is what the checker holds
+  expect(evaluated('function h(a, b) {} const s = Reflect.getReflection(Reflect.typeOf(h)).signatures[0];'
+    + ' String(s.parameters.length + ":" + s.parameters[0].name + ":" + (s.parameters[0].type === any));')).toBe('2:a:true');
+});
+
+test('function runtime type: the two mechanisms now agree, in both directions', () => {
+  // The property this change exists to restore. Before it, `f` was a
+  // `() => void` to a binding and a `{}` to reflection; `type {}` to reflection
+  // and NOT a `{}` to a binding. Asserted in both directions and beside the
+  // binding forms, so reflection and the checker cannot drift apart again.
+  expect(evaluated('function f() {} String(Reflect.isAssignable(Reflect.typeOf(f), type () => void));')).toBe('true');
+  expect(evaluated('function f() {} String(Reflect.isAssignable(Reflect.typeOf(f), type {}));')).toBe('false');
+  expect(evaluated('function f() {} let x: () => void = f; String(typeof x);')).toBe('function');
+  expectThrown('function f() {} let x: {} = f;');
+  expect(evaluated('function f() {} String(Reflect.typeOf(f) === type {});')).toBe('false');
+});
+
+test('F129: every unannotated callable no longer shares one type', () => {
+  // The consequence a reader hits first, and the one that mentions nothing
+  // about functions when it bites: every unannotated callable answered
+  // `type {}`, so a Map keyed on `Reflect.typeOf` collapsed them all into one
+  // entry and a dispatch over it took the wrong branch.
+  expect(evaluated('function f() {} function g(a) {} String(Reflect.typeOf(f) !== Reflect.typeOf(g));')).toBe('true');
+  expect(evaluated('function f() {} function g(a, b) {} const m = new Map();'
+    + ' m.set(Reflect.typeOf(f), 1); m.set(Reflect.typeOf(g), 2); String(m.size);')).toBe('2');
+});
+
+test('function runtime type: every callable shape reports a function type (OQ4-C)', () => {
+  // The rule has to be statable, and "the shapes our edit happened to reach" is
+  // not one. An arrow, a builtin, a bound function and a Proxy of a function are
+  // all callables whose signature the engine may not hold; each still reports a
+  // function type.
+  expect(evaluated('const a = () => 1; String(Reflect.getReflection(Reflect.typeOf(a)).kind);')).toBe('function');
+  expect(evaluated('String(Reflect.getReflection(Reflect.typeOf(Math.max)).kind);')).toBe('function');
+  expect(evaluated('function f(a) {} const b = f.bind(null, 1);'
+    + ' String(Reflect.getReflection(Reflect.typeOf(b)).kind);')).toBe('function');
+  expect(evaluated('function f() {} const p = new Proxy(f, {});'
+    + ' String(Reflect.getReflection(Reflect.typeOf(p)).kind);')).toBe('function');
+  // a class constructor is callable too, and used to answer `type {}`
+  expect(evaluated('class C { x: uint8 = 1; } String(Reflect.getReflection(Reflect.typeOf(C)).kind);')).toBe('function');
+});
+
+test('a TYPE OBJECT is callable and is NOT a function - the ordering the change exposed', () => {
+  // Found by this change and nearly shipped as a regression. The callable
+  // branch runs before `RuntimeTypeOf`, which hoists #sec-runtimetypeof step 10
+  // above steps 5-9; that was invisible while the old filter meant the branch
+  // almost never fired.
+  //
+  // A Type Object has [[Call]] - calling it is a conversion, `uint8(v)` - and
+  // an ENUM OBJECT is a Type Object. `typeof` already draws this line and says
+  // why. Without the same exclusion here, an enum reported a function type and
+  // lost the enumerator names that `keyof Reflect.typeOf(C)` reads.
+  expect(evaluated('enum C { Zero, One } type K = keyof Reflect.typeOf(C);'
+    + ' String(("Zero" is K) && ("One" is K));')).toBe('true');
+  expect(evaluated('enum A: any { X = uint8 } String(Reflect.typeOf(uint8) === A);')).toBe('true');
+  // and the steps the branch must not preempt still answer
+  expect(evaluated('class C {} String(Reflect.getReflection(Reflect.typeOf(new C())).kind);')).toBe('primitive');
+  expect(evaluated('String(Reflect.getReflection(Reflect.typeOf([1, 2])).kind);')).toBe('array');
 });
 
 test('function runtime type: the cases the step sits between are unaffected', () => {

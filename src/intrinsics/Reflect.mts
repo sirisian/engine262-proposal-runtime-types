@@ -231,7 +231,39 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // A callable that declares NO signature falls through unchanged: an
   // unannotated declaration stays unannotated, and synthesising all-`any`
   // parameters would be inference the program did not ask for.
-  if (surroundingAgent.feature('runtime-types') && IsCallable(value)) {
+  // PLAN-callable-reflection.md phase 2. The callable branch below runs BEFORE
+  // `RuntimeTypeOf`, which hoists #sec-runtimetypeof's step 10 above steps 5-9.
+  // That was harmless only while the `declared` filter below meant the branch
+  // almost never fired; removing the filter exposed it, and three tests caught
+  // it - an enum's names through `keyof Reflect.typeOf`, an enum member claimed
+  // from elsewhere, and `keyof` of a keyless type.
+  //
+  // The engine's `IsCallable` is true for values the JS-visible `typeof` calls
+  // objects: a TYPE OBJECT has [[Call]] because calling it is the construction
+  // boundary (`UserId(7)`), and an ENUM OBJECT has one too. Both have EARLIER,
+  // more specific steps - step 5 reports `type` for a Type Object, step 7
+  // reports a value's [[RuntimeType]], which is how an enum member reports its
+  // enum - and those must win.
+  //
+  // So the branch is gated on `RuntimeTypeOf` having reached its LAST step: it
+  // substitutes a function type only where the answer would otherwise have been
+  // the fall-through ~object~ Type Record. That is exactly the position step 10
+  // occupies in the clause, and it restores the order without moving the
+  // signature derivation, which needs an evaluator and cannot live in the
+  // synchronous `RuntimeTypeOf`.
+  // A TYPE OBJECT is callable and is not a function: calling it is a conversion,
+  // `uint8(v)`. `typeof` already draws exactly this line and says why - "a Type
+  // Object is `object` even though it is callable" - and the callable branch
+  // needs the same exclusion, because an ENUM OBJECT is a Type Object too. An
+  // enum reports its enumerator names as an object type, which is what
+  // `keyof Reflect.typeOf(C)` reads, and a function type has no properties to
+  // read. The `declared` filter was silently doing this job as well; removing
+  // it made the second job visible.
+  const fallThrough = surroundingAgent.feature('runtime-types')
+    && IsCallable(value) && !isTypeObject(value)
+    ? RuntimeTypeOf(value)
+    : undefined;
+  if (fallThrough !== undefined && (fallThrough as { Kind?: string }).Kind === 'object') {
     // SignaturesOf serves an OVERLOADED function, reading the arms it was built
     // from; a singly-declared function has no such slot, so its one signature is
     // derived directly.
@@ -255,8 +287,32 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // unannotated rule refuses. A parameter with no annotation resolves to
     // `any`, so a signature counts as declared where some parameter is not
     // `any` or a return type was written.
-    const declared = overloads.filter((o) => o.ReturnType !== undefined
-      || o.Parameters.some((parameter) => (parameter.Type as { Kind?: string } | undefined)?.Kind !== 'any'));
+    // PLAN-callable-reflection.md phase 2 (OQ1-B). This filter USED to discard
+    // a signature that had already been built, on the grounds that reporting
+    // all-`any` parameters "would be inference the program did not ask for".
+    //
+    // That rationale does not hold. The checker ALREADY performs the inference
+    // and prints the result in diagnostics, parameter names included:
+    // `function g(a) { return 1; }` is reported as `(a: any) => void` when it
+    // fails to satisfy an annotation. So the filter did not decline to INVENT a
+    // type - it declined to REPORT one the engine holds, which is a different
+    // act and one the rationale never covered.
+    //
+    // What it cost is the property #sec-runtimetypeof's own paragraph says
+    // step 10 exists to establish: `Reflect.typeOf` answered differently from
+    // the checker about the same value, and in both directions. `f` was a
+    // `() => void` to a binding and a `{}` to reflection; `type {}` to
+    // reflection and not a `{}` to a binding. Every unannotated callable in a
+    // program - functions, arrows, methods, builtins, class constructors - also
+    // shared ONE type, `type {}`, so a Map keyed on `Reflect.typeOf` collapsed
+    // them all into one entry (F129).
+    //
+    // The "unannotated is not `any`" distinction the filter protected is real
+    // and survives: it lives on DECLARATION reflection, which answers what was
+    // WRITTEN, where `m(a) {}` still reports no signatures and `m(a: any) {}`
+    // still reports one. `Reflect.typeOf` answers what a value IS. The two are
+    // allowed to differ and this is where.
+    const declared = overloads;
     // #sec-inferred-return-types: a function that PUBLISHES an inferred return
     // type is reported with it. The rule just above - that a signature counts as
     // declared only where a type was WRITTEN - is what keeps an unannotated
