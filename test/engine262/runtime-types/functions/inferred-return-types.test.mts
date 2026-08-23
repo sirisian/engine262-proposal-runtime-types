@@ -477,3 +477,69 @@ test('a refused union names the member that does not fit, and its return', () =>
   expect(thrown('function f(): uint32 { return 5; } function g() { return f(); } const s: string = g();'))
     .toContain('which is what "f" declares');
 });
+
+/**
+ * PLAN-constructor-returns.md phase 3, tests 21-25. Where a CONSTRUCTOR meets
+ * return inference, plus one widening rule this file never pinned.
+ */
+
+test('the multi-arm widening, pinned (F124)', () => {
+  // Nothing here covered a multi-arm inferred return, so the widening rule was
+  // free to drift. It is not `1 | "s"` - the literals widen - and it is not
+  // `uint8 | string` either. It is `number | string`, asserted by IDENTITY
+  // rather than by `kind`, so a change to the rule has to change this line
+  // rather than slip past a shape check.
+  const r = 'function f(b: boolean) { if (b) { return 1; } return "s"; }'
+    + ' const t = Reflect.getReflection(Reflect.typeOf(f)).signatures[0].return.type; ';
+  expect(value(`${r} String(t === type number | string);`)).toBe('true');
+  expect(value(`${r} String(t === type 1 | "s");`)).toBe('false');
+  expect(value(`${r} String(t === type uint8 | string);`)).toBe('false');
+});
+
+test('a constructor contributes nothing to inference', () => {
+  // #sec-published-return-types: "A setter declares no return type, and a
+  // constructor has none to infer." The constructor now reflects a SIGNATURE
+  // (PLAN-constructor-returns.md OQ3-C), which is a different thing - its
+  // parameters are known and its result is fixed by rule, so nothing is
+  // inferred. The absence of the `return` slot is what says so.
+  for (const decl of [
+    'class C { x: uint8 = 1; constructor(y: uint8) {} }',
+    'class C { x: uint8 = 1; constructor(y) {} }',
+    'class C { x: uint8 = 1; }',
+  ]) {
+    expect(value(`${decl} const r = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor');`
+      + ' String(r.signatures[0].return === undefined);'), decl).toBe('true');
+  }
+});
+
+test('a method NAMED `constructor` on an object literal does infer', () => {
+  // The boundary of the rule above. `{ constructor() {} }` is an ordinary
+  // method: it is not a construction, so it has a return type like any other
+  // method, and it keeps its annotation too.
+  expect(value('const o = { constructor(a: uint8) { return a; } };'
+    + ' const s: uint8 = o.constructor(3); String(s);')).toBe('3');
+  expect(value('const o = { constructor(): uint8 { return 4; } }; String(o.constructor());')).toBe('4');
+});
+
+test('inference through a factory yields the class - the sentence phase 1 made true', () => {
+  // `new K()` has static type `K`, and after PLAN-constructor-returns.md phase 1
+  // that is true rather than assumed: no typed class can return anything else.
+  // So an unannotated factory infers the class, seeded by the construction.
+  expect(value('class K { x: uint8 = 1; } function make() { return new K(); }'
+    + ' const s = Reflect.getReflection(Reflect.typeOf(make)).signatures[0];'
+    + ' String(s.return.type === type K);')).toBe('true');
+  // and the inferred type is usable at a boundary, which is the point
+  expect(value('class K { x: uint8 = 1; } function make() { return new K(); }'
+    + ' const k: K = make(); String(k.x);')).toBe('1');
+});
+
+test('a getter\'s published return still joins its shape', () => {
+  // Regression guard on the clause phase 1 touches: the annotation refusal is
+  // scoped to `constructor`, and a getter is the neighbour most likely to be
+  // caught by an over-wide rule, since it reaches the same parse.
+  expect(value('class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
+    + ' const r = Reflect.getReflection.<Reflect.ClassGetter, C>("g");'
+    + ' String(r.type !== undefined);')).toBe('true');
+  expect(value('class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
+    + ' const v: uint8 = (new C()).g; String(v);')).toBe('1');
+});
