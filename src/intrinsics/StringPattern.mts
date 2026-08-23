@@ -1,7 +1,7 @@
 import { Value, JSStringValue, ObjectValue, type Arguments } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
-import { makePrimitive, type TypeRecord } from '../type-system/records.mts';
+import {  type TypeRecord, anyType } from '../type-system/records.mts';
 import {
   Call, ClaimMetaKey, CreateBuiltinFunction, Get, Realm, RegExpCreate, RegisterMetaHook, RegisterTypeDefault, surroundingAgent,
 } from '#self';
@@ -33,7 +33,13 @@ function stringPatternShape(): TypeRecord {
   return {
     Kind: 'object',
     Properties: [{
-      key: 'pattern', type: makePrimitive('any'), optional: false, readonly: false,
+      // `any` is its OWN Kind, not a primitive named "any" - `anyType` is the
+      // record every program's `any` interns to. Building
+      // `makePrimitive('any')` here produced `{ Kind: 'primitive', Name: 'any' }`,
+      // which is structurally DIFFERENT, so the meta type this bootstrap
+      // registered was never the one `{ pattern: any }` interns to and every
+      // lookup against it missed.
+      key: 'pattern', type: anyType, optional: false, readonly: false,
     }],
     IndexSignatures: [],
   } as TypeRecord;
