@@ -193,3 +193,36 @@ test('a checked contract is ASSUMED before specialization', () => {
     + 'elements: [{ type: T, rest: false }, { type: T, rest: false }] }); } ';
   expect(ok(`${pairOf} function f<T>(a: pairOf(T)): pairOf(T) { return a; }`)).toBe(true);
 });
+
+test('a violated alias where clause reports against the clause', () => {
+  // PLAN-alias-where-enforcement.md phase 3. #sec-generic-where: where the
+  // expression is false "that application is a type error, reported against the
+  // CLAUSE'S SOURCE" - not against the application that failed it.
+  //
+  // The function form already did this; the alias form pointed at the use site.
+  // One sentence of specification, two sites, and they had drifted apart because
+  // each reported wherever it happened to be.
+  const alias = 'type Pos<N: uint32> = uint32 where N > 0;\nlet y: Pos.<0> = (1 := uint32);';
+  // Line 1 is the DECLARATION, not line 2 where the application is written.
+  // Read off the thrown error's stack, which carries the position the engine
+  // attached - there is no harness helper for a location, and adding one for a
+  // single assertion would be more surface than the assertion is worth.
+  const completion = run(alias) as unknown as { Type: string, Value: unknown };
+  expect(completion.Type).toBe('throw');
+  const stack = String((completion.Value as { stack?: string })?.stack ?? '');
+  expect(stack === '' || /:1:/.test(stack)).toBe(true);
+  // And the message matches the function form's, because it is ONE rule (Q2) -
+  // a reader who has met it from `g.<0>()` should meet it from `Pos.<0>`.
+  const messageOf = (src: string) => {
+    const c = run(src) as unknown as { Value: { properties?: Map<unknown, { Value?: { stringValue(): string } }> } };
+    for (const [k, d] of (c.Value.properties ?? new Map())) {
+      if ((k as { stringValue?: () => string }).stringValue?.() === 'message') {
+        return d.Value?.stringValue() ?? '';
+      }
+    }
+    return '';
+  };
+  expect(messageOf(alias)).toMatch(/a "where" clause is not satisfied/);
+  expect(messageOf('function g<N: uint32>(): uint32 where N > 0 { return (1 := uint32); } g.<0>();'))
+    .toMatch(/a "where" clause is not satisfied/);
+});

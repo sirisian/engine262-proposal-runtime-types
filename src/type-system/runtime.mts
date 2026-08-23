@@ -364,6 +364,16 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         for (const clause of clauses) {
           const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
           if (holds === false) {
+            // PLAN-alias-where-enforcement.md phase 3. #sec-generic-where: the
+            // error is "reported against the CLAUSE'S SOURCE" - not against the
+            // application that failed it. Measured, the function form already
+            // does this and the alias form did not: a violated `Pos.<0>` pointed
+            // at the assignment on the use line, where `g.<0>()` points at
+            // `where N > 0` on the declaration.
+            //
+            // One clause of one sentence, and the two positions had drifted
+            // apart because each site reported wherever it happened to be.
+            surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
             return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
           }
         }
