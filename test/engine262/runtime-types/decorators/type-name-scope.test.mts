@@ -38,7 +38,7 @@ const runtime = (setup: string, ty: string) => run(`${setup}let x: any = 5; try 
 const CASES: readonly (readonly [string, string, string])[] = [
   ['a bare intrinsic name', 'const Token = uint8; ', 'Token'],
   ['a metadata interface', 'const ClassMetadata = uint8; ', 'ClassMetadata'],
-  ['a qualified name, shadowed at the BASE', 'const Reflect = { Region: uint8 }; ', 'Reflect.Region'],
+  ['a qualified name, shadowed at the BASE', 'const Reflect = { Block: uint8 }; ', 'Reflect.Block'],
 ];
 
 test('a program binding shadows an intrinsic type name, and both judges agree', () => {

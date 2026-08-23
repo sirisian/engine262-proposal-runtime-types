@@ -18,7 +18,7 @@ const NL = String.fromCharCode(10);
 const IMPORT = 'import { m } from "./m.js" with { preprocessor: "true" };' + NL;
 
 /** A captured macro that reports its raw tokens beside a delegated parse. */
-const DELEGATING = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
+const DELEGATING = `(function (t: TokenStream, ctx: Reflect.Block): [].<Token> {
   var s = t[0] ? t[0].span : undefined;
   var text = t.toString();
   var open = text.indexOf("{"), close = text.lastIndexOf("}");
@@ -61,7 +61,7 @@ test('an unambiguous range parses to the same tokens either way', () => {
 });
 
 test('the goal symbol chooses what the range may be', () => {
-  const withGoal = (goal: string) => `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
+  const withGoal = (goal: string) => `(function (t: TokenStream, ctx: Reflect.Block): [].<Token> {
     var s = t[0] ? t[0].span : undefined;
     var text = t.toString();
     var open = text.indexOf("{"), close = text.lastIndexOf("}");
@@ -80,11 +80,11 @@ test('a range that does not parse is refused', () => {
 });
 
 test('an unrecognised goal, and a range outside the source, are refused', () => {
-  const badGoal = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
+  const badGoal = `(function (t: TokenStream, ctx: Reflect.Block): [].<Token> {
     return t.parse(0, 1, "module");
   })`;
   expect(expandWith(badGoal, 'const v = @m { x };')).toBe('REFUSED');
-  const badRange = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
+  const badRange = `(function (t: TokenStream, ctx: Reflect.Block): [].<Token> {
     return t.parse(0, 9999, "expression");
   })`;
   expect(expandWith(badRange, 'const v = @m { x };')).toBe('REFUSED');
@@ -94,7 +94,7 @@ test('a span exposes the source TEXT its ranges index', () => {
   // `parse(start, end)` indexes the SOURCE, so a macro scanning a captured
   // region needs the same string - and `toString` is a rendering of the tokens,
   // which is not guaranteed to be it. Exposing the source removes the question.
-  const reportsBoth = `(function (t: TokenStream, ctx: Reflect.Region): [].<Token> {
+  const reportsBoth = `(function (t: TokenStream, ctx: Reflect.Block): [].<Token> {
     var s = t[0].span;
     return [{ kind: "string", value: JSON.stringify(
       (String(t) === s.source.text ? "same" : "differ") + " " + JSON.stringify(s.source.text)), span: s }];

@@ -13,7 +13,7 @@ import { Agent, setSurroundingAgent } from '#self';
  *
  * The context TYPE used to decide it, and that made declaring the MODE the same
  * act as declaring which POSITIONS a macro takes: a macro annotating
- * `Reflect.Region` could not decorate a class, because the annotation is enforced
+ * `Reflect.Block` could not decorate a class, because the annotation is enforced
  * where the macro is called. The workaround was a union enumerating every
  * position — measured at EIGHTEEN in `syntax-context.mts`, and one more whenever
  * the language gains a position. `PLAN-region-context-removal` §20.

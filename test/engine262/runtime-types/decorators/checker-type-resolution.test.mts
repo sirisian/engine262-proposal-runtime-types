@@ -34,7 +34,7 @@ test('a bare intrinsic type name is resolved', () => {
 
 test('a QUALIFIED type name is resolved', () => {
   // The whole `Reflect.*` namespace answered null unconditionally.
-  expectStaticTypeError(mismatch('Reflect.Region'));
+  expectStaticTypeError(mismatch('Reflect.Block'));
   expectStaticTypeError(mismatch('Reflect.Class'));
   expectStaticTypeError(mismatch('Reflect.ClassFieldLayout'));
   // Not a context, and so left behind by a registration that kept only contexts.
@@ -44,11 +44,11 @@ test('a QUALIFIED type name is resolved', () => {
 test('one unresolvable parameter no longer defeats a whole signature', () => {
   // An annotation is resolved as a WHOLE: one unresolvable name in it made the
   // entire target type unresolvable, and the comparison then did not happen at
-  // all - `IsFunctionSubtype` was never reached. So a single `Reflect.Region`
+  // all - `IsFunctionSubtype` was never reached. So a single `Reflect.Block`
   // parameter stopped the RETURN from being compared too.
   expectStaticTypeError(
-    'function f(x: number, c: Reflect.Region): string { return "s"; }'
-    + ' const a: (x: number, c: Reflect.Region) => number = f;',
+    'function f(x: number, c: Reflect.Block): string { return "s"; }'
+    + ' const a: (x: number, c: Reflect.Block) => number = f;',
   );
 });
 

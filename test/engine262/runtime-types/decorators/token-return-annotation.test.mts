@@ -61,15 +61,15 @@ test('a macro ANNOTATES its return, and the annotation is what identifies it', (
   // These three were once interchangeable, because a `capture` PROPERTY declared
   // the mode and the return annotation was free. It is not free now: it is half
   // of what says this is a replacement decorator at all.
-  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Region): [].<Token>'), ENTRY).Type).not.toBe('throw');
+  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Block): [].<Token>'), ENTRY).Type).not.toBe('throw');
   // Neither half alone identifies one.
   expect(compileWithMacro(macro('(stream, context): [].<Token>'), ENTRY).Type).toBe('throw');
-  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Region): []'), ENTRY).Type).toBe('throw');
+  expect(compileWithMacro(macro('(stream: TokenStream, context: Reflect.Block): []'), ENTRY).Type).toBe('throw');
 });
 
 test('annotating the parameters as well changes nothing', () => {
   expect(compileWithMacro(
-    macro('(stream: TokenStream, context: Reflect.Region): [].<Token>'),
+    macro('(stream: TokenStream, context: Reflect.Block): [].<Token>'),
     ENTRY,
   ).Type).not.toBe('throw');
 });

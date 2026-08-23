@@ -25,7 +25,7 @@ function bothRoles(ordinaryParams: string): string {
     // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
     // calls a replacement decorator `(tokens, context, args)`, so a macro that may
     // be written `@jsx(1) { … }` must declare it or no signature has that arity.
-    'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
+    'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.
     '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
@@ -102,7 +102,7 @@ test('a name with ONLY a replacement overload is unaffected', () => {
     // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
     // calls a replacement decorator `(tokens, context, args)`, so a macro that may
     // be written `@jsx(1) { … }` must declare it or no signature has that arity.
-    'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
+    'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.
     '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',

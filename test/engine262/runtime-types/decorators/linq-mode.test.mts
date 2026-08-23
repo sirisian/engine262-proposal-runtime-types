@@ -29,7 +29,7 @@ const NL = String.fromCharCode(10);
 // a preprocessor decoration is what makes the braces a region.
 const LINQ_IMPORT = 'import { linq } from "./linq.js" with { preprocessor: "true" };' + NL;
 
-const MACRO = `((function (tokens: TokenStream, context: Reflect.Region, args): [].<Token> {
+const MACRO = `((function (tokens: TokenStream, context: Reflect.Block, args): [].<Token> {
   var KEYWORDS = ["from", "let", "where", "join", "orderby", "index", "take",
     "skip", "takewhile", "skipwhile", "distinct", "select", "group", "into"];
   var fresh = 0;

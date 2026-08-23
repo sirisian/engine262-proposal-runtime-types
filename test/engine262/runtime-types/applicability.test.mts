@@ -10,7 +10,7 @@ import { realmWithMacro } from './harness.mts';
  * the position - a macro declaring `Reflect.Block` used on a class is refused
  * because the argument does not satisfy the parameter.
  *
- * `Reflect.Region` is the one context that had to be added, being the one
+ * `Reflect.Block` is the one context that had to be added, being the one
  * position that is not also a reflection: nothing reflects on a region at run
  * time, because a region does not survive to run time.
  */
@@ -30,7 +30,7 @@ function outcome(macro: string, source: string): string {
 }
 
 test('a macro declaring a position is accepted there', () => {
-  expect(outcome('(function (t, c: Reflect.Region) { ' + BODY + ' })', 'const v = @m { x };'))
+  expect(outcome('(function (t, c: Reflect.Block) { ' + BODY + ' })', 'const v = @m { x };'))
     .toBe('const v = "X";');
   expect(outcome('(function (t, c: Reflect.Class) { ' + BODY + ' })', '@m class C {}'))
     .toBe('"X"');
@@ -70,7 +70,7 @@ test('TokenStream is a type, so a macro can be fully annotated', () => {
   // It is a global whose values are its instances, like `Map` - and its absence
   // from that list is why `function jsx(tokens: TokenStream)` could not be
   // written, though both reference macros are documented with that signature.
-  expect(outcome('(function (t: TokenStream, c: Reflect.Region) { ' + BODY + ' })', 'const v = @m { x };'))
+  expect(outcome('(function (t: TokenStream, c: Reflect.Block) { ' + BODY + ' })', 'const v = @m { x };'))
     .toBe('const v = "X";');
   // And the annotation is enforced rather than decorative: the position still
   // decides where the macro may be used.

@@ -49,7 +49,7 @@ function compile(moduleSource: string, body: string): { type: string, text: stri
  * `[disp] sigs=2 args=2 kind=none params=[3,1]`.
  */
 const BOTH_ROLES = [
-  'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
+  'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
   '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
   '          { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }];',
   '}',
@@ -91,7 +91,7 @@ test('a name with ONLY a replacement overload is unaffected', () => {
   // because that is when another may handle the position. A name with one
   // declaration behaves exactly as it did.
   const only = [
-    'function jsx(t: TokenStream, c: Reflect.Region, args?): [].<Token> {',
+    'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
     '  return [{ kind: "identifier", value: "EXPANDED", span: t[0].span, tokens: undefined },',
     '          { kind: "punctuator", value: ";", span: t[0].span, tokens: undefined }];',
     '}',

@@ -15,8 +15,8 @@ import type { Realm } from '#self';
  * these are the reflection names, and a replacement decorator's context uses the
  * same vocabulary a runtime decorator's does rather than a second one.
  *
- * `'Region'` is the one value that is new, a captured region not being a
- * position `decorators.md` had.
+ * A captured region reports `'Block'`: it IS a block, and the engine not
+ * parsing its text is a fact about the decorator rather than a second position.
  *
  * EVERY VALUE HERE IS A NAME `decorators.md` DEFINES. An earlier draft carried
  * `'TryBlock'`, `'SwitchBlock'` and `'MatchBlock'`, which it does not - its block
@@ -25,7 +25,12 @@ import type { Realm } from '#self';
  * invented one, and `syntax-context.test.mts` fails if that stops being true.
  */
 const KIND_BY_PARSE_NODE: Readonly<Record<string, string>> = {
-  ModedRegion: 'Region',
+  // `PLAN-region-context-removal` Q2/Q3: a region reports `Block`, the context it
+  // IS. `Region` was a position of its own only because the context type carried
+  // the capture decision; capture follows from being a replacement decorator now
+  // (`#sec-preprocessor-modules`), so a region is a block whose text the engine
+  // does not parse, and `Reflect.Block` is what a macro annotates.
+  ModedRegion: 'Block',
   ClassDeclaration: 'Class',
   ClassExpression: 'Class',
   FunctionDeclaration: 'Function',

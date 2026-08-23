@@ -25,7 +25,7 @@ test('… a CLASS', () => {
 });
 
 test('… a QUALIFIED reflection name', () => {
-  expect(evaluated('function m(c: Reflect.Region): uint8 { return 1; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
+  expect(evaluated('function m(c: Reflect.Block): uint8 { return 1; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
 });
 
 test('… and a LIBRARY type inside a composite annotation', () => {
@@ -42,8 +42,8 @@ test('the signature is READ, not merely survived', () => {
   // Not crashing is not the same as resolving. The parameter list is reachable
   // and its second entry's type is identity-equal to the type it names - which
   // is the predicate Stage C is built on.
-  const M = 'function m(s: TokenStream, c: Reflect.Region): [].<Token> { return []; } ';
+  const M = 'function m(s: TokenStream, c: Reflect.Block): [].<Token> { return []; } ';
   expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).kind);`)).toBe('function');
   expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).signatures[0].parameters.length);`)).toBe('2');
-  expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).signatures[0].parameters[1].type === (type Reflect.Region));`)).toBe('true');
+  expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).signatures[0].parameters[1].type === (type Reflect.Block));`)).toBe('true');
 });

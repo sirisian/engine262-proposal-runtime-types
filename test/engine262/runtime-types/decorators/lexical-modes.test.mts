@@ -33,12 +33,14 @@ const JSX_IMPORT = 'import { jsx } from "./x.js" with { preprocessor: "true" };'
  */
 // `#sec-preprocessor-modules`: a macro declares a captured region in its
 // SIGNATURE - a `TokenStream` it receives, a `[].<Token>` it returns, and a
-// context that ADMITS a `Reflect.Region`. The context is a UNION because these
-// macros decorate classes and declarations as well as regions: admitting a region
-// declares the mode, admitting the rest keeps the positions open.
+// `TokenStream` it receives and a `[].<Token>` it returns. That pair is the whole
+// of it: `#sec-preprocessor-modules` says capture "follows from what a
+// replacement decorator is", so the CONTEXT is annotated only where a macro
+// means to restrict which positions it takes - and these macros decorate
+// regions, classes and function declarations alike, so they annotate none.
 const asCaptured = (macroSource: string) => (macroSource.includes('(function (t, c')
-  ? macroSource.replace('(function (t, c', '(function (t: TokenStream, c: Reflect.Region | Reflect.Class')
-  : macroSource.replace('(function (t', '(function (t: TokenStream, ctx: Reflect.Region | Reflect.Class'))
+  ? macroSource.replace('(function (t, c', '(function (t: TokenStream, c')
+  : macroSource.replace('(function (t', '(function (t: TokenStream, ctx'))
   .replace(') {', '): [].<Token> {');
 const withJsxGrammar = (macroSource: string) => asCaptured(macroSource);
 const PLAIN_IMPORT = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
@@ -162,8 +164,8 @@ test('a preprocessor name need not be callable unless it decorates', () => {
 test('declaring a mode does not require every use to take a region', () => {
   // A mode says how a REGION is scanned, not that the name may only decorate
   // one. `@jsx class C {}` is an ordinary decoration on a class.
-  expect(jsx('@jsx class C { x = 1; }', '(function (t) { return t; })')).toBe('class C { x = 1; }');
-  expect(jsx('@jsx function f() { return 1; }', '(function (t) { return t; })')).toBe('function f() { return 1; }');
+  expect(jsx('@jsx class C { x = 1; }', '(function (t) { return t.concat([]); })')).toBe('class C { x = 1; }');
+  expect(jsx('@jsx function f() { return 1; }', '(function (t) { return t.concat([]); })')).toBe('function f() { return 1; }');
 });
 
 

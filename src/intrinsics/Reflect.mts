@@ -1145,16 +1145,6 @@ export function blockContextRecord(): TypeRecord {
  * declare that it applies to one, which is how every other position declares
  * applicability.
  */
-const regionContextDeclaration = { type: 'ReflectionContext', name: 'Region' } as unknown as ParseNode;
-
-export function regionContextRecord(): TypeRecord {
-  return {
-    Kind: 'nominal',
-    Declaration: regionContextDeclaration,
-    Arguments: [],
-    LibraryName: 'Reflect.Region',
-  };
-}
 
 const ifBlockContextDeclaration = { type: 'ReflectionContext', name: 'IfBlock' } as unknown as ParseNode;
 
@@ -1536,12 +1526,6 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('ObjectMethodReturn'), Descriptor({
     Value: GetTypeObject(objectMethodReturnContextRecord(), realmRec),
-    Writable: Value.false,
-    Enumerable: Value.false,
-    Configurable: Value.false,
-  })));
-  X(reflect.DefineOwnProperty(Value('Region'), Descriptor({
-    Value: GetTypeObject(regionContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

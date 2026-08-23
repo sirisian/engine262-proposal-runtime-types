@@ -51,14 +51,17 @@ test('the context argument answers its reflection context, not `object`', () => 
   // `SyntaxContextFor` built a plain object carrying only a `kind` property. The
   // property said "Region" while the TYPE said `object`, so the two disagreed
   // about the same value.
-  expect(reported('String(Reflect.isAssignable(Reflect.typeOf(c), type Reflect.Region))'))
+  expect(reported('String(Reflect.isAssignable(Reflect.typeOf(c), type Reflect.Block))'))
     .toBe('"true";');
 });
 
 test('the context still carries its `kind`, which is what a macro reads', () => {
+  // `Block`, not `Region`: a captured region IS a block, and the engine not
+  // parsing its text is a fact about the DECORATOR rather than a second position.
+  // `PLAN-region-context-removal` Q2.
   // The stamp is additive: `#sec-syntax-replacement` says the context "is an
   // ordinary object with one own property, `kind`", and that is unchanged.
-  expect(reported('String(c.kind)')).toBe('"Region";');
+  expect(reported('String(c.kind)')).toBe('"Block";');
 });
 
 test('a context of another position answers ITS own type', () => {
@@ -67,7 +70,7 @@ test('a context of another position answers ITS own type', () => {
   // the context to choose.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] } as never));
   const macro = '(function (t, c) { return [{ kind: "string", value: JSON.stringify('
-    + 'String(c.kind) + ":" + String(Reflect.isAssignable(Reflect.typeOf(c), type Reflect.Region))'
+    + 'String(c.kind) + ":" + String(Reflect.isAssignable(Reflect.typeOf(c), type Reflect.Block))'
     + '), span: t[0].span, tokens: undefined }]; })';
   const realm = realmWithMacro('m', macro);
   const compiled = realm.compileModule(
