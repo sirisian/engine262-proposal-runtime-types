@@ -743,3 +743,32 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () 
     + 'meta GB { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(evaluated(`${ok1} let p: uint8 = (5 := uint8); let w: uint8.<{ gb: false }> = p; String(w);`)).toBe('5');
 });
+
+test('the built-in StringPattern meta type validates a string against its pattern', () => {
+  // OUTSTANDING item G, and the coverage gap that let it hide. `StringPattern`
+  // is bootstrapped into every realm (`Realm.mts`), claims the `pattern` key,
+  // registers a type default and a validate hook - and NOTHING tested it, so a
+  // wrong constructor in its shape helper made the whole intrinsic unreachable
+  // without a single failure.
+  //
+  // The bug: `stringPatternShape()` built its property with
+  // `makePrimitive('any')` - `{ Kind: 'primitive', Name: 'any' }` - where `any`
+  // is its OWN kind. The meta type it registered was structurally different from
+  // the one a program's `{ pattern: any }` interns to, so every lookup missed.
+  //
+  // The hook reads `pattern.source` and `pattern.flags`, so the metadata value
+  // is a REGEXP. A string there fails the hook's own guard, which is what made
+  // the intrinsic look broken after the interning was fixed.
+  expect(evaluated('String(("aaa" := string.<{ pattern: /^a+$/ }>));')).toBe('aaa');
+  expectThrown('("bbb" := string.<{ pattern: /^a+$/ }>);');
+  // The registered DEFAULT is now FINDABLE, which is item G's own subject. The
+  // binding is still refused, but for a different and later reason - the
+  // registered default is `undefined`, and `{ pattern: any }` has a
+  // non-optional property, so `undefined is not assignable to "{ pattern: any }"`
+  // where before it was `"{ pattern: any }" has no default value`.
+  //
+  // Recorded rather than asserted as correct: whether an intrinsic should
+  // register a default its own constraint shape rejects is a question for
+  // `#sec-defaultvalueof`, not something to settle in a test.
+  expectThrown('let s: { pattern: any };');
+});
