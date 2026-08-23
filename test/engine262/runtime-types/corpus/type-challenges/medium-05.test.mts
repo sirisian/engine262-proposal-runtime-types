@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { KIT, expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the medium tier, shard 5: the property-modifier family.
@@ -13,17 +13,6 @@ import { expectBuilderTrue } from './harness.mts';
  * the key set via the literal type operator.
  */
 
-const KIT = `
-function mapProperties(T, f) { return Reflect.makeType({ kind: 'object', properties: Reflect.getReflection(T).properties.map(f), indexSignatures: [] }); }
-function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-function readonly(T) { return mapProperties(T, p => ({ ...p, readonly: true })); }
-function mutable(T) { return mapProperties(T, p => ({ ...p, readonly: false })); }
-function partial(T) { return mapProperties(T, p => ({ ...p, optional: true })); }
-function required(T) { return mapProperties(T, p => ({ ...p, optional: false })); }
-function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
-function keyVals(K) { return new Set(arms(K).map(a => Reflect.getReflection(a).value)); }
-`;
-const kit = (p: string) => `${KIT}\n${p}`;
 
 // 7 - Readonly - mark every property readonly.
 test('medium 7 - Readonly', () => {

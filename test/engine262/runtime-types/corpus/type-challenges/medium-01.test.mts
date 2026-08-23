@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the medium tier, shard 1.
@@ -21,14 +21,6 @@ import { expectBuilderTrue } from './harness.mts';
  * The kit source (over the primitives) prepended where a builder uses it.
  */
 
-const KIT = `
-function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
-function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }
-function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
-function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-`;
-const kit = (p: string) => `${KIT}\n${p}`;
 
 // 1042 - IsNever - T === never ? true : false. `T === never` is a pointer
 // comparison; the tuple-wrapping the TypeScript solution needs (to dodge

@@ -265,24 +265,24 @@ export function parameters(F: type): type {
 
 // ---- literals and strings — §4.2, §4.4 -------------------------
 
-const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+const capitalizeFirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function mapLiterals(T: type, f): type {
   return union(literalValues(T).map(v => literal(f(String(v)))));
 }
 export function uppercase(T: type): type   { return mapLiterals(T, s => s.toUpperCase()); }
 export function lowercase(T: type): type   { return mapLiterals(T, s => s.toLowerCase()); }
-export function capitalized(T: type): type { return mapLiterals(T, capitalize); }
+export function capitalized(T: type): type { return mapLiterals(T, capitalizeFirst); }
 export function uncapitalized(T: type): type {
   return mapLiterals(T, s => s.charAt(0).toLowerCase() + s.slice(1));
 }
 export function getters(T: type): type {
   return mapProperties(T, p => typeof p.name !== 'string' ? p
-    : prop(\`get\${capitalize(p.name)}\`, fn([], p.type), { readonly: true }));
+    : prop(\`get\${capitalizeFirst(p.name)}\`, fn([], p.type), { readonly: true }));
 }
 export function listeners(T: type): type {
   return mapProperties(T, p => typeof p.name !== 'string' ? p
-    : prop(\`on\${capitalize(p.name)}Changed\`, fn([p.type], type void)));
+    : prop(\`on\${capitalizeFirst(p.name)}Changed\`, fn([p.type], type void)));
 }
 
 // ---- tuples and arrays — §4.5 ----------------------------------

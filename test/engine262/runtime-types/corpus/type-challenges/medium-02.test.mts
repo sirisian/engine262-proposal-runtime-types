@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the medium tier, shard 2.
@@ -12,14 +12,6 @@ import { expectBuilderTrue } from './harness.mts';
  * operator now accepts literals); tuple/paren operands, where any, are aliases.
  */
 
-const KIT = `
-function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }
-function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-function keysSet(T) { return new Set(Reflect.getReflection(T).properties.map(p => p.name)); }
-function props(T) { return Reflect.getReflection(T).properties; }
-function merge(A, B) { const bk = keysSet(B); return objectOf([...props(A).filter(p => !bk.has(p.name)), ...props(B)]); }
-`;
-const kit = (p: string) => `${KIT}\n${p}`;
 
 // 116 - Replace - replace the first occurrence; empty `from` is identity.
 test('medium 116 - Replace', () => {
