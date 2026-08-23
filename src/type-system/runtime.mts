@@ -985,6 +985,28 @@ function classInstanceType(value: ObjectValue): TypeRecord | null {
  * array/tuple -> filled with element defaults; otherwise none (symbol, object,
  * function, non-nullable unions, and value-type classes without a field default).
  */
+/**
+ * A class's declared zero, evaluated ONCE and held.
+ *
+ * #sec-declared-zero: the |AssignmentExpression| "must be compile-time evaluable
+ * and it is a type error otherwise, and it is evaluated ONCE, when the class is
+ * declared" - because a type is interned, "so one Type Object serves every use
+ * of it, and a zero that allocated per binding would either hand every value the
+ * same object or make the type's identity depend on when it was read".
+ *
+ * The snapshot is held per DECLARATION rather than per Type Record, so two
+ * applications of one generic class share the one evaluation.
+ */
+const declaredZeros = new WeakMap<object, Value>();
+
+export function RegisterDeclaredZero(declaration: object, value: Value): void {
+  declaredZeros.set(declaration, value);
+}
+
+function DeclaredZeroOf(t: { Declaration?: object }): Value | undefined {
+  return t.Declaration === undefined ? undefined : declaredZeros.get(t.Declaration);
+}
+
 export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined> {
   switch (t.Kind) {
     case 'parameter':
@@ -1233,6 +1255,18 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return crossed.Value;
     }
     case 'nominal': {
+      // PLAN-type-declared-zero.md phases 2-3. #sec-defaultvalueof, as amended:
+      // "If _t_.[[Kind]] is ~nominal~ and _t_.[[Declaration]] has a declared
+      // zero _z_, return A COPY OF _z_." Ahead of every derived rule, because
+      // #sec-declared-zero makes it a REPLACEMENT: "a class that declares one is
+      // stating that the field-by-field value does not describe it".
+      //
+      // A class that declares none falls straight through, which is what keeps
+      // the memberwise zero working for almost every class.
+      const zero = DeclaredZeroOf(t as { Declaration?: object });
+      if (zero !== undefined) {
+        return zero;
+      }
       // #sec-rational-types is a numeric type too, but it resolves through the
       // library type names rather than as a ~primitive~ record, so its zero is
       // answered here rather than beside the decimals. Zero is 0/1, which is

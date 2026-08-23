@@ -1,6 +1,6 @@
 import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
-import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, RegisterDeclaredZero } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
 import { CallDecorator } from '../abstract-ops/runtime-types.mts';
@@ -970,6 +970,19 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
       Q(yield* SetIntegrityLevel(proto, 'frozen'));
     }
+    // PLAN-type-declared-zero.md phase 2. #sec-declared-zero: the declared zero
+    // "is evaluated ONCE, when the class is declared". Read here, after the
+    // static fields have been defined, so the value is the one the class holds.
+    if (surroundingAgent.feature('runtime-types')
+        && (ClassTail as { DeclaredZero?: object }).DeclaredZero !== undefined) {
+      // Keyed on the DECLARATION, which is what a ~nominal~ Type Record carries
+      // as [[Declaration]] - the ClassTail is the body, and the record never
+      // sees it. `ClassTail.parent` is how this file already reaches the
+      // declaration for modifiers and decorators.
+      const owner = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
+      const held = Q(yield* Get(F as ObjectValue, Value('default')));
+      RegisterDeclaredZero(owner, held);
+    }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
     // 33. Return F.
@@ -1417,6 +1430,16 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
+    // PLAN-type-declared-zero.md phase 2. The same registration as the branch
+    // above: this function has TWO `return F` sites and a typed class may leave
+    // by either, so the declared zero has to be recorded at both or it is
+    // recorded for some classes and not others.
+    if (surroundingAgent.feature('runtime-types')
+        && (ClassTail as { DeclaredZero?: object }).DeclaredZero !== undefined) {
+      const owner2 = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
+      const held2 = Q(yield* Get(F as ObjectValue, Value('default')));
+      RegisterDeclaredZero(owner2, held2);
+    }
     // 33. Return F.
     SetCurrentClassName(outerClassName);
     return F;

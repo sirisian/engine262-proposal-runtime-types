@@ -2380,6 +2380,24 @@ export abstract class ExpressionParser extends FunctionParser {
           while (this.eat(Token.SEMICOLON)) {
             // nothing
           }
+          // PLAN-type-declared-zero.md phase 2. #sec-declared-zero:
+          //
+          //   ClassElement : `static` `default` `=` AssignmentExpression `;`
+          //
+          // A class may declare the value its bindings hold before assignment,
+          // in place of the one DefaultValueOf derives field by field.
+          //
+          // This spelling ALREADY PARSED - `static default = 5` is an ordinary
+          // static field and `Z.default` is 5 - so nothing new is parsed here.
+          // What is new is recognising it: the declaration is marked so
+          // `DefaultValueOf` can consult it ahead of the derived rules, which is
+          // the replacement rule the clause states.
+          if (surroundingAgent.feature('runtime-types')
+              && m.type === 'FieldDefinition'
+              && (m as { static?: boolean }).static
+              && (m as { ClassElementName?: { name?: string } }).ClassElementName?.name === 'default') {
+            (node as { DeclaredZero?: ParseNode }).DeclaredZero = m;
+          }
           if (m.type === 'ClassStaticBlock') {
             continue;
           }
