@@ -979,9 +979,26 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // as [[Declaration]] - the ClassTail is the body, and the record never
       // sees it. `ClassTail.parent` is how this file already reaches the
       // declaration for modifiers and decorators.
+    // PLAN-generic-declared-zero.md phase 1. An UNSPECIALIZED generic's static
+    // fields and blocks are DEFERRED - the loop above skipped them, because "a
+    // static field's initializer may read the class's type parameters" and none
+    // are bound yet. Reading `default` here would therefore observe *undefined*
+    // and register THAT, which is worse than registering nothing: DeclaredZeroOf
+    // finds an entry and returns it, overriding the derived zero with nothing.
+    //
+    // Measured before the guard: `class Box<T> { static default = … }` then
+    // `let b: Box.<uint8>;` reported "undefined is not assignable", where the
+    // same class without a declared zero got its derived one correctly.
+    //
+    // So: register only where the field has actually run. A generic falls back
+    // to the derived zero, which is where it was before this feature - the
+    // declared zero for a generic needs registration at the APPLICATION, which
+    // is phases 2 and 3.
       const owner = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held = Q(yield* Get(F as ObjectValue, Value('default')));
-      RegisterDeclaredZero(owner, held);
+      if (!unspecializedGeneric) {
+        RegisterDeclaredZero(owner, held);
+      }
     }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
@@ -1436,9 +1453,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // recorded for some classes and not others.
     if (surroundingAgent.feature('runtime-types')
         && (ClassTail as { DeclaredZero?: object }).DeclaredZero !== undefined) {
+      // The same guard as the branch above, and for the same reason.
       const owner2 = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held2 = Q(yield* Get(F as ObjectValue, Value('default')));
-      RegisterDeclaredZero(owner2, held2);
+      if (!unspecializedGeneric) {
+        RegisterDeclaredZero(owner2, held2);
+      }
     }
     // 33. Return F.
     SetCurrentClassName(outerClassName);
