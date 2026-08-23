@@ -67,29 +67,49 @@ test('a decorator does not make a class typed', () => {
     + ' String(new C() instanceof C);')).toBe('false');
 });
 
-test('any annotation makes a class typed, wherever it sits', () => {
-  // OQ2-B, decided in phase 2 as the SIMPLE reading: any annotation counts.
-  //
-  // The case that made this a question is `static`: a class annotated only on a
-  // static member has no typed INSTANCE shape to protect, so the layout half of
-  // OQ1's rationale does not apply to it. It is included anyway, and the reason
-  // is that the OTHER half does. `C` is a type for every class by declaration,
-  // so `let c: C = new C()` is statically provable - and therefore has its
-  // runtime check elided (F122) - whether or not any instance member is
-  // annotated. The hole is the same one; only the willingness to break
-  // compatibility differs, and an author who wrote a type has opted in.
-  //
-  // The alternative - counting only instance-shaping annotations - buys a
-  // smaller cliff for a longer rule, and its own cliff is worse: adding an
-  // INSTANCE annotation to a class that already has a static one would change
-  // the legality of a `return` that was fine a moment ago, which is the same
-  // surprise one layer deeper. Recorded as the fallback, not the choice.
+test('a class is typed when an INSTANCE FIELD is annotated - #sec-typed-classes', () => {
+  // Phase 2 decided this line independently and drew it wider: any annotation
+  // anywhere. Phase 4 corrected it, because #sec-typed-classes ALREADY defines
+  // the term - "at least one of its public or private fields carries a type
+  // annotation" - and that definition has teeth elsewhere: a typed class "is
+  // automatically sealed and its prototype frozen", implemented as
+  // [[SealInstances]]. The wider reading gave one term two meanings, with the
+  // constructor rule and the sealing rule disagreeing about which classes they
+  // covered.
   const returns = ' constructor() { return { a: 1 }; } }';
   expectEarlyError('class C { x: uint8 = 1;' + returns);
-  expectEarlyError('class C { static s: uint8 = 1;' + returns);
-  expectEarlyError('class C { m(): uint8 { return 1; }' + returns);
-  expectEarlyError('class C { get g(): uint8 { return 1; }' + returns);
-  expectEarlyError('class C { constructor(y: uint8) { return { a: 1 }; } }');
+  expectEarlyError('class C { #x: uint8 = 1;' + returns);
+});
+
+test('and NOT typed by an annotation that says nothing about an instance', () => {
+  // The cost of the alignment, asserted rather than left to be discovered. A
+  // class annotated only on a static field, a method, a getter, or a
+  // constructor parameter is not typed, so F122's hole stays open there.
+  //
+  // It is the right residual. The layout argument - the strongest one, and the
+  // one specific to this proposal - is about what a construction PRODUCES, and
+  // only a field annotation makes an instance's shape a fact. Where the rule
+  // does not reach, the class is extensible and unsealed, which is the same
+  // category an untyped class is in.
+  //
+  // A `static` field is excluded for the reason the engine excludes it from
+  // sealing: it is not on the instance.
+  const returns = ' constructor() { return { a: 1 }; } }';
+  expect(evaluated('class C { static s: uint8 = 1;' + returns + ' String(new C() instanceof C);')).toBe('false');
+  expect(evaluated('class C { m(): uint8 { return 1; }' + returns + ' String(new C() instanceof C);')).toBe('false');
+  expect(evaluated('class C { get g(): uint8 { return 1; }' + returns + ' String(new C() instanceof C);')).toBe('false');
+  expect(evaluated('class C { constructor(y: uint8) { return { a: 1 }; } }'
+    + ' String(new C(1) instanceof C);')).toBe('false');
+  // and the sealing rule agrees with the constructor rule on every one of them,
+  // which is the property the correction bought
+  for (const decl of [
+    'class C { static s: uint8 = 1; }',
+    'class C { m(): uint8 { return 1; } }',
+    'class C { constructor(y: uint8) {} }',
+  ]) {
+    expect(evaluated(`${decl} String(Object.isExtensible(new C(1)));`), decl).toBe('true');
+  }
+  expect(evaluated('class C { x: uint8 = 1; } String(Object.isExtensible(new C()));')).toBe('false');
 });
 
 test('the annotation may come AFTER the constructor', () => {

@@ -189,39 +189,41 @@ function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
 }
 
 /**
- * proposal-runtime-types, PLAN-constructor-returns.md phase 1 (OQ2-B): is this
- * class a TYPED class?
+ * proposal-runtime-types, PLAN-constructor-returns.md (OQ2-B, CORRECTED in
+ * phase 4): is this class a TYPED class?
  *
- * A class carrying at least one type annotation. That line is the gradual-typing
- * contract - annotating a declaration opts it into the typed dialect - and it is
- * what keeps the proposal a SUPERSET: an untyped class keeps JavaScript's
- * semantics unchanged, including a constructor that returns another object, so
- * no running program stops running because the feature is on.
+ * #sec-typed-classes already defines the term: "A class is typed when at least
+ * one of its public or private fields carries a type annotation." That
+ * definition has teeth elsewhere - a typed class "is automatically sealed and
+ * its prototype frozen", and value-type-class eligibility is built on it - and
+ * the engine implements it as [[SealInstances]], set from an INSTANCE field
+ * annotation, public or private.
  *
- * An earlier draft justified this line by saying the engine already drew it.
- * That reasoning is withdrawn: the engine decides participation per DECLARATION
- * SITE (F123), which is a different line and the one OQ3 rejects. The argument
- * is the contract and the superset property, not the implementation.
+ * Phase 2 decided this line independently and drew it wider: any annotation
+ * anywhere, including a method's return, a constructor parameter, and a static
+ * field. That was wrong, and not because the wider line is indefensible - it is
+ * that "typed class" was ALREADY DEFINED, so the wider reading created a second
+ * meaning for one term, with the constructor rule and the sealing rule
+ * disagreeing about which classes they applied to. One term, one meaning.
  *
- * A `static`-only annotation counts here, which is the simple reading of "any
- * annotation" and is deliberately provisional - a class typed only by
- * `static s: uint8` has no typed INSTANCE shape to protect, which argues the
- * other way. PLAN-constructor-returns.md phase 2 measures and decides it, along
- * with the decorator-only and `partial class` cases.
+ * What the alignment costs, stated rather than discovered later: a class
+ * annotated only on a method, a getter, a constructor parameter, or a static
+ * field is NOT typed, so its constructor may still return an object and F122's
+ * hole stays open there. That is a real residual, and it is the right residual:
+ * the layout argument - the strongest one, and the one specific to this
+ * proposal - is about what a construction PRODUCES, and only a field annotation
+ * makes an instance's shape a fact. Where the rule does not reach, the class is
+ * extensible, unsealed, and not layout-bearing, which is the same category an
+ * untyped class is in for these purposes.
+ *
+ * A `static` field is excluded for the same reason the engine excludes it from
+ * sealing: it is not on the instance, so it says nothing about what a
+ * construction produces.
  */
 function classIsTyped(elements: readonly ParseNode.ClassElement[]): boolean {
   return elements.some((element) => {
-    const e = element as {
-      TypeAnnotation?: unknown,
-      TypeParameters?: unknown,
-      UniqueFormalParameters?: readonly { TypeAnnotation?: unknown }[] | null,
-      PropertySetParameterList?: readonly { TypeAnnotation?: unknown }[] | null,
-    };
-    if (e.TypeAnnotation || e.TypeParameters) {
-      return true;
-    }
-    const parameters = e.UniqueFormalParameters || e.PropertySetParameterList;
-    return !!parameters && parameters.some((p) => !!p && !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+    const e = element as { type?: string, static?: boolean, TypeAnnotation?: unknown };
+    return e.type === 'FieldDefinition' && !e.static && !!e.TypeAnnotation;
   });
 }
 
