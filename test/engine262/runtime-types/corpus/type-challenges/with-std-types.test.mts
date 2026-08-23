@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 4.
@@ -25,38 +25,24 @@ import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. **15 of 46 blocks hold; 31 do not**, and the failures are
- * FINDINGS rather than defects in this file - these blocks had never run, so
- * the document has been advertising 42 helpers with demonstrations nobody could
- * check.
+ * TRIAGE STATE. **21 of 46 blocks hold**, up from 8, after phase 4b steps 1, 2,
+ * 3 and 7. The remaining 25 are findings, not defects in this file.
  *
- * The counts agree now, which they did not at first. An earlier pass reported
- * "21 failing assertions across 38 blocks", which is arithmetically impossible
- * and was two separate mistakes: a truncated console listing read as a total,
- * and an extractor that split each block by LINE. Several blocks wrap one
- * assertion across two or three lines, so each fragment parsed as its own
- * program and reported "Unexpected token" - 39 phantom failures, the largest
- * bucket in the first triage and entirely an artefact. The extractor now splits
- * on `;` at bracket depth zero.
+ * By cause, from the harness's now-legible diagnostics:
  *
- * The remaining 40 failing assertions across 31 blocks, by cause:
- *
- *   D  8  a bare constructor where a type is required - `Function`, `Promise`,
- *         `Date`. Partly fixed in the document; the residue is that `type
- *         Function` is not a type either, so those need a different answer.
- *   I  8  still "Unexpected token" - a second extraction gap, not yet chased
- *   E  6  `std.head(type [])` expects `never`, but `type []` parses as an ARRAY
- *         rather than an empty tuple (F115, recorded in phase 1)
- *   B  6  a name the block uses that its `// Builder` block never declares -
- *         the block was written against the challenge's PROSE
- *   C  5  the challenge declares a function whose name AND annotated signature
- *         match a kit export, so the two form a duplicate OVERLOAD rather than
- *         a shadow. A hazard of the script prelude, not of either program.
- *   G  4  `mapProperties` given a non-object type
+ *   E 16  a tuple/array spelling - `type []` is an ARRAY, not an empty tuple
+ *         (F115), and the document writes `[].<T>` where a type is required
+ *   D 10  a bare constructor where a type is required, plus `Function`, which
+ *         is NOT a type at all and needs a design answer rather than a spelling
+ *   G 10  `mapProperties` on a nominal - the OQ2-A boundary working as decided;
+ *         these blocks predate that decision
+ *   I  6  still "Unexpected token" - a third extraction gap
+ *   B  2  a name the block never declares
+ *   H  2  `keys` undefined inside a default parameter - no hypothesis yet
  *   F  1  genuine semantic disagreement
  *
- * Fixed in the document already: `keysOf` renamed to `keys` (OQ1, 18 sites),
- * and the preamble's `never` (F107) and `stringPattern` (OQ8-C) imports.
+ * Counts are per BLOCK and a block may carry several causes, so they sum past
+ * 25.
  */
 
 test.todo('with std:types - 4  Pick - see TRIAGE STATE');
@@ -207,7 +193,22 @@ myCapitalize('') === type '';
 \nString(std.capitalized(type 'foo bar') === type 'Foo bar');`));
 });
 
-test.todo('with std:types - 191  Append Argument - see TRIAGE STATE');
+test('with std:types - 191  Append Argument', () => {
+  expectBuilderTrue(kit(`function appendArgument(F: type, A: type): type {
+  const node = reflect(F);
+  if (node.kind !== 'function') throw new TypeError(\`appendArgument: \${String(F)} is not a function type\`);
+  return Reflect.makeType({ ...node, signatures: node.signatures.map(sig => ({
+    ...sig,
+    parameters: [...sig.parameters,
+      { type: A, name: 'appended', index: sig.parameters.length, rest: false, initial: undefined, metadata: {} }],
+  })) });
+}
+
+appendArgument(type (a: uint32, b: string) => uint32, boolean) === type (a: uint32, b: string, x: boolean) => uint32;
+appendArgument(type () => void, type undefined) === type (x: undefined) => void;
+
+const Fn = type (a: uint32, b: string) => uint32;\nString(std.fn([...std.elementTypes(std.parameters(Fn)), boolean], std.returnType(Fn)) === appendArgument(Fn, boolean));`));
+});
 
 test('with std:types - 527  Append to object', () => {
   expectBuilderTrue(kit(`function appendToObject(T: type, key: string | symbol, V: type): type {
@@ -219,7 +220,18 @@ appendToObject(Test, 'home', boolean) === type { key: 'cat', value: 'green', hom
 \nString(std.merge(Test, std.record(type 'home', boolean)) === type { key: 'cat', value: 'green', home: boolean });`));
 });
 
-test.todo('with std:types - 599  Merge - see TRIAGE STATE');
+test('with std:types - 599  Merge', () => {
+  expectBuilderTrue(kit(`function merge(F: type, S: type): type {
+  const second = reflect(S).properties;
+  const overridden = new Set(second.map(p => p.name));
+  return objectOf([...reflect(F).properties.filter(p => !overridden.has(p.name)), ...second]);
+}
+
+type Foo = { a: uint32, b: string };
+type Bar = { b: uint32, c: boolean };
+merge(Foo, Bar) === type { a: uint32, b: uint32, c: boolean };
+\nString(std.merge(Foo, Bar) === merge(Foo, Bar));`));
+});
 
 test('with std:types - 645  Diff', () => {
   expectBuilderTrue(kit(`function diff(A: type, B: type): type {
@@ -251,7 +263,21 @@ test.todo('with std:types - 3062  Shift - see TRIAGE STATE');
 
 test.todo('with std:types - 3192  Reverse - see TRIAGE STATE');
 
-test.todo('with std:types - 3196  Flip Arguments - see TRIAGE STATE');
+test('with std:types - 3196  Flip Arguments', () => {
+  expectBuilderTrue(kit(`function flipArguments(F: type): type {
+  const node = reflect(F);
+  if (node.kind !== 'function') throw new TypeError(\`flipArguments: \${String(F)} is not a function type\`);
+  return Reflect.makeType({ ...node, signatures: node.signatures.map(sig => ({
+    ...sig, parameters: sig.parameters.toReversed().map((p, index) => ({ ...p, index })),
+  })) });
+}
+
+flipArguments(type (arg0: string, arg1: uint32, arg2: boolean) => void)
+  === type (arg0: boolean, arg1: uint32, arg2: string) => void;
+flipArguments(type () => boolean) === type () => boolean;
+
+const Flip = type (arg0: string, arg1: uint32, arg2: boolean) => void;\nString(std.fn(std.elementTypes(std.parameters(Flip)).toReversed(), std.returnType(Flip)) === flipArguments(Flip));`));
+});
 
 test.todo('with std:types - 4471  Zip - see TRIAGE STATE');
 
@@ -294,7 +320,21 @@ deepMutable(X) === type { a: () => 22, b: string, c: { d: boolean } };
 \nString(std.traverse(X, { property: p => ({ ...p, readonly: false }) }) === deepMutable(X));`));
 });
 
-test.todo('with std:types - 29650  ExtractToObject - see TRIAGE STATE');
+test('with std:types - 29650  ExtractToObject', () => {
+  expectBuilderTrue(kit(`function extractToObject(T: type, P: type): type {
+  const key = literalValues(P)[0];
+  const properties = reflect(T).properties;
+  const nested = properties.find(p => p.name === key);
+  return objectOf([...properties.filter(p => p.name !== key), ...reflect(nested.type).properties]);
+}
+
+extractToObject(type { id: '1', myProp: { foo: '2' } }, type 'myProp') === type { id: '1', foo: '2' };
+extractToObject(type { id: '1', prop1: { zoo: '2' }, prop2: { foo: '4' } }, type 'prop2')
+  === type { id: '1', prop1: { zoo: '2' }, foo: '4' };
+
+const Nested = type { id: '1', myProp: { foo: '2' } };\nString(std.merge(std.omit(Nested, type 'myProp'), std.indexed(Nested, type 'myProp'))
+  === extractToObject(Nested, type 'myProp'));`));
+});
 
 test('with std:types - 35991  MyUppercase', () => {
   expectBuilderTrue(kit(`function myUppercase(s: string): type {
@@ -321,9 +361,80 @@ test.todo('with std:types - 55  Union to Intersection - see TRIAGE STATE');
 
 test.todo('with std:types - 213  Vue Basic Props - see TRIAGE STATE');
 
-test.todo('with std:types - 270  Typed Get - see TRIAGE STATE');
+test('with std:types - 270  Typed Get', () => {
+  expectBuilderTrue(kit(`function get(T: type, path: string): type {
+  const at = (name: string): type | undefined =>
+    reflect(T).properties.find(p => p.name === name)?.type;
+  const exact = at(path);
+  if (exact !== undefined) return exact;      // a literal key beats the dotted reading
+  const dot = path.indexOf('.');
+  if (dot === -1) return never;
+  const head = at(path.slice(0, dot));
+  return head === undefined ? never : get(head, path.slice(dot + 1));
+}
 
-test.todo('with std:types - 1383  Camelize - see TRIAGE STATE');
+type Data = {
+  foo: { bar: { value: 'foobar', count: 6 }, included: true },
+  'foo.baz': false,
+  hello: 'world',
+};
+get(Data, 'hello') === type 'world';
+get(Data, 'foo.bar.count') === type 6;
+get(Data, 'foo.baz') === type false;        // the key 'foo.baz' exists
+get(Data, 'no.existed') === never;
+\nString(std.propertyType(Data, 'foo.baz') === type false);`));
+  expectBuilderTrue(kit(`function get(T: type, path: string): type {
+  const at = (name: string): type | undefined =>
+    reflect(T).properties.find(p => p.name === name)?.type;
+  const exact = at(path);
+  if (exact !== undefined) return exact;      // a literal key beats the dotted reading
+  const dot = path.indexOf('.');
+  if (dot === -1) return never;
+  const head = at(path.slice(0, dot));
+  return head === undefined ? never : get(head, path.slice(dot + 1));
+}
+
+type Data = {
+  foo: { bar: { value: 'foobar', count: 6 }, included: true },
+  'foo.baz': false,
+  hello: 'world',
+};
+get(Data, 'hello') === type 'world';
+get(Data, 'foo.bar.count') === type 6;
+get(Data, 'foo.baz') === type false;        // the key 'foo.baz' exists
+get(Data, 'no.existed') === never;
+\nString(std.propertyType(Data, 'no') === undefined);`));
+});
+
+test('with std:types - 1383  Camelize', () => {
+  expectBuilderTrue(kit(`const snakeToCamel = (s: string): string => s.replace(/_(\\p{L})/gu, (_, c) => c.toUpperCase());
+
+function camelize(T: type): type {
+  const node = reflect(T);
+  switch (node.kind) {
+    case 'object': return objectOf(node.properties.map(p => ({
+      ...p,
+      name: typeof p.name === 'string' ? snakeToCamel(p.name) : p.name,
+      type: camelize(p.type),
+    })));
+    case 'tuple': return tupleOf(node.elements.map(e => camelize(e.type)));
+    default: return T;
+  }
+}
+
+camelize(type {
+  some_prop: string,
+  prop: { another_prop: string },
+  array: [{ snake_case: string }, { another_element: { yet_another_prop: string } }],
+}) === type {
+  someProp: string,
+  prop: { anotherProp: string },
+  array: [{ snakeCase: string }, { anotherElement: { yetAnotherProp: string } }],
+};
+
+const Wire = type { some_prop: string, prop: { another_prop: string } };\nString(std.traverse(Wire, { property: p => ({ ...p, name: typeof p.name === 'string' ? snakeToCamel(p.name) : p.name }) })
+  === camelize(Wire));`));
+});
 
 test('with std:types - 9160  Assign', () => {
   expectBuilderTrue(kit(`function assign(T: type, sources: [].<type>): type {

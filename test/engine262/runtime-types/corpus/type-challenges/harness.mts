@@ -89,12 +89,53 @@ const STD_NAMESPACE = `const std = { ${STD_TYPES_SOURCE.split('\n')
  */
 export const KIT = `${KIT_ONLY}\n${CORPUS_LOCAL}\n${STD_NAMESPACE}`;
 
-/** A challenge program with the corpus prelude in scope. */
-export const kit = (program: string) => `${KIT}\n${program}`;
+/**
+ * A challenge program with the corpus prelude in scope, minus any export the
+ * program declares for itself.
+ *
+ * PLAN-std-types.md phase 4b step 7. Shadowing was supposed to make this
+ * unnecessary: a challenge that implements a helper the kit also exports
+ * declares its own `function omit`, a later declaration wins over an earlier
+ * one, and the exercise rule - "implementing the utility is the whole point" -
+ * keeps working.
+ *
+ * That holds for an UNANNOTATED declaration and fails for an annotated one.
+ * Two `function mutable(T: type): type` at one scope are a duplicate OVERLOAD,
+ * not a shadow, and the second is a Syntax Error. So the prelude was safe for
+ * the corpus's older challenges and unsafe for its typed ones - a distinction
+ * neither program hints at, and one that broke `concat`, `merge`, `mutable`,
+ * `reverse` and `zip`.
+ *
+ * Rather than renaming those challenges to suit the harness, or wrapping the
+ * prelude and losing the bare-name spelling the corpus uses throughout, the
+ * prelude simply omits what the program is about to declare. The challenge's
+ * definition is then the only one, which is what shadowing was meant to
+ * achieve.
+ */
+export const kit = (program: string) => {
+  const declared = new Set(
+    [...program.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+  );
+  const exported = STD_TYPES_SOURCE.split('\n')
+    .filter((line) => line.startsWith('export function '))
+    .map((line) => line.slice('export function '.length).split('(')[0]);
+  // The kit evaluates INSIDE a closure and is handed out as `std`, so a name the
+  // challenge redeclares cannot reach the kit's own calls: `removeKind` keeps
+  // calling the kit's `omit` even where the challenge defines a different one.
+  // Exposing it by destructuring rather than by declaration is also what lets a
+  // name simply be omitted - a `const` that is never introduced cannot clash
+  // with the `function` the challenge declares.
+  const kept = exported.filter((name) => !declared.has(name));
+  const namespace = `const std = (() => {\n${KIT_ONLY}\nreturn { ${exported.join(', ')} };\n})();`;
+  const bare = kept.length > 0 ? `const { ${kept.join(', ')} } = std;` : '';
+  return `${namespace}\n${bare}\n${CORPUS_LOCAL}\n${program}`;
+};
 
 export interface ChallengeResult {
   readonly completion: 'normal' | 'throw';
   readonly value: string | undefined;
+  /** The thrown error's message, where the program threw. */
+  readonly error?: string | undefined;
 }
 
 /** Evaluate a builder source in a fresh runtime-types realm. */
@@ -105,9 +146,29 @@ export function evaluateBuilder(source: string): ChallengeResult {
     Type: 'normal' | 'throw';
     Value?: { stringValue?(): string };
   };
+  // PLAN-std-types.md phase 4b: report the THROWN MESSAGE, not the first sixty
+  // characters of source. Those sixty characters are now the kit prelude, so a
+  // failure read "builder threw: const std = (() => { // ---- foundations" for
+  // every challenge in the corpus - identical, and useless for telling one
+  // cause from another. Triaging the ported blocks was impossible until this
+  // reported what actually went wrong.
+  let error;
+  if (completion.Type === 'throw') {
+    const v = completion.Value as unknown as {
+      properties?: Map<{ stringValue?(): string }, { Value?: { stringValue?(): string } }>,
+      stringValue?(): string,
+    };
+    for (const [k, entry] of v?.properties ?? []) {
+      if (k.stringValue?.() === 'message') {
+        error = entry.Value?.stringValue?.();
+      }
+    }
+    error ??= v?.stringValue?.();
+  }
   return {
     completion: completion.Type,
     value: completion.Value?.stringValue?.(),
+    error,
   };
 }
 
@@ -139,7 +200,7 @@ export function runChallenge(builder: string, assertions: readonly string[]): vo
  */
 export function expectBuilderTrue(source: string): void {
   const result = evaluateBuilder(source);
-  expect(result.completion, `builder threw: ${source.slice(0, 60)}`).toBe('normal');
+  expect(result.completion, `builder threw: ${result.error}`).toBe('normal');
   expect(result.value).toBe('true');
 }
 
