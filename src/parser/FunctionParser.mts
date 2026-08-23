@@ -36,6 +36,25 @@ interface ConciseBodyInfo {
 }
 
 export abstract class FunctionParser extends IdentifierParser {
+  /**
+   * proposal-runtime-types, PLAN-constructor-returns.md phase 1 (OQ1-E):
+   * `return` statements with an operand seen inside the class constructor
+   * currently being parsed, or null when not in one. Read by the class-body
+   * early-error pass, which is the first point that knows whether the class is
+   * typed - an annotation may appear AFTER the constructor.
+   *
+   * These live on `FunctionParser` because it is the lowest class all three
+   * users descend from: the collector is filled in `StatementParser`, scoped in
+   * `FunctionParser`, and consumed in `ExpressionParser`.
+   */
+  protected constructorReturns: ParseNode.ReturnStatement[] | null = null;
+
+  /** Set by a constructor's parse just before its body; consumed by `parseFunctionBody`. */
+  protected nextBodyIsConstructor = false;
+
+  /** The collector `parseFunctionBody` just finished with, for its caller to read. */
+  protected lastConstructorReturns: ParseNode.ReturnStatement[] | null = null;
+
   /** Declared here because a FORMAL PARAMETER may carry decorators (decorators.md) and the list parser lives further down the hierarchy. */
   protected abstract parseDecorators(): ParseNode.Decorator[] | null;
 
@@ -531,6 +550,17 @@ export abstract class FunctionParser extends IdentifierParser {
 
   parseFunctionBody(isAsync: boolean, isGenerator: boolean, isArrow: boolean): ParseNode.FunctionBodyLike {
     const node = this.startNode<ParseNode.FunctionBodyLike>();
+    // PLAN-constructor-returns.md phase 1 (OQ1-E). Every function body funnels
+    // through here, so the constructor-return collector is scoped ONCE, here,
+    // rather than at each of the forms that parse a body. That is what makes
+    // nesting correct without enumerating it: a function, arrow, or nested
+    // class's constructor written INSIDE a constructor gets a fresh collector
+    // (null unless it is itself a constructor body), so its own `return`
+    // statements never reach the enclosing constructor's list. Doing this at
+    // the constructor's call site instead would have collected them.
+    const savedConstructorReturns = this.constructorReturns;
+    this.constructorReturns = this.nextBodyIsConstructor ? [] : null;
+    this.nextBodyIsConstructor = false;
     this.expect(Token.LBRACE);
     this.scope.with({
       newTarget: isArrow ? undefined : true,
@@ -543,6 +573,8 @@ export abstract class FunctionParser extends IdentifierParser {
       node.FunctionStatementList = this.parseStatementList(Token.RBRACE, node.directives);
       node.strict = node.strict || node.directives.includes('use strict');
     });
+    this.lastConstructorReturns = this.constructorReturns;
+    this.constructorReturns = savedConstructorReturns;
     let name: ParseNode.FunctionBodyLike['type'];
     if (isAsync) {
       name = isGenerator ? 'AsyncGeneratorBody' : 'AsyncBody';

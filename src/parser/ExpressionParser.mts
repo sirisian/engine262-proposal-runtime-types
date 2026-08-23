@@ -188,6 +188,43 @@ function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
   }
 }
 
+/**
+ * proposal-runtime-types, PLAN-constructor-returns.md phase 1 (OQ2-B): is this
+ * class a TYPED class?
+ *
+ * A class carrying at least one type annotation. That line is the gradual-typing
+ * contract - annotating a declaration opts it into the typed dialect - and it is
+ * what keeps the proposal a SUPERSET: an untyped class keeps JavaScript's
+ * semantics unchanged, including a constructor that returns another object, so
+ * no running program stops running because the feature is on.
+ *
+ * An earlier draft justified this line by saying the engine already drew it.
+ * That reasoning is withdrawn: the engine decides participation per DECLARATION
+ * SITE (F123), which is a different line and the one OQ3 rejects. The argument
+ * is the contract and the superset property, not the implementation.
+ *
+ * A `static`-only annotation counts here, which is the simple reading of "any
+ * annotation" and is deliberately provisional - a class typed only by
+ * `static s: uint8` has no typed INSTANCE shape to protect, which argues the
+ * other way. PLAN-constructor-returns.md phase 2 measures and decides it, along
+ * with the decorator-only and `partial class` cases.
+ */
+function classIsTyped(elements: readonly ParseNode.ClassElement[]): boolean {
+  return elements.some((element) => {
+    const e = element as {
+      TypeAnnotation?: unknown,
+      TypeParameters?: unknown,
+      UniqueFormalParameters?: readonly { TypeAnnotation?: unknown }[] | null,
+      PropertySetParameterList?: readonly { TypeAnnotation?: unknown }[] | null,
+    };
+    if (e.TypeAnnotation || e.TypeParameters) {
+      return true;
+    }
+    const parameters = e.UniqueFormalParameters || e.PropertySetParameterList;
+    return !!parameters && parameters.some((p) => !!p && !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+  });
+}
+
 export abstract class ExpressionParser extends FunctionParser {
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
   // the conditional's own colon, so arrow return annotations are suppressed
@@ -2412,6 +2449,46 @@ export abstract class ExpressionParser extends FunctionParser {
             this.addEarlyError(Throw.SyntaxError('A class static field cannot be named as "constructor"'), m);
           }
         }
+        // PLAN-constructor-returns.md phase 1 (OQ1-E, scoped by OQ2-B).
+        // Reported HERE and not at the `return`, because this is the first
+        // point that knows whether the class is TYPED: an annotation may come
+        // after the constructor, as in
+        // `class C { constructor() { return {}; } x: uint8 = 1; }`.
+        //
+        // #sec-typed-classes asserts "the class is the type a construction
+        // yields" and never states a rule that makes it so. JavaScript makes
+        // it false: `[[Construct]]` returns the constructor's object when it
+        // returns one, so `new C() instanceof C` is false, a declared field
+        // reads `undefined`, and a private-name brand check fails (F122).
+        //
+        // A REFUSAL rather than a check, because a check cannot be written
+        // where the offence is. A base class's returning constructor breaks
+        // every subclass - `class B extends A { m() {} }` gets an object with
+        // no `m` and no prototype - and whether A's returned object is
+        // assignable to B is not knowable at A. Refusing makes the assertion
+        // true by construction, so `new C()` keeps a monomorphic shape and
+        // memorylayout.md's guarantees (placement `new`, serializers walking
+        // by offset) hold without reading a constructor body.
+        //
+        // Scoped to a typed class so the proposal stays a superset: an
+        // untyped class keeps JavaScript's semantics, including the
+        // Proxy-wrapping idiom, which is the one pattern this costs.
+        //
+        // Run AFTER the element loop, not inside it: the loop sees elements one
+        // at a time, so a constructor examined mid-loop cannot know about an
+        // annotation that follows it.
+        if (surroundingAgent.feature('runtime-types') && classIsTyped(ClassBody)) {
+          for (const element of ClassBody) {
+            const returns = (element as { ConstructorReturns?: readonly ParseNode.ReturnStatement[] }).ConstructorReturns;
+            for (const offending of returns || []) {
+              this.addEarlyError(
+                Throw.SyntaxError('A constructor yields its class and may return only `this`; write the expression as a statement followed by `return;`, or use a static method to return something else'),
+                offending,
+              );
+            }
+          }
+        }
+
         return ClassBody;
       });
     }
@@ -3855,8 +3932,40 @@ export abstract class ExpressionParser extends FunctionParser {
         node.UniqueFormalParameters = this.parseUniqueFormalParameters();
       }
 
-      // proposal-runtime-types: MethodDefinition return TypeAnnotation, setters excluded.
-      if (surroundingAgent.feature('runtime-types') && !isSetter && this.test(Token.COLON)) {
+      // proposal-runtime-types: MethodDefinition return TypeAnnotation; setters
+      // and class constructors excluded.
+      //
+      // PLAN-constructor-returns.md phase 1 (OQ1-E). A constructor has no
+      // return annotation POSITION. #sec-typed-classes: "A constructor declares
+      // no return type, since the class is the type a construction yields", and
+      // #sec-annotations-on-the-remaining-function-forms calls it "the one
+      // method that takes no return annotation". Three clauses IMPLIED the rule
+      // and none stated it as an early error, which is the room the engine's
+      // over-permission grew in (F121): the annotation parsed, the BODY was
+      // checked against it - a rule no clause contains - and the construction
+      // site then ignored it, so `let x: C = new C()` succeeded while
+      // `let x: Foo = new C()` failed. An annotation enforced in one place and
+      // discarded in another teaches a rule that is not true.
+      //
+      // Refused HERE, beside the setter exclusion, because it is the same rule
+      // for the same reason: a form whose result is fixed by what it IS has
+      // nothing to declare. Scoped to a CLASS constructor - an object literal's
+      // `{ constructor() {} }` is an ordinary method and keeps its annotation,
+      // which `type === 'class element'` distinguishes.
+      const isClassConstructor = type === 'class element'
+        && !isSpecialMethod
+        && !(node as { static?: boolean }).static
+        && this.classElementNameIsConstructor((node as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
+      if (surroundingAgent.feature('runtime-types') && isClassConstructor && this.test(Token.COLON)) {
+        this.addEarlyError(
+          Throw.SyntaxError('A constructor declares no return type; the class is the type a construction yields'),
+          this.peek(),
+        );
+        // Parsed and discarded, so the rest of the class still parses and the
+        // reader gets THIS diagnostic rather than a cascade from the `:`.
+        this.parseTypeAnnotation(true);
+      }
+      if (surroundingAgent.feature('runtime-types') && !isSetter && !isClassConstructor && this.test(Token.COLON)) {
         (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
@@ -3920,7 +4029,16 @@ export abstract class ExpressionParser extends FunctionParser {
                     || (node.ClassElementName.type === 'StringLiteral' && node.ClassElementName.value === 'constructor'))
                    && this.scope.hasSuperCall(),
       }, () => {
+        // PLAN-constructor-returns.md phase 1 (OQ1-E): ask `parseFunctionBody`
+        // to collect this constructor's own `return <expr>` statements. The
+        // collector is scoped there, not here, so nesting is handled once - see
+        // the note at `parseFunctionBody`.
+        this.nextBodyIsConstructor = isClassConstructor;
         const body = this.parseFunctionBody(isAsync, isGenerator, false);
+        if (isClassConstructor) {
+          (node as { ConstructorReturns?: readonly ParseNode.ReturnStatement[] })
+            .ConstructorReturns = this.lastConstructorReturns ?? [];
+        }
         // Unsafe cast below
         if (!isAsync && !isGenerator) {
           (node as ParseNode.Unfinished<ParseNode.MethodDefinition>).FunctionBody = body as ParseNode.FunctionBody;

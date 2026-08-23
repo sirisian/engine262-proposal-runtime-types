@@ -8,6 +8,7 @@ import type { ParseNode } from './ParseNode.mts';
 import { surroundingAgent, Throw, Value } from '#self';
 
 export abstract class StatementParser extends TypeParser {
+
   // proposal-runtime-types: meta-declared type names seen in this parse.
   private declaredMetaTypes?: Set<string>;
 
@@ -1645,7 +1646,25 @@ export abstract class StatementParser extends TypeParser {
       node.Expression = this.parseExpression();
       this.semicolon();
     }
-    return this.finishNode(node, 'ReturnStatement');
+    const finished = this.finishNode(node, 'ReturnStatement');
+    // PLAN-constructor-returns.md phase 1 (OQ1-E). A `return` with an operand
+    // inside a class constructor's own body. Collected rather than reported
+    // here for two reasons: whether the class is TYPED (OQ2-B) is not known
+    // until the class body ends - an annotation may come after the constructor,
+    // as in `class C { constructor() { return {}; } x: uint8 = 1; }` - and the
+    // class-body early-error pass is where every other constructor rule already
+    // lives.
+    //
+    // `return this` is exempt: it is `return;` written out, and it is the one
+    // operand that cannot be a different object. Nothing else is exempt, not
+    // even `return 42;`. The primitive form is harmless at run time (JavaScript
+    // discards it), but admitting it would require answering why an object
+    // operand differs, which is the type reasoning this rule exists to avoid.
+    if (this.constructorReturns && finished.Expression
+        && finished.Expression.type !== 'ThisExpression') {
+      this.constructorReturns.push(finished);
+    }
+    return finished;
   }
 
   // WithStatement :
