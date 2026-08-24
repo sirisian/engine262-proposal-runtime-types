@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { KIT, expectBuilderTrue, kit } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the medium tier, shard 5: the property-modifier family.
@@ -38,58 +38,58 @@ test('medium 2793 - Mutable', () => {
 
 // 8 - Readonly 2 - mark only the named keys readonly; the default is all keys.
 test('medium 8 - Readonly 2', () => {
-  const f = `${KIT}
+  const f = `
     function readonly2(T, K) {
       const keys = keyVals(K);
       return mapProperties(T, p => keys.has(p.name) ? { ...p, readonly: true } : p);
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type Todo = { title: string, description: string, completed: boolean };
     type Keys = 'title' | 'description';
     type Expected = { readonly title: string, readonly description: string, completed: boolean };
     String(readonly2(Todo, Keys) === Expected);
-  `);
+  `));
   // the default parameter (all keys) equals plain readonly
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     function readonlyAll(T) { return readonly(T); }
     type Todo = { title: string, done: boolean };
     type AllKeys = keyof Todo;
     String(readonly2(Todo, AllKeys) === readonly(Todo));
-  `);
+  `));
 });
 
 // 2757 - PartialByKeys - make only the named keys optional; default is all.
 test('medium 2757 - PartialByKeys', () => {
-  const f = `${KIT}
+  const f = `
     function partialByKeys(T, K) {
       const keys = keyVals(K);
       return mapProperties(T, p => keys.has(p.name) ? { ...p, optional: true } : p);
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type User = { name: string, age: uint32, address: string };
     type Expected = { name?: string, age: uint32, address: string };
     String(partialByKeys(User, type 'name') === Expected);
-  `);
-  expectBuilderTrue(`${f}
+  `));
+  expectBuilderTrue(kit(`${f}
     type User = { name: string, age: uint32, address: string };
     type Keys = 'name' | 'age';
     type Expected = { name?: string, age?: uint32, address: string };
     String(partialByKeys(User, Keys) === Expected);
-  `);
+  `));
 });
 
 // 2759 - RequiredByKeys - make only the named keys required; default is all.
 test('medium 2759 - RequiredByKeys', () => {
-  const f = `${KIT}
+  const f = `
     function requiredByKeys(T, K) {
       const keys = keyVals(K);
       return mapProperties(T, p => keys.has(p.name) ? { ...p, optional: false } : p);
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type User = { name?: string, age?: uint32, address?: string };
     type Expected = { name: string, age?: uint32, address?: string };
     String(requiredByKeys(User, type 'name') === Expected);
-  `);
+  `));
 });
 
 // 3 - Omit (readonly-preserving form) - the corpus's Omit keeps `readonly title`

@@ -92,7 +92,6 @@ test('hard 14080 - FizzBuzz', () => {
 // inference under a constraint applied to a generic call.
 test('hard 847 - String Join (return-type transform)', () => {
   const f = `
-    function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }
     function litval(T) { return Reflect.getReflection(T).value; }
     function joinType(P, delimiter) { return literal(elementTypes(P).map(e => litval(e)).join(delimiter)); }
     function join(delimiter) { return (P) => joinType(P, delimiter); }`;

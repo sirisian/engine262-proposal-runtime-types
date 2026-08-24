@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { runChallenge, expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit, runChallenge } from './harness.mts';
 
 // Type Challenge - Warm-up - 13 - Hello World
 // Source: ecmascript-types/examples/typechallenges.md
@@ -28,10 +28,10 @@ test('warm-up 13 - Hello World', () => {
 // The same, checked as one self-contained program ending in a boolean, to
 // exercise expectBuilderTrue and confirm the multi-assertion program runs whole.
 test('warm-up 13 - Hello World (whole program)', () => {
-  expectBuilderTrue(`
+  expectBuilderTrue(kit(`
     type HelloWorld = string;
     const a = HelloWorld === string;
     const b = Reflect.typeOf('hi') === HelloWorld;
     String(a && b);
-  `);
+  `));
 });

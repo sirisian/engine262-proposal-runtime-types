@@ -13,10 +13,6 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 const TUP = `
-function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
 `;
 
 // 35314 - Valid Sudoku - every row, column, and box of a 9x9 grid is complete.

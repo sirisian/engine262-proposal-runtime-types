@@ -26,39 +26,39 @@ import { expectBuilderTrue, kit } from './harness.mts';
 // comparison; the tuple-wrapping the TypeScript solution needs (to dodge
 // distribution over never) has nothing to do here. Fully in builder form.
 test('medium 1042 - IsNever', () => {
-  expectBuilderTrue(`
+  expectBuilderTrue(kit(`
     function isNever(T) { return T === never ? type true : type false; }
     String(isNever(never) === type true);
-  `);
-  expectBuilderTrue(`
+  `));
+  expectBuilderTrue(kit(`
     function isNever(T) { return T === never ? type true : type false; }
     String(isNever(type '') === type false);
-  `);
+  `));
   // never | string is just string (never is the union identity), so not never
-  expectBuilderTrue(`
+  expectBuilderTrue(kit(`
     function isNever(T) { return T === never ? type true : type false; }
     type U = never | string;
     String(isNever(U) === type false);
-  `);
+  `));
 });
 
 // 1097 - IsUnion - a type is a union with more than one arm.
 test('medium 1097 - IsUnion', () => {
-  expectBuilderTrue(`
+  expectBuilderTrue(kit(`
     function isUnion(T) {
       const n = Reflect.getReflection(T);
       return n.kind === 'union' && n.arms.length > 1 ? type true : type false;
     }
     type U = 'a' | 'b';
     String(isUnion(U) === type true);
-  `);
-  expectBuilderTrue(`
+  `));
+  expectBuilderTrue(kit(`
     function isUnion(T) {
       const n = Reflect.getReflection(T);
       return n.kind === 'union' && n.arms.length > 1 ? type true : type false;
     }
     String(isUnion(string) === type false);
-  `);
+  `));
 });
 
 // 531 - String to Union - each character becomes a literal type, unioned.

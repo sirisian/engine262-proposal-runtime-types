@@ -18,7 +18,6 @@ import { expectBuilderTrue, kit } from './harness.mts';
 // withKey builds exactly the object the challenge's `.get()` returns.
 test('medium 12 - Chainable Options (withKey accumulator)', () => {
   const f = `
-    function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
     function withKey(T, key, V) {
       if (Reflect.getReflection(T).properties.some(p => p.name === key)) {
         throw new TypeError("option: '" + key + "' is already set");
@@ -56,9 +55,6 @@ test('medium 12 - Chainable Options (withKey accumulator)', () => {
 test('medium 20 - Promise.all (settled)', () => {
   const f = `
     type PromiseBase = Promise;
-    function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-    function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-    function arrayOf(el, extent) { return Reflect.makeType({ kind: 'array', element: el, extent }); }
     function promiseOf(X) { return Reflect.makeType({ kind: 'generic', base: PromiseBase, arguments: [X] }); }
     function awaited(T) {
       const n = Reflect.getReflection(T);
@@ -95,8 +91,6 @@ test('medium 26401 - JSON Schema to TypeScript', () => {
   const f = `
     function field(schema, name) { const p = Reflect.getReflection(schema).properties.find(x => x.name === name); return p ? p.type : undefined; }
     function litval(T) { return Reflect.getReflection(T).value; }
-    function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-    function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
     function jsonSchema2TS(schema) {
       const kindT = field(schema, 'type');
       if (kindT === undefined) { return never; }

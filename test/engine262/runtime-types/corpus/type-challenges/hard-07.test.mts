@@ -14,9 +14,6 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 const TUP = `
-function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
 `;
 
 // 17 - Currying 1 - a multi-argument function type to nested single-argument
@@ -105,9 +102,6 @@ test('hard 213 - Vue Basic Props (inferPropType)', () => {
 // expressible, so the typed-options identity is asserted here.
 test('hard 6 - Simple Vue', () => {
   const f = `
-    function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-    function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
-    function prop(name, type) { return { name, type, optional: false, readonly: false }; }
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];
       return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, this: Reflect.getReflection(Self) }] });
@@ -148,10 +142,6 @@ test('hard 6 - Simple Vue', () => {
 // withThisType helper, so it needs the same `this`-parameter type primitive.
 test('hard 1290 - Pinia', () => {
   const f = `
-    function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-    function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
-    function prop(name, type) { return { name, type, optional: false, readonly: false }; }
-    function readonly(T) { return mapProperties(T, p => ({ ...p, readonly: true })); }
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];
       return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, this: Reflect.getReflection(Self) }] });
