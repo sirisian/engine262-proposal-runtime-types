@@ -459,8 +459,31 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // that defines no `validate` therefore admits nothing here, which is what
     // makes a brand reachable only by construction.
     const atBase = Q(yield* ConvertValue(value, t.Base));
-    if (!Q(yield* IsOfType(atBase, t))) {
-      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    // PLAN-brand.md OQ1. The gate was `IsOfType(atBase, t)`, and IsOfType
+    // answers *false* for a meta type defining no `validate` - THAT BEING THE
+    // BRAND RULE. So the rule about BARE values was applied at the boundary
+    // that exists to let a value stop being bare, and a brand refused its own
+    // construction: `UserId(7)` threw with the same diagnostic as
+    // `let x: UserId = 7`. B11 held and B5 did not, which is not a brand but a
+    // type nothing can inhabit.
+    //
+    // The same correction was already made for the CAST path, and
+    // RequireTypeAfterCast records it: "a meta type offering no judgment now
+    // admits, rather than refusing on the strength of a rule about BARE values
+    // that a cast result is no longer one of." A construction result is no
+    // longer one either. So the boundary runs the DEFINED judgments and treats
+    // an absent one as nothing to check - a pattern still validates here, a
+    // brand admits, and that asymmetry is what makes the two spellings mean
+    // different things.
+    const { types: governing } = GoverningMetaTypes(t.Metadata);
+    for (const metaType of governing) {
+      if (!MetaTypeGoverns(t.Metadata, metaType)) {
+        continue;
+      }
+      const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType), t.Base));
+      if (verdict === false) {
+        return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+      }
     }
     return isTypedNumber(atBase) ? new TypedNumberValue(atBase.value, t) : atBase;
   }
