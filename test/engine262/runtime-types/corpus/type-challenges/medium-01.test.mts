@@ -127,11 +127,11 @@ test('medium 298 - Length of String', () => {
 // the corpus's own form, `last(type [3,2,1])`, now that a tuple operand parses.
 test('medium 15 - Last of Array', () => {
   expectBuilderTrue(kit(`
-    function last(T) { const els = elementTypes(T); return els.length ? els[els.length - 1] : never; }
+    function last(T) { const els = elementTypes(T); return Number(els.length) ? els[Number(els.length) - 1] : never; }
     String(last(type [3, 2, 1]) === type 1);
   `));
   expectBuilderTrue(kit(`
-    function last(T) { const els = elementTypes(T); return els.length ? els[els.length - 1] : never; }
+    function last(T) { const els = elementTypes(T); return Number(els.length) ? els[Number(els.length) - 1] : never; }
     String(last(type [2]) === type 2);
   `));
 });

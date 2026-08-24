@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the hard tier, shard 7 (the structural cluster).
@@ -13,7 +13,6 @@ import { expectBuilderTrue } from './harness.mts';
  * primitive named; the portable sub-piece (inferPropType) is asserted on its own.
  */
 
-const L = `function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }`;
 const TUP = `
 function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
 function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
@@ -36,22 +35,22 @@ test('hard 17 - Currying 1', () => {
       const tail = fn(rest.map(p => p.type), signature.return.type);
       return Reflect.makeType({ kind: 'function', signatures: [{ parameters: [first], return: { type: curried(tail) } }] });
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type F = (a: string, b: float64, c: boolean) => true;
     type Expected = (a: string) => (b: float64) => (c: boolean) => true;
     String(curried(F) === Expected);
-  `);
+  `));
   // a single-argument (or zero-argument) function type is unchanged
-  expectBuilderTrue(`${f}\n type F = () => true; String(curried(F) === F);`);
+  expectBuilderTrue(kit(`${f}\n type F = () => true; String(curried(F) === F);`));
 });
 
 // 147 - C-printf Parser - the format controls as a tuple of literal types.
 test('hard 147 - C-printf Parser', () => {
-  const f = `${L}${TUP}
+  const f = `${TUP}
     const controlsMap = { c: 'char', s: 'string', d: 'dec', o: 'oct', h: 'hex', f: 'float', p: 'pointer' };
     function parsePrintFormat(s) {
       const out = [];
-      for (let i = 0; i < s.length - 1; i += 1) {
+      for (let i = 0; i < Number(s.length) - 1; i += 1) {
         if (s[i] !== '%') { continue; }
         const letter = s[i + 1];
         if (letter === '%') { i += 1; continue; }
@@ -59,11 +58,11 @@ test('hard 147 - C-printf Parser', () => {
       }
       return tupleOf(out);
     }`;
-  expectBuilderTrue(`${f}\n type Expected = ['dec']; String(parsePrintFormat('The result is %d.') === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type Expected = ['dec']; String(parsePrintFormat('The result is %d.') === Expected);`));
   // %% is an escaped percent
-  expectBuilderTrue(`${f}\n const empty = Reflect.makeType({ kind: 'tuple', elements: [] }); String(parsePrintFormat('The result is %%d.') === empty);`);
-  expectBuilderTrue(`${f}\n type Expected = ['dec']; String(parsePrintFormat('The result is %%%d.') === Expected);`);
-  expectBuilderTrue(`${f}\n type Expected = ['string', 'dec']; String(parsePrintFormat('Hello %s: score is %d.') === Expected);`);
+  expectBuilderTrue(kit(`${f}\n const empty = Reflect.makeType({ kind: 'tuple', elements: [] }); String(parsePrintFormat('The result is %%d.') === empty);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = ['dec']; String(parsePrintFormat('The result is %%%d.') === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = ['string', 'dec']; String(parsePrintFormat('Hello %s: score is %d.') === Expected);`));
 });
 
 // 545 - printf - a format string to a curried function type ending in string.
@@ -74,10 +73,10 @@ test('hard 545 - printf', () => {
       const specs = [...f2.matchAll(/%(.)/g)].map(m => m[1]).filter(c => c in mapDict);
       return specs.reduceRight((rest, c) => fn([mapDict[c]], rest), string);
     }`;
-  expectBuilderTrue(`${f}\n String(format('') === string);`);
-  expectBuilderTrue(`${f}\n type Expected = (x: string) => string; String(format('%s') === Expected);`);
-  expectBuilderTrue(`${f}\n type Expected = (x: float64) => string; String(format('%d') === Expected);`);
-  expectBuilderTrue(`${f}\n type Expected = (x: string) => (y: float64) => string; String(format('%s%d') === Expected);`);
+  expectBuilderTrue(kit(`${f}\n String(format('') === string);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = (x: string) => string; String(format('%s') === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = (x: float64) => string; String(format('%d') === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = (x: string) => (y: float64) => string; String(format('%s%d') === Expected);`));
 });
 
 // 213 - Vue Basic Props - the full vueProps type needs `this`-typed methods
@@ -96,8 +95,8 @@ test('hard 213 - Vue Basic Props (inferPropType)', () => {
       }
       return each(declared);
     }`;
-  expectBuilderTrue(`${f}\n type P = { type: () => uint32 }; String(inferPropType(P) === uint32);`);
-  expectBuilderTrue(`${f}\n type P = [() => uint32, () => string]; type Expected = uint32 | string; String(inferPropType(P) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type P = { type: () => uint32 }; String(inferPropType(P) === uint32);`));
+  expectBuilderTrue(kit(`${f}\n type P = [() => uint32, () => string]; type Expected = uint32 | string; String(inferPropType(P) === Expected);`));
 });
 
 // 6 - Simple Vue - vueOptions types `data`, `computed`, and `methods` so each
@@ -128,7 +127,7 @@ test('hard 6 - Simple Vue', () => {
     }`;
   // data binds `this: void`, computed getters bind `this: D`, methods bind
   // `this: D & computedResults(C) & M`.
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type D = { count: uint32 };
     type C = { double: () => uint32 };
     type M = { inc: () => void };
@@ -138,14 +137,14 @@ test('hard 6 - Simple Vue', () => {
       methods: { inc: (this: { count: uint32 } & { double: uint32 } & { inc: () => void }) => void }
     };
     String(vueOptions(D, C, M) === Expected);
-  `);
+  `));
   // the shape is deterministic, so interned identity holds across two builds
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type D = { firstname: string, lastname: string };
     type C = { fullname: () => string };
     type M = { hi: () => string };
     String(vueOptions(D, C, M) === vueOptions(D, C, M));
-  `);
+  `));
 });
 
 // 1290 - Pinia - storeOptions binds `this` on getters and actions with the same
@@ -177,13 +176,13 @@ test('hard 1290 - Pinia', () => {
   // and each piece matches its construction. Asserting against builder-constructed
   // expectations mirrors the corpus and avoids hand-transcribing deeply nested
   // `this`-type intersections.
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type S = { count: uint32 };
     type G = { double: () => uint32 };
     type A = { inc: () => void };
     String(storeOptions(S, G, A) === storeOptions(S, G, A));
-  `);
-  expectBuilderTrue(`${f}
+  `));
+  expectBuilderTrue(kit(`${f}
     type S = { count: uint32 };
     type G = { double: () => uint32 };
     type A = { inc: () => void };
@@ -195,14 +194,14 @@ test('hard 1290 - Pinia', () => {
     const gettersOk = byName('getters') === withThisOnMethods(G, all([computedResults(G), readonly(S)]));
     const actionsOk = byName('actions') === withThisOnMethods(A, all([A, S, readonly(computedResults(G))]));
     String(idOk && stateOk && gettersOk && actionsOk);
-  `);
+  `));
   // the getters this-type is exactly the computed results intersected with the
   // readonly state; spot-check it against a hand-written type (the shallow case
   // that is safe to transcribe).
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type S = { count: uint32 };
     type G = { double: () => uint32 };
     type Expected = { double: (this: { double: uint32 } & { readonly count: uint32 }) => uint32 };
     String(withThisOnMethods(G, all([computedResults(G), readonly(S)])) === Expected);
-  `);
+  `));
 });

@@ -359,7 +359,7 @@ const Flip = type (arg0: string, arg1: uint32, arg2: boolean) => void;\nString(s
 test('with std:types - 4471  Zip', () => {
   expectBuilderTrue(kit(`function zip(A: type, B: type): type {
   const [a, b] = [tupleElements(A), tupleElements(B)];
-  return tupleOf(a.slice(0, Math.min(a.length, b.length)).map((e, i) => tupleOf([e.type, b[i].type])));
+  return tupleOf(a.slice(0, Math.min(Number(a.length), Number(b.length))).map((e, i) => tupleOf([e.type, b[i].type])));
 }\nString(std.zip(type [1, 2, 3], type ['1', '2']) === type [[1, '1'], [2, '2']]);`));
 });
 

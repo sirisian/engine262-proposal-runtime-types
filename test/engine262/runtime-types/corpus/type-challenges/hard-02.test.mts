@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the hard tier, shard 2.
@@ -10,62 +10,55 @@ import { expectBuilderTrue } from './harness.mts';
  * ordinary JS. Tuple operands are aliases.
  */
 
-const L = `function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }`;
-const TUP = `
-function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
-`;
 
 // 55 - Union to Intersection - the arms of a union as an intersection.
 test('hard 55 - Union to Intersection', () => {
-  const f = `${TUP}\n function unionToIntersection(U) { return Reflect.makeType({ kind: 'intersection', members: arms(U) }); }`;
-  expectBuilderTrue(`${f}\n type U = 'foo' | 42 | true; type Expected = 'foo' & 42 & true; String(unionToIntersection(U) === Expected);`);
-  expectBuilderTrue(`${f}\n type U = (() => 'foo') | ((i: 42) => true); type Expected = (() => 'foo') & ((i: 42) => true); String(unionToIntersection(U) === Expected);`);
+  const f = ` function unionToIntersection(U) { return Reflect.makeType({ kind: 'intersection', members: arms(U) }); }`;
+  expectBuilderTrue(kit(`${f}\n type U = 'foo' | 42 | true; type Expected = 'foo' & 42 & true; String(unionToIntersection(U) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type U = (() => 'foo') | ((i: 42) => true); type Expected = (() => 'foo') & ((i: 42) => true); String(unionToIntersection(U) === Expected);`));
 });
 
 // 223 - IsAny - identity against the any type.
 test('hard 223 - IsAny', () => {
   const f = 'function isAny(T) { return T === any ? type true : type false; }';
-  expectBuilderTrue(`${f}\n String(isAny(any) === type true);`);
-  expectBuilderTrue(`${f}\n String(isAny(undefined) === type false);`);
-  expectBuilderTrue(`${f}\n String(isAny(never) === type false);`);
+  expectBuilderTrue(kit(`${f}\n String(isAny(any) === type true);`));
+  expectBuilderTrue(kit(`${f}\n String(isAny(undefined) === type false);`));
+  expectBuilderTrue(kit(`${f}\n String(isAny(never) === type false);`));
 });
 
 // 112 - Capitalize Words - capitalize the first letter of every word.
 test('hard 112 - Capitalize Words', () => {
-  const f = `${L}
-    function capitalizeWords(s) { return literal(s.replace(/(^|[^a-zA-Z])([a-z])/g, (m, p, c) => p + c.toUpperCase())); }`;
-  expectBuilderTrue(`${f}\n String(capitalizeWords('foobar') === type 'Foobar');`);
-  expectBuilderTrue(`${f}\n String(capitalizeWords('FOOBAR') === type 'FOOBAR');`);
-  expectBuilderTrue(`${f}\n String(capitalizeWords('foo bar.hello,world') === type 'Foo Bar.Hello,World');`);
+  const f = `    function capitalizeWords(s) { return literal(s.replace(/(^|[^a-zA-Z])([a-z])/g, (m, p, c) => p + c.toUpperCase())); }`;
+  expectBuilderTrue(kit(`${f}\n String(capitalizeWords('foobar') === type 'Foobar');`));
+  expectBuilderTrue(kit(`${f}\n String(capitalizeWords('FOOBAR') === type 'FOOBAR');`));
+  expectBuilderTrue(kit(`${f}\n String(capitalizeWords('foo bar.hello,world') === type 'Foo Bar.Hello,World');`));
 });
 
 // 651 - Length of String 2 - the length as a literal number type.
 test('hard 651 - Length of String 2', () => {
-  const f = `${L}\n function lengthOfString(s) { return literal(s.length); }`;
-  expectBuilderTrue(`${f}\n String(lengthOfString('') === type 0);`);
-  expectBuilderTrue(`${f}\n String(lengthOfString('1234567') === type 7);`);
+  const f = ` function lengthOfString(s) { return literal(s.length); }`;
+  expectBuilderTrue(kit(`${f}\n String(lengthOfString('') === type 0);`));
+  expectBuilderTrue(kit(`${f}\n String(lengthOfString('1234567') === type 7);`));
 });
 
 // 4037 - IsPalindrome - reads the same reversed.
 test('hard 4037 - IsPalindrome', () => {
   const f = "function isPalindrome(s) { return s === [...s].reverse().join('') ? type true : type false; }";
-  expectBuilderTrue(`${f}\n String(isPalindrome('abc') === type false);`);
-  expectBuilderTrue(`${f}\n String(isPalindrome('abcba') === type true);`);
+  expectBuilderTrue(kit(`${f}\n String(isPalindrome('abc') === type false);`));
+  expectBuilderTrue(kit(`${f}\n String(isPalindrome('abcba') === type true);`));
 });
 
 // 6141 - Binary to Decimal - parse a binary string to a literal number type.
 test('hard 6141 - Binary to Decimal', () => {
-  const f = `${L}\n function binaryToDecimal(s) { return literal(parseInt(s, 2)); }`;
-  expectBuilderTrue(`${f}\n String(binaryToDecimal('0011') === type 3);`);
-  expectBuilderTrue(`${f}\n String(binaryToDecimal('11111111') === type 255);`);
-  expectBuilderTrue(`${f}\n String(binaryToDecimal('10101010') === type 170);`);
+  const f = ` function binaryToDecimal(s) { return literal(parseInt(s, 2)); }`;
+  expectBuilderTrue(kit(`${f}\n String(binaryToDecimal('0011') === type 3);`));
+  expectBuilderTrue(kit(`${f}\n String(binaryToDecimal('11111111') === type 255);`));
+  expectBuilderTrue(kit(`${f}\n String(binaryToDecimal('10101010') === type 170);`));
 });
 
 // 14080 - FizzBuzz - the FizzBuzz words 1..n as a tuple of string literals.
 test('hard 14080 - FizzBuzz', () => {
-  const f = `${L}${TUP}
-    function fizzBuzz(n) {
+  const f = `    function fizzBuzz(n) {
       const out = [];
       for (let v = 1; v <= n; v += 1) {
         const word = (v % 3 === 0 ? 'Fizz' : '') + (v % 5 === 0 ? 'Buzz' : '');
@@ -73,8 +66,8 @@ test('hard 14080 - FizzBuzz', () => {
       }
       return tupleOf(out);
     }`;
-  expectBuilderTrue(`${f}\n type Expected = ['1']; String(fizzBuzz(1) === Expected);`);
-  expectBuilderTrue(`${f}\n type Expected = ['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz']; String(fizzBuzz(15) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type Expected = ['1']; String(fizzBuzz(1) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = ['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz']; String(fizzBuzz(15) === Expected);`));
 });
 
 // 847 - String Join - the corpus writes a curried
@@ -105,11 +98,11 @@ test('hard 847 - String Join (return-type transform)', () => {
     function joinType(P, delimiter) { return literal(elementTypes(P).map(e => litval(e)).join(delimiter)); }
     function join(delimiter) { return (P) => joinType(P, delimiter); }`;
   // join('-')(['a','b','c']) computes 'a-b-c'
-  expectBuilderTrue(`${f}\n type P = ['a', 'b', 'c']; String(join('-')(P) === type 'a-b-c');`);
+  expectBuilderTrue(kit(`${f}\n type P = ['a', 'b', 'c']; String(join('-')(P) === type 'a-b-c');`));
   // an empty argument tuple joins to the empty string (empty tuple constructed)
-  expectBuilderTrue(`${f}\n const P = Reflect.makeType({ kind: 'tuple', elements: [] }); String(join('-')(P) === type '');`);
+  expectBuilderTrue(kit(`${f}\n const P = Reflect.makeType({ kind: 'tuple', elements: [] }); String(join('-')(P) === type '');`));
   // a single element is itself
-  expectBuilderTrue(`${f}\n type P = ['a']; String(join('-')(P) === type 'a');`);
+  expectBuilderTrue(kit(`${f}\n type P = ['a']; String(join('-')(P) === type 'a');`));
   // an empty delimiter concatenates
-  expectBuilderTrue(`${f}\n type P = ['a', 'b', 'c']; String(join('')(P) === type 'abc');`);
+  expectBuilderTrue(kit(`${f}\n type P = ['a', 'b', 'c']; String(join('')(P) === type 'abc');`));
 });

@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the extreme tier, shard 3 (the last five).
@@ -12,7 +12,6 @@ import { expectBuilderTrue } from './harness.mts';
  * Tuple operands are aliases; Currying 2 is asserted as the type transform.
  */
 
-const L = `function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }`;
 const TUP = `
 function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
 function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
@@ -38,13 +37,13 @@ test('extreme 35314 - Valid Sudoku', () => {
       [2, 3, 1, 5, 6, 4, 8, 9, 7], [5, 6, 4, 8, 9, 7, 2, 3, 1], [8, 9, 7, 2, 3, 1, 5, 6, 4],
       [3, 1, 2, 6, 4, 5, 9, 7, 8], [6, 4, 5, 9, 7, 8, 3, 1, 2], [9, 7, 8, 3, 1, 2, 6, 4, 5]
     ];`;
-  expectBuilderTrue(`${f}\n String(validSudoku(Grid) === type true);`);
+  expectBuilderTrue(kit(`${f}\n String(validSudoku(Grid) === type true);`));
   // a duplicated row makes columns incomplete
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     const gridRows = elementTypes(Grid);
     const bad = tupleOf([gridRows[0], gridRows[0], ...gridRows.slice(2)]);
     String(validSudoku(bad) === type false);
-  `);
+  `));
 });
 
 // 462 - Currying 2 - an argument tuple and return type to a curried function
@@ -57,12 +56,12 @@ test('extreme 462 - Currying 2', () => {
       const [head, ...tail] = elements;
       return fn([head.type], tail.length === 0 ? R : curry(tupleOf(tail.map(e => e.type)), R));
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type Args = [string, uint32, boolean];
     type Expected = (a: string) => (b: uint32) => (c: boolean) => true;
     String(curry(Args, type true) === Expected);
-  `);
-  expectBuilderTrue(`${f}\n type Args = [string]; type Expected = (a: string) => uint32; String(curry(Args, uint32) === Expected);`);
+  `));
+  expectBuilderTrue(kit(`${f}\n type Args = [string]; type Expected = (a: string) => uint32; String(curry(Args, uint32) === Expected);`));
 });
 
 // 869 - DistributeUnions - a tuple of unions to the union of tuple combinations.
@@ -82,16 +81,16 @@ test('extreme 869 - DistributeUnions', () => {
       if (node.kind !== 'tuple') { return T; }
       return union(distribute(node.elements.map(e => e.type)).map(combo => tupleOf(combo)));
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type T = [1 | 2, 'a' | 'b'];
     type Expected = [1, 'a'] | [1, 'b'] | [2, 'a'] | [2, 'b'];
     String(distributeUnions(T) === Expected);
-  `);
+  `));
 });
 
 // 6228 - JSON Parser - a JSON string to the type of its value.
 test('extreme 6228 - JSON Parser', () => {
-  const f = `${L}${TUP}
+  const f = `${TUP}
     function build(v) {
       if (v === null) { return type null; }
       if (Array.isArray(v)) { return tupleOf(v.map(build)); }
@@ -99,10 +98,10 @@ test('extreme 6228 - JSON Parser', () => {
       return literal(v);
     }
     function parseJSON(s) { return build(JSON.parse(s)); }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type Expected = { a: 'b', b: false, c: [true, false, 'hello'], nil: null };
     String(parseJSON('{"a":"b","b":false,"c":[true,false,"hello"],"nil":null}') === Expected);
-  `);
+  `));
 });
 
 // 33345 - Dynamic Route - the `:name` segments as an object of string params.
@@ -112,7 +111,7 @@ test('extreme 33345 - Dynamic Route', () => {
       const parts = route.split('/').filter(p => p.startsWith(':')).map(p => p.slice(1));
       return objectOf(parts.map(p => ({ name: p, type: string, optional: false, readonly: false })));
     }`;
-  expectBuilderTrue(`${f}\n const empty = Reflect.makeType({ kind: 'object', properties: [], indexSignatures: [] }); String(dynamicRoute('/shop') === empty);`);
-  expectBuilderTrue(`${f}\n type Expected = { id: string }; String(dynamicRoute('/shop/product/:id') === Expected);`);
-  expectBuilderTrue(`${f}\n type Expected = { categoryId: string, productId: string }; String(dynamicRoute('/shop/:categoryId/:productId') === Expected);`);
+  expectBuilderTrue(kit(`${f}\n const empty = Reflect.makeType({ kind: 'object', properties: [], indexSignatures: [] }); String(dynamicRoute('/shop') === empty);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = { id: string }; String(dynamicRoute('/shop/product/:id') === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type Expected = { categoryId: string, productId: string }; String(dynamicRoute('/shop/:categoryId/:productId') === Expected);`));
 });
