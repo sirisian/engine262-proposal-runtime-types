@@ -72,7 +72,6 @@ test('extreme 925 - Assert Array Index', () => {
 // 697 - Tag - attach an order-independent, idempotent tag set to a type.
 test('extreme 697 - Tag', () => {
   const f = `    const TAGS = '__tags';
-    function literalValues(T) { const n = Reflect.getReflection(T); return (n.kind === 'union' ? n.arms : [T]).map(a => Reflect.getReflection(a).value); }
     function tag(T, name) {
       const existing = Reflect.getReflection(T).properties.find(p => p.name === TAGS);
       const names = existing === undefined ? [] : literalValues(existing.type).map(String);
@@ -99,7 +98,13 @@ test('extreme 31997 - Parameter Intersection', () => {
       const a = elementTypes(A), b = elementTypes(B);
       const n = Math.max(Number(a.length), Number(b.length));
       const out = [];
-      for (let i = 0; i < n; i += 1) { out.push(a[i] !== undefined && b[i] !== undefined ? all([a[i], b[i]]) : (a[i] ?? b[i])); }
+      // A typed array is BOUNDS-CHECKED, so \`a[i]\` past the end throws rather
+      // than yielding undefined; test the length instead of the value.
+      for (let i = 0; i < n; i += 1) {
+        const ai = i < Number(a.length) ? a[i] : undefined;
+        const bi = i < Number(b.length) ? b[i] : undefined;
+        out.push(ai !== undefined && bi !== undefined ? all([ai, bi]) : (ai ?? bi));
+      }
       return tupleOf(out);
     }`;
   expectBuilderTrue(kit(`${f}\n type A = [{ x: 1 }]; type B = [{ y: 2 }]; type Expected = [{ x: 1 } & { y: 2 }]; String(paramIntersection(A, B) === Expected);`));

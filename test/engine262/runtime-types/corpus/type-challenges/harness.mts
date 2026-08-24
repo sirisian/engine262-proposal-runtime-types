@@ -116,6 +116,12 @@ export const kit = (program: string) => {
   const declared = new Set(
     [...program.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
   );
+  // Any top-level binding, not just a function: a `const` collides with a
+  // prelude `function` of the same name rather than shadowing it.
+  const declaredAny = new Set([
+    ...declared,
+    ...[...program.matchAll(/\b(?:const|let|var|class)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+  ]);
   const exported = STD_TYPES_SOURCE.split('\n')
     .filter((line) => line.startsWith('export function '))
     .map((line) => line.slice('export function '.length).split('(')[0]);
@@ -128,7 +134,16 @@ export const kit = (program: string) => {
   const kept = exported.filter((name) => !declared.has(name));
   const namespace = `const std = (() => {\n${KIT_ONLY}\nreturn { ${exported.join(', ')} };\n})();`;
   const bare = kept.length > 0 ? `const { ${kept.join(', ')} } = std;` : '';
-  return `${namespace}\n${bare}\n${CORPUS_LOCAL}\n${program}`;
+  // CORPUS_LOCAL's three helpers need the same shadow-check as the kit's
+  // exports. A challenge that writes `const props = ...` collides with
+  // `function props(T)` here - a `const` and a `function` at one scope is a
+  // hard redeclaration error, not a shadow, so the program fails to parse.
+  // Dropping what the program declares is the same rule applied one level out.
+  const localsKept = CORPUS_LOCAL.split('\n').filter((line) => {
+    const m = /^function\s+([A-Za-z_$][\w$]*)/.exec(line);
+    return !m || !declaredAny.has(m[1]);
+  }).join('\n');
+  return `${namespace}\n${bare}\n${localsKept}\n${program}`;
 };
 
 export interface ChallengeResult {

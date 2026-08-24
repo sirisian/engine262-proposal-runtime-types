@@ -93,7 +93,6 @@ test('hard 14080 - FizzBuzz', () => {
 test('hard 847 - String Join (return-type transform)', () => {
   const f = `
     function literal(v) { return Reflect.makeType({ kind: 'literal', value: v, base: Reflect.typeOf(v) }); }
-    function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
     function litval(T) { return Reflect.getReflection(T).value; }
     function joinType(P, delimiter) { return literal(elementTypes(P).map(e => litval(e)).join(delimiter)); }
     function join(delimiter) { return (P) => joinType(P, delimiter); }`;

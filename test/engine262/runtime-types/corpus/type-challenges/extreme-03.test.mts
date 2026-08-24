@@ -14,7 +14,6 @@ import { expectBuilderTrue, kit } from './harness.mts';
 
 const TUP = `
 function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
-function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
 function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
 function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
 function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
@@ -67,7 +66,6 @@ test('extreme 462 - Currying 2', () => {
 // 869 - DistributeUnions - a tuple of unions to the union of tuple combinations.
 test('extreme 869 - DistributeUnions', () => {
   const f = `${TUP}
-    function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
     function distribute(columns) {
       if (columns.length === 0) { return [[]]; }
       const [first, ...rest] = columns;

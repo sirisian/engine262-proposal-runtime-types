@@ -17,7 +17,6 @@ const TUP = `
 function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
 function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
 function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
-function returnType(F) { return Reflect.getReflection(F).signatures[0].return.type; }
 `;
 
 // 17 - Currying 1 - a multi-argument function type to nested single-argument
@@ -109,8 +108,6 @@ test('hard 6 - Simple Vue', () => {
     function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
     function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
     function prop(name, type) { return { name, type, optional: false, readonly: false }; }
-    function returnType(F) { return Reflect.getReflection(F).signatures[0].return.type; }
-    function mapProperties(T, g) { return objectOf(Reflect.getReflection(T).properties.map(g)); }
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];
       return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, this: Reflect.getReflection(Self) }] });
@@ -154,8 +151,6 @@ test('hard 1290 - Pinia', () => {
     function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
     function fn(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }
     function prop(name, type) { return { name, type, optional: false, readonly: false }; }
-    function returnType(F) { return Reflect.getReflection(F).signatures[0].return.type; }
-    function mapProperties(T, g) { return objectOf(Reflect.getReflection(T).properties.map(g)); }
     function readonly(T) { return mapProperties(T, p => ({ ...p, readonly: true })); }
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];

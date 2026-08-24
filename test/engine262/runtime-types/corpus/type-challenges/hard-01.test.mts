@@ -79,7 +79,6 @@ test('hard 730 - Union to Tuple', () => {
   expectBuilderTrue(kit(`${f}\n type U = 'a' | 'b'; String(Reflect.getReflection(unionToTuple(U)).elements.length === 2);`));
   // re-unioning the tuple's elements recovers the union
   expectBuilderTrue(kit(`${f}
-    function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
     type U = 'a' | 'b';
     String(union(elementTypes(unionToTuple(U))) === U);
   `));

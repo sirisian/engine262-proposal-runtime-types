@@ -17,7 +17,7 @@ const FN = `function fnType(params, ret) { return Reflect.makeType({ kind: 'func
 
 // 2 - Get Return Type - the return type of a function type.
 test('medium 2 - Get Return Type', () => {
-  const rt = 'function returnType(F) { return Reflect.getReflection(F).signatures[0].return.type; }';
+  const rt = '';
   expectBuilderTrue(kit(`${rt}\n type F = () => string; String(returnType(F) === string);`));
   expectBuilderTrue(kit(`${rt}\n type F = () => 123; String(returnType(F) === type 123);`));
   // a function returning a function type

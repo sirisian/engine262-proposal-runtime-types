@@ -24,7 +24,7 @@ test('medium 10969 - Integer', () => {
 
 // 28333 - Public Type - drop properties whose name starts with '_'.
 test('medium 28333 - Public Type', () => {
-  const f = `    function mapProperties(T, f2) { return objectOf(Reflect.getReflection(T).properties.map(f2).filter(p => p !== null)); }
+  const f = `
     function publicType(T) { return mapProperties(T, p => typeof p.name === 'string' && p.name.startsWith('_') ? null : p); }`;
   expectBuilderTrue(kit(`${f}\n type X = { a: uint32 }; type Expected = { a: uint32 }; String(publicType(X) === Expected);`));
   expectBuilderTrue(kit(`${f}\n type X = { d: string, _e: string }; type Expected = { d: string }; String(publicType(X) === Expected);`));

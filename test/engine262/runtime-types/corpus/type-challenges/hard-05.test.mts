@@ -88,7 +88,6 @@ test('hard 31824 - Length of String 3', () => {
 // 33763 - Union to Object from key - the arms that have the given key.
 test('hard 33763 - Union to Object from key', () => {
   const f = `
-    function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
     function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
     function unionToObjectFromKey(U, name) { return union(arms(U).filter(a => Reflect.getReflection(a).properties.some(p => p.name === name))); }`;
   expectBuilderTrue(kit(`${f}

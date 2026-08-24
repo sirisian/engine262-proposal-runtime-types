@@ -47,7 +47,7 @@ test('medium 25270 - Transpose', () => {
       const rows = elementTypes(M).map(r => elementTypes(r));
       if (Number(rows.length) === 0) { return tupleOf([]); }
       const out = [];
-      for (let c = 0; c < rows[0].length; c += 1) { out.push(tupleOf(rows.map(r => r[c]))); }
+      for (let c = 0; c < Number(rows[0].length); c += 1) { out.push(tupleOf(rows.map(r => r[c]))); }
       return tupleOf(out);
     }`;
   expectBuilderTrue(kit(`${f}\n type M = [[1, 2], [3, 4]]; type Expected = [[1, 3], [2, 4]]; String(transpose(M) === Expected);`));
