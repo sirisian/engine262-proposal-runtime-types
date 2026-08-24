@@ -319,7 +319,7 @@ export interface TupleElementRecord {
 export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
 
 /*
- * NOT YET the declared type of the slot, deliberately. Typing [[Metadata]] as
+ * NOW the declared type of the slot. PLAN-metadata-typing.md. Typing [[Metadata]] as
  * `MetadataRecord` compiles the contract above into a check, and doing so
  * reports **49 errors across 6 files** - every site that was relying on the
  * cast. That is OQ1's direction C, and it is worth taking: it is the only one
@@ -429,7 +429,7 @@ export type TypeRecord =
     readonly StartBound: 'closed' | 'open' | undefined,
     readonly EndBound: 'closed' | 'open' | undefined,
   }
-  | { readonly Kind: 'parameterized', readonly Base: TypeRecord, readonly Metadata: Value }
+  | { readonly Kind: 'parameterized', readonly Base: TypeRecord, readonly Metadata: MetadataRecord }
   | {
     readonly Kind: 'nominal',
     readonly Declaration: ParseNode,

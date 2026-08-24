@@ -9,7 +9,7 @@ import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
-import { propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord } from '../type-system/records.mts';
+import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -697,7 +697,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       if (!isCanonicalMetadata(record)) {
         return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node whose metadata is not a plain record'));
       }
-      return { Kind: 'parameterized', Base, Metadata: record };
+      return { Kind: 'parameterized', Base, Metadata: record as unknown as MetadataRecord };
     }
     default:
       return Throw.TypeError('$1 is not supported yet', Value(`a type node of kind ${kind}`));

@@ -4,7 +4,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf } from '../abstract-ops/runtime-types.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
-import {
+import { type MetadataRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
@@ -2878,7 +2878,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const base = builtinTypeRecord(node.TypeName.IdentifierReference.name);
             if (base && base.Kind === 'primitive') {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord);
-              const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata };
+              const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
               const keys = Object.keys(metadata as unknown as Record<string, unknown>);
               // table-metadata-values: the value language is CLOSED - "Nothing
               // else is a metadata value. A function, an object other than the

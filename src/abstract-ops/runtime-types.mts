@@ -11,7 +11,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
-import { anyType, displayType, builtinTypeRecord, type TypeRecord, propertyKeyValue } from '../type-system/records.mts';
+import { anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -480,7 +480,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       if (!MetaTypeGoverns(t.Metadata, metaType)) {
         continue;
       }
-      const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType), t.Base));
+      const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType) as unknown as MetadataRecord, t.Base));
       if (verdict === false) {
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
@@ -1839,7 +1839,7 @@ const EMPTY_METADATA_RECORD: Value = Object.freeze(Object.create(null)) as unkno
  * portion is always empty and it governs nothing, which the empty record makes
  * literal.
  */
-export function MetaTypeGoverns(metadata: Value, metaType: object): boolean {
+export function MetaTypeGoverns(metadata: MetadataRecord, metaType: object): boolean {
   const snapshot = LookupMetaDefaultSnapshot(metaType) ?? EMPTY_METADATA_RECORD;
   return !SameMetadata(MetadataPortion(metadata, metaType), snapshot);
 }
@@ -1979,12 +1979,15 @@ export function LookupMetaHook(typeObject: object, name: string): Value | undefi
   return metaHooks.get(typeObject)?.get(name);
 }
 
+/** The metadata of a type carrying none: the empty record. */
+const EMPTY_METADATA = Object.freeze(Object.create(null) as Record<string, never>) as MetadataRecord;
+
 /**
  * The meta types governing a metadata value: one per own key, deduplicated. A key
  * no meta type claims is reported by the caller, since the specification places
  * that error at the parameterization rather than here.
  */
-export function GoverningMetaTypes(metadata: Value): { types: object[], unclaimed: string[] } {
+export function GoverningMetaTypes(metadata: MetadataRecord): { types: object[], unclaimed: string[] } {
   const types: object[] = [];
   const unclaimed: string[] = [];
   if (!metadata || typeof metadata !== 'object') {
@@ -2009,7 +2012,7 @@ export function GoverningMetaTypes(metadata: Value): { types: object[], unclaime
  * metadata, because a metadata value may be governed by several meta types at
  * once and each must see only what it claims.
  */
-export function MetadataPortion(metadata: Value, metaType: object): Value {
+export function MetadataPortion(metadata: MetadataRecord, metaType: object): Value {
   // sec-metadataportion, as written: start from a copy of the meta type's
   // `default` and overwrite with the metadata's own claimed keys, so every
   // judgment of the protocol sees a COMPLETE portion. The missing completion
@@ -2284,7 +2287,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
       // nothing, so the meta type takes no part in the crossing either.
       continue;
     }
-    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
+    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType) as unknown as MetadataRecord, t.Base));
     // *undefined* is "this meta type defines no `validate`", which the clause's
     // step reads as nothing to check rather than as a refusal.
     if (verdict === false) {
@@ -2337,7 +2340,11 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
     if (!MetaTypeGoverns(t.Metadata, metaType)) {
       continue;
     }
-    const fp = MetadataPortion(Value.undefined, metaType);
+    // "No metadata" is the EMPTY RECORD. `Value.undefined` spelled it only
+    // because the parameter was `Value` and the body tests
+    // `typeof metadata !== 'object'`; both mean absence, and this one says so
+    // in the slot's own language.
+    const fp = MetadataPortion(EMPTY_METADATA, metaType);
     const tp = MetadataPortion(t.Metadata, metaType);
     const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], t.Base));
     if (admits !== Value.true) {
@@ -2448,7 +2455,13 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // then rejects for a constraint the program never wrote. A meta type whose
   // constraint IS factor-invariant, like a non-zero flag, says so by defining
   // `rescale` as the identity.
-  let targetMetadata: Value = to.Metadata;
+  // PLAN-metadata-typing.md F157. Annotated as the slot's own type, not
+  // `Value`: this local is compared against `to.Metadata` by IDENTITY below, to
+  // ask whether the rescale loop replaced it. An over-narrow annotation made
+  // that comparison span two types and reported as TS2367, "comparison appears
+  // to be unintentional" - a false alarm from the annotation, not a defect in
+  // the comparison, which is exactly the check it looks like.
+  let targetMetadata: MetadataRecord = to.Metadata;
   if (factor !== 1) {
     const carriedOver: Record<string, unknown> = Object.create(null);
     const source = to.Metadata as unknown as Record<string, unknown>;
@@ -2479,7 +2492,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
       }
     }
     if (carriedAny) {
-      targetMetadata = Object.freeze(carriedOver) as unknown as Value;
+      targetMetadata = Object.freeze(carriedOver) as unknown as MetadataRecord;
     }
   }
   const carriedType = targetMetadata === to.Metadata
@@ -2513,8 +2526,14 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
  * What stays here is the only thing that differed: the return conversion, since
  * `validate` answers a Boolean where the other hooks answer a Value.
  */
-export function* ApplyValidateHook(typeObject: object, value: Value, metadata: Value, base: TypeRecord | undefined): PlainEvaluator<boolean | undefined> {
-  const result = Q(yield* ApplyMetaHook(typeObject, 'validate', [value, metadata], base));
+export function* ApplyValidateHook(typeObject: object, value: Value, metadata: MetadataRecord, base: TypeRecord | undefined): PlainEvaluator<boolean | undefined> {
+  // PLAN-metadata-typing.md OQ4-C. `ApplyMetaHook` takes `readonly Value[]`
+  // because it serves EVERY hook, most of which never see metadata, so the
+  // conversion happens here rather than by widening a shared signature.
+  // `MetadataAsObject` is the one named conversion for this boundary and it
+  // already existed: a hook is user code and must receive an ECMAScript object,
+  // and handing it the host record once crashed the engine inside `Call`.
+  const result = Q(yield* ApplyMetaHook(typeObject, 'validate', [value, MetadataAsObject(metadata)], base));
   if (result === undefined) {
     return undefined;
   }
@@ -2534,9 +2553,9 @@ export function* ApplyValidateHook(typeObject: object, value: Value, metadata: V
  * conversion belongs here, at the one boundary where the record reaches a
  * program, and not in the storage, which the comparison path depends on.
  */
-export function MetadataAsObject(metadata: Value): Value {
+export function MetadataAsObject(metadata: Value | MetadataRecord): Value {
   if (metadata === null || typeof metadata !== 'object') {
-    return metadata;
+    return metadata as Value;
   }
   // An engine Value is a host object too, so the two are told apart by shape
   // rather than by typeof: a nested metadata record is built with a null
@@ -2565,7 +2584,9 @@ export function MetadataAsObject(metadata: Value): Value {
     return CreateRangeObject(range.start, range.end, range.startBound, range.endBound, surroundingAgent.currentRealmRecord);
   }
   if (!Array.isArray(metadata) && Object.getPrototypeOf(metadata) !== null) {
-    return metadata;
+    // Already a Value - an engine object is a host object too, so the guard
+    // above tells them apart by prototype rather than by typeof.
+    return metadata as Value;
   }
   // A metadata value nests (table-metadata-values), so the conversion must too.
   // Converting only the top level left host records and host arrays sitting in

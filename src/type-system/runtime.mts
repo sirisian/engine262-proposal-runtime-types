@@ -33,7 +33,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
-import { restElementType, UnderlyingOf } from './records.mts';
+import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
@@ -1646,7 +1646,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // (the audit's C2 named three call sites; this was the unlisted
         // fourth, and the reason a two-key `validate` saw undefined where the
         // defaulted key should be).
-        const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
+        const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType) as unknown as MetadataRecord, t.Base));
         if (verdict === undefined) {
           // The meta type claims a key here and offers no judgment, so it
           // constrains without admitting. This is the brand case.
@@ -2262,7 +2262,7 @@ function metadataValueFromType(t: TypeRecord): unknown {
 /** Distinguishes "this form is not a metadata value" from a value of *undefined*. */
 const METADATA_NOT_A_VALUE = Symbol('not-a-metadata-value');
 
-export function MetadataObjectFromType(t: TypeRecord): Value {
+export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
   const fields: Record<string, unknown> = Object.create(null);
   if (t.Kind === 'object') {
     for (const p of t.Properties) {
@@ -2273,7 +2273,13 @@ export function MetadataObjectFromType(t: TypeRecord): Value {
       }
     }
   }
-  return Object.freeze(fields) as unknown as Value;
+  // PLAN-metadata-typing.md. This is the canonical builder of the slot, and it
+  // is where the original cast lived: `as unknown as Value` asserted a contract
+  // the value did not satisfy, and that assertion is what let the record and
+  // the `Value` readings of [[Metadata]] diverge behind three separate bugs.
+  // The cast remains - a frozen null-prototype object is not a nominal type -
+  // but it now asserts the shape the slot actually declares.
+  return Object.freeze(fields) as unknown as MetadataRecord;
 }
 
 

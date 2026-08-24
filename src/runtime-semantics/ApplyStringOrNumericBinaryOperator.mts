@@ -9,6 +9,7 @@ import { ObjectValue,
   SameType,
 } from '../value.mts';
 import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
+import type { MetadataRecord } from '../type-system/records.mts';
 import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range-ops.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isTypedNumber, TypedNumberValue } from '../value.mts';
@@ -35,7 +36,7 @@ import {
  * rebuilds the same parameterization. Each property is a ~literal~ record,
  * which is the form the projection hands back unchanged.
  */
-function metadataAsObjectRecord(metadata: Value): TypeRecord {
+function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
   const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
   if (metadata && typeof metadata === 'object') {
     for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
@@ -137,7 +138,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
               const metaType = MetaTypeForConstraint(constraint);
               if (metaType !== undefined) {
                 spokenFor.push(metaType);
-                portion = MetadataPortion(carried.Metadata, metaType);
+                portion = MetadataPortion(carried.Metadata, metaType) as unknown as MetadataRecord;
               }
             }
             frame.set(name, metadataAsObjectRecord(portion));
