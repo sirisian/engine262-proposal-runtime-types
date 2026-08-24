@@ -415,3 +415,57 @@ test('soa: the three open questions, resolved', () => {
   // And byteLength stays exactly the sum the layout rule computes.
   expect(evaluated('class P { a: uint8; b: float64; } String((type SoA.<P, 4>).byteLength);')).toBe('40');
 });
+
+test('a boolean SoA column is written and read as a boolean', () => {
+  // OUTSTANDING P and Q, which were ONE function a stack frame apart: a `ref`
+  // write and a scatter both reach `writeColumnElement`, where `RequireType`
+  // answers a BooleanValue and the unwrapping handled only a TypedNumberValue.
+  // The `as NumberValue` cast then told the type system a boolean was a Number
+  // on the way into SetValueInBuffer, which asserts exactly that - so the
+  // engine CRASHED rather than refusing.
+  const R = 'class R { x: float32; id: uint32; alive: boolean; } ';
+  const s = `${R} const s = new SoA.<R, 4>(); `;
+  // P: a `ref` write.
+  expect(evaluated(`${s} const ref p = s[0]; p.alive = true; String(s[0].alive);`)).toBe('true');
+  // Q: a scatter, through the same function one frame down.
+  expect(evaluated(`${s} const v = new R(); v.x = (3.5 := float32); s[0] = v; String(s[0].x);`)).toBe('3.5');
+  // The scatter above asserts the FLOAT field, which only shows the write did
+  // not crash. Item Q's crash happened while scattering the BOOLEAN, so the
+  // value that landed there is what the fix has to be judged on - a scatter
+  // that stored 1 rather than `true` would pass the line above and fail this.
+  expect(evaluated(`${s} const v = new R(); v.alive = true; s[0] = v; `
+    + 'String(s[0].alive) + "/" + String(typeof s[0].alive);')).toBe('true/boolean');
+  // The FALSY case, which a careless fix passes without fixing: writing `true`
+  // and reading `1` satisfies a sloppy String() comparison, and writing `false`
+  // and reading `0` is indistinguishable from the unfixed behaviour.
+  expect(evaluated(`${s} const ref q = s[1]; q.alive = false; String(s[1].alive);`)).toBe('false');
+  // The READ half, which was never filed and is the worse of the three: a crash
+  // stops the program, a wrong type propagates. This read `0`, typeof "number".
+  expect(evaluated(`${s} String(typeof s[2].alive);`)).toBe('boolean');
+  expect(evaluated(`${s} String(s[2].alive);`)).toBe('false');
+});
+
+test('the boolean fix does not disturb the layout or its neighbours', () => {
+  // memorylayout.md: "The default layout is the C, C++, and Rust rule, so a
+  // typed class is layout-compatible with the same declaration in those
+  // languages." Rust's `bool` is ONE BYTE, and `placement.mts` already maps a
+  // boolean column to Uint8 - so the representation was never in question and
+  // nothing about the storage changes.
+  const G = 'class G { x: float32; y: float32; id: uint32; alive: boolean; } ';
+  // 4+4+4+1 = 13 bytes per element, packed, times 8.
+  expect(evaluated(`${G} String(new SoA.<G, 8>().byteLength);`)).toBe('104');
+  // One byte per boolean, which is the layout rule at its most visible.
+  expect(evaluated('class B { a: boolean; b: boolean; c: boolean; } '
+    + 'String(new SoA.<B, 4>().byteLength);')).toBe('12');
+  // The numeric columns still write, and columns stay isolated.
+  expect(evaluated(`${G} const s = new SoA.<G, 4>(); const ref p = s[2]; `
+    + 'p.x = (1.5 := float32); p.id = (77 := uint32); '
+    + 'String(s[2].x) + "/" + String(s[2].id) + "/" + String(s[3].x);')).toBe('1.5/77/0');
+  // An ENUM column is still REFUSED with a diagnostic rather than an assertion -
+  // the neighbouring kind, and the model for what "handled" looks like here.
+  expectThrown('enum C: uint8 { Red = 0 } class E { c: C; } '
+    + 'const s = new SoA.<E, 2>(); s[0].c;');
+  // A gather is still a COPY, per soa.md:106 "Gathers a Particle value from the
+  // columns" - specified, not a defect, and easy to mistake for one.
+  expect(evaluated(`${G} const s = new SoA.<G, 4>(); String(s[0] === s[0]);`)).toBe('false');
+});

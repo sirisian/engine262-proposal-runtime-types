@@ -14,8 +14,7 @@ import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts'
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   AllocateArrayBuffer, ArrayCreate, CreateDataProperty, Get, GetValueFromBuffer, OrdinaryCreateFromConstructor,
-  OrdinaryObjectCreate, R, RequireType, SetValueInBuffer, Throw, ToIndex, surroundingAgent,
-} from '#self';
+  OrdinaryObjectCreate, R, RequireType, SetValueInBuffer, Throw, ToIndex, surroundingAgent, BooleanValue } from '#self';
 
 /**
  * proposal-runtime-types soa.md: the storage of an `SoA.<T, Length>`.
@@ -293,6 +292,18 @@ function* readColumnElement(storage: SoAStorage, columnIndex: number, index: num
   const primitive = BufferElementType(column.type);
   if (primitive !== null) {
     const raw = GetValueFromBuffer(storage.Buffer, at, primitive, true, 'unordered');
+    // PLAN-soa-boolean-columns.md phase 2, the mirror of the write. A boolean
+    // column is a Uint8, so GetValueFromBuffer always answers a Number and the
+    // wrap below turned it into a TypedNumberValue - `s[0].alive` read as `0`
+    // with `typeof "number"`, where the same field on a plain class instance
+    // reads `false`.
+    //
+    // That half was never filed, and it is the worse of the two: the crash
+    // stops the program, a wrong type propagates. Fixing only the write would
+    // have made `p.alive = true` followed by `s[0].alive === 0`.
+    if (column.type.Kind === 'primitive' && column.type.Name === 'boolean') {
+      return raw instanceof NumberValue && R(raw) !== 0 ? Value.true : Value.false;
+    }
     return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, column.type) : raw;
   }
   if (column.type.Kind === 'nominal') {
@@ -323,10 +334,36 @@ function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: nu
   const primitive = BufferElementType(column.type);
   if (primitive !== null) {
     const converted = Q(yield* RequireType(value, column.type));
-    const numeric = converted instanceof TypedNumberValue
-      ? Value(Number((converted as unknown as { value: number }).value))
-      : converted;
-    Q(yield* SetValueInBuffer(storage.Buffer, at, primitive, numeric as NumberValue, true, 'unordered'));
+    // PLAN-soa-boolean-columns.md phase 1. `RequireType` answers a
+    // BooleanValue for a boolean column, and the unwrapping below only handled
+    // a TypedNumberValue - so a boolean reached SetValueInBuffer, which asserts
+    // `value instanceof NumberValue`, and the engine CRASHED rather than
+    // refusing. Both OUTSTANDING P (`p.alive = true`) and Q (`s[0] = v`, which
+    // scatters through this same function) were that one assertion.
+    //
+    // A boolean column is a Uint8 (`placement.mts`: `case 'boolean': return
+    // 'Uint8'`), which is memorylayout.md's rule - "the C, C++, and Rust rule,
+    // so a typed class is layout-compatible with the same declaration in those
+    // languages". Rust's `bool` is one byte whose only valid patterns are 0x00
+    // and 0x01, so the write NORMALISES to 1 or 0 rather than storing whatever
+    // a ToNumber would give: a byte holding 2 is a `bool` no Rust program may
+    // soundly read, and layout compatibility is the point of the rule.
+    let numeric: Value;
+    if (converted instanceof TypedNumberValue) {
+      numeric = Value(Number((converted as unknown as { value: number }).value));
+    } else if (converted instanceof BooleanValue) {
+      numeric = Value(converted === Value.true ? 1 : 0);
+    } else {
+      numeric = converted;
+    }
+    if (!(numeric instanceof NumberValue)) {
+      // The cast this replaces was the enabling mistake: it told the type
+      // system a wrong value was a NumberValue on the way into a function that
+      // asserts exactly that. An enum column already refuses here rather than
+      // crashing, and this is no less careful than its neighbour.
+      return Throw.TypeError('a column of this type cannot be written');
+    }
+    Q(yield* SetValueInBuffer(storage.Buffer, at, primitive, numeric, true, 'unordered'));
     return true;
   }
   if (column.type.Kind === 'nominal' && value instanceof ObjectValue) {
