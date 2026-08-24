@@ -998,14 +998,41 @@ function classInstanceType(value: ObjectValue): TypeRecord | null {
  * The snapshot is held per DECLARATION rather than per Type Record, so two
  * applications of one generic class share the one evaluation.
  */
-const declaredZeros = new WeakMap<object, Value>();
+/** The argument list a declared zero was registered for, as a comparable key. */
+function declaredZeroKey(args: readonly (TypeRecord | number)[] | undefined): string {
+  return (args ?? []).map((a) => (
+    a && typeof a === 'object' ? displayType(a as TypeRecord) : String(a)
+  )).join(',');
+}
 
-export function RegisterDeclaredZero(declaration: object, value: Value): void {
-  declaredZeros.set(declaration, value);
+// PLAN-generic-declared-zero.md Q2. Keyed on the DECLARATION and the ARGUMENTS,
+// not the declaration alone: one declaration serves every application, so a
+// single-key map let `Bx.<string>` pick up whatever `Bx.<uint8>` had registered
+// and report "[object Object] is not assignable to Bx.<string>". A zero that
+// reads `T` is a different value per application, which is the whole reason the
+// class body may name `Bx.<T>` at all.
+const declaredZeros = new WeakMap<object, Map<string, Value>>();
+
+export function RegisterDeclaredZero(
+  declaration: object,
+  value: Value,
+  args?: readonly (TypeRecord | number)[],
+): void {
+  let byArgs = declaredZeros.get(declaration);
+  if (byArgs === undefined) {
+    byArgs = new Map();
+    declaredZeros.set(declaration, byArgs);
+  }
+  byArgs.set(declaredZeroKey(args), value);
 }
 
 function DeclaredZeroOf(t: { Declaration?: object }): Value | undefined {
-  return t.Declaration === undefined ? undefined : declaredZeros.get(t.Declaration);
+  if (t.Declaration === undefined) {
+    return undefined;
+  }
+  return declaredZeros.get(t.Declaration)?.get(declaredZeroKey(
+    (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments,
+  ));
 }
 
 export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined> {

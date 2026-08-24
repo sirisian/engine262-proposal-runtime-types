@@ -899,6 +899,7 @@ export interface Throw {
   | 'The return value ($1) of the throw() on an iterator ($2) must be an object'
   | 'a $1 annotation is not a $2'
   | 'a declared zero is not compile-time evaluable: it names $1'
+  | 'a declared zero may not $1'
   | 'a builder is not compile-time evaluable: it names $1 ($2)'
   | 'a tuple of $1 positions cannot be given a length of $2'
   | 'a tuple of $1 positions has no position at index $2'

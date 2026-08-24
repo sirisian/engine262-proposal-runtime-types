@@ -997,7 +997,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const owner = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held = Q(yield* Get(F as ObjectValue, Value('default')));
       if (!unspecializedGeneric) {
-        RegisterDeclaredZero(owner, held);
+      // PLAN-generic-declared-zero.md Q2: keyed by the ARGUMENTS this
+      // specialization was built for, so `Bx.<uint8>` and `Bx.<string>` hold
+      // different zeros. The frame is what the specialization bound, and it is
+      // still pushed here - `unspecializedGeneric` is false precisely because
+      // an application pushed it.
+      const zeroArgs = [...(currentTypeParameterFrame()?.values() ?? [])];
+        RegisterDeclaredZero(owner, held, zeroArgs);
       }
     }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
@@ -1457,7 +1463,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const owner2 = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held2 = Q(yield* Get(F as ObjectValue, Value('default')));
       if (!unspecializedGeneric) {
-        RegisterDeclaredZero(owner2, held2);
+      // PLAN-generic-declared-zero.md Q2: keyed by the ARGUMENTS this
+      // specialization was built for, so `Bx.<uint8>` and `Bx.<string>` hold
+      // different zeros. The frame is what the specialization bound, and it is
+      // still pushed here - `unspecializedGeneric` is false precisely because
+      // an application pushed it.
+      const zeroArgs2 = [...(currentTypeParameterFrame()?.values() ?? [])];
+        RegisterDeclaredZero(owner2, held2, zeroArgs2);
       }
     }
     // 33. Return F.

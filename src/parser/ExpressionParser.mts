@@ -227,6 +227,52 @@ function classIsTyped(elements: readonly ParseNode.ClassElement[]): boolean {
   });
 }
 
+/**
+ * The first observable WRITE in a declared zero's expression, if any.
+ *
+ * PLAN-type-declared-zero.md phase 4. `#sec-iscompiletimeevaluable` asks whether
+ * a binding is immutable, which needs a resolution the parser does not do - but
+ * an assignment or an update writes whatever it names, so it is refusable from
+ * the syntax alone. This narrows the floor rather than replacing it.
+ */
+function firstWriteIn(node: object, depth = 0): string | undefined {
+  if (!node || typeof node !== 'object' || depth > 40) {
+    return undefined;
+  }
+  const type = (node as { type?: string }).type;
+  if (type === 'AssignmentExpression') {
+    return 'assign';
+  }
+  if (type === 'UpdateExpression') {
+    return 'use ++ or --';
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'parent' || key === 'location' || key === 'source') {
+      continue;
+    }
+    let value;
+    try {
+      value = (node as Record<string, unknown>)[key];
+    } catch {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        const hit = firstWriteIn(v as object, depth + 1);
+        if (hit) {
+          return hit;
+        }
+      }
+    } else if (value && typeof value === 'object') {
+      const hit = firstWriteIn(value as object, depth + 1);
+      if (hit) {
+        return hit;
+      }
+    }
+  }
+  return undefined;
+}
+
 export abstract class ExpressionParser extends FunctionParser {
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
   // the conditional's own colon, so arrow return annotations are suppressed
@@ -1759,7 +1805,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // inside a block, and the statement was then parsed as something else and
     // failed. The restriction belongs to the token AFTER `match`, and
     // `tryParseMatchExpression` already declines anything that is not
-    // `match (`�`) {`, so the guard here need only avoid speculating on every
+    // `match (`…`) {`, so the guard here need only avoid speculating on every
     // identifier named `match`.
     if (surroundingAgent.feature('runtime-types') && this.test('match')) {
       const matchExpression = this.tryParseMatchExpression();
@@ -2418,10 +2464,28 @@ export abstract class ExpressionParser extends FunctionParser {
             // binding's MUTABILITY, which is a scope fact the parser does not
             // have, and the engine has no IsCompileTimeEvaluable to ask.
             //
-            // So `static default = (Date.now(), �)` is refused and
-            // `let c = 0; static default = (c += 1, �)` is not. The check is a
+            // So `static default = (Date.now(), …)` is refused and
+            // `let c = 0; static default = (c += 1, …)` is not. The check is a
             // floor rather than the rule; see PLAN-type-declared-zero.md phase 4.
             const initializer = (m as { Initializer?: ParseNode | null }).Initializer;
+            // A WRITE inside the zero, caught syntactically. The clause's rule
+            // needs a binding's MUTABILITY - "the binding is immutable and its
+            // initializer is compile-time evaluable" - which the parser cannot
+            // resolve; but an assignment or an update is an observable effect
+            // whatever it touches, so it is refusable here without knowing what
+            // it names.
+            //
+            // Measured before: `let c = 0; static default = (c += 1, â€¦)` and
+            // `(d++, â€¦)` were both accepted, and the zero is evaluated ONCE, so
+            // the effect happened once at declaration and never again - a
+            // silent single side effect, which is worse than an obvious one.
+            const write = initializer ? firstWriteIn(initializer) : undefined;
+            if (write) {
+              this.addEarlyError(
+                Throw.SyntaxError('a declared zero may not $1', Value(write)),
+                m,
+              );
+            }
             const violation = initializer ? FirstEvaluabilityViolation(initializer) : undefined;
             if (violation) {
               this.addEarlyError(

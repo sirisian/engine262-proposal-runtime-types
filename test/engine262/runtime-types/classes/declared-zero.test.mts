@@ -50,3 +50,48 @@ test('an unspecialized generic keeps its DERIVED zero', () => {
   expect(evaluated('class G2<T> { static s = 7; } String(G2.<uint8>.s);')).toBe('7');
   expect(ok('class G3<T> { static m() { return 1; } } G3.m();')).toBe(true);
 });
+
+test('a GENERIC class may declare a zero, once its application exists', () => {
+  // PLAN-generic-declared-zero.md, unblocked by item N. The declared zero for a
+  // generic was registered correctly all along; the value was then REJECTED,
+  // because a specialized instance was a member of no type - which item N fixed.
+  //
+  // The zero may name its own specialization: the type-parameter frame is
+  // pushed during the application's re-entry, so `new Bx.<T>()` resolves.
+  const Bx = 'class Bx<T> { x: uint8; static default = new Bx.<T>(); } ';
+  expect(evaluated(`${Bx} const f = Bx.<uint8>; f.default.x = (9 := uint8); `
+    + 'let b: Bx.<uint8>; String(b.x);')).toBe('9');
+  // Q2, the hazard a single-key registry hides: one DECLARATION serves every
+  // application, so a zero keyed on the declaration alone let `Bx.<string>`
+  // pick up `Bx.<uint8>`'s value and report "[object Object] is not assignable
+  // to Bx.<string>". Keyed on the arguments, each application holds its own.
+  expect(evaluated(`${Bx} const f = Bx.<uint8>; f.default.x = (7 := uint8); `
+    + 'let a: Bx.<uint8>; let c: Bx.<string>; String(a.x) + "/" + String(c.x);')).toBe('7/0');
+  // An application never evaluated has no registered zero, and falls back to the
+  // DERIVED one rather than to undefined - which is phase 1's guard, still held.
+  expect(evaluated('class Bx2<T> { x: uint8; static default = new Bx2.<T>(); } '
+    + 'let b: Bx2.<uint8>; String(b.x);')).toBe('0');
+});
+
+test('a declared zero may not write, and the floor is narrower than the rule', () => {
+  // PLAN-type-declared-zero.md phase 4. #sec-declared-zero requires the
+  // expression to be compile-time evaluable, and #sec-iscompiletimeevaluable's
+  // rule for a binding reference needs its MUTABILITY - "the binding is
+  // immutable and its initializer is compile-time evaluable" - which the parser
+  // cannot resolve. So the check is a FLOOR, and this narrows it.
+  //
+  // A WRITE is refusable from the syntax alone, whatever it names. Both of these
+  // were accepted, and the zero is evaluated ONCE - so the effect happened once
+  // at declaration and never again, which is a silent single side effect.
+  expectThrown('let c = 0; class E1 { x: uint8; static default = (c += 1, new E1()); }');
+  expectThrown('let d = 0; class E2 { x: uint8; static default = (d++, new E2()); }');
+  // An ambient name is still caught by the original floor.
+  expectThrown('class E4 { x: uint8; static default = (Date.now(), new E4()); }');
+  // STILL NOT CAUGHT, and asserted so the gap is visible rather than assumed
+  // closed: a plain call to a function that could do anything. Refusing it needs
+  // the resolution the clause describes and the parser does not have.
+  expect(ok('function side() { return 1; } '
+    + 'class E3 { x: uint8; static default = (side(), new E3()); }')).toBe(true);
+  // A valid zero is unaffected.
+  expect(ok('class E5 { x: uint8; static default = new E5(); }')).toBe(true);
+});
