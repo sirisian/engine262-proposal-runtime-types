@@ -184,3 +184,52 @@ test('representability still decides, and the limits do not participate', () => 
   // maximum safe integer of anything.
   expectThrown('let r: float32 = 1.0; Number.MAX_SAFE_INTEGER * r;');
 });
+
+test('a union containing bigint does not capture an integer literal', () => {
+  // PLAN-number-bigint-coercion.md, OUTSTANDING item S. `bigintTarget` answered
+  // true for a union if ANY arm was `bigint`, without asking whether another arm
+  // already accepted the literal as written - so the literal propagated to
+  // `bigint` and the binding held a BigInt the program never wrote:
+  //
+  //   let x: number | bigint = 5;
+  //   typeof x   // was "bigint"    x === 5   // was false    x + 1  // threw
+  //
+  // #sec-type-membership makes a union's arms ALTERNATIVES - a value belongs to
+  // a union if it belongs to ANY member - so a literal already belonging to one
+  // arm has no reason to be converted for another.
+  expect(evaluated('let x: number | bigint = 5; String(typeof x);')).toBe('number');
+  expect(evaluated('let x: number | bigint = 5; String(x === 5);')).toBe('true');
+  expect(evaluated('let x: bigint | number = 5; String(typeof x);')).toBe('number');
+  expect(evaluated('let x: number | bigint | string = 5; String(typeof x);')).toBe('number');
+  // A SIZED numeric arm too - the first draft of the plan thought these escaped,
+  // having measured them with a cast rather than a literal.
+  expect(evaluated('let x: int8 | bigint = 5; String(typeof x);')).toBe('number');
+});
+
+test('the corrupted value no longer escapes into untyped code', () => {
+  // The severity of item S was that the wrong value LEFT the typed world: it
+  // reached ordinary JavaScript, where a BigInt does not mix with a Number.
+  expect(evaluated('let x: number | bigint = 5; String(x + 1);')).toBe('6');
+  expect(evaluated('let x: number | bigint = 5; let y = x; String(typeof y);')).toBe('number');
+  expect(evaluated('let x: number | bigint = 5; JSON.stringify({ v: x });')).toBe('{"v":5}');
+  // Every position that applies the type, not only a `let`.
+  expect(evaluated('class C { f: number | bigint = 5; } String(typeof new C().f);')).toBe('number');
+  expect(evaluated('function g(): number | bigint { return 5; } String(typeof g());')).toBe('number');
+  expect(evaluated('function h(v: number | bigint) { return typeof v; } String(h(5));')).toBe('number');
+});
+
+test('what the bigint fix must not disturb', () => {
+  // A genuine BigInt literal still reaches the bigint arm - it has no other way
+  // into the union, and a blanket "do not propagate to bigint" loses it. This is
+  // the guard the obvious fix breaks.
+  expect(evaluated('let x: number | bigint = 5n; String(typeof x);')).toBe('bigint');
+  expect(evaluated('let x: number | bigint = 5n; String(x === 5n);')).toBe('true');
+  // A `bigint` annotation with no competing arm still propagates.
+  expect(evaluated('let x: bigint = 5; String(typeof x);')).toBe('bigint');
+  // A non-integer was never affected: it is not an exact BigInt.
+  expect(evaluated('let x: number | bigint = 5.5; String(typeof x);')).toBe('number');
+  // The narrowing conversion path is untouched - `5` is not a `uint8` value
+  // until it is converted, and that conversion must still happen. A fix aimed at
+  // "stop converting for unions" passes every row above and breaks this one.
+  expect(evaluated('let a: uint8 | string = 5; String(a is uint8);')).toBe('true');
+});

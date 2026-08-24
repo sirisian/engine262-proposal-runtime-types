@@ -474,7 +474,44 @@ function bigintTarget(t: TypeRecord): boolean {
     return t.Name === 'bigint';
   }
   if (t.Kind === 'union') {
-    return t.Members.some(bigintTarget);
+    // PLAN-number-bigint-coercion.md. A union is a bigint target only where NO
+    // arm already accepts the literal as a Number. `some` alone made every
+    // union containing `bigint` one, so `let x: number | bigint = 5` propagated
+    // the literal to `bigint` and the binding held `5n`:
+    //
+    //   typeof x   // "bigint"     x === 5   // false     x + 1  // TypeError
+    //
+    // #sec-type-membership makes a union's arms ALTERNATIVES - "a value belongs
+    // to a union if it belongs to any member" - so a literal that already
+    // belongs to one arm has no reason to be converted for another. The Number
+    // arm is preferred because the literal is written as a Number; a `5n` is a
+    // BigInt literal and reaches the bigint arm on its own.
+    return t.Members.some(bigintTarget) && !t.Members.some(numberLiteralTarget);
+  }
+  return false;
+}
+
+/**
+ * Whether a type accepts an integer numeric literal AS A NUMBER, without
+ * conversion.
+ *
+ * PLAN-number-bigint-coercion.md: this is the half `bigintTarget` was missing.
+ * `number` and every sized numeric type hold `5` as written; `bigint` does not,
+ * which is why it is the one numeric name excluded here.
+ */
+function numberLiteralTarget(t: TypeRecord): boolean {
+  if (t.Kind === 'literal') {
+    return numberLiteralTarget(t.Base as TypeRecord);
+  }
+  if (t.Kind === 'primitive') {
+    // `number` is the untyped one; the sized names are the typed numerics that
+    // hold an integer literal as written. `bigint` is deliberately absent - it
+    // is the arm this predicate exists to lose to.
+    return t.Name === 'number' || t.Name === 'int' || t.Name === 'uint'
+      || t.Name === 'float' || t.Name === 'decimal';
+  }
+  if (t.Kind === 'union') {
+    return t.Members.some(numberLiteralTarget);
   }
   return false;
 }
