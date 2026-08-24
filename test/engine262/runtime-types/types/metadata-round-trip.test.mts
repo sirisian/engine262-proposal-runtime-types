@@ -163,3 +163,38 @@ test('`enum` is the one kind that still does not round-trip, for its own reason'
   expect(evaluated("enum E { a, b } String(Reflect.getReflection(type E).kind);")).toBe('enum');
   expectThrown('enum E { a, b } Reflect.makeType(Reflect.getReflection(type E));');
 });
+
+// ---------------------------------------------------------------------------
+// The contract itself, now that [[Metadata]] is typed
+// ---------------------------------------------------------------------------
+
+test('a hook still receives an ECMAScript object, not the stored record', () => {
+  // PLAN-metadata-typing.md OQ4-C. The slot STORES a frozen plain record, so
+  // that `SameMetadata` can compare two parameterizations without allocating an
+  // object or running user code on the interning path. A hook is user code and
+  // must receive an object instead - handing it the host record once failed
+  // `Call`'s own assertion and brought the engine down rather than throwing.
+  //
+  // `MetadataAsObject` is that conversion and it is applied at the call sites
+  // rather than by widening `ApplyMetaHook`, which serves every hook and mostly
+  // sees no metadata at all. These assertions are what stop the storage form
+  // leaking to a program: a hook that could not read its portion would fail
+  // them, and so would one handed a host record.
+  const meta = (body: string) => "type U = { unit: string };"
+    + ` meta U { subtype(a, b) { return true; } validate(v, m) { return ${body}; }`
+    + " default = { unit: '' }; }"
+    + " type T = uint32.<{ unit: 'm' }>; String(T((1 := uint32)));";
+  expect(evaluated(meta("typeof m === 'object'"))).toBe('1');
+  expect(evaluated(meta("m.unit === 'm'"))).toBe('1');
+  expect(evaluated(meta('Object.keys(m).length === 1'))).toBe('1');
+});
+
+test('the stored form and the hook form are different, and both are right', () => {
+  // The distinction the plan turns on, asserted from the outside. Reflection
+  // reads the STORED record - keys and leaves - while a hook reads a converted
+  // object. Both answer for the same parameterization, and neither is the other.
+  expect(evaluated("type B = uint32.<{ brand: 'UserId' }>;"
+    + ' String(Reflect.getReflection(B).metadata.brand);')).toBe('UserId');
+  expect(evaluated("type B = uint32.<{ brand: 'UserId' }>;"
+    + ' String(Reflect.makeType(Reflect.getReflection(B)) === B);')).toBe('true');
+});

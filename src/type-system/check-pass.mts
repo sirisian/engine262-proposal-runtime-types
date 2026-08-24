@@ -3,7 +3,7 @@ import { DefaultValueOf, EvaluateAliasApplicationClauses } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { MetadataAsObject, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
+import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -540,7 +540,7 @@ function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<b
     }
   }
   const baseObject = GetTypeObject(pair.source.Base);
-  const verdict = Q(yield* ApplyMetaHook(baseObject as unknown as object, 'subtype', [MetadataAsObject(s), MetadataAsObject(t)], pair.source.Base));
+  const verdict = Q(yield* ApplyMetaHook(baseObject as unknown as object, 'subtype', [s as unknown as Value, t as unknown as Value], pair.source.Base));
   if (verdict !== undefined && verdict !== Value.true) {
     return false;
   }

@@ -319,22 +319,34 @@ export interface TupleElementRecord {
 export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
 
 /*
- * NOW the declared type of the slot. PLAN-metadata-typing.md. Typing [[Metadata]] as
- * `MetadataRecord` compiles the contract above into a check, and doing so
- * reports **49 errors across 6 files** - every site that was relying on the
- * cast. That is OQ1's direction C, and it is worth taking: it is the only one
- * of the three that would have made F148, F154 and F155 impossible rather than
- * fixing them one layer at a time.
+ * HOW THIS SLOT CAME TO BE TYPED, because the history is the argument for
+ * keeping it that way.
  *
- * It is not taken here because this plan's own recommendation is "A now, C as
- * the follow-on": retyping a slot that sits on the interning path, in the same
- * change that repairs a live invariant, is two risks where one will do. The
- * measurement is the useful part - C's cost is 49 sites, 41 of them the same
- * shape (a `MetadataRecord` passed where a `Value` is declared), concentrated
- * in `runtime-types.mts` (26) and `check-pass.mts` (10). That is a mechanical
- * change of known size rather than an open-ended one.
+ * It was declared `Value` and did not hold one: `MetadataObjectFromType` built
+ * a frozen plain record and cast it, `as unknown as Value`. That cast asserted
+ * a contract instead of checking it, and the two consumers - `SameMetadata`,
+ * which walks a plain record, and the reflection emitter, which wants a Value -
+ * then diverged without anything complaining.
+ *
+ * The same divergence produced three separate defects at three depths, each
+ * found on its own, each with an identical symptom from outside
+ * (`makeType(getReflection(T)) === T` answering false), and each fix exposing
+ * the next:
+ *
+ *   F148  the RECORD:       plain vs ObjectValue - reading `.metadata` crashed
+ *   F154  the CONTAINER:    a marker, plain vs ObjectValue
+ *   F155  the DISCRIMINANT: `__pattern`, `true` vs BooleanValue
+ *
+ * Typing the slot is what makes that class of defect impossible rather than
+ * fixable one layer at a time - and the evidence is not the argument, it is
+ * that compiling the honest type located every one of the 49 sites relying on
+ * the cast in a second.
+ *
+ * A cast remains inside `MetadataObjectFromType`, because a frozen
+ * null-prototype object is not a nominal type. What changed is that it now
+ * asserts the shape the slot declares, at one site, rather than asserting a
+ * different shape everywhere.
  */
-
 /**
  * A fact a checked contract states about a deferred application.
  *

@@ -2527,13 +2527,19 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
  * `validate` answers a Boolean where the other hooks answer a Value.
  */
 export function* ApplyValidateHook(typeObject: object, value: Value, metadata: MetadataRecord, base: TypeRecord | undefined): PlainEvaluator<boolean | undefined> {
-  // PLAN-metadata-typing.md OQ4-C. `ApplyMetaHook` takes `readonly Value[]`
-  // because it serves EVERY hook, most of which never see metadata, so the
-  // conversion happens here rather than by widening a shared signature.
-  // `MetadataAsObject` is the one named conversion for this boundary and it
-  // already existed: a hook is user code and must receive an ECMAScript object,
-  // and handing it the host record once crashed the engine inside `Call`.
-  const result = Q(yield* ApplyMetaHook(typeObject, 'validate', [value, MetadataAsObject(metadata)], base));
+  // PLAN-metadata-typing.md OQ4, CORRECTED. `ApplyMetaHook` already maps
+  // `MetadataAsObject` over every argument at its `Call` (see above), so
+  // converting here as well would be a second, redundant conversion. The cast
+  // is what the site actually needs: `ApplyMetaHook` takes `readonly Value[]`
+  // because it serves every hook, most of which never see metadata, and the
+  // record becomes an object inside it.
+  //
+  // The plan's OQ4 chose "convert at the call sites" over "widen the shared
+  // signature", having found `MetadataAsObject` and read it as a converter the
+  // CALLERS should apply. It is one the callee already applies. A mutation test
+  // caught it: removing the call-site conversion changed nothing, because the
+  // conversion downstream was doing the work.
+  const result = Q(yield* ApplyMetaHook(typeObject, 'validate', [value, metadata as unknown as Value], base));
   if (result === undefined) {
     return undefined;
   }
