@@ -92,7 +92,13 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
     // reflected node - and a raw `===` never equates the two.
     const leaf = (x: unknown) => (typeof x === 'string' ? x
       : (x as { stringValue?(): string })?.stringValue?.());
-    return ap.__pattern === bp.__pattern
+    // `__pattern` is the marker's own discriminant and is subject to the same
+    // two representations as its fields: a plain `true` as built, a
+    // `BooleanValue` when rebuilt. Comparing it with `===` was the last leaf
+    // keeping a pattern from round-tripping after the CONTAINER was fixed
+    // (F154) - three layers of the same mismatch, each hidden by the one above.
+    const truthy = (x: unknown) => (x === true || (x as { booleanValue?(): boolean })?.booleanValue?.() === true);
+    return truthy(ap.__pattern) === truthy(bp.__pattern)
       && leaf(ap.source) === leaf(bp.source) && leaf(ap.flags) === leaf(bp.flags);
   }
   // table-metadata-values: a range is equivalent to a range of the same shape,

@@ -326,24 +326,27 @@ test('agreement: the round trip, over every kind the READ side emits', async () 
   for (const [kind, spelling] of kinds) {
     expect(await holds(`Reflect.makeType(Reflect.getReflection(${spelling})) === ${spelling}`), kind).toBe('ok');
   }
-  // A BRAND round-trips: `parameterized` was asserted here as an exception so
-  // that OQ6-A's landing would break this test, and it landed
-  // (PLAN-brand.md phase 1).
-  expect(await holds("Reflect.makeType(Reflect.getReflection(B)) === B",
-    "type B = uint32.<{ brand: 'UserId' }>;")).toBe('ok');
-  // A PATTERN does not, and that is F153 rather than F110: the rebuild is
-  // STABLE but not equal to the original - one conversion moves it to a fixed
-  // point. Its metadata leaves (`source`, `flags`) are plain JS strings as
-  // built and engine Values as rebuilt, and something above the marker
-  // comparison still distinguishes the two. A brand round-trips because its tag
-  // is a Value on BOTH sides, which is why this looked like a brand success
-  // rather than a pattern failure.
-  expect(await holds('Reflect.makeType(Reflect.getReflection(Px)) !== Px',
+  // `parameterized` round-trips, brand and pattern alike. It was asserted here
+  // as an EXCEPTION so that OQ6-A's landing would break this test; it landed
+  // (PLAN-brand.md phase 1), and then the rewrite recorded that a pattern was
+  // still only stable-but-unequal. PLAN-metadata-representation.md closed that
+  // too: the metadata is now read back structurally to the depth of the record,
+  // and the marker's own discriminant is compared across both representations.
+  //
+  // `sec-reflect-maketype` states this as an IDENTITY - "which is what makes
+  // the round trip the identity function rather than an equivalence" - so `===`
+  // is the assertion, not a shape check. Every weaker check passed while this
+  // was broken.
+  expect(await holds('Reflect.makeType(Reflect.getReflection(Px)) === Px',
     'type Px = string.<{ pattern: /^a$/ }>;')).toBe('ok');
-  expect(await holds('Reflect.makeType(Reflect.getReflection(R)) === R',
-    "type Px = string.<{ pattern: /^a$/ }>; const R = Reflect.makeType(Reflect.getReflection(Px));")).toBe('ok');
-  // `enum` remains a separate exception: an enum reflects as a NOMINAL, so
-  // there is no node to rebuild it from.
+  expect(await holds('Reflect.makeType(Reflect.getReflection(B)) === B',
+    "type B = uint32.<{ brand: 'UserId' }>;")).toBe('ok');
+  // A Value leaf and a marker leaf in ONE record - the case that would catch a
+  // fix handling one leaf kind and not the mix.
+  expect(await holds('Reflect.makeType(Reflect.getReflection(M)) === M',
+    "type M = string.<{ brand: 'Name', pattern: /^a$/ }>;")).toBe('ok');
+  // `enum` remains the one exception, and for a different reason: the write
+  // side has no `enum` case at all.
   expect(await run('enum E { a, b } Reflect.makeType(Reflect.getReflection(type E));')).toBe('threw');
 });
 
