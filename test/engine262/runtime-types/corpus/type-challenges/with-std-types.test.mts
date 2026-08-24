@@ -25,26 +25,24 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. **30 of 46 blocks hold.** The remaining 16 are findings, not
- * defects in this file.
+ * TRIAGE STATE. **34 of 46 blocks hold.** The remaining 12 are findings.
  *
- * Two causes are now closed in the LANGUAGE rather than in the document: F115
- * gave `[]` to the empty tuple, and F136 gave the function family a writable
- * bound, `(...a: [].<any>) => any`. The corpus's `Function` uses - four of
- * them, in a builder block, a std block and two positions the first grep missed
- * - now spell that bound.
+ * Closed since the last pass: bucket G, five blocks whose fixtures were
+ * declared `interface` and so were opaque to the kit - OQ2-A settled that the
+ * kit operates on structural object types, and those blocks predated it.
  *
- * Titles are made unique with a `(2)` suffix where two challenges share a
- * heading. They collided before, and marking by title then marked every block
- * sharing one - 51 todos for 17 failures, which is how the collision surfaced.
+ * The largest remaining cause is **F138: `declare function` does not parse**,
+ * and it is an engine gap rather than a corpus error. Four builders contain an
+ * ambient declaration, `spec.emu` contains no `declare` production at all, and
+ * 16 corpus blocks use one. That needs its own plan.
  *
- * Remaining, by cause:
+ * Remaining: F138 (4), a bare `[].<T>` where a type is required (2), `unknown`
+ * not being a type name (1), `keys` undefined in a default parameter (1), an
+ * expected-throw the splitter mis-annotates (1), and E/F residue (3).
  *
- *   G  `mapProperties` on a nominal - the OQ2-A boundary working as decided
- *   I  "Unexpected token" - a third extraction gap
- *   B  a name the block never declares
- *   H  `keys` undefined inside a default parameter - no hypothesis yet
- *   F  genuine semantic disagreement
+ * Block 213 also calls `std.instanceType`, which OQ10-C RETIRED - a corpus use
+ * of an export the plan removed, which nothing caught because the block had
+ * never run.
  */
 
 test.todo('with std:types - 4  Pick - see TRIAGE STATE');
@@ -312,15 +310,55 @@ diff(Foo, Coo) === type { age: string, gender: uint32 };
 \nString(std.merge(std.omit(Foo, std.keys(Coo)), std.omit(Coo, std.keys(Foo))) === type { age: string, gender: uint32 });`));
 });
 
-test.todo('with std:types - 2595  PickByType - see TRIAGE STATE');
+test('with std:types - 2595  PickByType', () => {
+  expectBuilderTrue(kit(`function pickByType(T: type, U: type): type {
+  return mapProperties(T, p => Reflect.isAssignable(p.type, U) ? p : null);
+}
 
-test.todo('with std:types - 2757  PartialByKeys - see TRIAGE STATE');
+type Model = { name: string, count: uint32, isReadonly: boolean, isEnable: boolean };
+pickByType(Model, boolean) === type { isReadonly: boolean, isEnable: boolean };
+pickByType(Model, string) === type { name: string };
+\nString(std.pickByValue(Model, boolean) === type { isReadonly: boolean, isEnable: boolean });`));
+});
 
-test.todo('with std:types - 2759  RequiredByKeys - see TRIAGE STATE');
+test('with std:types - 2757  PartialByKeys', () => {
+  expectBuilderTrue(kit(`function partialByKeys(T: type, K: type = keys(T)): type {
+  const keys = new Set(literalValues(K));
+  return mapProperties(T, p => keys.has(p.name) ? { ...p, optional: true } : p);
+}
+
+type User = { name: string, age: uint32, address: string };
+partialByKeys(User, type 'name') === type { name?: string, age: uint32, address: string };
+partialByKeys(User, type 'name' | 'age') === type { name?: string, age?: uint32, address: string };
+partialByKeys(User) === partial(User);
+\nString(std.merge(std.omit(User, type 'name'), std.partial(std.pick(User, type 'name')))
+  === partialByKeys(User, type 'name'));`));
+});
+
+test('with std:types - 2759  RequiredByKeys', () => {
+  expectBuilderTrue(kit(`function requiredByKeys(T: type, K: type = keys(T)): type {
+  const keys = new Set(literalValues(K));
+  return mapProperties(T, p => keys.has(p.name) ? { ...p, optional: false } : p);
+}
+
+type User = { name?: string, age?: uint32, address?: string };
+requiredByKeys(User, type 'name') === type { name: string, age?: uint32, address?: string };
+requiredByKeys(User) === required(User);
+\nString(std.merge(std.omit(User, type 'name'), std.required(std.pick(User, type 'name')))
+  === requiredByKeys(User, type 'name'));`));
+});
 
 test.todo('with std:types - 2793  Mutable - see TRIAGE STATE');
 
-test.todo('with std:types - 2852  OmitByType - see TRIAGE STATE');
+test('with std:types - 2852  OmitByType', () => {
+  expectBuilderTrue(kit(`function omitByType(T: type, U: type): type {
+  return mapProperties(T, p => Reflect.isAssignable(p.type, U) ? null : p);
+}
+
+type Model = { name: string, count: uint32, isReadonly: boolean, isEnable: boolean };
+omitByType(Model, boolean) === type { name: string, count: uint32 };
+\nString(std.omit(Model, std.keys(std.pickByValue(Model, boolean))) === type { name: string, count: uint32 });`));
+});
 
 test('with std:types - 3062  Shift', () => {
   expectBuilderTrue(kit(`function shift(T: type): type {
