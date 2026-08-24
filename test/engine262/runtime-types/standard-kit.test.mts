@@ -209,8 +209,13 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['compose', 'std.compose(std.partial, std.mutable)(type { readonly a: uint8 }) === type { a?: uint8 }', ''],
   ['awaited', 'std.awaited(type Promise.<uint8>) === uint8', ''],
 
-  // maximal set (4) - `brand` is the one blocked export, below
+  // maximal set (4)
   ['noInfer', 'std.noInfer(uint8) === uint8', ''],
+  // Unblocked by PLAN-brand.md phases 1 and 2: F110 gave `makeType` a
+  // `parameterized` case, and `src/intrinsics/Brand.mts` claims the `brand`
+  // key. It was the ONE blocked export of the 71 and carried this file's only
+  // `test.todo`.
+  ['brand', "std.brand(uint32, 'UserId') === type uint32.<{ brand: 'UserId' }>", ''],
   ['options', 'std.reflect(std.options(type { n: uint8 }, type { inc: () => void })).properties.length === 2', ''],
   ['listeners', 'std.listeners(type { x: uint8 }) === type { onXChanged: (uint8) => void }', ''],
 ];
@@ -218,7 +223,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
 test('the table covers every export, and only exports', async () => {
   // Guards the suite against the kit growing past it. A helper added without a
   // test fails on the count here rather than passing unnoticed.
-  const named = EXPORTS.map(([name]) => name).concat('brand');
+  const named = EXPORTS.map(([name]) => name);
   expect(new Set(named).size).toBe(71);
   expect(await run(`const extra = Object.keys(std).filter(k => !${JSON.stringify(named)}.includes(k));`
     + ' if (extra.length) { throw new Error("untested exports: " + extra.join(",")); }'
@@ -229,7 +234,6 @@ test.each(EXPORTS)('%s', async (_name, expr, setup) => {
   expect(await holds(expr, setup ?? '')).toBe('ok');
 });
 
-test.todo('brand - blocked twice: F110 (makeType rejects a `parameterized` node) and F126 (no meta type claims the `brand` key, so even `uint32.<{ brand: "X" }>` is refused). Needs OQ6-A AND OQ9-A; fixing either alone leaves it dead.');
 
 // ---------------------------------------------------------------------------
 // 2. The agreement obligations. `annex-standard-kit`: "Where the kit and the
@@ -322,10 +326,25 @@ test('agreement: the round trip, over every kind the READ side emits', async () 
   for (const [kind, spelling] of kinds) {
     expect(await holds(`Reflect.makeType(Reflect.getReflection(${spelling})) === ${spelling}`), kind).toBe('ok');
   }
-  // The two exceptions, asserted AS exceptions so that OQ6-A's landing breaks
-  // this test and whoever lands it reads the note above.
+  // A BRAND round-trips: `parameterized` was asserted here as an exception so
+  // that OQ6-A's landing would break this test, and it landed
+  // (PLAN-brand.md phase 1).
+  expect(await holds("Reflect.makeType(Reflect.getReflection(B)) === B",
+    "type B = uint32.<{ brand: 'UserId' }>;")).toBe('ok');
+  // A PATTERN does not, and that is F153 rather than F110: the rebuild is
+  // STABLE but not equal to the original - one conversion moves it to a fixed
+  // point. Its metadata leaves (`source`, `flags`) are plain JS strings as
+  // built and engine Values as rebuilt, and something above the marker
+  // comparison still distinguishes the two. A brand round-trips because its tag
+  // is a Value on BOTH sides, which is why this looked like a brand success
+  // rather than a pattern failure.
+  expect(await holds('Reflect.makeType(Reflect.getReflection(Px)) !== Px',
+    'type Px = string.<{ pattern: /^a$/ }>;')).toBe('ok');
+  expect(await holds('Reflect.makeType(Reflect.getReflection(R)) === R',
+    "type Px = string.<{ pattern: /^a$/ }>; const R = Reflect.makeType(Reflect.getReflection(Px));")).toBe('ok');
+  // `enum` remains a separate exception: an enum reflects as a NOMINAL, so
+  // there is no node to rebuild it from.
   expect(await run('enum E { a, b } Reflect.makeType(Reflect.getReflection(type E));')).toBe('threw');
-  expect(await run('type Px = string.<{ pattern: /^a$/ }>; Reflect.makeType(Reflect.getReflection(Px));')).toBe('threw');
 });
 
 test('a struct CONTAINING a parameterized field round-trips, and walks preserve it', async () => {

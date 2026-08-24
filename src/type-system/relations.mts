@@ -86,7 +86,14 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   const ap = a as { __pattern?: boolean, source?: string, flags?: string };
   const bp = b as { __pattern?: boolean, source?: string, flags?: string };
   if (ap.__pattern || bp.__pattern) {
-    return ap.__pattern === bp.__pattern && ap.source === bp.source && ap.flags === bp.flags;
+    // PLAN-brand.md F153. `source` and `flags` reach here in one of two
+    // representations - plain JS strings as `metadataValueFromType` builds
+    // them, engine `JSStringValue`s when the record was rebuilt from a
+    // reflected node - and a raw `===` never equates the two.
+    const leaf = (x: unknown) => (typeof x === 'string' ? x
+      : (x as { stringValue?(): string })?.stringValue?.());
+    return ap.__pattern === bp.__pattern
+      && leaf(ap.source) === leaf(bp.source) && leaf(ap.flags) === leaf(bp.flags);
   }
   // table-metadata-values: a range is equivalent to a range of the same shape,
   // with the same bound at each endpoint the shape has, and SameValue at each
