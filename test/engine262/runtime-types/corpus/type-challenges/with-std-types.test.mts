@@ -25,24 +25,27 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. **34 of 46 blocks hold.** The remaining 12 are findings.
+ * TRIAGE STATE. **34 of 46 blocks hold.**
  *
- * Closed since the last pass: bucket G, five blocks whose fixtures were
- * declared `interface` and so were opaque to the kit - OQ2-A settled that the
- * kit operates on structural object types, and those blocks predated it.
+ * F138 is closed and its framing was corrected: `declare` was never part of
+ * this proposal - `spec.emu` has no production for it, and the design
+ * document's uses are all inside TypeScript comparison blocks. Eight corpus
+ * blocks wrote it anyway, carried across from the TypeScript answer above them,
+ * and nothing caught it because those blocks had never run. All eight are
+ * rewritten; the TypeScript comparisons keep it, correctly.
  *
- * The largest remaining cause is **F138: `declare function` does not parse**,
- * and it is an engine gap rather than a corpus error. Four builders contain an
- * ambient declaration, `spec.emu` contains no `declare` production at all, and
- * 16 corpus blocks use one. That needs its own plan.
+ * Remaining 12:
  *
- * Remaining: F138 (4), a bare `[].<T>` where a type is required (2), `unknown`
- * not being a type name (1), `keys` undefined in a default parameter (1), an
- * expected-throw the splitter mis-annotates (1), and E/F residue (3).
+ *   F139 4  a computed parameter type specialized through generic inference
+ *           hands `mapProperties` a non-object. Removing `declare` moved these
+ *           from a parse error to this, so the parse error was masking it.
+ *   D    2  a bare `[].<T>` where a type is required
+ *   E/F  3  residue
+ *   B    1  `unknown` is not a type name
+ *   H    1  `keys` undefined inside a default parameter
+ *   J    1  an expected-throw the splitter mis-annotates
  *
- * Block 213 also calls `std.instanceType`, which OQ10-C RETIRED - a corpus use
- * of an export the plan removed, which nothing caught because the block had
- * never run.
+ * Block 213 also calls `std.instanceType`, retired by OQ10-C.
  */
 
 test.todo('with std:types - 4  Pick - see TRIAGE STATE');
