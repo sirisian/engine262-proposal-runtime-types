@@ -684,7 +684,7 @@ function metadataToValue(metadata: unknown, realm: Realm): Value {
 }
 
 /**
- * The structure of a type as #sec-reflection-contexts' `Type` context describes
+ * The structure of a type as the `Type` context of #sec-reflection-contexts describes
  * it, discriminated by `kind`. Exported so the context form of
  * `Reflect.getReflection` can ask for the same thing the value form does.
  */
