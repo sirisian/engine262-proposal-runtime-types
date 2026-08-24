@@ -66,6 +66,7 @@ import { bootstrapAtomics } from '../intrinsics/Atomics.mts';
 import { bootstrapSynchronization } from '../intrinsics/Synchronization.mts';
 import { bootstrapThread } from '../intrinsics/Thread.mts';
 import { bootstrapStringPattern } from '../intrinsics/StringPattern.mts';
+import { bootstrapBrand } from '../intrinsics/Brand.mts';
 import { bindRangeEnumGlobals } from '../intrinsics/RangeEnums.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
@@ -104,6 +105,7 @@ import { bootstrapWeakSetPrototype } from '../intrinsics/WeakSetPrototype.mts';
 import { bootstrapWrapForValidIteratorPrototype } from '../intrinsics/WrapForValidIteratorPrototype.mts';
 import { bootstrapTemporal } from '../intrinsics/Temporal/Temporal.mts';
 import { RegisterTemporalTypeSources } from '../intrinsics/Temporal/type-sources.mts';
+import { BindTypeName } from './TypeNames.mts';
 import {
   type ObjectValue, type GlobalEnvironmentRecord, type ParseNode, type LoadedModuleRequestRecord, type ManagedRealmHostDefined, type GCMarker,
   ManagedRealm,
@@ -116,7 +118,6 @@ import {
   OrdinaryObjectCreate,
   surroundingAgent,
 } from '#self';
-import { BindTypeName } from './TypeNames.mts';
 
 /** https://tc39.es/ecma262/#sec-code-realms */
 export abstract class Realm {
@@ -264,6 +265,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   // proposal-runtime-types: a meta type this specification declares rather than
   // a program. Needs %Type.prototype% too, so it follows it.
   bootstrapStringPattern(realmRec);
+  bootstrapBrand(realmRec);
 
   bootstrapMath(realmRec);
 
