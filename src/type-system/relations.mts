@@ -1205,7 +1205,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
         return false;
       }
       return sg.Parameters.every((sp, i) => sp.Rest === tg.Parameters[i].Rest
-        && IsSubtype(parameterArgumentType(tg.Parameters[i]), parameterArgumentType(sp), assumptions))
+        && parameterAccepts(parameterArgumentType(tg.Parameters[i]), parameterArgumentType(sp), assumptions))
         && (!sg.Return || !tg.Return || IsSubtype(sg.Return, tg.Return, assumptions));
     }
     // Where the SOURCE has several rests and the target supplies a finite list,
@@ -1215,7 +1215,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     // to accept it is sound but refuses lists the source can plainly take.
     if (sg.Parameters.filter((p) => p.Rest).length > 1 && !tg.Parameters.some((p) => p.Rest)) {
       const slots = sg.Parameters.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
-      const assigned = SequenceAssignment(slots, tg.Parameters.length, (j, k) => IsSubtype(
+      const assigned = SequenceAssignment(slots, tg.Parameters.length, (j, k) => parameterAccepts(
         parameterArgumentType(tg.Parameters[j]),
         parameterArgumentType(sg.Parameters[k]),
         assumptions,
@@ -1240,7 +1240,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
         // language ignores; the clause admits it.
         return true;
       }
-      return candidates.every((sp) => IsSubtype(parameterArgumentType(tp), parameterArgumentType(sp), assumptions));
+      return candidates.every((sp) => parameterAccepts(parameterArgumentType(tp), parameterArgumentType(sp), assumptions));
     });
     if (!positionsOk) {
       return false;
@@ -1278,6 +1278,44 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
 }
 
 /** #sec-isassignable */
+/**
+ * Does a parameter typed _target_ accept a function whose parameter is typed
+ * _source_? Contravariant, so the target's type must reach the source's.
+ *
+ * PLAN-function-family-bound.md F136. This used to call `IsSubtype` directly,
+ * and that is one-directional on `any`: `IsSubtype(s, t)` admits `any` as the
+ * TARGET (everything is a subtype of `any`) and not as the SOURCE. `IsAssignable`
+ * is bidirectional - it returns true where EITHER side is `any` - which is the
+ * gradual-typing rule and the one a boundary uses.
+ *
+ * Using the strict relation inside a signature made `any` in a target's
+ * parameter position refuse every specific source parameter:
+ *
+ *   (uint8) => void  ->  (uint8) => any    // true
+ *   (uint8) => void  ->  (any) => any      // FALSE, though `any` accepts a uint8
+ *
+ * while the mirror held, because there `any` sat on the target side of the
+ * IsSubtype call:
+ *
+ *   (any) => void    ->  (uint8) => any    // true
+ *
+ * So one direction of `any` was consulted and the other was not, and a function
+ * could not be passed where an `any`-parameterised signature was declared. That
+ * breaks gradual typing at the function boundary on its own; the visible symptom
+ * was that the FUNCTION FAMILY had no writable bound, since every candidate
+ * spelling for "any function" puts `any` in exactly this position.
+ *
+ * With this, `(...a: [].<any>) => any` is that bound, parallel to `[].<any>` for
+ * arrays and `{}` for objects - no new type name and no Type Object exception,
+ * because a Type Object has no call signature to match.
+ */
+function parameterAccepts(target: TypeRecord, source: TypeRecord, assumptions: readonly Assumption[]): boolean {
+  if (target.Kind === 'any' || source.Kind === 'any') {
+    return true;
+  }
+  return IsSubtype(target, source, assumptions);
+}
+
 export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
