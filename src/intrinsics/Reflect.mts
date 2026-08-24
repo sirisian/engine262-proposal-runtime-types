@@ -592,6 +592,36 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       }
       return { Kind: 'function', Signatures };
     }
+    case 'parameterized': {
+      // proposal-runtime-types, PLAN-brand.md phase 1 (F110). The read side has
+      // always emitted this kind and the write side rejected it, so
+      // `makeType(getReflection(T)) === T` was false for every parameterized
+      // type, and `brand` - which IS a parameterized node - could not be built
+      // at all. It is the one blocked export of the 71 in `std:types`.
+      //
+      // The metadata is read out into a PLAIN RECORD rather than stored as the
+      // ObjectValue it arrives as. Syntactic construction stores a frozen plain
+      // record and SameMetadata walks it with Object.keys; handed an
+      // ObjectValue instead, Object.keys returns the ENGINE's own fields, which
+      // are identical for every metadata object - so every parameterization
+      // compared equal to every other and `brand(uint32, 'UserId')` interned to
+      // the same type as `brand(uint32, 'OrderId')`. A brand that does not
+      // distinguish its tag is not a brand, so this conversion is the whole of
+      // that obligation and not an incidental detail.
+      const Base = Q(yield* typeProp('base'));
+      const metadataV = Q(yield* Get(node, Value('metadata')));
+      if (!(metadataV instanceof ObjectValue)) {
+        return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node without metadata'));
+      }
+      const keys = Q(yield* metadataV.OwnPropertyKeys());
+      const record: Record<string, Value> = Object.create(null) as Record<string, Value>;
+      for (const key of keys) {
+        if (key instanceof JSStringValue) {
+          record[key.stringValue()] = Q(yield* Get(metadataV, key));
+        }
+      }
+      return { Kind: 'parameterized', Base, Metadata: Object.freeze(record) as unknown as Value };
+    }
     default:
       return Throw.TypeError('$1 is not supported yet', Value(`a type node of kind ${kind}`));
   }
