@@ -88,8 +88,24 @@ test('Fixed-length arrays: the extents must agree, and a window takes either', (
 
 // -- Any Typed Array: [] -------------------------------------------------------
 // `[]` alone is the array of `any`; `[].<any>` is the same type spelled out.
-test('Any Typed Array: [] is [].<any>', () => {
-  expect(bool('type A = []; type B = [].<any>; String(A === B);')).toBe(true);
+test('Any Typed Array: the family bound is [].<any>; [] is the empty tuple', () => {
+  // PLAN-std-types.md F115, direction B. `[]` used to BE `[].<any>` - the array
+  // of `any`, and the bound of the array and tuple family. It is now the EMPTY
+  // TUPLE, and the bound keeps a spelling rather than the short one.
+  //
+  // The measurement is why: across every design document and the 190-program
+  // corpus, `[]` in bound position was written ZERO times and `[]` meaning the
+  // empty tuple about thirty, while `tupleOf([])` - the only previous way to
+  // write the empty tuple - was written zero. The terse form belonged to the
+  // role nobody used, and the common meaning had none.
+  expect(bool('type A = [].<any>; type B = [].<any>; String(A === B);')).toBe(true);
+  expect(bool('type A = []; type B = [].<any>; String(A === B);')).toBe(false);
+  // the bound still admits every array and tuple
+  expect(bool('String(Reflect.isAssignable(type [uint8, string], type [].<any>));')).toBe(true);
+  expect(bool('String(Reflect.isAssignable(type [].<uint8>, type [].<any>));')).toBe(true);
+  // and `[]` is now the empty tuple, which nothing else could spell
+  expect(bool('String(Reflect.getReflection(type []).kind === "tuple");')).toBe(true);
+  expect(bool('String(Reflect.getReflection(type []).elements.length === 0);')).toBe(true);
 });
 
 // -- Tuple Types: [T1, T2, ...] ------------------------------------------------

@@ -275,7 +275,7 @@ test('the one-argument and bare array forms still resolve', () => {
   // The guard must not catch the forms that were always correct.
   expect(evaluated('let a: [4].<uint8> = [1, 2, 3, 4]; String(a.length);')).toBe('4');
   expect(evaluated('let a: [].<uint32> = [1, 2]; String(a.length);')).toBe('2');
-  expect(evaluated('let a: [] = [1, 2]; String(a.length);')).toBe('2');
+  expect(evaluated('let a: [].<any> = [1, 2]; String(a.length);')).toBe('2');
 });
 
 // -- placement: an untyped array has no capacity surface ----------------------

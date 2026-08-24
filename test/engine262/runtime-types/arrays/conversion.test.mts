@@ -118,7 +118,7 @@ test('a default does not disturb the types around it', () => {
   expect(evaluated("type A = [uint8, string = 'a']; type B = [uint8, string = 'a'];"
     + ' let x: A = [1]; let y: B = [1]; String(Reflect.typeOf(x) === Reflect.typeOf(y));')).toBe('true');
   // and a defaulted tuple still satisfies the array-family bound
-  expect(evaluated("function g<T extends []>(v: T): string { return 'ok'; }"
+  expect(evaluated("function g<T extends [].<any>>(v: T): string { return 'ok'; }"
     + " const t: [uint8, string = 'z'] = [1]; g(t);")).toBe('ok');
 });
 

@@ -627,7 +627,7 @@ export abstract class TypeParser extends ExpressionParser {
   }
 
   // ArrayOrTupleType :
-  //   `[` `]`
+  //   `[` `]`                        <- the EMPTY TUPLE (F115, direction B)
   //   `[` `]` TypeArguments
   //   `[` ArrayExtent `]` TypeArguments
   //   `[` TupleElementList `,`? `]`
@@ -641,9 +641,32 @@ export abstract class TypeParser extends ExpressionParser {
     const node = this.startNode<ParseNode.ArrayType | ParseNode.TupleType>();
     this.expect(Token.LBRACK);
     if (this.eat(Token.RBRACK)) {
-      node.ArrayExtent = null;
-      node.TypeArguments = this.test(Token.PERIOD_LT) ? this.parseTypeArguments() : null;
-      return this.finishNode(node, 'ArrayType');
+      // PLAN-std-types.md F115, direction B. `[]` FOLLOWED BY `.<...>` is an
+      // array - `[].<uint8>` is the dynamic array of `uint8`. `[]` ALONE is the
+      // EMPTY TUPLE.
+      //
+      // It used to be the array of `any`, which #sec-array-and-tuple-types
+      // justified as "the bound of the array and tuple family, so a type
+      // parameter constrained by it is satisfied by any array or tuple". That
+      // role is real and it keeps a spelling: `[].<any>` denotes the very same
+      // type, and a tuple, an array and the empty tuple are all assignable to
+      // it. What it does not keep is the SHORT spelling, and the measurement is
+      // why: across every design document and the 190-program corpus, `[]` in
+      // bound position is written ZERO times, while `[]` meaning the empty
+      // tuple is written about thirty, and `tupleOf([])` - the only previous
+      // way to denote the empty tuple - is written zero.
+      //
+      // So the terse form went to the role nobody used, and the common meaning
+      // had no spelling at all. Worse, it failed SILENTLY: `type []` was not an
+      // error, it was a different type, and a TypeScript reader writing
+      // `First<[]>` got the array of `any` and no diagnostic.
+      if (this.test(Token.PERIOD_LT)) {
+        node.ArrayExtent = null;
+        node.TypeArguments = this.parseTypeArguments();
+        return this.finishNode(node, 'ArrayType');
+      }
+      node.TupleElementList = [];
+      return this.finishNode(node, 'TupleType');
     }
 
     const savedEarlyErrors = new Set(this.earlyErrors);

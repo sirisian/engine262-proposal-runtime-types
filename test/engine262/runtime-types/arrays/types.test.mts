@@ -9,7 +9,7 @@ import { evaluated, expectThrown, expectThrownFlagOff } from '../harness.mts';
  * Arrays are invariant in their element, so without a top an array whose
  * element type is written `any` is a type nothing inhabits - no array is
  * declared that way - and the bound the design writes over the family,
- * `T extends []`, is satisfied by nothing at all. `any` is already the type of which every
+ * `T extends [].<any>`, is satisfied by nothing at all. `any` is already the type of which every
  * value is a value; this is that reading carried to the array types.
  *
  * What makes it admissible where a general covariance would not be is that a
@@ -20,7 +20,7 @@ import { evaluated, expectThrown, expectThrownFlagOff } from '../harness.mts';
  */
 
 test('every array and tuple satisfies the array-family bound', () => {
-  const G = "function g<T extends []>(v: T): string { return 'ok'; } ";
+  const G = "function g<T extends [].<any>>(v: T): string { return 'ok'; } ";
   expect(evaluated(`${G}const a: [].<number> = [1]; g(a);`)).toBe('ok');
   expect(evaluated(`${G}const a: [4].<uint8> = [1, 2, 3, 4]; g(a);`)).toBe('ok');
   expect(evaluated(`${G}const t: [number, string] = [1, 'a']; g(t);`)).toBe('ok');
@@ -59,9 +59,9 @@ test('a store through the wider view is still checked', () => {
 
 test('the bound composes with the rest of the array work', () => {
   // a parameter bound by the family may be indexed and measured
-  expect(evaluated("function g<T extends []>(v: T) { return v[0]; }"
+  expect(evaluated("function g<T extends [].<any>>(v: T) { return v[0]; }"
     + ' const a: [].<uint8> = [7]; String(g(a));')).toBe('7');
-  expect(evaluated('function g<T extends []>(v: T) { return v.length; }'
+  expect(evaluated('function g<T extends [].<any>>(v: T) { return v.length; }'
     + " const t: [number, string] = [1, 'a']; String(g(t));")).toBe('2');
   // a borrow taken through the wider view writes the original
   expect(evaluated('const a: [].<uint8> = [1]; const b: [].<any> = a;'

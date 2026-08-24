@@ -106,9 +106,16 @@ test('the type operator', () => {
   expect(statements('type [4].<uint8>;')[0]).toMatchObject({
     Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
   });
-  // An empty bracket pair is the ARRAY form (`ArrayOrTupleType : [ ] TypeArguments?`)
-  // rather than an empty tuple, so this pins what it is rather than assuming.
+  // An empty bracket pair is the EMPTY TUPLE. It used to be the array form, and
+  // this assertion is the one that pinned it - PLAN-std-types.md F115 direction
+  // B moved it, because `[]` in bound position was written zero times across
+  // every design document while `[]` meaning the empty tuple was written about
+  // thirty, and the empty tuple had no spelling at all. The array form keeps
+  // `[].<T>`, and the family bound `[]` used to spell is now `[].<any>`.
   expect(statements('type [];')[0]).toMatchObject({
+    Expression: { type: 'TypeOperatorExpression', Type: { type: 'TupleType' } },
+  });
+  expect(statements('type [].<any>;')[0]).toMatchObject({
     Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
   });
 });

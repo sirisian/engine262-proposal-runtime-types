@@ -25,24 +25,24 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. **21 of 46 blocks hold**, up from 8, after phase 4b steps 1, 2,
- * 3 and 7. The remaining 25 are findings, not defects in this file.
+ * TRIAGE STATE. **29 of 46 blocks hold**, after phase 4b steps 1, 2, 3, 7 and
+ * F115 direction B. The remaining 17 are findings, not defects in this file.
  *
- * By cause, from the harness's now-legible diagnostics:
+ * F115 closed 8 at once: `[]` is now the EMPTY TUPLE rather than the array of
+ * `any`. The corpus was written expecting exactly that - it is what TypeScript
+ * means - and the old reading failed SILENTLY, since `type []` was not an error
+ * but a different type.
  *
- *   E 16  a tuple/array spelling - `type []` is an ARRAY, not an empty tuple
- *         (F115), and the document writes `[].<T>` where a type is required
- *   D 10  a bare constructor where a type is required, plus `Function`, which
- *         is NOT a type at all and needs a design answer rather than a spelling
- *   G 10  `mapProperties` on a nominal - the OQ2-A boundary working as decided;
- *         these blocks predate that decision
- *   I  6  still "Unexpected token" - a third extraction gap
- *   B  2  a name the block never declares
- *   H  2  `keys` undefined inside a default parameter - no hypothesis yet
- *   F  1  genuine semantic disagreement
+ * Remaining, by cause:
  *
- * Counts are per BLOCK and a block may carry several causes, so they sum past
- * 25.
+ *   D  a bare constructor where a type is required, plus `Function`, which is
+ *      not a type at all and needs a design answer rather than a spelling
+ *   G  `mapProperties` on a nominal - the OQ2-A boundary working as decided;
+ *      these blocks predate that decision
+ *   I  "Unexpected token" - a third extraction gap
+ *   B  a name the block never declares
+ *   H  `keys` undefined inside a default parameter - no hypothesis yet
+ *   F  genuine semantic disagreement
  */
 
 test.todo('with std:types - 4  Pick - see TRIAGE STATE');
@@ -64,11 +64,41 @@ test.todo('with std:types - 43  Exclude - see TRIAGE STATE');
 
 test.todo('with std:types - 189  Awaited - see TRIAGE STATE');
 
-test.todo('with std:types - 533  Concat - see TRIAGE STATE');
+test('with std:types - 533  Concat', () => {
+  expectBuilderTrue(kit(`function concat(A: type, B: type): type {
+  return Reflect.makeType({ kind: 'tuple', elements: [...tupleElements(A), ...tupleElements(B)] });
+}
 
-test.todo('with std:types - 3057  Push - see TRIAGE STATE');
+concat(type [], type []) === type [];
+concat(type [], type [1]) === type [1];
+concat(type [1, 2], type [3, 4]) === type [1, 2, 3, 4];
+concat(type ['1', 2, '3'], type [false, boolean, '4']) === type ['1', 2, '3', false, boolean, '4'];
+\nString(std.concat(type ['1', 2, '3'], type [false, boolean, '4']) === type ['1', 2, '3', false, boolean, '4']);`));
+});
 
-test.todo('with std:types - 3060  Unshift - see TRIAGE STATE');
+test('with std:types - 3057  Push', () => {
+  expectBuilderTrue(kit(`function push(T: type, U: type): type {
+  return Reflect.makeType({ kind: 'tuple',
+    elements: [...tupleElements(T), { type: U, rest: false, initial: undefined }] });
+}
+
+push(type [], type 1) === type [1];
+push(type [1, 2], type '3') === type [1, 2, '3'];
+push(type ['1', 2, '3'], boolean) === type ['1', 2, '3', boolean];
+\nString(std.concat(type [1, 2], type [3]) === push(type [1, 2], type 3));`));
+});
+
+test('with std:types - 3060  Unshift', () => {
+  expectBuilderTrue(kit(`function unshift(T: type, U: type): type {
+  return Reflect.makeType({ kind: 'tuple',
+    elements: [{ type: U, rest: false, initial: undefined }, ...tupleElements(T)] });
+}
+
+unshift(type [], type 1) === type [1];
+unshift(type [1, 2], type 0) === type [0, 1, 2];
+unshift(type ['1', 2, '3'], boolean) === type [boolean, '1', 2, '3'];
+\nString(std.concat(type [0], type [1, 2]) === unshift(type [1, 2], type 0));`));
+});
 
 test('with std:types - 3312  Parameters', () => {
   expectBuilderTrue(kit(`function myParameters(F: type): type {
@@ -85,7 +115,19 @@ myParameters(Reflect.typeOf(baz)) === type [];
 \nString(std.parameters(Reflect.typeOf(foo)) === type [string, uint32]);`));
 });
 
-test.todo('with std:types - 2  Get Return Type - see TRIAGE STATE');
+test('with std:types - 2  Get Return Type', () => {
+  expectBuilderTrue(kit(`function myReturnType(F: type): type {
+  const node = reflect(F);
+  if (node.kind !== 'function') throw new TypeError(\`myReturnType: \${String(F)} is not a function type\`);
+  return node.signatures[0].return.type;
+}
+
+myReturnType(type () => string) === string;
+myReturnType(type () => 123) === type 123;
+myReturnType(type () => Promise.<boolean>) === type Promise.<boolean>;
+myReturnType(type () => () => 'foo') === type () => 'foo';
+\nString(std.returnType(type () => Promise.<boolean>) === type Promise.<boolean>);`));
+});
 
 test('with std:types - 3  Omit', () => {
   expectBuilderTrue(kit(`function myOmit(T: type, K: type): type {
@@ -151,7 +193,16 @@ tupleToUnion([].<string | uint32>) === type string | uint32;
 \nString(std.flatten([].<string | uint32>) === type string | uint32);`));
 });
 
-test.todo('with std:types - 15  Last of Array - see TRIAGE STATE');
+test('with std:types - 15  Last of Array', () => {
+  expectBuilderTrue(kit(`function last(T: type): type {
+  return tupleElements(T).at(-1)?.type ?? never;
+}
+
+last(type [3, 2, 1]) === type 1;
+last(type [2]) === type 2;
+last(type []) === never;
+\nString(std.elementTypes(type [3, 2, 1]).at(-1) === type 1);`));
+});
 
 test.todo('with std:types - 20  Promise.all - see TRIAGE STATE');
 
@@ -259,9 +310,26 @@ test.todo('with std:types - 2793  Mutable - see TRIAGE STATE');
 
 test.todo('with std:types - 2852  OmitByType - see TRIAGE STATE');
 
-test.todo('with std:types - 3062  Shift - see TRIAGE STATE');
+test('with std:types - 3062  Shift', () => {
+  expectBuilderTrue(kit(`function shift(T: type): type {
+  return Reflect.makeType({ kind: 'tuple', elements: tupleElements(T).slice(1) });
+}
 
-test.todo('with std:types - 3192  Reverse - see TRIAGE STATE');
+shift(type [3, 2, 1]) === type [2, 1];
+shift(type [1]) === type [];
+shift(type []) === type [];
+\nString(std.tail(type [3, 2, 1]) === type [2, 1]);`));
+});
+
+test('with std:types - 3192  Reverse', () => {
+  expectBuilderTrue(kit(`function reverse(T: type): type {
+  return Reflect.makeType({ kind: 'tuple', elements: tupleElements(T).toReversed() });
+}
+
+reverse(type ['a', 'b', 'c']) === type ['c', 'b', 'a'];
+reverse(type []) === type [];
+\nString(std.reverse(type ['a', 'b', 'c']) === type ['c', 'b', 'a']);`));
+});
 
 test('with std:types - 3196  Flip Arguments', () => {
   expectBuilderTrue(kit(`function flipArguments(F: type): type {
@@ -279,7 +347,17 @@ flipArguments(type () => boolean) === type () => boolean;
 const Flip = type (arg0: string, arg1: uint32, arg2: boolean) => void;\nString(std.fn(std.elementTypes(std.parameters(Flip)).toReversed(), std.returnType(Flip)) === flipArguments(Flip));`));
 });
 
-test.todo('with std:types - 4471  Zip - see TRIAGE STATE');
+test('with std:types - 4471  Zip', () => {
+  expectBuilderTrue(kit(`function zip(A: type, B: type): type {
+  const [a, b] = [tupleElements(A), tupleElements(B)];
+  return tupleOf(a.slice(0, Math.min(a.length, b.length)).map((e, i) => tupleOf([e.type, b[i].type])));
+}
+
+zip(type [], type []) === type [];
+zip(type [1, 2], type [true, false]) === type [[1, true], [2, false]];
+zip(type [1, 2, 3], type ['1', '2']) === type [[1, '1'], [2, '2']];
+\nString(std.zip(type [1, 2, 3], type ['1', '2']) === type [[1, '1'], [2, '2']]);`));
+});
 
 test('with std:types - 9616  Parse URL Params', () => {
   expectBuilderTrue(kit(`function parseUrlParams(path: string): type {
