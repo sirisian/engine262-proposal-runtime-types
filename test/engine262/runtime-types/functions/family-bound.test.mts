@@ -79,3 +79,44 @@ test('the bound composes, which a bare top type could not', () => {
   expect(evaluated('String(Reflect.isAssignable(type (uint8) => uint8,'
     + ' type (...a: [].<any>) => string));')).toBe('false');
 });
+
+test('F136 reaches `this` too, which is contravariant "as a parameter is"', () => {
+  // Added in the phase-3 audit, which found the fix had been made in phase 3
+  // and never tested. #sec-this-adoption says a signature's [[ThisType]] "is
+  // contravariant, as a parameter is", so it inherits the parameter rule - and
+  // it inherited the defect with it: `this: uint8` was refused where
+  // `this: any` was declared, while the mirror passed, for exactly the reason
+  // the parameter step failed.
+  const withThis = (t: string) => 'Reflect.makeType({ kind: "function", signatures: ['
+    + `{ parameters: [], return: { type: type void }, this: ${t} }] })`;
+  expect(evaluated(`String(Reflect.isAssignable(${withThis('uint8')}, ${withThis('any')}));`)).toBe('true');
+  // the mirror already held
+  expect(evaluated(`String(Reflect.isAssignable(${withThis('any')}, ${withThis('uint8')}));`)).toBe('true');
+  // and a genuine violation is still refused
+  expect(evaluated(`String(Reflect.isAssignable(${withThis('uint8')}, ${withThis('string')}));`)).toBe('false');
+});
+
+test('the family splits on `this`, and that is #sec-this-adoption working', () => {
+  // Found in the phase-3 audit: the plan claimed the bound admits
+  // `this`-carrying functions. It does not, and it should not.
+  //
+  // #sec-this-adoption: "A signature with none supplies no `this` rather than
+  // accepting any", so a signature that HAS a [[ThisType]] "is usable nowhere a
+  // `this` is absent". The bound `(...a: [].<any>) => any` declares no `this`,
+  // so a `this`-carrying function is excluded by that rule rather than by any
+  // shortcoming of the bound - which is also what makes a method extracted from
+  // its class an error at the boundary that took it.
+  //
+  // So there are two bounds, one per half of the family, and the split is the
+  // design rather than a gap. Asserted in both directions so neither half
+  // silently absorbs the other.
+  const sig = (self: string | null, params: string) => 'Reflect.makeType({ kind: "function", signatures: [{'
+    + ` parameters: ${params}, return: { type: any }${self ? `, this: ${self}` : ''} }] })`;
+  const thisBound = sig('any', '[{ type: any, name: "a", rest: true, index: 0 }]');
+  const plainBound = 'type (...a: [].<any>) => any';
+
+  expect(evaluated(`String(Reflect.isAssignable(${sig('type { a: uint8 }', '[]')}, ${thisBound}));`)).toBe('true');
+  expect(evaluated(`String(Reflect.isAssignable(${sig('type { a: uint8 }', '[]')}, ${plainBound}));`)).toBe('false');
+  expect(evaluated(`String(Reflect.isAssignable(type (uint8) => void, ${plainBound}));`)).toBe('true');
+  expect(evaluated(`String(Reflect.isAssignable(type (uint8) => void, ${thisBound}));`)).toBe('false');
+});
