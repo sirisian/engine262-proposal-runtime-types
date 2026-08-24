@@ -1190,7 +1190,12 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     if ((sThis === null) !== (tThis === null)) {
       return false;
     }
-    if (sThis !== null && tThis !== null && !IsSubtype(tThis, sThis, assumptions)) {
+    // `this` is contravariant "as a parameter is", so it takes the parameter
+    // rule: F136's asymmetry reached here too. `this: uint8` was refused where
+    // `this: any` was declared while the mirror passed, for the same reason -
+    // `IsSubtype` admits `any` only as the target. Found by checking whether
+    // the defect was confined to the parameter loop; it was not.
+    if (sThis !== null && tThis !== null && !parameterAccepts(tThis, sThis, assumptions)) {
       return false;
     }
     if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
