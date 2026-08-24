@@ -367,6 +367,22 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
 }
 
 /**
+ * Is _record_ the canonical `[[Metadata]]` form - a plain record whose
+ * containers are plain records and whose leaves are engine `Value`s?
+ *
+ * PLAN-metadata-representation.md OQ2-C. Cheap, and it names the invariant that
+ * three findings violated in turn at three different depths.
+ */
+function isCanonicalMetadata(record: unknown): boolean {
+  if (record === null || typeof record !== 'object' || record instanceof ObjectValue) {
+    return false;
+  }
+  return Object.values(record as Record<string, unknown>).every(
+    (v) => v instanceof Value || isCanonicalMetadata(v),
+  );
+}
+
+/**
  * A `[[Metadata]]` record, read out of the ECMAScript object a type node
  * carries it in.
  *
@@ -667,6 +683,20 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node without metadata'));
       }
       const record = Q(yield* metadataFromValue(metadataV));
+      // OQ2-C's entry check. The slot's canonical form is a plain record with
+      // plain containers (see `MetadataRecord` in records.mts), and nothing in
+      // the type system enforces it - the slot is declared `Value` and holds
+      // something else behind a cast. This asserts on the way IN, which is the
+      // one boundary a rebuilt record passes through, and it is where F154
+      // would have been caught: a container left as an `ObjectValue` fails here
+      // rather than surviving to make `makeType(getReflection(T)) === T` false
+      // three plans later.
+      //
+      // On the `makeType` path, not the interning path, so its cost is paid
+      // once per construction rather than once per type comparison.
+      if (!isCanonicalMetadata(record)) {
+        return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node whose metadata is not a plain record'));
+      }
       return { Kind: 'parameterized', Base, Metadata: record };
     }
     default:

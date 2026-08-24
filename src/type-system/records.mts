@@ -266,6 +266,76 @@ export interface TupleElementRecord {
 }
 
 /**
+ * A `[[Metadata]]` record: what a ~parameterized~ Type Record carries alongside
+ * its [[Base]].
+ *
+ * PLAN-metadata-representation.md phase 2. The slot was typed `Value` and did
+ * not hold one - `MetadataObjectFromType` builds a frozen plain record and
+ * casts it, `Object.freeze(fields) as unknown as Value` - and that cast is
+ * where the contract went missing. **A cast asserts a contract instead of
+ * checking it**, so the two consumers diverged without anything complaining,
+ * and the same representation mismatch then appeared at three depths in turn,
+ * each hidden by the one above it (F148, F154, F155). Naming the shape is the
+ * cheapest thing that makes the class of defect visible rather than the
+ * instance.
+ *
+ * THE CANONICAL FORM. A frozen plain record, prototype-less, whose keys are the
+ * meta keys a meta type has claimed - `pattern`, `brand` - and whose values are
+ * either:
+ *
+ *   - a LEAF: an engine `Value`. A literal's value, a brand's tag. It stays a
+ *     `Value` because a Symbol tag has no plain equivalent whose identity
+ *     survives, and `SameValue` on two SymbolValues is what makes a
+ *     symbol-tagged brand unforgeable (F147).
+ *   - a CONTAINER: another frozen plain record. A structural marker built by
+ *     `metadataValueFromType` - a pattern's `{ __pattern, source, flags }`, a
+ *     range's `{ __range, ... }` - or a nested record of further metadata.
+ *
+ * The mixture is deliberate and it is the part that was never written down;
+ * a reader who assumed uniformity wrote a one-level conversion that looked
+ * complete and was not.
+ *
+ * THE TWO BOUNDARIES that convert, and they are the only two:
+ *
+ *   - OUT, `recordToNode` in Reflect.mts: `metadataToValue` builds an
+ *     ECMAScript object a program can read. Reading this field used to abort
+ *     the engine, because the plain record was handed to `CreateDataProperty`.
+ *   - IN, `nodeToTypeRecord` in Reflect.mts: `metadataFromValue` reads one back,
+ *     recursively over containers, leaves untouched.
+ *
+ * IDENTITY. Two metadata records are the same when their keys and their leaves
+ * are the same, however either was constructed. `SameMetadata` decides it and
+ * is reached from `SameTypeStructural`, and therefore from every interning
+ * lookup - which is why this stays plain JS: putting the ECMAScript object
+ * protocol on that path would put generator calls in the decision of whether
+ * two types are the same.
+ *
+ * That identity is what `sec-reflect-maketype` requires when it says
+ * `Reflect.makeType(Reflect.getReflection(`_T_`))` is _T_, "which is what makes
+ * the round trip the identity function rather than an equivalence". Every
+ * weaker check - the `kind`, the base, the field values, even stability under
+ * repeated round trips - passed while that identity was broken.
+ */
+export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
+
+/*
+ * NOT YET the declared type of the slot, deliberately. Typing [[Metadata]] as
+ * `MetadataRecord` compiles the contract above into a check, and doing so
+ * reports **49 errors across 6 files** - every site that was relying on the
+ * cast. That is OQ1's direction C, and it is worth taking: it is the only one
+ * of the three that would have made F148, F154 and F155 impossible rather than
+ * fixing them one layer at a time.
+ *
+ * It is not taken here because this plan's own recommendation is "A now, C as
+ * the follow-on": retyping a slot that sits on the interning path, in the same
+ * change that repairs a live invariant, is two risks where one will do. The
+ * measurement is the useful part - C's cost is 49 sites, 41 of them the same
+ * shape (a `MetadataRecord` passed where a `Value` is declared), concentrated
+ * in `runtime-types.mts` (26) and `check-pass.mts` (10). That is a mechanical
+ * change of known size rather than an open-ended one.
+ */
+
+/**
  * A fact a checked contract states about a deferred application.
  *
  * #sec-checked-contracts: "the checker takes each clause as a known fact about
