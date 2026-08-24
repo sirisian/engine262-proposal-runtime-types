@@ -110,6 +110,16 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
     // equivalent values without regard to order, and a list by length and by
     // each index in order. Object.keys gives a list's indices, so one recursion
     // serves both, with the array check above keeping the two forms apart.
+    // An engine Value is compared as a VALUE, before the nested-record branch
+    // below can swallow it. PLAN-brand.md F147: a SymbolValue is a JS object
+    // with neither `numberValue` nor `stringValue`, so it fell into that branch
+    // and was compared by `Object.keys` on the engine's own fields - identical
+    // for any two symbols. Two distinct `Symbol('x')` tags therefore interned
+    // to ONE type, and typeprogramming.md offers a symbol tag as precisely the
+    // way to get a brand nobody else can forge.
+    if (av instanceof Value && bv instanceof Value) {
+      return SameValue(av, bv);
+    }
     if (av && bv && typeof av === 'object' && typeof bv === 'object'
       && !('numberValue' in av) && !('stringValue' in av)) {
       return SameMetadata(av, bv);

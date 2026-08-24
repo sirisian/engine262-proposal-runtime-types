@@ -634,6 +634,55 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
  * denotes a type holds a Type Object, so a walker recurses by reflecting it in
  * turn. This is the inverse of nodeToTypeRecord: makeType(getReflection(T)) is T.
  */
+
+/**
+ * A [[Metadata]] record, as an ECMAScript object a program can read.
+ *
+ * PLAN-brand.md F148. The slot's canonical form is a FROZEN PLAIN RECORD -
+ * `MetadataObjectFromType` builds one and casts it to `Value`, and
+ * `SameMetadata` walks it with `Object.keys`, which only works on that form.
+ * The emitter, though, handed the record straight to `CreateDataProperty`,
+ * which wants a real Value. The cast is where the two readings diverged and it
+ * is why nothing caught them: a cast asserts the contract instead of checking
+ * it.
+ *
+ * The consequence was not a wrong answer but a CRASH. Reading `.metadata` off
+ * any reflected parameterized type aborted the engine - "Cannot convert object
+ * to primitive value" for a `typeof`, and an assertion failure inside
+ * `Object.keys` - on the SYNTACTIC path as much as on a built one. So the
+ * emitter has never produced a usable metadata value, and no test read one.
+ *
+ * Converting here keeps the plain record canonical, which is what the two
+ * consumers that already work depend on, and confines the Value form to the
+ * boundary that needs it.
+ */
+function metadataToValue(metadata: unknown, realm: Realm): Value {
+  if (metadata === null || metadata === undefined) {
+    return Value.undefined;
+  }
+  if (metadata instanceof Value) {
+    return metadata;
+  }
+  if (typeof metadata === 'string') {
+    return Value(metadata);
+  }
+  if (typeof metadata === 'number') {
+    return Value(metadata);
+  }
+  if (typeof metadata === 'boolean') {
+    return metadata ? Value.true : Value.false;
+  }
+  if (typeof metadata !== 'object') {
+    return Value.undefined;
+  }
+  const out = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  for (const key of Object.keys(metadata as object)) {
+    const v = (metadata as Record<string, unknown>)[key];
+    X(CreateDataProperty(out, Value(key), metadataToValue(v, realm)));
+  }
+  return out;
+}
+
 /**
  * The structure of a type as #sec-reflection-contexts' `Type` context describes
  * it, discriminated by `kind`. Exported so the context form of
@@ -694,7 +743,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
     case 'parameterized':
       set('kind', Value('parameterized'));
       set('base', typeObj(t.Base));
-      set('metadata', t.Metadata);
+      set('metadata', metadataToValue(t.Metadata, realm));
       break;
     case 'union':
       set('kind', Value('union'));
