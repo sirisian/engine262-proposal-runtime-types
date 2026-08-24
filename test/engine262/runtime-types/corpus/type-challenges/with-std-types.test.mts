@@ -25,27 +25,22 @@ import { expectBuilderTrue, kit } from './harness.mts';
  */
 
 /**
- * TRIAGE STATE. **34 of 46 blocks hold.**
+ * TRIAGE STATE. **36 of 46 blocks hold.**
  *
- * F138 is closed and its framing was corrected: `declare` was never part of
- * this proposal - `spec.emu` has no production for it, and the design
- * document's uses are all inside TypeScript comparison blocks. Eight corpus
- * blocks wrote it anyway, carried across from the TypeScript answer above them,
- * and nothing caught it because those blocks had never run. All eight are
- * rewritten; the TypeScript comparisons keep it, correctly.
+ * Closed this pass: `unknown` (TypeScript's, replaced with `any` - the THIRD
+ * TypeScript keyword these blocks turned out to be using, after `Function` and
+ * `declare`), four more bare constructors in BUILDER blocks that earlier passes
+ * missed while fixing the std halves above them, and F140.
  *
- * Remaining 12:
+ * F140: a union LEADING with a parenthesised function type does not parse -
+ * `type (() => 'foo') | (...)` reads the first arm as an arrow EXPRESSION. The
+ * cover grammar `sec-types-in-expression-position` describes picks wrong here.
+ * Worked around by aliasing the arms; not fixed, because it belongs with the
+ * cover-grammar question already open elsewhere.
  *
- *   F139 4  a computed parameter type specialized through generic inference
- *           hands `mapProperties` a non-object. Removing `declare` moved these
- *           from a parse error to this, so the parse error was masking it.
- *   D    2  a bare `[].<T>` where a type is required
- *   E/F  3  residue
- *   B    1  `unknown` is not a type name
- *   H    1  `keys` undefined inside a default parameter
- *   J    1  an expected-throw the splitter mis-annotates
- *
- * Block 213 also calls `std.instanceType`, retired by OQ10-C.
+ * Remaining 10: F139 (4) a computed parameter type through generic inference,
+ * `keys` undefined in a default parameter (1), an expected-throw the splitter
+ * mis-annotates (1), and four uncategorised.
  */
 
 test.todo('with std:types - 4  Pick - see TRIAGE STATE');
@@ -488,7 +483,17 @@ myUppercase('A z h yy ??cda\\n\\t  a   ') === type 'A Z H YY ??CDA\\n\\t  A   ';
 
 test.todo('with std:types - 6  Simple Vue - see TRIAGE STATE');
 
-test.todo('with std:types - 55  Union to Intersection - see TRIAGE STATE');
+test('with std:types - 55  Union to Intersection', () => {
+  expectBuilderTrue(kit(`function unionToIntersection(U: type): type {
+  return Reflect.makeType({ kind: 'intersection', members: arms(U) });
+}
+
+unionToIntersection(type 'foo' | 42 | true) === type 'foo' & 42 & true;
+type Foo55 = () => 'foo';
+type Bar55 = (i: 42) => true;
+unionToIntersection(type Foo55 | Bar55) === type Foo55 & Bar55;   // aliased: a union LEADING with a parenthesised function type does not parse (F140)
+\nString(std.intersection(std.arms(type 'foo' | 42 | true)) === type 'foo' & 42 & true);`));
+});
 
 test.todo('with std:types - 213  Vue Basic Props - see TRIAGE STATE');
 
@@ -619,4 +624,25 @@ snakeCase(type 'getElementById' | 'getElementByClassNames')
   s => s.replace(/\\p{Lu}/gu, c => \`_\${c.toLowerCase()}\`)) === type 'get_element_by_id' | 'get_element_by_class_names');`));
 });
 
-test.todo('with std:types - 33763  Union to Object from key - see TRIAGE STATE');
+test('with std:types - 33763  Union to Object from key', () => {
+  expectBuilderTrue(kit(`function unionToObjectFromKey(U: type, key: type): type {
+  const name = literalValues(key)[0];
+  return union(arms(U).filter(a => reflect(a).properties.some(p => p.name === name)));
+}
+
+type Foo = { foo: string, common: boolean };
+type Bar = { bar: float64, common: boolean };
+unionToObjectFromKey(type Foo | Bar, type 'foo') === Foo;
+unionToObjectFromKey(type Foo | Bar, type 'common') === type Foo | Bar;
+\nString(std.extract(type Foo | Bar, type { foo: any }) === Foo);`));
+  expectBuilderTrue(kit(`function unionToObjectFromKey(U: type, key: type): type {
+  const name = literalValues(key)[0];
+  return union(arms(U).filter(a => reflect(a).properties.some(p => p.name === name)));
+}
+
+type Foo = { foo: string, common: boolean };
+type Bar = { bar: float64, common: boolean };
+unionToObjectFromKey(type Foo | Bar, type 'foo') === Foo;
+unionToObjectFromKey(type Foo | Bar, type 'common') === type Foo | Bar;
+\nString(std.extract(type Foo | Bar, type { common: any }) === type Foo | Bar);`));
+});
