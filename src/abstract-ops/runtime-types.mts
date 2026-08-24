@@ -480,7 +480,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       if (!MetaTypeGoverns(t.Metadata, metaType)) {
         continue;
       }
-      const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType) as unknown as MetadataRecord, t.Base));
+      const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType), t.Base));
       if (verdict === false) {
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
@@ -1956,7 +1956,7 @@ export function LookupMetaTypeParameterName(typeObject: object): string | undefi
  * declarable since cycle 37 with no consumer at all: the engine threw its
  * generic "$1 is not assignable to $2" and never called it (F62).
  */
-export function* DescribePortion(metaType: object, portion: Value): PlainEvaluator<string | undefined> {
+export function* DescribePortion(metaType: object, portion: MetadataRecord): PlainEvaluator<string | undefined> {
   if (metaHooks.get(metaType)?.get('describe') === undefined) {
     return undefined;
   }
@@ -2012,7 +2012,7 @@ export function GoverningMetaTypes(metadata: MetadataRecord): { types: object[],
  * metadata, because a metadata value may be governed by several meta types at
  * once and each must see only what it claims.
  */
-export function MetadataPortion(metadata: MetadataRecord, metaType: object): Value {
+export function MetadataPortion(metadata: MetadataRecord, metaType: object): MetadataRecord {
   // sec-metadataportion, as written: start from a copy of the meta type's
   // `default` and overwrite with the metadata's own claimed keys, so every
   // judgment of the protocol sees a COMPLETE portion. The missing completion
@@ -2036,11 +2036,24 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Val
       }
     }
   }
-  return Object.freeze(portion) as unknown as Value;
+  return Object.freeze(portion) as unknown as MetadataRecord;
 }
 
 /** Apply a named hook of a meta type, or *undefined* where it defines none. */
-export function* ApplyMetaHook(typeObject: object, name: string, args: readonly Value[], base: TypeRecord | undefined): PlainEvaluator<Value | undefined> {
+/**
+ * PLAN-metadata-typing.md F159. `args` admits a `MetadataRecord` as well as a
+ * `Value` because a hook's arguments ARE metadata portions at four of the five
+ * call shapes, and the conversion to an ECMAScript object happens below, at the
+ * `Call` - not at the callers.
+ *
+ * F160 is why this is the widening rather than a conversion at each site: OQ4
+ * decided "convert at the call sites", the callers duly wrapped their arguments
+ * in `MetadataAsObject`, and it changed nothing, because this function was
+ * already mapping it over every argument. A mutation test caught the redundancy.
+ * Widening here says what is true - a hook argument may be either form, and
+ * this is the one place that reconciles them.
+ */
+export function* ApplyMetaHook(typeObject: object, name: string, args: readonly (Value | MetadataRecord)[], base: TypeRecord | undefined): PlainEvaluator<Value | undefined> {
   const fn = metaHooks.get(typeObject)?.get(name);
   if (!fn) {
     return undefined;
@@ -2287,7 +2300,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
       // nothing, so the meta type takes no part in the crossing either.
       continue;
     }
-    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType) as unknown as MetadataRecord, t.Base));
+    const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
     // *undefined* is "this meta type defines no `validate`", which the clause's
     // step reads as nothing to check rather than as a refusal.
     if (verdict === false) {
@@ -3509,9 +3522,9 @@ export function IsForbiddenReadonlyWrite(receiver: Value, key: import('../value.
  * bound the operation may have invalidated.
  */
 export function MergeOperatorResultMetadata(
-  contributed: readonly { metaType: object, portion: Value }[],
+  contributed: readonly { metaType: object, portion: MetadataRecord }[],
   governing: readonly object[],
-): Value {
+): MetadataRecord {
   const merged: Record<string, unknown> = Object.create(null);
   const said = new Set<object>();
   for (const { metaType, portion } of contributed) {
@@ -3533,7 +3546,7 @@ export function MergeOperatorResultMetadata(
       }
     }
   }
-  return Object.freeze(merged) as unknown as Value;
+  return Object.freeze(merged) as unknown as MetadataRecord;
 }
 
 /**

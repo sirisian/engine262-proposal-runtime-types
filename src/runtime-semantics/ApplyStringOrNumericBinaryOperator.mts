@@ -138,7 +138,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
               const metaType = MetaTypeForConstraint(constraint);
               if (metaType !== undefined) {
                 spokenFor.push(metaType);
-                portion = MetadataPortion(carried.Metadata, metaType) as unknown as MetadataRecord;
+                portion = MetadataPortion(carried.Metadata, metaType);
               }
             }
             frame.set(name, metadataAsObjectRecord(portion));
