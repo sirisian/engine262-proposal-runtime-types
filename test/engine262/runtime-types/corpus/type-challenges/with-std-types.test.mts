@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue, kit } from './harness.mts';
+import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 4.
@@ -24,25 +24,29 @@ import { expectBuilderTrue, kit } from './harness.mts';
  * IS the demonstration.
  */
 
-/**
- * TRIAGE STATE. **42 of 46 blocks hold.**
- *
- * F141 was most of it: this port was executing PROSE. A markdown builder block
- * carries demonstration lines after its definitions - bare `Promise.<T>` where
- * a type position needs `type`, calls whose results are shown in a comment,
- * deliberate TypeErrors - and the engine's own corpus tests take only the
- * DEFINITIONS and supply their own fixtures. Doing the same took 36 to 40.
- *
- * Two more were real: 2793 used an `interface` fixture (OQ2-A), and 213 called
- * `std.instanceType`, retired by OQ10-C.
- *
- * Remaining 4: a `// TypeError:` demonstration the splitter mis-annotates (4
- * Pick), `keys` undefined in a default parameter (8 Readonly 2), an empty
- * diagnostic (14 First of Array), and one genuine semantic disagreement (20
- * Promise.all).
- */
-
-test.todo('with std:types - 4  Pick - see TRIAGE STATE');
+test('with std:types - 4  Pick', () => {
+  expectBuilderTrue(kit(`function myPick(T: type, K: type): type {
+  const wanted = new Set(literalValues(K));
+  const kept = reflect(T).properties.filter(p => wanted.has(p.name));
+  const missing = [...wanted].filter(k => !kept.some(p => p.name === k));
+  if (missing.length > 0)
+    throw new TypeError(\`myPick: \${String(T)} has no property \${missing.map(k => \`'\${String(k)}'\`).join(', ')}\`);
+  return objectOf(kept);
+}
+type Todo = { title: string, description: string, completed: boolean };
+type TodoPreview = myPick(Todo, type 'title' | 'completed');\nString(std.pick(Todo, type 'title' | 'completed') === TodoPreview);`));
+  // // TypeError: pick: Todo has no property 'invalid'
+  expectBuilderThrows(kit(`function myPick(T: type, K: type): type {
+  const wanted = new Set(literalValues(K));
+  const kept = reflect(T).properties.filter(p => wanted.has(p.name));
+  const missing = [...wanted].filter(k => !kept.some(p => p.name === k));
+  if (missing.length > 0)
+    throw new TypeError(\`myPick: \${String(T)} has no property \${missing.map(k => \`'\${String(k)}'\`).join(', ')}\`);
+  return objectOf(kept);
+}
+type Todo = { title: string, description: string, completed: boolean };
+type TodoPreview = myPick(Todo, type 'title' | 'completed');\nstd.pick(Todo, type 'title' | 'invalid');`));
+});
 
 test('with std:types - 7  Readonly', () => {
   expectBuilderTrue(kit(`function myReadonly(T: type): type {
@@ -52,7 +56,27 @@ type Todo = { title: string, description: string, meta: { author: string } };
 type Frozen = myReadonly(Todo);\nString(std.readonly(Todo) === Frozen);`));
 });
 
-test.todo('with std:types - 14  First of Array - see TRIAGE STATE');
+test('with std:types - 14  First of Array', () => {
+  expectBuilderTrue(kit(`function first(T: type): type {
+  const node = reflect(T);
+  if (node.kind === 'tuple') return node.elements[0]?.type ?? never;
+  if (node.kind === 'array') return node.extent === 0 ? never : node.element;
+  throw new TypeError(\`first: \${String(T)} is not an array or tuple type\`);
+}\nString(std.head(type [3, 2, 1]) === type 3);`));
+  expectBuilderTrue(kit(`function first(T: type): type {
+  const node = reflect(T);
+  if (node.kind === 'tuple') return node.elements[0]?.type ?? never;
+  if (node.kind === 'array') return node.extent === 0 ? never : node.element;
+  throw new TypeError(\`first: \${String(T)} is not an array or tuple type\`);
+}\nString(std.head(type []) === never);`));
+  // // TypeError: expected a tuple type: head is tuple-only, where first also takes arrays
+  expectBuilderThrows(kit(`function first(T: type): type {
+  const node = reflect(T);
+  if (node.kind === 'tuple') return node.elements[0]?.type ?? never;
+  if (node.kind === 'array') return node.extent === 0 ? never : node.element;
+  throw new TypeError(\`first: \${String(T)} is not an array or tuple type\`);
+}\nstd.head(type [].<string>);`));
+});
 
 test('with std:types - 43  Exclude', () => {
   expectBuilderTrue(kit(`function myExclude(T: type, U: type): type {
@@ -134,7 +158,17 @@ test('with std:types - 3  Omit', () => {
 type Todo = { readonly title: string, description: string, completed: boolean };\nString(std.omit(Todo, type 'description' | 'completed') === type { readonly title: string });`));
 });
 
-test.todo('with std:types - 8  Readonly 2 - see TRIAGE STATE');
+test('with std:types - 8  Readonly 2', () => {
+  expectBuilderTrue(kit(`function myReadonly2(T: type, K: type = keys(T)): type {
+  const wanted = new Set(literalValues(K));
+  const have = new Set(literalValues(keys(T)));
+  for (const k of wanted) if (!have.has(k))
+    throw new TypeError(\`myReadonly2: \${String(T)} has no property '\${String(k)}'\`);
+  return mapProperties(T, p => wanted.has(p.name) ? { ...p, readonly: true } : p);
+}
+type Todo = { title: string, description?: string, completed: boolean };\nString(std.merge(Todo, std.readonly(std.pick(Todo, type 'title' | 'description')))
+  === myReadonly2(Todo, type 'title' | 'description'));`));
+});
 
 test('with std:types - 9  Deep Readonly', () => {
   expectBuilderTrue(kit(`function deepReadonly(T: type): type {
@@ -174,7 +208,27 @@ test('with std:types - 15  Last of Array', () => {
 }\nString(std.elementTypes(type [3, 2, 1]).at(-1) === type 1);`));
 });
 
-test.todo('with std:types - 20  Promise.all - see TRIAGE STATE');
+test('with std:types - 20  Promise.all', () => {
+  expectBuilderTrue(kit(`function settled(T: type): type {
+  const node = reflect(T);
+  switch (node.kind) {
+    case 'tuple': return Reflect.makeType({ ...node, elements: node.elements.map(e => ({ ...e, type: awaited(e.type) })) });
+    case 'array': return arrayOf(awaited(node.element), node.extent);
+    default: throw new TypeError(\`promiseAll: \${String(T)} is not an array or tuple type\`);
+  }
+}
+function promiseAll<T>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.genericApplication(type Promise, [std.mapElements(type [1, 2, Promise.<uint32>], std.awaited)])
+  === type Promise.<[1, 2, uint32]>);`));
+  expectBuilderTrue(kit(`function settled(T: type): type {
+  const node = reflect(T);
+  switch (node.kind) {
+    case 'tuple': return Reflect.makeType({ ...node, elements: node.elements.map(e => ({ ...e, type: awaited(e.type) })) });
+    case 'array': return arrayOf(awaited(node.element), node.extent);
+    default: throw new TypeError(\`promiseAll: \${String(T)} is not an array or tuple type\`);
+  }
+}
+function promiseAll<T>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.mapElements(type [].<uint32 | Promise.<string>>, std.awaited) === type [].<uint32 | string>);`));
+});
 
 test('with std:types - 62  Type Lookup', () => {
   expectBuilderTrue(kit(`function lookUp(U: type, T: type): type {
