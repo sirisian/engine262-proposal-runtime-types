@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { expectBuilderTrue } from './harness.mts';
+import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
  * Type Challenges - the medium tier, shard 14 (the last three).
@@ -25,22 +25,22 @@ test('medium 12 - Chainable Options (withKey accumulator)', () => {
       }
       return objectOf([...Reflect.getReflection(T).properties, { name: key, type: V, optional: false, readonly: false }]);
     }`;
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     let acc = Reflect.makeType({ kind: 'object', properties: [], indexSignatures: [] });
     acc = withKey(acc, 'foo', uint32);
     acc = withKey(acc, 'bar', Reflect.makeType({ kind: 'object', properties: [{ name: 'value', type: string, optional: false, readonly: false }], indexSignatures: [] }));
     acc = withKey(acc, 'name', string);
     type Expected = { foo: uint32, bar: { value: string }, name: string };
     String(acc === Expected);
-  `);
+  `));
   // setting the same key twice is a type error, as the builder throws
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     let threw = false;
     let acc = Reflect.makeType({ kind: 'object', properties: [], indexSignatures: [] });
     acc = withKey(acc, 'foo', uint32);
     try { withKey(acc, 'foo', string); } catch (e) { threw = true; }
     String(threw);
-  `);
+  `));
 });
 
 // 20 - Promise.all - settled(T) maps a tuple/array's element types through
@@ -58,7 +58,6 @@ test('medium 20 - Promise.all (settled)', () => {
     type PromiseBase = Promise;
     function tupleOf(ts) { return Reflect.makeType({ kind: 'tuple', elements: ts.map(t => ({ type: t, rest: false })) }); }
     function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
-    function arms(T) { const n = Reflect.getReflection(T); return n.kind === 'union' ? n.arms : [T]; }
     function arrayOf(el, extent) { return Reflect.makeType({ kind: 'array', element: el, extent }); }
     function promiseOf(X) { return Reflect.makeType({ kind: 'generic', base: PromiseBase, arguments: [X] }); }
     function awaited(T) {
@@ -75,15 +74,15 @@ test('medium 20 - Promise.all (settled)', () => {
     }
     function promiseAll(T) { return promiseOf(settled(T)); }`;
   // awaited unwraps a Promise, recursively, and passes a non-Promise through
-  expectBuilderTrue(`${f}\n type P = Promise.<uint32>; String(awaited(P) === uint32);`);
-  expectBuilderTrue(`${f}\n type P = Promise.<Promise.<string | uint32>>; type Expected = string | uint32; String(awaited(P) === Expected);`);
-  expectBuilderTrue(`${f}\n String(awaited(uint32) === uint32);`);
+  expectBuilderTrue(kit(`${f}\n type P = Promise.<uint32>; String(awaited(P) === uint32);`));
+  expectBuilderTrue(kit(`${f}\n type P = Promise.<Promise.<string | uint32>>; type Expected = string | uint32; String(awaited(P) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n String(awaited(uint32) === uint32);`));
   // promiseAll on a plain tuple wraps it unchanged
-  expectBuilderTrue(`${f}\n type T = [1, 2, 3]; type Expected = Promise.<[1, 2, 3]>; String(promiseAll(T) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type T = [1, 2, 3]; type Expected = Promise.<[1, 2, 3]>; String(promiseAll(T) === Expected);`));
   // a promise element is awaited before wrapping
-  expectBuilderTrue(`${f}\n type T = [1, 2, Promise.<uint32>]; type Expected = Promise.<[1, 2, uint32]>; String(promiseAll(T) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type T = [1, 2, Promise.<uint32>]; type Expected = Promise.<[1, 2, uint32]>; String(promiseAll(T) === Expected);`));
   // awaiting reaches inside a union inside a dynamic array element
-  expectBuilderTrue(`${f}\n type T = [].<uint32 | Promise.<string>>; type Inner = [].<uint32 | string>; type Expected = Promise.<Inner>; String(promiseAll(T) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type T = [].<uint32 | Promise.<string>>; type Inner = [].<uint32 | string>; type Expected = Promise.<Inner>; String(promiseAll(T) === Expected);`));
 });
 
 // 26401 - JSON Schema to TypeScript - a recursive schema interpreter: an object
@@ -98,7 +97,6 @@ test('medium 26401 - JSON Schema to TypeScript', () => {
     function litval(T) { return Reflect.getReflection(T).value; }
     function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
     function objectOf(props) { return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] }); }
-    function elementTypes(T) { return Reflect.getReflection(T).elements.map(e => e.type); }
     function jsonSchema2TS(schema) {
       const kindT = field(schema, 'type');
       if (kindT === undefined) { return never; }
@@ -117,14 +115,14 @@ test('medium 26401 - JSON Schema to TypeScript', () => {
       if (kind === 'array') { const items = field(schema, 'items'); return Reflect.makeType({ kind: 'array', element: items === undefined ? any : jsonSchema2TS(items) }); }
       return never;
     }`;
-  expectBuilderTrue(`${f}\n type S = { type: 'string' }; String(jsonSchema2TS(S) === string);`);
-  expectBuilderTrue(`${f}\n type S = { type: 'number', enum: [1, 2, 3] }; type Expected = 1 | 2 | 3; String(jsonSchema2TS(S) === Expected);`);
-  expectBuilderTrue(`${f}\n type S = { type: 'object' }; type Expected = { [key: string]: any }; String(jsonSchema2TS(S) === Expected);`);
-  expectBuilderTrue(`${f}\n type S = { type: 'array', items: { type: 'string' } }; type Expected = [].<string>; String(jsonSchema2TS(S) === Expected);`);
+  expectBuilderTrue(kit(`${f}\n type S = { type: 'string' }; String(jsonSchema2TS(S) === string);`));
+  expectBuilderTrue(kit(`${f}\n type S = { type: 'number', enum: [1, 2, 3] }; type Expected = 1 | 2 | 3; String(jsonSchema2TS(S) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type S = { type: 'object' }; type Expected = { [key: string]: any }; String(jsonSchema2TS(S) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n type S = { type: 'array', items: { type: 'string' } }; type Expected = [].<string>; String(jsonSchema2TS(S) === Expected);`));
   // an object schema with required and optional properties
-  expectBuilderTrue(`${f}
+  expectBuilderTrue(kit(`${f}
     type S = { type: 'object', properties: { req1: { type: 'string' }, add1: { type: 'string' } }, required: ['req1'] };
     type Expected = { req1: string, add1?: string };
     String(jsonSchema2TS(S) === Expected);
-  `);
+  `));
 });
