@@ -36,14 +36,22 @@ import {
   surroundingAgent,
 } from '#self';
 
-/** #sec-array-defaults-and-stores: the type a typed array's `length` reads at. */
 /**
- * proposal-runtime-types #index-type: the type EVERY count an array reports
- * carries - a `length`, a `capacity`, an index, and the length of a view. Named
- * once so the width is stated in one place; widening it is this constant and
- * the specification's `#index-type`, and nothing else.
+ * proposal-runtime-types #index-type: the type EVERY count a CONTAINER reports
+ * carries - an array's `length`, `capacity`, index and view length, and a `Map`'s
+ * or `Set`'s `size`. Named once so the width is stated in one place.
+ *
+ * It was named `ARRAY_LENGTH_TYPE` and its comment claimed to be the only copy;
+ * neither survived contact. The scope widened when the keyed collections were
+ * typed, so a name saying `ARRAY` said the wrong thing - and the claim was
+ * already false, `ArrayPrototype.mts` having a second identical constant. That
+ * one now imports this. A third lives in `type-system/check.mts` as
+ * `indexTypeRecord()`, which cannot import from here without a cycle; it is the
+ * CHECKER's record and this is the RUNTIME's, and the two are kept honest by
+ * `collections/size-and-counts.test.mts`, which asserts a count read at run time
+ * has the type the checker gave it.
  */
-const ARRAY_LENGTH_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
+export const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
 
 let createStringValue: (value: string) => JSStringValue; // set by static block in StringValue for privileged access to constructor
 // proposal-runtime-types (Capability B): privileged factory for a String value carrying an inferred Type Record, set by the StringValue static block.
@@ -1062,7 +1070,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         && (this as { TypedElement?: unknown }).TypedElement !== undefined
         && P instanceof JSStringValue && P.stringValue() === 'length'
         && result instanceof NumberValue) {
-      return new TypedNumberValue(R(result) as number, ARRAY_LENGTH_TYPE);
+      return new TypedNumberValue(R(result) as number, INDEX_TYPE);
     }
     // proposal-runtime-types #sec-span-type: an element read through a WINDOW
     // over an owned array. There is nothing to decode - the storage is the
@@ -1076,7 +1084,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
           // type, as an owned array's does. It read as a plain Number, so the
           // one type that is supposed to describe EVERY count described two of
           // the five places a count comes from.
-          return new TypedNumberValue(ArraySpanLength(spanBacking), ARRAY_LENGTH_TYPE);
+          return new TypedNumberValue(ArraySpanLength(spanBacking), INDEX_TYPE);
         }
         const index = Number(P.stringValue());
         if (String(index) === P.stringValue()) {
@@ -1091,7 +1099,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const viewBacking = ArrayViewBackingOf(this as unknown as object);
       if (viewBacking !== undefined) {
         if (P.stringValue() === 'length') {
-          return new TypedNumberValue(ArrayViewLength(viewBacking), ARRAY_LENGTH_TYPE);
+          return new TypedNumberValue(ArrayViewLength(viewBacking), INDEX_TYPE);
         }
         const index = Number(P.stringValue());
         if (String(index) === P.stringValue()) {

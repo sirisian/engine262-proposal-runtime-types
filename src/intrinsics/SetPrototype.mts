@@ -1,6 +1,8 @@
 import {
   Descriptor,
-  NumberValue,
+  INDEX_TYPE,
+  isTypedNumber,
+  TypedNumberValue,
   Value,
   wellKnownSymbols,
   ObjectValue,
@@ -19,6 +21,7 @@ import { CreateSetIterator } from './SetIteratorPrototype.mts';
 import type { SetObject } from './Set.mts';
 import {
   surroundingAgent,
+  ToIndexType,
   Call,
   F,
   IsCallable,
@@ -132,9 +135,23 @@ function* SetProto_add([value = Value.undefined]: Arguments, { thisValue }: Func
     }
   }
   // 5. If value is -0𝔽, set value to +0𝔽.
-  if (value instanceof NumberValue && Object.is(R(value), -0)) {
-    value = F(+0);
-  }
+  //
+  // Through CanonicalizeKeyedCollectionKey rather than by hand. The hand-written
+  // guard read `Object.is(R(value), -0)`, and R answers the MATHEMATICAL VALUE,
+  // which has no signed zero: R(-0𝔽) is 0, so `Object.is(0, -0)` was false and the
+  // step never fired. A Set therefore STORED -0 where the specification requires
+  // +0, and `1 / [...s][0]` was -Infinity after `s.add(-0)`.
+  //
+  // Map was unaffected, `Map.prototype.set` reading the raw `.value`, which
+  // preserves the sign - so the two collections disagreed about a key the
+  // specification gives one answer for. Lookup was never wrong, SameValueZero
+  // pairing -0 with +0 either way, which is what kept the defect out of sight:
+  // only the value read back out was.
+  //
+  // A plain ES2026 conformance fix in an untyped code path, nothing this
+  // proposal introduces. Guarded by the `SameValueZero` case of
+  // `collections/backcompat.test.mts`, which fails without it.
+  value = CanonicalizeKeyedCollectionKey(value);
   // 6. Append value as the last element of entries.
   Q(surroundingAgent.debugger_tryTouchDuringPreview(S));
   entries.push(value);
@@ -316,7 +333,17 @@ function* SetProto_has([value = Value.undefined]: Arguments, { thisValue }: Func
   return Value.false;
 }
 
-/** https://tc39.es/ecma262/#sec-get-set.prototype.size */
+/**
+ * proposal-runtime-types #index-type, widened from arrays to containers. See the
+ * `Map.prototype.size` accessor for the reasoning; the two must agree, a single
+ * index type being the claim that every container's count IS one type.
+ *
+ * `SetDataSize` is left answering a Number, deliberately. It is called from the
+ * set-algebra methods as an internal count - `SetDataSize(O.SetData) <=
+ * otherRec.Size` - where it is compared against a mathematical value and never
+ * reaches a program. Only the accessor is a boundary, so only the accessor
+ * carries the type.
+ */
 function SetProto_sizeGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   // 1. Let S be the this value.
   const S = thisValue as SetObject;
@@ -325,7 +352,12 @@ function SetProto_sizeGetter(_args: Arguments, { thisValue }: FunctionCallContex
   // 3. Let entries be the List that is S.[[SetData]].
   const entries = S.SetData;
 
-  return SetDataSize(entries);
+  const size = SetDataSize(entries);
+  if (surroundingAgent.feature('runtime-types')
+      && (S as { TypedCollection?: readonly unknown[] }).TypedCollection !== undefined) {
+    return new TypedNumberValue(R(size), INDEX_TYPE);
+  }
+  return size;
 }
 
 /** https://tc39.es/ecma262/#sec-set.prototype.intersection */
@@ -680,19 +712,46 @@ function* GetSetRecord(obj: Value): PlainEvaluator<SetRecord> {
 
   // 3. Let numSize be ? ToNumber(rawSize).
   // 4. NOTE: If rawSize is undefined, then numSize will be NaN.
-  const numSize = Q(yield* ToNumber(rawSize));
+  //
+  // proposal-runtime-types: a TYPED collection's `size` is a value of the index
+  // type, so a `Set.<T>` on either side of a set operation reaches this step
+  // carrying one. ToNumber would unwrap it and the operation would work, which
+  // is exactly the problem: an implicit numeric conversion is the thing this
+  // proposal does not do, and `#sec-toindextype` states the discipline for a
+  // count in particular - "a COUNT is CHECKED rather than coerced", because
+  // operations that ACCEPT a count must agree with the ones that REPORT one.
+  //
+  // So a value already of the index type is read directly, and everything else
+  // takes the existing path unchanged. That second half matters as much as the
+  // first: `other` here may be any SET-LIKE, whose `size` is an ordinary Number
+  // and whose out-of-range and missing cases have observable error kinds a
+  // program may rely on - a missing `size` is a *TypeError* by way of NaN, and a
+  // negative one a *RangeError*. Routing set-likes through ToIndexType would
+  // have collapsed both into a TypeError and changed ES2026 behaviour for code
+  // using no types at all.
+  let intSize: number;
+  if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawSize)) {
+    // Through ToIndexType rather than by hand: that IS the operation
+    // `#sec-toindextype` names, it performs exactly this check, and the clause
+    // revising this one cites it. Reimplementing the test here would have been a
+    // second statement of one rule, which is what the index type is named once
+    // to avoid.
+    intSize = Q(yield* ToIndexType(rawSize));
+  } else {
+    const numSize = Q(yield* ToNumber(rawSize));
 
-  // 5. If numSize is NaN, throw a TypeError exception.
-  if (numSize.isNaN()) {
-    return Throw.TypeError('size property must not be undefined, as it will be NaN');
-  }
+    // 5. If numSize is NaN, throw a TypeError exception.
+    if (numSize.isNaN()) {
+      return Throw.TypeError('size property must not be undefined, as it will be NaN');
+    }
 
-  // 6. Let intSize be ! ToIntegerOrInfinity(numSize).
-  const intSize = X(ToIntegerOrInfinity(numSize));
+    // 6. Let intSize be ! ToIntegerOrInfinity(numSize).
+    intSize = X(ToIntegerOrInfinity(numSize));
 
-  // 7. If intSize < 0, throw a RangeError exception.
-  if (intSize < 0) {
-    return Throw.RangeError('size property must be a positive integer');
+    // 7. If intSize < 0, throw a RangeError exception.
+    if (intSize < 0) {
+      return Throw.RangeError('size property must be a positive integer');
+    }
   }
 
   // 8. Let has be ? Get(obj, "has").

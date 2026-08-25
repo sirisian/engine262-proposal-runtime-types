@@ -1,6 +1,7 @@
 import {
   BooleanValue,
   Descriptor,
+  INDEX_TYPE,
   JSStringValue,
   ObjectValue,
   TypedNumberValue,
@@ -320,14 +321,6 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
     return element;
   }
 }
-
-/**
- * #index-type: the type every count an array reports carries. `length` reads at
- * this type (value.mts), and `capacity` must read at the same one - a single
- * index type is the claim that the two counts ARE one type, and two
- * representations contradict it.
- */
-const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
 
 /**
  * proposal-runtime-types (README "Capacity"): `reserve(n)` grows the backing

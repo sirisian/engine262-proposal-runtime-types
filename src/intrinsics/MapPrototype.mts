@@ -1,5 +1,7 @@
 import {
+  INDEX_TYPE,
   NumberValue,
+  TypedNumberValue,
   Value,
   wellKnownSymbols } from '../value.mts';
 import { Q, X } from '../completion.mts';
@@ -286,7 +288,27 @@ function* MapProto_set([key = Value.undefined, value = Value.undefined]: Argumen
   return M;
 }
 
-/** https://tc39.es/ecma262/#sec-get-map.prototype.size */
+/**
+ * proposal-runtime-types #index-type, widened from arrays to containers: a
+ * TYPED collection's `size` reads at the index type, `uint64`, the same type an
+ * array's `length` and `capacity` report.
+ *
+ * The reason is NOT the one that fixed the width for arrays. That argument is
+ * about a view's length coming from a buffer rather than an allocation the
+ * language caps, and a collection has no view form. It is the OTHER property the
+ * index type exists for: one type for every count is what makes a count from one
+ * container comparable with a count from another. `map.size < array.length` is a
+ * sentence a program wants to write, and it is unwriteable if the two are
+ * different types - exactly as "a capacity is at least a length" is unwriteable
+ * if those two are not one type. Before this, that comparison was a TypeError.
+ *
+ * CONDITIONED ON THE STAMP, and that is the whole of the backwards-compatibility
+ * story. A `Map` with no type arguments carries no [[TypedCollection]] and
+ * reports a Number, exactly as it does today - so `m.size + 1`, `m.size < 0`,
+ * and every other expression an ordinary program writes a count into keep
+ * working. `collections/backcompat.test.mts` is the guard for that and was
+ * written before this change.
+ */
 function MapProto_sizeGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   // 1. Let M be the this value.
   const M = thisValue as MapObject;
@@ -303,7 +325,11 @@ function MapProto_sizeGetter(_args: Arguments, { thisValue }: FunctionCallContex
       count += 1;
     }
   }
-  // 6. Return 𝔽(count).
+  // 6. Return 𝔽(count), or a value of the index type where the collection is typed.
+  if (surroundingAgent.feature('runtime-types')
+      && (M as { TypedCollection?: readonly unknown[] }).TypedCollection !== undefined) {
+    return new TypedNumberValue(count, INDEX_TYPE);
+  }
   return F(count);
 }
 

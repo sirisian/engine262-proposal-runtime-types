@@ -4123,9 +4123,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
               && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map'
                 || receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
+            const name = (m.IdentifierName as { name: string }).name;
+            // #index-type, widened from arrays to containers: a typed
+            // collection's `size` reads at the index type, as an array's
+            // `length` and `capacity` do. One type for every count is what makes
+            // `map.size < array.length` writable at all; before this it was a
+            // TypeError, `size` being the one count in the language with no
+            // type. The RUNTIME half is the two `size` accessors, and the two
+            // must agree - a checker saying `uint64` over a run time answering a
+            // Number is the disagreement shape this suite has been bitten by
+            // before.
+            if (name === 'size' && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map')) {
+              return indexTypeRecord();
+            }
+            // A WEAK collection has no `size`, and reading one was ~any~ - so
+            // `let n: string = w.size` type-checked on a `WeakMap`. Refused by
+            // name, the treatment `Span.<T>` already gives the operations it
+            // does not have, because a member the type does not declare is a
+            // mistake rather than an unknown.
+            if (name === 'size') {
+              const completion = Throw.TypeError(
+                '$1 is not declared by $2',
+                Value(name),
+                Value(displayType(receiver)),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+              return null;
+            }
             const sig = collectionMethodSignature(
               receiver.LibraryName,
-              (m.IdentifierName as { name: string }).name,
+              name,
               receiver.Arguments,
               receiver,
             );
