@@ -758,6 +758,18 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
  * first pass found errors never reaches linking. Every error this pass finds is
  * one that needed an import to see.
  */
+/**
+ * The members a `Map` or `Set` has and a `WeakMap` or `WeakSet` does not.
+ *
+ * Everything that follows from being ENUMERABLE, plus `clear`. A weak collection
+ * is neither enumerable nor clearable: what it holds may be collected between
+ * one step of a walk and the next, so there is no order to report and no count
+ * to report it against. Reading any of these was ~any~ before this list existed.
+ */
+const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
+  'size', 'clear', 'keys', 'values', 'entries', 'forEach',
+]);
+
 export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>): ObjectValue[] {
   if (imported.size === 0) {
     return [];
@@ -4136,12 +4148,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (name === 'size' && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map')) {
               return indexTypeRecord();
             }
-            // A WEAK collection has no `size`, and reading one was ~any~ - so
-            // `let n: string = w.size` type-checked on a `WeakMap`. Refused by
-            // name, the treatment `Span.<T>` already gives the operations it
-            // does not have, because a member the type does not declare is a
-            // mistake rather than an unknown.
-            if (name === 'size') {
+            // A WEAK collection has none of the members below, and reading one
+            // was ~any~ - so `let n: string = w.size` type-checked on a
+            // `WeakMap`, and so did `w.forEach(...)`. Refused by name, the
+            // treatment `Span.<T>` already gives the operations it does not
+            // have, because a member the type does not declare is a mistake
+            // rather than an unknown.
+            //
+            // The list is the members that follow from being ENUMERABLE, plus
+            // `clear`. A weak collection is neither - it cannot be walked,
+            // because what it holds may be collected between one step and the
+            // next, which is the whole point of it - so this is not an omission
+            // to fill in later.
+            if (WEAK_COLLECTION_ABSENT.has(name)
+                && (receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
               const completion = Throw.TypeError(
                 '$1 is not declared by $2',
                 Value(name),
@@ -6219,6 +6239,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Kind: 'function',
       Signatures: [{ Parameters: shapes(Parameters, optionalFrom), Return, Untyped: false }],
     } as unknown as Known);
+    /**
+     * A pair as a TUPLE record, which is what `entries` yields and what a
+     * `for`-`of` over a `Map` destructures.
+     *
+     * Built the same way `BUILTIN_IMPLEMENTS` builds `Map`'s `Iterable`
+     * argument, and for the reason recorded there: a tuple's Elements are
+     * TupleElementRecords rather than bare types, and writing them as bare types
+     * produces a record nothing matches - which is how `Map` was once silently
+     * not iterable while `Set` was. Two copies of one shape is how that recurs,
+     * so if a third site needs it, hoist it.
+     */
+    const pairOf = (a: TypeRecord, b: TypeRecord) => ({
+      Kind: 'tuple',
+      Elements: [a, b].map((t) => ({ Type: t, Rest: false, Initial: 'none' })),
+    } as unknown as TypeRecord);
+    /**
+     * What `keys`, `values` and `entries` return.
+     *
+     * `IteratorHelper` is the CARRIER, not the interface, and the choice is
+     * forced rather than preferred. The design and the specification say these
+     * return `Iterator.<T>`, and they should: `sec-iteration-types` rules out
+     * per-collection iterator types by name, so there is no `MapIterator` to
+     * name. But in this checker `Iterator.<T>` is a structural OBJECT record
+     * carrying members, with no [[Arguments]] to read - so a chain starting from
+     * one loses its element type at the first step, and `m.values().map(f)`
+     * would be untyped. The carrier is a nominal that keeps the element, and it
+     * is DECLARED to implement `Iterator.<T>`, `IterableIterator.<T>` and
+     * `Iterable.<T>` through `BUILTIN_IMPLEMENTS`, so a value of it goes
+     * everywhere the interface goes.
+     *
+     * The two statements agree rather than conflict: the specification names the
+     * interface a caller may rely on, and the checker returns a record that
+     * satisfies it and can also carry a chain. It is the same choice
+     * `iteratorMethodSignature` already makes for the helpers themselves.
+     */
+    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidTypeRecord, voidTypeRecord])!;
+    /** `(value, key, collection) => void`, the shape both forEach callbacks take. */
+    const forEachCallback = (first: TypeRecord, second: TypeRecord) => ({
+      Kind: 'function',
+      Signatures: [{
+        Parameters: [first, second, receiver].map((t, i) => parameter(t, { Name: `a${i}`, Optional: i > 0 })),
+        Return: voidTypeRecord,
+        Untyped: false,
+      }],
+    } as unknown as TypeRecord);
     if (library === 'Set' || library === 'WeakSet') {
       const element = arg(0);
       switch (name) {
@@ -6242,6 +6307,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         case 'isSubsetOf':
         case 'isSupersetOf':
         case 'isDisjointFrom': return sig([anyType as TypeRecord], boolType);
+        default: break;
+      }
+      // The members a Set has and a WeakSet does not. Guarded rather than
+      // written into the switch above so that a WeakSet reaches the
+      // not-declared-by refusal instead of quietly acquiring an iteration
+      // surface it has no way to implement - a weak collection cannot be
+      // enumerated, which is the point of it.
+      if (library === 'WeakSet') {
+        return null;
+      }
+      switch (name) {
+        case 'clear': return sig([], voidTypeRecord);
+        // On a Set `keys` IS `values` - the same function object, not merely
+        // the same behaviour - so the two share a signature.
+        case 'keys':
+        case 'values': return sig([], iteratorOf(element));
+        // A Set's `entries` yields [v, v], which is odd and is what the
+        // language does; typing it as the pair it actually yields is what lets
+        // a destructuring `for (const [a, b] of s)` check.
+        case 'entries': return sig([], iteratorOf(pairOf(element, element)));
+        case 'forEach': return sig([forEachCallback(element, element), anyType as TypeRecord], voidTypeRecord, 1);
         default: return null;
       }
     }
@@ -6259,6 +6345,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // its own semantics rather than quoted: it answers the value it found or
       // the one it inserted, and never *undefined*.
       case 'getOrInsert': return sig([key, value], value);
+      // Same shape, but the value is computed from the key rather than passed.
+      //
+      // The callback's PARAMETER is typed and its RETURN is left ~any~,
+      // deliberately. Constraining the return to V is more precise and refuses
+      // the natural spelling: `m.getOrInsertComputed("a", (k) => 1)` fails with
+      // "a literal type of number is not assignable to uint.<8>", because
+      // inferring a callback's return from the expected type is the
+      // argument-position inference the design lists as deferred. An
+      // annotated callback would work and an unannotated one would not, which
+      // is a worse trade than under-approximating - and the value is checked
+      // at insertion regardless, so a wrong one is refused either way, just at
+      // run time. Same reasoning as the `other` parameter of the set
+      // operations above; when inference from an expected type lands, tighten
+      // both together.
+      case 'getOrInsertComputed': return sig([key, ({
+        Kind: 'function',
+        Signatures: [{ Parameters: [parameter(key, { Name: 'key' })], Return: anyType as TypeRecord, Untyped: false }],
+      } as unknown as TypeRecord)], value);
+      default: break;
+    }
+    if (library === 'WeakMap') {
+      return null;
+    }
+    switch (name) {
+      case 'clear': return sig([], voidTypeRecord);
+      case 'keys': return sig([], iteratorOf(key));
+      case 'values': return sig([], iteratorOf(value));
+      case 'entries': return sig([], iteratorOf(pairOf(key, value)));
+      // (value, key, map) - the value FIRST, which is the order the language
+      // chose and the order a reader gets wrong. Typing it is most of the value
+      // of typing `forEach` at all.
+      case 'forEach': return sig([forEachCallback(value, key), anyType as TypeRecord], voidTypeRecord, 1);
       default: return null;
     }
   };

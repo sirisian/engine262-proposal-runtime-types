@@ -785,6 +785,36 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   // `window is []` answered *true*, which is the two answers disagreeing that
   // #sec-instanceof-for-type-objects exists to prevent.
   if (value instanceof ObjectValue) {
+    // proposal-runtime-types #sec-keyed-collections and typeobjects.md: a TYPED
+    // COLLECTION carries the Type Record it was built at, for the reason a
+    // window and a vector do - the type is not recoverable from the value. A
+    // `Map.<string, uint8>` and a `Map.<string, string>` are the same object
+    // shape and the same prototype chain; only the stamp tells them apart.
+    //
+    // Without this, `Reflect.typeOf(new Map.<string, uint8>())` was neither the
+    // specialization NOR the bare `Map` - the value fell through to the shape
+    // branches below and reported the literal type of an object with no own
+    // properties, which is what a `Map` looks like from the outside. The design
+    // states the wanted answer directly: "Reflect.typeOf(new Map.<string,
+    // uint8>()); // Map.<string, uint8>". The array control already passed, so
+    // the collections were the family out of line.
+    //
+    // The stamp holds only the ARGUMENTS, so the library name comes from the
+    // internal slot - which is also what makes an untyped collection report the
+    // bare nominal rather than a shape.
+    const collection = (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+    const slots = value as unknown as Record<string, unknown>;
+    const library = slots.MapData !== undefined ? 'Map'
+      : slots.SetData !== undefined ? 'Set'
+        : slots.WeakMapData !== undefined ? 'WeakMap'
+          : slots.WeakSetData !== undefined ? 'WeakSet'
+            : undefined;
+    if (library !== undefined) {
+      const record = libraryTypeRecord(library, collection ?? []);
+      if (record) {
+        return record;
+      }
+    }
     const spanBacking = ArraySpanBackingOf(value as unknown as object);
     if (spanBacking !== undefined) {
       return libraryTypeRecord('Span', [spanBacking.Element])!;
