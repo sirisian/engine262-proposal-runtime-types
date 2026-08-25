@@ -101,3 +101,62 @@ test('a runtime object reports a structural type whose keys keysOf reads', () =>
   expect(ok('Reflect.typeOf({ a: (1 := uint32) }) === Reflect.typeOf({ a: (2 := uint32) });')).toBe(true);
   expect(bool('class Pt { constructor() { this.x = (1 := uint32); } } let p = new Pt(); String(Reflect.typeOf(p) === Reflect.typeOf({ x: (1 := uint32) }));')).toBe(false);
 });
+
+// ---------------------------------------------------------------------------
+// PLAN-literal-type-arguments.md F165/F166
+// ---------------------------------------------------------------------------
+
+test('a TYPE parameter given a literal argument reads as the type', () => {
+  // sec-generic-parameters-as-values: a type parameter, "declared with
+  // `extends` or unbounded", denotes in an expression position "the Type Object
+  // bound to it". This read as the literal's VALUE - `P.length` answered 3 -
+  // because the parser collapsed `:` and `extends` into one field, leaving
+  // GetValue to guess from the bound record's kind, which is `literal` for a
+  // type parameter given a literal argument too.
+  expect(evaluated("type L = 'abc'; function f<P>() { return Reflect.getReflection(P).kind; }"
+    + ' String(f.<L>());')).toBe('literal');
+  expect(evaluated("type L = 'abc'; function f<P extends string>() { return Reflect.getReflection(P).kind; }"
+    + ' String(f.<L>());')).toBe('literal');
+  expect(evaluated("type L = 'abc'; function f<P>() { return P === L; } String(f.<L>());")).toBe('true');
+});
+
+test('a VALUE parameter still reads as its value', () => {
+  // The other half, and the reason the old rule existed: the design's `y * W + x`.
+  expect(evaluated("type L = 'abc'; function f<P: string>() { return String(P); } String(f.<L>());")).toBe('abc');
+  expect(evaluated('type N = 5; function f<V: uint8>() { return V * 2; } String(f.<N>());')).toBe('10');
+});
+
+test('one literal serves as both kinds of argument without interference', () => {
+  // Guards the dependency `bindTypeParameter` documents: the value-parameter
+  // mark is keyed on the bound RECORD, which is safe only because a value
+  // parameter's record is rebuilt by the argument conversion rather than being
+  // the interned one. Were it interned, marking it here would mark every
+  // binding of `'abc'` in the realm - and this test would read 'abc' where it
+  // expects 'literal'.
+  const src = "type L = 'abc';"
+    + ' function v<P: string>() { return String(P); }'
+    + ' function ty<P>() { return Reflect.getReflection(P).kind; }';
+  expect(evaluated(`${src} String(v.<L>() + '|' + ty.<L>() + '|' + v.<L>());`)).toBe('abc|literal|abc');
+  expect(evaluated(`${src} String(ty.<L>() + '|' + v.<L>() + '|' + ty.<L>());`)).toBe('literal|abc|literal');
+});
+
+test('every literal kind reaches a type parameter as a type', () => {
+  for (const literal of ["'abc'", '42', 'true']) {
+    expect(evaluated(`type L = ${literal}; function f<P>() { return Reflect.getReflection(P).kind; }`
+      + ' String(f.<L>());')).toBe('literal');
+  }
+});
+
+test('other type kinds are unaffected', () => {
+  const cases: [string, string][] = [
+    ['uint8', 'primitive'],
+    ['{ a: uint8 }', 'object'],
+    ['uint8 | string', 'union'],
+    ["['a']", 'tuple'],
+    ["'a' | 'b'", 'union'],
+  ];
+  for (const [written, kind] of cases) {
+    expect(evaluated(`type L = ${written}; function f<P>() { return Reflect.getReflection(P).kind; }`
+      + ' String(f.<L>());')).toBe(kind);
+  }
+});

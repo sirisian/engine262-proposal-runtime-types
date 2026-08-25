@@ -3357,6 +3357,8 @@ export namespace ParseNode {
      */
     readonly Arity?: number;
     readonly TypeParameterConstraint: Type | null;
+    /** Declared with `:` - a VALUE parameter - rather than `extends` or unbounded. F166. */
+    readonly IsValueParameter: boolean;
     readonly TypeParameterDefault: Type | null;
   }
 

@@ -142,7 +142,16 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
           // correctly. The frame is for the UNSPECIALIZED declaration, where
           // there is genuinely nothing to bind to.
           const bound = lookupTypeParameter(name);
-          frame.set(name, bound ?? parameterTypeRecord(name, undefined, arity));
+          // PLAN-literal-type-arguments.md F165. Re-binding a LOOKED-UP record into a
+          // fresh frame drops the value-parameter mark, which lives on the binding
+          // rather than in the map. The same object has to be carried across, or the
+          // enclosing class's `W` reads as a Type Object inside a method body while
+          // reading as its value outside - the split that made `x * W` NaN.
+          if (bound !== null) {
+            frame.set(name, bound);
+          } else {
+            frame.set(name, parameterTypeRecord(name, undefined, arity));
+          }
         }
       }
       pushTypeParameterFrame(frame);

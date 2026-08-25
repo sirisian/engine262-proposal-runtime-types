@@ -17,7 +17,7 @@ import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -1135,7 +1135,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           }
         }
         if (p.BindingIdentifier?.name) {
-          frame.set(p.BindingIdentifier.name, record);
+          bindTypeParameter(frame, p.BindingIdentifier.name, record, p);
         }
       }
       // #sec-where-clauses: a `where` clause is "a compile-time-evaluable

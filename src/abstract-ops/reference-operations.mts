@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
-import { lookupTypeParameter } from '../type-system/runtime.mts';
+import { isValueParameterBinding, lookupTypeParameter } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
@@ -94,7 +94,15 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         // required reads the type, which the value still carries, since the
         // literal type's single value IS its view of the binding. Handing back
         // the Type Object for a value parameter made arithmetic over it NaN.
-        if (bound.Kind === 'literal') {
+        // F165. The test is the DECLARATION, not the bound record's kind:
+        // sec-generic-parameters-as-values gives a value parameter its value
+        // here and a type parameter its Type Object, and a type parameter given
+        // a literal argument is bound to a literal record too. Asking the
+        // record made `f.<L>()` with `type L = 'abc'` hand back the string.
+        if (bound.Kind === 'literal' && !isValueParameterBinding(bound)) {
+          (globalThis as { __unmarked?: Set<string> }).__unmarked?.add((V.ReferencedName as JSStringValue).stringValue());
+        }
+        if (bound.Kind === 'literal' && isValueParameterBinding(bound)) {
           return bound.Value;
         }
         return GetTypeObject(bound);

@@ -24,7 +24,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
-import { toNumericArgument,
+import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature } from '../type-system/runtime.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
@@ -1590,7 +1590,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
       }
     }
     if (name) {
-      frame.set(name, record);
+      bindTypeParameter(frame, name, record, param);
     }
     key.push(specializationKeyOf(record));
     argRecords.push(record);

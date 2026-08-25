@@ -5,7 +5,6 @@ import { wrappedParse } from '../parse.mts';
 import type { Parser } from '../parser/Parser.mts';
 import { OutOfRange } from '../utils/language.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import {
@@ -27,6 +26,7 @@ import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
+import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
@@ -42,7 +42,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
-import { isTokenStream } from '../intrinsics/TokenStream.mts';
+import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { IsAssignable } from './relations.mts';
 import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
@@ -149,7 +149,7 @@ export function* AllDefaultsFrame(declaration: unknown): PlainEvaluator<Map<stri
       popTypeParameterFrame();
     }
     if (name) {
-      frame.set(name, record);
+      bindTypeParameter(frame, name, record, p);
     }
   }
   return frame;
@@ -168,6 +168,73 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
   }
   return merged;
 }
+
+/**
+ * The bindings that belong to a VALUE parameter.
+ *
+ * F165. A binding's record cannot say which kind of parameter it belongs to - a
+ * literal argument to a TYPE parameter is a literal record just the same - so
+ * the declaration is carried alongside. A side table rather than a field
+ * because Type Records are interned: a flag on one would be a flag on every
+ * structurally identical type in the realm.
+ *
+ * Every site that binds from a |TypeParameterList| must mark its value
+ * parameters. Marking one and not the others is worse than marking none: an
+ * unmarked value parameter reads as a Type Object and breaks arithmetic that
+ * was working, which is what a partial attempt at this measured.
+ */
+/**
+ * The bindings that belong to a VALUE parameter.
+ *
+ * F165/F168. Keyed on the RECORD, and that choice was made against the
+ * alternative rather than by default.
+ *
+ * Keying on the (frame, name) pair is the more principled shape - a frame is
+ * fresh per specialization, so it does not depend on any record's identity.
+ * **Measured, it is worse**: 18 generics tests fail, because a frame is
+ * COPIED in several places - `currentTypeParameterFrame` flattens the stack,
+ * and a suspended body captures a merged frame - and a copy carries the
+ * binding without carrying the mark. Record-keying survives those copies for
+ * free, since the copy holds the same record object.
+ *
+ * What record-keying depends on: a value parameter's record must not be the
+ * interned one, or the mark would apply to every binding of that literal in
+ * the realm. It is not - `Evaluate_CallExpression` rebuilds a value
+ * parameter's record as `{ ...record, Value: converted }` when converting the
+ * argument to the declared type, so the record reaching this function is
+ * already this binding's own.
+ *
+ * That dependency is real and is not visible from here, so it is asserted by
+ * test: a literal used as BOTH a value-parameter argument and a type-parameter
+ * argument in one program must read as its value in the first and as a type in
+ * the second. If the conversion is ever removed, that test fails rather than a
+ * brand of unrelated types quietly changing meaning.
+ *
+ * An earlier attempt freshened the record here instead, to avoid depending on
+ * that. It broke interning: `where I < N`, reading two value parameters from
+ * two frames, reported *"a value of the number type and a uint.<32> are
+ * different numeric types"*.
+ */
+const valueParameterBindings = new WeakSet<object>();
+
+/** Binds _record_ to _name_ in _frame_, marking it if _param_ was declared with `:`. */
+export function bindTypeParameter(
+  frame: Map<string, TypeRecord>,
+  name: string,
+  record: TypeRecord,
+  param: unknown,
+): void {
+  if ((param as { IsValueParameter?: boolean } | undefined)?.IsValueParameter) {
+    valueParameterBindings.add(record as unknown as object);
+  }
+  frame.set(name, record);
+}
+
+/** Whether _record_ is a value parameter's binding. */
+export function isValueParameterBinding(record: TypeRecord): boolean {
+  return valueParameterBindings.has(record as unknown as object);
+}
+
 
 /**
  * proposal-runtime-types: the Type Record bound to a type parameter
@@ -348,7 +415,11 @@ export function* EvaluateAliasApplicationClauses(
       // the resolver, where the message names it.
       return undefined;
     }
-    frame.set(name, record.Value as TypeRecord);
+    // `record` is a Completion here and `.Value` unwraps IT, not a literal
+    // type - see the `record.Type === 'throw'` test above. The binding still
+    // needs its parameter's declaration, which is what a `where` clause reading
+    // `N` as a value depends on. F165.
+    bindTypeParameter(frame, name, record.Value as TypeRecord, params[i]);
   }
   typeParameterFrames.push(frame);
   try {
@@ -396,7 +467,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         }
       }
       if (name) {
-        frame.set(name, filled[i]!);
+        bindTypeParameter(frame, name, filled[i]!, params[i]);
       }
     }
     argRecords = filled;
@@ -430,7 +501,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
     }
     const frame = new Map<string, TypeRecord>();
     params.forEach((p, i) => {
-      frame.set((p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i]);
+      bindTypeParameter(frame, (p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i], p);
     });
     typeParameterFrames.push(frame);
     try {
@@ -582,7 +653,7 @@ export function* InferGenericBindings(
           return Throw.TypeError('$1 is not assignable to $2', Value(displayType(bound)), Value(displayType(constraint)));
         }
       }
-      frame.set(paramName, bound);
+      bindTypeParameter(frame, paramName, bound, tp);
     }
   } finally {
     popTypeParameterFrame();

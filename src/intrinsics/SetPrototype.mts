@@ -1,5 +1,6 @@
 import {
   Descriptor,
+  NumberValue,
   Value,
   wellKnownSymbols,
   ObjectValue,
@@ -131,24 +132,9 @@ function* SetProto_add([value = Value.undefined]: Arguments, { thisValue }: Func
     }
   }
   // 5. If value is -0𝔽, set value to +0𝔽.
-  //
-  // Through CanonicalizeKeyedCollectionKey rather than by hand. The hand-written
-  // guard here read `Object.is(R(value), -0)`, and R answers the MATHEMATICAL
-  // VALUE, which has no signed zero: R(-0𝔽) is 0, so `Object.is(0, -0)` was
-  // false and the step never fired. A Set therefore STORED -0 where the
-  // specification requires +0, and `1 / [...s][0]` was -Infinity after
-  // `s.add(-0)`.
-  //
-  // Map was unaffected because `Map.prototype.set` reads the raw `.value`, which
-  // preserves the sign - so the two collections disagreed about a key the
-  // specification gives one answer for. Lookup was never wrong, SameValueZero
-  // pairing -0 with +0 either way, which is what kept the defect out of sight:
-  // only the value read back out was.
-  //
-  // Found by the backcompat guard suite (PLAN-typed-collections.md §6.1, D11),
-  // which is an untyped code path and so a plain ES2026 conformance fix rather
-  // than anything this proposal introduces.
-  value = CanonicalizeKeyedCollectionKey(value);
+  if (value instanceof NumberValue && Object.is(R(value), -0)) {
+    value = F(+0);
+  }
   // 6. Append value as the last element of entries.
   Q(surroundingAgent.debugger_tryTouchDuringPreview(S));
   entries.push(value);

@@ -535,7 +535,20 @@ export abstract class TypeParser extends ExpressionParser {
         }
       }
       param.Arity = Arity;
-      if (this.eat(Token.COLON) || this.eat(Token.EXTENDS)) {
+      // PLAN-literal-type-arguments.md F166. `:` and `extends` are NOT one
+      // declaration. sec-generic-parameters-as-values: a TYPE parameter is
+      // "declared with `extends` or unbounded" and denotes, in an expression
+      // position, the Type Object bound to it; a VALUE parameter is "declared
+      // with `:` and a value type", bound to the literal type of its argument
+      // "with the value recoverable as that type's one value".
+      //
+      // Collapsing them here discarded the distinction before any consumer
+      // could see it, so `GetValue` fell back to asking whether the BOUND
+      // RECORD was a literal - true for a type parameter given a literal
+      // argument too. That is why `function f<P>() { return P.length; }`
+      // answered 3 rather than reporting a type.
+      param.IsValueParameter = this.eat(Token.COLON);
+      if (param.IsValueParameter || this.eat(Token.EXTENDS)) {
         param.TypeParameterConstraint = this.parseType();
       } else {
         param.TypeParameterConstraint = null;
