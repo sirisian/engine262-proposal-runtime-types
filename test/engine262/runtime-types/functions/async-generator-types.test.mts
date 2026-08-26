@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, settledAfterJobs } from '../harness.mts';
 
 /**
  * PLAN-async-generator-types.md. Annotations on an `async` function or a
@@ -71,4 +71,18 @@ test('phase 3: an unannotated generator is unaffected', () => {
 test('phase 3: yield* still delegates', () => {
   expect(evaluated('function* inner(): uint8 { yield (1 := uint8); }'
     + ' function* outer(): uint8 { yield* inner(); } String(outer().next().value);')).toBe('1');
+});
+
+test('phase 3: an async generator REJECTS on a bad yield', () => {
+  // An async generator reports a type failure as a REJECTION, not a throw, so
+  // `expectThrown` cannot see one - and nothing in this repository could, which
+  // made a working check indistinguishable from a missing one.
+  //
+  // Instrumenting `EnforceYieldType` settled it: both generator kinds reach
+  // `checked`. The check was landing; only the observation was missing.
+  const settle = (body: string) => settledAfterJobs(`globalThis.settled = 'pending';
+    async function* ag(): uint8 { ${body} }
+    ag().next().then(() => { globalThis.settled = 'resolved'; }, () => { globalThis.settled = 'rejected'; });`);
+  expect(settle('yield "nope";')).toBe('rejected');
+  expect(settle('yield (1 := uint8);')).toBe('resolved');
 });

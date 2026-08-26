@@ -21,6 +21,40 @@ export function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
+/**
+ * Run _source_, drain the job queue, and report how a promise settled.
+ *
+ * PLAN-async-generator-types.md phase 3. An `async function` and an
+ * `async function*` report a type failure as a REJECTION, not a throw, so
+ * `expectThrown` cannot see one - and nothing in this repository could. The
+ * async checks were landing unobserved, which is indistinguishable from not
+ * landing.
+ *
+ * The script must assign its outcome to `globalThis.settled`; this drains
+ * whatever jobs the promise scheduled and returns that string.
+ */
+export function settledAfterJobs(source: string): string {
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const realm = new ManagedRealm();
+  realm.evaluateScriptSkipDebugger(source);
+  // A promise reaction schedules further jobs, so drain until empty rather than
+  // a fixed number of turns.
+  for (let i = 0; i < 1000; i += 1) {
+    const job = agent.jobQueue?.shift?.();
+    if (!job) {
+      break;
+    }
+    try {
+      (job as { callback?: () => unknown }).callback?.();
+    } catch {
+      // A job that throws has already settled its promise.
+    }
+  }
+  const c = realm.evaluateScriptSkipDebugger('String(globalThis.settled);');
+  return normalValueString(c, source);
+}
+
 /** Extract the string-ish value of a normal completion (shared by the evaluators). */
 function normalValueString(completion: unknown, source: string): string {
   expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
