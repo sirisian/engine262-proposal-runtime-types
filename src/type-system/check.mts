@@ -6275,6 +6275,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * `iteratorMethodSignature` already makes for the helpers themselves.
      */
     const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidTypeRecord, voidTypeRecord])!;
+    /**
+     * `Set.<any>`, the top of the set family: the bound the set operations take
+     * their `other` operand at. Built from the receiver's own Declaration so it
+     * is the same nominal, not a look-alike.
+     */
+    const setOfAny = { ...(receiver as object), Arguments: [{ Kind: 'any' }] } as unknown as TypeRecord;
     /** `(value, key, collection) => void`, the shape both forEach callbacks take. */
     const forEachCallback = (first: TypeRecord, second: TypeRecord) => ({
       Kind: 'function',
@@ -6295,18 +6301,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // whatever the other side holds - which is why they can be written
         // here while `union` and `symmetricDifference` cannot.
         //
-        // The `other` parameter is left ~any~ rather than typed `Set.<U>`.
-        // The design writes a generic parameter, and this checker has no way
-        // to say "a Set of any element type" without deciding assignability
-        // between two parameterizations of one nominal, which is a rule the
-        // specification has not stated. An under-approximation admits what the
-        // design admits and declines to invent the rest; the run time refuses
-        // a non-Set as it always did.
+        // The `other` parameter is bound at `Set.<any>`, the COLLECTION FAMILY
+        // TOP. The design writes `union<U>(other: Set.<U>)`, and this is the
+        // spelling of "a Set of some element type" - the thing the checker
+        // previously had no way to say, so the parameter was left ~any~ and
+        // `a.union(1)` type-checked.
+        //
+        // `Set.<any>` is admissible as the top for the reason `[].<any>` is:
+        // a store is checked against the receiver's own declared types at run
+        // time, so writing through the wider view is refused whatever the
+        // static type permitted. Invariance is untouched for every other
+        // argument.
+        //
+        // The RESULT type of `union` and `symmetricDifference` is not decided
+        // here - it depends on the ARGUMENT's type, which a signature written
+        // at the member access cannot express, so it is computed at the call
+        // site. That handler predates this work; only the bound is new.
         case 'intersection':
-        case 'difference': return sig([anyType as TypeRecord], receiver);
+        case 'difference': return sig([setOfAny], receiver);
         case 'isSubsetOf':
         case 'isSupersetOf':
-        case 'isDisjointFrom': return sig([anyType as TypeRecord], boolType);
+        case 'isDisjointFrom': return sig([setOfAny], boolType);
+        case 'union':
+        case 'symmetricDifference': return sig([setOfAny], receiver);
         default: break;
       }
       // The members a Set has and a WeakSet does not. Guarded rather than

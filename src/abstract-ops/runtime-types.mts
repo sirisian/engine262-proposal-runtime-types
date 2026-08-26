@@ -12,7 +12,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
-import { SameMetadata, SameType } from '../type-system/relations.mts';
+import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
@@ -418,6 +418,36 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       // "A parameterized type is a subtype of its base, so the brand is shed
       // freely on the way up." No meta type gates this direction.
       return new TypedNumberValue(value.value, t);
+    }
+  }
+  // A collection with NO type arguments adopts the target's, at the boundary,
+  // before membership is asked.
+  //
+  // This is the conversion an annotation means: `let m: Map.<string, uint8> =
+  // new Map()` takes a fresh untyped Map and makes it a typed one, exactly as
+  // `let a: [].<uint8> = []` does for the empty array a few lines below. It has
+  // to happen HERE rather than in the `already` branch, because membership on a
+  // collection specialization now compares the type arguments against the stamp
+  // (#sec-issubtype, D12) - so an unstamped Map is NOT a `Map.<string, uint8>`,
+  // and asking first would refuse the annotation that was about to give it one.
+  //
+  // The previous arrangement leaned on membership being the bare prototype
+  // walk: any Map passed, the branch below stamped it, and the looseness was
+  // load-bearing. That is also why `new Map() is Map.<string, uint8>` answered
+  // *true* - one test doing duty for two different questions, "is this value
+  // already of type T" at a boundary and "does this value claim to be T" for
+  // `is`. Splitting them is what D12 is.
+  //
+  // Only an UNSTAMPED collection is adopted. One already carrying arguments
+  // keeps them and is judged against the target on their merits, so
+  // `let m: Map.<string, uint8> = someMapOfStrings` is refused rather than
+  // silently re-stamped into a claim its contents do not support.
+  if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
+      && COLLECTION_LIBRARY_NAMES.has(t.LibraryName ?? '')
+      && (value as { TypedCollection?: readonly unknown[] }).TypedCollection === undefined) {
+    const bare = { ...t, Arguments: [] } as unknown as TypeRecord;
+    if (Q(yield* IsOfType(value, bare))) {
+      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
     }
   }
   const already = Q(yield* IsOfType(value, t));
@@ -994,6 +1024,21 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
     const lengthNow = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length'))))) as NumberValue);
     shortOfADefault = lengthNow < t.Elements.length;
+  }
+  // The same adoption as at the other boundary above, and for the same reason:
+  // membership on a collection specialization compares the type arguments
+  // against the stamp (D12), so an unstamped collection has to acquire the
+  // target's arguments BEFORE it is asked whether it has them. This is the
+  // annotation path - `let m: Map.<string, uint8> = new Map()` - and it is the
+  // one a program actually writes; the site above is reached by a different
+  // caller, and patching only one of the two left every annotation refused.
+  if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
+      && COLLECTION_LIBRARY_NAMES.has(t.LibraryName ?? '')
+      && (value as { TypedCollection?: readonly unknown[] }).TypedCollection === undefined) {
+    const bare = { ...t, Arguments: [] } as unknown as TypeRecord;
+    if (Q(yield* IsOfType(value, bare))) {
+      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+    }
   }
   const already = !shortOfADefault && Q(yield* IsOfType(value, t));
   if (already) {

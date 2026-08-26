@@ -2,15 +2,35 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md §6.7 - collection MEMBERSHIP and the type patterns
+ * PLAN-typed-collections.md sec 6.7 - collection MEMBERSHIP and the type patterns
  * built on it. D12 (new) and D7 (relocated).
  *
- * D12: A SPECIALIZATION OF A LIBRARY COLLECTION DOES NOT DISCRIMINATE ON ITS
- * TYPE ARGUMENTS. `m is Map.<string, string>` is *true* for a
- * `Map.<string, uint8>`, and `new Map() is Map.<string, uint8>` is *true* for a
- * collection with no type arguments at all. Membership is a bare prototype-chain
- * test that never consults [[Arguments]], so every specialization of `Map` has
- * the same extension and the test answers nothing.
+ * D12 - FIXED IN PHASE 3. Membership on a collection specialization now compares
+ * the type arguments against the [[TypedCollection]] stamp, so these tests
+ * assert behaviour rather than record a gap.
+ *
+ * What was wrong: `m is Map.<string, string>` was *true* for a
+ * `Map.<string, uint8>`, and `new Map() is Map.<string, uint8>` was *true* for a
+ * collection with no type arguments at all. Membership was a bare prototype-chain
+ * test that never consulted [[Arguments]], so every specialization of `Map` had
+ * the same extension and the test answered nothing.
+ *
+ * THE FIX HAD A CONSEQUENCE WORTH KNOWING, because it is the shape of the next
+ * one. Membership was doing duty for two different questions: "is this value
+ * already of type T", asked by the CONVERSION BOUNDARY so it can skip converting,
+ * and "does this value claim to be T", asked by `is`. The boundary was relying on
+ * the loose answer - any Map passed, so the branch that STAMPS a fresh
+ * `new Map()` was reached. Tightening membership for `is` therefore refused every
+ * annotation: `let m: Map.<string, uint8> = new Map()` threw, because an
+ * unstamped Map is not a `Map.<string, uint8>` and never got the chance to
+ * become one.
+ *
+ * So the boundary now ADOPTS an unstamped collection into the target's arguments
+ * before asking, at both of its two sites - and there are two, which is how the
+ * first attempt still left every annotation refused. Only an unstamped
+ * collection is adopted; one already carrying arguments is judged on their
+ * merits, so `let m: Map.<string, uint8> = someMapOfStrings` is still refused
+ * rather than silently re-stamped.
  *
  * This contradicts `sec-issubtype` - "a generic class is invariant in its
  * arguments, so `Map.<string, uint8>` is a subtype of no other instantiation of
@@ -21,24 +41,32 @@ import { evaluated, ok } from '../harness.mts';
  * generic (SameType, IsAssignable and `is` all agreeing) does not hold for a
  * library one.
  *
- * The cause is the same as that file's "OUTSTANDING item N", one level along. A
+ * The cause was the same as that file's "OUTSTANDING item N", one level along. A
  * user generic's specialization is a distinct constructor, so membership was
  * fixed by carrying the right constructor on the Type Record. A library
  * collection has no per-specialization constructor - the specialization is
- * carried by the [[TypedCollection]] stamp instead - and IsOfType was never
- * taught to read it. The stamp is on the value already, so the fix is local:
- * membership against a nominal with arguments compares them against the stamp.
+ * carried by the [[TypedCollection]] stamp instead - and IsOfType had never been
+ * taught to read it.
  *
- * CONSEQUENCES BEYOND `is`. Narrowing reads membership, so narrowing a value to
- * a collection specialization produces a type the value need not have. `catch (e:
- * Map.<K, V>)` catches any Map. And a `when` pattern naming a specialization
- * matches any collection, which is why the pattern tests live in this file
- * rather than in a pattern-matching one: they are membership wearing different
- * syntax.
+ * DECIDED BY THE STAMP RATHER THAN BY CONTENTS (OQ8). Inspecting the entries
+ * would be the ARRAY's answer - `[1,2,3] is [].<uint8>` walks elements - and it
+ * loses on three counts: it is O(n) per test in the positions `is` is read from
+ * (narrowing, a `when` arm, a `catch` match, each of which can sit in a loop);
+ * its answer is invalidated by the next store, so a narrowing cannot be relied on
+ * downstream; and it would licence the unsoundness invariance exists to prevent,
+ * since what a container will ACCEPT NEXT is not a function of what it currently
+ * holds. That makes the array's contents-inspecting answer the questionable one,
+ * which is filed rather than changed here.
+ *
+ * CONSEQUENCES BEYOND `is`, all of which follow: narrowing reads membership,
+ * `catch (e: Map.<K, V>)` selects on the specialization, and a `when` pattern
+ * naming one selects on it too - which is why the pattern tests live in this
+ * file rather than in a pattern-matching one. They are membership wearing
+ * different syntax.
  *
  * D7, CORRECTED. An earlier draft filed "a type pattern over a collection does
  * not match" as a collections defect on the strength of `match (m) { when
- * (Map.<K: type, V: type>): … }` throwing. That spelling was wrong twice over -
+ * (Map.<K: type, V: type>): ... }` throwing. That spelling was wrong twice over -
  * the design's form is `when extends Map.<K: type, V: type>:`, and its subject is
  * a TYPE OBJECT rather than an instance. Written correctly it still fails, but
  * so does `when extends uint8:` and `when extends string:`, with the same
@@ -52,24 +80,24 @@ import { evaluated, ok } from '../harness.mts';
 // D12 - membership must read the type arguments
 // ---------------------------------------------------------------------------
 
-test.fails('D12: `is` discriminates between two specializations of Map', () => {
+test('D12: `is` discriminates between two specializations of Map', () => {
   expect(evaluated('const m = new Map.<string, uint8>(); String(m is Map.<string, string>);')).toBe('false');
   expect(evaluated('const m = new Map.<string, uint8>(); String(m is Map.<uint8, uint8>);')).toBe('false');
 });
 
-test.fails('D12: `is` discriminates between two specializations of Set', () => {
+test('D12: `is` discriminates between two specializations of Set', () => {
   expect(evaluated('const s = new Set.<uint8>(); String(s is Set.<string>);')).toBe('false');
 });
 
-test.fails('D12: an UNTYPED collection is not a member of a specialization', () => {
-  // The invariant of §0 read in the other direction. An untyped Map is an
+test('D12: an UNTYPED collection is not a member of a specialization', () => {
+  // The invariant of sec 0 read in the other direction. An untyped Map is an
   // ordinary Map, and an ordinary Map is not a `Map.<string, uint8>` - it makes
   // no promise about what it holds, which is exactly what the specialization is.
   expect(evaluated('const m = new Map(); String(m is Map.<string, uint8>);')).toBe('false');
   expect(evaluated('const s = new Set(); String(s is Set.<uint8>);')).toBe('false');
 });
 
-test.fails('D12: the three relations agree, as they do for a user generic', () => {
+test('D12: the three relations agree, as they do for a user generic', () => {
   // The evidence shape `generic-instance-membership.test.mts` uses: a fix that
   // moved one of these without the others would trade one contradiction for
   // another.
@@ -82,14 +110,14 @@ test.fails('D12: the three relations agree, as they do for a user generic', () =
   expect(evaluated(`${m} String(m is Map.<string, string>);`)).toBe('false');
 });
 
-test.fails('D12: a `when` pattern naming a specialization selects on it', () => {
+test('D12: a `when` pattern naming a specialization selects on it', () => {
   // Membership in different syntax: `when T:` tests membership, so this arm and
   // the `is` above are one question.
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, string>: "wrong"; default: "fell through"; }')).toBe('fell through');
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; default: "fell through"; }')).toBe('right');
 });
 
-test.fails('D12: a typed catch selects on the specialization', () => {
+test('D12: a typed catch selects on the specialization', () => {
   // A `catch` whose annotation does not match must NOT catch, so the throw
   // escapes the script. Asserted as "the program does not complete normally",
   // which is what an uncaught throw looks like from here - writing the arm's

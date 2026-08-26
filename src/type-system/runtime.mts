@@ -43,7 +43,7 @@ import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
-import { IsAssignable } from './relations.mts';
+import { IsAssignable, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
@@ -2075,13 +2075,58 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           return false;
         }
         let proto = Q(yield* value.GetPrototypeOf());
+        let onChain = false;
         while (proto instanceof ObjectValue) {
           if (proto === protoValue) {
-            return true;
+            onChain = true;
+            break;
           }
           proto = Q(yield* proto.GetPrototypeOf());
         }
-        return false;
+        if (!onChain) {
+          return false;
+        }
+        // proposal-runtime-types #sec-issubtype: "a generic class is invariant
+        // in its arguments, so `Map.<string, uint8>` is a subtype of no other
+        // instantiation of `Map`" - which names `Map` as its own example. The
+        // prototype walk above cannot tell two instantiations apart: every Map
+        // has one prototype, so without this every Map satisfied every
+        // `Map.<...>`, and `new Map() is Map.<string, uint8>` was *true* for a
+        // collection carrying no types at all. Exactly the defect the range and
+        // window cases above exist to prevent, one family along.
+        //
+        // Decided by the STAMP rather than by inspecting the contents, which is
+        // the choice worth recording. Inspecting would be the array's answer -
+        // `[1,2,3] is [].<uint8>` walks elements - and it is wrong here for
+        // three reasons. It is O(n) per test, in the positions `is` is read
+        // from: narrowing, a `when` arm, a `catch` match, each of which can sit
+        // in a loop. Its answer is invalidated by the next `set`, so a narrowing
+        // cannot be relied on downstream. And it would licence the unsoundness
+        // invariance exists to prevent: what a container will ACCEPT NEXT is not
+        // a function of what it currently holds, so an untyped map whose entries
+        // happen to fit is not a `Map.<string, uint8>` - it will take anything
+        // on its next store.
+        //
+        // An argument written `any` admits any instantiation, matching the
+        // family top the relations give (`Set.<any>`, `Map.<any, any>`) and the
+        // window's treatment of `Span.<any>` above.
+        if (COLLECTION_LIBRARY_NAMES.has(t.LibraryName) && t.Arguments.length > 0) {
+          const stamped = (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+          if (stamped === undefined || stamped.length !== t.Arguments.length) {
+            return false;
+          }
+          return t.Arguments.every((want, i) => {
+            if (typeof want !== 'number' && (want as TypeRecord).Kind === 'any') {
+              return true;
+            }
+            const have = stamped[i];
+            if (typeof want === 'number' || typeof have === 'number') {
+              return want === have;
+            }
+            return SameType(have as TypeRecord, want as TypeRecord);
+          });
+        }
+        return true;
       }
       return false;
     }

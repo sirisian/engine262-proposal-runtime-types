@@ -17,6 +17,15 @@ import { builtinImplements } from './iteration-types.mts';
 interface Assumption { readonly First: TypeRecord, readonly Second: TypeRecord }
 
 /**
+ * The keyed collections, which have a family top written argument by argument.
+ *
+ * Named rather than inlined because the same four names appear in the checker's
+ * member dispatch and in the runtime's stamping, and a fifth collection added to
+ * one list and not the others is the way this drifts.
+ */
+export const COLLECTION_LIBRARY_NAMES: ReadonlySet<string> = new Set(['Map', 'Set', 'WeakMap', 'WeakSet']);
+
+/**
  * Is this pair already assumed to hold?
  *
  * PLAN-nominal-records.md v2 task B. Identity alone is not enough for two
@@ -794,6 +803,42 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       && (s.Kind === 'array' || s.Kind === 'tuple' || isSpanRecord(s))) {
     return true;
   }
+  // The COLLECTION family top, by the same reasoning one step along:
+  // `Set.<any>` is a set of some element type and `Map.<any, any>` a map of
+  // some key and value types, and every specialization reaches its family's
+  // top.
+  //
+  // What makes `any` admissible here is what makes it admissible for the array,
+  // and it transfers without weakening: a store into a collection is checked
+  // against the RECEIVER's own declared types at run time - `Set.prototype.add`
+  // and `Map.prototype.set` route through the [[TypedCollection]] stamp - so
+  // writing through the wider view is refused whatever the static type
+  // permitted. Element invariance is untouched for every other argument: a
+  // `Map.<string, uint8>` is still not a `Map.<string, number>`.
+  //
+  // Argument by argument rather than all-or-nothing, so `Map.<string, any>`
+  // is the map-of-string-keys top and not only the fully-erased form. The
+  // array has one argument and so never had to say this.
+  //
+  // The bound this gives a caller is the one the set operations need:
+  // `union<U>(other: Set.<U>)` has no spelling in a checker that cannot say
+  // "a Set of some element type", and `Set.<any>` is that spelling.
+  if (t.Kind === 'nominal' && s.Kind === 'nominal'
+      && t.LibraryName !== undefined && t.LibraryName === s.LibraryName
+      && COLLECTION_LIBRARY_NAMES.has(t.LibraryName)
+      && t.Arguments.length > 0 && t.Arguments.length === s.Arguments.length
+      && t.Arguments.some((a) => typeof a !== 'number' && (a as TypeRecord).Kind === 'any')) {
+    return t.Arguments.every((want, i) => {
+      if (typeof want !== 'number' && (want as TypeRecord).Kind === 'any') {
+        return true;
+      }
+      const have = s.Arguments[i];
+      if (typeof want === 'number' || typeof have === 'number') {
+        return want === have;
+      }
+      return SameTypeWithAssumptions(have as TypeRecord, want as TypeRecord, next);
+    });
+  }
   // #sec-span-coercion: `[].<T>` and `[N].<T>` are both assignable to
   // `Span.<T>`, and a tuple is assignable to it when EVERY position's type is
   // T. The reverse never holds - a window is not assignable to either array
@@ -1023,10 +1068,6 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
             return SameTypeWithAssumptions(sa as TypeRecord, ta, next);
           });
         }
-      }
-      if (s.LibraryName !== undefined && tn.LibraryName === s.LibraryName
-        && tn.Arguments.length === 0 && s.Arguments.length > 0) {
-        return true;
       }
       // A CLASS IS A SUBTYPE OF THE CLASS IT EXTENDS. The relation held
       // nowhere, and the engine disagreed with itself about it: `new Dog() is
