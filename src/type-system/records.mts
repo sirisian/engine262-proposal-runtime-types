@@ -939,6 +939,54 @@ export function propertiesInKeyOrder<T extends { key: string | SymbolValue }>(pr
 }
 
 /**
+ * A canonical key for a `[[Metadata]]` record.
+ *
+ * PLAN-brand-layering-F.md F169. Deterministic over the shape `MetadataRecord`
+ * describes: engine `Value` leaves, and nested plain records - including the
+ * structural markers a pattern and a range take. Record keys are SORTED, so two
+ * records holding the same metadata key alike however they were built.
+ */
+function metadataOrderKey(m: unknown): string {
+  if (m === null || m === undefined) {
+    return String(m);
+  }
+  const leaf = m as {
+    numberValue?(): number, stringValue?(): string, booleanValue?(): boolean,
+    Description?: { stringValue?(): string },
+  };
+  /* eslint-disable @engine262/mathematical-value -- a metadata leaf may be any literal Value */
+  if (typeof leaf.numberValue === 'function') {
+    return `n:${String(leaf.numberValue())}`;
+  }
+  /* eslint-enable @engine262/mathematical-value */
+  if (typeof leaf.stringValue === 'function') {
+    return `s:${JSON.stringify(leaf.stringValue())}`;
+  }
+  if (typeof leaf.booleanValue === 'function') {
+    return `b:${String(leaf.booleanValue())}`;
+  }
+  if (Array.isArray(m)) {
+    return `[${m.map(metadataOrderKey).join(',')}]`;
+  }
+  if (typeof m === 'object') {
+    // A Symbol tag has no plain equivalent whose identity survives a string
+    // key, so it keys by its description AND its position in the realm's
+    // interning table would be needed to be exact. Two distinct symbols with
+    // one description therefore key alike here - which is safe, because the key
+    // only ORDERS members; `SameMetadata` decides identity and compares symbols
+    // by `SameValue` (F147).
+    const sym = m as { Description?: { stringValue?(): string } };
+    if (typeof sym.Description?.stringValue === 'function') {
+      return `y:${JSON.stringify(sym.Description.stringValue())}`;
+    }
+    return `{${Object.keys(m as Record<string, unknown>).sort()
+      .map((k) => `${JSON.stringify(k)}:${metadataOrderKey((m as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return `p:${String(m)}`;
+}
+
+/**
  * A canonical ordering key for a Type Record, used to sort union and
  * intersection members (#sec-canonicalizetype) and to key the composite
  * registry.
@@ -968,7 +1016,26 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     case 'void': return 'void';
     case 'primitive': return `primitive:${t.Name}:${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : orderKey(a))).join(',')}`;
     case 'literal': return `literal:${orderKey(t.Base)}:${String((t.Value as { value?: unknown }).value ?? t.Value)}`;
-    case 'parameterized': return `parameterized:${orderKey(t.Base)}`;
+    // PLAN-brand-layering-F.md F169. The METADATA is part of the identity and
+    // so belongs in the key. Without it two parameterizations of one base -
+    // `string.<{ brand: 'E' }>` and `string.<{ brand: 'V' }>` - produce the
+    // IDENTICAL key, the sort at #sec-canonicalizetype cannot separate them,
+    // and the order they were written in survives: `E & V` and `V & E` interned
+    // as two Type Objects while being mutually assignable. Two brands on
+    // DIFFERENT bases were fine, which is what made this look brand-specific
+    // rather than what it is - any two parameterizations of one base, a
+    // `pattern` and a `brand` included.
+    //
+    // The walk sorts its keys for the reason the ~object~ case below sorts its
+    // properties: a record built by Reflect.makeType and one written as a type
+    // literal may hold the same metadata in different property order, and a key
+    // that read them in record order would give one type two Type Objects.
+    //
+    // `displayMetadataValue` walks the same shape and is NOT reused: its record
+    // branch is `Object.entries` unsorted, so it is not canonical, and giving it
+    // a sort would change every diagnostic that prints a metadata type. A
+    // display string reads as written; an identity key must be canonical.
+    case 'parameterized': return `parameterized:${orderKey(t.Base)}:${metadataOrderKey(t.Metadata)}`;
     case 'nominal': return `nominal:${t.LibraryName ? `lib:${t.LibraryName}` : (t.Declaration as { location?: { startIndex?: number } }).location?.startIndex ?? 0}${t.Arguments.length > 0 ? `<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : orderKey(a))).join(',')}>` : ''}`;
     case 'union': return `union:${t.Members.map(orderKey).join('|')}`;
     case 'intersection': return `intersection:${t.Members.map(orderKey).join('&')}`;
