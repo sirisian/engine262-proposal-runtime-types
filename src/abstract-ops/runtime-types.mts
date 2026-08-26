@@ -855,7 +855,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   }
   // T3. An object or array carries the brand as a mark, read back by
   // `CarriedTypeRecordOf` and `RuntimeTypeOf`.
-  if (atBase instanceof ObjectValue && t.Base.Kind !== 'primitive') {
+  if (atBase instanceof ObjectValue) {
     Object.defineProperty(atBase, 'BrandTypeRecord', {
       value: t, enumerable: false, configurable: true,
     });
