@@ -243,3 +243,22 @@ test('OQ4-A: brands on carrying bases are unaffected', () => {
   expect(evaluated(`${E}function f(x: E) { return 1; } String(f(E('a')));`)).toBe('1');
   expect(evaluated("type U = uint32.<{ brand: 'B' }>; String(Reflect.typeOf(U((7 := uint32))) === U);")).toBe('true');
 });
+
+test('F176: a bigint brand carries, as a string brand does', () => {
+  // `TypedBigIntValue` existed and `RuntimeTypeOf` already recognised it; the
+  // crossing was not using it. The same one-line gap as F172, one base over.
+  const G = "type G = bigint.<{ brand: 'G' }>;";
+  expect(evaluated(`${G} String(Reflect.typeOf(G(1n)) === G);`)).toBe('true');
+  expect(evaluated(`${G} function f(x: G) { return 1; } String(f(G(1n)));`)).toBe('1');
+  expectThrown(`${G} function f(x: G) { return 1; } function h(u) { return f(u); } h(1n);`);
+  expectThrown(`${G} type H = bigint.<{ brand: 'H' }>;`
+    + ' function f(x: H) { return 1; } function h(g: G) { return f(g); } h(G(1n));');
+});
+
+test('boolean is the one base a brand cannot yet carry on', () => {
+  // Recorded as the state, not asserted as correct. `boolean` has no
+  // `TypedBooleanValue`, so it is the only primitive left where the crossing
+  // produces something the receiving boundary cannot recognise.
+  expect(evaluated("type B = boolean.<{ brand: 'B' }>; String(B(true));")).toBe('true');
+  expectThrown("type B = boolean.<{ brand: 'B' }>; function f(x: B) { return 1; } f(B(true));");
+});

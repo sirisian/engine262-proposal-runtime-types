@@ -4,7 +4,7 @@ import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
-import { NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
@@ -43,6 +43,14 @@ import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts
  * type, or a non-string, is returned as-is.
  */
 function carryStringType(value: Value, t: TypeRecord): Value {
+  // PLAN-brand-layering-F.md F176. A BigInt has a carrier too -
+  // `TypedBigIntValue`, recognised by `RuntimeTypeOf` already - and the crossing
+  // was not using it, so a branded BigInt was a bare BigInt for the same reason
+  // a branded String was. The same operation on the same shape of value.
+  if (value instanceof BigIntValue && !(value instanceof TypedBigIntValue)
+    && t.Kind === 'parameterized' && t.Base.Kind === 'primitive' && t.Base.Name === 'bigint') {
+    return TypedBigInt(R(value) as bigint, t);
+  }
   if (!(value instanceof JSStringValue) || value instanceof TypedStringValue) {
     return value;
   }
