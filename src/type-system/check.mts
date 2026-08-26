@@ -7675,7 +7675,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const generatorReturn = generatorType
       ? ((generatorType as { Arguments?: readonly TypeRecord[] }).Arguments?.[1] ?? null)
       : null;
-    returnTypes.push(generatorType ? generatorReturn as Known | null : declaredForReturn);
+    // PLAN-async-generator-types.md phase 4. An ASYNC function's annotation
+    // types the PROMISE the call returns (sec-function-annotations), so a
+    // `return` inside it produces the promise's RESOLUTION type - the first
+    // argument of `Promise.<T, E>` - not the annotation itself. The same shape
+    // as F188 one form over: pushing the raw annotation would compare
+    // `return 1` against `Promise.<uint8, Error>` and refuse it.
+    const asyncResolution = resumable && !generatorType
+      && (declaredForReturn as { LibraryName?: string } | null)?.LibraryName === 'Promise'
+      ? ((declaredForReturn as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] ?? null)
+      : null;
+    returnTypes.push(generatorType
+      ? generatorReturn as Known | null
+      : (asyncResolution as Known | null) ?? declaredForReturn);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
     let index = 0;
