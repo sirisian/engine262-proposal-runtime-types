@@ -13,6 +13,8 @@ import {
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { LayoutOf, type ClassLayout } from '../type-system/layout.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
@@ -243,7 +245,119 @@ export function SameValue(x: Value, y: Value): boolean {
 }
 
 /** https://tc39.es/ecma262/#sec-samevaluezero */
+/**
+ * proposal-runtime-types #sec-equality-and-comparison and #value-type-class: the
+ * identity of a value type is its VALUE, so two instances of a value type class
+ * are equal exactly when their fields are, compared field by field.
+ *
+ * "That `===` compares a value type class field by field rather than by
+ * reference is what makes a value type a value: two `Vector2` instances holding
+ * the same coordinates are the same value, AND A `Map` KEYED ON THEM HAS ONE
+ * ENTRY. This is the existing rule for a `uint8` and a String applied to an
+ * aggregate, not a new one."
+ *
+ * Before this, both instances fell through to SameValueNonNumber - reference
+ * identity - so `new Vector2() === new Vector2()` was *false* and a Map keyed on
+ * them had two entries. The scalar and built-in aggregate value types (rational,
+ * complex, decimal, and the typed numbers) each had a branch already; the
+ * user-declared aggregate had none.
+ *
+ * WHICH CLASSES. A class is a value type class exactly where it has a layout,
+ * which is the condition #sec-layout-finiteness states and the predicate
+ * `IsSharableValueType` already computes for `shared`. A class with a String, an
+ * object, or a dynamic-array field has no layout and keeps reference identity,
+ * which is what makes this rule apply to the aggregates that are values and to
+ * nothing else.
+ *
+ * FIELD BY FIELD RATHER THAN BYTE BY BYTE, though #sec-default-values observes
+ * that two instances equal field by field "are also equal byte for byte". The
+ * derivation runs one way only: a byte comparison would report `-0` and `+0` as
+ * different when `===` says they are the same, and would report two NaNs with
+ * differing bit patterns as the same when `===` says neither is. Padding being
+ * zero-filled makes the two agree on the instances an engine allocates; the
+ * float rules make them disagree on the values a program writes.
+ *
+ * SAME CLASS REQUIRED. Distinct classes are distinct types even when
+ * structurally identical, so two layouts that happen to match are not one type
+ * and their instances are not one value.
+ *
+ * _zero_ selects SameValueZero at the leaves rather than `===`, which is what a
+ * `Map` key needs: a `Vector2` holding a NaN is findable, and one holding `-0`
+ * pairs with one holding `+0`, exactly as a bare NaN or `-0` key does.
+ */
+function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefined {
+  if (!surroundingAgent.feature('runtime-types')
+      || !(x instanceof ObjectValue) || !(y instanceof ObjectValue)) {
+    return undefined;
+  }
+  const xt = RuntimeTypeOf(x);
+  const yt = RuntimeTypeOf(y);
+  if (xt.Kind !== 'nominal' || yt.Kind !== 'nominal' || xt.EnumMembers !== undefined) {
+    return undefined;
+  }
+  const layout = LayoutOf(xt) as ClassLayout | null;
+  if (layout === null || layout.fields === undefined) {
+    return undefined;
+  }
+  // Distinct classes are distinct types: two matching layouts are not one type.
+  if (!SameTypeRecord(xt, yt)) {
+    return false;
+  }
+  for (const field of layout.fields) {
+    if (typeof field.key !== 'string') {
+      continue;
+    }
+    const key = Value(field.key);
+    const xv = X(Get(x, key));
+    const yv = X(Get(y, key));
+    if (!fieldEquals(xv, yv, field.type, zero)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Compare one field, by its DECLARED type rather than by what the values happen
+ * to be.
+ *
+ * "a value type field recursively and structurally, a fixed-length array field
+ * element by element, since it's inline storage, and a reference field by
+ * identity."
+ *
+ * The fixed-extent array is the case that needs saying. Its field holds an Array
+ * object, and comparing two of those the ordinary way is reference identity - so
+ * a class with a `[4].<uint32>` field was unequal to a copy of itself, which is
+ * the one shape where "field by field" alone gives the wrong answer. The array
+ * is INLINE STORAGE in the layout, not a reference the class points at, so its
+ * elements are as much part of the value as a scalar field is.
+ *
+ * A DYNAMIC array field does not arise: it has no layout, so a class holding one
+ * is not a value type class and never reaches here.
+ */
+function fieldEquals(xv: Value, yv: Value, t: TypeRecord, zero: boolean): boolean {
+  if (t.Kind === 'array' && typeof (t as { Extent?: unknown }).Extent === 'number') {
+    const extent = (t as { Extent: number }).Extent;
+    const element = (t as { Element: TypeRecord }).Element;
+    if (!(xv instanceof ObjectValue) || !(yv instanceof ObjectValue)) {
+      return zero ? SameValueZero(xv, yv) : IsStrictlyEqual(xv, yv);
+    }
+    for (let i = 0; i < extent; i += 1) {
+      const k = Value(String(i));
+      if (!fieldEquals(X(Get(xv, k)), X(Get(yv, k)), element, zero)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return zero ? SameValueZero(xv, yv) : IsStrictlyEqual(xv, yv);
+}
+
 export function SameValueZero(x: Value, y: Value): boolean {
+  const asValueClass = valueClassEquals(x, y, true);
+  if (asValueClass !== undefined) {
+    return asValueClass;
+  }
   // proposal-runtime-types (rational.md): a rational's identity is its canonical
   // value, so SameValue and SameValueZero compare it structurally, which is what
   // lets it serve as a Map or Set key by value.
@@ -564,6 +678,10 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
 
 /** https://tc39.es/ecma262/#sec-isstrictlyequal */
 export function IsStrictlyEqual(x: Value, y: Value): boolean {
+  const asValueClass = valueClassEquals(x, y, false);
+  if (asValueClass !== undefined) {
+    return asValueClass;
+  }
   // proposal-runtime-types (rational.md): two rationals are strictly equal iff
   // they are the same canonical value, which is byte equality of the reduced
   // numerator and denominator; a rational is never strictly equal to anything

@@ -466,6 +466,16 @@ test('the boolean fix does not disturb the layout or its neighbours', () => {
   expectThrown('enum C: uint8 { Red = 0 } class E { c: C; } '
     + 'const s = new SoA.<E, 2>(); s[0].c;');
   // A gather is still a COPY, per soa.md:106 "Gathers a Particle value from the
-  // columns" - specified, not a defect, and easy to mistake for one.
-  expect(evaluated(`${G} const s = new SoA.<G, 4>(); String(s[0] === s[0]);`)).toBe('false');
+  // columns" - specified, not a defect, and easy to mistake for one. What it is
+  // NOT is a different value: `G` is a value type class, so two gathers of one
+  // element are `===` because their fields are (D5). This assertion read
+  // *false* while `===` on a value type class was still reference identity, and
+  // the comment above is what makes the new answer the right one - a copy of a
+  // value is that value.
+  expect(evaluated(`${G} const s = new SoA.<G, 4>(); String(s[0] === s[0]);`)).toBe('true');
+  // ...and it still discriminates on the DATA, which is what stops the new
+  // answer from being vacuous: two elements holding different fields are not
+  // equal however they were gathered.
+  expect(evaluated(`${G} const s = new SoA.<G, 4>(); const ref p = s[1]; `
+    + 'p.id = (7 := uint32); String(s[0] === s[1]);')).toBe('false');
 });

@@ -51,16 +51,16 @@ const BitSet = 'class BitSet { readonly words: [4].<uint32>; } ';
 // Equality - the root of it
 // ---------------------------------------------------------------------------
 
-test.fails('D5: two value type class instances with equal fields are ===', () => {
+test('D5: two value type class instances with equal fields are ===', () => {
   // sec-equality-and-comparison: "the identity of a value type is its value".
   expect(evaluated(`${V} String(new V() === new V());`)).toBe('true');
 });
 
-test.fails('D5: == on two equal value type class instances is true', () => {
+test('D5: == on two equal value type class instances is true', () => {
   expect(evaluated(`${V} String(new V() == new V());`)).toBe('true');
 });
 
-test.fails('D5: instances differing in a field are NOT ===', () => {
+test('D5: instances differing in a field are NOT ===', () => {
   // The other half, and the half that would pass vacuously if `===` were left
   // as identity - so it is only meaningful once the first test passes.
   expect(evaluated(`${V} const a = new V(); const b = new V(); b.x = (1 := uint32); String(a === b);`)).toBe('false');
@@ -87,14 +87,14 @@ test.fails('D5: reading an element out of a typed array copies it', () => {
 // The collection consequences - what this plan actually needs
 // ---------------------------------------------------------------------------
 
-test.fails('D5: a Map keyed on a value type class has one entry per VALUE', () => {
+test('D5: a Map keyed on a value type class has one entry per VALUE', () => {
   // The design's worked example, in its own words: "index.get(b); // archetype,
   // the same key by value".
   expect(evaluated(`${BitSet} const a: BitSet; const b: BitSet; const m = new Map.<BitSet, string>(); m.set(a, "hit"); String(m.get(b));`)).toBe('hit');
   expect(evaluated(`${V} const a = new V(); const b = new V(); const m = new Map.<V, string>(); m.set(a, "hit"); m.set(b, "again"); String(m.size);`)).toBe('1');
 });
 
-test.fails('D5: a Set of value type class instances dedups structurally', () => {
+test('D5: a Set of value type class instances dedups structurally', () => {
   expect(evaluated(`${V} const s = new Set.<V>(); s.add(new V()); s.add(new V()); String(s.size);`)).toBe('1');
   // And `has` finds an equal-but-distinct instance.
   expect(evaluated(`${V} const s = new Set.<V>(); s.add(new V()); String(s.has(new V()));`)).toBe('true');
@@ -111,7 +111,7 @@ test.fails('D5: insertion COPIES the key, so mutating the original does not move
   expect(evaluated(`${setup} String(m.size);`)).toBe('1');
 });
 
-test.fails('D5: comparison recurses by field KIND, not by byte image', () => {
+test('D5: comparison recurses by field KIND, not by byte image', () => {
   // "a value type field recursively and structurally, a fixed-length array field
   // element by element, since it's inline storage, and a reference field by
   // identity."
