@@ -399,3 +399,39 @@ test('F179: a layered boolean is unusable but SOUND', () => {
   expect(evaluated(`${d} String(Reflect.getReflection(Reflect.typeOf(AB(true))).kind);`)).toBe('primitive');
   expectThrown(`${d} function f(x: AB) { return 1; } function h(u) { return f(u); } h(true);`);
 });
+
+// ---------------------------------------------------------------------------
+// F183: a dead OPERAND is not the same defect as a constant ANSWER
+// ---------------------------------------------------------------------------
+
+test('F183: a logical operator whose right operand can never evaluate is dead code', () => {
+  // `??` was reported for this and `||`/`&&` were not, though they are the same
+  // shape whenever the left operand's type settles the test. Decidable only
+  // where truthiness is a property of the TYPE - a literal, or a union of
+  // literals that agree.
+  expectThrown('type T = 5; function f(d: T) { return d || (9 := uint8); } f((5 := T));');
+  expectThrown('type Z = 0; function f(d: Z) { return d && (9 := uint8); } f((0 := Z));');
+  expectThrown('type T = 1 | 2; function f(d: T) { return d || (9 := uint8); } f((1 := T));');
+});
+
+test('F183: a reachable operand is left alone', () => {
+  // `uint8` settles nothing - 0 is falsy and every other value is not - and a
+  // union whose members disagree settles nothing either. `5 && x` reaches its
+  // right operand precisely because 5 is truthy.
+  expect(evaluated('function f(d: uint8) { return d || (9 := uint8); }'
+    + ' String(f((1 := uint8)));')).toBe('1');
+  expect(evaluated('type T = 5; function f(d: T) { return d && (9 := uint8); }'
+    + ' String(f((5 := T)));')).toBe('9');
+  expect(evaluated('type T = 0 | 1; function f(d: T) { return d || (9 := uint8); }'
+    + ' String(f((1 := T)));')).toBe('1');
+});
+
+test('F183: a constant ANSWER in a value position stays legitimate', () => {
+  // The distinction this rule turns on. An impossible `instanceof` has no
+  // unreachable operand - it is a question with a constant answer, and the
+  // corpus writes exactly this to demonstrate the operator.
+  expect(evaluated('let a: uint8 = 0; String(a instanceof uint8);')).toBe('true');
+  expect(evaluated('let a: uint8 = 0; String(a instanceof uint16);')).toBe('false');
+  expect(evaluated('function f(a: uint8) { const x = typeof a === "string"; return x; }'
+    + ' String(f((1 := uint8)));')).toBe('false');
+});

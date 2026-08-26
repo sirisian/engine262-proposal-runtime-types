@@ -7881,6 +7881,59 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(rel.ShiftExpression as ParseNode);
         return;
       }
+      case 'LogicalANDExpression':
+      case 'LogicalORExpression': {
+        // PLAN-brand-layering-F.md F183 item 1. `??` is reported because its
+        // RIGHT OPERAND can never be evaluated - the form contains code the
+        // program wrote and cannot reach - and `||` and `&&` are the same shape
+        // whenever the left operand's type settles the test.
+        //
+        // This is NOT the constant-answer rule. An impossible `instanceof` in a
+        // value position is a legitimate question, which the corpus relies on to
+        // demonstrate the operator; an unreachable operand is dead code wherever
+        // it appears, which is why `??`'s own example in the clause is a value
+        // position.
+        //
+        // Decidable only where truthiness is a property of the TYPE: a literal,
+        // or a union of literals that agree. A `uint8` settles nothing, since 0
+        // is falsy and every other value is not.
+        const lg = n as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode, BitwiseANDExpression?: ParseNode };
+        const isOr = n.type === 'LogicalORExpression';
+        const leftNode = (isOr ? lg.LogicalORExpression : lg.LogicalANDExpression) as ParseNode | undefined;
+        if (leftNode) {
+          const lt = staticType(leftNode);
+          if (lt) {
+            const uniform = (t: TypeRecord): boolean | undefined => {
+              const members = t.Kind === 'union' ? t.Members : [t];
+              let seen: boolean | undefined;
+              for (const m of members) {
+                if (m.Kind !== 'literal') {
+                  return undefined;
+                }
+                const v = (m.Value as { value?: unknown })?.value;
+                const truthy = Boolean(v);
+                if (seen === undefined) {
+                  seen = truthy;
+                } else if (seen !== truthy) {
+                  return undefined;
+                }
+              }
+              return seen;
+            };
+            const t = uniform(lt);
+            // `||` skips its right operand when the left is truthy; `&&` when
+            // the left is falsy.
+            if (t !== undefined && t === isOr) {
+              const completion = Throw.TypeError(
+                'the right operand of $1 can never be evaluated, so it is dead code',
+                Value(isOr ? '||' : '&&'),
+              );
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
+        break;
+      }
       case 'CoalesceExpression': {
         const co = n as ParseNode.CoalesceExpression;
         const s = staticType(co.CoalesceExpressionHead as ParseNode);
