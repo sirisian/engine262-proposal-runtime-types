@@ -136,15 +136,42 @@ test('the optional-key form survives the full shape rule', () => {
 
 // -- Participation and the sit-out -----------------------------------------------
 
-test('a brand written at its own default admits, and off it refuses, in one program', () => {
-  // Both halves in one test, so that a regression dropping the meta type from
-  // the judgment reads as a failure rather than as a pass.
+test('a cast into a metadata type admits, whatever the meta type declares', () => {
+  // WAS: "a brand written at its own default admits, and off it refuses",
+  // expecting a cast to metadata off the meta type's default to be gated by its
+  // `subtype` judgment. PLAN-brand-layering-F.md OQ5: the specification says
+  // otherwise, and the engine follows it.
+  //
+  //   "A cast's declared parameterization names what its result BECOMES, and is
+  //    not a boundary its body must already satisfy."
+  //
+  // and names `validate` - not `subtype` - as what a cast's boundary runs:
+  // "a bare number reaches a bounded type only through a cast whose boundary
+  // runs validate". `subtype` is a relation between two PARAMETERIZATIONS, and
+  // a cast does consult it there; it is not a judgment about a bare value.
+  //
+  // Under the old expectation a brand would be uninhabitable by cast as well as
+  // by assignment, since a brand declares no `validate` - which contradicts the
+  // clause's own "except through the construction boundary".
   expect(evaluated(`${brand}
     const atDefault = (1 := float32.<{ tag: "" }>) is float32.<{ tag: "" }>;
-    let offDefault = "refused"; try { (1 := float32.<{ tag: "A" }>); offDefault = "admitted"; } catch (e) { }
+    let offDefault = "refused"; try { (1 := float32.<{ tag: "A" }>); offDefault = "admitted"; } catch (e) {}
     String(atDefault) + "/" + offDefault;
-  `)).toBe('true/refused');
+  `)).toBe('true/admitted');
 });
+
+test('a cast DOES consult the judgments between two parameterizations', () => {
+  // The other half of OQ5, and what makes the rule above a rule rather than a
+  // hole: the bare-value entry is what a cast is for, and everything else is
+  // still checked.
+  expectThrown(`${brand}
+    const a = (1 := float32.<{ tag: "A" }>);
+    (a := float32.<{ tag: "B" }>);
+  `);
+  expectThrown('("zz" := string.<{ pattern: /^a+$/ }>);');
+  expect(evaluated('String(("aa" := string.<{ pattern: /^a+$/ }>));')).toBe('aa');
+});
+
 
 test('written exactly at the default sits out; written off it enforces both keys', () => {
   expect(evaluated(`${bounds} String(((999 := float64.<{ min: 0, max: 100 }>)) is float64.<{ min: 0, max: 100 }>);`)).toBe('true');
