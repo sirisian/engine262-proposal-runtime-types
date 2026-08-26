@@ -1,3 +1,4 @@
+import { EnforceYieldType } from '../abstract-ops/runtime-types.mts';
 import { ObjectValue, Value } from '../value.mts';
 import {
   Await,
@@ -9,7 +10,7 @@ import {
 } from '../completion.mts';
 import { Evaluate, type YieldEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import {
+import { surroundingAgent,
   Assert,
   Call,
   EnsureCompletion,
@@ -166,7 +167,14 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
     // 1. Let exprRef be the result of evaluating AssignmentExpression.
     const exprRef = Q(yield* Evaluate(AssignmentExpression));
     // 2. Let value be ? GetValue(exprRef).
-    const value = Q(yield* GetValue(exprRef));
+    let value = Q(yield* GetValue(exprRef));
+    // PLAN-async-generator-types.md phase 3. sec-function-annotations: "a
+    // generator's annotation types the values the iterator YIELDS". Nothing
+    // checked them, so `function* g(): uint8 { yield 'nope'; }` ran and
+    // `.next().value` was the String.
+    if (surroundingAgent.feature('runtime-types')) {
+      value = Q(yield* EnforceYieldType(value, GetGeneratorKind() === 'async'));
+    }
     // 3. Return ? Yield(value).
     return Q(yield* Yield(value));
   }

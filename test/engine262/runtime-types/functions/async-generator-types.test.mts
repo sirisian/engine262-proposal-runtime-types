@@ -49,3 +49,26 @@ test('phase 2: a correct argument still passes on every form', () => {
   expect(evaluated('async function f(a: uint8) { return a; } f((1 := uint8)); String(1);')).toBe('1');
   expect(evaluated('const g = async (a: uint8) => a; g((1 := uint8)); String(1);')).toBe('1');
 });
+
+test('phase 3: a yield is checked against the declared yield type', () => {
+  // sec-function-annotations: "a generator's annotation types the values the
+  // iterator YIELDS". Nothing checked them, so `.next().value` was the String.
+  //
+  // The declared type is read from the RUNNING function, because a `yield` is
+  // an expression with no other route to its generator, and
+  // `generatorDeclaredType` - which already existed - turns the annotation into
+  // `Generator.<Y, R, N>` so that _Y_ can be read off it.
+  expectThrown('function* g(): uint8 { yield "nope"; } g().next();');
+  expectThrown('function* g(): Generator.<uint8, void, void> { yield "nope"; } g().next();');
+  expect(evaluated('function* g(): uint8 { yield (1 := uint8); } String(g().next().value);')).toBe('1');
+});
+
+test('phase 3: an unannotated generator is unaffected', () => {
+  // Nothing is promised, so nothing is checked.
+  expect(evaluated('function* g() { yield "anything"; } String(g().next().value);')).toBe('anything');
+});
+
+test('phase 3: yield* still delegates', () => {
+  expect(evaluated('function* inner(): uint8 { yield (1 := uint8); }'
+    + ' function* outer(): uint8 { yield* inner(); } String(outer().next().value);')).toBe('1');
+});

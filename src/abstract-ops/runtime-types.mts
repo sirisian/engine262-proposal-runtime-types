@@ -11,7 +11,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
-import { anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
+import { generatorDeclaredType, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -3038,6 +3038,40 @@ function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | n
   // parent (the body is the child that carries no annotation).
   const code = fn.ECMAScriptCode as { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation | null } } | null | undefined;
   return code?.parent?.TypeAnnotation;
+}
+
+/**
+ * Checks a yielded value against the enclosing generator's declared YIELD type.
+ *
+ * PLAN-async-generator-types.md phase 3. `sec-function-annotations`: "a
+ * generator's annotation types the values the iterator YIELDS". Nothing checked
+ * them - `function* g(): uint8 { yield 'nope'; }` ran and `.next().value` was
+ * the String.
+ *
+ * The declared type is read from the RUNNING function rather than passed in,
+ * because a `yield` is an expression and has no other route to its generator.
+ * `generatorDeclaredType` turns the annotation into `Generator.<Y, R, N>` -
+ * that mapping already existed - and _Y_ is the first argument.
+ */
+export function* EnforceYieldType(value: Value, isAsync: boolean): ValueEvaluator {
+  const fn = surroundingAgent.runningExecutionContext.Function;
+  if (!fn) {
+    return value;
+  }
+  const annotation = returnAnnotationOf(fn as unknown as AnnotatedFunction);
+  if (!annotation) {
+    return value;
+  }
+  const declared = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+  // The async flag matters: `generatorDeclaredType` builds `AsyncGenerator` for
+  // an async generator and `Generator` otherwise, and passing the wrong one
+  // finds no _Y_ - which silently skipped the check for `async function*`.
+  const asGenerator = generatorDeclaredType(declared, isAsync);
+  const Y = (asGenerator as { Arguments?: readonly TypeRecord[] })?.Arguments?.[0];
+  if (!Y) {
+    return value;
+  }
+  return Q(yield* RequireType(value, Y));
 }
 
 export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
