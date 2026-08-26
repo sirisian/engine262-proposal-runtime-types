@@ -62,7 +62,45 @@ function fromMembers(kept: readonly TypeRecord[]): NarrowResult {
  * and _t_ within _m_ means some do. Anything involving ~any~ overlaps, since an
  * unknown type must not manufacture a diagnostic.
  */
+/**
+ * The names `typeof` answers *"number"* for.
+ *
+ * PLAN-brand-layering-F.md F182. `sec-narrowing`: "`typeof` is unchanged: it
+ * reports *number* for every numeric type, so `typeof v === "number"` narrows
+ * `uint8 | string` to `uint8`".
+ */
+const typeofNumberNames = new Set([
+  // The integers are named `uint` and `int` with a WIDTH ARGUMENT, not
+  // `uint8`: a list of the spelled names matched the floats and missed every
+  // integer, which is why the clause's own `uint8 | string` example still
+  // failed after the floats were fixed.
+  'number', 'uint', 'int',
+  'float16', 'float32', 'float64', 'float128',
+  'decimal32', 'decimal64', 'decimal128',
+]);
+
+/** Whether _t_ is the `number` type, which a `typeof` test names as a CATEGORY. */
+function isNumberCategory(t: TypeRecord): boolean {
+  return t.Kind === 'primitive' && t.Name === 'number';
+}
+
 function overlaps(m: TypeRecord, t: TypeRecord): boolean {
+  // F182. A `typeof` test names a CATEGORY of types, not one type. The
+  // specification is explicit that `number` is disjoint from the sized numeric
+  // types - "no other numeric type is assignable to it and it is assignable to
+  // no other numeric type" - which is right for ASSIGNMENT and wrong here: it
+  // made `typeof v === "number"` narrow `uint8 | string` to nothing, and the
+  // checker rejected the clause's own example as dead code.
+  //
+  // Applied at `overlaps` because it is the single decision both `NarrowTo` and
+  // `NarrowFrom` reach, so the true and false branches stay each other's
+  // complement.
+  if (isNumberCategory(t) && m.Kind === 'primitive' && typeofNumberNames.has(m.Name)) {
+    return true;
+  }
+  if (isNumberCategory(m) && t.Kind === 'primitive' && typeofNumberNames.has(t.Name)) {
+    return true;
+  }
   return isAny(m) || isAny(t) || IsAssignable(m, t) || IsAssignable(t, m);
 }
 
