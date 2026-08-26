@@ -368,3 +368,34 @@ test('F179: the guards survive the fix', () => {
   expectThrown(`${PV} PV('zz');`);
   expect(evaluated(`${PV} String(PV('aa'));`)).toBe('aa');
 });
+
+test('F179: layering works on every carrying base, not only strings', () => {
+  // The matrix in the plan measured a SINGLE brand per base. Layering is a
+  // different question and F179 changed it, so it is measured separately: for
+  // each carrying base, `A & B` constructs, reports itself, accepts an already-
+  // branded value, and sheds to a member.
+  const cases: [string, string, string][] = [
+    ['uint32', 'uint32', '(7 := uint32)'],
+    ['float64', 'float64', '(1.5 := float64)'],
+    ['string', 'string', "'a'"],
+    ['bigint', 'bigint', '1n'],
+    ['object', 'Base', '{ a: (1 := uint8) }'],
+    ['array', 'Base2', '[(1 := uint8)]'],
+  ];
+  for (const [, base, val] of cases) {
+    const d = 'type Base = { a: uint8 }; type Base2 = [].<uint8>;'
+      + ` type A = ${base}.<{ brand: 'A' }>; type B = ${base}.<{ brand: 'B' }>; type AB = A & B;`;
+    expect(evaluated(`${d} String(Reflect.typeOf(AB(${val})) === AB);`)).toBe('true');
+    expect(evaluated(`${d} String(AB(A(${val})) !== undefined);`)).toBe('true');
+    expect(evaluated(`${d} function f(x: A) { return 1; } String(f(AB(${val})));`)).toBe('1');
+  }
+});
+
+test('F179: a layered boolean is unusable but SOUND', () => {
+  // Construction returns the bare value and `typeOf` reports `boolean`, exactly
+  // as for a single boolean brand - and every boundary that declares the
+  // layering refuses it. Nothing is silently admitted.
+  const d = "type A = boolean.<{ brand: 'A' }>; type B = boolean.<{ brand: 'B' }>; type AB = A & B;";
+  expect(evaluated(`${d} String(Reflect.getReflection(Reflect.typeOf(AB(true))).kind);`)).toBe('primitive');
+  expectThrown(`${d} function f(x: AB) { return 1; } function h(u) { return f(u); } h(true);`);
+});
