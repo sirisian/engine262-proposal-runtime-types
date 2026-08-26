@@ -7,7 +7,7 @@ import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
-import { builtinImplements } from './iteration-types.mts';
+import { builtinImplements, iterationInterfaceRecord } from './iteration-types.mts';
 
 /**
  * proposal-runtime-types #sec-structural-identity and #sec-subtyping-and-assignability
@@ -15,6 +15,19 @@ import { builtinImplements } from './iteration-types.mts';
  * of recursive types terminates.
  */
 interface Assumption { readonly First: TypeRecord, readonly Second: TypeRecord }
+
+/** A tuple iterates as the union of its positions. */
+function elementUnionOfTuple(t: TypeRecord): TypeRecord | undefined {
+  const elements = (t as { Elements?: readonly { Type: TypeRecord }[] }).Elements;
+  if (!elements || elements.length === 0) {
+    return undefined;
+  }
+  if (elements.length === 1) {
+    return elements[0].Type;
+  }
+  return { Kind: 'union', Members: elements.map((e) => e.Type) } as unknown as TypeRecord;
+}
+
 
 /**
  * The keyed collections, which have a family top written argument by argument.
@@ -292,6 +305,27 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       && builtinImplements(s.LibraryName, s.Arguments, (declared) => IsSubtype(declared, t, [...assumptions, { First: s, Second: t }]))) {
     return true;
   }
+  // An ARRAY implements `Iterable.<T>` over its element type, and did not,
+  // because BUILTIN_IMPLEMENTS is keyed on a [[LibraryName]] and an array type
+  // has none - it is ~array~, not ~nominal~, so the branch above could not see
+  // it whatever the table said.
+  //
+  // The omission was invisible from the collections, which ARE in that table, and
+  // it left the most obvious iterable in the language unable to reach an
+  // `Iterable` parameter: `function f(i: Iterable.<uint8>)` refused a
+  // `[].<uint8>` while `_a_ is Iterable.<uint8>` answered *true* for the same
+  // value. A tuple reaches this too, every tuple being an array.
+  if ((s.Kind === 'array' || s.Kind === 'tuple') && t.Kind === 'object') {
+    const element = s.Kind === 'array'
+      ? (s as { Element?: TypeRecord }).Element
+      : elementUnionOfTuple(s as TypeRecord);
+    if (element) {
+      const iterable = iterationInterfaceRecord('Iterable', [element]);
+      if (iterable && IsSubtype(iterable, t, [...assumptions, { First: s, Second: t }])) {
+        return true;
+      }
+    }
+  }
   // proposal-runtime-types: a generic parameter is opaque within its own
   // declaration. It is a subtype of itself - which is what lets `m(v: T): T`
   // return its argument - and of its constraint, since a constrained parameter
@@ -318,9 +352,9 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'void':
       return true;
     case 'application':
-      // #sec-issubtype: "If _s_.[[Kind]] is ~application~ … if _s_.[[Builder]]
+      // #sec-issubtype: "If _s_.[[Kind]] is ~application~ ï¿½ if _s_.[[Builder]]
       // and _t_.[[Builder]] are not the same function, return *false*; return
-      // SameArgumentList(…)". And #sec-computed-types: "A deferred ~application~
+      // SameArgumentList(ï¿½)". And #sec-computed-types: "A deferred ~application~
       // is a subtype only of itself and of the `any` type. Before specialization
       // nothing finer than identity is known about its result, so nothing finer
       // is assumed: two mentions of one deferred call are one type by interning,
@@ -330,7 +364,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // `any` is handled by its own arm above, so identity is the whole of this
       // WHERE THERE ARE NO FACTS.
       //
-      // #sec-checked-contracts: a contract "is ASSUMED: before specialization …
+      // #sec-checked-contracts: a contract "is ASSUMED: before specialization ï¿½
       // the checker takes each clause as a known fact about the ~application~
       // Type Record. The second is sound because of the first: any
       // specialization that would falsify an assumption is stopped at the
@@ -344,7 +378,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // with no contract.
       // A LOWER bound licensed by a fact: `where Reflect.isAssignable(X, return)`
       // says every X value is a `return` value, so `X <: thisApplication`. That
-      // is the direction `typeprogramming.md` §6.2 warns is easy to reverse -
+      // is the direction `typeprogramming.md` ï¿½6.2 warns is easy to reverse -
       // "checking a generic body that PRODUCES the result needs a lower bound,
       // and for `omit` the true one is `T <: return`".
       if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
@@ -694,7 +728,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // LOWER bound on a deferred application - `T <: return` - so it is consulted
   // where the application is the TARGET. #sec-checked-contracts: "the checker
   // takes each clause as a known fact about the ~application~ Type Record", and
-  // `typeprogramming.md` §6.2: "checking a generic body that PRODUCES the result
+  // `typeprogramming.md` ï¿½6.2: "checking a generic body that PRODUCES the result
   // needs a lower bound, and for `omit` the true one is `T <: return`".
   //
   // Here rather than in the `case 'application':` arm of SameTypeWithAssumptions:

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { ok, evaluated } from '../harness.mts';
+import { ok, evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-iteration-types (Iteration Types).
@@ -346,4 +346,28 @@ test('Iterable and AsyncIterable remain two interfaces', () => {
   expect(ok('function* g(): uint8 { yield 1; } const i: Iterable.<uint8> = g();')).toBe(true);
   expect(ok('async function* ag(): uint8 { yield 1; } const i: AsyncIterable.<uint8> = ag();')).toBe(true);
   expect(ok('function* g(): uint8 { yield 1; } const i: AsyncIterable.<uint8> = g();')).toBe(false);
+});
+
+test('an array and a tuple satisfy Iterable over their elements (D22)', () => {
+  // BUILTIN_IMPLEMENTS is keyed on a [[LibraryName]], and an array type has
+  // none - it is ~array~, not ~nominal~ - so the declared-implements branch
+  // could not see it whatever the table said. The omission was invisible from
+  // the collections, which ARE in that table, and it left the most obvious
+  // iterable in the language unable to reach an `Iterable` parameter.
+  //
+  // The two halves disagreed, which is what makes it a defect rather than a
+  // deliberate narrowing: `_a_ is Iterable.<uint8>` answered *true* at run time
+  // for the same value the checker refused.
+  expect(ok('function f(i: Iterable.<uint8>) {} const a: [].<uint8> = [1]; f(a);')).toBe(true);
+  expect(ok('function f(i: Iterable.<uint8>) {} const a: [4].<uint8> = [1, 2, 3, 4]; f(a);')).toBe(true);
+  expect(evaluated('const a: [].<uint8> = [1]; String(a is Iterable.<uint8>);')).toBe('true');
+  // A tuple iterates as the union of its positions, every tuple being an array.
+  expect(ok('function f(i: Iterable.<uint8 | string>) {} const t: [uint8, string] = [1, "a"]; f(t);')).toBe(true);
+  // The element type is still checked, so the relation discriminates.
+  expectStaticTypeError('function f(i: Iterable.<string>) {} const a: [].<uint8> = [1]; f(a);');
+  // And a non-iterable is still refused, so the position is really checked.
+  expectStaticTypeError('function f(i: Iterable.<uint8>) {} f(1);');
+  // The collections, which reach this by the declared table rather than by the
+  // array arm, are unaffected.
+  expect(ok('function f(i: Iterable.<uint8>) {} let s: Set.<uint8> = new Set(); f(s);')).toBe(true);
 });
