@@ -18,6 +18,7 @@ import {
   RequireInternalSlot,
   SameValue, SameValueZero, Throw,
   RequireType,
+  RequireIdentityType,
 } from '#self';
 import type {
   Arguments, Descriptor, ValueEvaluator, FunctionCallContext, Realm,
@@ -65,6 +66,11 @@ function* mapValueAtType(O: Value, value: Value, index: number): PlainEvaluator<
   const t = args?.[index];
   if (t === undefined || typeof t === 'number') {
     return value;
+  }
+  // Index 0 is the KEY of a Map and the ELEMENT of a Set: the identity-bearing
+  // position. Index 1 is a Map's value, an ordinary store.
+  if (index === 0) {
+    return Q(yield* RequireIdentityType(value, t));
   }
   return Q(yield* RequireType(value, t));
 }

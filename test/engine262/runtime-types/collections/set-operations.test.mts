@@ -166,6 +166,34 @@ test('the operations carry their element types at run time', () => {
   expect(ok(`${a}${b} const u = a.union(b); const bad = (300 := any); u.add(bad);`)).toBe(false);
 });
 
+test('D20: the constant-fold holds in BOTH directions', () => {
+  // The design's claim is symmetric - "distinct value types share no values" -
+  // and before this it was not. A set operation walks the SMALLER operand and
+  // probes the larger, and the probe ran through the converting path: a uint8
+  // needle stringified into a `Set.<string>` and answered false, while a String
+  // needle at a `Set.<uint8>` threw. So the fold worked or threw depending on
+  // which operand happened to be smaller, and the test that covered it happened
+  // to pick the working order.
+  const a = 'const a = new Set.<uint8>(); a.add(1); ';
+  const b = 'const b = new Set.<string>(); b.add("x"); ';
+  expect(evaluated(`${a}${b} String(a.intersection(b).size);`)).toBe('0');
+  expect(evaluated(`${a}${b} String(b.intersection(a).size);`)).toBe('0');
+  expect(evaluated(`${a}${b} String(a.isDisjointFrom(b));`)).toBe('true');
+  expect(evaluated(`${a}${b} String(b.isDisjointFrom(a));`)).toBe('true');
+  expect(evaluated(`${a}${b} String(a.isSubsetOf(b));`)).toBe('false');
+  expect(evaluated(`${a}${b} String(b.isSubsetOf(a));`)).toBe('false');
+  // The operations that draw from both sides still carry both.
+  expect(evaluated(`${a}${b} String(a.union(b).size);`)).toBe('2');
+  expect(evaluated(`${a}${b} String(a.difference(b).size);`)).toBe('1');
+});
+
+test('a genuine error from the other operand still propagates', () => {
+  // Only this operation's OWN type test is inspected. A `has` that throws for
+  // any other reason is a failure rather than an answer, and swallowing it would
+  // turn a broken set-like into a silently empty intersection.
+  expect(evaluated('const a = new Set.<uint8>([1]); const bad = { size: 1, has: () => { throw new RangeError("boom"); }, keys: () => [1][Symbol.iterator]() }; try { a.intersection(bad); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+});
+
 test('the constant-fold case the design names', () => {
   // "When T and U are unrelated value types the compiler can constant-fold the
   // answer: an intersection of a Set.<uint8> and a Set.<string> is empty

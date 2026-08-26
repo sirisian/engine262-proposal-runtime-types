@@ -525,10 +525,16 @@ test('a typed collection checks every position it declares, at any type', () => 
   expect(thrownKind(`${ss} function anyv() { return {}; } s.add(anyv());`)).toBe('TypeError');
   expect(thrownKind(`${ss} function anyv() { return {}; } s.has(anyv());`)).toBe('TypeError');
   expect(thrownKind(`${ss} function anyv() { return {}; } s.delete(anyv());`)).toBe('TypeError');
-  // The conversion is the array's conversion, so it behaves identically: a
-  // lossless source converts rather than failing, exactly as `a.push(5)` on a
-  // `[].<string>` has always produced the string "5".
-  expect(evaluated(`${ss} function anyv() { return 5; } s.add(anyv()); String(typeof [...s][0]);`)).toBe('string');
+  // The conversion is NOT the array's conversion at this position, and the
+  // difference is OQ7. A `[].<string>` still converts - `a.push(5)` produces
+  // the string "5", asserted below so the two stay distinguishable - because an
+  // array element is a STORE addressed by an index. A Set's element is its KEY,
+  // and a conversion that loses nothing as a value can still lose an identity
+  // by mapping two distinct sources onto one key: a stringified `5` would
+  // collide with a `"5"` added next to it, and the collection would hold one
+  // element where an untyped Set holds two.
+  expect(thrownKind(`${ss} function anyv() { return 5; } s.add(anyv());`)).toBe('TypeError');
+  expect(evaluated('let a: [].<string> = []; function anyv() { return 5; } a.push(anyv()); String(typeof a[0]);')).toBe('string');
 
   const mm = 'let m: Map.<string, uint8> = new Map(); ';
   expect(thrownKind(`${mm} function anyv() { return {}; } m.get(anyv());`)).toBe('TypeError');

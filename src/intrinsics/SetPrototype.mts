@@ -39,6 +39,7 @@ import {
   IteratorClose,
   Throw,
   RequireType,
+  RequireIdentityType,
 } from '#self';
 import type {
   FunctionObject,
@@ -75,6 +76,11 @@ function* collectionValueAtType(O: Value, value: Value, index: number): PlainEva
   const t = args?.[index];
   if (t === undefined || typeof t === 'number') {
     return value;
+  }
+  // Index 0 is the KEY of a Map and the ELEMENT of a Set: the identity-bearing
+  // position. Index 1 is a Map's value, an ordinary store.
+  if (index === 0) {
+    return Q(yield* RequireIdentityType(value, t));
   }
   return Q(yield* RequireType(value, t));
 }
@@ -237,7 +243,7 @@ function* SetProto_difference([other = Value.undefined]: Arguments, { thisValue 
     while (index < thisSize) {
       const e = resultSetData[index];
       if (e !== undefined) {
-        const inOther = ToBoolean(Q(yield* Call(otherRec.Has, otherRec.SetObject, [e])));
+        const inOther = Q(yield* probeOther(otherRec, e));
         if (inOther === Value.true) {
           resultSetData[index] = undefined;
         }
@@ -398,7 +404,7 @@ function* SetProto_intersection([other = Value.undefined]: Arguments, { thisValu
       const e: Value | undefined = O.SetData[index];
       index += 1;
       if (e !== undefined) {
-        const inOther = ToBoolean(Q(yield* Call(otherRec.Has, otherRec.SetObject, [e])));
+        const inOther = Q(yield* probeOther(otherRec, e));
         if (inOther === Value.true && !SetDataHas(resultSetData, e)) {
           resultSetData.push(e);
         }
@@ -475,7 +481,7 @@ function* SetProto_isDisjointFrom([other = Value.undefined]: Arguments, { thisVa
       const e = O.SetData[index];
       index += 1;
       if (e !== undefined) {
-        const inOther = ToBoolean(Q(yield* Call(otherRec.Has, otherRec.SetObject, [e])));
+        const inOther = Q(yield* probeOther(otherRec, e));
         if (inOther === Value.true) {
           return BooleanValue.false;
         }
@@ -534,7 +540,7 @@ function* SetProto_isSubsetOf([other = Value.undefined]: Arguments, { thisValue 
     const e = O.SetData[index];
     index += 1;
     if (e !== undefined) {
-      const inOther = ToBoolean(Q(yield* Call(otherRec.Has, otherRec.SetObject, [e])));
+      const inOther = Q(yield* probeOther(otherRec, e));
       if (inOther === Value.false) {
         return Value.false;
       }
@@ -702,6 +708,53 @@ interface SetRecord {
 }
 
 /** https://tc39.es/ecma262/#sec-getsetrecord */
+/**
+ * Probe the other operand of a set operation, answering *false* where its
+ * element type cannot hold the needle rather than throwing.
+ *
+ * A user-written `b.has(x)` on a `Set.<string>` where `x` is not a String is an
+ * ERROR, deliberately: a needle the element type cannot hold makes a test that
+ * can never succeed (F69), and OQ7 extended that from a conversion to a refusal
+ * at every identity-bearing position. But a set OPERATION's probe is not a
+ * user-written test - it is an internal membership question asked once per
+ * element while walking two collections, and the design fixes its answer: "an
+ * intersection of a `Set.<uint8>` and a `Set.<string>` is empty without
+ * iterating, and `isDisjointFrom` is `true`, since distinct value types share no
+ * values."
+ *
+ * Both rules are right for their own caller. Writing a test that can never
+ * succeed is the mistake F69 is about; asking a question whose answer is already
+ * KNOWN is not. So the probe reads an inadmissible needle as the *false* it was
+ * always going to be, and the constant-fold the design describes falls out of
+ * iterating rather than needing a rule of its own.
+ *
+ * THE ADMISSIBILITY TEST IS RUN HERE rather than by catching what `has` throws.
+ * Catching would swallow a throw from a revoked proxy or a side-effecting
+ * getter - failures rather than answers - and those must propagate. Only this
+ * operation's own type test is inspected, and the user's `has` is called
+ * unguarded once it passes.
+ *
+ * This also repairs a direction-dependence that predates OQ7 (D20): the probe
+ * ran through the converting path, so `Set.<uint8>` against `Set.<string>`
+ * worked in the order where the needle could be stringified and threw in the
+ * other. The design's constant-fold was only ever half true, and which half
+ * depended on which operand was smaller.
+ */
+function* probeOther(otherRec: SetRecord, e: Value): PlainEvaluator<BooleanValue> {
+  if (surroundingAgent.feature('runtime-types')) {
+    const args = (otherRec.SetObject as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
+    const t = args?.[0];
+    if (t !== undefined && typeof t !== 'number') {
+      const admissible = EnsureCompletion(yield* RequireIdentityType(e, t as TypeRecord));
+      if (admissible.Type === 'throw') {
+        return Value.false;
+      }
+    }
+  }
+  return ToBoolean(Q(yield* Call(otherRec.Has, otherRec.SetObject, [e])));
+}
+
+
 function* GetSetRecord(obj: Value): PlainEvaluator<SetRecord> {
   // 1. If obj is not an Object, throw a TypeError exception.
   if (!(obj instanceof ObjectValue)) {

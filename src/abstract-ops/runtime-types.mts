@@ -209,7 +209,7 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
         continue;
       }
       if (typeof key !== 'number') {
-        p.Key = Q(yield* RequireType(p.Key, key as TypeRecord));
+        p.Key = Q(yield* RequireIdentityType(p.Key, key as TypeRecord));
       }
       if (p.Value !== undefined && typeof second !== 'number') {
         p.Value = Q(yield* RequireType(p.Value, second as TypeRecord));
@@ -221,12 +221,59 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
       for (let i = 0; i < elements.length; i += 1) {
         const e = elements[i];
         if (e !== undefined) {
-          elements[i] = Q(yield* RequireType(e, key as TypeRecord));
+          elements[i] = Q(yield* RequireIdentityType(e, key as TypeRecord));
         }
       }
     }
   }
   (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = args;
+}
+
+/**
+ * proposal-runtime-types #sec-collection-key-positions (OQ7): a KEY or ELEMENT
+ * position CHECKS where a value position converts.
+ *
+ * `table-string-conversion-sources` admits a numeric or Boolean source at a
+ * `string` target, converting with ToString, and argues the case: ToString is
+ * total and lossless, so nothing is lost - `5` is `'5'` and reads back as `5`.
+ * That reasoning is about a STORE, a slot holding one value. A key is a store
+ * whose value is also an IDENTITY, and a conversion that loses nothing as a
+ * value can still lose an identity by mapping two distinct sources onto one key:
+ *
+ *     const m = new Map.<string, uint8>();
+ *     m.set(numberOne, 1); m.set("1", 2);   // one entry, not two
+ *     const u = new Map();
+ *     u.set(1, 1); u.set("1", 2);           // two entries
+ *
+ * So typing a collection MERGED two keys that were distinct - silently, and only
+ * when both spellings happened to occur, which is a data-dependent failure that
+ * survives every test exercising one of them.
+ *
+ * THE NUMERIC TARGET ALREADY HAS THIS PROPERTY, which makes this a consistency
+ * fix rather than a new rule: RequireType admits an `any` numeric source only
+ * where the target represents it exactly and raises a RangeError otherwise, so a
+ * `Map.<uint8, V>` could never merge two keys. The `string` target is the one
+ * boundary in the language admitting a conversion that does not preserve
+ * identity, and it is the outlier.
+ *
+ * NARROW ON PURPOSE. Only the string conversion is withheld, and only at an
+ * identity-bearing position. A value position keeps the conversion rule in full,
+ * so `m.set("a", someNumber)` on a `Map.<string, uint8>` converts as it did.
+ * Literal propagation is untouched, a literal taking the target's type rather
+ * than converting to it.
+ *
+ * Every identity-bearing position routes through here - the four prototypes'
+ * key and element arguments, and the constructor seed by way of
+ * StampTypedCollection - because a rule enforced at some of them is a rule a
+ * program can walk around. The seed was exactly that hole: `new Map.<string,
+ * uint8>([[1, 2]])` bypassed the prototype path entirely.
+ */
+export function* RequireIdentityType(value: Value, t: TypeRecord): ValueEvaluator {
+  const target = t as { Kind?: string, Name?: string };
+  if (target.Kind === 'primitive' && target.Name === 'string' && !(value instanceof JSStringValue)) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  return Q(yield* RequireType(value, t));
 }
 
 export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
