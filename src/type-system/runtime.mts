@@ -35,7 +35,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import {
-  iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration,
+  iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
 } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
@@ -2872,6 +2872,34 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         }
       }
       if (baseRecord) {
+        // proposal-runtime-types #sec-iteration-types: an iteration interface is
+        // a STRUCTURAL record rather than a nominal one - its members are the
+        // shape, and its type arguments appear inside them - so the
+        // nominal-instantiation branch below, which is what carries
+        // [[Arguments]], cannot see it and the resolution fell through to the
+        // BARE interface.
+        //
+        // The arguments were therefore dropped: `type Iterable.<uint8>`,
+        // `type Iterable.<string>` and `type Iterable` all interned to ONE type
+        // object, so a program could not tell an iterable of numbers from an
+        // iterable of strings through a type expression. The annotation path
+        // resolves the same name through the checker, which does pass its
+        // arguments, so the two disagreed about what one spelling meant.
+        //
+        // This is the interning half of D16. The RELATION half is separate and
+        // still open: nothing is assignable to these records through
+        // `Reflect.isAssignable` even now that they carry their arguments, while
+        // the checker accepts the same pairs at a parameter position. Both
+        // records look right - the source is `~array~` or a nominal carrying its
+        // [[LibraryName]], the target is the interface with its member - so the
+        // remaining fault is in how the two are compared rather than in how
+        // either is built.
+        if (isIterationInterfaceName(name) && argRecords.length > 0) {
+          const applied = iterationInterfaceRecord(name, argRecords);
+          if (applied) {
+            return applied;
+          }
+        }
         // proposal-runtime-types: a generic class/interface referenced with type
         // arguments is a nominal instantiation carrying those arguments (spec
         // ~nominal~ [[Arguments]]). Identity is the declaration plus the arguments

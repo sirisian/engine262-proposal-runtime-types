@@ -371,3 +371,20 @@ test('an array and a tuple satisfy Iterable over their elements (D22)', () => {
   // array arm, are unaffected.
   expect(ok('function f(i: Iterable.<uint8>) {} let s: Set.<uint8> = new Set(); f(s);')).toBe(true);
 });
+
+test('an iteration interface written as a type EXPRESSION carries its arguments (D16, part)', () => {
+  // `type Iterable.<uint8>`, `type Iterable.<string>` and `type Iterable` all
+  // interned to one type object: an iteration interface resolves to a
+  // structural record rather than a nominal one, so the branch that carries
+  // [[Arguments]] could not see it and the resolution fell through to the bare
+  // interface. A program could not tell an iterable of numbers from an iterable
+  // of strings through a type expression.
+  expect(evaluated('String((type Iterable.<uint8>) === (type Iterable.<string>));')).toBe('false');
+  expect(evaluated('String((type Iterable.<uint8>) === (type Iterable));')).toBe('false');
+  expect(evaluated('String((type Iterable.<uint8>) === (type Iterable.<uint8>));')).toBe('true');
+  expect(evaluated('String((type Iterator.<uint8>) === (type Iterator.<string>));')).toBe('false');
+  // The ANNOTATION path always passed its arguments, which is why the two
+  // disagreed about what one spelling meant.
+  expect(ok('function f(i: Iterable.<uint8>) {} let s: Set.<uint8> = new Set(); f(s);')).toBe(true);
+  expectStaticTypeError('function f(i: Iterable.<string>) {} let s: Set.<uint8> = new Set(); f(s);');
+});
