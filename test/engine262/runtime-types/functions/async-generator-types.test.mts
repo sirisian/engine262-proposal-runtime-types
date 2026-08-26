@@ -86,3 +86,23 @@ test('phase 3: an async generator REJECTS on a bad yield', () => {
   expect(settle('yield "nope";')).toBe('rejected');
   expect(settle('yield (1 := uint8);')).toBe('resolved');
 });
+
+test('F188: a generator return is compared against R, not the Generator type', () => {
+  // The raw annotation was pushed as the return type, so a `return` was compared
+  // against the whole `Generator.<Y, R, N>`. A correct `return "ok"` under an R
+  // of `string` was REFUSED - a String is not a Generator - which made the
+  // explicit spelling, the one that exists to type a generator's return, the
+  // one that could not be used.
+  expect(evaluated('function* g(): Generator.<uint8, string, void> { yield (1 := uint8); return "ok"; }'
+    + ' String(g().next().value);')).toBe('1');
+  expectThrown('function* g(): Generator.<uint8, string, void> { return (0 := uint8); }');
+});
+
+test('OQ1-C: a bare annotation types the yields and returns nothing', () => {
+  // Decided direction C: a bare `: uint8` maps to `Generator.<uint8, void, void>`,
+  // so its R is `void` and a value-returning `return` is refused. It falls out of
+  // the mapping F188 fixed rather than needing a rule of its own - the `void`
+  // filler that made C coherent is the same filler that does the refusing.
+  expectThrown('function* g(): uint8 { return (0 := uint8); }');
+  expect(evaluated('function* g(): uint8 { yield (1 := uint8); return; } String(g().next().value);')).toBe('1');
+});

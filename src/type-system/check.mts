@@ -7654,7 +7654,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean) => {
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
-    returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
+    // PLAN-async-generator-types.md F188 / OQ1-C. A `return` is compared against
+    // what the function RETURNS, and for a generator that is the _R_ of
+    // `Generator.<Y, R, N>` - not the annotation, which types the values
+    // YIELDED.
+    //
+    // Pushing the raw annotation compared a return against the whole generator
+    // type, so `function* g(): Generator.<uint8, string, void> { return 'ok'; }`
+    // was REFUSED - a String is not a Generator - and the explicit spelling that
+    // exists precisely to type a generator's return was the one that could not
+    // be used.
+    //
+    // Reading _R_ fixes that and settles OQ1-C in the same step: a BARE
+    // annotation maps to `Generator.<Y, void, void>`, so its _R_ is `void` and a
+    // value-returning `return` is refused - which is the rule OQ1-C chose, and
+    // it falls out of the mapping rather than needing one of its own.
+    const declaredForReturn = checkReturns && returnAnnotation
+      ? resolveType(returnAnnotation.Type)
+      : null;
+    const generatorReturn = generatorType
+      ? ((generatorType as { Arguments?: readonly TypeRecord[] }).Arguments?.[1] ?? null)
+      : null;
+    returnTypes.push(generatorType ? generatorReturn as Known | null : declaredForReturn);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
     let index = 0;
