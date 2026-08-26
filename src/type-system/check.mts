@@ -5470,6 +5470,147 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * boundary runs and the program is correct, which is the right direction to
    * be wrong in when the alternative is skipping a check that was needed.
    */
+  /**
+   * Whether _stmt_ can complete NORMALLY - that is, without returning or
+   * throwing.
+   *
+   * PLAN-implicit-return.md phase 2. Distinct from `endsWithReturn` below, and
+   * deliberately not built on it: that helper is conservative in the direction
+   * ELISION wants, where a false negative merely keeps a check that was not
+   * needed. Here a false negative REJECTS A CORRECT PROGRAM, so the
+   * conservatism has to run the other way - when this cannot tell, it answers
+   * *true* ("can complete"), which withholds the error.
+   *
+   * Syntactic, per OQ1-A. It recognises the shapes a reader would call
+   * obviously total; anything else is assumed to complete.
+   */
+  const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean => {
+    if (!stmt) {
+      return true;
+    }
+    const n = stmt as ParseNode & Record<string, unknown>;
+    if (n.ExpressionBody !== undefined || n.AssignmentExpression !== undefined) {
+      return false;
+    }
+    switch (n.type) {
+      case 'ReturnStatement':
+      case 'ThrowStatement':
+        return false;
+      case 'FunctionBody':
+      case 'Block': {
+        // A function BODY carries `FunctionStatementList`, not `StatementList`,
+        // which is why `endsWithReturn` reads both. Missing it here made every
+        // body fall to `default` and answer "can complete", so the phase-1
+        // count named every annotated function rather than the incomplete ones.
+        const list = (n.FunctionStatementList
+          ?? n.StatementList
+          ?? (n.Block as { StatementList?: readonly ParseNode[] })?.StatementList) as readonly ParseNode[] | undefined;
+        if (!list || list.length === 0) {
+          return true;
+        }
+        // A block completes normally when its LAST reachable statement does.
+        return canCompleteNormally(list[list.length - 1]);
+      }
+      case 'IfStatement': {
+        const alt = n.Statement_b as ParseNode | undefined;
+        if (!alt) {
+          // No `else`: the test may be false, so control reaches the tail.
+          return true;
+        }
+        return canCompleteNormally(n.Statement_a as ParseNode)
+          || canCompleteNormally(alt);
+      }
+      case 'TryStatement': {
+        const block = n.Block as ParseNode | undefined;
+        const handler = (n.Catch as { Block?: ParseNode })?.Block;
+        const fin = (n.Finally as { Block?: ParseNode })?.Block ?? n.Finally as ParseNode | undefined;
+        // A `finally` that cannot complete decides the whole statement.
+        if (fin && !canCompleteNormally(fin)) {
+          return false;
+        }
+        if (handler) {
+          return canCompleteNormally(block) || canCompleteNormally(handler);
+        }
+        return canCompleteNormally(block);
+      }
+      case 'WhileStatement': {
+        // `while (true)` with no reachable `break` cannot complete. A `break`
+        // anywhere inside is enough to assume it can, which is the conservative
+        // reading.
+        const test = n.Expression as { type?: string, value?: unknown } | undefined;
+        const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
+        if (!alwaysTrue) {
+          return true;
+        }
+        return containsBreak(n.Statement as ParseNode);
+      }
+      case 'SwitchStatement': {
+        // A `switch` completes normally unless it has a `default` AND no clause
+        // completes normally AND no clause can `break` out. Without a `default`
+        // an unmatched value falls through, so the statement completes.
+        const cb = n.CaseBlock as {
+          CaseClauses_a?: readonly ParseNode[],
+          DefaultClause?: ParseNode,
+          CaseClauses_b?: readonly ParseNode[],
+        } | undefined;
+        if (!cb?.DefaultClause) {
+          return true;
+        }
+        const clauses = [
+          ...(cb.CaseClauses_a ?? []),
+          cb.DefaultClause,
+          ...(cb.CaseClauses_b ?? []),
+        ];
+        for (const c of clauses) {
+          const list = (c as { StatementList?: readonly ParseNode[] }).StatementList;
+          // An EMPTY clause falls through to the next one rather than
+          // completing, so it does not decide the statement.
+          if (!list || list.length === 0) {
+            continue;
+          }
+          if (canCompleteNormally(list[list.length - 1]!)) {
+            return true;
+          }
+          if (containsBreak(c as ParseNode)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      default:
+        return true;
+    }
+  };
+
+  /** Whether a statement contains a `break` that could leave its enclosing loop. */
+  const containsBreak = (node: ParseNode | null | undefined): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const n = node as ParseNode & Record<string, unknown>;
+    if (n.type === 'BreakStatement') {
+      return true;
+    }
+    // Not descending into a nested function, whose `break` is not this loop's.
+    if (typeof n.type === 'string' && /Function|Arrow|Method|Class/.test(n.type)) {
+      return false;
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const v = (n as Record<string, unknown>)[key];
+      if (Array.isArray(v)) {
+        if (v.some((x) => containsBreak(x as ParseNode))) {
+          return true;
+        }
+      } else if (v && typeof v === 'object' && containsBreak(v as ParseNode)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | undefined): boolean => {
     if (!body) {
       return false;
@@ -7544,6 +7685,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (checkReturns && returnAnnotation && declaredReturn && proven
         && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
       elidableAnnotations.add(returnAnnotation);
+    }
+    // PLAN-implicit-return.md phase 1: MEASURE ONLY. Counts what the Early
+    // Error would reject, without rejecting anything, so the blast radius is a
+    // number before it is a decision.
+    if (checkReturns && returnAnnotation && declaredReturn
+      && canCompleteNormally(body as ParseNode)
+      // `void` is the annotation for a function that returns nothing, and
+      // `IsAssignable(undefined, void)` is false - the two are different types.
+      // It admits the implicit return by meaning, not by assignability.
+      && declaredReturn.Kind !== 'void'
+      && !IsAssignable(undefinedType, declaredReturn)) {
+      const completion = Throw.TypeError(
+        'a function declared to return $1 can complete without a return, and that type does not admit undefined',
+        Value(displayType(declaredReturn)),
+      );
+      errors.push(completion.Value as ObjectValue);
     }
     returnTypes.pop();
     generatorTypes.pop();
