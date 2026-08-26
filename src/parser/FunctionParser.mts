@@ -235,6 +235,36 @@ export abstract class FunctionParser extends IdentifierParser {
         this.scope.declare(node, 'parameter');
         return this.finishNode(SingleNameBinding, 'SingleNameBinding');
       }
+      case 'NamedArgument': {
+        // PLAN-async-generator-types.md F187. `async (a: uint8) => a` is first
+        // parsed as a CALL - `async(...)` - and inside a call `a: uint8` is a
+        // NAMED ARGUMENT. Refining the cover to an AsyncArrowHead has to turn
+        // that back into an annotated parameter, and did not: the node reached
+        // `getDeclarations`, which has no case for it, and the engine threw
+        // `OutOfRange.nonExhaustive` - a RangeError from an internal
+        // exhaustiveness check rather than any diagnostic.
+        //
+        // A NamedArgument carries its annotation as an EXPRESSION (`uint8`
+        // parsed as an IdentifierReference), and a parameter needs a
+        // TypeAnnotation, so the refinement is a re-read rather than a
+        // relabelling and there is no expression-to-type helper to do it.
+        //
+        // Reported as a Syntax Error until that refinement exists. This rejects
+        // exactly the programs that already failed - the crash was a rejection
+        // too - and says why, which the RangeError did not. The form is legal
+        // per sec-function-annotations, so this is an interim, not a rule.
+        this.addEarlyError(Throw.SyntaxError(
+          'a type annotation on an async arrow parameter is not yet supported; write an async function, or annotate the arrow\'s return type only',
+        ));
+        const ident = this.startNode<ParseNode.BindingIdentifier>(node);
+        (ident as { name?: string }).name = (node as unknown as { Name: string }).Name;
+        const BindingIdentifier = this.finishNode(ident, 'BindingIdentifier');
+        const SingleNameBinding = this.startNode<ParseNode.SingleNameBinding>(node);
+        SingleNameBinding.BindingIdentifier = BindingIdentifier;
+        SingleNameBinding.Initializer = null;
+        this.scope.declare(BindingIdentifier as unknown as ParseNode, 'parameter');
+        return this.finishNode(SingleNameBinding, 'SingleNameBinding');
+      }
       case 'BindingRestElement':
         this.scope.declare(node, 'parameter');
         return node;
