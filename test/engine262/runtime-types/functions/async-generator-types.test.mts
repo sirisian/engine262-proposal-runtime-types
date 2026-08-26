@@ -106,3 +106,33 @@ test('OQ1-C: a bare annotation types the yields and returns nothing', () => {
   expectThrown('function* g(): uint8 { return (0 := uint8); }');
   expect(evaluated('function* g(): uint8 { yield (1 := uint8); return; } String(g().next().value);')).toBe('1');
 });
+
+test('phase 4: an async return is checked against the promise resolution type', () => {
+  // The body field for an AsyncFunctionDeclaration is `AsyncBody`, not
+  // `AsyncFunctionBody` - the name the body EVALUATOR uses. Naming the
+  // evaluator's field found nothing, so `body` was undefined, the walk never
+  // descended, and no `return` inside an async function was ever checked.
+  //
+  // Instrumenting the ReturnStatement arm said so directly: reached for a sync
+  // body, never for an async one. Two guesses about the TYPE RECORD's shape
+  // preceded it, and both were wrong - the record was correct throughout.
+  expectThrown('async function f(): Promise.<uint8, Error> { return "nope"; }');
+  expect(evaluated('async function f(): Promise.<uint8, Error> { return (1 := uint8); } String(1);')).toBe('1');
+});
+
+test('OQ2-A: an async annotation must be a promise', () => {
+  // Decided A. NOT read as shorthand for `Promise.<T, ?>` the way a bare
+  // generator annotation is read as `Generator.<Y, void, void>`: that shorthand
+  // fills with `void`, which says something true about a generator that yields
+  // and does not return, and there is no equally honest filler for a REJECT
+  // type - sec-inferred-return-types refuses to infer one.
+  expectThrown('async function f(): uint8 { return (1 := uint8); }');
+  expect(evaluated('async function f(): Promise.<uint8, Error> { return (1 := uint8); } String(1);')).toBe('1');
+});
+
+test('OQ2-A: the asymmetry with the generator shorthand is deliberate', () => {
+  // The thing a reader will call an inconsistency, asserted so it is recorded
+  // as intended rather than discovered as a bug.
+  expect(evaluated('function* g(): uint8 { yield (1 := uint8); } String(g().next().value);')).toBe('1');
+  expectThrown('async function f(): uint8 { return (1 := uint8); }');
+});

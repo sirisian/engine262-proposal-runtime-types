@@ -7685,6 +7685,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && (declaredForReturn as { LibraryName?: string } | null)?.LibraryName === 'Promise'
       ? ((declaredForReturn as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] ?? null)
       : null;
+    // OQ2-A. An `async` function's annotation types the PROMISE, so a
+    // non-promise annotation is a mistake. It is NOT read as shorthand for
+    // `Promise.<T, ?>` the way a bare generator annotation is read as
+    // `Generator.<Y, void, void>`: that shorthand fills its remaining arguments
+    // with `void`, which says something true about a generator that yields and
+    // does not return, and there is no equally honest filler for a REJECT type -
+    // sec-inferred-return-types refuses to infer one because "the convention
+    // that `undefined` there means a promise that never rejects is a claim no
+    // body supports".
+    if (resumable && !generatorType && declaredForReturn
+      && (declaredForReturn as { LibraryName?: string }).LibraryName !== 'Promise') {
+      const completion = Throw.SyntaxError(
+        'an async function\'s return annotation types the promise it returns; write $1',
+        Value(`Promise.<${displayType(declaredForReturn as TypeRecord)}, E>`),
+      );
+      errors.push(completion.Value as ObjectValue);
+    }
     returnTypes.push(generatorType
       ? generatorReturn as Known | null
       : (asyncResolution as Known | null) ?? declaredForReturn);
@@ -9325,8 +9342,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const isAsyncGen = n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const ann = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          // PLAN-async-generator-types.md phase 4. The body field for an
+          // AsyncFunctionDeclaration is `AsyncBody`, not `AsyncFunctionBody` - the name
+          // the body EVALUATOR uses. Naming the evaluator's field here found nothing, so
+          // `body` was undefined, the walk never descended, and no `return` inside an
+          // async function was ever checked. Instrumenting the ReturnStatement arm said
+          // so directly: it is reached for a sync body and never for an async one.
           const declared = gen ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen) : null;
-          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, undefined, declared, true);
+          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, undefined, declared, true);
         }
         return;
       default: {
