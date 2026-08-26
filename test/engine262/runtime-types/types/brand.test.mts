@@ -48,25 +48,29 @@ test('B2: the builder and the syntax agree', () => {
     + " metadata: { brand: 'UserId' } }); String(built === U);")).toBe('true');
 });
 
-test('F151: a nested brand REPLACES the outer tag rather than nesting', () => {
-  // RECORDED, NOT FIXED. The plan's test 6 expected
-  // `brand(brand(uint32,'A'),'B')` to be a distinct type from either, shedding
-  // one layer at a time. It is not: parameterizing an already-branded type
-  // MERGES the metadata, and a second `brand` key overwrites the first.
+test('F151 FIXED: a nested brand nests, keeping the outer tag', () => {
+  // Was: parameterizing an already-branded type MERGED the metadata, so a
+  // second `brand` key overwrote the first and `U.<{ brand: 'Inner' }>` WAS `U`.
   //
-  //   type N = U.<{ brand: 'Inner' }>;
-  //   N === U                                  // true
-  //   getReflection(N).metadata.brand          // 'UserId', not 'Inner'
-  //
-  // Whether that is right is a design question: merging is the documented
-  // behaviour for metadata generally - a pattern and a range compose on one
-  // base - and `brand` is the one key where composing means overwriting. A
-  // brand over a brand may be meaningless (a value is one thing), or it may be
-  // the natural way to say "a UserId that is also an AdminId". The clause does
-  // not say.
-  expect(evaluated(`${U}type N = U.<{ brand: 'Inner' }>; String(N === U);`)).toBe('true');
-  expect(evaluated(`${U}type N = U.<{ brand: 'Inner' }>;`
-    + " String(Reflect.getReflection(N).metadata.brand);")).toBe('UserId');
+  // Fixed as a side effect of F174 (PLAN-brand-layering-F.md): the base of a
+  // parameterization was resolved as a BUILTIN only, so a user alias found
+  // nothing and the parameterization was never built. Resolving the alias
+  // builds it - and an already-branded alias then nests rather than merging.
+  const U = "type U = uint32.<{ brand: 'UserId' }>; type N = U.<{ brand: 'Inner' }>;";
+  expect(evaluated(`${U} String(N !== U);`)).toBe('true');
+  expect(evaluated(`${U} String(Reflect.getReflection(N).kind);`)).toBe('parameterized');
+  expect(evaluated(`${U} String(Reflect.getReflection(N).metadata.brand);`)).toBe('Inner');
+  expect(evaluated(`${U} String(Reflect.getReflection(N).base === U);`)).toBe('true');
+});
+
+test('a nested brand refuses a bare value, at the boundary and by assignability', () => {
+  // B4 holds for a nested brand as it does for a single one. An earlier probe
+  // reported `isAssignable(uint32, N)` as true and that was a stale build - the
+  // finding it would have been (F175) does not exist.
+  const U = "type U = uint32.<{ brand: 'UserId' }>; type N = U.<{ brand: 'Inner' }>;";
+  expect(evaluated(`${U} String(Reflect.isAssignable(uint32, N));`)).toBe('false');
+  expect(evaluated(`${U} String(Reflect.isAssignable(N, uint32));`)).toBe('true');
+  expectThrown(`${U} function h(u: uint32) { let v: N = u; return 1; } h((7 := uint32));`);
 });
 
 // ---------------------------------------------------------------------------

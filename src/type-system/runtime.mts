@@ -2651,7 +2651,29 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         ? argRecords[0]!
         : null;
       if (metadataRecord) {
-        const base = builtinTypeRecord(name);
+        // PLAN-brand-layering-F.md F174. The base was looked up as a BUILTIN
+        // only, so `Base.<{ brand: 'B' }>` where `Base` is a user alias found
+        // nothing, fell past this branch, and the parameterization was never
+        // built - `T` interned as `Base` itself, kind `object` rather than
+        // `parameterized`.
+        //
+        // Nothing downstream was wrong: `isAssignable(Base, T)` answered true
+        // because they were ONE TYPE, a bare object "acquired the brand"
+        // because there was no brand, and two object brands crossed freely
+        // because both were the base. A brand that silently becomes its own
+        // base type-checks everywhere and guarantees nothing, which is the
+        // worst shape this can fail in - every primitive kept its
+        // parameterization, so it looked like a working feature.
+        let base = builtinTypeRecord(name);
+        if (!base) {
+          const aliasRef = EnsureCompletion(yield* ResolveTypeName(Value(name)));
+          if (aliasRef.Type === 'normal') {
+            const aliasValue = EnsureCompletion(yield* GetValue(aliasRef.Value as never));
+            if (aliasValue.Type === 'normal' && isTypeObject(aliasValue.Value)) {
+              base = (aliasValue.Value as unknown as { TypeRecord: TypeRecord }).TypeRecord;
+            }
+          }
+        }
         if (base) {
           const record = {
             Kind: 'parameterized',
