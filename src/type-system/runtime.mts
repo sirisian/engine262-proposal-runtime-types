@@ -2698,6 +2698,39 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // registered against the BASE receives the whole metadata object, so it
           // speaks for every key of a parameterization of that base, which is how
           // a brand is written.
+          // PLAN-brand-layering-F.md OQ4-A. A `brand` needs somewhere to live
+          // on a value, and an OBJECT type's runtime type is DERIVED rather
+          // than stored: `Reflect.typeOf` reads the object's shape and answers
+          // the type that shape inhabits, so two structurally identical object
+          // types are one answer. A brand is deliberately NOT structural, so
+          // there is nothing in the shape for it to be read from.
+          //
+          // Left unchecked it was worse than unsupported. Before F174 the
+          // parameterization was never built and the brand silently became its
+          // own base - `Base.<{ brand: 'B' }>` WAS `Base`, so a bare object
+          // satisfied it and two object brands crossed freely. With the type now
+          // built, every boundary refuses instead, which is honest but arrives
+          // at the use rather than the declaration.
+          //
+          // Refused here, where the author can see why. The mutation question is
+          // what stands between this and supporting it: an object can be changed
+          // after a brand is granted, and a brand has no validation to re-run at
+          // the next boundary - a String cannot do that, which is why a `string`
+          // brand is sound and this is not yet.
+          {
+            const brandKey = (metadataRecord as { Properties?: readonly { key?: unknown }[] })
+              .Properties?.some((prop) => {
+                const k = prop.key;
+                const kn = typeof k === 'string' ? k : (k as { stringValue?: () => string })?.stringValue?.();
+                return kn === 'brand';
+              });
+            if (brandKey && (base.Kind === 'object' || base.Kind === 'array')) {
+              return Throw.TypeError(
+                'a brand cannot be written on $1: its runtime type is derived from its shape, so there is no place to carry one',
+                Value(displayType(base)),
+              );
+            }
+          }
           if (!HasMetaHooks(GetTypeObject(base) as unknown as object)) {
             for (const prop of (metadataRecord as { Properties?: readonly { key?: unknown }[] }).Properties ?? []) {
               const key = prop.key;

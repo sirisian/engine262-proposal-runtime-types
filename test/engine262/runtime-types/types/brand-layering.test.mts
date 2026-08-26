@@ -214,3 +214,32 @@ test('F172: the numeric bases are unchanged', () => {
     + ' String(f(U((7 := uint32))));')).toBe('1');
   expect(evaluated("type F = float64.<{ brand: 'B' }>; String(Reflect.typeOf(F((1.5 := float64))) === F);")).toBe('true');
 });
+
+// ---------------------------------------------------------------------------
+// OQ4-A: a brand needs somewhere to live
+// ---------------------------------------------------------------------------
+
+test('OQ4-A: a brand on an object or array base is refused at its declaration', () => {
+  // An object type's runtime type is DERIVED - `Reflect.typeOf` reads the
+  // shape and answers the type that shape inhabits, so two structurally
+  // identical object types are one answer. A brand is deliberately not
+  // structural, so there is nothing in the shape to read it from.
+  //
+  // Refused where the author writes it. Before F174 the parameterization was
+  // never built and the brand silently became its own base - which type-checked
+  // everywhere and guaranteed nothing.
+  expectThrown("type Base = { a: uint8 }; type T = Base.<{ brand: 'B' }>;");
+  expectThrown("type Base = [].<uint8>; type T = Base.<{ brand: 'B' }>;");
+});
+
+test('OQ4-A: other metadata on an object base is unaffected', () => {
+  // The refusal is about `brand` specifically, not about parameterizing an
+  // object: a judgment that VALIDATES re-runs at each boundary and so needs
+  // nothing carried on the value.
+  expect(evaluated("type Base = { a: uint8 }; type P = Base.<{ pattern: /^a/ }>; String(1);")).toBe('1');
+});
+
+test('OQ4-A: brands on carrying bases are unaffected', () => {
+  expect(evaluated(`${E}function f(x: E) { return 1; } String(f(E('a')));`)).toBe('1');
+  expect(evaluated("type U = uint32.<{ brand: 'B' }>; String(Reflect.typeOf(U((7 := uint32))) === U);")).toBe('true');
+});
