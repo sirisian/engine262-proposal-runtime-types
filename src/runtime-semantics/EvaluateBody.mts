@@ -198,11 +198,12 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
 
 /** https://tc39.es/ecma262/#sec-async-arrow-function-definitions-EvaluateBody */
 // AsyncConciseBody : ExpressionBody
-function* EvaluateBody_AsyncConciseBody({ ExpressionBody }: ParseNode.AsyncConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
+function* EvaluateBody_AsyncConciseBody({ ExpressionBody }: ParseNode.AsyncConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments): StatementEvaluator {
   // 1. Let promiseCapability be ! NewPromiseCapability(%Promise%).
   const promiseCapability = X(NewPromiseCapability(surroundingAgent.intrinsic('%Promise%')));
   // 2. Let declResult be FunctionDeclarationInstantiation(functionObject, argumentsList).
   const declResult = EnsureCompletion(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
   // 3. If declResult is not an abrupt completion, then
   if (declResult.Type === 'normal') {
     // a. Perform ! AsyncFunctionStart(promiseCapability, ExpressionBody).
@@ -220,6 +221,17 @@ function* EvaluateBody_AsyncConciseBody({ ExpressionBody }: ParseNode.AsyncConci
 export function* EvaluateBody_GeneratorBody(GeneratorBody: ParseNode.GeneratorBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments): StatementEvaluator {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  // PLAN-async-generator-types.md phase 2. A parameter's declared type is
+  // enforced HERE, in the body evaluator, and only `EvaluateBody_FunctionBody`
+  // and `EvaluateBody_ConciseBody` called it - so a generator, an async
+  // generator and an async function accepted any argument for a typed
+  // parameter.
+  //
+  // A DESTRUCTURED parameter was already enforced on a generator, by
+  // `IteratorBindingInitialization`'s own path, which is why the gap looked
+  // narrower than it was: `function* g({a}: {a: uint8})` refused where
+  // `function* g(a: uint8)` did not.
+  Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
   // 2. Let G be ? OrdinaryCreateFromConstructor(functionObject, "%GeneratorPrototype%", « [[GeneratorState]], [[GeneratorContext]], [[GeneratorBrand]] »).
   const G = Q(yield* OrdinaryCreateFromConstructor(functionObject, '%GeneratorFunction.prototype.prototype%', ['GeneratorState', 'GeneratorContext', 'GeneratorBrand'])) as Mutable<GeneratorObject>;
   // 3. Set G.[[GeneratorBrand]] to empty.
@@ -237,6 +249,7 @@ export function* EvaluateBody_GeneratorBody(GeneratorBody: ParseNode.GeneratorBo
 export function* EvaluateBody_AsyncGeneratorBody(FunctionBody: ParseNode.AsyncGeneratorBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments): StatementEvaluator {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
+  Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
   // 2. Let generator be ? OrdinaryCreateFromConstructor(functionObject, "%AsyncGeneratorFunction.prototype.prototype%", « [[AsyncGeneratorState]], [[AsyncGeneratorContext]], [[AsyncGeneratorQueue]], [[GeneratorBrand]] »).
   const generator = Q(yield* OrdinaryCreateFromConstructor(functionObject, '%AsyncGeneratorFunction.prototype.prototype%', [
     'AsyncGeneratorState',
@@ -255,11 +268,12 @@ export function* EvaluateBody_AsyncGeneratorBody(FunctionBody: ParseNode.AsyncGe
 
 /** https://tc39.es/ecma262/#sec-async-function-definitions-EvaluateBody */
 // AsyncBody : FunctionBody
-export function* EvaluateBody_AsyncFunctionBody(FunctionBody: ParseNode.AsyncBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
+export function* EvaluateBody_AsyncFunctionBody(FunctionBody: ParseNode.AsyncBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments): StatementEvaluator {
   // 1. Let promiseCapability be ! NewPromiseCapability(%Promise%).
   const promiseCapability = X(NewPromiseCapability(surroundingAgent.intrinsic('%Promise%')));
   // 2. Let declResult be FunctionDeclarationInstantiation(functionObject, argumentsList).
   const declResult = yield* FunctionDeclarationInstantiation(functionObject, argumentsList);
+  Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
   // 3. If declResult is not an abrupt completion, then
   if (!(declResult instanceof AbruptCompletion)) {
     // a. Perform ! AsyncFunctionStart(promiseCapability, FunctionBody).

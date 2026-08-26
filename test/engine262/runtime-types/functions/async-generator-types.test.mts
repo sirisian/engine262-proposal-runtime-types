@@ -29,3 +29,23 @@ test('F187: the neighbouring forms are unaffected', () => {
   expect(evaluated('const g = (a: uint8) => a; String(g((1 := uint8)));')).toBe('1');
   expect(evaluated('async function f(a: uint8) { return a; } String(1);')).toBe('1');
 });
+
+test('phase 2: a plain parameter is enforced on every async and generator form', () => {
+  // The check lives in the BODY EVALUATOR, and only `EvaluateBody_FunctionBody`
+  // and `EvaluateBody_ConciseBody` called it - so these four forms accepted any
+  // argument for a typed parameter.
+  //
+  // A DESTRUCTURED parameter was already enforced on a generator, through
+  // `IteratorBindingInitialization`'s own path, which made the gap look
+  // narrower than it was.
+  expectThrown('function* g(a: uint8) { yield a; } function h(x) { return g(x).next(); } h("nope");');
+  expectThrown('async function f(a: uint8) { return a; } function h(x) { return f(x); } h("nope");');
+  expectThrown('async function* ag(a: uint8) { yield a; } function h(x) { return ag(x); } h("nope");');
+  expectThrown('const g = async (a: uint8) => a; function h(x) { return g(x); } h("nope");');
+});
+
+test('phase 2: a correct argument still passes on every form', () => {
+  expect(evaluated('function* g(a: uint8) { yield a; } String(g((1 := uint8)).next().value);')).toBe('1');
+  expect(evaluated('async function f(a: uint8) { return a; } f((1 := uint8)); String(1);')).toBe('1');
+  expect(evaluated('const g = async (a: uint8) => a; g((1 := uint8)); String(1);')).toBe('1');
+});
