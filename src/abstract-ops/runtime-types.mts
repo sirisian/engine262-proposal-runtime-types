@@ -50,6 +50,18 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   if (t.Kind === 'literal' && t.Value instanceof JSStringValue) {
     return TypedString(value.stringValue(), t);
   }
+  // PLAN-brand-layering-F.md F172. A PARAMETERIZATION of `string` is a
+  // refinement of it too, and the same carrier serves: a brand on a String had
+  // nowhere to be recorded, so a branded string WAS a bare string, `IsOfType`
+  // correctly answered false at every boundary that declared the brand, and a
+  // value from the brand's own constructor could not be passed anywhere.
+  //
+  // The carrier already existed and this function already used it - for a
+  // literal type only. Carrying a parameterization is the same operation on the
+  // same value, and it makes the three non-carrying primitives carry.
+  if (t.Kind === 'parameterized' && t.Base.Kind === 'primitive' && t.Base.Name === 'string') {
+    return TypedString(value.stringValue(), t);
+  }
   return value;
 }
 
@@ -739,7 +751,20 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
     }
-    return isTypedNumber(atBase) ? new TypedNumberValue(atBase.value, t) : atBase;
+    // PLAN-brand-layering-F.md F172. THE CROSSING STAMPS THE VALUE, and it stamped
+  // only a typed number - every other value came back unchanged, so a branded
+  // String was a bare String and `IsOfType(bare, E)` correctly answered false at
+  // every boundary that declared the brand. A value from the brand's own
+  // constructor could not be passed anywhere: the crossing produced something
+  // the receiving boundary could not recognise.
+  //
+  // A String has a carrier - `TypedStringValue`, which `carryStringType` already
+  // uses for a literal string type - so the fix is to use it here for a
+  // parameterization of `string` as well.
+  if (isTypedNumber(atBase)) {
+    return new TypedNumberValue(atBase.value, t);
+  }
+  return carryStringType(atBase, t);
   }
   if (t.Kind === 'union') {
     return yield* ConvertValueToUnion(value, t, ConvertValue);

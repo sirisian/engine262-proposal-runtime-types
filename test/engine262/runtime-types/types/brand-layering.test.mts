@@ -184,3 +184,33 @@ test('F172: the numeric case is unchanged', () => {
   expect(evaluated("type U = uint32.<{ brand: 'U' }>; function f(u: U) { return u; }"
     + ' String(f(U((7 := uint32))));')).toBe('7');
 });
+
+// ---------------------------------------------------------------------------
+// F172: a String brand now carries, so it behaves as a numeric one does
+// ---------------------------------------------------------------------------
+
+test('F172: a string brand carries its type and can be passed', () => {
+  // The crossing STAMPS the value, and it stamped only a typed number - every
+  // other value came back unchanged. So a branded String was a bare String,
+  // `IsOfType(bare, E)` correctly answered false, and a value from the brand's
+  // own constructor could not be passed anywhere.
+  //
+  // A String has a carrier - `TypedStringValue`, which `carryStringType`
+  // already used for a literal string type - so the crossing uses it for a
+  // parameterization of `string` too.
+  expect(evaluated(`${E}String(Reflect.typeOf(E('a')) === E);`)).toBe('true');
+  expect(evaluated(`${E}function f(x: E) { return 1; } String(f(E('a')));`)).toBe('1');
+});
+
+test('F172: a string brand still refuses a bare value and does not cross', () => {
+  // The guards. A carrier that admitted anything would pass the test above and
+  // destroy the feature.
+  expectThrown(`${E}function f(x: E) { return 1; } function h(u) { return f(u); } h('a');`);
+  expectThrown(`${E}${V}function f(x: V) { return 1; } function h(e: E) { return f(e); } h(E('a'));`);
+});
+
+test('F172: the numeric bases are unchanged', () => {
+  expect(evaluated("type U = uint32.<{ brand: 'B' }>; function f(x: U) { return 1; }"
+    + ' String(f(U((7 := uint32))));')).toBe('1');
+  expect(evaluated("type F = float64.<{ brand: 'B' }>; String(Reflect.typeOf(F((1.5 := float64))) === F);")).toBe('true');
+});
