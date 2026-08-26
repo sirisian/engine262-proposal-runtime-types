@@ -772,6 +772,14 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   if (isTypedNumber(atBase)) {
     return new TypedNumberValue(atBase.value, t);
   }
+  // T3. An object or array carries the brand as a mark, read back by
+  // `CarriedTypeRecordOf` and `RuntimeTypeOf`.
+  if (atBase instanceof ObjectValue && t.Base.Kind !== 'primitive') {
+    Object.defineProperty(atBase, 'BrandTypeRecord', {
+      value: t, enumerable: false, configurable: true,
+    });
+    return atBase;
+  }
   return carryStringType(atBase, t);
   }
   if (t.Kind === 'union') {

@@ -219,17 +219,40 @@ test('F172: the numeric bases are unchanged', () => {
 // OQ4-A: a brand needs somewhere to live
 // ---------------------------------------------------------------------------
 
-test('OQ4-A: a brand on an object or array base is refused at its declaration', () => {
-  // An object type's runtime type is DERIVED - `Reflect.typeOf` reads the
-  // shape and answers the type that shape inhabits, so two structurally
-  // identical object types are one answer. A brand is deliberately not
-  // structural, so there is nothing in the shape to read it from.
+test('an object or array base carries a brand', () => {
+  // OQ4-A refused these, on two arguments that both fail. An object's runtime
+  // type is DERIVED from its shape - true - but that is not the same as having
+  // nowhere to store one: an array's [[TypedElement]] and a tuple's record
+  // already travel on the object, because "only a mark on the object itself can
+  // refuse a store that the narrow view forbids". A brand is the same kind of
+  // mark.
   //
-  // Refused where the author writes it. Before F174 the parameterization was
-  // never built and the brand silently became its own base - which type-checked
-  // everywhere and guaranteed nothing.
-  expectThrown("type Base = { a: uint8 }; type T = Base.<{ brand: 'B' }>;");
-  expectThrown("type Base = [].<uint8>; type T = Base.<{ brand: 'B' }>;");
+  // The second argument - that an object is mutable, so a stamped brand
+  // outlives what it was granted for - confuses a brand with a pattern. A brand
+  // asserts PROVENANCE; a pattern asserts a predicate and re-validates. A class
+  // instance is nominal and mutable and nobody calls that unsound.
+  const B = "type Base = { a: uint8 }; type T = Base.<{ brand: 'B' }>;";
+  expect(evaluated(`${B} String(Reflect.getReflection(T).kind);`)).toBe('parameterized');
+  expect(evaluated(`${B} String(Reflect.typeOf(T({ a: (1 := uint8) })) === T);`)).toBe('true');
+  expect(evaluated(`${B} function f(x: T) { return 1; } String(f(T({ a: (1 := uint8) })));`)).toBe('1');
+  const A = "type Base = [].<uint8>; type T = Base.<{ brand: 'B' }>;";
+  expect(evaluated(`${A} String(Reflect.typeOf(T([(1 := uint8)])) === T);`)).toBe('true');
+});
+
+test('an object brand refuses a bare value and does not cross', () => {
+  const B = "type Base = { a: uint8 }; type T = Base.<{ brand: 'B' }>;";
+  expectThrown(`${B} function f(x: T) { return 1; } function h(u: Base) { return f(u); } h({ a: (1 := uint8) });`);
+  expectThrown(`${B} type U = Base.<{ brand: 'U' }>;`
+    + ' function f(x: U) { return 1; } function h(v: T) { return f(v); } h(T({ a: (1 := uint8) }));');
+});
+
+test('a branded object keeps its brand across a mutation', () => {
+  // Asserted as CORRECT, not as a hazard. A brand records where a value came
+  // from; mutating a field does not change that, exactly as mutating a class
+  // instance's field does not stop it being an instance.
+  const B = "type Base = { a: uint8 }; type T = Base.<{ brand: 'B' }>;";
+  expect(evaluated(`${B} const v = T({ a: (1 := uint8) }); v.a = (99 := uint8);`
+    + ' String(Reflect.typeOf(v) === T);')).toBe('true');
 });
 
 test('OQ4-A: other metadata on an object base is unaffected', () => {

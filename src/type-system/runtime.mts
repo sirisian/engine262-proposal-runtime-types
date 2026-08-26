@@ -731,6 +731,20 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
       || value instanceof TypedBigIntValue || (value as Value)?.type === 'Vector') {
     return (value as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }
+  // PLAN-brand-layering-F.md T3b. An object or array carries its brand as a mark
+  // on the value, the way an array's [[TypedElement]] and a tuple's record do -
+  // "only a mark on the object itself can refuse a store that the narrow view
+  // forbids", and a brand is the same kind of mark.
+  //
+  // The comment at the ~parameterized~ arm of IsOfType assumed "every value that
+  // can be of a parameterized type is a primitive stamped at construction". That
+  // was true while an object base silently discarded its parameterization
+  // (F174); it is not now, and reading the mark here is what makes the arm's
+  // first limb - "IsSubtype(RuntimeTypeOf(value), t)" - answer for an object
+  // without going through the shape inference that a brand is invisible to.
+  if ((value as { BrandTypeRecord?: unknown })?.BrandTypeRecord !== undefined) {
+    return (value as { BrandTypeRecord?: unknown }).BrandTypeRecord as TypeRecord;
+  }
   if (isDecimalObject(value as Value)) {
     return (value as unknown as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }
@@ -784,6 +798,17 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   // type of `{}`. `f<T extends []>(window)` then failed its own bound while
   // `window is []` answered *true*, which is the two answers disagreeing that
   // #sec-instanceof-for-type-objects exists to prevent.
+  // T2. The stored mark wins over the structurally derived answer: an object's
+  // runtime type is otherwise read from its shape, and a brand is deliberately
+  // not structural. A brand records PROVENANCE, so a mutation that changes the
+  // shape does not change where the value came from - a class instance behaves
+  // the same way.
+  {
+    const stamped = (value as { BrandTypeRecord?: TypeRecord }).BrandTypeRecord;
+    if (stamped !== undefined) {
+      return stamped;
+    }
+  }
   if (value instanceof ObjectValue) {
     // proposal-runtime-types #sec-keyed-collections and typeobjects.md: a TYPED
     // COLLECTION carries the Type Record it was built at, for the reason a
@@ -2698,39 +2723,6 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // registered against the BASE receives the whole metadata object, so it
           // speaks for every key of a parameterization of that base, which is how
           // a brand is written.
-          // PLAN-brand-layering-F.md OQ4-A. A `brand` needs somewhere to live
-          // on a value, and an OBJECT type's runtime type is DERIVED rather
-          // than stored: `Reflect.typeOf` reads the object's shape and answers
-          // the type that shape inhabits, so two structurally identical object
-          // types are one answer. A brand is deliberately NOT structural, so
-          // there is nothing in the shape for it to be read from.
-          //
-          // Left unchecked it was worse than unsupported. Before F174 the
-          // parameterization was never built and the brand silently became its
-          // own base - `Base.<{ brand: 'B' }>` WAS `Base`, so a bare object
-          // satisfied it and two object brands crossed freely. With the type now
-          // built, every boundary refuses instead, which is honest but arrives
-          // at the use rather than the declaration.
-          //
-          // Refused here, where the author can see why. The mutation question is
-          // what stands between this and supporting it: an object can be changed
-          // after a brand is granted, and a brand has no validation to re-run at
-          // the next boundary - a String cannot do that, which is why a `string`
-          // brand is sound and this is not yet.
-          {
-            const brandKey = (metadataRecord as { Properties?: readonly { key?: unknown }[] })
-              .Properties?.some((prop) => {
-                const k = prop.key;
-                const kn = typeof k === 'string' ? k : (k as { stringValue?: () => string })?.stringValue?.();
-                return kn === 'brand';
-              });
-            if (brandKey && (base.Kind === 'object' || base.Kind === 'array')) {
-              return Throw.TypeError(
-                'a brand cannot be written on $1: its runtime type is derived from its shape, so there is no place to carry one',
-                Value(displayType(base)),
-              );
-            }
-          }
           if (!HasMetaHooks(GetTypeObject(base) as unknown as object)) {
             for (const prop of (metadataRecord as { Properties?: readonly { key?: unknown }[] }).Properties ?? []) {
               const key = prop.key;
