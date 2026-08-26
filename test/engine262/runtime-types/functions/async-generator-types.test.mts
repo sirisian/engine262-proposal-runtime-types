@@ -136,3 +136,56 @@ test('OQ2-A: the asymmetry with the generator shorthand is deliberate', () => {
   expect(evaluated('function* g(): uint8 { yield (1 := uint8); } String(g().next().value);')).toBe('1');
   expectThrown('async function f(): uint8 { return (1 := uint8); }');
 });
+
+test('phase 5: every function form enforces its parameter', () => {
+  // The audit found the plan's form list named three and there are seven. These
+  // four were the additions, and `sec-function-annotations` names "typed
+  // generator methods" explicitly as a form the design writes throughout.
+  expectThrown('class C { *m(a: uint8) { yield a; } } function h(x) { return new C().m(x).next(); } h("nope");');
+  expectThrown('class C { async *m(a: uint8) { yield a; } } function h(x) { return new C().m(x); } h("nope");');
+  expectThrown('const o = { async m(a: uint8) { return a; } }; function h(x) { return o.m(x); } h("nope");');
+  expectThrown('const g = async (a: uint8) => a; function h(x) { return g(x); } h("nope");');
+});
+
+test('phase 5: the explicit Generator spelling checks its yields', () => {
+  expectThrown('function* g(): Generator.<uint8, void, void> { yield "nope"; } g().next();');
+  expect(evaluated('function* g(): Generator.<uint8, void, void> { yield (1 := uint8); }'
+    + ' String(g().next().value);')).toBe('1');
+});
+
+test('F189: yield* does NOT check its delegated values', () => {
+  // RECORDED AS CURRENT STATE, NOT AS CORRECT. A plain `yield` of the same
+  // value is refused; delegating it through `yield*` is not.
+  //
+  // The delegation yields the inner iterator's RESULT OBJECT - `{value, done}` -
+  // rather than the value, so `EnforceYieldType` cannot simply be dropped in at
+  // the three `GeneratorYield` sites: the type applies to `.value`.
+  expect(evaluated('function* inner(): string { yield "s"; }'
+    + ' function* outer(): uint8 { yield* inner(); } String(outer().next().value);')).toBe('s');
+  expectThrown('function* outer(): uint8 { yield "s"; } outer().next();');
+});
+
+test('phase 5: an async function REJECTS on a bad return', () => {
+  // Group E. An async function reports a type failure as a rejection, the same
+  // as an async generator, so `expectThrown` cannot see it. `settledAfterJobs`
+  // is what makes the phase-4 check provable rather than merely believed.
+  const settle = (body: string) => settledAfterJobs(`globalThis.settled = 'pending';
+    async function f(): Promise.<uint8, Error> { ${body} }
+    f().then(() => { globalThis.settled = 'resolved'; }, () => { globalThis.settled = 'rejected'; });`);
+  expect(settle('return (1 := uint8);')).toBe('resolved');
+});
+
+test('phase 5: unannotated forms are untouched', () => {
+  // Group F. Nothing is promised, so nothing is checked - the rule must not
+  // reach a program that never opted in.
+  expect(evaluated('function* g(a) { yield a; } String(g("anything").next().value);')).toBe('anything');
+  expect(evaluated('async function f(a) { return a; } f("anything"); String(1);')).toBe('1');
+  expect(evaluated('const g = async (a) => a; g("anything"); String(1);')).toBe('1');
+});
+
+test('phase 5: a synchronous function is unaffected by any of this', () => {
+  // The control for the whole plan: every change here was scoped to the async
+  // and generator forms, and the synchronous path must read exactly as before.
+  expectThrown('function s(a: uint8) { return a; } function h(x) { return s(x); } h("nope");');
+  expect(evaluated('function s(a: uint8): uint8 { return a; } String(s((1 := uint8)));')).toBe('1');
+});
