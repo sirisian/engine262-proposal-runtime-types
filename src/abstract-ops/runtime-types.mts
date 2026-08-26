@@ -471,6 +471,38 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // wave the raw value through either. Shedding a parameterization UPWARD to
   // its base needs no gate at all, since a parameterized type is a subtype of
   // its base, which is the branding rule.
+  // PLAN-brand-layering-F.md phase 2. THE CONSTRUCTION BOUNDARY for a layered
+  // brand.
+  //
+  // `ConvertValue` had no ~intersection~ case, so calling `(Email & Verified)(x)`
+  // fell past every branch. The only intersection handling lives in
+  // `CheckedConvertValue`, which is the MEMBERSHIP path - and membership is what
+  // a brand's absent `validate` is designed to refuse, so routing a crossing
+  // through it refused every value. That is PLAN-brand.md OQ1 one level up: the
+  // rule about BARE values applied at the boundary that exists to let a value
+  // stop being bare.
+  //
+  // Crossing each member in turn is what an intersection means here - "a value
+  // belongs to it if it belongs to every member" - and each member's crossing is
+  // already written, in the ~parameterized~ arm below.
+  //
+  // GUARDED to an intersection whose members are ALL parameterizations of ONE
+  // base. An intersection of an object type and a brand has no single value to
+  // cross, and keeps refusing: there is nothing for `{ a: uint8 } & Email` to do
+  // with a String. The guard is what keeps this rule definable rather than a
+  // special case that happens to work for brands.
+  if (t.Kind === 'intersection' && t.Members.length > 0
+    && t.Members.every((m) => m.Kind === 'parameterized')
+    && t.Members.every((m) => SameType(
+      (m as TypeRecord & { Kind: 'parameterized' }).Base,
+      (t.Members[0] as TypeRecord & { Kind: 'parameterized' }).Base,
+    ))) {
+    let current = value;
+    for (const m of t.Members) {
+      current = Q(yield* ConvertValue(current, m));
+    }
+    return current;
+  }
   if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
     const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
     if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {

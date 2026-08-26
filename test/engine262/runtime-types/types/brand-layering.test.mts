@@ -123,3 +123,32 @@ test('an intersection that is NOT all parameterizations of one base refuses cons
   // to cross.
   expectThrown("type O = { a: uint8 }; type V = string.<{ brand: 'V' }>; (type O & V)('a');");
 });
+
+// ---------------------------------------------------------------------------
+// C6: the construction boundary — phase 2
+// ---------------------------------------------------------------------------
+
+test('C6: a layered type is constructible', () => {
+  // `ConvertValue` had no ~intersection~ case, so `EV(x)` fell past every
+  // branch. The only intersection handling was in `CheckedConvertValue`, the
+  // MEMBERSHIP path - and membership is exactly what a brand's absent
+  // `validate` refuses. PLAN-brand.md OQ1, one level up.
+  expect(evaluated(`${EV}String(EV('a@b'));`)).toBe('a@b');
+});
+
+test('C6: an already-branded value can cross into the layering', () => {
+  // C7's mechanism: `EV(Email(x))` rather than a bare value.
+  expect(evaluated(`${EV}String(EV(E('a@b')));`)).toBe('a@b');
+});
+
+test('C6: the guard holds — a mixed intersection still refuses', () => {
+  // An object type and a brand have no single value to cross. Asserted twice,
+  // here and above, because widening the crossing rule is the likeliest wrong
+  // fix and this is what catches it.
+  expectThrown("type O = { a: uint8 }; type V = string.<{ brand: 'V' }>; type OV = O & V; OV('a');");
+});
+
+test('C6: an intersection of brands over DIFFERENT bases refuses', () => {
+  // The guard's second half: same-base is required, not merely all-parameterized.
+  expectThrown("type A = string.<{ brand: 'A' }>; type B = uint8.<{ brand: 'B' }>; type AB = A & B; AB('a');");
+});
