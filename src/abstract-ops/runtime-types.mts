@@ -54,6 +54,15 @@ function underlyingPrimitiveName(t: TypeRecord): string | undefined {
       cur = cur.Base;
       continue;
     }
+    // F179. An INTERSECTION of parameterizations over one base is itself a
+    // refinement of that base, and a value crossing into it needs the base's
+    // carrier - without this a layered String brand had nowhere to be recorded
+    // and the boundary that declared it refused the value it had just made.
+    if (cur.Kind === 'intersection' && cur.Members.length > 0
+      && cur.Members.every((m) => m.Kind === 'parameterized')) {
+      cur = cur.Members[0]!;
+      continue;
+    }
     return undefined;
   }
   return undefined;
@@ -73,7 +82,8 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   // was not using it, so a branded BigInt was a bare BigInt for the same reason
   // a branded String was. The same operation on the same shape of value.
   if (value instanceof BigIntValue && !(value instanceof TypedBigIntValue)
-    && t.Kind === 'parameterized' && underlyingPrimitiveName(t.Base) === 'bigint') {
+    && (t.Kind === 'parameterized' || t.Kind === 'intersection')
+    && underlyingPrimitiveName(t) === 'bigint') {
     return TypedBigInt(R(value) as bigint, t);
   }
   // A value already carrying a record is RE-STAMPED when the target is a
@@ -100,7 +110,8 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   // The carrier already existed and this function already used it - for a
   // literal type only. Carrying a parameterization is the same operation on the
   // same value, and it makes the three non-carrying primitives carry.
-  if (t.Kind === 'parameterized' && underlyingPrimitiveName(t.Base) === 'string') {
+  if ((t.Kind === 'parameterized' || t.Kind === 'intersection')
+    && underlyingPrimitiveName(t) === 'string') {
     return TypedString(value.stringValue(), t);
   }
   return value;
@@ -671,11 +682,48 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       (m as TypeRecord & { Kind: 'parameterized' }).Base,
       (t.Members[0] as TypeRecord & { Kind: 'parameterized' }).Base,
     ))) {
-    let current = value;
+    // PLAN-brand-layering-F.md F179. Cross from the BASE once, run every
+    // member's judgments over the result, then stamp the INTERSECTION.
+    //
+    // Threading the value through each member in turn was the first shape and
+    // it is wrong twice over. The value ends up carrying the LAST member's
+    // record rather than the intersection's - `typeOf(EV(x)) === EV` was false,
+    // it was a `V` - and on a base whose values carry their type, member 2
+    // receives a value already stamped as member 1 and refuses it: crossing
+    // `A & B` reported "a meta type does not admit converting A to B".
+    //
+    // A crossing is from a BARE value, and an intersection of parameterizations
+    // over one base has exactly one bare form: the base's. So the base is
+    // crossed once, each member's `validate` is consulted over that result -
+    // which is what makes `(E & Pattern)` still validate - and the value is
+    // stamped with `t` rather than with any member.
+    const base = (t.Members[0] as TypeRecord & { Kind: 'parameterized' }).Base;
+    const atBase = Q(yield* ConvertValue(value, base));
     for (const m of t.Members) {
-      current = Q(yield* ConvertValue(current, m));
+      const mp = m as TypeRecord & { Kind: 'parameterized' };
+      const { types: governing } = GoverningMetaTypes(mp.Metadata);
+      for (const metaType of governing) {
+        if (!MetaTypeGoverns(mp.Metadata, metaType)) {
+          continue;
+        }
+        const verdict = Q(yield* ApplyValidateHook(
+          metaType, atBase, MetadataPortion(mp.Metadata, metaType), mp.Base,
+        ));
+        if (verdict === false) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+      }
     }
-    return current;
+    if (isTypedNumber(atBase)) {
+      return new TypedNumberValue(atBase.value, t);
+    }
+    if (atBase instanceof ObjectValue) {
+      Object.defineProperty(atBase, 'BrandTypeRecord', {
+        value: t, enumerable: false, configurable: true,
+      });
+      return atBase;
+    }
+    return carryStringType(atBase, t);
   }
   if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
     const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };

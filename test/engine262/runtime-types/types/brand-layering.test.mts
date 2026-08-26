@@ -329,29 +329,42 @@ test('T4: a brand over a literal BOOLEAN is refused, and that is correct', () =>
 // F179: the intersection crossing does not produce the INTERSECTION type
 // ---------------------------------------------------------------------------
 
-test('F179: a crossing into an intersection yields the last member, not the intersection', () => {
-  // RECORDED AS CURRENT STATE, NOT AS CORRECT. `ConvertValue`'s intersection
-  // arm crosses each member in turn and returns the result, so the value ends
-  // up carrying the LAST member's record rather than the intersection's.
+test('F179: a crossing into an intersection yields the INTERSECTION', () => {
+  // The arm threaded the value through each member in turn, which was wrong
+  // twice over: the value ended up carrying the LAST member's record - so
+  // `typeOf(EV(x)) === EV` was false, it was a `V` - and on a base whose values
+  // carry their type, member 2 received a value already stamped as member 1 and
+  // refused it ("a meta type does not admit converting A to B").
   //
-  // F171 predicted exactly this - "the result type is the open question, not
-  // the mechanism" - and it was never asserted, so C7 and the end-to-end gate
-  // below have been failing unnoticed for the whole of this plan.
-  expect(evaluated(`${EV}String(EV('a@b'));`)).toBe('a@b');
-  expect(evaluated(`${EV}String(Reflect.typeOf(EV('a@b')) === EV);`)).toBe('false');
+  // A crossing is from a BARE value, and an intersection of parameterizations
+  // over one base has one bare form: the base's. So it crosses the base once,
+  // consults every member's judgments over the result, and stamps `t`.
+  expect(evaluated(`${EV}String(Reflect.typeOf(EV('a@b')) === EV);`)).toBe('true');
+  expect(evaluated("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
+    + ' String(Reflect.typeOf(AB(A((7 := uint32)))) === AB);')).toBe('true');
 });
 
-test('F179: C7 - a brand cannot yet be ADDED to an already-branded value', () => {
-  // The incremental case every real use has: `verify(e: Email): Email & Verified`.
-  // On a numeric base the crossing refuses outright, naming the meta type; on a
-  // String it returns a value carrying the wrong record.
-  expectThrown("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
-    + ' AB(A((7 := uint32)));');
+test('F179: C7 - a brand can be ADDED to an already-branded value', () => {
+  // The incremental case every real use has.
+  expect(evaluated("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
+    + ' String(AB(A((7 := uint32))));')).toBe('7');
 });
 
-test('F179: the end-to-end gate does not yet run', () => {
-  // `send(verify(e))` - the program this plan opened with. Asserted as failing
-  // so that fixing F179 breaks a test that explains what it was for.
-  expectThrown(`${EV}function verify(e: E): EV { return EV(e); }`
-    + ' function send(to: E) { return to; } send(verify(E(\'a@b\')));');
+test('F179: the end-to-end gate runs - send(verify(e))', () => {
+  // The program this plan opened with. `verify` takes an Email and returns an
+  // Email & Verified; `send` takes an Email; a Verified IS an Email.
+  expect(evaluated(`${EV}function verify(e: E): EV { return EV(e); }`
+    + " function send(to: E) { return to; } String(send(verify(E('a@b'))));")).toBe('a@b');
+});
+
+test('F179: the guards survive the fix', () => {
+  // A bare value is still refused, the layering still sheds to each member, a
+  // mixed intersection still refuses construction, and a pattern inside an
+  // intersection still validates.
+  expectThrown(`${EV}function h(s: string) { let y: EV = s; return y; } h('a');`);
+  expect(evaluated(`${EV}String(Reflect.isAssignable(EV, E));`)).toBe('true');
+  expectThrown("type O = { a: uint8 }; type V = string.<{ brand: 'V' }>; type OV = O & V; OV('a');");
+  const PV = "type P = string.<{ pattern: /^a+$/ }>; type V = string.<{ brand: 'V' }>; type PV = P & V;";
+  expectThrown(`${PV} PV('zz');`);
+  expect(evaluated(`${PV} String(PV('aa'));`)).toBe('aa');
 });
