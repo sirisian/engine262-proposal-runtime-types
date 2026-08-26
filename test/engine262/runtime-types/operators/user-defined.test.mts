@@ -122,6 +122,36 @@ test('operators: an explicit operator+= updates in place and returns the result'
   expect(evaluated(`${klass}let a = new V(5); let alias = a; let b = new V(3); a += b; String(alias.n);`)).toBe('8');
 });
 
+test('operators: an explicit compound assignment works on a `const` binding', () => {
+  // operatoroverloading.md: compound assignments "are invoked as method calls on
+  // the left-hand side. The binding itself is never reassigned, so THEY WORK ON
+  // `const` BINDINGS, and the value of the expression `a += b` is whatever the
+  // operator returns, allowing operators to return `this` for chaining."
+  //
+  // Writing the operator's result back to the reference made `a += b` a
+  // reassignment, so a `const` binding threw "Assignment to constant variable" -
+  // the one case the design calls out as working. It matters most for a value
+  // type, which uses this form precisely to update in place and whose bindings
+  // are usually `const`, so the form was unavailable exactly where it was meant.
+  const klass = 'class V { constructor(n) { this.n = n; } operator+=(rhs) { this.n += rhs.n; return this; } } ';
+  expect(evaluated(`${klass}const a = new V(5); const b = new V(3); a += b; String(a.n);`)).toBe('8');
+  // It chains, and the value of the expression is whatever the operator returns.
+  expect(evaluated(`${klass}const a = new V(1); const b = new V(2); a += b; a += b; String(a.n);`)).toBe('5');
+  expect(evaluated(`${klass}const a = new V(1); const b = new V(4); String((a += b).n);`)).toBe('5');
+  // A field or an element is a target as much as a binding is.
+  expect(evaluated(`${klass}const holder = { v: new V(1) }; const b = new V(6); holder.v += b; String(holder.v.n);`)).toBe('7');
+});
+
+test('operators: the DESUGARED form still reassigns, so it still needs a `let`', () => {
+  // The difference is the author's, not the caller's. `operator+` returns a NEW
+  // value, so `a += b` is genuinely `a = a + b` and the binding is written; an
+  // explicit `operator+=` updates the receiver and the binding is left alone.
+  // Both halves are asserted here so the distinction cannot quietly collapse.
+  const klass = 'class W { constructor(n) { this.n = n; } operator+(rhs) { return new W(this.n + rhs.n); } } ';
+  expect(evaluated(`${klass}let a = new W(5); let b = new W(3); a += b; String(a.n);`)).toBe('8');
+  expectThrownKind(`${klass}const a = new W(5); const b = new W(3); a += b;`, 'TypeError');
+});
+
 test('operators: an explicit operator+= takes precedence over the operator+ desugar', () => {
   // operator+ would add 100; the explicit operator+= is chosen instead.
   const klass = 'class W { constructor(n) { this.n = n; } operator+(rhs) { return new W(this.n + rhs.n + 100); } operator+=(rhs) { this.n += rhs.n; return this; } } ';

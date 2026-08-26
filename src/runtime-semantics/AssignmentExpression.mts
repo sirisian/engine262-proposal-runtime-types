@@ -291,9 +291,26 @@ export function* Evaluate_AssignmentExpression({
     if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
       const compoundOp = LookupClassOperator(lval, assignmentOpText);
       if (compoundOp) {
-        const updated = Q(yield* Call(compoundOp, lval, [rval]));
-        Q(yield* PutValue(lref, updated));
-        return updated;
+        // THE BINDING IS NOT REASSIGNED. operatoroverloading.md: compound
+        // assignments "are invoked as method calls on the left-hand side. The
+        // binding itself is never reassigned, so THEY WORK ON `const` BINDINGS,
+        // and the value of the expression `a += b` is whatever the operator
+        // returns, allowing operators to return `this` for chaining."
+        //
+        // Writing the result back made `a += b` a reassignment, so a `const`
+        // binding threw "Assignment to constant variable" - the one thing the
+        // design calls out as working. A value type uses this form precisely to
+        // update in place, and the bindings holding such a value are usually
+        // `const`, so the form was unavailable exactly where it was meant to be
+        // used.
+        //
+        // Only the EXPLICIT operator takes this path. The desugaring below,
+        // where a class declares `operator+` and not `operator+=`, is a genuine
+        // reassignment - `a = a + b` - and keeps its PutValue, because
+        // `operator+` returns a new value rather than updating the receiver.
+        // That is why one form works on a `const` binding and the other does
+        // not, and it is a difference the author of the class chooses.
+        return Q(yield* Call(compoundOp, lval, [rval]));
       }
     }
     // 6. Let opText be the sequence of Unicode code points associated with assignmentOpText in the following table:
