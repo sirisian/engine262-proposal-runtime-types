@@ -13,6 +13,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { LayoutOf } from '../type-system/layout.mts';
+import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
@@ -268,6 +270,78 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
  * program can walk around. The seed was exactly that hole: `new Map.<string,
  * uint8>([[1, 2]])` bypassed the prototype path entirely.
  */
+/**
+ * proposal-runtime-types #value-type-class: "Instances of a value type class are
+ * values ... and ASSIGNING ONE COPIES IT."
+ *
+ * WHERE THE COPY HAPPENS is the boundaries of #table-check-sites, which is to
+ * say inside RequireType - a binding's initializer or assigned value, an
+ * argument, a `return` operand, a store to a field or an array element, and a
+ * value crossing in through reflection. That table is not chosen for
+ * convenience: it is "where a value acquires a type it did not have", and a
+ * value type acquiring its type IS the copy.
+ *
+ * The table's own note says why a value type class differs from an OBJECT type
+ * here, which converts in place rather than copying: "an object may carry
+ * properties the type does not declare and keeps them under width subtyping,
+ * which a copy assembled from the declared members alone would discard." A value
+ * type class has a layout and no undeclared properties, so nothing is discarded
+ * and the reasoning that forbids copying there is absent here.
+ *
+ * WHAT IS NOT COVERED, and is filed rather than guessed: reading an element OUT
+ * of an array, `const e = arr[0]`. Rust, C++ and C# all copy there and this does
+ * not, because a read is not a boundary in #table-check-sites and copying at
+ * every read would allocate on the hot path - `p.x` in a loop. The rule for it
+ * has to be written before it can be implemented.
+ *
+ * NO USER CODE RUNS. #sec-typed-classes has a value type class be "a shape with
+ * a zero, not an object with an invariant its constructor establishes", and the
+ * threading clause states plainly that "a value type is copied by assignment,
+ * and that copy is not atomic" - a description of a memcpy, not of a
+ * constructor. The copy is field by field over the layout, which is the same
+ * walk `sec-default-values` makes for a derived default.
+ *
+ * A `ref` does NOT come through here. A reference "reads and writes through to
+ * the original rather than to a copy", which is the whole of the references
+ * extension, and its parameters and returns take the location rather than the
+ * value.
+ */
+export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): PlainEvaluator<ObjectValue> {
+  const layout = LayoutOf(t) as { fields?: readonly { key: string | PrivateName, type: TypeRecord }[] } | null;
+  if (layout?.fields === undefined) {
+    return value;
+  }
+  const ctor = (t as { Constructor?: ObjectValue }).Constructor;
+  const proto = ctor ? Q(yield* Get(ctor, Value('prototype'))) : Value.null;
+  const copy = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+  for (const field of layout.fields) {
+    if (typeof field.key !== 'string') {
+      continue;
+    }
+    const key = Value(field.key);
+    let held = Q(yield* Get(value, key));
+    // A nested value type field is itself a value, so it copies too - otherwise
+    // the outer copy would share the inner instance and a write through one
+    // would be visible through the other, which is the aliasing this exists to
+    // prevent one level down.
+    if (held instanceof ObjectValue && field.type.Kind === 'nominal' && LayoutOf(field.type) !== null) {
+      held = Q(yield* CopyValueTypeInstance(held, field.type));
+    }
+    X(CreateDataPropertyOrThrow(copy, key, held));
+    typed.set(field.key, { TypeRecord: field.type });
+  }
+  (copy as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+  // Sealed, as the original is. A value type class has a layout with no room for
+  // a property it did not declare, so its instances are not extensible - and a
+  // copy that forgot this would be a value of the type that accepts what the
+  // type cannot hold. Caught by the zero-filled-defaults test, which asserts
+  // `Object.isExtensible(d[0])` is *false* for an element of a `[2].<A>`; the
+  // SoA gather already did the same for the same reason.
+  X(copy.PreventExtensions());
+  return copy;
+}
+
 export function* RequireIdentityType(value: Value, t: TypeRecord): ValueEvaluator {
   const target = t as { Kind?: string, Name?: string };
   if (target.Kind === 'primitive' && target.Name === 'string' && !(value instanceof JSStringValue)) {
@@ -618,6 +692,15 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
       Q(yield* StampTypedCollection(value, t.Arguments));
+    }
+    // #value-type-class: "assigning one copies it". The value already satisfies
+    // the type, and for a value type that is exactly when the copy is taken -
+    // a boundary is "where a value acquires a type it did not have", and a
+    // value type acquiring its type IS the copy. See CopyValueTypeInstance for
+    // why this is the right set of sites and what it does not cover.
+    if (t.Kind === 'nominal' && t.EnumMembers === undefined && value instanceof ObjectValue
+        && LayoutOf(t) !== null) {
+      return Q(yield* CopyValueTypeInstance(value, t));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
@@ -1228,6 +1311,15 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
       Q(yield* StampTypedCollection(value, t.Arguments));
+    }
+    // #value-type-class: "assigning one copies it". The value already satisfies
+    // the type, and for a value type that is exactly when the copy is taken -
+    // a boundary is "where a value acquires a type it did not have", and a
+    // value type acquiring its type IS the copy. See CopyValueTypeInstance for
+    // why this is the right set of sites and what it does not cover.
+    if (t.Kind === 'nominal' && t.EnumMembers === undefined && value instanceof ObjectValue
+        && LayoutOf(t) !== null) {
+      return Q(yield* CopyValueTypeInstance(value, t));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.

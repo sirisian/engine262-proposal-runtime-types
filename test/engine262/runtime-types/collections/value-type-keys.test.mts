@@ -71,15 +71,32 @@ test('D5: instances differing in a field are NOT ===', () => {
 // Copy semantics - the other half, and the one that makes a stored key safe
 // ---------------------------------------------------------------------------
 
-test.fails('D5: a value type copies on assignment', () => {
+test.fails('D5: an UNANNOTATED assignment copies (no boundary reaches it)', () => {
+  // The copy is taken at the boundaries #table-check-sites names, and that table
+  // says "a binding with a DECLARED type". `const b: V = a` therefore copies and
+  // is asserted in the passing test above; `const b = a` has only an INFERRED
+  // type and reaches no boundary, so it still aliases.
+  //
+  // Whether an inferred type should be a boundary is a question broader than
+  // this one - it would change where every check in the language runs, not only
+  // this copy - so it is filed rather than answered here. #value-type-class
+  // states "assigning one copies it" without qualification, which is the case
+  // for saying yes.
   expect(evaluated(`${V} const a = new V(); const b = a; b.x = (9 := uint32); String(a.x);`)).toBe('0');
 });
 
-test.fails('D5: a value type copies when passed to a function', () => {
+test('D5: a value type copies when passed to a function', () => {
   expect(evaluated(`${V} function f(v: V) { v.x = (9 := uint32); } const a = new V(); f(a); String(a.x);`)).toBe('0');
 });
 
 test.fails('D5: reading an element out of a typed array copies it', () => {
+  // A READ is not a boundary. Rust, C++ and C# all copy here, so this is the one
+  // place the implemented rule falls short of every comparable language - but
+  // copying at every read allocates on the hot path, `p.x` in a loop, and
+  // #table-check-sites does not list a read. The rule has to be written before
+  // it can be implemented, and the SoA form already has one worth reconciling
+  // with: #sec-reference-values makes `s[i]` a gathered COPY, so the two array
+  // forms currently disagree with each other about this.
   expect(evaluated(`${V} const arr: [2].<V>; const e = arr[0]; e.x = (9 := uint32); String(arr[0].x);`)).toBe('0');
 });
 
@@ -100,7 +117,7 @@ test('D5: a Set of value type class instances dedups structurally', () => {
   expect(evaluated(`${V} const s = new Set.<V>(); s.add(new V()); String(s.has(new V()));`)).toBe('true');
 });
 
-test.fails('D5: insertion COPIES the key, so mutating the original does not move it', () => {
+test('D5: insertion COPIES the key, so mutating the original does not move it', () => {
   // "This is worth stating because it's the failure mode of struct keys in other
   // languages, where a mutable key inserted by reference corrupts the table it
   // lives in. Value semantics forecloses it." The stored key must be unaffected
