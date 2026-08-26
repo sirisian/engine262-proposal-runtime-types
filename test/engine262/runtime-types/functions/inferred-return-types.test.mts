@@ -254,7 +254,14 @@ test('a generator infers its yield type', () => {
   // #sec-inference-and-function-forms: _Y_ is the join of what the `yield`
   // operands contribute. A generator's return annotation is sugar for _Y_, so
   // inferring _Y_ is inferring the annotation the program did not write.
-  expectEarly('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } const n: number = g(1);', 'Generator.<uint.<8> | undefined, void, void>');
+  // _Y_ is the join of the YIELD operands and nothing else. It once read
+  // `uint.<8> | undefined`, because the fall-off-the-end contribution of
+  // #sec-inferred-result-type - which belongs to _R_ - was joined into _Y_. The
+  // tell was that adding a `return` to the same body produced a CLEAN
+  // `uint.<8>`: a return statement cannot narrow a yield type, so the routing
+  // was the defect rather than the rule. The `expectOk` at the foot of this test
+  // is what the old expectation contradicted.
+  expectEarly('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
   expect(thrown('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); yield "x"; } const n: number = g(1);')).toContain('uint.<8> | string');
   // A declared annotation still wins, and a legacy generator is unchanged.
   expectEarly('function* g(a: uint32): uint8 { yield 1; } const n: number = g(1);', 'Generator.<uint.<8>, void, void>');

@@ -6396,7 +6396,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (unknown) {
         return null;
       }
-      if (!endsWithReturn(body)) {
+      // #sec-inferred-result-type: "Where the body can complete without
+      // returning, *undefined* is contributed as well, since falling off the end
+      // answers *undefined*."
+      //
+      // That is a contribution to the RESULT, and for a generator the result is
+      // _R_. #sec-inference-and-function-forms defines _Y_ over the yield
+      // operands ALONE - "_Y_ is the join of the types its `yield` operands
+      // contribute" - so falling off the end says nothing about what was yielded
+      // and must not reach _Y_.
+      //
+      // It did, because this contribution ran in every mode, and the correlation
+      // was exact rather than incidental: `function* g() { yield f(); }`
+      // published `Generator.<uint8 | undefined, ...>` while `function* g() {
+      // yield f(); return "done"; }` - the same yields, an end that cannot be
+      // reached - published a clean `uint8`. A `return` statement cannot narrow
+      // a yield type, which is what identified the ROUTING rather than the rule
+      // as the defect.
+      //
+      // The cost was a tax on every loop: an element of `T | undefined` needs a
+      // narrowing that can never fail, because a `for`-`of` body does not run
+      // for the completion value. TypeScript, Rust and Python all keep "no more
+      // values" in the protocol rather than in the element type.
+      if (mode !== 'yield' && !endsWithReturn(body)) {
         contributions.push(makePrimitive('undefined'));
       }
       if (contributions.length === 0) {
