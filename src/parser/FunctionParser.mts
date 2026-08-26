@@ -253,15 +253,25 @@ export abstract class FunctionParser extends IdentifierParser {
         // exactly the programs that already failed - the crash was a rejection
         // too - and says why, which the RangeError did not. The form is legal
         // per sec-function-annotations, so this is an interim, not a rule.
-        this.addEarlyError(Throw.SyntaxError(
-          'a type annotation on an async arrow parameter is not yet supported; write an async function, or annotate the arrow\'s return type only',
-        ));
+        const candidate = (node as unknown as { TypeCandidate?: ParseNode.Type }).TypeCandidate;
+        if (!candidate) {
+          // The text after the colon was not a type, so this was a genuine
+          // named argument in a position that turned out to be an arrow head.
+          this.addEarlyError(Throw.SyntaxError(
+            'an async arrow parameter must be a binding, optionally with a type annotation',
+          ));
+        }
         const ident = this.startNode<ParseNode.BindingIdentifier>(node);
         (ident as { name?: string }).name = (node as unknown as { Name: string }).Name;
         const BindingIdentifier = this.finishNode(ident, 'BindingIdentifier');
         const SingleNameBinding = this.startNode<ParseNode.SingleNameBinding>(node);
         SingleNameBinding.BindingIdentifier = BindingIdentifier;
         SingleNameBinding.Initializer = null;
+        if (candidate) {
+          const ann = this.startNode<ParseNode.TypeAnnotation>(node);
+          (ann as { Type?: ParseNode.Type }).Type = candidate;
+          SingleNameBinding.TypeAnnotation = this.finishNode(ann, 'TypeAnnotation');
+        }
         this.scope.declare(BindingIdentifier as unknown as ParseNode, 'parameter');
         return this.finishNode(SingleNameBinding, 'SingleNameBinding');
       }

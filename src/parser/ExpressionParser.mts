@@ -2217,6 +2217,31 @@ export abstract class ExpressionParser extends FunctionParser {
         const named = this.startNode<ParseNode.NamedArgument>();
         named.Name = this.parseIdentifierName().name;
         this.expect(Token.COLON);
+        // PLAN-async-generator-types.md F187. `async (a: uint8) => a` reaches
+        // here, because `async(...)` parses as a CALL first and `a: uint8` in a
+        // call is a named argument. If this turns out to be an
+        // |AsyncArrowHead|, `convertArrowParameter` needs the annotation as a
+        // TYPE, and by then only an expression is left - `uint8 | string` having
+        // become a bitwise-or.
+        //
+        // So the type is read HERE, speculatively, and kept alongside the
+        // expression. A checkpoint makes the attempt free when the text is an
+        // ordinary named argument whose value is not a type: the lexer is
+        // restored and the expression parse below proceeds as it always did.
+        // This is what `getLexerCheckpoint` exists for - its own comment counts
+        // 42 sites, "most of them arrow-parameter disambiguation".
+        {
+          const cp = this.getLexerCheckpoint();
+          try {
+            const asType = this.parseType();
+            if (this.test(Token.COMMA) || this.test(Token.RPAREN)) {
+              (named as { TypeCandidate?: ParseNode.Type }).TypeCandidate = asType;
+            }
+          } catch {
+            // Not a type; the expression below is the reading that applies.
+          }
+          this.restoreLexerCheckpoint(cp);
+        }
         named.AssignmentExpression = this.withConditionalAnnotationsAllowed(() => this.parseAssignmentExpression());
         Arguments.push(this.finishNode(named, 'NamedArgument'));
       } else {
