@@ -7630,7 +7630,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     errors.push((Throw.TypeError('$1 is protected', Value(String(prop.key))) as ThrowCompletion).Value as ObjectValue);
   };
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known) => {
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean) => {
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     returnTypes.push(checkReturns && returnAnnotation ? resolveType(returnAnnotation.Type) : null);
     generatorTypes.push(generatorType ?? null);
@@ -7690,6 +7690,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Error would reject, without rejecting anything, so the blast radius is a
     // number before it is a decision.
     if (checkReturns && returnAnnotation && declaredReturn
+      // PLAN-async-generator-types.md phase 1. A GENERATOR or ASYNC function
+      // does not return its annotation's type by falling off its end: a
+      // generator that reaches its end returns from the ITERATOR, whose type is
+      // the _R_ of `Generator.<Y, R, N>` rather than the annotation - which
+      // types the values YIELDED - and an async function resolves its promise
+      // with *undefined*, its annotation typing the PROMISE, which exists
+      // either way.
+      //
+      // F184's rule therefore does not apply to these forms. It fired on all
+      // four typed-generator and typed-promise corpus programs the moment they
+      // were routed through the checked path, which is what phase 1 measured.
+      && !resumable
       && canCompleteNormally(body as ParseNode)
       // `void` is the annotation for a function that returns nothing, and
       // `IsAssignable(undefined, void)` is false - the two are different types.
@@ -9259,7 +9271,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const isAsyncGen = n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const ann = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
           const declared = gen ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen) : null;
-          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, false, undefined, declared);
+          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncFunctionBody?: ParseNode }).AsyncFunctionBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, undefined, declared, true);
         }
         return;
       default: {
