@@ -152,3 +152,35 @@ test('C6: an intersection of brands over DIFFERENT bases refuses', () => {
   // The guard's second half: same-base is required, not merely all-parameterized.
   expectThrown("type A = string.<{ brand: 'A' }>; type B = uint8.<{ brand: 'B' }>; type AB = A & B; AB('a');");
 });
+
+// ---------------------------------------------------------------------------
+// F172: a brand on a base that cannot carry a type
+// ---------------------------------------------------------------------------
+
+test('F172: a branded string can be held', () => {
+  // Calling a Type Object is the construction boundary, and the static type of
+  // that call is the type called. Without it the call typed as its BASE, so
+  // every boundary downstream inserted a runtime check that CANNOT pass on a
+  // String: a String has nowhere to carry a Type Record, so a branded string is
+  // a bare string and `IsOfType(bare, E)` correctly answers false.
+  //
+  // The runtime check was never wrong and neither was elision - where the
+  // checker knows the static type is the target, no check is inserted. Only the
+  // static type of the call was missing.
+  expect(evaluated(`${E}const v: E = E('a'); String(v);`)).toBe('a');
+  expect(evaluated(`${E}function g(): E { return E('a'); } String(g());`)).toBe('a');
+});
+
+test('F172: a bare value is still refused where the brand is declared', () => {
+  // The guard. A static type that made the brand admit anything would pass the
+  // test above and destroy the feature.
+  expectThrown(`${E}function f(e: E) { return e; } function h(s: string) { return f(s); } h('a');`);
+  expectThrown(`${E}function h(s: string) { const v: E = s; return v; } h('a');`);
+});
+
+test('F172: the numeric case is unchanged', () => {
+  // A numeric value carries its Type Record, so a `uint32` brand worked
+  // throughout and must keep working.
+  expect(evaluated("type U = uint32.<{ brand: 'U' }>; function f(u: U) { return u; }"
+    + ' String(f(U((7 := uint32))));')).toBe('7');
+});

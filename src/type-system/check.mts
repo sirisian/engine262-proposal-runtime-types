@@ -3816,6 +3816,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // where the type is stated rather than guessed.
           return makePrimitive('Composite', []);
         }
+        // PLAN-brand-layering-F.md F172. CALLING A TYPE OBJECT is the
+        // construction boundary (sec-parameterized-types), and the static type
+        // of that call is the type called: `Email('a@b')` is an `Email`.
+        //
+        // Without this the call typed as its BASE - `string` - so every boundary
+        // downstream inserted a runtime check, and for a non-numeric base that
+        // check cannot pass: a String has nowhere to carry a Type Record, so a
+        // branded string IS a bare string and `IsOfType(bare, Email)` correctly
+        // answers false. A value from a brand's own constructor could not be
+        // passed to a parameter declared with that brand, which made a `string`
+        // or `boolean` brand unusable.
+        //
+        // The runtime check is not what needed fixing, and neither is elision:
+        // where the checker knows the static type IS the target,
+        // #table-check-sites inserts nothing, and `let v: E = e` for a parameter
+        // `e: E` already worked. Only the static type of the CALL was missing -
+        // the same defect as the `Composite` and `T.parse` cases above, whose
+        // comments record it in the same words.
+        //
+        // Matched on the callee's NAME, as `Composite` is, and resolved through
+        // `lookupAlias`: the static type of a bare type name is not the type, so
+        // keying on `staticType(callee)` does not identify a Type Object call.
+        if (calleeNode?.type === 'IdentifierReference') {
+          const named = lookupAlias((calleeNode as { name?: string }).name ?? '');
+          if (named && named.Kind === 'parameterized') {
+            return named as Known;
+          }
+        }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
         const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);
