@@ -333,6 +333,7 @@ function* SetProto_has([value = Value.undefined]: Arguments, { thisValue }: Func
   return Value.false;
 }
 
+/** https://tc39.es/ecma262/#sec-get-set.prototype.size */
 /**
  * proposal-runtime-types #index-type, widened from arrays to containers. See the
  * `Map.prototype.size` accessor for the reasoning; the two must agree, a single

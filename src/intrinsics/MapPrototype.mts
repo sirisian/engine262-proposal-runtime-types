@@ -288,6 +288,7 @@ function* MapProto_set([key = Value.undefined, value = Value.undefined]: Argumen
   return M;
 }
 
+/** https://tc39.es/ecma262/#sec-get-map.prototype.size */
 /**
  * proposal-runtime-types #index-type, widened from arrays to containers: a
  * TYPED collection's `size` reads at the index type, `uint64`, the same type an
