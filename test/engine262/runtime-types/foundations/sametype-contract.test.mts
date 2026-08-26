@@ -50,3 +50,42 @@ test('distinct types are still distinct', () => {
   expectThrown('let x: uint8 = "s";');
   expect(evaluated('type U = 5 | uint8; let x: U = 7; String(Number(x));')).toBe('7');
 });
+
+test('an object type is a SET of members, not a sequence of them', () => {
+  // `SameTypeWithAssumptions` compared `s.Properties[i]` against
+  // `to.Properties[i]`, so two records holding the same members in a different
+  // order were different types. An object type is a set of members - `{ x, y }`
+  // and `{ y, x }` name one type - so the comparison matches BY KEY.
+  //
+  // WHY THE SOURCE-LEVEL FORM OF THIS TEST PROVES NOTHING, and why the defect
+  // survived several rounds of looking for it: the members reach a parsed
+  // record in the order they were written, so both sides of a comparison
+  // between two SPELLINGS are already in the same order and the positional loop
+  // agrees. The assertions below therefore passed before the fix as well as
+  // after. What exposes it is a record that was BUILT rather than parsed, and
+  // two builders that happen to emit their members in different orders.
+  expect(evaluated('String((type { x: uint8, y: string }) === (type { y: string, x: uint8 }));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type { x: uint8, y: string }, type { y: string, x: uint8 }));')).toBe('true');
+
+  // The case that DID expose it, and the regression this test exists for. The
+  // iteration interfaces are reached from two directions - through the interned
+  // type expression on one side, and through `iterationInterfaceRecord` called
+  // from the subtype rules on the other - and their nested `IteratorResult`
+  // members came out in opposite orders. Nothing was assignable to a
+  // `type Iterable.<uint8>` however plainly it satisfied the interface, so
+  // `Reflect.isAssignable` disagreed with the checker, which accepts all four of
+  // these at a parameter position.
+  expect(evaluated('String(Reflect.isAssignable(type [].<uint8>, type Iterable.<uint8>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Iterable.<uint8>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type Generator.<uint8>, type Iterable.<uint8>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type Map.<string, uint8>, type Iterable.<[string, uint8]>));')).toBe('true');
+
+  // Matching by key rather than by position does not weaken the relation: a
+  // member the other side lacks, a differing member type, and a differing count
+  // are each still unequal.
+  expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Iterable.<string>));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type Iterable.<uint8>));')).toBe('false');
+  expect(evaluated('String((type { x: uint8 }) === (type { x: string }));')).toBe('false');
+  expect(evaluated('String((type { x: uint8 }) === (type { y: uint8 }));')).toBe('false');
+  expect(evaluated('String((type { x: uint8 }) === (type { x: uint8, y: string }));')).toBe('false');
+});

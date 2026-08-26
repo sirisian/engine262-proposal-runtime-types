@@ -421,11 +421,32 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       return t.Kind === 'shared' && SameTypeWithAssumptions(s.Target, t.Target, next);
     case 'object': {
       const to = t as Extract<TypeRecord, { Kind: 'object' }>;
+      // Matched BY KEY, not by position. An object type is a set of members and
+      // not a sequence of them - `{ x: uint8, y: string }` and
+      // `{ y: string, x: uint8 }` are one type - and comparing
+      // `s.Properties[i]` against `to.Properties[i]` made two records with the
+      // same members in a different order unequal.
+      //
+      // Written source never showed it: the members reach the record in the
+      // order they were written, so two spellings of one type were compared
+      // position by position and agreed. It surfaces where a record is BUILT
+      // rather than parsed, and where two builders happen to emit their members
+      // in different orders - which is what `Reflect.isAssignable(type
+      // [].<uint8>, type Iterable.<uint8>)` does. The iteration interfaces are
+      // reached from two directions, one through the interned type expression
+      // and one through `iterationInterfaceRecord` called from the subtype
+      // rules, and their nested `IteratorResult` members came out in opposite
+      // orders. Every source-level test of ordering passed, which is why this
+      // took so long to see: the parser normalises, so only a programmatically
+      // reversed record exposes it.
       return t.Kind === 'object' && s.Properties.length === to.Properties.length
-        && s.Properties.every((p, i) => p.key === to.Properties[i].key
-          && p.optional === to.Properties[i].optional
-          && p.readonly === to.Properties[i].readonly
-          && SameTypeWithAssumptions(p.type, to.Properties[i].type, next))
+        && s.Properties.every((p) => {
+          const q = to.Properties.find((other) => other.key === p.key);
+          return q !== undefined
+            && p.optional === q.optional
+            && p.readonly === q.readonly
+            && SameTypeWithAssumptions(p.type, q.type, next);
+        })
         && s.IndexSignatures.length === to.IndexSignatures.length
         && s.IndexSignatures.every((ix, i) => SameTypeWithAssumptions(ix.Key, to.IndexSignatures[i].Key, next)
           && SameTypeWithAssumptions(ix.Value, to.IndexSignatures[i].Value, next));
