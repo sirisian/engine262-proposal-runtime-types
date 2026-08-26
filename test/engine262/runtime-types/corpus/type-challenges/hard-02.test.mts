@@ -14,7 +14,14 @@ import { expectBuilderTrue, kit } from './harness.mts';
 // 55 - Union to Intersection - the arms of a union as an intersection.
 test('hard 55 - Union to Intersection', () => {
   const f = ` function unionToIntersection(U) { return Reflect.makeType({ kind: 'intersection', members: arms(U) }); }`;
-  expectBuilderTrue(kit(`${f}\n type U = 'foo' | 42 | true; type Expected = 'foo' & 42 & true; String(unionToIntersection(U) === Expected);`));
+  // The expected type is spelled `never` rather than `'foo' & 42 & true`.
+  // Those denote the SAME type - three literals over three different bases share
+  // no value - and TypeScript's own answer for this challenge is `never` for the
+  // same reason. Here the empty spelling is the only writable one, because
+  // #sec-intersection-type-early-errors reports the written form as the mistake
+  // it usually is. Naming it `never` also says what the challenge actually
+  // proves, which the three-member spelling hid.
+  expectBuilderTrue(kit(`${f}\n type U = 'foo' | 42 | true; String(unionToIntersection(U) === never);`));
   expectBuilderTrue(kit(`${f}\n type U = (() => 'foo') | ((i: 42) => true); type Expected = (() => 'foo') & ((i: 42) => true); String(unionToIntersection(U) === Expected);`));
 });
 

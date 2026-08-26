@@ -84,7 +84,12 @@ test('a shared type renders its target', () => {
   expect(message('let a: [].<shared uint32> = "s";')).toContain('[].<shared uint.<32>>');
   expect(message('type O = { s: shared uint32 }; let o: O = 5;')).toContain('{ s: shared uint.<32> }');
   expect(message('type U = shared uint32 | null; let u: U = "s";')).toContain('shared uint.<32>');
-  expect(message('type A = { a: uint8 }; type C = A & shared uint32; let c: C = 5;')).toContain('{ a: uint.<8> } & shared uint.<32>');
+  // The intersection member is an OBJECT type rather than a bare `shared uint32`:
+  // #sec-intersection-type-early-errors now rejects the written `A & shared uint32`,
+  // no value being both an object and a `uint32`, so the display it was reached
+  // through is unreachable from that spelling. An inhabited intersection carrying a
+  // `shared` member exercises the same case.
+  expect(message('type A = { a: uint8 }; type C = A & { s: shared uint32 }; let c: C = 5;')).toContain('{ s: shared uint.<32> }');
 });
 
 test('the kinds that already rendered are unchanged', () => {

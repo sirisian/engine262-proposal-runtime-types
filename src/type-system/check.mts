@@ -20,7 +20,7 @@ import { voidType as voidTypeRecord } from './records.mts';
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
 import { Diverges } from './divergence.mts';
-import { IsSubtype, SameType, IsAssignable } from './relations.mts';
+import { IsSubtype, SameType, IsAssignable, AreDisjoint } from './relations.mts';
 import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -2816,6 +2816,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // The statically resolvable subset of types: built-ins and aliases declared
   // in the program. An unresolvable type is unknown, and unknown is ~any~.
+  /** Nodes already reported by the empty-intersection Early Error. */
+  const reportedEmptyIntersections = new Set<object>();
+
   const resolveType = (node: ParseNode.Type): Known => {
     // table-metadata-values: a RANGE in type position. This resolver "mirrors
     // TypeNodeToTypeRecord so the checker and the runtime agree on what the
@@ -3129,6 +3132,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return null;
           }
           Members.push(r);
+        }
+        // #sec-intersection-type-early-errors: it is a type error if a WRITTEN
+        // intersection has two members no value can be of both.
+        //
+        // The reduction in CanonicalizeType makes such a type `never`, which is
+        // the right ANSWER but the wrong DIAGNOSTIC: a program that wrote `&`
+        // where it meant `|` would learn about it from a "not assignable to
+        // never" at every USE SITE rather than at the annotation that caused it.
+        // This is the call #sec-narrowto already makes with its ~empty~
+        // sentinel, which "reports a test that cannot succeed as a mistake
+        // rather than narrowing to the type with no values" - `d ?? 5` for a
+        // `uint8` `d`. A written empty intersection is that mistake with less
+        // excuse, the members being right there in the source.
+        //
+        // It fires on the SYNTAX, so a `never` a COMPUTATION reaches is
+        // untouched: a builder constructing one gets `never` (canonicalization
+        // stays total, which the kit's `exclude(T, T)` needs), and in a generic
+        // body `T` is unresolved and therefore ~any~, over which AreDisjoint is
+        // conservative - so `type F<T> = T & string;` is not diagnosed at its
+        // declaration for an instantiation that may never happen. Nothing is
+        // lost by the error, `never` being writable (#sec-never-type) and
+        // saying the same thing on purpose.
+        //
+        // Reported once per NODE: `resolveType` is called on an annotation from
+        // several judgments, and the error belongs to the syntax, not to how
+        // many times the checker asked what it meant.
+        //
+        // The two halves have DIFFERENT REACH, and this one is the shorter.
+        // Canonicalization reduces every disjoint intersection; this rule sees
+        // only what `resolveType` has resolved, and a parameterization over a
+        // parameterized or object-alias base is not resolved far enough here to
+        // be judged - AreDisjoint answers *false* and nothing is reported. So
+        // `E & uint8` is diagnosed at the annotation while the nested
+        // `E.<{ brand }> & uint8` is only reduced, and reaches the program as
+        // the downstream error it reached before this rule existed. A missed
+        // diagnostic, never a wrong one: the type is `never` in both cases.
+        //
+        // An explicitly written `never` member is EXEMPT. The diagnostic exists
+        // to catch an author who did not realise the intersection was empty;
+        // writing `never` states that it is. `uint8 & never` is the annihilation
+        // identity of #sec-never-type spelled out, and an identity is not a
+        // mistake - making it one would also stop generated and kit code from
+        // using `never` as a written annihilator. The exemption is on the member
+        // RESOLVING to `never`, so an alias for an already-diagnosed empty
+        // intersection reports once at its own declaration rather than again at
+        // every use.
+        const isNever = (m: TypeRecord): boolean => m.Kind === 'union' && (m as { Members: readonly TypeRecord[] }).Members.length === 0;
+        if (node.type === 'IntersectionType' && !reportedEmptyIntersections.has(node)
+            && !Members.some(isNever)) {
+          for (let i = 0; i < Members.length; i += 1) {
+            for (let j = i + 1; j < Members.length; j += 1) {
+              if (AreDisjoint(Members[i], Members[j])) {
+                reportedEmptyIntersections.add(node);
+                const completion = Throw.TypeError(
+                  'no value is of both $1 and $2, so their intersection is never',
+                  Value(displayType(Members[i])),
+                  Value(displayType(Members[j])),
+                ) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+                i = Members.length;
+                break;
+              }
+            }
+          }
         }
         return { Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members };
       }

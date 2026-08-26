@@ -823,6 +823,7 @@ export interface Throw {
   | 'no declared signature accepts an argument of type $1'
   | 'no overload of $1 matches these arguments'
   | 'no parameter named $1 for this call'
+  | 'no value is of both $1 and $2, so their intersection is never'
   | 'offset option is invalid ($1), only "auto" and "never" are accepted'
   | 'offset option is invalid ($1), only "prefer", "use", "ignore" and "reject" are accepted'
   | 'operator $1 is declared by the right operand, but operator dispatch keys on the left operand'

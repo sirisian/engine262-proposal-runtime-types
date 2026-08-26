@@ -1425,3 +1425,106 @@ export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
   }
   return IsSubtype(s, t, []);
 }
+
+/**
+ * proposal-runtime-types #sec-aredisjoint: whether no value can be of both _s_
+ * and _t_.
+ *
+ * This is the predicate NarrowTo already spells in prose ("If _s_ and _t_ have
+ * no common values, return ~empty~"), lifted to an operation so that
+ * CanonicalizeType and the |IntersectionType| Early Error decide it the same
+ * way the narrowing rows do. Everything it answers *true* for, the clause's own
+ * note already committed to: "Two distinct ~primitive~ types have no common
+ * values, since each value belongs to exactly one of them, and neither does a
+ * ~primitive~ type share values with an ~object~ or ~function~ type. Two
+ * ~object~ types, or two ~nominal~ types that are interfaces, may have common
+ * values."
+ *
+ * It is deliberately CONSERVATIVE: an unknown answer is *false*, never *true*.
+ * ~any~, a ~parameter~, and a not-yet-evaluated ~application~ therefore overlap
+ * with everything, so a generic body cannot be diagnosed for a disjointness its
+ * instantiation may not have.
+ *
+ * The one case that is easy to get wrong, and that the brand design depends on,
+ * is ~parameterized~: two parameterizations of ONE base SHARE values, which is
+ * what makes `string.<{ brand: 'E' }> & string.<{ pattern: /@/ }>` the layered
+ * type of #sec-brands rather than an empty one. Disjointness is decided on the
+ * BASE, never on the metadata. `ConvertValue` already carries the same rule as a
+ * hand-written guard ("an intersection whose members are ALL parameterizations
+ * of ONE base"), and this is that rule stated once.
+ */
+function baseOf(t: TypeRecord): TypeRecord {
+  return t.Kind === 'parameterized' ? baseOf(t.Base) : t;
+}
+
+/** The kinds whose values are objects, and so share none with a ~primitive~. */
+function isObjectLike(t: TypeRecord): boolean {
+  return t.Kind === 'object' || t.Kind === 'function' || t.Kind === 'array' || t.Kind === 'tuple';
+}
+
+/** Kinds whose inhabitants are not yet known, and which therefore overlap. */
+function isUndecidable(t: TypeRecord): boolean {
+  return t.Kind === 'any' || t.Kind === 'parameter' || t.Kind === 'application';
+}
+
+export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
+  if (isUndecidable(s) || isUndecidable(t)) {
+    return false;
+  }
+  // A ~shared~ marker is not observable in the value (#sec-threading-shared-modifier),
+  // so it neither creates nor removes an overlap.
+  if (s.Kind === 'shared') {
+    return AreDisjoint(s.Target, t);
+  }
+  if (t.Kind === 'shared') {
+    return AreDisjoint(s, t.Target);
+  }
+  // An intersection is disjoint from _t_ when ANY member is: a value of the
+  // intersection is a value of every member.
+  if (s.Kind === 'intersection') {
+    return s.Members.some((m) => AreDisjoint(m, t));
+  }
+  if (t.Kind === 'intersection') {
+    return t.Members.some((m) => AreDisjoint(s, m));
+  }
+  // A union is disjoint from _t_ only when EVERY arm is. The empty union is
+  // `never`, and the quantification over no arms holds, which is the
+  // annihilation fact stated as disjointness.
+  if (s.Kind === 'union') {
+    return s.Members.every((m) => AreDisjoint(m, t));
+  }
+  if (t.Kind === 'union') {
+    return t.Members.every((m) => AreDisjoint(s, m));
+  }
+  // ~void~ is the return type "no binding may hold" (#sec-undefined-and-void),
+  // so it shares values with nothing but itself.
+  if (s.Kind === 'void' || t.Kind === 'void') {
+    return s.Kind !== t.Kind;
+  }
+  // Decide on the BASE, so that brand layering survives and a brand over one
+  // primitive is still disjoint from another primitive.
+  const sb = baseOf(s);
+  const tb = baseOf(t);
+  // Two literal types are disjoint unless they are the same value; a literal is
+  // otherwise decided by its base, which subsumption has usually already folded.
+  if (sb.Kind === 'literal' && tb.Kind === 'literal') {
+    return !SameType(sb, tb) || !SameType(tb, sb);
+  }
+  const sPrim = sb.Kind === 'literal' ? sb.Base : sb;
+  const tPrim = tb.Kind === 'literal' ? tb.Base : tb;
+  if (sPrim.Kind === 'primitive' && tPrim.Kind === 'primitive') {
+    return !SameType(sPrim, tPrim);
+  }
+  if (sPrim.Kind === 'primitive' && isObjectLike(tPrim)) {
+    return true;
+  }
+  if (tPrim.Kind === 'primitive' && isObjectLike(sPrim)) {
+    return true;
+  }
+  // Everything else - two ~object~ types, two ~nominal~ types, a ~nominal~
+  // against an ~object~ - is left OVERLAPPING. Two object types may share a
+  // value, which is the case intersections exist for; whether two unrelated
+  // nominal CLASSES are disjoint is a separate question this operation
+  // deliberately does not answer.
+  return false;
+}

@@ -8,7 +8,7 @@ import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
-import { IsSubtype, SameTypeStructural } from './relations.mts';
+import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
 import { RequireType } from '#self';
 import {
@@ -110,6 +110,26 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
       return !subsumes(m.canonical, other.canonical) || j < i;
     }));
     if (t.Kind === 'intersection' && members.some((m) => m.canonical.Kind === 'union' && m.canonical.Members.length === 0)) {
+      return neverType;
+    }
+    // #sec-canonicalizetype: an intersection two of whose members are DISJOINT
+    // has no values, and is the empty union.
+    //
+    // The step above is the special case where a member is ALREADY `never`; this
+    // is the general one, and it is what makes `never` the single uninhabited
+    // type rather than one of many. Without it `number & bigint` interned as its
+    // own Type Object: uninhabited by #sec-narrowto's own reasoning, with no
+    // default value and no assignable source, and yet not `never` and not even
+    // assignable TO `never` - two empty types the relation could not equate.
+    //
+    // It also removes a dead arm from a union that contains one, since flattening
+    // then drops the `never`: `string | (number & bigint)` is `string`, so a slot
+    // of that type is monomorphic instead of a two-arm union an engine would tag.
+    //
+    // Disjointness is decided on the BASE (AreDisjoint), so the layered brands of
+    // #sec-brands - two parameterizations of ONE primitive - are untouched.
+    if (t.Kind === 'intersection'
+      && members.some((m, i) => members.some((other, j) => i !== j && AreDisjoint(m.canonical, other.canonical)))) {
       return neverType;
     }
     if (members.length === 1) {

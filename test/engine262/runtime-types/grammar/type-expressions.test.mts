@@ -286,9 +286,16 @@ test('keyof a type with no keys is the empty type, not an error', () => {
 test('a keyless member of an intersection contributes nothing, rather than voiding it', () => {
   // A behaviour CHANGE, not a simplification: while a sentinel stood for "no
   // keys", one keyless member made the whole intersection keyless. An
-  // intersection has every key its members have, so `keyof (A & uint8)` is
+  // intersection has every key its members have, so `keyof (A & { })` is
   // `keyof A`.
-  expect(evaluated('type A = { a: uint8 }; type X = keyof (A & uint8); type Y = keyof A; '
+  //
+  // The keyless member is `{ }` rather than the `uint8` this pinned before.
+  // #sec-aredisjoint makes an object type and a primitive DISJOINT - the fact
+  // #sec-narrowto already stated - so `A & uint8` is now `never`, and `keyof`
+  // over the empty type is the empty type rather than an intersection with a
+  // keyless member. `{ }` is keyless and NOT disjoint from `A`, so it exercises
+  // the rule this test is about on a type that still has values.
+  expect(evaluated('type A = { a: uint8 }; type X = keyof (A & { }); type Y = keyof A; '
     + 'String(X === Y);')).toBe('true');
   // A union is the other way round - its keys are those COMMON to every member -
   // so a keyless member empties it, which needs no special case either.
