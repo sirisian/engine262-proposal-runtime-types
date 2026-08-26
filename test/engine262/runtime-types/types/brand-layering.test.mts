@@ -285,3 +285,42 @@ test('boolean is the one base a brand cannot yet carry on', () => {
   expect(evaluated("type B = boolean.<{ brand: 'B' }>; String(B(true));")).toBe('true');
   expectThrown("type B = boolean.<{ brand: 'B' }>; function f(x: B) { return 1; } f(B(true));");
 });
+
+// ---------------------------------------------------------------------------
+// T4: a carrier is chosen by the base's PRIMITIVE, looked through
+// ---------------------------------------------------------------------------
+
+test('T4: a brand over a LITERAL base carries', () => {
+  // The carrier was chosen by `Base.Kind === 'primitive'`, and a
+  // parameterization's base need not be one: `'a'.<{ brand }>` has a ~literal~
+  // base. So a branded literal carried nothing and every boundary refused it.
+  expect(evaluated("type L = 'a'; type B = L.<{ brand: 'B' }>;"
+    + ' String(Reflect.typeOf(B(\'a\')) === B);')).toBe('true');
+});
+
+test('T4: a NESTED brand carries its outer layer, not its inner', () => {
+  // Two gaps in one: the base of `E.<{ brand: 'N' }>` is ~parameterized~, which
+  // the guard also missed; and `carryStringType` returned an already-carrying
+  // value unchanged, so a nested crossing left it reporting the INNER type.
+  // Re-stamping unless the target is identical fixes the second.
+  const N = "type E = string.<{ brand: 'E' }>; type N = E.<{ brand: 'N' }>;";
+  expect(evaluated(`${N} String(Reflect.typeOf(N(E('a'))) === N);`)).toBe('true');
+  expect(evaluated(`${N} String(Reflect.typeOf(N(E('a'))) === E);`)).toBe('false');
+});
+
+test('T4: a plain brand is unchanged', () => {
+  expect(evaluated(`${E}String(Reflect.typeOf(E('a')) === E);`)).toBe('true');
+  expect(evaluated("type G = bigint.<{ brand: 'G' }>; String(Reflect.typeOf(G(1n)) === G);")).toBe('true');
+});
+
+test('T4: a brand over a literal BOOLEAN is refused, and that is correct', () => {
+  // A Boolean has no carrier - `true` and `false` are single values, and a
+  // Boolean carrying a mark would not be them (F177). Narrowing to `true`
+  // does not help: without a carrier a branded `true` is indistinguishable
+  // from `true`, so admitting it would make the brand unenforced. Refusing is
+  // the sound answer, and `isAssignable(true, B)` is false in the same breath.
+  const B = "type L = true; type B = L.<{ brand: 'B' }>;";
+  expect(evaluated(`${B} String(Reflect.getReflection(B).kind);`)).toBe('parameterized');
+  expect(evaluated(`${B} String(Reflect.isAssignable(L, B));`)).toBe('false');
+  expectThrown(`${B} function f(x: B) { return 1; } f(B(true));`);
+});

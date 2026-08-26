@@ -35,6 +35,31 @@ import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts
  */
 
 /**
+ * The primitive a parameterization ultimately refines, looking through a literal
+ * base and through nested parameterizations.
+ *
+ * PLAN-brand-layering-F.md T4. A carrier is chosen by the base's PRIMITIVE, and
+ * a parameterization's base need not be one: `true.<{ brand }>` has a ~literal~
+ * base, and `U.<{ brand }>` over an already-branded `U` has a ~parameterized~
+ * one. Testing `Base.Kind === 'primitive'` directly missed both, so a branded
+ * literal carried nothing and a nested brand carried its inner layer's record.
+ */
+function underlyingPrimitiveName(t: TypeRecord): string | undefined {
+  let cur: TypeRecord = t;
+  for (let depth = 0; depth < 16; depth += 1) {
+    if (cur.Kind === 'primitive') {
+      return cur.Name;
+    }
+    if (cur.Kind === 'literal' || cur.Kind === 'parameterized') {
+      cur = cur.Base;
+      continue;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
  * proposal-runtime-types (Capability B): when a String value is given a literal
  * (or otherwise refined) string type at a typed boundary, carry that type on the
  * value so RuntimeTypeOf reports it rather than the widened `string`. Returns a
@@ -48,10 +73,18 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   // was not using it, so a branded BigInt was a bare BigInt for the same reason
   // a branded String was. The same operation on the same shape of value.
   if (value instanceof BigIntValue && !(value instanceof TypedBigIntValue)
-    && t.Kind === 'parameterized' && t.Base.Kind === 'primitive' && t.Base.Name === 'bigint') {
+    && t.Kind === 'parameterized' && underlyingPrimitiveName(t.Base) === 'bigint') {
     return TypedBigInt(R(value) as bigint, t);
   }
-  if (!(value instanceof JSStringValue) || value instanceof TypedStringValue) {
+  // A value already carrying a record is RE-STAMPED when the target is a
+  // different type: a nested brand crosses a value that already carries its
+  // inner layer, and returning it unchanged left it reporting the inner type.
+  // Only an identical target is a no-op.
+  if (!(value instanceof JSStringValue)) {
+    return value;
+  }
+  if (value instanceof TypedStringValue
+    && (value as { TypeRecord?: unknown }).TypeRecord === t) {
     return value;
   }
   // A literal type whose base is `string`, i.e. a specific string value's type.
@@ -67,7 +100,7 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   // The carrier already existed and this function already used it - for a
   // literal type only. Carrying a parameterization is the same operation on the
   // same value, and it makes the three non-carrying primitives carry.
-  if (t.Kind === 'parameterized' && t.Base.Kind === 'primitive' && t.Base.Name === 'string') {
+  if (t.Kind === 'parameterized' && underlyingPrimitiveName(t.Base) === 'string') {
     return TypedString(value.stringValue(), t);
   }
   return value;
