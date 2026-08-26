@@ -39,6 +39,7 @@ import {
 import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
 import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
+import { isFloat128Object } from '../intrinsics/Float128.mts';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `delete` UnaryExpression
@@ -164,6 +165,28 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   } else if (isTypedNumber(val)) {
     // proposal-runtime-types R6: a typed number is a numeric primitive; typeof
     // reports 'number', consistent with it reading as its underlying Number.
+    return Value('number');
+  } else if (isFloat128Object(val) || isDecimalObject(val)) {
+    // PLAN-brand-layering-F.md F181. `sec-narrowing`: "`typeof` is unchanged: it
+    // reports *number* for EVERY numeric type ... and reports *object* for the
+    // SIMD, rational, and complex types."
+    //
+    // Three categories answer "object" and they are named. A `float128` and a
+    // `decimal` are neither - the clause calls a decimal a numeric type, and
+    // `rational` is separately a quotient of two `int` values - but both are
+    // represented here as objects, so they fell to the object case below and
+    // reported "object".
+    //
+    // That is observable and it breaks the clause's own example: narrowing a
+    // union with `typeof v === "number"` silently dropped a `float128` and every
+    // decimal, which are among the types a program is most likely to
+    // discriminate. It was also inconsistent within a family - `int128` and
+    // `uint128` report "number", so this was never about width.
+    //
+    // The representation is left alone: `Reflect.typeOf` and `instanceof` are
+    // what distinguish numeric types, which is the division of labour the clause
+    // describes, and a 128-bit float does not fit a Number. Whether it should be
+    // a typed number rather than an object is a separate question.
     return Value('number');
   } else if (val instanceof JSStringValue) {
     return Value('string');
