@@ -324,3 +324,34 @@ test('T4: a brand over a literal BOOLEAN is refused, and that is correct', () =>
   expect(evaluated(`${B} String(Reflect.isAssignable(L, B));`)).toBe('false');
   expectThrown(`${B} function f(x: B) { return 1; } f(B(true));`);
 });
+
+// ---------------------------------------------------------------------------
+// F179: the intersection crossing does not produce the INTERSECTION type
+// ---------------------------------------------------------------------------
+
+test('F179: a crossing into an intersection yields the last member, not the intersection', () => {
+  // RECORDED AS CURRENT STATE, NOT AS CORRECT. `ConvertValue`'s intersection
+  // arm crosses each member in turn and returns the result, so the value ends
+  // up carrying the LAST member's record rather than the intersection's.
+  //
+  // F171 predicted exactly this - "the result type is the open question, not
+  // the mechanism" - and it was never asserted, so C7 and the end-to-end gate
+  // below have been failing unnoticed for the whole of this plan.
+  expect(evaluated(`${EV}String(EV('a@b'));`)).toBe('a@b');
+  expect(evaluated(`${EV}String(Reflect.typeOf(EV('a@b')) === EV);`)).toBe('false');
+});
+
+test('F179: C7 - a brand cannot yet be ADDED to an already-branded value', () => {
+  // The incremental case every real use has: `verify(e: Email): Email & Verified`.
+  // On a numeric base the crossing refuses outright, naming the meta type; on a
+  // String it returns a value carrying the wrong record.
+  expectThrown("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
+    + ' AB(A((7 := uint32)));');
+});
+
+test('F179: the end-to-end gate does not yet run', () => {
+  // `send(verify(e))` - the program this plan opened with. Asserted as failing
+  // so that fixing F179 breaks a test that explains what it was for.
+  expectThrown(`${EV}function verify(e: E): EV { return EV(e); }`
+    + ' function send(to: E) { return to; } send(verify(E(\'a@b\')));');
+});
