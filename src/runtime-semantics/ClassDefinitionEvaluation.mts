@@ -2,6 +2,7 @@ import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
 import { CallDecorator } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
@@ -730,6 +731,29 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   // https://github.com/tc39/ecma262/pull/3212/
   // 17. Perform MakeClassConstructor(F).
   MakeClassConstructor(F);
+  // D8: carry a collection heritage's TYPE ARGUMENTS on the class constructor,
+  // so that `new M()` for `class M extends Map.<string, uint8> {}` can stamp the
+  // instance. The heritage evaluates to the plain `Map` constructor - a library
+  // generic has no per-specialization constructor - so the arguments are lost at
+  // that point unless they are recorded here, and without them the subclass's
+  // instances were untyped while the type said otherwise.
+  //
+  // Inherited by the ordinary property lookup, so `class N extends M {}` needs
+  // no rule of its own.
+  if (surroundingAgent.feature('runtime-types') && ClassHeritage
+      && (ClassHeritage as unknown as ParseNode).type === 'TypeArgumentsExpression') {
+    const spec = ClassHeritage as unknown as ParseNode.TypeArgumentsExpression;
+    const baseName = spec.Expression.type === 'IdentifierReference'
+      ? (spec.Expression as unknown as { name: string }).name
+      : undefined;
+    if (baseName !== undefined && COLLECTION_LIBRARY_NAMES.has(baseName)) {
+      const argRecords: TypeRecord[] = [];
+      for (const argNode of spec.TypeArguments.TypeArgumentList) {
+        argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+      }
+      (F as { CollectionTypeArguments?: readonly TypeRecord[] }).CollectionTypeArguments = argRecords;
+    }
+  }
   // 18. If ClassHeritage is present, set F.[[ConstructorKind]] to derived.
   if (ClassHeritage) {
     F.ConstructorKind = 'derived';

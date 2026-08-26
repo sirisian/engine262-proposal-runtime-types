@@ -167,6 +167,68 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
  * DISCARDED the return value the operation is defined to produce. One
  * operation at every boundary is the invariant here; the engine had two.
  */
+/**
+ * Give a collection its type arguments, refusing the entries it already holds
+ * that do not fit.
+ *
+ * WHY VALIDATE RATHER THAN STAMP EARLIER. A collection built with a seed -
+ * `new Set.<uint8>(["a"])` - had every seeded entry go unchecked, because the
+ * stamp is applied to the RESULT of Construct and the constructor has already
+ * consumed the seed by then. The obvious fix is to stamp first, and it is not
+ * available: there is no object to stamp until the construction produces one,
+ * so the type arguments would have to be threaded INTO construction through a
+ * channel that does not exist.
+ *
+ * Validating on the way in reaches further than that fix would have. It also
+ * covers the ANNOTATION path, `let s: Set.<uint8> = new Set(["a"])`, where the
+ * construction carries no type arguments at all and there is nothing to thread;
+ * and it gives the Phase 3 ADOPTION rule its missing half - a collection adopts
+ * a target's arguments only where its contents support the claim, which is what
+ * "adopting" ought to have meant.
+ *
+ * The rule stated once: a collection is of `Map.<K, V>` when every entry it
+ * holds is, so acquiring the type is exactly the check that it already was.
+ */
+export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRecord | number)[]): PlainEvaluator<void> {
+  const slots = value as unknown as Record<string, unknown>;
+  const key = args[0];
+  const second = args[1];
+  const entries = (slots.MapData ?? slots.WeakMapData) as
+    { Key?: Value, Value?: Value }[] | undefined;
+  //
+  // The CONVERTED value is written back, not merely checked. A boundary
+  // converts, so `new Set.<uint8>([1])` must hold a `uint8` and not the Number
+  // the literal arrived as - otherwise a seeded element and an added one would
+  // differ, and `Reflect.typeOf([...s][0])` would answer `number` for the first
+  // and `uint8` for the second. `add` and `set` already carry their values
+  // through the conversion; this is the same step for the entries a constructor
+  // put in.
+  if (entries !== undefined) {
+    for (const p of entries) {
+      if (p.Key === undefined) {
+        continue;
+      }
+      if (typeof key !== 'number') {
+        p.Key = Q(yield* RequireType(p.Key, key as TypeRecord));
+      }
+      if (p.Value !== undefined && typeof second !== 'number') {
+        p.Value = Q(yield* RequireType(p.Value, second as TypeRecord));
+      }
+    }
+  } else {
+    const elements = (slots.SetData ?? slots.WeakSetData) as (Value | undefined)[] | undefined;
+    if (elements !== undefined && typeof key !== 'number') {
+      for (let i = 0; i < elements.length; i += 1) {
+        const e = elements[i];
+        if (e !== undefined) {
+          elements[i] = Q(yield* RequireType(e, key as TypeRecord));
+        }
+      }
+    }
+  }
+  (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = args;
+}
+
 export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
   // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
   // value. At the point a field of type `T` is defined, the application has
@@ -447,7 +509,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       && (value as { TypedCollection?: readonly unknown[] }).TypedCollection === undefined) {
     const bare = { ...t, Arguments: [] } as unknown as TypeRecord;
     if (Q(yield* IsOfType(value, bare))) {
-      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+      Q(yield* StampTypedCollection(value, t.Arguments));
     }
   }
   const already = Q(yield* IsOfType(value, t));
@@ -476,7 +538,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
-      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+      Q(yield* StampTypedCollection(value, t.Arguments));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
@@ -1037,7 +1099,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       && (value as { TypedCollection?: readonly unknown[] }).TypedCollection === undefined) {
     const bare = { ...t, Arguments: [] } as unknown as TypeRecord;
     if (Q(yield* IsOfType(value, bare))) {
-      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+      Q(yield* StampTypedCollection(value, t.Arguments));
     }
   }
   const already = !shortOfADefault && Q(yield* IsOfType(value, t));
@@ -1086,7 +1148,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
-      (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection = t.Arguments;
+      Q(yield* StampTypedCollection(value, t.Arguments));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.

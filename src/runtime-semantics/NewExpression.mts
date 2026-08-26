@@ -9,6 +9,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { StampTypedCollection } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
@@ -152,7 +153,45 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       for (const argNode of spec.TypeArguments.TypeArgumentList) {
         argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
       }
-      (constructed as { TypedCollection?: readonly TypeRecord[] }).TypedCollection = argRecords;
+      // Through StampTypedCollection, which REFUSES the entries a seed already
+      // put in that do not fit: `new Set.<uint8>(["a"])` used to build a
+      // `Set.<uint8>` holding the String "a", because the stamp lands on the
+      // RESULT of Construct and the constructor consumed the seed before it.
+      // Stamping earlier is not available - there is no object until the
+      // construction makes one - so the check happens on the way in instead.
+      Q(yield* StampTypedCollection(constructed, argRecords));
+    }
+  }
+  // D8: a SUBCLASS of a specialization. `class M extends Map.<string, uint8> {}`
+  // followed by `new M()` reaches neither stamping path - the construction is a
+  // plain IdentifierReference, so the branch above does not fire, and there is
+  // no annotation whose boundary would adopt it - so the instance came back
+  // unstamped and every method went unchecked, which is F73 one level along.
+  //
+  // The arguments are recorded on the class constructor when its heritage is
+  // evaluated, and read back here off the constructor that was actually called.
+  //
+  // Walked up the constructor's [[Prototype]] chain rather than read directly,
+  // so `class N extends M {}` inherits from `M`. An earlier attempt read the
+  // field off the called constructor alone, on the assumption that ordinary
+  // property lookup would do the walking - it does not: this is an INTERNAL
+  // field on the object record, not a JS-visible property, so nothing inherits
+  // it without being asked to. The grandchild silently came back untyped.
+  if (surroundingAgent.feature('runtime-types')
+      && constructed instanceof ObjectValue && constructor instanceof ObjectValue
+      && (constructed as { TypedCollection?: readonly unknown[] }).TypedCollection === undefined) {
+    let ctor: Value = constructor;
+    let inherited: readonly TypeRecord[] | undefined;
+    while (ctor instanceof ObjectValue) {
+      const found = (ctor as { CollectionTypeArguments?: readonly TypeRecord[] }).CollectionTypeArguments;
+      if (found !== undefined) {
+        inherited = found;
+        break;
+      }
+      ctor = ctor.Prototype;
+    }
+    if (inherited !== undefined) {
+      Q(yield* StampTypedCollection(constructed, inherited));
     }
   }
   return constructed;
