@@ -2600,6 +2600,45 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
         const bound = typeParameterFrames[i].get(name);
         if (bound) {
+          // OQ-type-arguments-vs-metadata.md D2, the DEFERRED reading.
+          //
+          // `T.<{ brand: 'B' }>` cannot be read where it is written: whether the
+          // arguments are types or metadata depends on what `T` turns out to be,
+          // and at the declaration `T` is a parameter. The reading is therefore
+          // deferred with the application, and decided HERE, where the binding
+          // is in hand.
+          //
+          // The arguments were simply DROPPED: this returned the bound type and
+          // ignored `node.TypeArguments`, so `type F<T> = T.<{ brand: 'B' }>`
+          // instantiated at `string` was `string` exactly - `F.<string> === type
+          // string` answered *true* - and the brand guaranteed nothing. That is
+          // the failure #sec-parameterized-types calls the worst shape this can
+          // fail in, because a brand that becomes its own base type-checks
+          // everywhere.
+          // Narrowly: only the METADATA reading is taken here. A bound parameter
+          // may still be abstract (~parameter~), or may be a generic declaration
+          // standing for a HIGHER-KINDED argument - `class C<W<_>> { v: W.<uint8>; }`
+          // - and both of those are applications this arm must leave to the
+          // paths that already handle them. Anything not decidable as metadata
+          // returns the binding unchanged, exactly as before.
+          const boundParams = (bound.Kind === 'nominal'
+            ? (bound.Declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } } | undefined)
+              ?.TypeParameters?.TypeParameterList?.length ?? 0
+            : 0);
+          if (!node.TypeArguments || bound.Kind === 'parameter' || boundParams > 0) {
+            return bound;
+          }
+          const boundArgs: TypeRecord[] = [];
+          for (const argNode of node.TypeArguments.TypeArgumentList) {
+            boundArgs.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+          }
+          if (boundArgs.length === 1 && boundArgs[0]!.Kind === 'object') {
+            return CanonicalizeType({
+              Kind: 'parameterized',
+              Base: bound,
+              Metadata: MetadataObjectFromType(boundArgs[0]!),
+            } as TypeRecord, new Map());
+          }
           return bound;
         }
       }

@@ -133,6 +133,26 @@ test('an empty argument list applies every default', () => {
   expectThrown('type Box<T> = { v: T }; type T = Box.<>;');
 });
 
+test('the deferred reading produces the SAME type the written form does', () => {
+  // Not merely "a parameterized type": the identical interned one, so a value
+  // crossing into `F.<string>` and one crossing into `string.<{ brand: 'B' }>`
+  // are of one type rather than two that happen to look alike.
+  expect(evaluated("type F<T> = T.<{ brand: 'B' }>; type G = F.<uint8>;"
+    + " type H = uint8.<{ brand: 'B' }>; String(G === H);")).toBe('true');
+  // And the brand is ENFORCED, which is the whole point of not dropping it:
+  // a bare value of the base is refused, and the construction boundary works.
+  expectThrown("type F<T> = T.<{ brand: 'B' }>; type G = F.<string>; let y: G = 'a';");
+  expect(evaluated("type F<T> = T.<{ brand: 'B' }>; type G = F.<string>; String(G('a'));")).toBe('a');
+});
+
+test('a HIGHER-KINDED parameter is applied, not read as metadata', () => {
+  // The deferred reading must not swallow this. `W` is bound to a generic
+  // DECLARATION, so `W.<uint8>` is an application and has parameters left to
+  // supply; only a binding with none reads its argument as metadata.
+  expect(evaluated('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }'
+    + " String('ok');")).toBe('ok');
+});
+
 test('the fully-defaulted generic keeps a route to a brand', () => {
   // The two-step form worked before the decision and must still, since it is
   // what `Grid.<>` is measured against.

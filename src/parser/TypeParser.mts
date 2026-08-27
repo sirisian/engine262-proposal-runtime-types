@@ -463,8 +463,20 @@ export abstract class TypeParser extends ExpressionParser {
     const node = this.startNode<ParseNode.TypeArguments>();
     this.expect(Token.PERIOD_LT);
     this.noFuseGT += 1;
-    const TypeArgumentList: ParseNode.Type[] = [this.parseTypeArgument()];
-    while (this.eat(Token.COMMA)) {
+    // OQ-type-arguments-vs-metadata.md D2. `X.<>` supplies NO argument, so every
+    // parameter takes its default.
+    //
+    // It exists because D2 made `Grid.<{ brand: 'V' }>` an APPLICATION wherever
+    // `Grid` declares a parameter, which is right but takes away the only
+    // one-step spelling a fully-defaulted generic had for being branded. Without
+    // an empty list the alternative is `Grid.<float64>.<{ brand: 'V' }>`, which
+    // repeats the very default the named-argument form was added to avoid
+    // repeating.
+    const TypeArgumentList: ParseNode.Type[] = [];
+    if (!this.test(Token.GT)) {
+      TypeArgumentList.push(this.parseTypeArgument());
+    }
+    while (TypeArgumentList.length > 0 && this.eat(Token.COMMA)) {
       if (this.test(Token.GT)) {
         break;
       }
