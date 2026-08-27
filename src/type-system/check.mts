@@ -6148,7 +6148,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
       ? (heritage as { name: string }).name
       : null;
-    const base = baseName ? classTypeOf(baseName) : null;
+    // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
+    // `classTypeOf` finds only classes declared in source, so [[Base]] was left
+    // undefined and the chain the subtype relation walks stopped short. The run
+    // time walked it anyway: `new MyErr() is Error` and `instanceof` both
+    // answered *true* while `let e: Error = new MyErr()` was refused, which is
+    // the disagreement this record exists to end (OQ-library-nominal-subtyping.md).
+    //
+    // Worse than a refusal, it disagreed with ITSELF across a module boundary:
+    // the same class imported from another module was ACCEPTED, because this
+    // pass cannot see an imported declaration and abstained, leaving the run
+    // time to answer correctly. A program's meaning depended on which file its
+    // class was written in.
+    const base = baseName ? (classTypeOf(baseName) ?? libraryType(baseName)) : null;
     const baseStructure = base && base.Kind === 'nominal'
       ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
       : null;

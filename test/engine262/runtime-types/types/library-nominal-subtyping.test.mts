@@ -89,3 +89,39 @@ test('an unrelated library nominal is untouched', () => {
   expectThrown('let e: Error = new Map();');
   expectThrown('let m: Map = new TypeError("x");');
 });
+
+test('a USER class extending a library nominal reaches it', () => {
+  // The chain the subtype relation walks is [[Base]], and a class's [[Base]] was
+  // taken from `classTypeOf`, which finds only classes declared in SOURCE. A
+  // library heritage left it undefined and the walk stopped short, so
+  // `let e: Error = new MyErr()` was refused while `new MyErr() is Error` and
+  // `instanceof` both answered *true*.
+  expect(evaluated('class MyErr extends Error { } let e: Error = new MyErr();'
+    + ' String(e instanceof Error);')).toBe('true');
+  expect(evaluated('class M extends Map { } let m: Map = new M(); String(m instanceof Map);')).toBe('true');
+  expect(evaluated('class S extends Set { } let s: Set = new S(); String(s instanceof Set);')).toBe('true');
+});
+
+test('the chain is walked all the way, through both kinds of link', () => {
+  // A user class over a library SUBCLASS reaches the library BASE, which needs
+  // both this rule and the error table: one link is `Base`, the next is the
+  // built-in hierarchy.
+  expect(evaluated('class MyErr extends TypeError { } let e: Error = new MyErr();'
+    + ' String(e instanceof TypeError);')).toBe('true');
+  expect(evaluated('class MyErr extends TypeError { } let e: TypeError = new MyErr();'
+    + ' String(e instanceof TypeError);')).toBe('true');
+  // Two user links then a library one.
+  expect(evaluated('class B extends Error { } class C extends B { } let e: Error = new C();'
+    + ' String(e instanceof Error);')).toBe('true');
+});
+
+test('extending a library nominal relates to THAT one and no other', () => {
+  // The risk in taking a heritage name for a base is admitting too much. A
+  // library base is a chain link, not a licence.
+  expectThrown('class MyErr extends Error { } let r: RangeError = new MyErr();');
+  expectThrown('class MyErr extends Error { } let m: Map = new MyErr();');
+  expectThrown('class MyErr extends Map { } let e: Error = new MyErr();');
+  // Still directional, and a class that extends nothing relates to nothing.
+  expectThrown('class MyErr extends Error { } let m: MyErr = new Error("x");');
+  expectThrown('class Plain { x: uint8 = 1; } let e: Error = new Plain();');
+});
