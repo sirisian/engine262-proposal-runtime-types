@@ -4028,7 +4028,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ObjectType': {
         const Properties = [];
+        const IndexSignatures = [];
         for (const member of node.TypeMemberList) {
+          // An INDEX SIGNATURE member (OQ17). Any member that was not a
+          // `TypeMember` made the WHOLE type resolve to *null*, so
+          // `{ [key: string]: uint8 }` had no Static Type at all - which is why
+          // a binding of one was untyped, its reads unchecked, and an
+          // index-signature RESULT inert. The record and the subtype rule for
+          // these have existed all along; only the annotation could not be read.
+          //
+          // Filed as "index signatures do not participate in assignability",
+          // which was wrong: `Reflect.isAssignable` between two of them answers
+          // correctly. Nothing REACHED the relation, because nothing built the
+          // type.
+          if ((member as { type?: string }).type === 'IndexSignature') {
+            const ix = member as unknown as {
+              KeyTypeAnnotation?: { Type: ParseNode.Type },
+              ValueTypeAnnotation?: { Type: ParseNode.Type },
+            };
+            const key = ix.KeyTypeAnnotation ? resolveType(ix.KeyTypeAnnotation.Type) : null;
+            const value = ix.ValueTypeAnnotation ? resolveType(ix.ValueTypeAnnotation.Type) : null;
+            if (!key || !value) {
+              return null;
+            }
+            IndexSignatures.push({ Key: key as TypeRecord, Value: value as TypeRecord });
+            continue;
+          }
           if (member.type !== 'TypeMember') {
             return null;
           }
@@ -4042,7 +4067,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly });
         }
-        return { Kind: 'object', Properties, IndexSignatures: [] };
+        return { Kind: 'object', Properties, IndexSignatures };
       }
       case 'LiteralType': {
         if (node.kind === 'imaginary') {
@@ -5113,7 +5138,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const objType = structureOf(receiver);
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
-            return prop ? prop.type : null;
+            if (prop) {
+              return prop.type;
+            }
+            // An INDEX SIGNATURE answers where no declared property does
+            // (OQ17). Without this a read through one was ~any~, so
+            // `let _s_: string = _o_.a` type-checked on an
+            // `_o_: { [key: string]: uint8 }` - the type resolved, the relation
+            // honoured it, and the only thing that did not was the access.
+            //
+            // That is what made an index-signature RESULT inert:
+            // `Object.groupBy`'s `{ [key: K]: [].<T> }` refused a wrong
+            // whole-result annotation and then let every read off it go
+            // unchecked.
+            //
+            // A NAMED access is a String key, so only a `string`-keyed signature
+            // answers it; a `symbol`-keyed one is reached by a computed access
+            // and is left to that path.
+            const named = objType.IndexSignatures.find((ix) => ix.Key.Kind === 'primitive'
+              && (ix.Key as { Name?: string }).Name === 'string');
+            return named ? named.Value as Known : null;
           }
         }
         // A COMPUTED access, `a[i]`. This fell through to ~any~, so indexing a

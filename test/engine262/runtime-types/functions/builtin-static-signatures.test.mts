@@ -111,19 +111,34 @@ test('Object.groupBy constrains its key where Map.groupBy does not', () => {
   expectStaticTypeError(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => (1 := uint8));`);
 });
 
-test.fails('OQ17: an index signature does not participate in assignability', () => {
-  // `{ [key: string]: [].<string> }` is accepted for a result whose value type is
-  // `[].<uint32>`. PRE-EXISTING and general, not something these signatures
-  // introduce: two HAND-WRITTEN index-signature types are mutually assignable
-  // whatever their value types, and a member read through one is unchecked.
+test('OQ17 FIXED: an index-signature type resolves, binds and is read', () => {
+  // Filed as "index signatures do not participate in assignability". THAT WAS
+  // WRONG - `Reflect.isAssignable` between two of them answers correctly, and
+  // the subtype rule for them has existed all along. Nothing REACHED the
+  // relation, because nothing built the type: `resolveType`'s `ObjectType` case
+  // returned *null* for any member that was not a `TypeMember`, so an annotation
+  // containing an index signature had no Static Type at all.
   //
-  // The plan shipped `Object.groupBy` anyway (OQ17 direction B): the signature is
-  // not wrong, only unenforced at that depth, and the whole-result check - which
-  // is the common mistake - does work. Filed here so that fixing index
-  // signatures converts this with it.
-  expectStaticTypeError(`${A} let o: { [key: string]: [].<string> } = Object.groupBy(a, (n) => "k");`);
-  expectStaticTypeError('function f(x: { [key: string]: uint8 }) {} let y: { [key: string]: string } = {}; f(y);');
+  // The tell was that a MIXED type - `{ a: uint8, [key: string]: uint8 }` - was
+  // untyped while the plain `{ a: uint8 }` was checked. One member was
+  // discarding the whole shape.
+  expectStaticTypeError('let y: { [key: string]: uint8 } = {}; let bad: uint8 = y;');
   expectStaticTypeError('let y: { [key: string]: uint8 } = {}; let s: string = y.a;');
+  expect(ok('let y: { [key: string]: uint8 } = {}; let s: uint8 = y.a;')).toBe(true);
+  // A DECLARED property still wins over the signature.
+  expect(ok('let y: { a: string, [key: string]: uint8 } = { a: "x" }; let s: string = y.a;')).toBe(true);
+  // And the relation, which was never broken.
+  expect(evaluated('String(Reflect.isAssignable(type { [key: string]: string }, type { [key: string]: uint8 }));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type { [key: string]: uint8 }, type { [key: string]: uint8 }));')).toBe('true');
+});
+
+test('Object.groupBy\'s result is no longer inert', () => {
+  // The reason OQ17 blocked `Object.values`, `entries` and `fromEntries`: the
+  // signature refused a wrong WHOLE-result annotation and then let every read
+  // off it go unchecked.
+  const G = 'const a: [].<uint32> = [1]; let o: { [key: string]: [].<uint32> } = Object.groupBy(a, (x) => "k"); ';
+  expectStaticTypeError(`${G} let s: string = o.k;`);
+  expect(ok(`${G} let s: [].<uint32> = o.k;`)).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
