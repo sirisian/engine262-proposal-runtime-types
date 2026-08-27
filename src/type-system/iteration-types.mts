@@ -288,6 +288,20 @@ function promiseOf(t: TypeRecord): TypeRecord {
  * `Map.<K, V>` implements is `Iterable.<[K, V]>` rather than a constant. Each
  * is also a claim kept true by hand, which is why every one has a test.
  */
+const LIBRARY_EXTENDS: Record<string, string> = {
+  AggregateError: 'Error', EvalError: 'Error', RangeError: 'Error',
+  ReferenceError: 'Error', SyntaxError: 'Error', TypeError: 'Error', URIError: 'Error',
+};
+export function libraryExtends(name: string | undefined, target: string | undefined): boolean {
+  if (name === undefined || target === undefined) { return false; }
+  let current: string | undefined = LIBRARY_EXTENDS[name];
+  while (current !== undefined) {
+    if (current === target) { return true; }
+    current = LIBRARY_EXTENDS[current];
+  }
+  return false;
+}
+
 const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]) => TypeRecord[]> = {
   Generator: (a) => [
     iterationInterfaceRecord('IterableIterator', a)!,

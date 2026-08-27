@@ -7,7 +7,7 @@ import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
 } from './records.mts';
-import { builtinImplements, iterationInterfaceRecord } from './iteration-types.mts';
+import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
 
 /**
  * proposal-runtime-types #sec-structural-identity and #sec-subtyping-and-assignability
@@ -773,6 +773,26 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (assumed(assumptions, s, t)) {
     return true;
   }
+  // A library nominal may be a SUBTYPE of another library nominal, which is the
+  // built-in error hierarchy: `TypeError` is an `Error`, as `is` and
+  // `instanceof` both already answered, while this relation refused it
+  // (OQ-library-nominal-subtyping.md). Same shape as the user-class rule below -
+  // "the run time walks a prototype chain and the checker had nothing to walk" -
+  // and that fix landed for classes DECLARED IN SOURCE, leaving the built-ins
+  // behind for want of a declaration to read.
+  //
+  // It belongs HERE and not in SameTypeWithAssumptions, where the neighbouring
+  // `builtinImplements` clause sits. That operation folds refinement paths into
+  // sameness on purpose, and interning compares with it (`GetTypeObject` ->
+  // `SameTypeStructural`), so a subtype fact added there makes two DISTINCT
+  // types one Type Object: `type RangeError === type Error` answered *true*, and
+  // the collapse then showed up as an unrelated-looking bug where the second
+  // argument of a two-type call became the first. Subtyping is asymmetric and
+  // belongs in the asymmetric operation.
+  if (s.Kind === 'nominal' && t.Kind === 'nominal'
+      && libraryExtends(s.LibraryName, t.LibraryName)) {
+    return true;
+  }
   const next = [...assumptions, { First: s, Second: t }];
   // PLAN-where-on-methods.md, the ASSUMED half. A checked contract's fact is a
   // LOWER bound on a deferred application - `T <: return` - so it is consulted
@@ -1470,6 +1490,11 @@ function parameterAccepts(target: TypeRecord, source: TypeRecord, assumptions: r
 }
 
 export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
+  if ((globalThis as { __DBG?: boolean }).__DBG) {
+    // eslint-disable-next-line no-console
+    console.error('DBG ENTRY', s.Kind, (s as { LibraryName?: string }).LibraryName,
+      '->', t.Kind, (t as { LibraryName?: string }).LibraryName);
+  }
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
   }
