@@ -7209,6 +7209,61 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * The element type a `for`-`of` over _expr_ binds, or *null* where it cannot
+   * be determined - in which case the binding stays untyped, as it was for every
+   * receiver before this.
+   *
+   * Read off the source's Static Type from where the checker already keeps it,
+   * rather than by re-deriving an iteration protocol: an array's [[Element]], a
+   * tuple's positions as a union, a `string`'s characters, and a nominal's own
+   * type arguments.
+   */
+  const iteratedElementType = (expr: ParseNode): Known => {
+    const source = staticType(expr);
+    if (!source) {
+      return null;
+    }
+    if (source.Kind === 'array') {
+      return ((source as { Element?: TypeRecord }).Element ?? null) as Known;
+    }
+    if (source.Kind === 'tuple') {
+      const elements = (source as { Elements?: readonly { Type: TypeRecord }[] }).Elements ?? [];
+      if (elements.length === 0) {
+        return null;
+      }
+      return (elements.length === 1
+        ? elements[0].Type
+        : CanonicalizeType({ Kind: 'union', Members: elements.map((e) => e.Type) } as TypeRecord)) as Known;
+    }
+    // A String iterates as Strings, which is what makes `for (const c of s)`
+    // bind at `string` rather than at ~any~. A string LITERAL type iterates the
+    // same way - its characters are Strings, not that literal.
+    const base = source.Kind === 'literal' ? (source as { Base?: TypeRecord }).Base : source;
+    if (base && base.Kind === 'primitive' && (base as { Name?: string }).Name === 'string') {
+      return makePrimitive('string') as Known;
+    }
+    // A nominal yields from its own type arguments: a `Set.<T>` and a
+    // `Generator.<T, R, N>` yield T, and a `Map.<K, V>` yields the PAIR, which
+    // is what makes `for (const [k, v] of map)` destructure.
+    if (source.Kind === 'nominal' && source.Arguments.length > 0) {
+      const first = source.Arguments[0];
+      if (typeof first === 'number') {
+        return null;
+      }
+      const second = source.Arguments[1];
+      if ((source.LibraryName === 'Map' || source.LibraryName === 'WeakMap')
+          && second !== undefined && typeof second !== 'number') {
+        return {
+          Kind: 'tuple',
+          Elements: [first, second].map((x) => ({ Type: x, Rest: false, Initial: 'none' })),
+        } as unknown as Known;
+      }
+      return first as Known;
+    }
+    return null;
+  };
+
   const declare = (name: string, t: Known) => {
     frames[frames.length - 1].declaredNames.add(name);
     if (t) {
@@ -8050,17 +8105,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         BindingIdentifier?: { name?: string },
       } | undefined;
       const name = decl?.ForBinding?.BindingIdentifier?.name ?? decl?.BindingIdentifier?.name;
+      // #sec-iteration-types (D17): the binding a `for`-`of` introduces takes
+      // the ELEMENT TYPE of what is iterated. It took no type at all - for EVERY
+      // receiver, not only a collection - so
+      // `for (const v of a) { let s: string = v; }` was accepted for an
+      // `a: [].<uint8>` as readily as for a generator, a string or a range.
+      //
+      // Declared HERE rather than in the statement switch below, because this
+      // branch returns before reaching it: a `for`-`of` is handled once. The
+      // range-counter treatment beside it is the precedent - a loop variable
+      // already carries something the source proves - and the two compose, a
+      // counter over a literal range getting both its bound and its type.
+      const element = f.AssignmentExpression ? iteratedElementType(f.AssignmentExpression) : null;
       walk(f.AssignmentExpression);
+      const walkBody = () => {
+        if (typeof name === 'string' && element) {
+          pushBlock(() => {
+            declare(name, element);
+            walk(f.Statement);
+          });
+          return;
+        }
+        walk(f.Statement);
+      };
       if (bound && typeof name === 'string') {
         rangeCounters.push({ name, ...bound });
         try {
-          walk(f.Statement);
+          walkBody();
         } finally {
           rangeCounters.pop();
         }
         return;
       }
-      walk(f.Statement);
+      walkBody();
       return;
     }
     if (!Array.isArray(node) && (node as ParseNode).type === 'IdentifierReference') {

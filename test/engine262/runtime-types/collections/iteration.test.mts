@@ -188,26 +188,62 @@ test('D6: an UNTYPED collection reports the bare nominal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D17 - for-of and spread bindings have no type. NOT a collections defect.
+// D17 - for-of binding types. FIXED for the receivers below; the remainder is
+// recorded as expected failures rather than folded into the passing test.
 // ---------------------------------------------------------------------------
 
-test.fails('D17: a for-of binding takes the element type (general, not collections)', () => {
-  // Measured: a `for`-`of` binding is untyped for EVERY receiver - an array, a
-  // generator, a string, a range, and a collection alike. So this is the general
-  // iteration-to-binding path and not something the collections are missing, and
-  // a fix converts all five at once. All five are asserted here for that reason:
-  // fixing it only for collections would make them behave differently from
-  // arrays for no stated reason.
-  expect(ok('let a: [].<uint8> = [1,2,3]; for (const v of a) { let x: string = v; }')).toBe(false);
-  expect(ok('function* g(): Generator.<uint8> { yield 1; } for (const v of g()) { let x: string = v; }')).toBe(false);
-  expect(ok('for (const c of "abc") { let x: uint8 = c; }')).toBe(false);
-  expect(ok('for (const i of 0..<4) { let x: string = i; }')).toBe(false);
-  expect(ok(`${S} for (const v of s) { let x: string = v; }`)).toBe(false);
-  // And a Map destructures to the pair.
-  expect(ok(`${M} for (const [k, v] of m) { let x: uint8 = k; }`)).toBe(false);
+test('D17: a for-of binding takes the element type (general, not collections)', () => {
+  // The binding was untyped for EVERY receiver - an array, a generator, a
+  // string, a range, and a collection alike - so this was never something the
+  // collections were missing, and fixing it only for them would have made them
+  // behave differently from arrays for no stated reason. All of these are
+  // asserted together for that reason.
+  //
+  // The element type is read off the source's Static Type where the checker
+  // already keeps it: an array's [[Element]], a tuple's positions as a union,
+  // a `string`'s characters, and a nominal's own type arguments.
+  expectStaticTypeError('let a: [].<uint8> = [1,2,3]; for (const v of a) { let x: string = v; }');
+  expectStaticTypeError('let a: [4].<uint8> = [1,2,3,4]; for (const v of a) { let x: string = v; }');
+  expectStaticTypeError('function* g(): Generator.<uint8, void, void> { yield 1; } for (const v of g()) { let x: string = v; }');
+  expectStaticTypeError('const s2: string = "abc"; for (const c of s2) { let x: uint8 = c; }');
+  expectStaticTypeError(`${S} for (const v of s) { let x: string = v; }`);
+  // A tuple binds at the union of its positions.
+  expectStaticTypeError('const t: [uint8, string] = [1, "a"]; for (const v of t) { let x: boolean = v; }');
+  // A Map's whole element is the PAIR.
+  expectStaticTypeError(`${M} for (const e of m) { let x: string = e; }`);
+  expect(ok(`${M} for (const e of m) { let x: [string, uint8] = e; }`)).toBe(true);
+  // The right annotation is accepted, so the binding is typed rather than
+  // merely refusing everything.
+  expect(ok('let a: [].<uint8> = [1,2,3]; for (const v of a) { let x: uint8 = v; }')).toBe(true);
+  expect(ok('const s2: string = "abc"; for (const c of s2) { let x: string = c; }')).toBe(true);
+  // An UNTYPED source still binds at ~any~, which sec 0 requires.
+  expect(ok('const a = [1,2,3]; for (const v of a) { let x: string = v; }')).toBe(true);
 });
 
-test.fails('D17: a spread of a typed source takes its element type', () => {
+test('D17: the range-counter bound still composes with the binding type', () => {
+  // A counter over a literal range carries a proven upper bound, which is what
+  // lets a fixed-array index be checked. Typing the binding must not displace
+  // that - the two are set on the same name in the same frame.
+  expect(ok('const a: [4].<uint8> = [1,2,3,4]; for (const i of 0..<4) { a[i]; }')).toBe(true);
+  expect(evaluated('let t = 0; for (const i of 0..<4) t = i; String(t);')).toBe('3');
+});
+
+test.fails('D17 remainder: a range counter and a destructuring head are still untyped', () => {
+  // Three receivers the fix does not reach, kept as expected failures so they
+  // convert when it is extended rather than being quietly absorbed into the
+  // passing test above.
+  //
+  // A RANGE has no element type to read: its Static Type is the range, and the
+  // counter's type would have to come from the endpoints.
+  expect(ok('for (const i of 0..<4) { let x: string = i; }')).toBe(false);
+  // A DESTRUCTURING head binds through a pattern rather than a single name, so
+  // it takes the existing pattern path and the element type does not reach it.
+  expect(ok(`${M} for (const [k, v] of m) { let x: uint8 = k; }`)).toBe(false);
+  expect(ok('let a: [].<[uint8, string]> = []; for (const [n, s2] of a) { let x: string = n; }')).toBe(false);
+});
+
+test.fails('D17 remainder: a spread of a typed source takes its element type', () => {
+  // Spread is the same derivation in expression position and is not done.
   expect(ok('let a: [].<uint8> = [1,2,3]; let b: [].<string> = [...a];')).toBe(false);
   expect(ok(`${S} let b: [].<string> = [...s];`)).toBe(false);
 });
