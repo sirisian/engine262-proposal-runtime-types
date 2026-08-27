@@ -125,3 +125,70 @@ test.fails('OQ17: an index signature does not participate in assignability', () 
   expectStaticTypeError('function f(x: { [key: string]: uint8 }) {} let y: { [key: string]: string } = {}; f(y);');
   expectStaticTypeError('let y: { [key: string]: uint8 } = {}; let s: string = y.a;');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 - the cases the plan's list did not name
+// ---------------------------------------------------------------------------
+
+test('the items may be any ITERABLE, not only an array', () => {
+  // The signature's first parameter is `Iterable.<T>`, so `T` is recovered
+  // through the interface rather than off an array's [[Element]]. A collection
+  // reaches it by the `Iterable` it DECLARES, which is what makes this test
+  // about the signature and not about arrays.
+  const S = 'let s: Set.<uint32> = new Set(); ';
+  expect(ok(`${S} let g: Map.<string, [].<uint32>> = Map.groupBy(s, (n) => "k");`)).toBe(true);
+  expectStaticTypeError(`${S} let g: Map.<string, [].<string>> = Map.groupBy(s, (n) => "k");`);
+  // ...and the callback's parameter is typed from the collection's element.
+  expect(ok(`${S} Map.groupBy(s, (n) => { let x: uint32 = n; return "k"; });`)).toBe(true);
+  expectStaticTypeError(`${S} Map.groupBy(s, (n) => { let x: string = n; return "k"; });`);
+});
+
+test('the callback\'s INDEX parameter is the index type', () => {
+  // `#index-type`: one type describes every count a container reports or
+  // accepts, "an index used to read or write an element" among them. A
+  // callback's index is such a count, so it is `uint64`.
+  //
+  // `standardlibrary.md` writes `uint32` for it, which predates that dfn;
+  // `sec-typed-standard-library-statics` states `uint64` and the design is the
+  // side that should move.
+  expect(ok(`${A} Map.groupBy(a, (n, i) => { let x: uint64 = i; return "k"; });`)).toBe(true);
+  expectStaticTypeError(`${A} Map.groupBy(a, (n, i) => { let x: string = i; return "k"; });`);
+});
+
+test('a shadowed `Object` gets no signature either', () => {
+  // The guard is on the base being an unshadowed global, and it is asserted for
+  // both statics rather than only the first - a guard tested on one name is a
+  // guard that may be keyed on that name.
+  expect(ok(`if (false) { class O2 { } const Object = O2; ${A} let o: uint8 = Object.groupBy(a, (n) => "k"); } 1;`)).toBe(true);
+});
+
+test.fails('D25: the result is not STAMPED, so its run-time count is a Number', () => {
+  // `Map.groupBy` publishes `Map.<K, [].<T>>` statically while the value it
+  // returns carries no type arguments. A program that ANNOTATES the result gets
+  // it stamped by adoption at the boundary (#sec-collection-construction); one
+  // that does not gets a static type its value does not match.
+  //
+  // Not unsound - a Number reaching a `uint64` position converts - but the two
+  // halves disagree and the clause is the side that is right. Found by the
+  // devtools example, which expected a typed count and measured a plain one.
+  //
+  // BROADER THAN FIRST FILED, and the cause is CHECK ELISION - the same shape
+  // `sec-value-type-copying`'s note describes for a value-type copy.
+  //
+  // Measured: `let m: Map.<string, uint8> = new Map()` DOES adopt, and
+  // `let g: Map.<…> = Map.groupBy(…)` does NOT - but laundering the same call
+  // through `any` first does. So the boundary is being SKIPPED because the
+  // checker can now prove the initializer already satisfies the annotation, and
+  // adoption rides on that boundary.
+  //
+  // Phase 1 created this by giving `Map.groupBy` a Static Type: the elision is
+  // correct for a CHECK, which cannot fail where the type is proven, and wrong
+  // for ADOPTION, which is not a no-op. "A check that cannot fail does nothing.
+  // A copy is never nothing" - and neither is a stamp.
+  //
+  // The inner array elements ARE typed, since they come from the typed source,
+  // so only the Map's own stamp is missing.
+  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(Reflect.typeOf(g.size) === (type uint64));`)).toBe('true');
+  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g is Map.<string, [].<uint32>>);`)).toBe('true');
+  expect(evaluated(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => "k"); String(Reflect.typeOf(g.size) === (type uint64));`)).toBe('true');
+});
