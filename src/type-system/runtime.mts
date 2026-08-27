@@ -451,7 +451,26 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
   const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
   const leastArgs = firstDefault === -1 ? params.length : firstDefault;
   if (argRecords.length < leastArgs || argRecords.length > params.length) {
-    return Throw.TypeError('$1 is not a type', Value(declaration.BindingIdentifier.name));
+    // OQ-type-arguments-vs-metadata.md D2. The parameter list decides what
+    // `.<...>` MEANS, so it has to decide the error too, and say which parameter
+    // is at fault. Both arities reported "$1 is not a type" - which is false of
+    // the alias, unhelpful about the application, and actively misleading now
+    // that `Grid.<>` is a legal spelling: a reader of `Box.<>` was told `Box` was
+    // not a type rather than that `T` has no default to fall back on.
+    const missing = params[argRecords.length] as { BindingIdentifier?: { name?: string } } | undefined;
+    if (argRecords.length < leastArgs && missing?.BindingIdentifier?.name) {
+      return Throw.TypeError(
+        'no type argument for the required parameter $1 of $2',
+        Value(missing.BindingIdentifier.name),
+        Value(declaration.BindingIdentifier.name),
+      );
+    }
+    return Throw.TypeError(
+      '$1 takes $2 type arguments, and $3 were supplied',
+      Value(declaration.BindingIdentifier.name),
+      Value(String(params.length)),
+      Value(String(argRecords.length)),
+    );
   }
   if (argRecords.length < params.length) {
     const filled = [...argRecords];

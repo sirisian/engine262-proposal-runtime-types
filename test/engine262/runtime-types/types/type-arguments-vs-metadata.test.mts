@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, run } from '../harness.mts';
 
 // OQ-type-arguments-vs-metadata.md, D2. What `X.<…>` means.
 //
@@ -151,6 +151,22 @@ test('a HIGHER-KINDED parameter is applied, not read as metadata', () => {
   // supply; only a binding with none reads its argument as metadata.
   expect(evaluated('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }'
     + " String('ok');")).toBe('ok');
+});
+
+test('an arity error names the parameter list, not the alias', () => {
+  // The parameter list decides what `.<...>` MEANS, so it has to decide the
+  // error too. Every arity failure reported "$1 is not a type", which is false
+  // of the alias and says nothing about the application - and became actively
+  // misleading once `Grid.<>` was legal, since a reader of `Box.<>` was told
+  // `Box` was not a type rather than that `T` has no default to fall back on.
+  const message = (src: string): string => {
+    const c = run(src) as { Type: string, Value?: { HostDefinedMessageString?: string } };
+    return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : `NO THROW: ${src}`;
+  };
+  expect(message('type Box<T> = { v: T }; type B = Box.<>;')).toContain('required parameter');
+  expect(message('type Box<T> = { v: T }; type B = Box.<>;')).toContain('T');
+  expect(message('type Pair<A, B> = { a: A, b: B }; type P = Pair.<uint8>;')).toContain('B');
+  expect(message('type Box<T> = { v: T }; type B = Box.<uint8, string>;')).toContain('type arguments');
 });
 
 test('the fully-defaulted generic keeps a route to a brand', () => {
