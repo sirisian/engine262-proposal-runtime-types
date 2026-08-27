@@ -30,17 +30,19 @@ test('A: an array can be parameterized', () => {
   // slot on the element type, so the restriction here was structural.
   expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
     + ' String(Reflect.getReflection(T).kind);')).toBe('parameterized');
-  // F191, RECORDED NOT ASSERTED. The inline and alias spellings of an ARRAY
-  // parameterization are not the same type, and are not even mutually
-  // assignable - `isAssignable(inline, alias)` is false while the reverse is
-  // true. Their bases ARE identical and their metadata reads alike, so the
-  // difference is in the array record itself, not in this arm.
+  // F191, RECORDED NOT ASSERTED. An inline array parameterization interns with
+  // a LATER-declared bare array alias when it should not - and the answer
+  // depends on DECLARATION ORDER:
   //
-  // Every other operand shape interns identically, so this is specific to
-  // arrays and predates the syntax: it is reachable today by writing the alias
-  // form twice against differently-derived bases.
+  //   type A = [].<uint8>; type T = [].<uint8>.<{brand:'B'}>;   T === A  false (right)
+  //   type T = [].<uint8>.<{brand:'B'}>; type A = [].<uint8>;   T === A  TRUE  (wrong)
+  //
+  // Not the parse - the postfix loop runs ONCE on an `ArrayType` operand - and
+  // not the brand, which is real: two inline array brands with different tags
+  // are distinct and the metadata reads back. The ALIAS spelling is unaffected
+  // in either order, and so is every non-array base.
   expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
-    + " type A = [].<uint8>; type U = A.<{ brand: 'B' }>; String(T === U);")).toBe('false');
+    + " type A = [].<uint8>; String(T === A);")).toBe('true');
 });
 
 test('A: a generic application, a parenthesized type, and a function type', () => {
