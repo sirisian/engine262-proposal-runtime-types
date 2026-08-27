@@ -1610,10 +1610,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
       return undefined;
     }
-    if ((base.name === 'Array' && method === 'from')
+    if ((base.name === 'Array' && (method === 'from' || method === 'fromAsync'))
         || ((base.name === 'Map' || base.name === 'Object') && method === 'groupBy')) {
       const items = args[0] ? staticType(args[0]) : null;
-      const element = items ? elementTypeOfIterable(items) : null;
+      const rawElement = items ? elementTypeOfIterable(items) : null;
+      // `fromAsync` AWAITS each element, so its callback sees what the element
+      // resolves with rather than the promise. The others pass the element
+      // through unchanged, and `awaitedElementType` is the identity for a
+      // non-promise.
+      const element = rawElement && method === 'fromAsync'
+        ? awaitedElementType(rawElement)
+        : rawElement;
       if (!element) {
         return undefined;
       }
@@ -1625,6 +1632,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** `[].<T>`, the dynamic array of an element type. */
+  /**
+   * What a value contributes once AWAITED: a `Promise.<R, E>` contributes _R_,
+   * and anything else contributes itself.
+   *
+   * `Array.fromAsync` awaits each element, so an array of promises yields an
+   * array of what they resolve with. The union case matters because the design
+   * writes the parameter as `Iterable.<T | Promise.<T, any>>` - a source may mix
+   * bare values and promises, and both arms contribute _T_.
+   */
+  const awaitedElementType = (t: Known): Known => {
+    if (!t) {
+      return null;
+    }
+    if (t.Kind === 'nominal' && t.LibraryName === 'Promise') {
+      const [resolved] = t.Arguments;
+      return typeof resolved === 'number' || resolved === undefined ? null : resolved as Known;
+    }
+    if (t.Kind === 'union') {
+      const members = (t as { Members?: readonly TypeRecord[] }).Members ?? [];
+      const awaited = members.map((member) => awaitedElementType(member as Known));
+      if (awaited.some((x) => !x)) {
+        return null;
+      }
+      return CanonicalizeType({ Kind: 'union', Members: awaited as TypeRecord[] } as TypeRecord) as Known;
+    }
+    return t;
+  };
+
   const arrayOfElement = (element: TypeRecord): Known => ({
     Kind: 'array', Element: element, Extent: 'dynamic',
   } as unknown as Known);
@@ -1665,6 +1700,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // and the derivation is the one `Map.groupBy` already uses - the first
     // parameter is `Iterable.<T>`, so a typed array, a collection, a generator
     // and a string all reach it by the interface they declare.
+    if (base.name === 'Array' && method === 'fromAsync') {
+      // `standardlibrary.md`'s two overloads:
+      //
+      //   fromAsync<T>(items: AsyncIterable.<T> | Iterable.<T | Promise.<T, any>>): Promise.<[].<T>, any>
+      //   fromAsync<T, U>(items, mapFn: (value: T, index: uint64) => U | Promise.<U, any>): Promise.<[].<U>, any>
+      //
+      // Selected by ARITY, as `Array.from`'s pair is: a builtin's overloads
+      // differ in how many arguments they take, so the general overload-ranking
+      // machinery the plan once budgeted for is not needed here.
+      //
+      // A promise-valued ELEMENT contributes what it RESOLVES with, which is the
+      // one thing this signature needs that no other does: `fromAsync` awaits
+      // each element, so a `[].<Promise.<uint8, E>>` yields a `[].<uint8>`.
+      return (args) => {
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        if (!element) {
+          return null;
+        }
+        const awaited = awaitedElementType(element);
+        if (!awaited) {
+          return null;
+        }
+        if (args.length < 2) {
+          return libraryTypeRecord('Promise', [
+            arrayOfElement(widen(awaited) as TypeRecord) as TypeRecord, anyTypeRecord,
+          ]) ?? null;
+        }
+        const callback = args[1] ? staticType(args[1]) : null;
+        const sigs = (callback as { Signatures?: readonly { Return?: Known, InferredReturn?: Known }[] } | null)?.Signatures;
+        const mapped = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
+        if (!mapped) {
+          return null;
+        }
+        // The callback may answer a promise too, and it is awaited the same way.
+        const mappedAwaited = awaitedElementType(widen(mapped) as TypeRecord);
+        return mappedAwaited
+          ? libraryTypeRecord('Promise', [
+            arrayOfElement(widen(mappedAwaited) as TypeRecord) as TypeRecord, anyTypeRecord,
+          ]) ?? null
+          : null;
+      };
+    }
     if (base.name === 'Array' && (method === 'from' || method === 'of')) {
       return (args) => {
         if (method === 'of') {

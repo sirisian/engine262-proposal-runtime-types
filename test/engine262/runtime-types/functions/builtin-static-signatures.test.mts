@@ -615,3 +615,49 @@ test('the three preserve participation and the run time', () => {
   expect(evaluated('const o = { a: 1 }; const e = Object.entries(o); String(e[0][0]) + String(e[0][1]);')).toBe('a1');
   expect(evaluated('const o = Object.fromEntries([["a", 1]]); String(o.a);')).toBe('1');
 });
+
+// ---------------------------------------------------------------------------
+// Array.fromAsync - the last stated design signature
+// ---------------------------------------------------------------------------
+
+const FA = 'const a: [].<uint8> = [1, 2]; ';
+const FP = 'let ps: [].<Promise.<uint8, Error>> = []; ';
+
+test('fromAsync AWAITS its elements', () => {
+  // `standardlibrary.md` writes the parameter as
+  // `AsyncIterable.<T> | Iterable.<T | Promise.<T, any>>`. A promise-valued
+  // element contributes what it RESOLVES with, which is the one thing this
+  // signature needs that no other does.
+  expect(ok(`${FA} let p: Promise.<[].<uint8>, any> = Array.fromAsync(a);`)).toBe(true);
+  expectStaticTypeError(`${FA} let p: Promise.<[].<string>, any> = Array.fromAsync(a);`);
+  expect(ok(`${FP} let p: Promise.<[].<uint8>, any> = Array.fromAsync(ps);`)).toBe(true);
+  // The promise is UNWRAPPED, so the result is not an array of promises.
+  expectStaticTypeError(`${FP} let p: Promise.<[].<Promise.<uint8, Error>>, any> = Array.fromAsync(ps);`);
+  // A source MIXING bare values and promises - the union arm the design writes -
+  // contributes T from both.
+  expect(ok('let m: [].<uint8 | Promise.<uint8, Error>> = []; let p: Promise.<[].<uint8>, any> = Array.fromAsync(m);')).toBe(true);
+});
+
+test('fromAsync\'s two overloads are selected by ARITY', () => {
+  // A builtin's overloads differ in how many arguments they take, so the general
+  // overload-ranking machinery this plan once budgeted for was not needed - the
+  // same answer `Array.from`'s pair reached.
+  expect(ok(`${FA} let p: Promise.<[].<string>, any> = Array.fromAsync(a, (x) => "k");`)).toBe(true);
+  expectStaticTypeError(`${FA} let p: Promise.<[].<uint8>, any> = Array.fromAsync(a, (x) => "k");`);
+});
+
+test('fromAsync\'s callback sees the AWAITED element', () => {
+  expect(ok(`${FA} Array.fromAsync(a, (x) => { let s: uint8 = x; return "k"; });`)).toBe(true);
+  expectStaticTypeError(`${FA} Array.fromAsync(a, (x) => { let s: string = x; return "k"; });`);
+  // Over promises the callback sees `uint8`, not `Promise.<uint8, Error>`.
+  expect(ok(`${FP} Array.fromAsync(ps, (x) => { let s: uint8 = x; return "k"; });`)).toBe(true);
+  expectStaticTypeError(`${FP} Array.fromAsync(ps, (x) => { let s: Promise.<uint8, Error> = x; return "k"; });`);
+});
+
+test('fromAsync matches Array.from on an untyped source, and the run time', () => {
+  // Consistency asserted rather than assumed: both say something for a literal,
+  // whose elements have a type, and nothing for an untyped binding.
+  expect(ok('if (false) { const u = [1, 2]; let p: uint8 = Array.fromAsync(u); } 1;')).toBe(true);
+  expect(ok('if (false) { const u = [1, 2]; let p: uint8 = Array.from(u); } 1;')).toBe(true);
+  expect(evaluated('const p = Array.fromAsync([1, 2]); String(typeof p.then);')).toBe('function');
+});
