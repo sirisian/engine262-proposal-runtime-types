@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool } from '../harness.mts';
+import { evaluated, ok, bool, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-computed-constraints (Computed Constraints),
@@ -159,4 +159,50 @@ test('other type kinds are unaffected', () => {
     expect(evaluated(`type L = ${written}; function f<P>() { return Reflect.getReflection(P).kind; }`
       + ' String(f.<L>());')).toBe(kind);
   }
+});
+
+test('a type variable is inferred from a CALLBACK, in both directions', () => {
+  // Two omissions, one gap seen from both ends. The binding walk had no
+  // [[Signatures]] case, so a callback's shape constrained nothing; and
+  // `mentionsTypeParameter` had none either, so `() => K` did not count as
+  // mentioning `K` - the guard that skips an unbound parameter never fired and
+  // the argument was compared against the raw `() => K`. The result read like a
+  // type error, `"() => uint8" is not assignable to "() => K"`, and was really
+  // the absence of one.
+  //
+  // Asserted BOTH WAYS throughout. A refusal alone proves that something was
+  // checked, never that the right thing was inferred: an earlier survey of this
+  // area read six capabilities as working on the strength of refusals, and four
+  // of them refused every annotation, right or wrong.
+  const F = 'function f<K>(cb: () => K): K { return cb(); } ';
+  expectStaticTypeError(`${F} let s: string = f(() => (1 := uint8));`);
+  expect(ok(`${F} let s: uint8 = f(() => (1 := uint8));`)).toBe(true);
+
+  // A named function argument, not only an arrow.
+  const N = `${F} function c(): uint8 { return 1; } `;
+  expectStaticTypeError(`${N} let s: string = f(c);`);
+  expect(ok(`${N} let s: uint8 = f(c);`)).toBe(true);
+
+  // A variable in the callback's PARAMETER position binds too, which is the
+  // other half of a signature's shape.
+  const P = 'function p<T>(cb: (v: T) => void, x: T): T { return x; } ';
+  expectStaticTypeError(`${P} let s: string = p((v: uint8) => {}, (1 := uint8));`);
+  expect(ok(`${P} let s: uint8 = p((v: uint8) => {}, (1 := uint8));`)).toBe(true);
+});
+
+test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => {
+  // `standardlibrary.md` gives `Map.groupBy<K, T>(items, callback): Map.<K, [].<T>>`,
+  // where T comes from the items and K from the callback's RETURN and from
+  // nowhere else. This is that shape written as a user generic, and it is the
+  // prerequisite PLAN-static-signatures.md's Phase 0 exists for.
+  const G = 'function g<T, K>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { return undefined; } '
+    + 'const a: [].<uint8> = [1]; ';
+  // Guarded by `if (false)`, so what is asserted is the STATIC property: the
+  // stub returns *undefined*, which no Map annotation admits at run time, and a
+  // run-time refusal would pass an `ok(...)` check for the wrong reason.
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
+  expectStaticTypeError(guard(`${G} let m: Map.<uint8, [].<uint8>> = g(a, (v) => "k");`));
+  expect(ok(guard(`${G} let m: Map.<string, [].<uint8>> = g(a, (v) => "k");`))).toBe(true);
+  // The element type flows to the result as well as the key.
+  expectStaticTypeError(guard(`${G} let m: Map.<string, [].<string>> = g(a, (v) => "k");`));
 });

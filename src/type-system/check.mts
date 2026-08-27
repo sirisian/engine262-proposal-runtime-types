@@ -1353,7 +1353,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return true;
     }
     const withElement = t as { Element?: TypeRecord };
-    return !!withElement.Element && mentionsTypeParameter(withElement.Element);
+    if (withElement.Element && mentionsTypeParameter(withElement.Element)) {
+      return true;
+    }
+    // A FUNCTION type mentions a parameter through its signature. Without this
+    // `() => K` did not count as mentioning `K`, so the guard at the argument
+    // check did not fire and the argument was compared against the UNBOUND
+    // parameter - `"() => uint8" is not assignable to "() => K"`, which reads
+    // like a type error and is really the absence of one.
+    //
+    // The same omission sat in the binding walk beside this, which likewise had
+    // no [[Signatures]] case and so bound nothing from a callback. The two are
+    // one gap seen from both ends: a callback's shape neither constrained a
+    // variable nor was recognised as mentioning one.
+    const withSignatures = t as {
+      Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[],
+    };
+    return !!withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type))
+      || (!!sig.Return && mentionsTypeParameter(sig.Return)));
   };
 
   /**
@@ -1399,6 +1416,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const aEl = (arg as { Element?: TypeRecord }).Element;
       if (pEl && aEl) {
         match(pEl, aEl);
+        return;
+      }
+      // A FUNCTION parameter: a callback's shape says what a variable is as
+      // plainly as a direct position does. Without this, `K` in
+      // `f<K>(cb: () => K)` was never bound - the walk had no case for
+      // [[Signatures]], so it stopped at the function record and left `K`
+      // unconstrained, and `"() => uint8" is not assignable to "() => K"` was
+      // the result even where the callback plainly returned a `uint8`.
+      //
+      // This is what `standardlibrary.md` means by the signatures stating "how
+      // element and key types flow through": `Map.groupBy`'s key type is the
+      // callback's RETURN and is knowable from nowhere else.
+      //
+      // Only the FIRST signature of each, and only pairwise: an overloaded
+      // callback type is not something a call site can resolve against here, and
+      // binding from one arbitrary overload would be worse than binding nothing.
+      const pSigs = (param as { Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[] }).Signatures;
+      const aSigs = (arg as { Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[] }).Signatures;
+      if (pSigs?.length === 1 && aSigs?.length === 1) {
+        const pSig = pSigs[0];
+        const aSig = aSigs[0];
+        (pSig.Parameters ?? []).forEach((pp, i) => {
+          const ap = (aSig.Parameters ?? [])[i];
+          if (pp?.Type && ap?.Type) {
+            match(pp.Type, ap.Type);
+          }
+        });
+        if (pSig.Return && aSig.Return) {
+          match(pSig.Return, aSig.Return);
+        }
       }
     };
     parameters.forEach((p, i) => match(p.Type ?? null, argumentTypes[i] ?? null));
