@@ -1,3 +1,4 @@
+import { NoDefaultValueError } from '../type-system/intern.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { displayType } from '../type-system/records.mts';
@@ -460,7 +461,7 @@ export function bootstrapSynchronization(realmRec: Realm) {
       // reads uses the storage exactly as intended, so refusing `new` would
       // refuse a program the clause permits.
       if (thisValue.ThreadLocalType !== undefined && thisValue.ThreadLocalHasDefault === false) {
-        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(thisValue.ThreadLocalType)));
+        return NoDefaultValueError(thisValue.ThreadLocalType);
       }
       return thisValue.ThreadLocalDefault;
     } as never, function* setValue(a: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {

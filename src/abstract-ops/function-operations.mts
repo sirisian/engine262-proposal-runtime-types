@@ -1,3 +1,4 @@
+import { NoDefaultValueError } from '../type-system/intern.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import {
   Descriptor,
@@ -324,7 +325,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
         // The same rule as a binding's, and reporting it here replaces the
         // "undefined is not assignable" the RequireType below used to raise -
         // which named the symptom rather than the reason.
-        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(record)));
+        return NoDefaultValueError(record);
       }
       initValue = Value.undefined;
     } else {

@@ -1,4 +1,4 @@
-import { GetTypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
 import { surroundingAgent, Throw, LookupTypeDefault } from '#self';
@@ -73,7 +73,7 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
           // and no initializer when DefaultValueOf(_t_) is ~none~." The refusal
           // follows the default, so `var u: uint8 | string;` stops being legal
           // exactly as `let u: uint8 | string;` already is.
-          return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(record)));
+          return NoDefaultValueError(record);
         }
       }
       // 1. Return NormalCompletion(empty).

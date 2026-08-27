@@ -11,7 +11,7 @@ import { Value } from '../value.mts';
 import { IsAnonymousFunctionDefinition, StringValue, type FunctionDeclaration } from '../static-semantics/all.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { GetTypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
@@ -173,7 +173,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       // bind, so a generic's field is checked at its specialization - which this
       // engine does not reach, since a specialized field's type is not
       // substituted at all (recorded in KNOWN-DIVERGENCES.md).
-        return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(record)));
+        return NoDefaultValueError(record);
       }
     }
     // 2. Return InitializeReferencedBinding(lhs, undefined).

@@ -417,6 +417,15 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (IsBudgetExhausted()) {
         break;
       }
+      // The same split the runtime makes (`NoDefaultValueError`): `never` has no
+      // default because it has NO VALUES, so telling a program to add an
+      // initializer names a remedy that cannot exist - there is no expression of
+      // type `never` to write. The record is used rather than the precomputed
+      // display, which is already canonical here.
+      const req = requirement.type as TypeRecord | undefined;
+      if (req && req.Kind === 'union' && req.Members.length === 0) {
+        return Throw.TypeError('$1 has no values, so no declaration of it can be initialized', Value(requirement.display));
+      }
       return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
     }
   }

@@ -6,7 +6,7 @@ import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
-import { neverType, orderKey, propertiesInKeyOrder } from './records.mts';
+import { neverType, orderKey, propertiesInKeyOrder, displayType } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
@@ -429,4 +429,33 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   };
   table.push(obj);
   return obj;
+}
+
+/**
+ * The refusal for `DefaultValueOf(_t_)` being ~none~: "It is a type error to
+ * declare a binding or a field with a type _t_ and no initializer when
+ * DefaultValueOf(_t_) is ~none~."
+ *
+ * Shared by the five sites that raise it, because both faults below were the
+ * same expression written five times.
+ *
+ * It CANONICALIZES before displaying. An annotation resolved inline reaches
+ * these sites as an un-interned record, so an empty intersection was named by
+ * its members rather than by what it denotes: `let x: N & uint8` reported
+ * `"string.<{ brand: "E" }>.<{ brand: "N" }> & uint.<8>"` while the same type
+ * behind an alias reported `"never"`. One type, two spellings, two messages.
+ *
+ * And it does not tell a program to do the impossible. `never` has no default
+ * because it has NO VALUES, so "a declaration of it needs an initializer" names
+ * a remedy that cannot exist - there is no expression of type `never` to write.
+ * The advice was actively wrong in exactly the case the empty-intersection rule
+ * makes reachable, which is where a reader is most likely to meet it.
+ */
+export function NoDefaultValueError(record: TypeRecord) {
+  const canonical = CanonicalizeType(record, new Map());
+  const isNever = canonical.Kind === 'union' && canonical.Members.length === 0;
+  if (isNever) {
+    return Throw.TypeError('$1 has no values, so no declaration of it can be initialized', Value(displayType(canonical)));
+  }
+  return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(canonical)));
 }

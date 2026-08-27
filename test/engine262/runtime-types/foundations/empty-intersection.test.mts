@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, run } from '../harness.mts';
 
 // #sec-aredisjoint, #sec-canonicalizetype, #sec-intersection-type-early-errors.
 //
@@ -211,4 +211,38 @@ test('an alias for an empty intersection reports once, at its own declaration', 
   // Guards against a cascade in which one mistake produces an error per mention.
   const c = evaluated('try { eval("type Z = number & bigint; type W = uint8 & Z;"); "no" } catch (e) { "one" }');
   expect(c).toBe('one');
+});
+
+test('the refusal for `never` names the reason, not an impossible remedy', () => {
+  // `never` has no default because it has NO VALUES, so "a declaration of it
+  // needs an initializer" named a remedy that cannot exist: there is no
+  // expression of type `never` to write. The advice was wrong in exactly the
+  // case the empty-intersection rule makes reachable, which is where a reader is
+  // most likely to meet it.
+  const message = (src: string): string => {
+    const c = run(src) as { Type: string, Value?: { HostDefinedMessageString?: string } };
+    return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : `NO THROW: ${src}`;
+  };
+  expect(message('let x: never;')).toContain('has no values');
+  expect(message('let x: never;')).not.toContain('needs an initializer');
+  // A type that merely lacks a default keeps the original advice, which is
+  // followable.
+  expect(message('let x: { f: never };')).toContain('needs an initializer');
+  expect(message('let u: uint8 | string;')).toContain('needs an initializer');
+});
+
+test('an inline annotation names the type it DENOTES, not its members', () => {
+  // An annotation resolved inline reaches the refusal as an un-interned record,
+  // so an empty intersection was named by its members while the same type behind
+  // an alias was named `never` - one type, two spellings, two messages. The
+  // shared refusal canonicalizes before displaying.
+  const message = (src: string): string => {
+    const c = run(src) as { Type: string, Value?: { HostDefinedMessageString?: string } };
+    return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : `NO THROW: ${src}`;
+  };
+  const N = "type E = string.<{ brand: 'E' }>; type N = E.<{ brand: 'N' }>;";
+  expect(message(`${N} let x: N & uint8;`)).toContain('never');
+  expect(message(`${N} let x: N & uint8;`)).not.toContain('&');
+  // The alias spelling of the same type already said this, and still does.
+  expect(message(`${N} type V = N & uint8; let x: V;`)).toContain('never');
 });
