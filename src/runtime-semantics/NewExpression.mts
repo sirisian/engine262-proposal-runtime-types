@@ -13,7 +13,7 @@ import { StampTypedCollection } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
-import { surroundingAgent } from '#self';
+import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
   Assert,
   Construct,
@@ -186,6 +186,12 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       const found = (ctor as { CollectionTypeArguments?: readonly TypeRecord[] }).CollectionTypeArguments;
       if (found !== undefined) {
         inherited = found;
+        break;
+      }
+      // `Prototype` is declared on ~OrdinaryObject~, not on every ObjectValue -
+      // an exotic object need not have the slot - so the walk has to check
+      // before reading it, and stops at anything that does not.
+      if (!isOrdinaryObject(ctor)) {
         break;
       }
       ctor = ctor.Prototype;

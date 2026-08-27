@@ -4,7 +4,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf } from '../abstract-ops/runtime-types.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
-import { type MetadataRecord,
+import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
   neverType, libraryTypeRecord as libraryType } from './records.mts';
@@ -1834,7 +1834,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // repeated across every operation that walks a type, which is why each half
     // looked like a separate defect until the pattern was named.
     const withSignatures = t as {
-      Signatures?: readonly { Parameters?: readonly { Type?: Known }[], Return?: Known }[],
+      // The local shape names only what this function READS. It must keep the
+      // record's own field types for the rest: the spreads below preserve every
+      // other field at run time, and a looser annotation makes the `as Known` a
+      // widening TypeScript rejects - `Parameters` would lose `Name`,
+      // `Optional` and `Rest`.
+      Signatures?: readonly SignatureRecord[],
     };
     // Guarded on the type actually MENTIONING a variable, so a record with
     // nothing to substitute is returned as it came. Rebuilding unconditionally
@@ -1853,7 +1858,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         })),
       } as Known;
     }
-    const withProperties = t as { Properties?: readonly { type?: Known }[] };
+    const withProperties = t as { Properties?: readonly PropertyTypeRecord[] };
     if (withProperties.Properties && mentionsTypeParameter(t)) {
       return {
         ...t,
@@ -4118,10 +4123,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // not have, and inferring it anyway answers `undefined` for a body that
         // simply never returns - which is not assignable to `void` and would
         // refuse `() => {}` at every position wanting one.
-        const conciseArrow = node as unknown as { ConciseBody?: ParseNode };
-        const conciseBodied = node.type === 'ArrowFunction'
-          && conciseArrow.ConciseBody !== undefined
-          && conciseArrow.ConciseBody.type !== 'FunctionBody';
         // Where the literal wrote no return type, its body cannot be read, and
         // its position wants nothing, there is NOTHING TO SAY - so say nothing
         // rather than claim ~any~. A claimed `any` is not the same as silence
@@ -9386,9 +9387,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `const` only, for the same reason: a `let` may be reassigned, and
           // fixing its type from an initializer would refuse assignments an
           // untyped program is entitled to make.
+          // Bound to a local so the guard NARROWS it: `n.Initializer` is typed
+          // as nullable, and testing a cast copy left the original nullable at
+          // the `staticType` call below.
+          const newInit = n.Initializer as ParseNode | null | undefined;
           if (!declared && !n.TypeAnnotation && isConstDeclaration
-              && (n.Initializer as ParseNode | undefined)?.type === 'NewExpression') {
-            const inferred = staticType(n.Initializer);
+              && newInit?.type === 'NewExpression') {
+            const inferred = staticType(newInit);
             if (inferred) {
               declare(n.BindingIdentifier.name, widen(inferred));
               return;
