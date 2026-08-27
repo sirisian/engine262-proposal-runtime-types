@@ -2673,7 +2673,66 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return composite;
         }
       }
-      const metadataRecord = argRecords.length === 1 && argRecords[0]!.Kind === 'object'
+      // OQ-type-arguments-vs-metadata.md D2. THE BASE DECIDES, NOT THE ARGUMENT.
+      //
+      // `X.<{ a: uint8 }>` has two readings - a generic application whose one
+      // type argument is an object type, and a metadata parameterization whose
+      // record is that object - and they are written alike BECAUSE A METADATA
+      // RECORD IS WRITTEN AS AN OBJECT TYPE. No rule that reads the ARGUMENT can
+      // separate them, which is what the rule below used to do: "one argument of
+      // kind ~object~ is metadata", base never consulted.
+      //
+      // That made every generic alias applied to one object type unreachable
+      // (`Box.<{ a: uint8 }>`, `Id.<{ a: uint8 }>`, and so `Box.<Box.<uint8>>`,
+      // the nesting only being what PRODUCES an object in argument position),
+      // along with `Composite.<Shape>` - written in #sec-composite-types - and
+      // `Iterable.<ObjectType>`. It was also arity-dependent: `Pair.<{a},{b}>`
+      // worked only because two arguments cannot be one record.
+      //
+      // The specification already decides two neighbouring ambiguities in this
+      // very bracket by the DECLARATION: whether an argument is a type or a
+      // value ("the clause on generics decides which a given parameter
+      // expects"), and which parameter a named argument supplies ("a
+      // TypeParameter of the type or function being applied"). This is that
+      // rule, applied to the one case it had not been.
+      const declaresTypeParameters = ((): boolean => {
+        // A user declaration - a generic alias or a generic class - states its
+        // parameters in the parse tree the annotation sits in.
+        const decl = declarationNamed(node, name) as {
+          TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
+        } | null;
+        if ((decl?.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
+          return true;
+        }
+        // A builtin family declares its parameters in `builtinTypeRecord`
+        // rather than in source, so it is asked the same question by applying
+        // it: a family ANSWERS DIFFERENTLY with arguments than without, while a
+        // plain builtin such as `string` ignores them and answers the same. This
+        // keeps the rule from carrying a list of builtin names that would go
+        // stale as families are added.
+        if (argRecords.length === 0) {
+          return false;
+        }
+        // An ITERATION INTERFACE is a structural record rather than a nominal
+        // one (#sec-iteration-types), so its parameters are in neither of the
+        // places above - they appear inside its members. The engine already
+        // needs a predicate for these to carry their arguments at all, and it
+        // answers this question too. Without it `Iterable.<{ a: uint8 }>` read
+        // the iterator's whole structural type as a base and reported that `a`
+        // is claimed by no meta type, naming a structure the program never
+        // wrote.
+        if (isIterationInterfaceName(name)) {
+          return true;
+        }
+        const applied = builtinTypeRecord(name, argRecords);
+        if (!applied) {
+          return false;
+        }
+        const bare = builtinTypeRecord(name);
+        return !bare || !SameType(bare, applied);
+      })();
+      const metadataRecord = !declaresTypeParameters
+        && argRecords.length === 1 && argRecords[0]!.Kind === 'object'
         ? argRecords[0]!
         : null;
       if (metadataRecord) {
@@ -2699,6 +2758,21 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
               base = (aliasValue.Value as unknown as { TypeRecord: TypeRecord }).TypeRecord;
             }
           }
+        }
+        // OQ-type-arguments-vs-metadata.md D2, second source of parameters. A
+        // LIBRARY generic - `Iterable`, and its neighbours in the standard types
+        // - declares its parameters neither in this source text nor in
+        // `builtinTypeRecord`, so the two tests above cannot see them. It is
+        // only once the name is resolved that the declaration is in hand.
+        //
+        // Without this, `Iterable.<{ a: uint8 }>` read the ITERABLE's whole
+        // structural type as a base and the argument as metadata, and reported
+        // that `a` is claimed by no meta type - naming a structure the program
+        // never wrote.
+        if (base && base.Kind === 'nominal'
+          && ((base.Declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } } | undefined)
+            ?.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
+          base = null;
         }
         if (base) {
           const record = {

@@ -3176,8 +3176,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // object argument and every parameterization looked to this pass like
           // its bare base, which is why the metadata subtype judgment had no
           // static site.
-          if (args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
-            const base = builtinTypeRecord(node.TypeName.IdentifierReference.name);
+          //
+          // OQ-type-arguments-vs-metadata.md D2. THE BASE DECIDES. A base that
+          // declares type parameters is being APPLIED, and its argument is a
+          // type however object-shaped it looks; only a base with no parameters
+          // reads its argument as metadata.
+          //
+          // This copy is why `Composite.<{ x: uint8 }>` failed. `Composite`'s
+          // record is ~primitive~ (#sec-composite-types), so the test below
+          // accepted it, built `Composite.<{ }>` with the SHAPE as metadata, and
+          // then refused the shape's own members for not being metadata values.
+          // The runtime had an escape hatch for that one name and this pass did
+          // not, so the two resolvers disagreed about what the annotation meant -
+          // which is the drift the comment above was written to prevent, and it
+          // had already happened.
+          const baseName = node.TypeName.IdentifierReference.name;
+          const appliedBuiltin = builtinTypeRecord(baseName, args);
+          const bareBuiltin = builtinTypeRecord(baseName);
+          const builtinTakesArguments = args.length > 0 && !!appliedBuiltin
+            && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
+          if (!builtinTakesArguments
+            && args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
+            const base = bareBuiltin;
             if (base && base.Kind === 'primitive') {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
