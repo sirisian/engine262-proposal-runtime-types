@@ -17,7 +17,14 @@ import { evaluated, expectThrown } from '../harness.mts';
 // here needs both orders too.
 
 const kind = (decl: string): string => evaluated(
-  `const d = (T) => { const r = Reflect.getReflection(T); return String(r.kind) + (r.members ? "[" + r.members.length + "]" : "") + (r.members ? "{" + r.members.length + "}" : ""); }; ${decl} d(U);`,
+  // Brackets for a union's arity, braces for an intersection's, so the two are
+  // told apart in one string. Both clauses tested `r.members` and so both fired,
+  // giving `union[3]{3}` where the assertions read `union[3]` - harmless while
+  // a union exposed `arms` and the first clause was dead, and a failure the
+  // moment reflection began exposing `members` for both kinds.
+  `const d = (T) => { const r = Reflect.getReflection(T); const n = r.members ? r.members.length : 0;`
+  + ` return String(r.kind) + (r.kind === "union" ? "[" + n + "]" : r.kind === "intersection" ? "{" + n + "}" : ""); };`
+  + ` ${decl} d(U);`,
 );
 
 test('a union keeps the wider member, in either order', () => {
@@ -57,4 +64,38 @@ test('the other union identities are unchanged', () => {
   expect(kind('type U = (uint8 | string) | boolean;')).toBe('union[3]');
   expect(kind('type A = { a: uint8 }; type B = { b: uint8 }; type C = { c: uint8 }; type U = (A & B) & C;')).toBe('intersection{3}');
   expect(evaluated('type U = uint8 | string; let x: U = "s"; String(x);')).toBe('s');
+});
+
+test('absorption terminates and stays order-independent on RECURSIVE members', () => {
+  // The specification once forbade absorption, on the ground that folding by
+  // IsSubtype would make the canonical form depend on a relation that READS
+  // canonical forms. The circularity does not arise: the fold runs on members
+  // the loop above it has ALREADY canonicalized, so IsSubtype is asked about
+  // forms that exist rather than about the one being built.
+  //
+  // These are the cases that would show it if it did - a recursive type, and a
+  // MUTUALLY recursive pair, both in a union and in an intersection. Where the
+  // relation cannot relate the pair it simply declines and both members stay,
+  // which is always sound: absorption is a simplification, never a judgment.
+  const kindOf = (decl: string): string => evaluated(
+    `const d = (T) => String(Reflect.getReflection(T).kind); ${decl} d(U);`,
+  );
+  const REC = 'type A = { next: A | null }; type B = { next: B | null, x: uint8 };';
+  expect(kindOf(`${REC} type U = B | A;`)).toBe('union');
+  expect(kindOf(`${REC} type U = A | B;`)).toBe('union');
+  expect(evaluated(`${REC} type U = B | A; type V = A | B; String(U === V);`)).toBe('true');
+  expect(kindOf(`${REC} type U = B & A;`)).toBe('intersection');
+  const MUT = 'interface A { b: B | null } interface B { a: A | null }';
+  expect(kindOf(`${MUT} type U = A | B;`)).toBe('union');
+  expect(evaluated(`${MUT} type U = A | B; type V = B | A; String(U === V);`)).toBe('true');
+});
+
+test('absorption fires where one member really does subsume the other', () => {
+  // And the two kinds keep OPPOSITE survivors, which is the whole reason the
+  // rule is directional: a union keeps the wider, an intersection the narrower.
+  const S = 'type Wide = { a: uint8 }; type Narrow = { a: uint8, b: string };';
+  expect(evaluated(`${S} type U = Narrow | Wide; type V = Wide; String(U === V);`)).toBe('true');
+  expect(evaluated(`${S} type U = Wide | Narrow; type V = Wide; String(U === V);`)).toBe('true');
+  expect(evaluated(`${S} type U = Narrow & Wide; type V = Narrow; String(U === V);`)).toBe('true');
+  expect(evaluated(`${S} type U = Wide & Narrow; type V = Narrow; String(U === V);`)).toBe('true');
 });
