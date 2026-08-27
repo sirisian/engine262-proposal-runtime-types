@@ -12,6 +12,12 @@ export * from './value.mts';
 // Test hook for the bounds proof (sec-bounds-checks), which is otherwise
 // unreachable: the elision is unobservable and the set is keyed on a root.
 export { BoundsProvenCountForLastCheck } from './type-system/check.mts';
+// PLAN-devtools-type-inspection.md F193/F194. The inspector renders a Type
+// Object, so it needs the predicate that recognises one and the canonical-form
+// function that describes it. Exported here rather than reached through a deep
+// path, which would pull `src/` into the inspector's own bundle.
+export { isTypeObject, type TypeObject } from './type-system/intern.mts';
+export { canonicalTypeText } from './type-system/records.mts';
 export * from './host-defined/engine.mts';
 export { runSingleJobInQueue, type JobQueue, BasicJobQueue } from './host-defined/job-queue.mts';
 export { ThreadCluster, runJobOn } from './host-defined/thread-cluster.mts';

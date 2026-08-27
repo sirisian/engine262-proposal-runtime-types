@@ -10,6 +10,7 @@ import {
 import { ShadowRealm } from './shadow-realms.mts';
 import { Module } from './modules.mts';
 import { RegExp } from './RegExp.mts';
+import { Type } from './Type.mts';
 import { Proxy } from './proxies.mts';
 import { Promise } from './promises.mts';
 import {
@@ -50,7 +51,7 @@ import {
   isWeakSetObject,
   JSStringValue,
   NumberValue,
-  ObjectValue, SymbolValue, TypedNumberValue, Value, VectorValue,
+  ObjectValue, SymbolValue, TypedNumberValue, Value, VectorValue, isTypeObject,
 } from '#self';
 
 export interface Inspector<T extends Value> {
@@ -90,6 +91,11 @@ export function getInspector(value: Value): Inspector<Value> {
       return Vector;
     case isProxyExoticObject(value):
       return Proxy;
+    // PLAN-devtools-type-inspection.md F193. ABOVE the callable case: a Type
+    // Object is callable (its construction boundary), so it would otherwise
+    // match there and render as a native function.
+    case isTypeObject(value):
+      return Type;
     case IsCallable(value):
       return Function;
     case isArrayExoticObject(value):
