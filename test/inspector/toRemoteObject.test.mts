@@ -372,3 +372,34 @@ test('normal object', async () => {
     await snapshotObject(inspector, value);
   }
 });
+
+test('runtime-types type objects', async () => {
+  // PLAN-devtools-type-inspection.md F193. A Type Object is CALLABLE - that is
+  // its construction boundary, `Email('a@b')` - so it matched `IsCallable` in
+  // getInspector's ladder before any later case and rendered as a native
+  // function. The reported repro is the intersection below.
+  //
+  // The description is the canonical source form (F194), which `String(T)` also
+  // calls, so the console line and the program agree.
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const inspector = new TestInspector();
+  const realm = new ManagedRealm();
+  inspector.attachAgent(agent, [realm]);
+  for (const value of [
+    'type { x: int32 }',
+    "type 'a' | 'b'",
+    'type [].<uint8>',
+    'type [uint8, string]',
+    "type string.<{ brand: 'B' }>",
+    'type never',
+    // The reported program.
+    '(() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })()',
+    // A recursive type. Expansion is on demand, so the back-edge is another
+    // collapsed Type Object rather than an infinite walk - no cycle marker and
+    // no visited set.
+    '(() => { type Node = { next: Node | null }; return Node; })()',
+  ]) {
+    await snapshotObject(inspector, value);
+  }
+});

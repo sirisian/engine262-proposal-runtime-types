@@ -1,3 +1,4 @@
+import { nativeEvalInAnyRealm } from '../evaluator.mts';
 import { ObjectInspector } from './objects.mts';
 import {
   canonicalTypeText, type TypeObject, GetTypeObject, CreateArrayFromList, Value,
@@ -36,12 +37,18 @@ export const Type = new ObjectInspector<TypeObject>(
      * termination condition - the same reason the object inspector handles a
      * cyclic plain object without a cycle marker.
      */
-    additionalProperties: (value) => {
+    additionalProperties: (value, context) => {
       const t = value.TypeRecord as unknown as Record<string, unknown> & { Kind: string };
       const out: [string, Value][] = [['kind', Value(t.Kind)]];
+      // `GetTypeObject` reads `currentRealmRecord`, and an inspector runs
+      // OUTSIDE any execution context - it threw "Cannot read properties of
+      // undefined (reading 'Realm')" and hung the session. Every other renderer
+      // that touches the realm goes through this wrapper.
+      let entered = true;
       const asType = (r: unknown) => GetTypeObject(r as never) as unknown as Value;
       const listOf = (rs: readonly unknown[]) => CreateArrayFromList(rs.map(asType)) as unknown as Value;
-      switch (t.Kind) {
+      const reached = nativeEvalInAnyRealm(true, context, () => {
+        switch (t.Kind) {
         case 'union':
         case 'intersection':
           out.push(['members', listOf(t.Members as readonly unknown[])]);
@@ -67,8 +74,16 @@ export const Type = new ObjectInspector<TypeObject>(
         case 'literal':
           out.push(['base', asType(t.Base)]);
           break;
-        default:
-          break;
+          default:
+            break;
+        }
+        return true;
+      });
+      if (reached === undefined) {
+        entered = false;
+      }
+      if (!entered) {
+        return [['kind', Value(t.Kind)]];
       }
       return out;
     },
