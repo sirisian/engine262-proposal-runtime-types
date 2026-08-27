@@ -16,8 +16,8 @@ import { evaluated, ok, expectThrown } from '../harness.mts';
 
 // -- Reflect.makeType: the builder foundation ----------------------------------
 test('type builders: makeType builds a union from a node', () => {
-  expect(evaluated('let U = Reflect.makeType({ kind: "union", arms: [uint8, uint16] }); Reflect.getReflection(U).kind;')).toBe('union');
-  expect(evaluated('let U = Reflect.makeType({ kind: "union", arms: [uint8, uint16] }); String(Reflect.getReflection(U).arms.length);')).toBe('2');
+  expect(evaluated('let U = Reflect.makeType({ kind: "union", members: [uint8, uint16] }); Reflect.getReflection(U).kind;')).toBe('union');
+  expect(evaluated('let U = Reflect.makeType({ kind: "union", members: [uint8, uint16] }); String(Reflect.getReflection(U).members.length);')).toBe('2');
 });
 
 test('type builders: makeType builds an array and an object', () => {

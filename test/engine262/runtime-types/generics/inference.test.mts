@@ -85,7 +85,7 @@ test('a value carrying a literal type still behaves as its underlying primitive'
 // relies on RuntimeTypeOf giving an object value its structural type rather than
 // the widened `object` primitive.
 test('pluck over a runtime object infers the key literally from keysOf(T)', () => {
-  const kit = 'function keysOf(T) { let ks = Reflect.getReflection(T).properties.map(p => Reflect.makeType({ kind: "literal", value: p.name, base: string })); return ks.length === 1 ? ks[0] : Reflect.makeType({ kind: "union", arms: ks }); } ';
+  const kit = 'function keysOf(T) { let ks = Reflect.getReflection(T).properties.map(p => Reflect.makeType({ kind: "literal", value: p.name, base: string })); return ks.length === 1 ? ks[0] : Reflect.makeType({ kind: "union", members: ks }); } ';
   const pluck = 'function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } ';
   // K binds to the literal key, observable through the returned value
   expect(evaluated(`${kit}${pluck}let user = { name: "n", age: (3 := uint32) }; Reflect.typeOf(pluck(user, "name")) === type "name" ? "ok" : "no";`)).toBe('ok');

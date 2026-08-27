@@ -493,7 +493,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       return { Kind: 'literal', Value: value, Base: base };
     }
     case 'union': {
-      const arms = Q(yield* listProp('arms'));
+      const arms = Q(yield* listProp('members'));
       const members: TypeRecord[] = [];
       for (const a of arms) {
         members.push(Q(yield* nodeToTypeRecord(a)));
@@ -824,7 +824,14 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       break;
     case 'union':
       set('kind', Value('union'));
-      set('arms', list(t.Members));
+      // OQ-union-arms-vs-members.md. `members`, not `arms`: every other
+      // reflection field is its slot lowercased - [[Elements]] to `elements`,
+      // [[Base]] to `base`, [[Properties]] to `properties` - and a union's
+      // parts come from [[Members]], the same slot an intersection and an
+      // object read. `arms` was the single exception to that rule, and reading
+      // `members` on a union returned *undefined* rather than throwing, which
+      // is indistinguishable from a broken graph.
+      set('members', list(t.Members));
       break;
     case 'intersection':
       set('kind', Value('intersection'));

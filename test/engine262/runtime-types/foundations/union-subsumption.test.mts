@@ -17,7 +17,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 // here needs both orders too.
 
 const kind = (decl: string): string => evaluated(
-  `const d = (T) => { const r = Reflect.getReflection(T); return String(r.kind) + (r.arms ? "[" + r.arms.length + "]" : "") + (r.members ? "{" + r.members.length + "}" : ""); }; ${decl} d(U);`,
+  `const d = (T) => { const r = Reflect.getReflection(T); return String(r.kind) + (r.members ? "[" + r.members.length + "]" : "") + (r.members ? "{" + r.members.length + "}" : ""); }; ${decl} d(U);`,
 );
 
 test('a union keeps the wider member, in either order', () => {

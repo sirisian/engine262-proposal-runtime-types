@@ -15,7 +15,7 @@ import { expectBuilderTrue, kit } from './harness.mts';
 
 // 5 - Get Readonly Keys - the names of the readonly properties.
 test('extreme 5 - Get Readonly Keys', () => {
-  const f = `    function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
+  const f = `    function union(a) { return Reflect.makeType({ kind: 'union', members: a }); }
     function getReadonlyKeys(T) { return union(Reflect.getReflection(T).properties.filter(p => p.readonly).map(p => literal(p.name))); }`;
   expectBuilderTrue(kit(`${f}\n type Todo = { readonly title: string, description: string }; String(getReadonlyKeys(Todo) === type 'title');`));
   expectBuilderTrue(kit(`${f}\n type T = { readonly a: uint32, readonly b: string, c: boolean }; type Expected = 'a' | 'b'; String(getReadonlyKeys(T) === Expected);`));

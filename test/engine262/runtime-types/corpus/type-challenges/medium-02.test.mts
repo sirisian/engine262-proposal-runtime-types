@@ -109,7 +109,7 @@ test('medium 645 - Diff', () => {
 test('medium 62 - Type Lookup', () => {
   const lookup = `
     function lookUp(U, K) {
-      for (const a of Reflect.getReflection(U).arms) {
+      for (const a of Reflect.getReflection(U).members) {
         const tp = Reflect.getReflection(a).properties.find(p => p.name === 'type');
         if (tp && tp.type === K) return a;
       }

@@ -86,11 +86,11 @@ export function literal(value: string | number | boolean | bigint): type {
   return Reflect.makeType({ kind: 'literal', value, base: Reflect.typeOf(value) });
 }
 export function union(armList: [].<type>): type {
-  return Reflect.makeType({ kind: 'union', arms: armList });
+  return Reflect.makeType({ kind: 'union', members: armList });
 }
 export function arms(T: type): [].<type> {
   const node = reflect(T);
-  return node.kind === 'union' ? node.arms : [T];
+  return node.kind === 'union' ? node.members : [T];
 }
 export function intersection(members: [].<type>): type {
   return Reflect.makeType({ kind: 'intersection', members });
@@ -133,7 +133,7 @@ export function elementTypes(T: type): [].<type> {
 
 export function mapProperties(T: type, f): type {
   const node = reflect(T);
-  if (node.kind === 'union') return union(node.arms.map(arm => mapProperties(arm, f)));
+  if (node.kind === 'union') return union(node.members.map(arm => mapProperties(arm, f)));
   if (node.kind === 'intersection')
     return Reflect.makeType({ kind: 'intersection', members: node.members.map(m => mapProperties(m, f)) });
   if (node.kind !== 'object') throw new TypeError(\`mapProperties expects an object type, got \${String(T)}\`);
@@ -187,7 +187,7 @@ export function omit(T: type, K): type {
 }
 export function record(K: type, V: type): type {
   const node = reflect(K);
-  if (node.kind === 'literal' || node.kind === 'union' && node.arms.every(a => reflect(a).kind === 'literal'))
+  if (node.kind === 'literal' || node.kind === 'union' && node.members.every(a => reflect(a).kind === 'literal'))
     return objectOf(literalValues(K).map(name => prop(name, V)));
   return objectOf([], [{ key: K, value: V }]);
 }
@@ -315,7 +315,7 @@ export function deepPartial(T: type): type {
         node.indexSignatures.map(s => ({ ...s, value: deepPartial(s.value) })));
     case 'array': return arrayOf(deepPartial(node.element), node.extent);
     case 'tuple': return Reflect.makeType({ ...node, elements: node.elements.map(e => ({ ...e, type: deepPartial(e.type) })) });
-    case 'union': return union(node.arms.map(deepPartial));
+    case 'union': return union(node.members.map(deepPartial));
     default:      return T;
   }
 }
@@ -340,7 +340,7 @@ export function traverse(T: type, { leaf = t => t, property = p => p, element = 
       node.indexSignatures.map(s => ({ ...s, value: rec(s.value) })));
     case 'tuple': return Reflect.makeType({ ...node, elements: node.elements.map(e => element({ ...e, type: rec(e.type) })) });
     case 'array': return arrayOf(rec(node.element), node.extent);
-    case 'union': return union(node.arms.map(rec));
+    case 'union': return union(node.members.map(rec));
     case 'intersection': return intersection(node.members.map(rec));
     default: return leaf(T);
   }
@@ -381,7 +381,7 @@ export function indexed(T: type, K: type): type {
 }
 export function awaited(T: type): type {
   const node = reflect(T);
-  if (node.kind === 'union') return union(node.arms.map(awaited));
+  if (node.kind === 'union') return union(node.members.map(awaited));
   if (node.kind === 'primitive' && node.generic?.base === type Promise)   // F116: §4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
     return awaited(node.generic.arguments[0]);
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
@@ -459,7 +459,7 @@ function stringPattern(pattern, ...holes) {
   const holePattern = (t: type): string => {
     const node = reflect(t);
     if (node.kind === 'literal') return RegExp.escape(String(node.value));
-    if (node.kind === 'union') return \`(?:\${node.arms.map(holePattern).join('|')})\`;
+    if (node.kind === 'union') return \`(?:\${node.members.map(holePattern).join('|')})\`;
     return t === string ? '[\\\\s\\\\S]*' : '-?\\\\d+(?:\\\\.\\\\d+)?';
   };
   const source = pattern instanceof RegExp ? pattern.source

@@ -32,7 +32,7 @@ test('medium 9286 - FirstUniqueCharIndex', () => {
 test('medium 9616 - Parse URL Params', () => {
   const f = `    function parseUrlParams(s) {
       const params = s.split('/').filter(p => p.startsWith(':')).map(p => p.slice(1));
-      return params.length === 0 ? never : Reflect.makeType({ kind: 'union', arms: params.map(p => literal(p)) });
+      return params.length === 0 ? never : Reflect.makeType({ kind: 'union', members: params.map(p => literal(p)) });
     }`;
   expectBuilderTrue(kit(`${f}\n String(parseUrlParams('') === never);`));
   expectBuilderTrue(kit(`${f}\n String(parseUrlParams('posts/:id') === type 'id');`));
@@ -47,7 +47,7 @@ test('medium 3326 - BEM style string', () => {
       const m = modifiers.length === 0 ? [''] : modifiers.map(x => '--' + x);
       const out = [];
       for (const el of e) { for (const mo of m) { out.push(literal(block + el + mo)); } }
-      return Number(out.length) === 1 ? out[0] : Reflect.makeType({ kind: 'union', arms: out });
+      return Number(out.length) === 1 ? out[0] : Reflect.makeType({ kind: 'union', members: out });
     }`;
   expectBuilderTrue(kit(`${f}\n String(bem('btn', ['price'], []) === type 'btn__price');`));
   expectBuilderTrue(kit(`${f}\n type Expected = 'btn__price--warning' | 'btn__price--success'; String(bem('btn', ['price'], ['warning', 'success']) === Expected);`));

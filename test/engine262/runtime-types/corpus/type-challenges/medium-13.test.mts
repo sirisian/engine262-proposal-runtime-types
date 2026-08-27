@@ -81,7 +81,7 @@ test('medium 21106 - Combination key type', () => {
       for (let i = 0; i < Number(items.length); i += 1) {
         for (let j = i + 1; j < Number(items.length); j += 1) { out.push(literal(items[i] + ' ' + items[j])); }
       }
-      return Reflect.makeType({ kind: 'union', arms: out });
+      return Reflect.makeType({ kind: 'union', members: out });
     }`;
   expectBuilderTrue(kit(`${f}
     type Expected = 'cmd ctrl' | 'cmd opt' | 'cmd fn' | 'ctrl opt' | 'ctrl fn' | 'opt fn';
@@ -92,7 +92,7 @@ test('medium 21106 - Combination key type', () => {
 // 34857 - Defined Partial Record - the union of every non-empty key subset object.
 test('medium 34857 - Defined Partial Record', () => {
   const f = `    function definedPartialRecord(K, V) {
-      const keys = Reflect.getReflection(K).arms.map(a => Reflect.getReflection(a).value);
+      const keys = Reflect.getReflection(K).members.map(a => Reflect.getReflection(a).value);
       const combos = [];
       for (let mask = 1; mask < (1 << keys.length); mask += 1) {
         const picked = keys.filter((_, i) => mask & (1 << i));

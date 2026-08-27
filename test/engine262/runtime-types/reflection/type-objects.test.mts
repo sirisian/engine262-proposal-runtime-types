@@ -71,7 +71,7 @@ test('type objects: Reflect.typeOf reports a value\u2019s runtime type', () => {
 // whose leaves are type objects.
 test('type objects: getReflection discriminates a union into arms', () => {
   expect(evaluated('type U = uint8 | uint16; Reflect.getReflection(U).kind;')).toBe('union');
-  expect(evaluated('type U = uint8 | uint16; String(Reflect.getReflection(U).arms.length);')).toBe('2');
+  expect(evaluated('type U = uint8 | uint16; String(Reflect.getReflection(U).members.length);')).toBe('2');
   // a nullable is a union
   expect(evaluated('type N = uint8 | null; Reflect.getReflection(N).kind;')).toBe('union');
 });
@@ -104,7 +104,7 @@ test('`type never` is the Type Object of the never type', () => {
   expect(evaluated('String(typeof (type never));')).toBe('object');
   // the same object the construction gives, because types are interned - which is
   // what a dedicated name would have saved, and does not
-  expect(evaluated('String((type never) === Reflect.makeType({ kind: "union", arms: [] }));')).toBe('true');
+  expect(evaluated('String((type never) === Reflect.makeType({ kind: "union", members: [] }));')).toBe('true');
   // no value is of it
   expect(evaluated('String((1 is never) === false && ("s" is never) === false);')).toBe('true');
 });

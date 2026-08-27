@@ -69,14 +69,14 @@ test('medium 1978 - Percentage Parser', () => {
 test('medium 1130 - ReplaceKeys', () => {
   const f = `
     function replaceKeys(U, repl) {
-      const arms = Reflect.getReflection(U).arms.map(a => {
+      const arms = Reflect.getReflection(U).members.map(a => {
         const props = Reflect.getReflection(a).properties.map(p => {
           const r = repl.find(x => x.name === p.name);
           return r ? { ...p, name: r.to } : p;
         });
         return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] });
       });
-      return Reflect.makeType({ kind: 'union', arms });
+      return Reflect.makeType({ kind: 'union', members: arms });
     }`;
   expectBuilderTrue(kit(`${f}
     type A = { a: uint32, b: string };
@@ -107,7 +107,7 @@ test('medium 8767 - Combination', () => {
       for (let mask = 1; mask < (1 << n); mask += 1) {
         out.push(literal(items.filter((_, i) => mask & (1 << i)).join(' ')));
       }
-      return Reflect.makeType({ kind: 'union', arms: out });
+      return Reflect.makeType({ kind: 'union', members: out });
     }`;
   expectBuilderTrue(kit(`${f}
     type Expected = 'foo' | 'bar' | 'foo bar' | 'baz' | 'foo baz' | 'bar baz' | 'foo bar baz';

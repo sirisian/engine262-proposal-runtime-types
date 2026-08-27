@@ -59,7 +59,7 @@ test('makeType - builds a union that interns with the written form', () => {
   expectBuilderTrue(`
     type A = 'a';
     type B = 'b';
-    const U = Reflect.makeType({ kind: 'union', arms: [A, B] });
+    const U = Reflect.makeType({ kind: 'union', members: [A, B] });
     type Expected = 'a' | 'b';
     String(U === Expected);
   `);
@@ -68,7 +68,7 @@ test('makeType - builds a union that interns with the written form', () => {
 test('makeType - canonicalizes (duplicate union arms collapse)', () => {
   expectBuilderTrue(`
     type A = 'a';
-    const U = Reflect.makeType({ kind: 'union', arms: [A, A] });
+    const U = Reflect.makeType({ kind: 'union', members: [A, A] });
     String(U === A);
   `);
 });

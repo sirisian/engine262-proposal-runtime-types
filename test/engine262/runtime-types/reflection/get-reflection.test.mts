@@ -69,7 +69,7 @@ test('round trip - deeply nested', () => {
 test('reads the kind and further node properties', () => {
   expectBuilderTrue(`
     type U = 'a' | 'b';
-    String(Reflect.getReflection(U).kind === 'union' && Reflect.getReflection(U).arms.length === 2);
+    String(Reflect.getReflection(U).kind === 'union' && Reflect.getReflection(U).members.length === 2);
   `);
   expectBuilderTrue(`
     type O = { a: uint8 };

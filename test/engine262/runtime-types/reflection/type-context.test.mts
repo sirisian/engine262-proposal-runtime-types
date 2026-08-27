@@ -34,8 +34,8 @@ test('Reflect.Type discriminates every structural form', () => {
   // kind-only test and be useless to a walker. So each form checks that its
   // nested positions are the interned types they should be.
   const u = 'type U = uint8 | string; const u = Reflect.getReflection.<Reflect.Type, U>(); ';
-  expect(evaluated(`${u} String(u.kind) + "/" + String(u.arms.length);`)).toBe('union/2');
-  expect(evaluated(`${u} String(u.arms[0] === string || u.arms[0] === uint8);`)).toBe('true');
+  expect(evaluated(`${u} String(u.kind) + "/" + String(u.members.length);`)).toBe('union/2');
+  expect(evaluated(`${u} String(u.members[0] === string || u.members[0] === uint8);`)).toBe('true');
 
   const a = 'type A4 = [4].<uint8>; const a = Reflect.getReflection.<Reflect.Type, A4>(); ';
   expect(evaluated(`${a} String(a.kind) + "/" + String(a.element === uint8) + "/" + String(a.extent);`)).toBe('array/true/4');

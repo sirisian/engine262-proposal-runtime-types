@@ -74,7 +74,7 @@ test('hard 2822 - Split', () => {
 
 // 730 - Union to Tuple - a union to a tuple of its arms (order not specified).
 test('hard 730 - Union to Tuple', () => {
-  const f = ` function unionToTuple(U) { const n = Reflect.getReflection(U); return tupleOf(n.kind === 'union' ? n.arms : [U]); }`;
+  const f = ` function unionToTuple(U) { const n = Reflect.getReflection(U); return tupleOf(n.kind === 'union' ? n.members : [U]); }`;
   // the length matches the arm count
   expectBuilderTrue(kit(`${f}\n type U = 'a' | 'b'; String(Reflect.getReflection(unionToTuple(U)).elements.length === 2);`));
   // re-unioning the tuple's elements recovers the union

@@ -116,7 +116,7 @@ test('medium 4260 - AllCombinations', () => {
         }
       }
       perm('', [...s]);
-      return Reflect.makeType({ kind: 'union', arms: [...result].map(x => literal(x)) });
+      return Reflect.makeType({ kind: 'union', members: [...result].map(x => literal(x)) });
     }`;
   expectBuilderTrue(kit(`${f}\n String(allCombinations('') === type '');`));
   expectBuilderTrue(kit(`${f}\n type Expected = '' | 'A'; String(allCombinations('A') === Expected);`));

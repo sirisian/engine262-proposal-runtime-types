@@ -265,11 +265,11 @@ test('a union of object arms is one type however its arms were built', () => {
   // ReplaceKeys challenge is the only other test that catches this.
   expect(evaluated(`
     function rebuild(u) {
-      const arms = Reflect.getReflection(u).arms.map(a => {
+      const arms = Reflect.getReflection(u).members.map(a => {
         const props = Reflect.getReflection(a).properties.map(p => (p.name === 'a' ? { ...p, name: 'x' } : p));
         return Reflect.makeType({ kind: 'object', properties: props, indexSignatures: [] });
       });
-      return Reflect.makeType({ kind: 'union', arms });
+      return Reflect.makeType({ kind: 'union', members: arms });
     }
     type A = { a: uint32, b: string };
     type B = { a: boolean, c: string };

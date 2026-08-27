@@ -47,7 +47,7 @@ test('medium 1097 - IsUnion', () => {
   expectBuilderTrue(kit(`
     function isUnion(T) {
       const n = Reflect.getReflection(T);
-      return n.kind === 'union' && n.arms.length > 1 ? type true : type false;
+      return n.kind === 'union' && n.members.length > 1 ? type true : type false;
     }
     type U = 'a' | 'b';
     String(isUnion(U) === type true);
@@ -55,7 +55,7 @@ test('medium 1097 - IsUnion', () => {
   expectBuilderTrue(kit(`
     function isUnion(T) {
       const n = Reflect.getReflection(T);
-      return n.kind === 'union' && n.arms.length > 1 ? type true : type false;
+      return n.kind === 'union' && n.members.length > 1 ? type true : type false;
     }
     String(isUnion(string) === type false);
   `));

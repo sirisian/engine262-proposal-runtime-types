@@ -76,7 +76,7 @@ test('hard 15260 - Tree path array', () => {
 
 // 2828 - ClassPublicKeys - the property names of a class type.
 test('hard 2828 - ClassPublicKeys', () => {
-  const f = `    function union(a) { return Reflect.makeType({ kind: 'union', arms: a }); }
+  const f = `    function union(a) { return Reflect.makeType({ kind: 'union', members: a }); }
     function classPublicKeys(T) { return union(Reflect.getReflection(T).properties.map(p => literal(p.name))); }`;
   expectBuilderTrue(kit(`${f}\n type A = { str: string, getNum: () => uint32 }; type Expected = 'str' | 'getNum'; String(classPublicKeys(A) === Expected);`));
 });

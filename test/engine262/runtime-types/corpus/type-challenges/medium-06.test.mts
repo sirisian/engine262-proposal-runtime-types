@@ -23,7 +23,7 @@ test('medium 9 - Deep Readonly', () => {
         return Reflect.makeType({ kind: 'object', properties: n.properties.map(p => ({ ...p, readonly: true, type: deepReadonly(p.type) })), indexSignatures: [] });
       }
       if (n.kind === 'union') {
-        return Reflect.makeType({ kind: 'union', arms: n.arms.map(deepReadonly) });
+        return Reflect.makeType({ kind: 'union', members: n.members.map(deepReadonly) });
       }
       return T;
     }`;
@@ -62,7 +62,7 @@ test('medium 2852 - OmitByType', () => {
 test('medium 2946 - ObjectEntries', () => {
   expectBuilderTrue(kit(`    function objectEntries(T) {
       const entries = Reflect.getReflection(T).properties.map(p => tupleOf([literal(p.name), p.type]));
-      return Reflect.makeType({ kind: 'union', arms: entries });
+      return Reflect.makeType({ kind: 'union', members: entries });
     }
     type Model = { name: string, age: uint32 };
     type Expected = ['name', string] | ['age', uint32];
@@ -115,7 +115,7 @@ test('medium 8640 - Number Range', () => {
   const f = `    function numberRange(lo, hi) {
       const arms = [];
       for (let i = lo; i <= hi; i += 1) { arms.push(literal(i)); }
-      return Reflect.makeType({ kind: 'union', arms });
+      return Reflect.makeType({ kind: 'union', members: arms });
     }`;
   expectBuilderTrue(kit(`${f}\n type Expected = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9; String(numberRange(2, 9) === Expected);`));
   expectBuilderTrue(kit(`${f}\n type Expected = 0 | 1 | 2; String(numberRange(0, 2) === Expected);`));

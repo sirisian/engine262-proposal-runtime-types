@@ -188,7 +188,7 @@ test('a builder reaching an empty intersection gets `never`, and does not throw'
   // by #sec-never-type, and an intersection the kit computes must answer the
   // same way rather than making every caller guard.
   expect(evaluated("String(Reflect.makeType({ kind: 'intersection', members: [type number, type bigint] }) === never);")).toBe('true');
-  expect(evaluated("String(Reflect.makeType({ kind: 'union', arms: [] }) === never);")).toBe('true');
+  expect(evaluated("String(Reflect.makeType({ kind: 'union', members: [] }) === never);")).toBe('true');
 });
 
 test('an explicitly written `never` member is exempt from the diagnostic', () => {

@@ -180,7 +180,7 @@ test('with std:types - 9  Deep Readonly', () => {
         node.indexSignatures.map(s => ({ ...s, value: deepReadonly(s.value) })));
     case 'array': return arrayOf(deepReadonly(node.element), node.extent);
     case 'tuple': return Reflect.makeType({ ...node, elements: node.elements.map(e => ({ ...e, type: deepReadonly(e.type) })) });
-    case 'union': return union(node.arms.map(deepReadonly));
+    case 'union': return union(node.members.map(deepReadonly));
     default:      return T;   // primitives, literals, functions, classes, enums, parameterized
   }
 }
@@ -401,7 +401,7 @@ test('with std:types - 17973  DeepMutable', () => {
                                    node.indexSignatures);
     case 'array':  return arrayOf(deepMutable(node.element), node.extent);
     case 'tuple':  return Reflect.makeType({ ...node, elements: node.elements.map(e => ({ ...e, type: deepMutable(e.type) })) });
-    case 'union':  return union(node.arms.map(deepMutable));
+    case 'union':  return union(node.members.map(deepMutable));
     default:       return T;
   }
 }
