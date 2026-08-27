@@ -530,3 +530,29 @@ test.fails('withResolvers cannot be typed by ARGUMENT inference', () => {
   // evidence about this gap at all.
   expectStaticTypeError('let bad: uint8 = Promise.withResolvers();');
 });
+
+test('the IDENTITY statics answer what they were given', () => {
+  // `Object.freeze<T>(o: T): T` and its siblings. Group A listed these and could
+  // not express them: a FIXED result cannot say "whatever you passed", so they
+  // needed a signature rather than a table row.
+  const A2 = 'const a: [].<uint8> = [1]; ';
+  for (const f of ['freeze', 'seal', 'preventExtensions']) {
+    expectStaticTypeError(`${A2} let n: string = Object.${f}(a);`);
+    expect(ok(`${A2} let n: [].<uint8> = Object.${f}(a);`), f).toBe(true);
+  }
+  expect(evaluated('const o = Object.freeze({ a: 1 }); String(Object.isFrozen(o));')).toBe('true');
+});
+
+test('Promise.reject carries its reason', () => {
+  // The mirror of `resolve`. The RESOLVED position is `any` and not `never`,
+  // though nothing is ever produced: `never` would be truthful and this checker
+  // has no record for it here, so `any` is the honest fallback - it claims
+  // nothing about a value the promise will not deliver.
+  const E = 'const e: uint8 = (1 := uint8); ';
+  expectStaticTypeError(`${E} let n: string = Promise.reject(e);`);
+  expect(ok(`${E} let n: Promise.<any, uint8> = Promise.reject(e);`)).toBe(true);
+  // An UNTYPED reason yields an untyped result, as everywhere else - `new
+  // Error("x")` has no Static Type, so the call says nothing rather than
+  // guessing.
+  expect(ok('if (false) { let n: string = Promise.reject(new Error("x")); } 1;')).toBe(true);
+});

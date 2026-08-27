@@ -1799,6 +1799,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeof rejected === 'number' || rejected === undefined ? null : rejected as TypeRecord);
         };
       }
+      if (method === 'reject') {
+        // `Promise.reject<E>(reason: E): Promise.<any, E>`. The mirror of
+        // `resolve`: the reason is what it rejects with.
+        //
+        // The RESOLVED position is `any` and not `never`, though nothing is ever
+        // produced. `never` would be the truthful answer and this checker has no
+        // record for it here - a first attempt named one that does not exist.
+        // `any` is the honest fallback: it claims nothing about a value the
+        // promise will not deliver, where a wrong name would have claimed
+        // something unbuildable.
+        return (args) => {
+          const reason = args[0] ? staticType(args[0]) : null;
+          return reason
+            ? libraryTypeRecord('Promise', [anyTypeRecord, widen(reason) as TypeRecord]) ?? null
+            : null;
+        };
+      }
       if (method === 'try') {
         // `Promise.try<R, E>(callback: (...args) => R | Promise.<R, E>, ...args)`.
         // R is the callback's RETURN, which is the same read `groupBy`'s key
@@ -1840,6 +1857,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : null;
         };
       }
+    }
+    if (base.name === 'Object' && (method === 'freeze' || method === 'seal' || method === 'preventExtensions')) {
+      // `Object.freeze<T>(o: T): T` and its siblings. The IDENTITY signature:
+      // each answers the object it was given, so a type crossing one is not
+      // lost. Group A listed these and they were never written - a fixed result
+      // could not express them, since the answer depends on the argument.
+      return (args) => {
+        const value = args[0] ? staticType(args[0]) : null;
+        return value ? widen(value) : null;
+      };
     }
     if (base.name === 'Object' && method === 'keys') {
       // `Object.keys(o: object): [].<string>` - no type parameter, since it
