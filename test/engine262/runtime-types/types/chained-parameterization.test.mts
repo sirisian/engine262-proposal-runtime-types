@@ -30,19 +30,22 @@ test('A: an array can be parameterized', () => {
   // slot on the element type, so the restriction here was structural.
   expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
     + ' String(Reflect.getReflection(T).kind);')).toBe('parameterized');
-  // F191, RECORDED NOT ASSERTED. An inline array parameterization interns with
-  // a LATER-declared bare array alias when it should not - and the answer
-  // depends on DECLARATION ORDER:
+  // F191, FIXED. The inline form built its base as an intermediate record and
+  // never asked for a Type Object, so nothing was interned for it - and a later
+  // `type A = [].<uint8>` bound to the only Type Object whose record matched
+  // closely enough, this parameterization's, so `A` reported the brand.
   //
-  //   type A = [].<uint8>; type T = [].<uint8>.<{brand:'B'}>;   T === A  false (right)
-  //   type T = [].<uint8>.<{brand:'B'}>; type A = [].<uint8>;   T === A  TRUE  (wrong)
-  //
-  // Not the parse - the postfix loop runs ONCE on an `ArrayType` operand - and
-  // not the brand, which is real: two inline array brands with different tags
-  // are distinct and the metadata reads back. The ALIAS spelling is unaffected
-  // in either order, and so is every non-array base.
+  // It showed only for arrays, only inline, and only when the bare alias came
+  // AFTERWARDS: declaring `A` first gave the array a Type Object of its own.
+  // Interning the base fixes it in both orders.
   expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
-    + " type A = [].<uint8>; String(T === A);")).toBe('true');
+    + " type A = [].<uint8>; type U = A.<{ brand: 'B' }>; String(T === U);")).toBe('true');
+  expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
+    + " type A = [].<uint8>; String(T === A);")).toBe('false');
+  expect(evaluated("type A = [].<uint8>; type T = [].<uint8>.<{ brand: 'B' }>;"
+    + ' String(T === A);')).toBe('false');
+  expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>; type A = [].<uint8>;"
+    + ' String(JSON.stringify(Reflect.getReflection(A).metadata || null));')).toBe('null');
 });
 
 test('A: a generic application, a parenthesized type, and a function type', () => {

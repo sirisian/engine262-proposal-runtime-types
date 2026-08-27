@@ -3248,6 +3248,19 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // `string.<{brand}>.<{brand}>` intern to the same type, which is the check
       // that this adds SYNTAX and not semantics.
       const baseRecord = Q(yield* TypeNodeToTypeRecord(node.BaseType));
+      // F191. Intern the BASE's Type Object, not only the parameterization's.
+      //
+      // The inline form builds its base as an intermediate record and never
+      // asked for a Type Object, so nothing was interned for it. A later
+      // `type A = [].<uint8>` then found the only Type Object whose record
+      // matched closely enough - this parameterization's - and bound to THAT,
+      // so `A` reported the brand `T` declared. Declaring `A` first hid it,
+      // because then the array had a Type Object of its own to sit under.
+      //
+      // Only arrays showed it: every other base in the six operand shapes is
+      // either a builtin with a pre-existing Type Object or reached through a
+      // path that interns one.
+      GetTypeObject(baseRecord);
       const args = node.TypeArguments.TypeArgumentList;
       const argRecords: TypeRecord[] = [];
       for (const a of args) {
