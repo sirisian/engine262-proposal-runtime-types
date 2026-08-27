@@ -158,7 +158,7 @@ export function requiredArity(params: readonly ParameterRecord[]): number {
  * `AsyncGenerator` on a synchronous one or the reverse - which the caller
  * reports as a type error.
  */
-export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: boolean): TypeRecord | null {
+export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: boolean, inferredReturn: TypeRecord | null = null): TypeRecord | null {
   const want = isAsync ? 'AsyncGenerator' : 'Generator';
   const other = isAsync ? 'Generator' : 'AsyncGenerator';
   if (annotation && annotation.Kind === 'nominal' && annotation.LibraryName === other) {
@@ -168,7 +168,17 @@ export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: bo
     return annotation;
   }
   const [Y, R, N] = iterationArguments(annotation ? [annotation] : []);
-  return libraryTypeRecord(want, [Y, R, N]);
+  // #sec-inferred-result-type: "_R_ is the join of its return contributions",
+  // said in the same breath as "_N_ is not inferred, being the type of what a
+  // caller sends IN". So _R_ WAS meant to be inferred where an annotation does
+  // not supply it, and this defaulted it to `void` instead - which refused
+  // `function* g() { yield 1; return "done"; }`, ordinary JavaScript, with
+  // `"a literal type of string" is not assignable to "void"`.
+  //
+  // Only where a return contribution was found. A generator that returns
+  // nothing keeps the `void` the shorthand gives it, which is the same answer
+  // an ordinary function's empty contribution set reaches.
+  return libraryTypeRecord(want, [Y, inferredReturn ?? R, N]);
 }
 
 /**

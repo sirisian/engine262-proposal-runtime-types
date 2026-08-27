@@ -7145,7 +7145,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             inferenceDepth -= 1;
           }
           if (inferredYield && (item.signatureTyped || ya.anchored) && inferredYield.Kind !== 'void') {
-            const rebuilt = generatorDeclaredType(inferredYield, item.generator.asyncGenerator);
+            // _R_ alongside _Y_: the same walk that collects yield operands sees
+            // `return`, and #sec-inferred-result-type asks for the join of both.
+            // `'return'` mode is what routes a fall-off-the-end `undefined` into
+            // R rather than into Y, which is the distinction OQ11 drew.
+            const inferredR = inferredReturnType(item.fn, item.parameterTypes, null, { anchored: false }, 'return');
+            const rebuilt = generatorDeclaredType(
+              inferredYield,
+              item.generator.asyncGenerator,
+              inferredR && inferredR.Kind !== 'void' ? inferredR as TypeRecord : null,
+            );
             // Into [[InferredReturn]], not [[Return]]. A generator with no
             // annotation declares no return type, so writing the refined
             // Generator type into the declared field would let an INFERRED type
@@ -10875,7 +10884,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `body` was undefined, the walk never descended, and no `return` inside an
           // async function was ever checked. Instrumenting the ReturnStatement arm said
           // so directly: it is reached for a sync body and never for an async one.
-          const declared = gen ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen) : null;
+          // #sec-inferred-result-type: "_R_ is the join of its return
+          // contributions". Where no annotation supplies _R_, it was defaulted
+          // to `void` BEFORE the body was walked, so a `return` was checked
+          // against `void` and `function* g() { yield 1; return "done"; }` -
+          // ordinary JavaScript - was refused with "a literal type of string is
+          // not assignable to void".
+          //
+          // The contributions are collected first, by the same walk
+          // `do*` expressions already use (#sec-do-generator-expressions, where
+          // "Y, R, and N are found rather than declared"). A generator that
+          // returns nothing keeps `void`, which is the answer an ordinary
+          // function's empty contribution set reaches.
+          //
+          // _N_ stays `void`: the clause says in the same breath that it "is not
+          // inferred, being the type of what a caller sends IN".
+          let inferredGeneratorReturn: TypeRecord | null = null;
+          if (gen && !ann) {
+            const yielded: TypeRecord[] = [];
+            const returned: TypeRecord[] = [];
+            collectGeneratorTypes(
+              (n as { GeneratorBody?: ParseNode }).GeneratorBody
+                ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody,
+              yielded,
+              returned,
+            );
+            if (returned.length > 0) {
+              inferredGeneratorReturn = returned.length === 1
+                ? returned[0]
+                : CanonicalizeType({ Kind: 'union', Members: returned } as TypeRecord) as TypeRecord;
+            }
+          }
+          const declared = gen
+            ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen, inferredGeneratorReturn)
+            : null;
           enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, undefined, declared, true);
         }
         return;
