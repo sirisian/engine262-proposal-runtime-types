@@ -192,3 +192,54 @@ test.fails('D25: the result is not STAMPED, so its run-time count is a Number', 
   expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g is Map.<string, [].<uint32>>);`)).toBe('true');
   expect(evaluated(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => "k"); String(Reflect.typeOf(g.size) === (type uint64));`)).toBe('true');
 });
+
+// ---------------------------------------------------------------------------
+// Group A - statics whose result depends on nothing the call passes
+// ---------------------------------------------------------------------------
+
+test('a fixed-result static states what it returns', () => {
+  // Not overloading. #sec-overloading-of-the-standard-library covers every
+  // function that TAKES a numeric-typed value and says one "that merely returns
+  // a number, with no parameter whose type could select a signature, is not
+  // overloaded and is unchanged". Unchanged is about which SIGNATURE a call
+  // selects; it does not say the call has no Static Type, and these had none -
+  // `Array.isArray([1])` was ~any~.
+  expectStaticTypeError('let n: string = Array.isArray([1]);');
+  expect(ok('let n: boolean = Array.isArray([1]);')).toBe(true);
+  for (const p of ['isInteger', 'isFinite', 'isNaN', 'isSafeInteger']) {
+    expectStaticTypeError(`let n: string = Number.${p}(1);`);
+    expect(ok(`let n: boolean = Number.${p}(1);`), p).toBe(true);
+  }
+  expectStaticTypeError('let n: string = Object.is(1, 1);');
+  expectStaticTypeError('let n: uint8 = Symbol.for("x");');
+  expect(ok('let n: symbol = Symbol.for("x");')).toBe(true);
+  expectStaticTypeError('let n: string = Date.now();');
+  expect(ok('let n: number = Date.now();')).toBe(true);
+  expectStaticTypeError('let n: uint8 = String.fromCharCode(65);');
+  expect(ok('let n: string = String.fromCharCode(65);')).toBe(true);
+});
+
+test('Math and the numeric library are untouched by this group', () => {
+  // They were already done, in the specification AND the engine, and a draft of
+  // the plan misread them as this group's headline. `Math.sqrt` over a numeric
+  // type answers that type; over a Number it is unchanged, which is the clause's
+  // own rule and what the misreading measured.
+  expect(ok('const x: float32 = 4; let n: float32 = Math.sqrt(x);')).toBe(true);
+  expectStaticTypeError('const x: float32 = 4; let n: string = Math.sqrt(x);');
+  expect(evaluated('const x: float32 = 4; String(Reflect.typeOf(Math.sqrt(x)) === (type float32));')).toBe('true');
+  // The quantity-parameter rule, also already in place.
+  expect(evaluated('const t: uint32 = 3; String(Array(t).length);')).toBe('3');
+});
+
+test('a shadowed base gets no fixed result either, and the run time is unchanged', () => {
+  expect(ok('if (false) { class A2 { } const Array = A2; let n: string = Array.isArray([1]); } 1;')).toBe(true);
+  expect(evaluated('String(Array.isArray([1])) + String(Number.isInteger(1)) + String(Object.is(1, 1));')).toBe('truetruetrue');
+});
+
+test.fails('a TAGGED TEMPLATE does not reach the static dispatch', () => {
+  // `String.raw({ raw: [...] })` is typed and `` String.raw`x` `` is not: a
+  // tagged template is a different node from a call, so the dispatch - which
+  // matches a member CALLEE - never sees it. Every tagged builtin is in the same
+  // position, which is why this is filed rather than special-cased for `raw`.
+  expectStaticTypeError('let n: uint8 = String.raw`x`;');
+});

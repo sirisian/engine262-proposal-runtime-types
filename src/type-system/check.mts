@@ -81,6 +81,38 @@ const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
  */
 export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
 
+
+/**
+ * Statics whose result type depends on nothing the call passes.
+ *
+ * PLAN-standard-library-statics.md Group A. Each is a predicate or a producer
+ * with one answer: `Array.isArray` is a Boolean whatever it is asked about, and
+ * `Symbol.for` a Symbol whatever string it is given. Held as thunks because a
+ * type record is built rather than shared, and because the numeric ones must be
+ * built after the primitives are registered.
+ *
+ * `Math.*`, `Number.parseInt` and everything else that takes a numeric-typed
+ * value is NOT here: those are overloaded by
+ * #sec-overloading-of-the-standard-library and already carry their signatures.
+ */
+const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
+  'Array.isArray': () => makePrimitive('boolean'),
+  'Number.isInteger': () => makePrimitive('boolean'),
+  'Number.isFinite': () => makePrimitive('boolean'),
+  'Number.isNaN': () => makePrimitive('boolean'),
+  'Number.isSafeInteger': () => makePrimitive('boolean'),
+  'Object.is': () => makePrimitive('boolean'),
+  'ArrayBuffer.isView': () => makePrimitive('boolean'),
+  'String.raw': () => makePrimitive('string'),
+  'String.fromCharCode': () => makePrimitive('string'),
+  'String.fromCodePoint': () => makePrimitive('string'),
+  'Symbol.for': () => makePrimitive('symbol'),
+  'Symbol.keyFor': () => makePrimitive('string'),
+  // `Date.now` "merely returns a number", which the overloading clause leaves
+  // unchanged - unchanged in its SIGNATURE, and a Number is what it answers.
+  'Date.now': () => makePrimitive('number'),
+};
+
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
 }
@@ -1497,6 +1529,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (shadowedByProgram(base.name)) {
       return undefined;
+    }
+    // Group A: a static whose result type is FIXED - it depends on nothing the
+    // call passes, so there is no inference and the row is the whole signature.
+    //
+    // These are not overloading. `sec-overloading-of-the-standard-library`
+    // already covers every function that TAKES a numeric-typed value, `Math.*`
+    // among them, and says a function "that merely returns a number, with no
+    // parameter whose type could select a signature, is not overloaded and is
+    // unchanged". Unchanged is about which SIGNATURE a call selects; it does not
+    // say the call has no Static Type, and these had none - `Array.isArray([1])`
+    // was `any`, so `let n: string = Array.isArray([1])` passed.
+    const fixed = FIXED_STATIC_RESULTS[`${base.name}.${method}`];
+    if (fixed) {
+      return () => fixed();
     }
     if (base.name === 'Object' && method === 'groupBy') {
       return (args) => {
