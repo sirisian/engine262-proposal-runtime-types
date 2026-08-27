@@ -1,3 +1,27 @@
+test('the two halves reach the SAME shapes, whatever names the base', () => {
+  // This once recorded a GAP. Canonicalization reduced every disjoint
+  // intersection, while the Early Error was decided over what the checking pass
+  // had resolved - and that pass built a parameterized record only when the base
+  // was a BUILTIN. So `string.<{ brand: 'E' }> & uint8` was diagnosed and
+  // `E.<{ brand: 'N' }> & uint8` was not, the two differing only in what named
+  // the base. The four shapes below were the whole of it, and they are now
+  // diagnosed at the annotation like any other.
+  //
+  // Both spellings, since the reach never depended on which was written: the
+  // inline form and the alias form resolve through the same arm.
+  const N = "type E = string.<{ brand: 'E' }>; type N = E.<{ brand: 'N' }>;";
+  expectThrown(`${N} type U = N & uint8;`);
+  expectThrown("type U = string.<{ brand: 'E' }>.<{ brand: 'N' }> & uint8;");
+  expectThrown("type Base = { a: uint8 }; type A = Base.<{ brand: 'A' }>; type U = A & uint8;");
+  expectThrown("type U = { a: uint8 }.<{ brand: 'A' }> & uint8;");
+  expectThrown("type Base = [].<uint8>; type A = Base.<{ brand: 'A' }>; type U = A & uint8;");
+  expectThrown("type E = string.<{ brand: 'E' }>; type U = E & uint8;");
+  // What must NOT be diagnosed: a base that declares type parameters is being
+  // APPLIED, so its object-shaped argument is a type and not a record.
+  expect(evaluated('type Box<T> = { value: T }; type U = Box.<{ a: uint8 }>;'
+    + ' String(Reflect.getReflection(U).kind);')).toBe('object');
+});
+
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
@@ -88,10 +112,9 @@ test('the walk to the base is a LOOP, so NESTED brands are not emptied', () => {
   // Three layers still reach the root.
   const D = "type A = string.<{ brand: 'A' }>; type B = A.<{ brand: 'B' }>; type C = B.<{ brand: 'C' }>;";
   expect(kind(`${D} type U = C & string;`)).toBe('parameterized');
-  // And a nested brand over one root is still disjoint from another root. The
-  // REDUCTION reaches it; see the conservatism test below for why the written
-  // form is not also diagnosed here.
-  expect(evaluated(`${N} type U = N & uint8; String(U === never);`)).toBe('true');
+  // And a nested brand over one root is still disjoint from another root,
+  // diagnosed at the annotation like any other.
+  expectThrown(`${N} type U = N & uint8;`);
 });
 
 test('an OBJECT or ARRAY base carries a brand, so those layer too', () => {
@@ -107,35 +130,15 @@ test('an OBJECT or ARRAY base carries a brand, so those layer too', () => {
   expect(kind(`${A2} type U = A & B;`)).toBe('intersection');
   // An object-based brand is still disjoint from a primitive, for the ordinary
   // reason rather than because it is branded.
-  expect(evaluated(`${O} type U = A & uint8; String(U === never);`)).toBe('true');
+  expectThrown(`${O} type U = A & uint8;`);
 });
 
 test('a LITERAL base is decided by the primitive under it', () => {
   expect(kind("type L = 'a'; type A = string.<{ brand: 'A' }>; type B = L.<{ brand: 'B' }>; type U = A & B;")).toBe('intersection');
-  expect(evaluated("type L1 = 'a'; type L2 = 'b'; type A = L1.<{ brand: 'A' }>; type B = L2.<{ brand: 'B' }>;"
-    + ' type U = A & B; String(U === never);')).toBe('true');
+  expectThrown("type L1 = 'a'; type L2 = 'b'; type A = L1.<{ brand: 'A' }>;"
+    + " type B = L2.<{ brand: 'B' }>; type U = A & B;");
 });
 
-test('the two halves have DIFFERENT reach, and the diagnostic is the conservative one', () => {
-  // Worth stating because it is the design and not a defect. CANONICALIZATION is
-  // complete: every disjoint intersection reduces to `never`, whatever the shape
-  // of its members. The EARLY ERROR is decided in the checking pass over what
-  // `resolveType` has resolved, and a parameterization whose base is itself
-  // parameterized, or whose base is an object alias, is not resolved far enough
-  // there to be judged - so AreDisjoint answers *false* and no error is raised.
-  //
-  // The failure mode is therefore a MISSED diagnostic and never a wrong one. The
-  // type is `never` either way; the program that wrote it hears about it from
-  // the use site instead of the annotation, which is where it heard about it
-  // before this rule existed. Extending the checker's resolution would close the
-  // gap; guessing at it would not, since an unresolved type may be anything.
-  const N = "type E = string.<{ brand: 'E' }>; type N = E.<{ brand: 'N' }>;";
-  // Reduced:
-  expect(evaluated(`${N} type U = N & uint8; String(U === never);`)).toBe('true');
-  // ...but not diagnosed at the annotation, unlike the single-layer form:
-  expect(evaluated(`${N} type U = N & uint8; String(1);`)).toBe('1');
-  expectThrown("type E = string.<{ brand: 'E' }>; type U = E & uint8;");
-});
 
 test('an ARRAY or TUPLE is not disjoint from an OBJECT type', () => {
   // An array is a subtype of `Iterable.<T>`, which is an ~object~ type, so the

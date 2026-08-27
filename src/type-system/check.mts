@@ -3901,8 +3901,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
           if (!builtinTakesArguments
             && args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
-            const base = bareBuiltin;
-            if (base && base.Kind === 'primitive') {
+            // The base is a BUILTIN or an ALIAS. Only the builtin was consulted,
+            // so a parameterization whose base was named by an alias resolved to
+            // nothing here and the annotation degraded to ~any~ in this pass.
+            //
+            // That is the whole of the reach gap recorded against
+            // #sec-intersection-type-early-errors: `string.<{ brand: 'E' }>` was
+            // diagnosed because `string` is a builtin, while
+            // `E.<{ brand: 'N' }>`, `ObjectBase.<{ brand }>`,
+            // `ArrayBase.<{ brand }>` and a brand over a literal alias were all
+            // missed - the four shapes differing only in what named the base.
+            // The runtime read them and reduced them to `never`; this pass could
+            // not, so the mistake was reported from a use site rather than from
+            // the annotation.
+            //
+            // Any base carries metadata (#sec-parameterized-types admits
+            // ~primitive~, ~literal~, ~object~, ~array~, ~tuple~ and ~nominal~
+            // bases), so the kind is not tested. What must hold is that the base
+            // RESOLVED: an unresolved name is still left alone, since a record
+            // invented for it would be a guess this pass has no way to check.
+            //
+            // A GENERIC alias is excluded, by the same rule as everywhere else
+            // (OQ-type-arguments-vs-metadata.md D2): a base that declares type
+            // parameters is being APPLIED, so its object-shaped argument is a
+            // type and not a record. `lookupAlias` does not distinguish them -
+            // its "declared but not yet walked" fallback reads `aliasNodes`,
+            // which holds every declaration - so the parameter list is consulted
+            // here. Without this, `Box.<{ a: uint8 }>` became `Box.<{ }>` with
+            // the shape as metadata and refused the shape's own members.
+            const baseName = node.TypeName.IdentifierReference.name;
+            const baseDecl = aliasNodes.get(baseName) as {
+              TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
+            } | undefined;
+            const baseIsGeneric = (baseDecl?.TypeParameters?.TypeParameterList?.length ?? 0) > 0;
+            const base = bareBuiltin ?? (baseIsGeneric ? null : lookupAlias(baseName) as TypeRecord | null);
+            if (base) {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
               const keys = Object.keys(metadata as unknown as Record<string, unknown>);
