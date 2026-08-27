@@ -76,14 +76,24 @@ test('row 3: the operand of a return in a function with a declared return type',
   expect(thrownKind('function anyv() { return "s"; } function g(): uint8 { return anyv(); } g();')).toBe('TypeError');
 });
 
+// The row programs below bind their instances with `let`, not `const`. A `const`
+// whose initializer is a construction now takes that construction's type (D13),
+// so a bad store through one is an EARLY ERROR and the run-time check site these
+// rows exist to exercise is never reached - the kind changes from the
+// operation's own RangeError to the checker's TypeError. `let` is left untyped
+// deliberately, so it is the spelling that reaches the boundary.
+//
+// The early error is the better answer for a program; these rows are about the
+// backstop underneath it.
+
 // -- Row 4: a value stored to a property or field -----------------------------
 
 test('row 4a: a store to a declared class field', () => {
   // The declared type has to be recorded on the class structure and not only
   // by the reflection route, or `c.x = "str"` stores the string.
-  expect(evaluated('class C { x: uint8 = 1; } const c = new C(); c.x = 7; String(c.x) + "/" + String(c.x is uint8);')).toBe('7/true');
-  expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); c.x = 300;')).toBe('RangeError');
-  expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); c.x = "str";')).toBe('TypeError');
+  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); c.x = 7; String(c.x) + "/" + String(c.x is uint8);')).toBe('7/true');
+  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = 300;')).toBe('RangeError');
+  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = "str";')).toBe('TypeError');
 });
 
 test('row 4b: a store to a PRIVATE declared field, which stores elsewhere', () => {
@@ -103,7 +113,7 @@ test('row 4c: a store to a property typed through a descriptor', () => {
 });
 
 test('row 4d: an untyped property is untouched by any of this', () => {
-  expect(evaluated('class C { y = 1; } const c = new C(); c.y = "anything"; String(c.y);')).toBe('anything');
+  expect(evaluated('class C { y = 1; } let c = new C(); c.y = "anything"; String(c.y);')).toBe('anything');
   expect(evaluated('const o = { z: 1 }; o.z = "anything"; String(o.z);')).toBe('anything');
 });
 
@@ -306,7 +316,7 @@ test('a setter gives a property its write type', () => {
   expectStatic('class C { get p(): string { return "a"; } set p(v: uint8) {} } function nc(c: C) { c.p = 300; }');
   expectStatic('class C { get p(): string { return "a"; } set p(v: uint8) {} } function nc(c: C) { let x: uint8 = c.p; }');
   // The run time is untouched: the setter still converts what it receives.
-  expect(evaluated('class C { set s(v: uint8) { this.q = v; } } const c = new C(); c.s = 7; String(c.q is uint8);')).toBe('true');
+  expect(evaluated('class C { set s(v: uint8) { this.q = v; } } let c = new C(); c.s = 7; String(c.q is uint8);')).toBe('true');
 });
 
 test('a subclass instance carries what it inherits', () => {
@@ -469,9 +479,9 @@ test('two typed operands of different types do not mix, exactly as BigInt does n
 // -- Row 7: a value crossing into a typed position through reflection ---------
 
 test('row 7: Reflect.set into a typed field and a typed element', () => {
-  expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); Reflect.set(c, "x", 300);')).toBe('RangeError');
+  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);')).toBe('RangeError');
   expect(thrownKind('let a: [].<uint8> = [1]; Reflect.set(a, "0", "x");')).toBe('TypeError');
-  expect(evaluated('class C { x: uint8 = 1; } const c = new C(); Reflect.set(c, "x", 7); String(c.x is uint8);')).toBe('true');
+  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 7); String(c.x is uint8);')).toBe('true');
 });
 
 test('row 7b: Reflect.defineProperty checks the value against the declared type', () => {
@@ -1149,12 +1159,12 @@ test('deleting a typed field, a typed element, or an interface-required member t
   // The first and third only started throwing when class fields began
   // recording their declared type: the rule reads a structure that is empty
   // for every declared field until they do.
-  expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); delete c.x;')).toBe('TypeError');
+  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); delete c.x;')).toBe('TypeError');
   expect(thrownKind('let a: [].<uint8> = [1,2]; delete a[0];')).toBe('TypeError');
-  expect(thrownKind('interface I { m: uint8 } class C implements I { m: uint8 = 1; } const c = new C(); delete c.m;')).toBe('TypeError');
+  expect(thrownKind('interface I { m: uint8 } class C implements I { m: uint8 = 1; } let c = new C(); delete c.m;')).toBe('TypeError');
   // An untyped property is still deletable, and so is a non-index property of
   // a typed array.
-  expect(evaluated('class C { y = 1; } const c = new C(); delete c.y; "deleted";')).toBe('deleted');
+  expect(evaluated('class C { y = 1; } let c = new C(); delete c.y; "deleted";')).toBe('deleted');
   expect(evaluated('let a: [].<uint8> = [1,2]; a.custom = 1; delete a.custom; "deleted";')).toBe('deleted');
 });
 
@@ -1174,10 +1184,10 @@ test('the same operation runs at every row: one value, seven boundaries, one ver
     'function anyv() { return 300; } let x: uint8 = anyv();',
     'function f(v: uint8) {} function anyv() { return 300; } f(anyv());',
     'function anyv() { return 300; } function g(): uint8 { return anyv(); } g();',
-    'class C { x: uint8 = 1; } const c = new C(); c.x = 300;',
+    'class C { x: uint8 = 1; } let c = new C(); c.x = 300;',
     'class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);',
     'let a: [].<uint8> = [1]; function anyv() { return 300; } a[0] = anyv();',
-    'class C { x: uint8 = 1; } const c = new C(); Reflect.set(c, "x", 300);',
+    'class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);',
   ];
   // Row 6's own form, asserted beside them: same operation, different fault.
   expect(thrownKind('function anyv() { return 300; } (1 := uint8) + anyv();')).toBe('TypeError');
@@ -1191,8 +1201,8 @@ test('a typed field survives a round trip, which is what the gap destroyed', () 
   // error arrives at the READ - an innocent boundary blaming a value the type
   // system
   // had admitted. Now the store is where it is reported.
-  expect(thrownKind('class C { x: uint8 = 1; } const c = new C(); c.x = 300; let y: uint8 = c.x;')).toBe('RangeError');
-  expect(evaluated('class C { x: uint8 = 1; } const c = new C(); c.x = 200; let y: uint8 = c.x; String(y);')).toBe('200');
+  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = 300; let y: uint8 = c.x;')).toBe('RangeError');
+  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); c.x = 200; let y: uint8 = c.x; String(y);')).toBe('200');
 });
 
 // -- Literal freshness (#sec-literal-freshness) -------------------------------

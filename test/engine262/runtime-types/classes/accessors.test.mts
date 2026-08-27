@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, evaluatedFlagOff, expectThrownKind } from '../harness.mts';
+import { evaluated, evaluatedFlagOff, expectThrownKind, ok } from '../harness.mts';
 
 /**
  * Design: README.md; the declarations are judged through #sec-typed-classes
@@ -184,8 +184,14 @@ test('the accessor is TYPED, and the setter enforces it', () => {
   // The reason to write `accessor a: uint8` rather than a hand-written pair.
   // Out of range is a RangeError, not a TypeError, and it arrives
   // through the backing field rather than through anything this stage wrote.
-  expectThrownKind('class A { accessor a: uint8 = 1; } const o = new A(); o.a = 300;', 'RangeError');
-  expectThrownKind('class A { accessor a: uint8 = 1; } const o = new A(); o.a = "s";', 'TypeError');
+  // Through a `let`: a `const` bound to a construction is now typed (D13), so
+  // the setter's range check is reached at COMPILE time and the run-time kind
+  // this line asserts never happens. Both are asserted, the early error being
+  // the better answer.
+  expectThrownKind('class A { accessor a: uint8 = 1; } let o = new A(); o.a = 300;', 'RangeError');
+  expect(ok('class A { accessor a: uint8 = 1; } const o = new A(); o.a = 300;')).toBe(false);
+  expectThrownKind('class A { accessor a: uint8 = 1; } let o = new A(); o.a = "s";', 'TypeError');
+  expect(ok('class A { accessor a: uint8 = 1; } const o = new A(); o.a = "s";')).toBe(false);
   // In range still works, so the check is a check and not a refusal.
   expect(evaluated('class A { accessor a: uint8 = 1; } const o = new A(); o.a = 255; String(o.a);')).toBe('255');
   // A typed accessor with NO initializer takes its type's default, the same

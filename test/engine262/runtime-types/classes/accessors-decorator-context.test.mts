@@ -110,7 +110,11 @@ test('what the accessor context does and does not carry', () => {
   // checked where the static type is known", and nothing checks it yet. The
   // modifier parses, lays out, and reflects.
   expect(evaluated('class B { protected a: uint8 = 1; } class D extends B { read() { return this.a; } } String(new D().read());')).toBe('1');
-  expect(evaluated('class B { protected a: uint8 = 1; } const o = new B(); String(o.a);')).toBe('1');
+  // Through a `let`: a `const` bound to a construction is now typed (D13), so
+  // `o.a` from outside the class is refused as the protected access it is.
+  // Reading it here is about the accessor's VALUE, so it goes through a binding
+  // the checker does not type.
+  expect(evaluated('class B { protected a: uint8 = 1; } let o = new B(); String(o.a);')).toBe('1');
 });
 
 test('an accessor context reports its TYPE', () => {

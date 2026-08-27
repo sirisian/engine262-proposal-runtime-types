@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, expectThrownKind } from '../harness.mts';
+import { expectThrown, expectThrownKind, ok } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -113,7 +113,14 @@ test('a typed class is sealed and its prototype frozen', () => {
   // What sealing does NOT do: a field may still be written, since "a field's
   // type is what constrains it", and the store check still applies.
   expect(evaluated('class A { a: uint8; } const x = new A(); x.a = 7; String(x.a);')).toBe('7');
-  expect(evaluated('class A { a: uint8; } const x = new A(); try { x.a = 300; "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // Written through a `let`, because a `const` bound to a CONSTRUCTION now takes
+  // that construction's type (D13) and `x.a = 300` becomes an Early Error - the
+  // store check moving from run time to compile time, which is the checker doing
+  // its job. The run-time check is what this line is about, so it is reached
+  // through a binding the checker does not type.
+  expect(evaluated('class A { a: uint8; } let x = new A(); try { x.a = 300; "no"; } catch (e) { "caught"; }')).toBe('caught');
+  // ...and the same store through a typed binding is refused EARLY.
+  expect(ok('class A { a: uint8; } const x = new A(); x.a = 300;')).toBe(false);
   // Methods and inheritance are undisturbed, and a subclass freezes too.
   expect(evaluated('class A { a: uint8; m() { return 1; } } String(new A().m());')).toBe('1');
   expect(evaluated('class B { a: uint8; } class S extends B { b: uint8; } String(Object.isFrozen(S.prototype)) + "/" + String(Object.isFrozen(B.prototype));')).toBe('true/true');

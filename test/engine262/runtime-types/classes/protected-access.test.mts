@@ -49,12 +49,16 @@ test('it is DELIBERATELY NOT a runtime wall', () => {
     + 'String(Reflect.getReflection.<Reflect.ClassField, B>("a").protected);')).toBe('true');
 });
 
-test('PINNED: an UNANNOTATED binding has no static type to check against', () => {
-  // `const b = new B(); b.a;` is ACCEPTED, because this checker records no type
-  // for an inferred binding - and the rule is explicitly one "checked WHERE THE
-  // STATIC TYPE IS KNOWN". So this is the design's own boundary rather than a
-  // hole in the rule, and it closes when inference for `new` bindings lands.
-  expect(outcome('class B { protected a: uint8 = 1; } const b = new B(); b.a;')).toBe('ACCEPTED');
+test('a `const` bound to a construction is typed, so protected access is checked (D13)', () => {
+  // This test PINNED the opposite answer and said in as many words that it
+  // "closes when inference for `new` bindings lands". It has landed: a `const`
+  // whose initializer is a `new` expression takes that construction's type, so
+  // the protected rule - "checked WHERE THE STATIC TYPE IS KNOWN" - now reaches
+  // the spelling a program actually writes rather than only the annotated one.
+  expect(outcome('class B { protected a: uint8 = 1; } const b = new B(); b.a;')).toBe('TypeError');
+  // A `let` is still untyped, deliberately: fixing a mutable binding's type from
+  // its initializer would refuse assignments an untyped program may make.
+  expect(outcome('class B { protected a: uint8 = 1; } let b = new B(); b.a;')).toBe('ACCEPTED');
   // The annotated form of the same program IS refused, which is what says the
   // gap is the binding's type and not the rule.
   expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('TypeError');

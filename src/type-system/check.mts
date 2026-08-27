@@ -2562,6 +2562,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classTypesInProgress = new Set<ParseNode>();
   const classTypeOf = (name: string): Known => {
     const node = classNodes.get(name);
+    // A LIBRARY nominal is deliberately NOT resolved here, though `new
+    // Map.<string, uint8>()` consequently has no Static Type (D13's second
+    // half). Returning `libraryTypeRecord(name)` gives `new Map()` the BARE
+    // `Map`, and a bare nominal is not assignable to a specialization (D2) - so
+    // `let m: Map.<string, uint8> = new Map()`, the canonical spelling, is
+    // refused by the checker while the run time ADOPTS it
+    // (#sec-collection-construction).
+    //
+    // Making that work needs the checker to model adoption - an unstamped
+    // collection being assignable to a specialization AT AN INITIALIZER, and
+    // only there - which is a rule this proposal has not stated and which D2
+    // deliberately declined for the general case. Filed rather than guessed.
     return node ? instanceTypeOf(node) : null;
   };
   /**
@@ -8793,6 +8805,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // function the checker read a signature from (#sec-check-elision).
           if (isConstDeclaration) {
             frames[frames.length - 1].immutableNames.add(n.BindingIdentifier.name);
+          }
+          // D13: a `const` bound to a CONSTRUCTION takes that construction's
+          // Static Type. It took nothing, so `const c = new C(); c.x` read the
+          // field at ~any~ while `new C().x` - the same access one step earlier
+          // - read it at its declared type. Every signature the checker provides
+          // was reachable through an annotation and not through the spelling a
+          // program actually writes. `protected-access.test.mts` pins the old
+          // answer and says in as many words that it "closes when inference for
+          // `new` bindings lands".
+          //
+          // NARROW ON PURPOSE, and the width was measured. Inferring a type for
+          // EVERY unannotated binding breaks participation outright: `let a = 1;
+          // a = "s";` is an untyped program, and giving `a` the type `number`
+          // makes it an error. A construction is different in kind - it names a
+          // class the program declared, so its type is something the program
+          // wrote rather than something inferred from a literal.
+          //
+          // `const` only, for the same reason: a `let` may be reassigned, and
+          // fixing its type from an initializer would refuse assignments an
+          // untyped program is entitled to make.
+          if (!declared && !n.TypeAnnotation && isConstDeclaration
+              && (n.Initializer as ParseNode | undefined)?.type === 'NewExpression') {
+            const inferred = staticType(n.Initializer);
+            if (inferred) {
+              declare(n.BindingIdentifier.name, widen(inferred));
+              return;
+            }
           }
           declare(n.BindingIdentifier.name, declared);
           return;
