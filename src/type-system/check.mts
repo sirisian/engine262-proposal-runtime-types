@@ -85,6 +85,24 @@ export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arg
 
 
 
+
+/**
+ * Constructors whose instance type is the constructor's own name.
+ *
+ * PLAN-remaining-blockers.md item 7. `new Error("x")` is an `Error` whatever it
+ * is passed, so the answer is determined without reading the arguments - the
+ * `FIXED_STATIC_RESULTS` idea one syntax along.
+ *
+ * `Array`, `Map`, `Set` and the other collections are NOT here. Their
+ * unparameterized form has no type the call supports, and
+ * #sec-collection-construction has adoption at an annotation do that work.
+ */
+const FIXED_CONSTRUCTOR_INSTANCES = new Set([
+  'Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError',
+  'EvalError', 'URIError', 'AggregateError',
+  'Date', 'RegExp',
+]);
+
 /**
  * Static DATA properties whose type is fixed.
  *
@@ -5514,7 +5532,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // field's declared type (F59).
         const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
         if (target && target.type === 'IdentifierReference') {
-          return classTypeOf((target as { name: string }).name);
+          const targetName = (target as { name: string }).name;
+          const declared = classTypeOf(targetName);
+          if (declared) {
+            return declared;
+          }
+          // PLAN-remaining-blockers.md item 7: a BUILTIN constructor, where the
+          // call determines its own answer. `classTypeOf` knows only declared
+          // classes, so `new WeakRef(_k_)` and `new Error("x")` were ~any~.
+          //
+          // Only where the answer IS determined. `new Array(3)` is left alone:
+          // an untyped array's Static Type is not `[].<any>`, so there is no
+          // type to give it that the call supports - the same question D13's
+          // library half settled by resolving library nominals ONLY where type
+          // arguments are written, and `new Array(3)` writes none. `new Map()`
+          // is left for the same reason, and because #sec-collection-construction
+          // has the ADOPTION at a boundary do that work instead.
+          if (!shadowedByProgram(targetName)) {
+            if (targetName === 'WeakRef') {
+              // `new WeakRef(_k_)` is a `WeakRef.<typeof _k_>` - the one
+              // constructor here whose argument decides the answer.
+              const args = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+              const referent = args[0] ? staticType(args[0]) : null;
+              return referent
+                ? libraryTypeRecord('WeakRef', [widen(referent) as TypeRecord]) ?? null
+                : null;
+            }
+            const fixedInstance = FIXED_CONSTRUCTOR_INSTANCES.has(targetName)
+              ? (libraryTypeRecord(targetName) ?? builtinTypeRecord(targetName) ?? interfaceTypeOf(targetName))
+              : null;
+            if (fixedInstance) {
+              return fixedInstance as Known;
+            }
+          }
+          return null;
         }
         // proposal-runtime-types #sec-generics: `new A.<uint8>()` is an
         // instance of the APPLICATION, not of the bare class. The arguments

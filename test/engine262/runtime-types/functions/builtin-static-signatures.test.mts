@@ -593,10 +593,14 @@ test('Promise.reject carries its reason', () => {
   const E = 'const e: uint8 = (1 := uint8); ';
   expectStaticTypeError(`${E} let n: string = Promise.reject(e);`);
   expect(ok(`${E} let n: Promise.<never, uint8> = Promise.reject(e);`)).toBe(true);
-  // An UNTYPED reason yields an untyped result, as everywhere else - `new
-  // Error("x")` has no Static Type, so the call says nothing rather than
-  // guessing.
-  expect(ok('if (false) { let n: string = Promise.reject(new Error("x")); } 1;')).toBe(true);
+  // `new Error("x")` IS typed now - a builtin constructor whose answer is its
+  // own name - so the reason flows through and the natural spelling carries a
+  // real type. This assertion used to say the opposite, and the change is the
+  // two rows composing rather than either being altered.
+  expect(ok('let n: Promise.<never, Error> = Promise.reject(new Error("x"));')).toBe(true);
+  expectStaticTypeError('let n: Promise.<never, TypeError> = Promise.reject(new Error("x"));');
+  // A reason with NO Static Type still yields nothing.
+  expect(ok('if (false) { const r = {}; let n: string = Promise.reject(r); } 1;')).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -687,4 +691,48 @@ test('fromAsync matches Array.from on an untyped source, and the run time', () =
   expect(ok('if (false) { const u = [1, 2]; let p: uint8 = Array.fromAsync(u); } 1;')).toBe(true);
   expect(ok('if (false) { const u = [1, 2]; let p: uint8 = Array.from(u); } 1;')).toBe(true);
   expect(evaluated('const p = Array.fromAsync([1, 2]); String(typeof p.then);')).toBe('function');
+});
+
+// ---------------------------------------------------------------------------
+// Builtin constructors - only where the call determines its own answer
+// ---------------------------------------------------------------------------
+
+test('a builtin constructor whose answer is its own name', () => {
+  // `new Error("x")` is an `Error` whatever it is passed, so the answer is
+  // determined without reading the arguments - `FIXED_STATIC_RESULTS` one syntax
+  // along.
+  expectStaticTypeError('let n: uint8 = new Error("x");');
+  expect(ok('let e: Error = new Error("x");')).toBe(true);
+  expectStaticTypeError('let n: uint8 = new TypeError("x");');
+  expectStaticTypeError('let n: uint8 = new Date();');
+  expectStaticTypeError('let n: uint8 = new RegExp("a");');
+});
+
+test('new WeakRef carries its referent\'s type', () => {
+  // The one constructor here whose ARGUMENT decides the answer.
+  const K = 'const k: { a: uint8 } = { a: 1 }; ';
+  expect(ok(`${K} let w: WeakRef.<{ a: uint8 }> = new WeakRef(k);`)).toBe(true);
+  expectStaticTypeError(`${K} let w: WeakRef.<{ a: string }> = new WeakRef(k);`);
+  expectStaticTypeError(`${K} let n: uint8 = new WeakRef(k);`);
+  // An untyped referent yields an untyped result, as everywhere else.
+  expect(ok('if (false) { const k = {}; let n: uint8 = new WeakRef(k); } 1;')).toBe(true);
+  expect(evaluated('const k = {}; const w = new WeakRef(k); String(w.deref() === k);')).toBe('true');
+});
+
+test('the COLLECTION constructors are deliberately left untyped', () => {
+  // `new Array(3)` and `new Map()` have no type the call supports: an untyped
+  // array's Static Type is not `[].<any>`, which is the question D13's library
+  // half settled by resolving library nominals ONLY where type arguments are
+  // written - and neither writes any.
+  //
+  // For the collections there is also a better mechanism already in place:
+  // #sec-collection-construction has the ADOPTION at an annotation do the work,
+  // and that still fires.
+  expect(ok('if (false) { let n: uint8 = new Array(3); } 1;')).toBe(true);
+  expect(ok('if (false) { let n: uint8 = new Map(); } 1;')).toBe(true);
+  expect(evaluated('let m: Map.<string, uint8> = new Map(); String(Reflect.typeOf(m.size) === (type uint64));')).toBe('true');
+  // A SHADOWED name and a user SUBCLASS both go to the declared class, not here.
+  expect(ok('if (false) { class E2 { } const Error = E2; let n: uint8 = new Error("x"); } 1;')).toBe(true);
+  expectStaticTypeError('class MyErr extends Error { } let n: uint8 = new MyErr();');
+  expect(evaluated('String(new Error("x").message);')).toBe('x');
 });
