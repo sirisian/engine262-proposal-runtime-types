@@ -16,7 +16,7 @@ export { BoundsProvenCountForLastCheck } from './type-system/check.mts';
 // Object, so it needs the predicate that recognises one and the canonical-form
 // function that describes it. Exported here rather than reached through a deep
 // path, which would pull `src/` into the inspector's own bundle.
-export { isTypeObject, type TypeObject } from './type-system/intern.mts';
+export { isTypeObject, GetTypeObject, type TypeObject } from './type-system/intern.mts';
 export { canonicalTypeText } from './type-system/records.mts';
 export * from './host-defined/engine.mts';
 export { runSingleJobInQueue, type JobQueue, BasicJobQueue } from './host-defined/job-queue.mts';
