@@ -20,7 +20,7 @@ import { voidType as voidTypeRecord } from './records.mts';
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
 import { Diverges } from './divergence.mts';
-import { IsSubtype, SameType, IsAssignable, AreDisjoint } from './relations.mts';
+import { IsSubtype, SameType, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
@@ -558,8 +558,37 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
   if (!target) {
     return false;
   }
-  return target.Kind === 'nominal'
-    && (target as { LibraryName?: string }).LibraryName === 'Span';
+  if (target.Kind !== 'nominal') {
+    return false;
+  }
+  const library = (target as { LibraryName?: string }).LibraryName;
+  if (library === 'Span') {
+    return true;
+  }
+  // D25 / OQ12: a boundary at a collection SPECIALIZATION does more than check.
+  // #sec-collection-construction has an unstamped collection ADOPT the target's
+  // type arguments there, and adoption is not a no-op - so the boundary may not
+  // be elided however provably the value already satisfies the type.
+  //
+  // The distinction is the one `sec-value-type-copying`'s note draws, and it now
+  // covers two features rather than one: "A check inserted at a boundary may be
+  // skipped where the source provably satisfies the target, since a check that
+  // cannot fail does nothing. A copy is never nothing." Neither is a stamp.
+  //
+  // Measured before this: `let m: Map.<string, uint8> = new Map()` adopted,
+  // `let g: Map.<…> = Map.groupBy(…)` did NOT, and laundering the same call
+  // through `any` made it adopt again - one behaviour decided by what the
+  // checker happened to prove. Giving `Map.groupBy` a Static Type in Phase 1 is
+  // what created that, by making the proof possible.
+  //
+  // Keyed on the NAME and the argument count, deliberately. An earlier attempt
+  // at the value-type half of this asked `LayoutOf` instead and broke four
+  // generic-alias tests: the checker is not entitled to compute a layout for
+  // every annotation it sees.
+  return library !== undefined
+    && COLLECTION_LIBRARY_NAMES.has(library)
+    && (target as { Arguments?: readonly unknown[] }).Arguments !== undefined
+    && (target as { Arguments: readonly unknown[] }).Arguments.length > 0;
 }
 
 /**

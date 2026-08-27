@@ -162,35 +162,35 @@ test('a shadowed `Object` gets no signature either', () => {
   expect(ok(`if (false) { class O2 { } const Object = O2; ${A} let o: uint8 = Object.groupBy(a, (n) => "k"); } 1;`)).toBe(true);
 });
 
-test.fails('D25: the result is not STAMPED, so its run-time count is a Number', () => {
-  // `Map.groupBy` publishes `Map.<K, [].<T>>` statically while the value it
-  // returns carries no type arguments. A program that ANNOTATES the result gets
-  // it stamped by adoption at the boundary (#sec-collection-construction); one
-  // that does not gets a static type its value does not match.
+test('D25: an ANNOTATED result is stamped, the elision no longer skipping adoption', () => {
+  // `Map.groupBy` publishes `Map.<K, [].<T>>` while the value it returns carries
+  // no type arguments. #sec-collection-construction has an unstamped collection
+  // ADOPT the target's at a boundary - and the boundary was being ELIDED,
+  // because Phase 1 gave the call a Static Type and the checker could then prove
+  // the initializer satisfied its annotation.
   //
-  // Not unsound - a Number reaching a `uint64` position converts - but the two
-  // halves disagree and the clause is the side that is right. Found by the
-  // devtools example, which expected a typed count and measured a plain one.
-  //
-  // BROADER THAN FIRST FILED, and the cause is CHECK ELISION - the same shape
-  // `sec-value-type-copying`'s note describes for a value-type copy.
-  //
-  // Measured: `let m: Map.<string, uint8> = new Map()` DOES adopt, and
-  // `let g: Map.<…> = Map.groupBy(…)` does NOT - but laundering the same call
-  // through `any` first does. So the boundary is being SKIPPED because the
-  // checker can now prove the initializer already satisfies the annotation, and
-  // adoption rides on that boundary.
-  //
-  // Phase 1 created this by giving `Map.groupBy` a Static Type: the elision is
-  // correct for a CHECK, which cannot fail where the type is proven, and wrong
-  // for ADOPTION, which is not a no-op. "A check that cannot fail does nothing.
-  // A copy is never nothing" - and neither is a stamp.
-  //
-  // The inner array elements ARE typed, since they come from the typed source,
-  // so only the Map's own stamp is missing.
-  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(Reflect.typeOf(g.size) === (type uint64));`)).toBe('true');
-  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g is Map.<string, [].<uint32>>);`)).toBe('true');
+  // The elision is right for a CHECK, which cannot fail where the type is
+  // proven, and wrong for ADOPTION, which is not a no-op. `conversionHasEffect`
+  // now says so, as it already did for `Span`.
   expect(evaluated(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => "k"); String(Reflect.typeOf(g.size) === (type uint64));`)).toBe('true');
+  expect(evaluated(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => "k"); String(g is Map.<string, [].<uint32>>);`)).toBe('true');
+  // The adoption still CHECKS: a collection whose contents deny the type is
+  // refused rather than re-labelled.
+  expect(evaluated('const u = new Map(); u.set("a", "b"); try { let m: Map.<string, uint8> = u; "no"; } catch (e) { "caught"; }')).toBe('caught');
+});
+
+test('a BARE call is not stamped, and that is correct', () => {
+  // No annotation means no boundary, and adoption happens AT a boundary. So
+  // `const g = Map.groupBy(...)` has the Static Type `Map.<K, [].<T>>` and a
+  // value carrying no arguments - the static and run-time halves describing the
+  // same collection differently.
+  //
+  // Not unsound: `g.size` is a Number, and a Number reaching a `uint64` position
+  // converts. Whether a static-only claim should exist at all is the open half
+  // of D25, and it is a question about the SIGNATURE rather than about the
+  // elision that this fixed.
+  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(typeof g.size);`)).toBe('number');
+  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g.get("k").length);`)).toBe('3');
 });
 
 // ---------------------------------------------------------------------------
