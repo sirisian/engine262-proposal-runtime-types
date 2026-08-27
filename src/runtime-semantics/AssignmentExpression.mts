@@ -1,3 +1,4 @@
+import { copiesOnBinding } from './LexicalDeclaration.mts';
 import { JSStringValue, ObjectValue, ReferenceRecord, Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import {
@@ -19,6 +20,7 @@ import {
   GetValue,
   LookupClassOperator,
   PutValue,
+  CopyValueClassInstance,
   LocationOfAssignmentTarget,
   ToBoolean,
   surroundingAgent,
@@ -181,6 +183,22 @@ export function* Evaluate_AssignmentExpression({
         const rref = Q(yield* Evaluate(AssignmentExpression));
         // ii. Let rval be ? GetValue(rref).
         rval = Q(yield* GetValue(rref));
+      }
+      // #sec-value-type-copying: "assigning to one" is a COPY site, by the same
+      // rule as at a binding - a NAME or a READ on the right denotes an existing
+      // value and copies; a construction or a call produces one and does not.
+      //
+      // Measured before this: `_b_ = _a_` copied where `_b_` was ANNOTATED and
+      // aliased where it was not, the annotation's boundary having been doing
+      // the work. That is the elision hazard this whole plan turns on: a
+      // boundary may be skipped, so a copy resting on one is a copy that
+      // sometimes does not happen.
+      //
+      // Placed at the SIMPLE-assignment `PutValue`. A first attempt put it at
+      // the one below, which serves DESTRUCTURING - the two look alike and only
+      // one of them runs for `_b_ = _a_`.
+      if (copiesOnBinding(AssignmentExpression)) {
+        rval = CopyValueClassInstance(rval);
       }
       // e. Perform ? PutValue(lref, rval).
       Q(yield* PutValue(lref, rval));

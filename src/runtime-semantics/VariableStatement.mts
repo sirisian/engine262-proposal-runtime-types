@@ -1,7 +1,7 @@
 import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
 import { surroundingAgent, LookupTypeDefault } from '#self';
-import { recordDeclaredType } from './LexicalDeclaration.mts';
+import { recordDeclaredType , copiesOnBinding } from './LexicalDeclaration.mts';
 import {
   NormalCompletion, Q,
 } from '../completion.mts';
@@ -14,6 +14,7 @@ import {
   EnforceAnnotation,
   GetValue,
   PutValue,
+  CopyValueClassInstance,
   ResolveBinding,
 } from '#self';
 
@@ -100,6 +101,15 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     // stored the value, which is the invariant break a `let` no longer has.
     // proposal-runtime-types: the annotation check at the binding boundary.
     value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
+    // #sec-value-type-copying, as at a lexical binding: a `var` initialized from
+    // a NAME or a READ copies, and one initialized from a construction does not.
+    // A separate evaluation from `let` and `const`, so it needs the rule said
+    // again rather than inherited - `var _b_ = _a_` aliased while
+    // `const _b_ = _a_` copied, which is the kind of split a reader would never
+    // guess.
+    if (copiesOnBinding(Initializer)) {
+      value = CopyValueClassInstance(value);
+    }
     // 5. Return ? PutValue(lhs, value).
     const put = Q(yield* PutValue(lhs, value));
     if (TypeAnnotation && surroundingAgent.feature('runtime-types')) {

@@ -282,7 +282,7 @@ function* Evaluate_LexicalBinding_BindingPattern(LexicalBinding: ParseNode.Lexic
  * #sec-value-type-copying: a construction "builds its result directly in the
  * destination", while a name or a read denotes a value that already exists.
  */
-function copiesOnBinding(node: ParseNode | null | undefined): boolean {
+export function copiesOnBinding(node: ParseNode | null | undefined): boolean {
   if (!node) {
     return false;
   }
