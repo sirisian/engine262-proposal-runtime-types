@@ -82,6 +82,42 @@ const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
 export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
 
 
+
+/**
+ * Global functions whose result type depends on nothing the call passes.
+ *
+ * PLAN-standard-library-statics.md Family B. The same rule as
+ * FIXED_STATIC_RESULTS, for callees that are bare identifiers.
+ *
+ * `isNaN` and `isFinite` are NOT here. #sec-overloading-of-the-standard-library
+ * names them among the functions overloaded for the numeric types, and
+ * `table-numeric-library-signatures` gives them LITERAL results per family, so a
+ * fixed `boolean` would displace an overload - the mistake this plan made once
+ * with `Math.*` and again with the `Number` predicates.
+ *
+ * `parseInt` and `parseFloat` ARE here, at `number`. `sec-parsing` leaves them
+ * "unchanged and continue to consume a prefix and to return NaN", and a Number
+ * is what unchanged means: the per-type `parse` functions are what a program
+ * writes when it wants a value type.
+ *
+ * `structuredClone` and `eval` are absent deliberately: a clone's result should
+ * be its argument's type, which is an identity signature rather than a fixed
+ * one, and `eval` has no type to claim.
+ */
+const FIXED_GLOBAL_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
+  parseInt: () => makePrimitive('number'),
+  parseFloat: () => makePrimitive('number'),
+  encodeURI: () => makePrimitive('string'),
+  encodeURIComponent: () => makePrimitive('string'),
+  decodeURI: () => makePrimitive('string'),
+  decodeURIComponent: () => makePrimitive('string'),
+  // `escape` and `unescape` are NOT here. They are Annex B and this engine does
+  // not implement them - `escape("a")` throws - so a Static Type for one would
+  // claim something no call can reach, and a program written against it would
+  // type-check and then fail. A signature must not describe a function that is
+  // absent.
+};
+
 /**
  * Statics whose result type depends on nothing the call passes.
  *
@@ -4294,6 +4330,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const staticSig = builtinStaticSignature(calleeNode);
           if (staticSig) {
             return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []));
+          }
+        }
+        // PLAN-standard-library-statics.md Family B: a GLOBAL function, whose
+        // callee is a bare identifier rather than a member. The dispatch above
+        // requires a member callee, so `parseInt(…)` matched nothing; this is
+        // the same table one shape along, and `Composite` below is the
+        // precedent for keying on a bare name.
+        if (calleeNode?.type === 'IdentifierReference') {
+          const globalName = (calleeNode as { name?: string }).name;
+          const fixedGlobal = globalName !== undefined && !shadowedByProgram(globalName)
+            ? FIXED_GLOBAL_RESULTS[globalName]
+            : undefined;
+          if (fixedGlobal) {
+            return fixedGlobal();
           }
         }
         if (calleeNode?.type === 'IdentifierReference'

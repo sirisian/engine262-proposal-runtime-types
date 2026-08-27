@@ -249,3 +249,58 @@ test.fails('a TAGGED TEMPLATE does not reach the static dispatch', () => {
   // position, which is why this is filed rather than special-cased for `raw`.
   expectStaticTypeError('let n: uint8 = String.raw`x`;');
 });
+
+// ---------------------------------------------------------------------------
+// Family B - global functions
+// ---------------------------------------------------------------------------
+
+test('a global function states what it returns', () => {
+  // The same rule as the fixed statics, for a callee that is a bare identifier
+  // rather than a member. `Composite(…)` is the precedent for keying on one.
+  expectStaticTypeError('let n: string = parseInt("1");');
+  expect(ok('let n: number = parseInt("1");')).toBe(true);
+  expectStaticTypeError('let n: string = parseFloat("1");');
+  expect(ok('let n: number = parseFloat("1");')).toBe(true);
+  for (const f of ['encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent']) {
+    expectStaticTypeError(`let n: uint8 = ${f}("a");`);
+    expect(ok(`let n: string = ${f}("a");`), f).toBe(true);
+  }
+});
+
+test('the OVERLOADED globals are left alone', () => {
+  // #sec-overloading-of-the-standard-library names `isFinite` and `isNaN` among
+  // the functions overloaded for the numeric types, and
+  // `table-numeric-library-signatures` gives them literal results per family. A
+  // fixed `boolean` would displace an overload - the mistake made once with
+  // `Math.*` and again with the `Number` predicates.
+  expect(ok('let n: string = isNaN(1);')).toBe(true);
+  expect(ok('let n: string = isFinite(1);')).toBe(true);
+  // `eval` has no type to claim, and is not given one.
+  expect(ok('let n: uint8 = eval("1");')).toBe(true);
+});
+
+test('a global that this engine does not implement gets no signature', () => {
+  // `escape` and `unescape` are Annex B and absent here - `escape("a")` throws.
+  // A Static Type for one would claim something no call can reach, so a program
+  // written against it would type-check and then fail. Both were in a draft of
+  // the table and were removed when the run time was checked.
+  //
+  // The call is refused, but for the ORDINARY reason - `escape` is not defined -
+  // rather than by a signature. That is the right refusal: the name means
+  // nothing here, and a type would have made it appear to mean something.
+  expect(ok('let n: uint8 = escape("a");')).toBe(false);
+  expect(ok('let n: string = escape("a");')).toBe(false);
+});
+
+test('Family B preserves the existing spellings and the run time', () => {
+  // The compatibility guard, per compat/backwards-compatibility.test.mts: what a
+  // wrong fixed type breaks is a program that ALREADY type-checked.
+  expect(ok('let n: number = parseInt("1", 10);')).toBe(true);
+  expect(ok('let n: string = encodeURIComponent("a b");')).toBe(true);
+  expect(evaluated('String(parseInt("42") === 42);')).toBe('true');
+  expect(evaluated('String(parseInt("42px") === 42);')).toBe('true');
+  expect(evaluated('String(Number.isNaN(parseInt("x")));')).toBe('true');
+  expect(evaluated('String(encodeURIComponent("a b") === "a%20b");')).toBe('true');
+  // A program that shadows one gets its own, not the builtin's signature.
+  expect(ok('if (false) { function parseInt(x) { return x; } let n: string = parseInt("1"); } 1;')).toBe(true);
+});
