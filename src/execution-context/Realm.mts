@@ -55,6 +55,7 @@ import { bootstrapNumberPrototype } from '../intrinsics/NumberPrototype.mts';
 import { bootstrapObject } from '../intrinsics/Object.mts';
 import { makeObjectPrototype, bootstrapObjectPrototype } from '../intrinsics/ObjectPrototype.mts';
 import { bootstrapParseFloat } from '../intrinsics/parseFloat.mts';
+import { bootstrapStructuredClone } from '../intrinsics/structuredClone.mts';
 import { bootstrapParseInt } from '../intrinsics/parseInt.mts';
 import { bootstrapPromise } from '../intrinsics/Promise.mts';
 import { bootstrapPromisePrototype } from '../intrinsics/PromisePrototype.mts';
@@ -183,6 +184,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapIsFinite(realmRec);
   bootstrapIsNaN(realmRec);
   bootstrapParseFloat(realmRec);
+  bootstrapStructuredClone(realmRec);
   bootstrapParseInt(realmRec);
   bootstrapURIHandling(realmRec);
 
@@ -522,6 +524,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'isFinite',
     'isNaN',
     'parseFloat',
+    // PLAN-remaining-blockers.md item 6: a HTML function rather than an
+    // ECMAScript one, provided so that the typed signature
+    // `standardlibrary.md` states for it can be given - a signature is a claim
+    // that the function exists.
+    'structuredClone',
     'parseInt',
     'decodeURI',
     'decodeURIComponent',

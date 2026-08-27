@@ -156,6 +156,9 @@ const FIXED_STATIC_PROPERTIES: Record<string, (() => TypeRecord) | undefined> = 
  * one, and `eval` has no type to claim.
  */
 const FIXED_GLOBAL_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
+  // `structuredClone<T>(value: T): T` is NOT here: its result is its argument's
+  // type, which is an IDENTITY signature rather than a fixed one. It is written
+  // in `builtinGlobalIdentitySignature` below.
   parseInt: () => makePrimitive('number'),
   parseFloat: () => makePrimitive('number'),
   encodeURI: () => makePrimitive('string'),
@@ -4964,6 +4967,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : undefined;
           if (fixedGlobal) {
             return fixedGlobal();
+          }
+          // `structuredClone<T>(value: T): T` - `standardlibrary.md`, "Cloning".
+          // The clone has the type of what was cloned, which is the whole reason
+          // the signature is stated: a structured clone is how a program moves a
+          // typed value across a boundary, and leaving it ~any~ loses the type
+          // across a call defined to preserve the value.
+          //
+          // An IDENTITY signature rather than a fixed result, so it is not a row
+          // in `FIXED_GLOBAL_RESULTS`.
+          if (globalName === 'structuredClone' && !shadowedByProgram(globalName)) {
+            const args = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+            const cloned = args[0] ? staticType(args[0]) : null;
+            return cloned ? widen(cloned) : null;
           }
         }
         if (calleeNode?.type === 'IdentifierReference'
