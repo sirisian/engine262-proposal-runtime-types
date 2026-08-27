@@ -547,22 +547,27 @@ test('Promise.try takes its value from the callback, and FLATTENS', () => {
   expect(evaluated('String(typeof Promise.try(() => 1).then);')).toBe('function');
 });
 
-test.fails('withResolvers cannot be typed by ARGUMENT inference', () => {
-  // `withResolvers<R, E>(): { promise: Promise.<R, E>, resolve: (value: R) =>
-  // void, reject: (reason: E) => void }` takes NO ARGUMENTS, so there is nothing
-  // for R and E to be inferred from. Every signature in this file reads its
-  // variables out of the call; this one would have to read them from the
-  // ANNOTATION the result is being assigned to, which is contextual typing in
-  // the opposite direction and a mechanism the dispatch does not have.
+test('withResolvers is typed where its type arguments are WRITTEN', () => {
+  // It takes NO ARGUMENTS, so there is nothing for R and E to be inferred from -
+  // every other signature here reads its variables out of the call. What it CAN
+  // read is what the program WROTE, and explicit type arguments already bind a
+  // result-only variable for a user generic: `f.<uint8>()` is a `uint8` for
+  // `f<T>(): T`.
   //
-  // Filed rather than approximated: answering `Promise.<any, any>` would state
-  // less than the program wrote and would refuse nothing.
-  //
-  // Stated as the RESULT being untyped. A first version asserted
-  // `let bad: uint8 = w` for an object-annotated `w`, which is a static error
-  // whatever `withResolvers` answers - true for an unrelated reason, and so no
-  // evidence about this gap at all.
-  expectStaticTypeError('let bad: uint8 = Promise.withResolvers();');
+  // Filed as needing "inference in the opposite direction", which is true only of
+  // the BARE spelling. This half needed no new mechanism.
+  const W = 'Promise.withResolvers.<uint8, Error>()';
+  const SHAPE = '{ promise: Promise.<uint8, Error>, resolve: (value: uint8) => void, reject: (reason: Error) => void }';
+  expectStaticTypeError(`let n: uint8 = ${W};`);
+  expect(ok(`let w: ${SHAPE} = ${W};`)).toBe(true);
+  // The members carry their types, which is what the signature is FOR.
+  expect(ok(`let w: ${SHAPE} = ${W}; let p: Promise.<uint8, Error> = w.promise;`)).toBe(true);
+  expectStaticTypeError(`let w: ${SHAPE} = ${W}; let p: Promise.<string, Error> = w.promise;`);
+  // The BARE spelling is still untyped, which is the open half of the gap.
+  expect(ok('if (false) { let n: uint8 = Promise.withResolvers(); } 1;')).toBe(true);
+  // A wrong ARGUMENT COUNT declines rather than guessing.
+  expect(ok('if (false) { let n: uint8 = Promise.withResolvers.<uint8>(); } 1;')).toBe(true);
+  expect(evaluated('const w = Promise.withResolvers(); String(typeof w.resolve) + String(typeof w.promise.then);')).toBe('functionfunction');
 });
 
 test('the IDENTITY statics answer what they were given', () => {

@@ -1664,6 +1664,65 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     Kind: 'array', Element: element, Extent: 'dynamic',
   } as unknown as Known);
 
+  /**
+   * The signature a named static carries when its type arguments are WRITTEN.
+   *
+   * PLAN-remaining-blockers.md item 5(a). `Promise.withResolvers` takes no
+   * arguments, so there is nothing for its variables to be inferred FROM - every
+   * other signature here reads them out of the call. What it CAN read is what
+   * the program wrote, and explicit type arguments already bind a result-only
+   * variable for a user generic: `f.<uint8>()` is a `uint8` for `f<T>(): T`.
+   *
+   * So the bare `Promise.withResolvers()` stays untyped and the written
+   * `Promise.withResolvers.<R, E>()` does not. That is a smaller gap than the
+   * one filed, and closing this half needs no new mechanism.
+   */
+  const builtinStaticTypeArgumentSignature = (callee: ParseNode | undefined): ((args: readonly TypeRecord[]) => Known) | undefined => {
+    const member = callee as unknown as {
+      type?: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string },
+    } | undefined;
+    if (member?.type !== 'MemberExpression') {
+      return undefined;
+    }
+    const base = member.MemberExpression;
+    const method = member.IdentifierName?.name;
+    if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
+      return undefined;
+    }
+    if (base.name === 'Promise' && method === 'withResolvers') {
+      return (args) => {
+        if (args.length !== 2) {
+          return null;
+        }
+        const [R, E] = args;
+        const promise = libraryTypeRecord('Promise', [R, E]);
+        if (!promise) {
+          return null;
+        }
+        // `{ promise: Promise.<R, E>, resolve: (value: R) => void,
+        // reject: (reason: E) => void }`, as `standardlibrary.md` states it.
+        const fn = (parameter: TypeRecord): TypeRecord => ({
+          Kind: 'function',
+          Signatures: [{
+            TypeParameters: [],
+            Parameters: [{ Name: 'value', Type: parameter, Optional: false, Rest: false }],
+            Return: voidTypeRecord,
+          }],
+        } as unknown as TypeRecord);
+        return {
+          Kind: 'object',
+          Properties: [
+            { key: 'promise', type: promise },
+            { key: 'resolve', type: fn(R) },
+            { key: 'reject', type: fn(E) },
+          ],
+          IndexSignatures: [],
+        } as unknown as Known;
+      };
+    }
+    return undefined;
+  };
+
   const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[]) => Known) | undefined => {
     const member = callee as unknown as {
       type?: string,
@@ -4843,6 +4902,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the base must be the unshadowed global: `const Map = MyMap;` then
         // `Map.groupBy(…)` gets nothing from here.
         {
+          // A callee carrying WRITTEN type arguments is a
+          // `TypeArgumentsExpression` wrapping the name, so the lookup is given
+          // the inner expression and the arguments are read separately.
+          const written = calleeNode?.type === 'TypeArgumentsExpression'
+            ? (calleeNode as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } }).TypeArguments?.TypeArgumentList
+            : undefined;
+          const bareCallee = calleeNode?.type === 'TypeArgumentsExpression'
+            ? (calleeNode as unknown as { Expression?: ParseNode }).Expression
+            : calleeNode;
+          const explicitSig = written && written.length > 0
+            ? builtinStaticTypeArgumentSignature(bareCallee)
+            : undefined;
+          if (explicitSig) {
+            const resolved = written.map((a) => resolveType(a as ParseNode.Type));
+            if (resolved.every((r) => !!r)) {
+              return explicitSig(resolved as readonly TypeRecord[]);
+            }
+            return null;
+          }
           const staticSig = builtinStaticSignature(calleeNode);
           if (staticSig) {
             return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []));
