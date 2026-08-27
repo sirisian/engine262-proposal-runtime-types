@@ -563,7 +563,16 @@ test('withResolvers is typed where its type arguments are WRITTEN', () => {
   // The members carry their types, which is what the signature is FOR.
   expect(ok(`let w: ${SHAPE} = ${W}; let p: Promise.<uint8, Error> = w.promise;`)).toBe(true);
   expectStaticTypeError(`let w: ${SHAPE} = ${W}; let p: Promise.<string, Error> = w.promise;`);
-  // The BARE spelling is still untyped, which is the open half of the gap.
+  // The BARE spelling is STILL untyped, and contextual result inference did not
+  // change that - which is worth recording, because it was the motivating case
+  // for building that capability.
+  //
+  // Contextual inference binds a variable in a signature's RETURN by matching it
+  // against the wanted type. `Promise.withResolvers` has no signature here at
+  // all unless its type arguments are written: the dispatch that answers it is
+  // keyed on those arguments, so there is no return for the context to match
+  // against. Closing the bare spelling means giving the row a form that reads
+  // the contextual type directly, which is a different mechanism again.
   expect(ok('if (false) { let n: uint8 = Promise.withResolvers(); } 1;')).toBe(true);
   // A wrong ARGUMENT COUNT declines rather than guessing.
   expect(ok('if (false) { let n: uint8 = Promise.withResolvers.<uint8>(); } 1;')).toBe(true);

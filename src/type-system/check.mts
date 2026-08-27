@@ -5107,6 +5107,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 );
               }
               const declaredOrPublished = only.Return ?? only.InferredReturn ?? null;
+              // A variable the ARGUMENTS cannot bind may still be bound by the
+              // call's CONTEXTUAL type - what the position requires - by matching
+              // the declared return against it. `f<T>(): T` has no argument
+              // mentioning T, so `let _n_: uint8 = f()` bound nothing and the
+              // call said nothing.
+              //
+              // The contextual type is already recorded on the node by
+              // `staticTypeIn`, for #sec-overloading-on-return-type; this reads
+              // the same record for a second purpose rather than threading a
+              // target through the walk.
+              //
+              // AFTER the arguments, never instead of them: an argument is a
+              // stronger statement than a position, and `into` keeps the first
+              // binding, so a contextual match cannot overrule what was passed.
+              if (declaredOrPublished && mentionsTypeParameter(declaredOrPublished)) {
+                const wanted = (node as unknown as { ContextualType?: Known }).ContextualType;
+                if (wanted) {
+                  bindTypeParametersFromArguments(
+                    [{ Type: declaredOrPublished as Known }],
+                    [wanted],
+                    new Set(only.TypeParameterNames),
+                    bindings,
+                  );
+                }
+              }
               if (declaredOrPublished && bindings.size > 0) {
                 return substituteTypeParameters(declaredOrPublished, bindings);
               }

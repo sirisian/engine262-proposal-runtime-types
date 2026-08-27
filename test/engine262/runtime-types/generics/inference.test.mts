@@ -316,3 +316,37 @@ test('the arm that binds is chosen by KIND, not by position', () => {
     expect(ok(guard(`${decl} const a: [].<uint8> = [1]; let s: uint8 = ${call}(a);`)), name).toBe(true);
   }
 });
+
+test('a RESULT-ONLY variable is bound by the call\'s contextual type', () => {
+  // `f<T>(): T` has no argument mentioning T, so the arguments bind nothing and
+  // the call said nothing - every other inference in this file reads its
+  // variables out of what was PASSED.
+  //
+  // What a call also has is the type its POSITION requires, which
+  // #sec-overloading-on-return-type calls its contextual type and which
+  // `staticTypeIn` already records on the node for overload resolution. This
+  // reads the same record for a second purpose.
+  const F = 'function f<T>(): T { return undefined; } ';
+  const guard = (src) => `if (false) { ${src} } 1;`;
+  expect(ok(guard(`${F} let n: uint8 = f(); let good: uint8 = n;`))).toBe(true);
+  expectStaticTypeError(guard(`${F} let n: uint8 = f(); let bad: string = n;`));
+  // A RETURN position and an ARGUMENT position supply one as readily as a
+  // binding's annotation does.
+  expect(ok(guard(`${F} function g(): uint8 { return f(); }`))).toBe(true);
+  expect(ok(guard(`${F} function h(x: uint8) {} h(f());`))).toBe(true);
+});
+
+test('an ARGUMENT beats the contextual type', () => {
+  // The context is consulted AFTER the arguments and only for variables they
+  // leave unbound: an argument is a stronger statement than a position, and a
+  // contextual match must not overrule what was passed.
+  const P = 'function p<T>(x: T): T { return x; } const a: uint8 = (1 := uint8); ';
+  const guard = (src) => `if (false) { ${src} } 1;`;
+  expect(ok(guard(`${P} let n: uint8 = p(a);`))).toBe(true);
+  expectStaticTypeError(guard(`${P} let n: string = p(a);`));
+  // A signature with BOTH kinds binds each from its own source - T from the
+  // argument, U from the annotation.
+  const M = 'function m<T, U>(x: T): U { return undefined; } const a: uint8 = (1 := uint8); ';
+  expect(ok(guard(`${M} let n: string = m(a); let good: string = n;`))).toBe(true);
+  expectStaticTypeError(guard(`${M} let n: string = m(a); let bad: uint8 = n;`));
+});
