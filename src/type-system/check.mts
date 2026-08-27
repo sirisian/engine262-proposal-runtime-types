@@ -4126,6 +4126,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // null where the runtime raises a type error, which is the difference
       // between the two resolvers' jobs: this one decides whether the annotation
       // denotes a type, and the boundary reports why it does not.
+      case 'ParameterizedType': {
+        // The postfix form `PostfixType TypeArguments`, added when a
+        // parameterization stopped being attached only to a |TypeName|.
+        //
+        // This pass had NO case for it, so every inline chained spelling
+        // resolved to nothing and the annotation degraded to ~any~: the runtime
+        // read `string.<{ brand: 'P' }>.<{ brand: 'Q' }>` and refused a bad
+        // value, while the checker saw an annotation it could not judge and let
+        // the program through. `decorators/resolver-parity` calls that shape out
+        // in terms - a kind the runtime reads and the checker does not is
+        // "unchecked statically and unelidable" - and found this the moment the
+        // node was given a row.
+        //
+        // By OQ-type-arguments-vs-metadata.md D2 the BASE decides the reading.
+        // A base reaching this arm is an already-resolved postfix type with no
+        // parameters left to supply, so the arguments are a metadata record;
+        // where they are not one, the annotation is left unresolved rather than
+        // guessed at, and the runtime reports it.
+        const baseType = resolveType(node.BaseType);
+        if (!baseType) {
+          return null;
+        }
+        const metaArgs = node.TypeArguments.TypeArgumentList.map((a) => resolveType(a));
+        if (metaArgs.length !== 1 || !metaArgs[0] || (metaArgs[0] as TypeRecord).Kind !== 'object') {
+          return null;
+        }
+        return {
+          Kind: 'parameterized',
+          Base: baseType as TypeRecord,
+          Metadata: MetadataObjectFromType(metaArgs[0] as TypeRecord) as unknown as MetadataRecord,
+        } as unknown as Known;
+      }
       case 'IndexedAccessType': {
         const objectType = resolveType(node.ObjectType);
         const indexType = resolveType(node.IndexType);

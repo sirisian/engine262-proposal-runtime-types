@@ -54,6 +54,12 @@ const rows: readonly Row[] = [
   { kind: 'ReferenceType', setup: '', ty: 'ref number', bad: '"nope"' },
   { kind: 'KeyOfType', setup: 'interface IK { a: number; } ', ty: 'keyof IK', bad: '5' },
   { kind: 'IndexedAccessType', setup: 'interface IX { a: number; } ', ty: 'IX["a"]', bad: '"nope"' },
+  // |ParameterizedType| is the postfix form `PostfixType TypeArguments`, added
+  // when a parameterization stopped being attached only to a |TypeName|. It
+  // reaches the resolvers by a different arm from the |TypeReference| row above,
+  // which carries its own arguments, so the two are not one case: this is the
+  // spelling where the BASE is an arbitrary postfix type.
+  { kind: 'ParameterizedType', setup: '', ty: "string.<{ brand: 'P' }>.<{ brand: 'Q' }>", bad: '5' },
   { kind: 'PredefinedType', setup: '', ty: 'string', bad: '5' },
   { kind: 'LiteralType', setup: '', ty: '5', bad: '"nope"' },
   { kind: 'PatternType', setup: '', ty: '/[a-z]+/', bad: '5' },
