@@ -202,6 +202,20 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
 }
 
 export function SameValue(x: Value, y: Value): boolean {
+  // A VALUE TYPE CLASS compares by its fields here as it does at
+  // `IsStrictlyEqual` and `SameValueZero` (D27). #sec-value-types: "two values
+  // of the same value type that are the same value are indistinguishable", and
+  // `Object.is` is a way of asking whether two values are the same one.
+  //
+  // Those two were hooked and this was not, so `_a_ === _b_` answered *true*
+  // for two field-equal instances while `Object.is(_a_, _b_)` answered *false*.
+  // Nearly unreachable while assignment ALIASES - most comparisons are then of a
+  // thing with itself - and reached immediately once assignment COPIES, which
+  // #sec-value-type-copying requires and which is the change this accompanies.
+  const asValueClass = valueClassEquals(x, y, false);
+  if (asValueClass !== undefined) {
+    return asValueClass;
+  }
   // proposal-runtime-types (rational.md): a rational's identity is its canonical
   // value, so SameValue and SameValueZero compare it structurally, which is what
   // lets it serve as a Map or Set key by value.
