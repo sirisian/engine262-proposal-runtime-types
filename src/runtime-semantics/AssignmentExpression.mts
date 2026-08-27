@@ -164,6 +164,38 @@ export function refineLeftHandSideExpression(node: ParseNode.ArrayLiteral | Pars
 //     LeftHandSideExpression `&&=` AssignmentExpression
 //     LeftHandSideExpression `||=` AssignmentExpression
 //     LeftHandSideExpression `??=` AssignmentExpression
+/**
+ * Whether an assignment target names TYPED STORAGE, which holds a value type
+ * class instance inline and therefore copies into it.
+ *
+ * #sec-value-type-copying: "storing into a field or an array element". A typed
+ * class field carries its declared type in [[TypedProperties]] and a typed
+ * array its element type in [[TypedElement]]; a plain object's property and a
+ * plain array's element carry neither and hold a reference.
+ *
+ * A binding target - one whose base is an Environment Record rather than a
+ * value - is not a store into an object at all. It is the assignment half of
+ * "assigning to one" and always copies.
+ */
+function isTypedStorageTarget(reference: unknown): boolean {
+  const ref = reference as {
+    ReferencedName?: unknown,
+    Base?: unknown,
+  } | undefined;
+  const base = ref?.Base;
+  if (!(base instanceof ObjectValue)) {
+    // A binding, not a property store.
+    return true;
+  }
+  if ((base as { TypedElement?: unknown }).TypedElement !== undefined) {
+    return true;
+  }
+  const name = ref?.ReferencedName;
+  const key = name instanceof JSStringValue ? name.stringValue() : name;
+  return (base as { TypedProperties?: Map<unknown, unknown> })
+    .TypedProperties?.has(key) === true;
+}
+
 export function* Evaluate_AssignmentExpression({
   LeftHandSideExpression, AssignmentOperator, AssignmentExpression,
 }: ParseNode.AssignmentExpression): ValueEvaluator {
@@ -197,7 +229,21 @@ export function* Evaluate_AssignmentExpression({
       // Placed at the SIMPLE-assignment `PutValue`. A first attempt put it at
       // the one below, which serves DESTRUCTURING - the two look alike and only
       // one of them runs for `_b_ = _a_`.
-      if (copiesOnBinding(AssignmentExpression)) {
+      // D28: copy only into TYPED STORAGE. #sec-value-type-copying's position
+      // list names "storing into a FIELD or an array element", and a plain
+      // object's property is neither - it holds a reference, as it does for
+      // every other object.
+      //
+      // This narrows an earlier version that copied on any assignment whose
+      // right-hand side named a value type class instance. That read the
+      // clause's opening sentence, "ASSIGNING a value of a value type ... copies
+      // it", which conditions on the VALUE; the position list conditions on the
+      // DESTINATION, and the two disagree. The measured consequence was that
+      // `_o_.p = _a_` copied while `const _o_ = { p: _a_ }`, `_m_.set(_k_, _a_)`
+      // and `_arr_.push(_a_)` all aliased - one spelling of "put this value in
+      // that object" behaving differently from the rest, which is where the
+      // rule had been implemented rather than what it says.
+      if (copiesOnBinding(AssignmentExpression) && isTypedStorageTarget(lref)) {
         rval = CopyValueClassInstance(rval);
       }
       // e. Perform ? PutValue(lref, rval).

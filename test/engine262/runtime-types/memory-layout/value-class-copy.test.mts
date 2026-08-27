@@ -22,6 +22,9 @@ test('a NAME or a READ copies', () => {
   // returning one each COPY it."
   expect(evaluated(`${V} const a = new P(); a.x = 1; const b = a; b.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; let b = new P(); b = a; b.x = 9; String(a.x);`)).toBe('1');
+  // Into TYPED STORAGE, which is what a store copies into (D28).
+  expect(evaluated(`${V} class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; h.p.x = 9; String(a.x);`)).toBe('1');
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [1].<P> = [new P()]; arr[0] = a; arr[0].x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; var b = a; b.x = 9; String(a.x);`)).toBe('1');
   // "A read of a field or an element into any of those positions is one of them,
   // so `e` in `let e: V = arr[0]` holds a copy and writing to it does not
@@ -121,4 +124,28 @@ test('the literal cases that must NOT copy still do not', () => {
   // stamp the elision branch exists for.
   expect(evaluated('const arr: [2].<uint8> = [1, 2]; String(arr[0]) + "/" + String(arr.length);')).toBe('1/2');
   expect(evaluated('const b: [].<uint8> = []; b.push((65 := uint8)); String(b.length);')).toBe('1');
+});
+
+test('D28: an untyped destination does NOT copy', () => {
+  // #sec-value-type-copying's position list names "storing into a FIELD or an
+  // array element". A plain object's property and a plain array's element are
+  // neither: they hold a REFERENCE, as they do for every other object, and a
+  // program that wants a copy into one writes the conversion.
+  //
+  // An earlier version copied on ANY assignment whose right-hand side named a
+  // value type class instance - reading the clause's opening sentence,
+  // "ASSIGNING a value of a value type ... copies it", which conditions on the
+  // VALUE where the position list conditions on the DESTINATION. The measured
+  // consequence was that `o.p = a` copied while `{ p: a }`, `m.set(k, a)` and
+  // `arr.push(a)` aliased: one spelling of "put this value in that object"
+  // behaving differently from the rest.
+  const V = 'class P { x: uint8 = 0; } const a = new P(); a.x = 1; ';
+  expect(evaluated(`${V} const o = {}; o.p = a; o.p.x = 9; String(a.x);`)).toBe('9');
+  expect(evaluated(`${V} const arr = []; arr[0] = a; arr[0].x = 9; String(a.x);`)).toBe('9');
+  // ...and the untyped routes that already aliased still do, so all four agree.
+  expect(evaluated(`${V} const o = { p: a }; o.p.x = 9; String(a.x);`)).toBe('9');
+  expect(evaluated(`${V} const m = new Map(); m.set("k", a); m.get("k").x = 9; String(a.x);`)).toBe('9');
+  expect(evaluated(`${V} const arr = []; arr.push(a); arr[0].x = 9; String(a.x);`)).toBe('9');
+  // A program that wants a copy into untyped storage writes one.
+  expect(evaluated(`${V} const o = {}; o.p = (a := P); o.p.x = 9; String(a.x);`)).toBe('1');
 });
