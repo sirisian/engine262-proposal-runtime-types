@@ -1038,9 +1038,15 @@ test('a collection constructed with type arguments carries them', () => {
   // instead, which is why the common spelling worked and the direct one did
   // not.
   expect(evaluated('const s = new Set.<uint8>(); s.add(65); String([...s][0] is uint8);')).toBe('true');
-  expect(thrownKind('const s = new Set.<uint8>(); s.add(300);')).toBe('RangeError');
+  // Through a `let`, so the RUN-TIME stamp this test is about is what answers:
+  // a `const` bound to a construction now takes its type (D13), and with the
+  // library nominals resolved a bad add is an Early Error before the stamp is
+  // consulted. Both are asserted, the early error being the better answer.
+  expect(thrownKind('let s = new Set.<uint8>(); s.add(300);')).toBe('RangeError');
+  expectStatic('const s = new Set.<uint8>(); s.add(300);');
   expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 65); String(m.get("a") is uint8);')).toBe('true');
-  expect(thrownKind('const m = new Map.<string, uint8>(); m.set("a", 300);')).toBe('RangeError');
+  expect(thrownKind('let m2 = new Map.<string, uint8>(); m2.set("a", 300);')).toBe('RangeError');
+  expectStatic('const m2 = new Map.<string, uint8>(); m2.set("a", 300);');
   expect(evaluated('const m = new Map.<string, uint8>([["a", 65]]); String(m.get("a"));')).toBe('65');
   // A plain construction and an ordinary class are untouched.
   expect(evaluated('const u = new Set(); u.add(300); String(u.size);')).toBe('1');

@@ -4392,7 +4392,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Expression: ParseNode, TypeArguments: { TypeArgumentList: readonly ParseNode[] },
           };
           if (spec.Expression.type === 'IdentifierReference') {
-            const base = classTypeOf((spec.Expression as unknown as { name: string }).name);
+            const specName = (spec.Expression as unknown as { name: string }).name;
+            // D13's library half. A LIBRARY generic is constructed the same way
+            // a user class is, and `new Map.<string, uint8>()` had no Static
+            // Type because `classTypeOf` knows only the classes a program
+            // declares.
+            //
+            // Resolved HERE and not in the bare-name branch above, which is the
+            // whole of what makes this safe. Giving bare `new Map()` the type
+            // `Map` would refuse `let m: Map.<string, uint8> = new Map()` - a
+            // bare nominal is not assignable to a specialization (D2) - and that
+            // is the canonical spelling, the one #sec-collection-construction
+            // describes the run time ADOPTING. A construction that WRITES its
+            // arguments has asked for the specialization and needs no adoption.
+            const base = classTypeOf(specName) ?? libraryTypeRecord(specName);
             if (base && base.Kind === 'nominal') {
               const args = spec.TypeArguments.TypeArgumentList
                 .map((a) => resolveType(a as unknown as ParseNode.Type)

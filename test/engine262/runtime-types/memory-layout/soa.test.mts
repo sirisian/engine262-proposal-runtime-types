@@ -344,7 +344,13 @@ test('soa: conversion is explicit and copies, and the two types are distinct', (
   // until a function needs the concrete layout, and then the abstraction has to
   // be undone."
   expectThrown('class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
-  expectThrownKind('class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
+  // Through a `let`, so the RUN-TIME refusal is what answers. A `const` bound to
+  // a construction now takes that construction's type (D13), and `SoA` is a
+  // library nominal like `Map`, so the conversion is refused as an Early Error
+  // before the run time is reached. Both are asserted, the early error being the
+  // better answer.
+  expectThrownKind('class Pad { a: uint8; } let s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
+  expectThrown('class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;');
 });
 
 test('soa: fields projects each column as a live view', () => {
