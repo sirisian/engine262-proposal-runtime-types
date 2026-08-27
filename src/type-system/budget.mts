@@ -28,24 +28,55 @@ import { surroundingAgent } from '#self';
 export const DEFAULT_STEP_LIMIT = 10_000_000;
 export const DEFAULT_RECORD_LIMIT = 1_000_000;
 
+/**
+ * The NESTING limit, which the clause's floors do not state and which the host
+ * imposes whether or not this file does.
+ *
+ * A step limit meters TOTAL work and cannot bound stack DEPTH: each level of a
+ * recursive instantiation is a nested call, so a self-referential alias reaches
+ * the host's own stack limit - a few thousand frames - long before ten million
+ * steps. `type R<T> = R.<T>; type X = R.<uint8>;` therefore ended in a host
+ * `Maximum call stack size exceeded`, which #sec-evaluation-budget rules out in
+ * terms: exhaustion "is not an abrupt completion the evaluated code can
+ * observe" and the evaluation is "abandoned". A host stack overflow is neither.
+ * It escapes the engine entirely, so no program observes the diagnostic the
+ * clause requires and the surrounding call dies with it.
+ *
+ * Set well below any host's stack so the metered failure always wins the race.
+ * The margin has to be generous, because the stack cost of ONE level is not
+ * fixed: measured here, a direct `R.<T>` and a recursion through an object
+ * member survive to 200 while the same recursion through an ARRAY or a FUNCTION
+ * member does not, those walking further per level. 100 covers every shape
+ * tried - direct, object, array, tuple, function, union, and mutual A/B
+ * recursion - and is far above any nesting a program writes on purpose.
+ *
+ * A host may raise it through `typeEvaluationBudget.depth`, as it may the other
+ * two. This is a floor, not a ceiling, and a host with a deeper stack is free
+ * to say so.
+ */
+export const DEFAULT_DEPTH_LIMIT = 100;
+
 interface BudgetFrame {
   steps: number;
   records: number;
+  depth: number;
   stepLimit: number;
   recordLimit: number;
-  exhausted: 'steps' | 'records' | null;
+  depthLimit: number;
+  exhausted: 'steps' | 'records' | 'depth' | null;
 }
 
 const frames: BudgetFrame[] = [];
 
-function hostLimits(): { steps: number, records: number } {
+function hostLimits(): { steps: number, records: number, depth: number } {
   const hostDefined = (surroundingAgent.currentRealmRecord as unknown as {
-    HostDefined?: { typeEvaluationBudget?: { steps?: number, records?: number } },
+    HostDefined?: { typeEvaluationBudget?: { steps?: number, records?: number, depth?: number } },
   })?.HostDefined;
   const configured = hostDefined?.typeEvaluationBudget;
   return {
     steps: typeof configured?.steps === 'number' ? configured.steps : DEFAULT_STEP_LIMIT,
     records: typeof configured?.records === 'number' ? configured.records : DEFAULT_RECORD_LIMIT,
+    depth: typeof configured?.depth === 'number' ? configured.depth : DEFAULT_DEPTH_LIMIT,
   };
 }
 
@@ -57,16 +88,34 @@ function hostLimits(): { steps: number, records: number } {
  */
 export function BeginTypeEvaluation(): void {
   if (frames.length > 0) {
-    frames.push(frames[frames.length - 1]!);
+    // A nested evaluation JOINS the enclosing frame - the same object is pushed
+    // again - so its depth is the shared count, not the array length: the array
+    // also grows for sibling evaluations that have already returned.
+    const joined = frames[frames.length - 1]!;
+    joined.depth += 1;
+    if (joined.exhausted === null && joined.depth > joined.depthLimit) {
+      joined.exhausted = 'depth';
+    }
+    frames.push(joined);
     return;
   }
   const limits = hostLimits();
   frames.push({
-    steps: 0, records: 0, stepLimit: limits.steps, recordLimit: limits.records, exhausted: null,
+    steps: 0,
+    records: 0,
+    depth: 1,
+    stepLimit: limits.steps,
+    recordLimit: limits.records,
+    depthLimit: limits.depth,
+    exhausted: null,
   });
 }
 
 export function EndTypeEvaluation(): void {
+  const frame = frames[frames.length - 1];
+  if (frame) {
+    frame.depth -= 1;
+  }
   frames.pop();
 }
 
@@ -152,7 +201,7 @@ export function IsBudgetExhausted(): boolean {
 }
 
 /** Which limit was reached, for the diagnostic the clause asks to name. */
-export function BudgetExhaustionKind(): 'steps' | 'records' | null {
+export function BudgetExhaustionKind(): 'steps' | 'records' | 'depth' | null {
   return current()?.exhausted ?? null;
 }
 
