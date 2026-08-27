@@ -46,6 +46,7 @@ import {
   GetV,
   ResolveBinding,
   InitializeReferencedBinding,
+  CopyValueClassInstance,
   IteratorComplete,
   IteratorValue,
   IteratorClose,
@@ -651,7 +652,16 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
 
         const lhsName = boundNames[0];
         lhsRef = X(ResolveBinding(lhsName));
-        status = EnsureCompletion(yield* InitializeReferencedBinding(lhsRef, nextValue));
+        // #sec-value-type-copying: a `for`-`of` head binds a name to a value read
+        // out of the iterable, and "a read of a field or an element into any of
+        // those positions is one of them". `for (const _e_ of _arr_)` is a
+        // binding from an element, so it copies as `const _e_ = _arr_[0]` does.
+        //
+        // A DESTRUCTURING head reaches `BindingInitialization` above and is
+        // copied there; this is the plain-identifier head, which is a third path
+        // again - the fourth distinct binding evaluation this rule has had to be
+        // stated at.
+        status = EnsureCompletion(yield* InitializeReferencedBinding(lhsRef, CopyValueClassInstance(nextValue)));
       }
     }
     Assert(typeof status! !== 'undefined');

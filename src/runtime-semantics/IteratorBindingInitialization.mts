@@ -24,6 +24,7 @@ import {
   Assert,
   GetValue,
   InitializeReferencedBinding,
+  CopyValueClassInstance,
   IteratorStep,
   PutValue,
   ResolveBinding,
@@ -278,8 +279,12 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   if (environment === Value.undefined) {
     return Q(yield* PutValue(lhs, v));
   }
+  // #sec-value-type-copying, as at a keyed binding: an array pattern and a
+  // PARAMETER LIST both bind a name to a value taken from an iterator or from a
+  // default, and a read into a binding is a copy position. `const [_q_] = _arr_`
+  // and `function f(p: P = _a_)` copy for the reason `const _b_ = _a_` does.
   // 7. Return InitializeReferencedBinding(lhs, v).
-  return yield* InitializeReferencedBinding(lhs, X(v));
+  return yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(X(v)));
 }
 
 // BindingRestElement :

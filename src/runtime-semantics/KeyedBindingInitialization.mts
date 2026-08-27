@@ -18,6 +18,7 @@ import {
   PutValue,
   ResolveBinding,
   InitializeReferencedBinding,
+  CopyValueClassInstance,
 } from '#self';
 import type {
   EnvironmentRecord, FunctionDeclaration, PropertyKeyValue, UndefinedValue,
@@ -111,9 +112,18 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     }
     // 5. If environment is undefined, return ? PutValue(lhs, v).
     if (environment === Value.undefined) {
-      return Q(yield* PutValue(lhs, v));
+      return Q(yield* PutValue(lhs, CopyValueClassInstance(v)));
     }
+    // #sec-value-type-copying: a destructuring pattern BINDS a name to a value
+    // read out of an object, and "a read of a field or an element into any of
+    // those positions is one of them". `const { p } = _o_` is `const _p_ = _o_.p`
+    // written shorter and copies for the same reason.
+    //
+    // Unconditional here, unlike at a lexical binding: `v` came from `GetV` or
+    // from a DEFAULT, and a default follows the same form rule - a name or a
+    // read copies, a construction does not - which `defaultCopies` applies
+    // above. There is no construction that reaches this line uncopied.
     // 6. Return InitializeReferencedBinding(lhs, v).
-    return yield* InitializeReferencedBinding(lhs, v);
+    return yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(v));
   }
 }
