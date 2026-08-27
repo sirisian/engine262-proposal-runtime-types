@@ -257,12 +257,22 @@ test('a shadowed base gets no fixed result either, and the run time is unchanged
   expect(evaluated('String(Array.isArray([1])) + String(Number.isInteger(1)) + String(Object.is(1, 1));')).toBe('truetruetrue');
 });
 
-test.fails('a TAGGED TEMPLATE does not reach the static dispatch', () => {
-  // `String.raw({ raw: [...] })` is typed and `` String.raw`x` `` is not: a
-  // tagged template is a different node from a call, so the dispatch - which
-  // matches a member CALLEE - never sees it. Every tagged builtin is in the same
-  // position, which is why this is filed rather than special-cased for `raw`.
+test('a TAGGED TEMPLATE reaches the static dispatch', () => {
+  // `String.raw({ raw: [...] })` was typed and `` String.raw`x` `` was not: a
+  // tagged template is a `TaggedTemplateExpression`, not a `CallExpression`, and
+  // `staticType` had no case for it.
+  //
+  // Fixed in the DISPATCH rather than in a table, so every future tagged builtin
+  // inherits it. Only the FIXED-result lookups are consulted - a tag's arguments
+  // are the strings array and the substitutions, not what a written call would
+  // pass, so a signature reading arguments positionally must not be handed them.
   expectStaticTypeError('let n: uint8 = String.raw`x`;');
+  expect(ok('let n: string = String.raw`x`;')).toBe(true);
+  expectStaticTypeError('let n: uint8 = String.raw`a${1}b`;');
+  // A shadowed base and a USER-DEFINED tag get nothing, as at a call.
+  expect(ok('if (false) { class S2 { } const String = S2; let n: uint8 = String.raw`x`; } 1;')).toBe(true);
+  expect(ok('function tag(s) { return 1; } let n: uint8 = tag`x`;')).toBe(true);
+  expect(evaluated('String(String.raw`a\\nb`.length);')).toBe('4');
 });
 
 // ---------------------------------------------------------------------------
@@ -445,11 +455,20 @@ test('Promise.resolve carries its value', () => {
   expectStaticTypeError('let p: Promise.<string, any> = Promise.resolve((1 := uint8));');
 });
 
-test('allSettled is deliberately absent', () => {
-  // Its element is `PromiseSettledResult.<R, E>`, a type alias the engine has no
-  // declaration for. A signature naming a type the program cannot write would be
-  // worse than none, so the row is withheld and the call stays untyped.
-  expect(ok(`if (false) { ${PS} let n: uint8 = Promise.allSettled(ps); } 1;`)).toBe(true);
+test('allSettled reports every outcome and NEVER REJECTS', () => {
+  // Its element is `PromiseSettledResult.<R, E>`, which was not a type this
+  // engine declared - so the row waited, a signature naming a type the program
+  // cannot write being worse than none. It is declared now, structurally and
+  // beside `IteratorResult` rather than among the library nominals, because
+  // `standardlibrary.md` states it as a `type ... = { ... }`.
+  // Guarded: what is asserted is the STATIC answer, and the run time would meet
+  // an unrelated boundary.
+  expect(ok(`if (false) { ${PS} let p: Promise.<[].<PromiseSettledResult.<uint8, Error>>, undefined> = Promise.allSettled(ps); } 1;`)).toBe(true);
+  expectStaticTypeError(`${PS} let p: Promise.<[].<PromiseSettledResult.<string, Error>>, undefined> = Promise.allSettled(ps);`);
+  // The rejection is `undefined`, not the elements' E: every outcome is reported
+  // as a settled result, which is the one thing distinguishing it from `all`.
+  expectStaticTypeError(`${PS} let p: Promise.<[].<PromiseSettledResult.<uint8, Error>>, Error> = Promise.allSettled(ps);`);
+  expect(evaluated('const p = Promise.allSettled([]); String(typeof p.then);')).toBe('function');
 });
 
 test('Group D preserves participation and the run time', () => {
@@ -559,13 +578,16 @@ test('the IDENTITY statics answer what they were given', () => {
 });
 
 test('Promise.reject carries its reason', () => {
-  // The mirror of `resolve`. The RESOLVED position is `any` and not `never`,
-  // though nothing is ever produced: `never` would be truthful and this checker
-  // has no record for it here, so `any` is the honest fallback - it claims
-  // nothing about a value the promise will not deliver.
+  // The mirror of `resolve`. The RESOLVED position is `never`: a rejected
+  // promise never produces a value, and `never` is the type of which there are
+  // none.
+  //
+  // This read `any`, with a comment saying `never` was unavailable here. That
+  // was FALSE - `neverType` is imported into the same file and used twice - and
+  // the consequence was that the honest annotation was refused.
   const E = 'const e: uint8 = (1 := uint8); ';
   expectStaticTypeError(`${E} let n: string = Promise.reject(e);`);
-  expect(ok(`${E} let n: Promise.<any, uint8> = Promise.reject(e);`)).toBe(true);
+  expect(ok(`${E} let n: Promise.<never, uint8> = Promise.reject(e);`)).toBe(true);
   // An UNTYPED reason yields an untyped result, as everywhere else - `new
   // Error("x")` has no Static Type, so the call says nothing rather than
   // guessing.

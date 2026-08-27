@@ -1808,6 +1808,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `AggregateError` is a LIBRARY nominal, not a declared class, so
         // `classTypeOf` does not know it - the same distinction D13's library
         // half turned on. Resolved through `libraryTypeRecord`, which does.
+        // `allSettled` NEVER REJECTS - every outcome is reported as a settled
+        // result - so its rejection type is `undefined` and not the elements'
+        // _E_. That is the one thing distinguishing it from `all`.
+        allSettled: (resolved: TypeRecord, rejected: TypeRecord | null) => libraryTypeRecord('Promise', [
+          arrayOfElement(iterationInterfaceRecord('PromiseSettledResult', [
+            resolved, rejected ?? anyTypeRecord,
+          ]) as TypeRecord) as TypeRecord,
+          makePrimitive('undefined'),
+        ]) ?? null,
         any: (resolved: TypeRecord) => libraryTypeRecord('Promise', [
           resolved, libraryTypeRecord('AggregateError') ?? anyTypeRecord,
         ]) ?? null,
@@ -1881,16 +1890,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `Promise.reject<E>(reason: E): Promise.<any, E>`. The mirror of
         // `resolve`: the reason is what it rejects with.
         //
-        // The RESOLVED position is `any` and not `never`, though nothing is ever
-        // produced. `never` would be the truthful answer and this checker has no
-        // record for it here - a first attempt named one that does not exist.
-        // `any` is the honest fallback: it claims nothing about a value the
-        // promise will not deliver, where a wrong name would have claimed
-        // something unbuildable.
+        // The RESOLVED position is `never`: a rejected promise never produces a
+        // value, and `never` is the type of which there are none.
+        //
+        // This read `any` and carried a comment saying `never` "would be the
+        // truthful answer and this checker has no record for it here". THAT WAS
+        // FALSE - `neverType` is imported at the top of this file and used twice
+        // - and the consequence was that `Promise.<never, uint8>`, the honest
+        // annotation, was refused. A comment explaining why something could not
+        // be done is a claim about the codebase and goes stale exactly like a
+        // signature.
         return (args) => {
           const reason = args[0] ? staticType(args[0]) : null;
           return reason
-            ? libraryTypeRecord('Promise', [anyTypeRecord, widen(reason) as TypeRecord]) ?? null
+            ? libraryTypeRecord('Promise', [neverType, widen(reason) as TypeRecord]) ?? null
             : null;
         };
       }
@@ -5052,6 +5065,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const enclosing = generatorParameters(generatorTypes[generatorTypes.length - 1] ?? null);
         return enclosing ? enclosing.Next : null;
+      }
+      case 'TaggedTemplateExpression': {
+        // A tagged template is a CALL of its tag, and `staticType` had no case
+        // for it - so `` String.raw`x` `` was ~any~ while
+        // `String.raw({ raw: [...] })` was a String. One spelling of one function
+        // typed and the other not.
+        //
+        // The fix is in the DISPATCH rather than in a table, so every future
+        // tagged builtin inherits it. Only the FIXED-result lookups are consulted:
+        // a tag's arguments are the strings array and the substitutions, not the
+        // arguments a written call would pass, so a signature that reads
+        // arguments positionally must not be handed them here.
+        const tag = (node as { MemberExpression?: ParseNode }).MemberExpression;
+        const tagged = tag as unknown as {
+          type?: string,
+          MemberExpression?: { type?: string, name?: string },
+          IdentifierName?: { name?: string },
+          name?: string,
+        } | undefined;
+        if (tagged?.type === 'MemberExpression'
+            && tagged.MemberExpression?.type === 'IdentifierReference'
+            && tagged.MemberExpression.name && tagged.IdentifierName?.name
+            && !shadowedByProgram(tagged.MemberExpression.name)) {
+          const fixed = FIXED_STATIC_RESULTS[`${tagged.MemberExpression.name}.${tagged.IdentifierName.name}`];
+          if (fixed) {
+            return fixed() as Known;
+          }
+        }
+        if (tagged?.type === 'IdentifierReference' && tagged.name
+            && !shadowedByProgram(tagged.name)) {
+          const fixedGlobal = FIXED_GLOBAL_RESULTS[tagged.name];
+          if (fixedGlobal) {
+            return fixedGlobal() as Known;
+          }
+        }
+        return null;
       }
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };

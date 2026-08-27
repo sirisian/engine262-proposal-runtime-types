@@ -16,6 +16,15 @@ import { wellKnownSymbols, Value } from '#self';
 
 const BUILTIN_INTERFACES = new Set([
   'IteratorResult',
+  // `standardlibrary.md`: `type PromiseSettledResult<R, E> = { status: string,
+  // value?: R, reason?: E }`. Structural like `IteratorResult` and unlike
+  // `Promise`, so it belongs to this family rather than to the library NOMINALS -
+  // a program writes the shape, not a branded name.
+  //
+  // It is here so that `Promise.allSettled`'s signature can name it. A signature
+  // naming a type the program cannot write would be worse than none, which is
+  // why that row waited for this.
+  'PromiseSettledResult',
   'Iterator', 'Iterable', 'IterableIterator',
   'AsyncIterator', 'AsyncIterable', 'AsyncIterableIterator',
 ]);
@@ -192,6 +201,20 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
   switch (name) {
     case 'IteratorResult':
       return iteratorResult(T, R);
+    case 'PromiseSettledResult':
+      // `status` is `string` and not a literal union of `'fulfilled'` and
+      // `'rejected'`. That is what the design states, and narrowing it here
+      // would be this engine improving on the document rather than implementing
+      // it; if the union is wanted it is a change to `standardlibrary.md` first.
+      //
+      // `value` and `reason` are OPTIONAL, which is what makes one record serve
+      // both outcomes - a fulfilled result carries no reason and a rejected one
+      // no value.
+      return objectType([
+        { key: 'status', type: makePrimitive('string') },
+        { key: 'value', type: T, optional: true },
+        { key: 'reason', type: R, optional: true },
+      ]);
     case 'Iterator':
     case 'AsyncIterator': {
       // proposal-runtime-types (higherkindedtypes.md): ONE declaration for both
