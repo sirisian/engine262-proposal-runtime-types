@@ -1,10 +1,16 @@
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
+// Placed with the other `./` imports and NOT after `../intrinsics/`, which
+// `import-x/order` asks for and which `./all.mts` and `./array-view.mts` below
+// already decline: moved there it forms a cycle through `array-view.mts` and
+// `CopyValueClassInstance` is undefined at its use. The ordering rule and the
+// module graph disagree, and the graph wins.
+import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
-import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
@@ -1073,6 +1079,26 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
     const unstamped = (value as { TypedElement?: unknown }).TypedElement === undefined;
     if (unstamped && elided.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      // The same store, on the ELIDED path. A DYNAMIC `[].<P>` annotation
+      // reaches `StampTypedArray` from here rather than through
+      // `CheckedConvertValue`, so the copy has to be said twice - the third
+      // near-identical array branch this rule has needed.
+      //
+      // #sec-elision-stability is the argument, and it is the one the stamp
+      // beside this already rests on: eliding a check must not change what a
+      // value IS, and an array whose elements alias their sources is a different
+      // value from one whose elements are copies.
+      const elidedLength = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length')))))) as number;
+      for (let i = 0; i < elidedLength; i += 1) {
+        const key = Value(String(i));
+        const element = Q(yield* Get(value, key));
+        const copied = CopyValueClassInstance(element);
+        if (copied !== element) {
+          X(value.DefineOwnProperty(key, Descriptor({
+            Value: copied, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
+          })));
+        }
+      }
       StampTypedArray(value, elided.Element);
       if (elided.Extent !== 'dynamic') {
         (value as { TypedExtent?: number }).TypedExtent = elided.Extent as number;
@@ -1413,6 +1439,32 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // The same shape as F38's crossing, swallowed by the same provenance-blind
     // shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+      // #sec-value-type-copying names "storing into ... an array element" a COPY
+      // position, and a typed array literal IS that store:
+      // `const _arr_: [1].<P> = [_a_]` and `_arr_[0] = _a_` are one operation
+      // written two ways, and without this they disagreed.
+      //
+      // Reached where the elements ALREADY satisfy the element type, which a
+      // value type class instance always does - so `[_a_]` comes here every time
+      // while `[new P()]` needs no copy anyway. The clause's elision covers "an
+      // object-literal CONVERSION", a literal BECOMING a value type, not a
+      // literal whose ELEMENTS are value type instances.
+      //
+      // Written with `DefineOwnProperty` and NOT through `Set`: a `Set` on an
+      // array re-enters this conversion and overflows the stack. The property
+      // already exists and only its value changes, so defining it is both
+      // correct and the only form that terminates.
+      const literalLength = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length')))))) as number;
+      for (let i = 0; i < literalLength; i += 1) {
+        const key = Value(String(i));
+        const element = Q(yield* Get(value, key));
+        const copied = CopyValueClassInstance(element);
+        if (copied !== element) {
+          X((value as ObjectValue).DefineOwnProperty(key, Descriptor({
+            Value: copied, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
+          })));
+        }
+      }
       StampTypedArray(value as ObjectValue, t.Element);
       if (t.Extent !== 'dynamic') {
         (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;

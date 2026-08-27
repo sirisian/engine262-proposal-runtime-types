@@ -88,3 +88,37 @@ test('a PRIVATE field is copied; a private METHOD is shared', () => {
     + 'const a = new X(); a.x = 1; a.p = (2 := uint8); const b = a; b.x = 9; b.p = (8 := uint8); '
     + 'String(a.x) + "/" + String(a.p);')).toBe('1/2');
 });
+
+test('a TYPED array literal copies its elements', () => {
+  // #sec-value-type-copying names "storing into ... an array element" a copy
+  // position, and a typed array literal IS that store: `const arr: [1].<P> =
+  // [a]` and `arr[0] = a` are one operation written two ways, and they
+  // disagreed - the second copied and the first aliased.
+  //
+  // The clause's elision does NOT cover this. It exempts "an object-literal
+  // CONVERSION" - a literal BECOMING a value type, as in `{ … } := Matrix4` -
+  // not a literal whose ELEMENTS are value type instances. Reading it the second
+  // way would elide a copy the clause requires two sentences earlier.
+  const V = 'class P { x: uint8 = 0; } ';
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [1].<P> = [a]; arr[0].x = 9; String(a.x);`)).toBe('1');
+  // A DYNAMIC annotation reaches the stamp by a different path and needs the
+  // rule said again - the third near-identical array branch it has taken.
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [].<P> = [a]; arr[0].x = 9; String(a.x);`)).toBe('1');
+  // One source used twice gives two independent elements.
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [2].<P> = [a, a]; arr[0].x = 9; String(a.x) + "/" + String(arr[1].x);`)).toBe('1/1');
+});
+
+test('the literal cases that must NOT copy still do not', () => {
+  const V = 'class P { x: uint8 = 0; } ';
+  // A literal of CONSTRUCTIONS builds in place, which the clause requires.
+  expect(evaluated(`${V} const arr: [1].<P> = [new P()]; arr[0].x = 7; String(arr[0].x);`)).toBe('7');
+  // An UNTYPED array literal is not a typed store: a plain Array holds a
+  // reference, and `const arr = [a]` is the same answer as `arr[0] = a` on one.
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const arr = [a]; arr[0].x = 9; String(a.x);`)).toBe('9');
+  // A plain OBJECT literal's property is not a "field" in the clause's sense.
+  expect(evaluated(`${V} const a = new P(); a.x = 1; const o = { p: a }; o.p.x = 9; String(a.x);`)).toBe('9');
+  // The non-value-type array surface is untouched, including the empty-array
+  // stamp the elision branch exists for.
+  expect(evaluated('const arr: [2].<uint8> = [1, 2]; String(arr[0]) + "/" + String(arr.length);')).toBe('1/2');
+  expect(evaluated('const b: [].<uint8> = []; b.push((65 := uint8)); String(b.length);')).toBe('1');
+});
