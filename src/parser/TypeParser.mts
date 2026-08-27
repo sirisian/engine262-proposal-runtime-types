@@ -122,7 +122,17 @@ export abstract class TypeParser extends ExpressionParser {
    */
   private parsePostfixTypeRest(primary: ParseNode.Type): ParseNode.Type {
     let type = primary;
-    while (this.test(Token.LBRACK)) {
+    // F190. `TypeArguments` joins the postfix loop, so a parameterization
+    // composes with itself and with an indexed access in either order - the
+    // same shape `IndexedAccessType` already has below.
+    while (this.test(Token.LBRACK) || this.test(Token.PERIOD_LT)) {
+      if (this.test(Token.PERIOD_LT)) {
+        const p = this.startNode<ParseNode.ParameterizedType>(type);
+        p.BaseType = type;
+        p.TypeArguments = this.parseTypeArguments();
+        type = this.finishNode(p, 'ParameterizedType');
+        continue;
+      }
       const node = this.startNode<ParseNode.IndexedAccessType>(type);
       node.ObjectType = type;
       this.expect(Token.LBRACK);

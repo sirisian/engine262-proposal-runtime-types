@@ -2809,6 +2809,7 @@ export namespace ParseNode {
     | TupleType
     | ObjectType
     | ParenthesizedType
+    | ParameterizedType
     | FunctionType;
 
   // TypeAnnotation : `:` Type
@@ -3235,6 +3236,23 @@ export namespace ParseNode {
     readonly type: 'TypeReference';
     readonly TypeName: TypeName;
     readonly TypeArguments: TypeArguments | null;
+  }
+
+  /**
+   * PLAN-chained-parameterization.md F190. A parameterization whose operand is
+   * any |PostfixType|, not only a |TypeName|.
+   *
+   * `TypeReference : TypeName TypeArguments?` attaches arguments to a NAME and
+   * once, so every type that is not a bare name was unparameterizable inline:
+   * an array, a generic application, an indexed access, a parenthesized type, a
+   * function type, and an already-parameterized type. Each could be
+   * parameterized the moment it was given a name, which made the rule turn on
+   * whether a type had been named.
+   */
+  export interface ParameterizedType extends BaseParseNode {
+    readonly type: 'ParameterizedType';
+    readonly BaseType: Type;
+    readonly TypeArguments: TypeArguments;
   }
 
   // TypeArguments : `.<` TypeArgumentList `,`? `>`
@@ -3873,6 +3891,7 @@ export type ParseNode =
   | ParseNode.ReferenceType
   | ParseNode.KeyOfType
   | ParseNode.IndexedAccessType
+  | ParseNode.ParameterizedType
   | ParseNode.PredefinedType
   | ParseNode.LiteralType
   | ParseNode.PatternType

@@ -3239,6 +3239,39 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const operand = Q(yield* TypeNodeToTypeRecord(node.Type));
       return KeyTypesOf(operand);
     }
+    case 'ParameterizedType': {
+      // PLAN-chained-parameterization.md F190. A parameterization whose operand
+      // is any |PostfixType| rather than a bare |TypeName|.
+      //
+      // The record it builds is the one an alias spelling already produces:
+      // `type E = string.<{brand}>; type N = E.<{brand}>` and
+      // `string.<{brand}>.<{brand}>` intern to the same type, which is the check
+      // that this adds SYNTAX and not semantics.
+      const baseRecord = Q(yield* TypeNodeToTypeRecord(node.BaseType));
+      const args = node.TypeArguments.TypeArgumentList;
+      const argRecords: TypeRecord[] = [];
+      for (const a of args) {
+        argRecords.push(Q(yield* TypeNodeToTypeRecord(a)));
+      }
+      const metadataRecord = argRecords.length === 1 && argRecords[0]!.Kind === 'object'
+        ? argRecords[0]!
+        : null;
+      if (!metadataRecord) {
+        return Throw.TypeError(
+          '$1 takes a metadata record',
+          Value(displayType(baseRecord)),
+        );
+      }
+      // CanonicalizeType is what makes the inline spelling and the alias
+      // spelling the SAME type rather than two equal ones. The neighbouring
+      // TypeReference path reaches it through its own caller; this arm returns
+      // a freshly built record and has to intern it itself.
+      return CanonicalizeType({
+        Kind: 'parameterized',
+        Base: baseRecord,
+        Metadata: MetadataObjectFromType(metadataRecord),
+      } as TypeRecord, new Map());
+    }
     case 'IndexedAccessType': {
       // proposal-runtime-types (typeprogramming.md 4.1): `T[K]` is the union, over
       // each arm _t_ of `T` and each literal key _k_ of `K`, of the type of _t_'s
