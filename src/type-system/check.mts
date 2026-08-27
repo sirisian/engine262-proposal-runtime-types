@@ -3888,14 +3888,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Return = literal.TypeAnnotation
           ? resolveType(literal.TypeAnnotation.Type)
           : ((conciseBodied ? inferredReturnType(node, contextual as readonly Known[], wantedReturn) : null)
-            // Where the body's type cannot be read - a BLOCK body, which needs
-            // return-type inference this checker does not have - the literal
-            // adopts the return its position wants rather than claiming ~any~.
-            // Claiming ~any~ would be worse than saying nothing: `any` is not a
-            // subtype of every type here, so a block-bodied callback would be
-            // refused at every typed position, which is the opposite of the
-            // imprecision intended. Adopting the wanted return leaves the
-            // block-bodied case exactly as unchecked as it was.
+            // Where inference answers nothing, the literal still adopts the
+            // return its position wants rather than claiming ~any~: `any` is not
+            // a subtype of every type here, so claiming it would refuse a
+            // callback at every typed position.
             ?? wantedReturn);
         // #sec-this-adoption: "the literal's own signature has that
         // [[ThisType]]". The half that matters downstream - a literal that
@@ -6647,6 +6643,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A literal with no contributions at all is a different case and keeps
         // its previous answer of nothing, since it is not being published.
         return anchorage.anchored || inferenceDepth > 0 ? neverType : null;
+      }
+      // #sec-inferred-result-type: "Where every contribution is *undefined*,
+      // because no `return` carries a value and none needs to, the join is
+      // `void`." The clause is explicit and the join did not do it, answering
+      // the bare *undefined* instead - so `() => {}` inferred
+      // `() => undefined`, which is not assignable to a `() => void` position,
+      // and a block-bodied callback was refused wherever one was wanted.
+      //
+      // That is the objection recorded against inferring a block body's return
+      // at all, and it was an objection to THIS, not to the inference. With the
+      // join corrected, the inference is safe and `(v) => { return "k"; }` can
+      // bind a caller's type variable as `(v) => "k"` already did (gap 4).
+      //
+      // `undefined` remains the CONTRIBUTION, so a body mixing a valueless path
+      // with a value-carrying one still joins to `T | undefined`, which the
+      // clause requires in the same breath.
+      if (contributions.length > 0 && contributions.every((c) => c.Kind === 'primitive' && (c as { Name?: string }).Name === 'undefined')) {
+        return voidTypeRecord as Known;
       }
       const Members: TypeRecord[] = [];
       for (const c of contributions) {

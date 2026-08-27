@@ -249,16 +249,27 @@ test('an INFERRED binding reaches a callback\'s unannotated parameter', () => {
 });
 
 test.fails('gap 4: a BLOCK-bodied callback binds nothing from its return', () => {
-  // `staticType` of `(v) => { return "k"; }` answers *null* at the site that
-  // binds a call's result, so there is no record to read a return from - while
-  // the concise `(v) => "k"` answers a function type and binds. One spelling of
-  // a callback works and the other does not, and the block body is the ordinary
-  // way a callback with any substance is written.
+  // `staticType` of `(v) => { return "k"; }` answered *null*, so there was no
+  // record to read a return from - while the concise `(v) => "k"` answered a
+  // function type and bound. One spelling of a callback worked and the other did
+  // not, and the block body is the ordinary way a callback with any substance is
+  // written.
   //
-  // Reading [[InferredReturn]] beside [[Return]] in the binding walk was tried
-  // and is not sufficient: the record is absent, not merely storing the type
-  // elsewhere. `Map.groupBy`'s signature needs this, so it gates
-  // PLAN-static-signatures.md Phase 1.
+  // ATTEMPTED AND REVERTED, twice over, and both findings are worth keeping.
+  //
+  // (1) The recorded objection - that an empty body infers *undefined*, which no
+  // `void` position accepts - was an objection to the JOIN rather than to the
+  // inference. #sec-inferred-result-type says "where every contribution is
+  // *undefined* ... the join is `void`" and the join did not do it. THAT IS NOW
+  // FIXED and shipped independently of this test.
+  //
+  // (2) With the join corrected, inferring a block body still refuses CORRECT
+  // callbacks: `h((x) => { return 1; })` at a `(x: uint8) => uint8` parameter is
+  // refused, because the inferred return WIDENS the literal to `number` and
+  // `number` is not assignable to `uint8`. The concise form does not, so the
+  // wanted return reaches the literal there and not here. Closing gap 4 means
+  // making the contextual return type guide a block body's inference the way it
+  // guides a concise one - which is a piece of work, not a gate to remove.
   const G = 'function gb<T, K>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { return undefined; } '
     + 'const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
