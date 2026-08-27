@@ -206,10 +206,16 @@ test('a fixed-result static states what it returns', () => {
   // `Array.isArray([1])` was ~any~.
   expectStaticTypeError('let n: string = Array.isArray([1]);');
   expect(ok('let n: boolean = Array.isArray([1]);')).toBe(true);
-  for (const p of ['isInteger', 'isFinite', 'isNaN', 'isSafeInteger']) {
-    expectStaticTypeError(`let n: string = Number.${p}(1);`);
-    expect(ok(`let n: boolean = Number.${p}(1);`), p).toBe(true);
-  }
+  // The four `Number` predicates are NOT here. They are overloaded
+  // (#sec-overloading-of-the-standard-library names them), and
+  // `table-numeric-library-signatures` gives them LITERAL results per family -
+  // `Number.isNaN` over an integer answers *false*. A fixed `boolean` displaced
+  // that and refused `let n: false = Number.isNaN(x)`, which the table says
+  // holds. A fixed result must never displace an overload.
+  expect(ok('const x: uint8 = 1; let n: false = Number.isNaN(x);')).toBe(true);
+  expect(ok('const x: uint8 = 1; let n: true = Number.isInteger(x);')).toBe(true);
+  // The global spelling agrees, which is what said the two had diverged.
+  expect(ok('const x: uint8 = 1; let n: false = isNaN(x);')).toBe(true);
   expectStaticTypeError('let n: string = Object.is(1, 1);');
   expectStaticTypeError('let n: uint8 = Symbol.for("x");');
   expect(ok('let n: symbol = Symbol.for("x");')).toBe(true);

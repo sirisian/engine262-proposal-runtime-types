@@ -97,10 +97,22 @@ export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arg
  */
 const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
   'Array.isArray': () => makePrimitive('boolean'),
-  'Number.isInteger': () => makePrimitive('boolean'),
-  'Number.isFinite': () => makePrimitive('boolean'),
-  'Number.isNaN': () => makePrimitive('boolean'),
-  'Number.isSafeInteger': () => makePrimitive('boolean'),
+  // `Number.isInteger`, `isFinite`, `isNaN` and `isSafeInteger` were HERE and
+  // have been removed. They are OVERLOADED - #sec-overloading-of-the-standard-
+  // library names them explicitly alongside the global `isFinite` and `isNaN` -
+  // and `table-numeric-library-signatures` gives them LITERAL results per
+  // family: `Number.isNaN` over an integer family answers *false*, and
+  // `Number.isInteger` over one answers *true*.
+  //
+  // A fixed `boolean` displaced that. It reads as more precise than the ~any~
+  // they had, and it is LESS precise than the table, so
+  // `let _n_: false = Number.isNaN(_x_)` for a `uint8` _x_ - which the table
+  // says holds - was refused. The tell was that the global `isNaN` still
+  // accepted it, the two spellings of one predicate disagreeing.
+  //
+  // They belong to the overload work, not to this table. A fixed result must
+  // never displace an overload, which is the mistake this plan already made once
+  // with `Math.*` and made again here.
   'Object.is': () => makePrimitive('boolean'),
   'ArrayBuffer.isView': () => makePrimitive('boolean'),
   'String.raw': () => makePrimitive('string'),
