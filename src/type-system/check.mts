@@ -1369,8 +1369,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const withSignatures = t as {
       Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[],
     };
-    return !!withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type))
-      || (!!sig.Return && mentionsTypeParameter(sig.Return)));
+    if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type))
+      || (!!sig.Return && mentionsTypeParameter(sig.Return)))) {
+      return true;
+    }
+    // An OBJECT type mentions a parameter through its members. An interface
+    // parameterized on a variable - `Iterable.<T>` - is a structural record with
+    // T inside `[Symbol.iterator]`'s return, so without this it did not count as
+    // mentioning T: the guard at the argument check did not fire, and the
+    // argument was compared against the interface with T still unbound.
+    //
+    // The third omission of one shape. [[Signatures]] and [[Properties]] were
+    // both missing here and both missing from the binding walk, so a callback
+    // and an interface each failed twice over - neither constraining a variable
+    // nor being recognised as mentioning one. Fixing either half alone changes
+    // nothing observable, which is what made the pair hard to see.
+    const withProperties = t as { Properties?: readonly { type?: TypeRecord }[] };
+    return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type));
   };
 
   /**
@@ -1384,6 +1399,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * first binding for a name wins, since a later disagreement is the caller's
    * error rather than a reason to rebind.
    */
+  /** The interfaces an argument may be matched against to recover an element type. */
+  const ITERATION_INTERFACES_FOR_INFERENCE = ['Iterable', 'Iterator', 'IterableIterator'] as const;
+
+  /**
+   * The element type an ARGUMENT offers to an iterable-typed parameter, or
+   * *null* where it offers none.
+   *
+   * The same derivation `for`-`of` uses (D17), from the same places: an array's
+   * [[Element]], a tuple's positions, a `string`'s characters, a nominal's own
+   * arguments. Kept beside the inference rather than shared with the statement
+   * walk because that one also has to handle a Map's pair, which is a binding
+   * question rather than an element one.
+   */
+  const elementTypeOfIterable = (t: Known): Known => {
+    if (!t) {
+      return null;
+    }
+    if (t.Kind === 'array') {
+      return ((t as { Element?: TypeRecord }).Element ?? null) as Known;
+    }
+    if (t.Kind === 'tuple') {
+      const elements = (t as { Elements?: readonly { Type: TypeRecord }[] }).Elements ?? [];
+      if (elements.length === 0) {
+        return null;
+      }
+      return (elements.length === 1
+        ? elements[0].Type
+        : CanonicalizeType({ Kind: 'union', Members: elements.map((e) => e.Type) } as TypeRecord)) as Known;
+    }
+    const base = t.Kind === 'literal' ? (t as { Base?: TypeRecord }).Base : t;
+    if (base && base.Kind === 'primitive' && (base as { Name?: string }).Name === 'string') {
+      return makePrimitive('string') as Known;
+    }
+    if (t.Kind === 'nominal' && t.Arguments.length > 0) {
+      const first = t.Arguments[0];
+      return typeof first === 'number' ? null : first as Known;
+    }
+    return null;
+  };
+
   const bindTypeParametersFromArguments = (
     parameters: readonly { Type?: Known }[],
     argumentTypes: readonly Known[],
@@ -1400,6 +1455,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           into.set(name, widen(arg) as TypeRecord);
         }
         return;
+      }
+      // An INTERFACE-typed parameter. `Iterable.<T>` resolves to a STRUCTURAL
+      // record with T buried inside `[Symbol.iterator]`'s return's `next`'s
+      // return, so neither the [[Arguments]] walk below nor the [[Element]] one
+      // can see it, and `f<T>(i: Iterable.<T>)` bound nothing - the most useful
+      // parameter shape a generic over a sequence can have, and the one
+      // `Map.groupBy` is declared with.
+      //
+      // Recovered by RECONSTRUCTION rather than by walking in: for each variable
+      // still unbound, rebuild the interface at that variable and ask whether it
+      // is the parameter's own type. That is one `SameType` per candidate, and
+      // it is exact - it cannot mistake a hand-written object type for an
+      // interface, because a hand-written one is not what
+      // `iterationInterfaceRecord` builds. Walking the shape inward would have
+      // to know the interface's layout, which is the coupling this avoids.
+      if (param.Kind === 'object') {
+        for (const candidate of names) {
+          if (into.has(candidate)) {
+            continue;
+          }
+          const variable = { Kind: 'parameter', Name: candidate } as unknown as TypeRecord;
+          for (const interfaceName of ITERATION_INTERFACES_FOR_INFERENCE) {
+            const rebuilt = iterationInterfaceRecord(interfaceName, [variable]);
+            if (rebuilt && SameType(rebuilt, param as TypeRecord)) {
+              const element = elementTypeOfIterable(arg);
+              if (element) {
+                into.set(candidate, widen(element) as TypeRecord);
+              }
+              return;
+            }
+          }
+        }
       }
       const pArgs = (param as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
       const aArgs = (arg as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;

@@ -206,3 +206,25 @@ test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => 
   // The element type flows to the result as well as the key.
   expectStaticTypeError(guard(`${G} let m: Map.<string, [].<string>> = g(a, (v) => "k");`));
 });
+
+test('a type variable is inferred through an INTERFACE-typed parameter', () => {
+  // `Iterable.<T>` resolves to a STRUCTURAL record with T buried inside
+  // `[Symbol.iterator]`'s return, so neither the [[Arguments]] walk nor the
+  // [[Element]] one could see it and `f<T>(i: Iterable.<T>)` bound nothing -
+  // the most useful parameter shape a generic over a sequence can have, and the
+  // one `Map.groupBy` is declared with.
+  //
+  // Recovered by RECONSTRUCTION: for each unbound variable, rebuild the
+  // interface at that variable and ask whether it is the parameter's own type.
+  // Exact, and it cannot mistake a hand-written object type for an interface.
+  const F = 'function f<T>(i: Iterable.<T>): T { return undefined; } ';
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
+  expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
+  expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
+  // A collection reaches it too, through the `Iterable` it DECLARES.
+  expectStaticTypeError(guard(`${F} let c: Set.<uint8> = new Set(); let s: string = f(c);`));
+  expect(ok(guard(`${F} let c: Set.<uint8> = new Set(); let s: uint8 = f(c);`))).toBe(true);
+  // A CONCRETE interface parameter is unaffected, which is what says the change
+  // is about the variable and not about the relation.
+  expect(ok('function g(i: Iterable.<uint8>): void {} const a: [].<uint8> = [1]; g(a);')).toBe(true);
+});
