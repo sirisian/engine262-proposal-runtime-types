@@ -399,3 +399,49 @@ test('Group B preserves participation and the run time', () => {
   expect(evaluated('String(Array.from(new Set([1, 2])).length) + String(Object.keys({ a: 1 })[0]);')).toBe('2a');
   expect(evaluated('String(Array.of(1, 2).length) + String(Iterator.from([1, 2]).toArray().length);')).toBe('22');
 });
+
+// ---------------------------------------------------------------------------
+// Group D - the Promise combinators
+// ---------------------------------------------------------------------------
+
+const PS = 'let ps: [].<Promise.<uint8, Error>> = []; ';
+
+test('the combinators differ only in what they resolve with', () => {
+  // `standardlibrary.md`, "Promise Statics". Each takes
+  // `Iterable.<Promise.<R, E>>`, so R and E come from the ELEMENT's own
+  // arguments - a nominal carrying two, which the checker already bound.
+  //
+  //   all  -> Promise.<[].<R>, E>            every value, or the first failure
+  //   race -> Promise.<R, E>                 whichever settles first
+  //   any  -> Promise.<R, AggregateError>    one value, or every failure
+  expect(ok(`${PS} let p: Promise.<[].<uint8>, Error> = Promise.all(ps);`)).toBe(true);
+  expectStaticTypeError(`${PS} let p: Promise.<[].<string>, Error> = Promise.all(ps);`);
+  // `all` resolves with an ARRAY, which is the whole difference from `race`.
+  expectStaticTypeError(`${PS} let p: Promise.<uint8, Error> = Promise.all(ps);`);
+  expect(ok(`${PS} let p: Promise.<uint8, Error> = Promise.race(ps);`)).toBe(true);
+  expectStaticTypeError(`${PS} let p: Promise.<string, Error> = Promise.race(ps);`);
+  // `any` rejects with an `AggregateError` whatever the elements reject with.
+  expect(ok(`${PS} let p: Promise.<uint8, AggregateError> = Promise.any(ps);`)).toBe(true);
+  expectStaticTypeError(`${PS} let p: Promise.<string, AggregateError> = Promise.any(ps);`);
+});
+
+test('Promise.resolve carries its value', () => {
+  expect(ok('let p: Promise.<uint8, any> = Promise.resolve((1 := uint8));')).toBe(true);
+  expectStaticTypeError('let p: Promise.<string, any> = Promise.resolve((1 := uint8));');
+});
+
+test('allSettled is deliberately absent', () => {
+  // Its element is `PromiseSettledResult.<R, E>`, a type alias the engine has no
+  // declaration for. A signature naming a type the program cannot write would be
+  // worse than none, so the row is withheld and the call stays untyped.
+  expect(ok(`if (false) { ${PS} let n: uint8 = Promise.allSettled(ps); } 1;`)).toBe(true);
+});
+
+test('Group D preserves participation and the run time', () => {
+  // An untyped source yields an untyped result, as everywhere else: the element
+  // must be a `Promise.<R, E>` for R and E to exist at all.
+  expect(ok('if (false) { let n: uint8 = Promise.all([]); } 1;')).toBe(true);
+  expect(evaluated('const p = Promise.all([]); String(typeof p.then);')).toBe('function');
+  expect(evaluated('String(typeof Promise.resolve(1).then) + String(typeof Promise.race([]).then);')).toBe('functionfunction');
+  expect(evaluated('String(typeof Promise.withResolvers().resolve);')).toBe('function');
+});

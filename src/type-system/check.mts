@@ -84,6 +84,7 @@ export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arg
 
 
 
+
 /**
  * Static DATA properties whose type is fixed.
  *
@@ -1703,6 +1704,64 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? libraryTypeRecord('IteratorHelper', [widen(element) as TypeRecord, voidTypeRecord, voidTypeRecord]) ?? null
           : null;
       };
+    }
+    // PLAN-standard-library-statics.md Group D: the `Promise` statics.
+    // `standardlibrary.md` states all six of the combinators plus `resolve` and
+    // `reject`; the shapes they need - `Iterable.<Promise.<R, E>>` as a
+    // parameter, and a nominal carrying two arguments - the checker already had.
+    if (base.name === 'Promise') {
+      // Each combinator takes `Iterable.<Promise.<R, E>>` and differs only in
+      // the result, so the derivation is shared and this holds the difference:
+      //
+      //   all   -> Promise.<[].<R>, E>   every value, or the first failure
+      //   any   -> Promise.<R, AggregateError>  one value, or every failure
+      //   race  -> Promise.<R, E>        whichever settles first
+      //
+      // `allSettled` is ABSENT. Its element is `PromiseSettledResult.<R, E>`, a
+      // type alias the engine has no declaration for, and a signature naming a
+      // type the program cannot write would be worse than none.
+      const combinator: ((resolved: TypeRecord, rejected: TypeRecord | null) => Known) | undefined = {
+        all: (resolved: TypeRecord, rejected: TypeRecord | null) => libraryTypeRecord('Promise', [
+          arrayOfElement(resolved) as TypeRecord, rejected ?? anyTypeRecord,
+        ]) ?? null,
+        race: (resolved: TypeRecord, rejected: TypeRecord | null) => libraryTypeRecord('Promise', [
+          resolved, rejected ?? anyTypeRecord,
+        ]) ?? null,
+        // `AggregateError` is a LIBRARY nominal, not a declared class, so
+        // `classTypeOf` does not know it - the same distinction D13's library
+        // half turned on. Resolved through `libraryTypeRecord`, which does.
+        any: (resolved: TypeRecord) => libraryTypeRecord('Promise', [
+          resolved, libraryTypeRecord('AggregateError') ?? anyTypeRecord,
+        ]) ?? null,
+      }[method];
+      if (combinator) {
+        return (args) => {
+          const items = args[0] ? staticType(args[0]) : null;
+          const element = items ? elementTypeOfIterable(items) : null;
+          // The element is a `Promise.<R, E>`; R and E are its own arguments.
+          if (!element || element.Kind !== 'nominal' || element.LibraryName !== 'Promise') {
+            return null;
+          }
+          const [resolved, rejected] = element.Arguments;
+          if (typeof resolved === 'number' || resolved === undefined) {
+            return null;
+          }
+          return combinator(resolved as TypeRecord,
+            typeof rejected === 'number' || rejected === undefined ? null : rejected as TypeRecord);
+        };
+      }
+      if (method === 'resolve') {
+        // `Promise.resolve<R>(value: R): Promise.<R, any>`. Not stated by the
+        // design, and it follows from `all`'s shape: the value is what the
+        // promise resolves with. The rejection is `any` because nothing in the
+        // call says what it could be.
+        return (args) => {
+          const value = args[0] ? staticType(args[0]) : null;
+          return value
+            ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, anyTypeRecord]) ?? null
+            : null;
+        };
+      }
     }
     if (base.name === 'Object' && method === 'keys') {
       // `Object.keys(o: object): [].<string>` - no type parameter, since it
