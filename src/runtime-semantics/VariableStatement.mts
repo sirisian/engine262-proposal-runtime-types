@@ -1,7 +1,6 @@
 import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
-import { displayType } from '../type-system/records.mts';
-import { surroundingAgent, Throw, LookupTypeDefault } from '#self';
+import { surroundingAgent, LookupTypeDefault } from '#self';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import {
   NormalCompletion, Q,

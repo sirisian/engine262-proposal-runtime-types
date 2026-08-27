@@ -1,7 +1,6 @@
 import { NoDefaultValueError } from '../type-system/intern.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
-import { displayType } from '../type-system/records.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,

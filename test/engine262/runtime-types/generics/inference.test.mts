@@ -287,7 +287,7 @@ test('a type variable is inferred through a UNION parameter', () => {
   // `f<T>(x: [].<T> | Set.<T>)` was unconstrained however plainly the argument
   // matched an arm.
   const F = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
-  const guard = (src) => `if (false) { ${src} } 1;`;
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
   expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
   // The SECOND arm binds as readily as the first.
@@ -306,7 +306,7 @@ test('the arm that binds is chosen by KIND, not by position', () => {
   // argument was. Measured: `[].<T> | Set.<T>` given a `Set.<uint8>` bound T
   // from the array arm, while the same union written the other way round worked.
   // Order is not supposed to decide this.
-  const guard = (src) => `if (false) { ${src} } 1;`;
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
   const forward = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
   const reversed = 'function h<T>(x: Set.<T> | [].<T>): T { return undefined; } ';
   for (const [name, decl, call] of [['forward', forward, 'f'], ['reversed', reversed, 'h']]) {
@@ -327,7 +327,7 @@ test('a RESULT-ONLY variable is bound by the call\'s contextual type', () => {
   // `staticTypeIn` already records on the node for overload resolution. This
   // reads the same record for a second purpose.
   const F = 'function f<T>(): T { return undefined; } ';
-  const guard = (src) => `if (false) { ${src} } 1;`;
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${F} let n: uint8 = f(); let good: uint8 = n;`))).toBe(true);
   expectStaticTypeError(guard(`${F} let n: uint8 = f(); let bad: string = n;`));
   // A RETURN position and an ARGUMENT position supply one as readily as a
@@ -341,7 +341,7 @@ test('an ARGUMENT beats the contextual type', () => {
   // leave unbound: an argument is a stronger statement than a position, and a
   // contextual match must not overrule what was passed.
   const P = 'function p<T>(x: T): T { return x; } const a: uint8 = (1 := uint8); ';
-  const guard = (src) => `if (false) { ${src} } 1;`;
+  const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${P} let n: uint8 = p(a);`))).toBe(true);
   expectStaticTypeError(guard(`${P} let n: string = p(a);`));
   // A signature with BOTH kinds binds each from its own source - T from the

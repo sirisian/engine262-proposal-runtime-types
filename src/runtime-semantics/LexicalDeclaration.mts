@@ -13,7 +13,6 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
-import { displayType } from '../type-system/records.mts';
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';

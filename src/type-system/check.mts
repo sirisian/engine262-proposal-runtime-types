@@ -1826,12 +1826,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `Array.of<T>(...items: T): [].<T>`. One variable gathered from MANY
           // arguments, which is the rest-parameter shape: every argument must
           // agree, or the call says nothing rather than picking the first.
+          // Filtered rather than tested, so the array is NARROWED: a
+          // `some((t) => !t)` guard proves no element is null but narrows
+          // nothing, leaving each element ~Known~ where `widen` takes a
+          // TypeRecord. The length comparison keeps the all-or-nothing meaning.
           const types = args.map((a) => staticType(a));
-          if (types.length === 0 || types.some((t) => !t)) {
+          const present = types.filter((t): t is TypeRecord => t !== null && t !== undefined);
+          if (present.length === 0 || present.length !== types.length) {
             return null;
           }
-          const first = widen(types[0]!);
-          if (!first || !types.every((t) => SameType(widen(t)!, first))) {
+          const first = widen(present[0]!);
+          if (!first || !present.every((t) => SameType(widen(t), first))) {
             return null;
           }
           return arrayOfElement(first);
@@ -4932,7 +4937,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const explicitSig = written && written.length > 0
             ? builtinStaticTypeArgumentSignature(bareCallee)
             : undefined;
-          if (explicitSig) {
+          // `explicitSig` is only produced when `written` is non-empty, but
+          // that implication crosses an intermediate the checker does not
+          // follow, so the list is tested directly.
+          if (explicitSig && written) {
             const resolved = written.map((a) => resolveType(a as ParseNode.Type));
             if (resolved.every((r) => !!r)) {
               return explicitSig(resolved as readonly TypeRecord[]);

@@ -29,7 +29,6 @@ import {
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
-import { displayType } from '../type-system/records.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
