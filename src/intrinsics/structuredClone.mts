@@ -7,6 +7,7 @@ import { CopyValueClassInstance } from '../abstract-ops/testing-comparison.mts';
 import {
   CreateBuiltinFunction, OrdinaryObjectCreate, CreateDataPropertyOrThrow,
   LengthOfArrayLike, Get, IsArray, Call, Construct, Realm, surroundingAgent, Throw,
+  type FunctionObject,
 } from '#self';
 
 /**
@@ -50,13 +51,13 @@ function* cloneValue(value: Value, memo: Map<ObjectValue, Value>): ValueEvaluato
   // #sec-value-types: a SYMBOL has identity and no serialization, so HTML
   // refuses it. So does a function, whose body cannot be carried across.
   if (value instanceof SymbolValue) {
-    return Throw('TypeError', 'Raw', 'A symbol cannot be cloned');
+    return Throw.TypeError('a $1 cannot be cloned', Value('symbol'));
   }
   if (!(value instanceof ObjectValue)) {
     return value;
   }
   if ('Call' in value) {
-    return Throw('TypeError', 'Raw', 'A function cannot be cloned');
+    return Throw.TypeError('a $1 cannot be cloned', Value('function'));
   }
   // The MEMO is what makes a cycle terminate and what preserves sharing: two
   // references to one object in the source are two references to one object in
@@ -91,9 +92,12 @@ function* cloneValue(value: Value, memo: Map<ObjectValue, Value>): ValueEvaluato
   }
 
   if ('MapData' in value) {
-    const target = Q(yield* ConstructEmpty('%Map%'));
+    // `Construct` of `%Map%` answers a Map, but its evaluator is typed as
+    // producing a Value, so `Get` below has no object to work from. The narrowing
+    // sits here, once, rather than at each use.
+    const target = Q(yield* ConstructEmpty('%Map%')) as ObjectValue;
     memo.set(value, target);
-    const setter = Q(yield* Get(target, Value('set')));
+    const setter = Q(yield* Get(target, Value('set'))) as ObjectValue;
     for (const entry of (value as unknown as { MapData: { Key: Value | undefined, Value: Value | undefined }[] }).MapData) {
       if (entry.Key === undefined) {
         continue;
@@ -107,9 +111,9 @@ function* cloneValue(value: Value, memo: Map<ObjectValue, Value>): ValueEvaluato
   }
 
   if ('SetData' in value) {
-    const target = Q(yield* ConstructEmpty('%Set%'));
+    const target = Q(yield* ConstructEmpty('%Set%')) as ObjectValue;
     memo.set(value, target);
-    const adder = Q(yield* Get(target, Value('add')));
+    const adder = Q(yield* Get(target, Value('add'))) as ObjectValue;
     for (const element of (value as unknown as { SetData: (Value | undefined)[] }).SetData) {
       if (element === undefined) {
         continue;
@@ -150,8 +154,10 @@ function ArrayCreateFor(length: number) {
 }
 
 function* ConstructEmpty(intrinsic: '%Map%' | '%Set%'): ValueEvaluator {
+  // `%Map%` and `%Set%` are constructors, which `Intrinsics` types as
+  // ObjectValue rather than FunctionObject; `Construct` needs the narrower one.
   const constructor = surroundingAgent.currentRealmRecord.Intrinsics[intrinsic];
-  return Q(yield* Construct(constructor as ObjectValue, []));
+  return Q(yield* Construct(constructor as FunctionObject, []));
 }
 
 export function bootstrapStructuredClone(realmRec: Realm) {

@@ -114,6 +114,7 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%Boolean.prototype%': ObjectValue;
   '%DataView.prototype%': ObjectValue;
   '%Date.prototype%': ObjectValue;
+  '%structuredClone%': FunctionObject; // proposal-runtime-types
   '%Type.prototype%': ObjectValue; // proposal-runtime-types
   '%Enum.prototype%': ObjectValue; // proposal-runtime-types
   '%Error.prototype%': ObjectValue;
