@@ -1519,8 +1519,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Only the FIRST signature of each, and only pairwise: an overloaded
       // callback type is not something a call site can resolve against here, and
       // binding from one arbitrary overload would be worse than binding nothing.
-      const pSigs = (param as { Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[] }).Signatures;
-      const aSigs = (arg as { Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[] }).Signatures;
+      type SigShape = {
+        Parameters?: readonly { Type?: TypeRecord }[],
+        Return?: TypeRecord | null,
+        InferredReturn?: TypeRecord | null,
+      };
+      const pSigs = (param as { Signatures?: readonly SigShape[] }).Signatures;
+      const aSigs = (arg as { Signatures?: readonly SigShape[] }).Signatures;
       if (pSigs?.length === 1 && aSigs?.length === 1) {
         const pSig = pSigs[0];
         const aSig = aSigs[0];
@@ -1530,8 +1535,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             match(pp.Type, ap.Type);
           }
         });
-        if (pSig.Return && aSig.Return) {
-          match(pSig.Return, aSig.Return);
+        // [[InferredReturn]] as well as [[Return]], since a callback whose return
+        // type is inferred is the ordinary way one is written and
+        // `effectiveFunctionType` normalises the two wherever a function type is
+        // COMPARED.
+        //
+        // NOTE: this alone does NOT make a block-bodied arrow bind a variable
+        // from its return. Measured: `staticType` of `(v) => { return "k"; }`
+        // answers *null* at the result-binding site - there is no record to read
+        // either field from - while the concise `(v) => "k"` answers a function
+        // type and binds. So a block body's return is unavailable at that point,
+        // not merely stored elsewhere, and closing it is a separate piece of
+        // work (see PLAN-static-signatures.md, gap 4).
+        const pReturn = pSig.Return ?? pSig.InferredReturn;
+        const aReturn = aSig.Return ?? aSig.InferredReturn;
+        if (pReturn && aReturn) {
+          match(pReturn, aReturn);
         }
       }
     };
@@ -1564,6 +1583,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const withElement = t as { Element?: TypeRecord };
     if (withElement.Element) {
       return { ...t, Element: substituteTypeParameters(withElement.Element, bindings) as TypeRecord } as Known;
+    }
+    // A FUNCTION and an OBJECT type carry variables in their signatures and
+    // members, and neither was substituted. So a bound `T` reached a callback
+    // parameter still spelled `T`: the contextual type recorded for the literal
+    // was the UNBOUND one, and a body reading its parameter saw `"T" is not
+    // assignable to "uint8"`.
+    //
+    // The fourth place the same two shapes were missing. `mentionsTypeParameter`
+    // lacked both, the binding walk lacked both, and so did this - one omission
+    // repeated across every operation that walks a type, which is why each half
+    // looked like a separate defect until the pattern was named.
+    const withSignatures = t as {
+      Signatures?: readonly { Parameters?: readonly { Type?: Known }[], Return?: Known }[],
+    };
+    // Guarded on the type actually MENTIONING a variable, so a record with
+    // nothing to substitute is returned as it came. Rebuilding unconditionally
+    // was measured to break three SoA and window programs: an object type is
+    // reached here constantly, and a fresh record is not always interchangeable
+    // with the one it copies.
+    if (withSignatures.Signatures && mentionsTypeParameter(t)) {
+      return {
+        ...t,
+        Signatures: withSignatures.Signatures.map((sig) => ({
+          ...sig,
+          Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
+            ? { ...prm, Type: substituteTypeParameters(prm.Type, bindings) }
+            : prm)),
+          Return: sig.Return ? substituteTypeParameters(sig.Return, bindings) : sig.Return,
+        })),
+      } as Known;
+    }
+    const withProperties = t as { Properties?: readonly { type?: Known }[] };
+    if (withProperties.Properties && mentionsTypeParameter(t)) {
+      return {
+        ...t,
+        Properties: withProperties.Properties.map((prop) => (prop?.type
+          ? { ...prop, type: substituteTypeParameters(prop.type, bindings) }
+          : prop)),
+      } as Known;
     }
     return t;
   };
@@ -9076,17 +9134,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
                 } | undefined;
                 const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
+                const bindings = new Map<string, TypeRecord>();
                 if (argNodes && argNodes.length > 0) {
-                  const bindings = new Map<string, TypeRecord>();
                   generic.forEach((tpName, k) => {
                     const bound = argNodes[k] ? resolveType(argNodes[k] as ParseNode.Type) : null;
                     if (tpName && bound) {
                       bindings.set(tpName, bound);
                     }
                   });
-                  if (bindings.size > 0) {
-                    param = substituteTypeParameters(param, bindings) as TypeRecord;
-                  }
+                } else {
+                  // INFERRED arguments bind the parameters too, and only the
+                  // explicit ones did. So `g(a, (v) => …)` for
+                  // `g<T>(a: [].<T>, cb: (v: T) => void)` pushed the UNBOUND
+                  // `(v: T) => void` into the callback, and its parameter was
+                  // typed at the bare variable - `"T" is not assignable to
+                  // "uint8"` where the body read it.
+                  //
+                  // Contextual typing itself was never missing: a CONCRETE
+                  // parameter has always worked, and so has `a.map`. What was
+                  // missing is the substitution ahead of it, which is why this
+                  // reads as a one-line change to an existing mechanism rather
+                  // than a new one.
+                  //
+                  // This is the design's stated purpose for the standard
+                  // library's signatures - "so fully typed call sites infer
+                  // their callbacks" - and `Map.groupBy`'s callback is exactly
+                  // this shape.
+                  bindTypeParametersFromArguments(
+                    chosen.Parameters as readonly { Type?: Known }[],
+                    (c.Arguments ?? []).map((a) => staticType(a as ParseNode)),
+                    new Set(generic),
+                    bindings,
+                  );
+                }
+                if (bindings.size > 0) {
+                  param = substituteTypeParameters(param, bindings) as TypeRecord;
                 }
               }
               // A FUNCTION LITERAL in a position whose type is a function type
