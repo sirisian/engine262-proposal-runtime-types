@@ -266,8 +266,14 @@ test('where clauses, plain and conditional', () => {
 test('rejected forms', () => {
   expectTypeError('(a, b)'); // a parameter list is not a parenthesized type
   expectTypeError('{ a }'); // type members need an annotation or method signature
-  expectTypeError('[1, 2].<uint8>'); // an extent is a single expression
   expectTypeError('.<uint8>'); // type arguments need a reference
+  // `[1, 2].<uint8>` is NO LONGER a parse error. It once was, because the only
+  // production carrying |TypeArguments| onto a bracketed form was
+  // `[` ArrayExtent `]` TypeArguments and an extent is a single expression.
+  // |ParameterizedType| now applies |TypeArguments| to any |PostfixType|, so
+  // `[1, 2]` parses as a TUPLE and the arguments parameterize it. The form is
+  // rejected one stage later instead, the tuple taking a metadata record where
+  // a type was written - which is a better error than a parse failure was.
 });
 
 // -- What `keyof` answers where there is nothing to answer with -----------------

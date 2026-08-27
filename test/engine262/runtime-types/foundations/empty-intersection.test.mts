@@ -140,7 +140,14 @@ test('the two halves have DIFFERENT reach, and the diagnostic is the conservativ
 test('an ARRAY or TUPLE is not disjoint from an OBJECT type', () => {
   // An array is a subtype of `Iterable.<T>`, which is an ~object~ type, so the
   // primitive/object rule must not be widened to array/object.
-  expect(kind('type U = [].<uint8> & Iterable.<uint8>;')).toBe('intersection');
+  //
+  // The assertion is that neither is EMPTY, not that either stays an
+  // intersection: an array is assignable to `Iterable.<T>`, so subsumption folds
+  // that one to the array, which is absorption doing its job and not
+  // annihilation. `{ length: uint32 }` has no such relation to an array and so
+  // stays an intersection, which is the sharper probe of the two.
+  expect(evaluated('type U = [].<uint8> & Iterable.<uint8>; String(U === never);')).toBe('false');
+  expect(kind('type U = [].<uint8> & Iterable.<uint8>;')).toBe('array');
   expect(kind('type U = [].<uint8> & { length: uint32 };')).toBe('intersection');
 });
 
