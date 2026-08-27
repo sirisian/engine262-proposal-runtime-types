@@ -445,3 +445,50 @@ test('Group D preserves participation and the run time', () => {
   expect(evaluated('String(typeof Promise.resolve(1).then) + String(typeof Promise.race([]).then);')).toBe('functionfunction');
   expect(evaluated('String(typeof Promise.withResolvers().resolve);')).toBe('function');
 });
+
+const TUP = 'let t: [Promise.<uint8, Error>, Promise.<string, Error>] = '
+  + '[Promise.resolve(1), Promise.resolve("a")]; ';
+
+test('a TUPLE of differently typed promises resolves positionally', () => {
+  // `standardlibrary.md`: "Over a tuple of differently typed promises the
+  // combinators return tuples instead: `Promise.all` of `[Promise.<uint8,
+  // Error>, Promise.<string, Error>]` resolves to `[uint8, string]`."
+  //
+  // Read per POSITION rather than through the element derivation, which answers
+  // the UNION of a tuple's positions - and a union of two `Promise` nominals is
+  // not a `Promise`, so a tuple argument reached the combinator with no element
+  // and the call had no type at all.
+  expect(ok(`${TUP} let p: Promise.<[uint8, string], Error> = Promise.all(t);`)).toBe(true);
+  expectStaticTypeError(`${TUP} let p: Promise.<[string, uint8], Error> = Promise.all(t);`);
+  // A tuple resolves to a TUPLE, not to an array of the union - which is the
+  // whole point of the design's sentence.
+  expectStaticTypeError(`${TUP} let p: Promise.<[].<uint8 | string>, Error> = Promise.all(t);`);
+  // An ARRAY argument still resolves to an array.
+  expect(ok('let ps: [].<Promise.<uint8, Error>> = []; let p: Promise.<[].<uint8>, Error> = Promise.all(ps);')).toBe(true);
+  expect(evaluated('const p = Promise.all([Promise.resolve(1), Promise.resolve("a")]); String(typeof p.then);')).toBe('function');
+});
+
+test.fails('D26: a union inside a nominal ARGUMENT is compared by order', () => {
+  // `race` and `any` over a tuple resolve with the UNION of its positions, and
+  // the union comes out in the order the positions were read. That should not
+  // matter and does: measured, `Promise.<string | uint8, Error>` is not
+  // assignable to `Promise.<uint8 | string, Error>`.
+  //
+  // PRE-EXISTING and general, not something these signatures introduce. The same
+  // two unions ARE equal everywhere else - `(type uint8 | string) === (type
+  // string | uint8)` is *true*, `Reflect.isAssignable` between them is *true*,
+  // and a bare `let b: string | uint8 = a` is accepted. Only the invariant
+  // comparison inside a nominal's arguments disagrees, and a `Set` shows it with
+  // no promise involved:
+  expect(ok('let a: Set.<uint8 | string> = new Set(); let b: Set.<string | uint8> = a;')).toBe(true);
+  expect(ok(`${TUP} let p: Promise.<uint8 | string, Error> = Promise.race(t);`)).toBe(true);
+});
+
+test('race and any over a tuple resolve with the union of its positions', () => {
+  // Asserted in the order the positions are read, since D26 makes the other
+  // order refuse. When D26 is fixed both orders should pass and this test should
+  // gain the swapped spelling rather than change.
+  expect(ok(`${TUP} let p: Promise.<string | uint8, Error> = Promise.race(t);`)).toBe(true);
+  expectStaticTypeError(`${TUP} let p: Promise.<uint8, Error> = Promise.race(t);`);
+  expect(ok(`${TUP} let p: Promise.<string | uint8, AggregateError> = Promise.any(t);`)).toBe(true);
+});

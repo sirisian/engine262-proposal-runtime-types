@@ -1737,6 +1737,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (combinator) {
         return (args) => {
           const items = args[0] ? staticType(args[0]) : null;
+          // A TUPLE of differently typed promises resolves POSITIONALLY.
+          // `standardlibrary.md`: "Over a tuple of differently typed promises the
+          // combinators return tuples instead: `Promise.all` of
+          // `[Promise.<uint8, Error>, Promise.<string, Error>]` resolves to
+          // `[uint8, string]`."
+          //
+          // Read per POSITION rather than through `elementTypeOfIterable`, which
+          // answers the union of a tuple's positions - and a union of two
+          // `Promise` nominals is not a `Promise`, so a tuple argument reached
+          // the combinator with no element at all and the call had no type.
+          if (items && items.Kind === 'tuple') {
+            const positions = (items as { Elements?: readonly { Type: TypeRecord }[] }).Elements ?? [];
+            const resolvedEach: TypeRecord[] = [];
+            const rejectedEach: TypeRecord[] = [];
+            for (const position of positions) {
+              const t = position.Type;
+              if (t.Kind !== 'nominal' || t.LibraryName !== 'Promise') {
+                return null;
+              }
+              const [r, e] = t.Arguments;
+              if (typeof r === 'number' || r === undefined) {
+                return null;
+              }
+              resolvedEach.push(r as TypeRecord);
+              if (e !== undefined && typeof e !== 'number') {
+                rejectedEach.push(e as TypeRecord);
+              }
+            }
+            if (resolvedEach.length === 0) {
+              return null;
+            }
+            // The rejection is the JOIN of what any of them may reject with: any
+            // one failing rejects the whole, so a single arm's type would state
+            // less than the call supports.
+            const rejection = rejectedEach.length === 0
+              ? anyTypeRecord
+              : CanonicalizeType({ Kind: 'union', Members: rejectedEach } as TypeRecord);
+            return method === 'all'
+              ? libraryTypeRecord('Promise', [{
+                Kind: 'tuple',
+                Elements: resolvedEach.map((x) => ({ Type: x, Rest: false, Initial: 'none' })),
+              } as unknown as TypeRecord, rejection as TypeRecord]) ?? null
+              // `race` and `any` settle on ONE of them, so a tuple gives the
+              // union of what its positions resolve with rather than a tuple.
+              : libraryTypeRecord('Promise', [
+                CanonicalizeType({ Kind: 'union', Members: resolvedEach } as TypeRecord) as TypeRecord,
+                method === 'any' ? (libraryTypeRecord('AggregateError') ?? anyTypeRecord) : rejection as TypeRecord,
+              ]) ?? null;
+          }
           const element = items ? elementTypeOfIterable(items) : null;
           // The element is a `Promise.<R, E>`; R and E are its own arguments.
           if (!element || element.Kind !== 'nominal' || element.LibraryName !== 'Promise') {
