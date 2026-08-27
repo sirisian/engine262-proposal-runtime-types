@@ -1468,7 +1468,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
       return undefined;
     }
-    if (base.name === 'Map' && method === 'groupBy') {
+    if ((base.name === 'Map' || base.name === 'Object') && method === 'groupBy') {
       const items = args[0] ? staticType(args[0]) : null;
       const element = items ? elementTypeOfIterable(items) : null;
       if (!element) {
@@ -1497,6 +1497,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (shadowedByProgram(base.name)) {
       return undefined;
+    }
+    if (base.name === 'Object' && method === 'groupBy') {
+      return (args) => {
+        // `{ [key: K]: [].<T> }`. The design's contrast with `Map.groupBy` is
+        // the KEY: "Object.groupBy produces property keys, so its key type is
+        // constrained to the property key types; Map.groupBy accepts any key
+        // type, using SameValueZero like Map itself." So a key the callback
+        // returns that is not a property key states nothing here, and the result
+        // carries none rather than an index signature no property could satisfy.
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        const callback = args[1] ? staticType(args[1]) : null;
+        const sigs = (callback as { Signatures?: readonly { Return?: Known, InferredReturn?: Known }[] } | null)?.Signatures;
+        const key = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
+        if (!element || !key) {
+          return null;
+        }
+        const widened = widen(key);
+        const isPropertyKey = !!widened && widened.Kind === 'primitive'
+          && ((widened as { Name?: string }).Name === 'string' || (widened as { Name?: string }).Name === 'symbol');
+        if (!isPropertyKey) {
+          return null;
+        }
+        const groups = { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord;
+        return {
+          Kind: 'object',
+          Properties: [],
+          IndexSignatures: [{ Key: widened as TypeRecord, Value: groups }],
+        } as unknown as Known;
+      };
     }
     if (base.name === 'Map' && method === 'groupBy') {
       return (args) => {
