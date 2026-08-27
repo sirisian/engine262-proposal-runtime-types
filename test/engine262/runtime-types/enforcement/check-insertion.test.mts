@@ -1378,13 +1378,23 @@ test('contextual typing survives, which is what the diversion existed for', () =
   expect(evaluated('const a: [].<uint8> = [1, 2, 3]; String(a.filter((x) => x > (1 := uint8)).length);')).toBe('2');
 });
 
-test('a body the checker cannot read is left alone', () => {
-  // A BLOCK body needs return-type inference this checker does not have, so a
-  // literal with one adopts the return its position wants. Claiming `any`
-  // instead refused every block-bodied callback, `any` not being a subtype of
-  // everything here.
-  expect(evaluated('function h(f: (x: uint8) => uint8) { return "took"; }'
-    + ' h((x) => { return "wrong"; });')).toBe('took');
+test('a BLOCK body IS read now, and the two spellings agree', () => {
+  // This pinned the old imprecision: a block body's return could not be
+  // inferred, so a literal with one adopted the return its position wanted and
+  // the body went unchecked. It is inferred now, and a wrong body is refused.
+  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; }'
+    + ' h((x) => { return "wrong"; });');
+  // The CONCISE spelling of the same wrong body, refused identically. The point
+  // of inferring the block was to make the two agree, and this is that
+  // agreement rather than a second assertion of the same thing.
+  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => "wrong");');
+  // D24, pre-existing and shared by BOTH spellings: a numeric literal return is
+  // not assignable to a numeric value type in a function-type position, so
+  // `h((x) => 1)` is refused too. Measured on a clean build, where the concise
+  // form was already refused and the block form was accepted only because it was
+  // never checked. Asserted here so that fixing D24 converts both together.
+  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => 1);');
+  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => { return 1; });');
   expect(evaluated('let f: (a: uint8) => void = () => {}; f(5); "ok";')).toBe('ok');
   // An object-literal property is a position too, and the return it wants has
   // to TYPE the body rather than replace it: handing the literal that type

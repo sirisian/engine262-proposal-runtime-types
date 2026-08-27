@@ -248,28 +248,31 @@ test('an INFERRED binding reaches a callback\'s unannotated parameter', () => {
   expectStaticTypeError('const a: [].<uint8> = [1]; a.map((x) => { let s: string = x; return 1; });');
 });
 
-test.fails('gap 4: a BLOCK-bodied callback binds nothing from its return', () => {
+test('a BLOCK-bodied callback binds a variable from its return', () => {
   // `staticType` of `(v) => { return "k"; }` answered *null*, so there was no
   // record to read a return from - while the concise `(v) => "k"` answered a
   // function type and bound. One spelling of a callback worked and the other did
   // not, and the block body is the ordinary way a callback with any substance is
   // written.
   //
-  // ATTEMPTED AND REVERTED, twice over, and both findings are worth keeping.
+  // Closed in three steps, each of which looked like the whole problem.
   //
-  // (1) The recorded objection - that an empty body infers *undefined*, which no
-  // `void` position accepts - was an objection to the JOIN rather than to the
-  // inference. #sec-inferred-result-type says "where every contribution is
-  // *undefined* ... the join is `void`" and the join did not do it. THAT IS NOW
-  // FIXED and shipped independently of this test.
+  // (1) The block body's return was never inferred - the inference was gated on
+  // the body being concise - so there was no type to bind from.
   //
-  // (2) With the join corrected, inferring a block body still refuses CORRECT
-  // callbacks: `h((x) => { return 1; })` at a `(x: uint8) => uint8` parameter is
-  // refused, because the inferred return WIDENS the literal to `number` and
-  // `number` is not assignable to `uint8`. The concise form does not, so the
-  // wanted return reaches the literal there and not here. Closing gap 4 means
-  // making the contextual return type guide a block body's inference the way it
-  // guides a concise one - which is a piece of work, not a gate to remove.
+  // (2) The objection recorded against un-gating it, that an empty body infers
+  // *undefined* which no `void` position accepts, was an objection to the JOIN:
+  // #sec-inferred-result-type collapses an all-*undefined* contribution set to
+  // `void`, and the join did not. Fixed separately.
+  //
+  // (3) Each `return` is now read AT THE WANTED TYPE, as the concise body always
+  // was, so a literal does not widen past the position that wants it; and an
+  // ARGUMENT position records its contextual RETURN as well as its parameters,
+  // which it did not, so the wanted type reaches the body at all.
+  //
+  // A wrong body is still refused - the wanted type GUIDES the contribution
+  // rather than replacing it - which is the property that keeps this from making
+  // every unannotated body trivially conform.
   const G = 'function gb<T, K>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { return undefined; } '
     + 'const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;

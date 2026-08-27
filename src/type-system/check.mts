@@ -3869,7 +3869,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // downstream: `(function () { return ref x; })() = 5` asks whether the
         // callee returns a ref, and an `any` return answers "no" where an
         // absent type left the question to the run time.
-        if (!literal.TypeAnnotation && !conciseBodied && wantedReturn === null) {
+        if (!literal.TypeAnnotation && wantedReturn === null
+            && inferredReturnType(node, contextual as readonly Known[], null) === null) {
           return null;
         }
         const params = literal.ArrowParameters ?? literal.FormalParameters ?? [];
@@ -3887,7 +3888,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         const Return = literal.TypeAnnotation
           ? resolveType(literal.TypeAnnotation.Type)
-          : ((conciseBodied ? inferredReturnType(node, contextual as readonly Known[], wantedReturn) : null)
+          // A BLOCK body's return is inferred too, by the same operation the
+          // concise form uses. It was gated on `conciseBodied`, so
+          // `(v) => { return "k"; }` had no return type where `(v) => "k"` did -
+          // one spelling of a callback binding a caller's type variable and the
+          // other not (gap 4).
+          //
+          // Two objections stood against this and both are now answered. The
+          // first, recorded in the source, was that an empty body infers
+          // *undefined* and no `void` position accepts it - an objection to the
+          // JOIN, which #sec-inferred-result-type says collapses an all-*undefined*
+          // contribution set to `void`, and which now does. The second, found by
+          // trying it, was that a correct body is refused because its literal
+          // widens - answered by reading each `return` AT THE WANTED TYPE, as
+          // the concise path already did.
+          : ((inferredReturnType(node, contextual as readonly Known[], wantedReturn))
             // Where inference answers nothing, the literal still adopts the
             // return its position wants rather than claiming ~any~: `any` is not
             // a subtype of every type here, so claiming it would refuse a
@@ -6545,7 +6560,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             contributions.push(makePrimitive('undefined'));
             return;
           }
-          const t = staticType(expr);
+          // Read AT THE WANTED type where the position supplies one, exactly as
+          // the concise body above does. The two spellings of one function must
+          // agree - which is what #sec-inferred-result-type exists to prevent
+          // them from doing otherwise - and they did not: `() => 1` at a `uint8`
+          // position gave a `uint8` while `() => { return 1; }` gave the widened
+          // `number`, which is not assignable to `uint8`, so a correct
+          // block-bodied callback was refused where the concise one passed.
+          //
+          // The wanted type GUIDES the literal rather than replacing the
+          // contribution: `() => { return "wrong"; }` at a `uint8` still reads
+          // as a string and is still refused, which is the property the concise
+          // path's own comment insists on.
+          const t = wanted ? staticTypeIn(expr, wanted) : staticType(expr);
           if (!t) {
             unknown = true;
             return;
@@ -9192,6 +9219,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (param && param.Kind === 'function' && param.Signatures.length === 1
                   && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
                 contextualParameterTypes.set(arg, param.Signatures[0].Parameters.map((pr) => pr.Type) as readonly Known[]);
+                // The position's RETURN as well as its parameters. Only the
+                // parameters were recorded here, so a block-bodied callback's
+                // `return` was read with no wanted type and its literal widened:
+                // `h((x) => { return 1; })` at a `(x: uint8) => uint8` parameter
+                // gave `number`, which is not assignable to `uint8`, and a
+                // correct callback was refused where the concise `(x) => 1`
+                // passed.
+                //
+                // `staticTypeIn` already does this wherever a node meets its
+                // contextual type; an ARGUMENT is such a position and was the
+                // one place it did not.
+                const wantedForBody = param.Signatures[0].Return;
+                if (wantedForBody) {
+                  contextualReturnTypes.set(arg, wantedForBody as Known);
+                }
                 // `map`'s result element type is the CALLBACK'S RETURN, which
                 // is why it could not be claimed before the callback was typed
                 // (F79 left it ~any~ deliberately). It is readable for a
