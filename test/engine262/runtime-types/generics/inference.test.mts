@@ -280,3 +280,39 @@ test('a BLOCK-bodied callback binds a variable from its return', () => {
   // The concise form, which DOES work, for contrast.
   expect(ok(guard(`${G} let m: Map.<string, [].<uint8>> = gb(a, (v) => "k");`))).toBe(true);
 });
+
+test('a type variable is inferred through a UNION parameter', () => {
+  // `match` walked members, arguments, elements, signatures and properties, and
+  // had no case for a union - so a variable inside one bound nothing and
+  // `f<T>(x: [].<T> | Set.<T>)` was unconstrained however plainly the argument
+  // matched an arm.
+  const F = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
+  const guard = (src) => `if (false) { ${src} } 1;`;
+  expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
+  expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
+  // The SECOND arm binds as readily as the first.
+  expectStaticTypeError(guard(`${F} let c: Set.<uint8> = new Set(); let s: string = f(c);`));
+  expect(ok(guard(`${F} let c: Set.<uint8> = new Set(); let s: uint8 = f(c);`))).toBe(true);
+  // A union with a plain arm - `T | undefined`, the shape an optional takes.
+  const P = 'function p<T>(x: T | undefined): T { return undefined; } const a: uint8 = (1 := uint8); ';
+  expectStaticTypeError(guard(`${P} let s: string = p(a);`));
+  expect(ok(guard(`${P} let s: uint8 = p(a);`))).toBe(true);
+});
+
+test('the arm that binds is chosen by KIND, not by position', () => {
+  // An arm still mentioning an unbound variable admits almost anything -
+  // `IsAssignable(Set.<uint8>, [].<T>)` holds while T is free - so choosing by
+  // assignability alone let the FIRST arm claim the variable whatever the
+  // argument was. Measured: `[].<T> | Set.<T>` given a `Set.<uint8>` bound T
+  // from the array arm, while the same union written the other way round worked.
+  // Order is not supposed to decide this.
+  const guard = (src) => `if (false) { ${src} } 1;`;
+  const forward = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
+  const reversed = 'function h<T>(x: Set.<T> | [].<T>): T { return undefined; } ';
+  for (const [name, decl, call] of [['forward', forward, 'f'], ['reversed', reversed, 'h']]) {
+    expectStaticTypeError(guard(`${decl} let c: Set.<uint8> = new Set(); let s: string = ${call}(c);`));
+    expect(ok(guard(`${decl} let c: Set.<uint8> = new Set(); let s: uint8 = ${call}(c);`)), name).toBe(true);
+    expectStaticTypeError(guard(`${decl} const a: [].<uint8> = [1]; let s: string = ${call}(a);`));
+    expect(ok(guard(`${decl} const a: [].<uint8> = [1]; let s: uint8 = ${call}(a);`)), name).toBe(true);
+  }
+});

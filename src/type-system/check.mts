@@ -1812,6 +1812,61 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+      // A UNION parameter. `match` walked members, arguments, elements,
+      // signatures and properties, and had no case for a union - so a variable
+      // inside one bound nothing, and `f<T>(x: [].<T> | Set.<T>)` was
+      // unconstrained however plainly the argument matched an arm.
+      //
+      // The arm that the argument is ASSIGNABLE to is the one that binds. Trying
+      // every arm and keeping the first binding would let a non-matching arm
+      // claim the variable: for `[].<T> | Set.<T>` given a `Set.<uint8>`, the
+      // array arm structurally offers an [[Element]] to match against and would
+      // bind T from whatever it found there. Assignability is what says which
+      // arm the call actually took.
+      //
+      // Where two arms both admit the argument, the FIRST is taken and the rest
+      // are not tried - a later arm disagreeing is the caller's ambiguity rather
+      // than a reason to bind twice, which is the rule `into` already applies
+      // within one arm.
+      if (param.Kind === 'union') {
+        const members = (param as { Members?: readonly TypeRecord[] }).Members ?? [];
+        // The arm whose KIND the argument has is the one that binds, and it is
+        // tried before assignability. An arm still mentioning an unbound
+        // variable admits almost anything - `IsAssignable(Set.<uint8>,
+        // [].<T>)` holds while T is free - so assignability alone let the
+        // FIRST arm claim the variable whatever the argument was: `[].<T> |
+        // Set.<T>` given a `Set.<uint8>` bound T from the array arm, and the
+        // same union written the other way round worked. Order is not supposed
+        // to decide this.
+        //
+        // A nominal is matched on its [[LibraryName]] too, since `Set.<T>` and
+        // `Map.<K, V>` are both nominals and the kind alone would not separate
+        // them.
+        const argLibrary = (arg as { LibraryName?: string }).LibraryName;
+        for (const arm of members) {
+          if (mentionsTypeParameter(arm) && arm.Kind === arg.Kind
+              && (arm.Kind !== 'nominal' || (arm as { LibraryName?: string }).LibraryName === argLibrary)) {
+            match(arm, arg);
+            return;
+          }
+        }
+        for (const arm of members) {
+          if (mentionsTypeParameter(arm) && IsAssignable(arg as TypeRecord, substituteTypeParameters(arm, into) as TypeRecord)) {
+            match(arm, arg);
+            return;
+          }
+        }
+        // No arm admits it as written, which is the ordinary case while the
+        // variable is still unbound: fall back to the arms that mention one, so
+        // a first binding can be made from the shape alone.
+        for (const arm of members) {
+          if (mentionsTypeParameter(arm)) {
+            match(arm, arg);
+            return;
+          }
+        }
+        return;
+      }
       const pArgs = (param as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
       const aArgs = (arg as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
       if (pArgs && aArgs) {
