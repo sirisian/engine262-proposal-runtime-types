@@ -23,6 +23,7 @@ import {
   surroundingAgent,
   GetValue,
   InitializeReferencedBinding,
+  CopyValueClassInstance,
   ResolveBinding,
   LookupTypeDefault,
   Throw,
@@ -127,6 +128,19 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     }
     // proposal-runtime-types: the annotation check at the binding boundary.
     value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
+    // #sec-value-type-copying: initializing a binding from a value of a value
+    // type class COPIES it - and CONSTRUCTION does not, the clause requiring
+    // elision for a newly constructed value rather than permitting it.
+    //
+    // Told apart by the INITIALIZER'S FORM, which is the only thing that
+    // distinguishes them here: this branch runs for both `const _a_ = new P()`
+    // and `const _b_ = _a_`. A NAME, a field read and an element read each
+    // denote an existing value; a `new`, a call and a literal each produce one.
+    // The clause names the reads: "a read of a field or an element into any of
+    // those positions is one of them".
+    if (copiesOnBinding(Initializer)) {
+      value = CopyValueClassInstance(value);
+    }
     // 5. Return InitializeReferencedBinding(lhs, value).
     const initialized = Q(yield* InitializeReferencedBinding(lhs, value));
     if (TypeAnnotation) {
@@ -260,6 +274,21 @@ function* Evaluate_LexicalBinding_BindingPattern(LexicalBinding: ParseNode.Lexic
   const annotated = (LexicalBinding as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   const bound = annotated ? Q(yield* EnforceAnnotation(annotated, value)) : value;
   return yield* BindingInitialization(BindingPattern!, bound, env);
+}
+
+/**
+ * Whether an initializer NAMES an existing value, so binding it copies.
+ *
+ * #sec-value-type-copying: a construction "builds its result directly in the
+ * destination", while a name or a read denotes a value that already exists.
+ */
+function copiesOnBinding(node: ParseNode | null | undefined): boolean {
+  if (!node) {
+    return false;
+  }
+  return node.type === 'IdentifierReference'
+    || node.type === 'MemberExpression'
+    || node.type === 'ParenthesizedExpression';
 }
 
 export function* Evaluate_LexicalBinding(LexicalBinding: ParseNode.LexicalBinding) {

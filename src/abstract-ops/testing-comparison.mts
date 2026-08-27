@@ -9,8 +9,10 @@ import {
   Value,
   wellKnownSymbols,
   unwrapToNumber,
+  Descriptor,
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
+import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, type ClassLayout } from '../type-system/layout.mts';
@@ -299,6 +301,92 @@ export function SameValue(x: Value, y: Value): boolean {
  * `Map` key needs: a `Vector2` holding a NaN is findable, and one holding `-0`
  * pairs with one holding `+0`, exactly as a bare NaN or `-0` key does.
  */
+/**
+ * A copy of _v_ where _v_ is an instance of a VALUE TYPE CLASS, or _v_ itself.
+ *
+ * #sec-typed-classes: "A typed class is a value type class when every one of its
+ * fields has a type that is a value type. Instances ... are values in the sense
+ * of #sec-value-types ... and ASSIGNING ONE COPIES IT."
+ *
+ * WHAT A COPY MUST CARRY, enumerated from an instance rather than assumed - four
+ * attempts failed here, each losing a different thing:
+ *
+ *   - the FIELDS, taken from the LAYOUT so the copy holds what the storage holds
+ *     rather than what a type record describes;
+ *   - [[ConstructedBy]], the constructor list, which is what
+ *     `OrdinaryPreventExtensions` and the sealing rules read;
+ *   - [[TypedProperties]], the per-property type marks that make a store to a
+ *     field check the field's declared type;
+ *   - the PROTOTYPE, and the sealed state that #sec-typed-storage requires.
+ *
+ * Losing [[ConstructedBy]] and [[TypedProperties]] is what made an earlier copy
+ * report the wrong `Reflect.typeOf`: an instance's nominal type is not derived
+ * from its shape.
+ *
+ * The CALLER decides whether a copy is wanted. This operation cannot tell a
+ * construction from a read, and #sec-value-type-copying makes that difference
+ * decisive - construction builds in place and must NOT copy.
+ */
+export function CopyValueClassInstance(v: Value): Value {
+  if (!surroundingAgent.feature('runtime-types') || !(v instanceof ObjectValue)) {
+    return v;
+  }
+  const t = RuntimeTypeOf(v);
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
+    return v;
+  }
+  const layout = LayoutOf(t) as ClassLayout | null;
+  if (layout === null || layout.fields === undefined) {
+    return v;
+  }
+  const source = v as unknown as {
+    ConstructedBy?: unknown[],
+    TypedProperties?: Map<unknown, object>,
+    BrandTypeRecord?: TypeRecord,
+  };
+  // `OrdinaryGetPrototypeOf`, NOT `v.GetPrototypeOf()`: the slot is a GENERATOR
+  // method (`* GetPrototypeOf()`), so calling it directly yields a generator
+  // object rather than the prototype - and `RuntimeTypeOf` finds a class
+  // instance's nominal type "by walking the prototype chain to a constructor
+  // with an associated class Type Object", so a junk prototype loses the type
+  // silently. `Get` is a generator for the same reason and is called through its
+  // abstract operation just below.
+  const copy = OrdinaryObjectCreate(OrdinaryGetPrototypeOf(v as never) as ObjectValue, []);
+  const target = copy as unknown as {
+    ConstructedBy?: unknown[],
+    TypedProperties?: Map<unknown, object>,
+  };
+  if (source.ConstructedBy !== undefined) {
+    target.ConstructedBy = [...source.ConstructedBy];
+  }
+  if (source.TypedProperties !== undefined) {
+    target.TypedProperties = new Map(source.TypedProperties);
+  }
+  if (source.BrandTypeRecord !== undefined) {
+    Object.defineProperty(copy, 'BrandTypeRecord', {
+      value: source.BrandTypeRecord, enumerable: false, configurable: true,
+    });
+  }
+  for (const field of layout.fields) {
+    // A PRIVATE field is not reachable through Get and needs the private element
+    // list. Bailing out leaves such a class aliasing, which is wrong - but a copy
+    // missing half its state is worse, and the gap is recorded rather than
+    // silently shipped.
+    if (typeof field.key !== 'string') {
+      return v;
+    }
+    const key = Value(field.key);
+    X(copy.DefineOwnProperty(key, Descriptor({
+      Value: X(Get(v, key)),
+      Writable: Value.true,
+      Enumerable: Value.true,
+      Configurable: Value.false,
+    })));
+  }
+  X(copy.PreventExtensions());
+  return copy;
+}
+
 function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefined {
   if (!surroundingAgent.feature('runtime-types')
       || !(x instanceof ObjectValue) || !(y instanceof ObjectValue)) {

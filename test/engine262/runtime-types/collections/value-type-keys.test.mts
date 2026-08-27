@@ -71,17 +71,20 @@ test('D5: instances differing in a field are NOT ===', () => {
 // Copy semantics - the other half, and the one that makes a stored key safe
 // ---------------------------------------------------------------------------
 
-test.fails('D5: an UNANNOTATED assignment copies (no boundary reaches it)', () => {
-  // The copy is taken at the boundaries #table-check-sites names, and that table
-  // says "a binding with a DECLARED type". `const b: V = a` therefore copies and
-  // is asserted in the passing test above; `const b = a` has only an INFERRED
-  // type and reaches no boundary, so it still aliases.
+test('D5: an UNANNOTATED assignment copies', () => {
+  // This asked whether an INFERRED binding should be a boundary, and said the
+  // question was broader than the copy - "it would change where every check in
+  // the language runs".
   //
-  // Whether an inferred type should be a boundary is a question broader than
-  // this one - it would change where every check in the language runs, not only
-  // this copy - so it is filed rather than answered here. #value-type-class
-  // states "assigning one copies it" without qualification, which is the case
-  // for saying yes.
+  // It was the wrong question. The copy does not belong at a boundary AT ALL:
+  // a boundary is a CHECK site and may be skipped where the source provably
+  // satisfies the target, and a skipped check is nothing while a skipped copy is
+  // an alias. It belongs at the BINDING, keyed on what the initializer IS - a
+  // name or a read denotes an existing value and copies; a `new` or a call
+  // produces one and #sec-value-type-copying requires the elision.
+  //
+  // So `const b = a` copies without any boundary being involved, and
+  // #value-type-class's unqualified "assigning one copies it" is honoured.
   expect(evaluated(`${V} const a = new V(); const b = a; b.x = (9 := uint32); String(a.x);`)).toBe('0');
 });
 
@@ -89,7 +92,7 @@ test('D5: a value type copies when passed to a function', () => {
   expect(evaluated(`${V} function f(v: V) { v.x = (9 := uint32); } const a = new V(); f(a); String(a.x);`)).toBe('0');
 });
 
-test.fails('D5: reading an element out of a typed array copies it', () => {
+test('D5: reading an element out of a typed array copies it', () => {
   // A READ is not a boundary. Rust, C++ and C# all copy here, so this is the one
   // place the implemented rule falls short of every comparable language - but
   // copying at every read allocates on the hot path, `p.x` in a loop, and
