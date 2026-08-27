@@ -1580,7 +1580,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
       return undefined;
     }
-    if ((base.name === 'Map' || base.name === 'Object') && method === 'groupBy') {
+    if ((base.name === 'Array' && method === 'from')
+        || ((base.name === 'Map' || base.name === 'Object') && method === 'groupBy')) {
       const items = args[0] ? staticType(args[0]) : null;
       const element = items ? elementTypeOfIterable(items) : null;
       if (!element) {
@@ -1592,6 +1593,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return undefined;
   };
+
+  /** `[].<T>`, the dynamic array of an element type. */
+  const arrayOfElement = (element: TypeRecord): Known => ({
+    Kind: 'array', Element: element, Extent: 'dynamic',
+  } as unknown as Known);
 
   const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[]) => Known) | undefined => {
     const member = callee as unknown as {
@@ -1623,6 +1629,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const fixed = FIXED_STATIC_RESULTS[`${base.name}.${method}`];
     if (fixed) {
       return () => fixed();
+    }
+    // PLAN-standard-library-statics.md Group B: an element type in, an element
+    // type out. `standardlibrary.md`'s "Building From an Iterable" states them,
+    // and the derivation is the one `Map.groupBy` already uses - the first
+    // parameter is `Iterable.<T>`, so a typed array, a collection, a generator
+    // and a string all reach it by the interface they declare.
+    if (base.name === 'Array' && (method === 'from' || method === 'of')) {
+      return (args) => {
+        if (method === 'of') {
+          // `Array.of<T>(...items: T): [].<T>`. One variable gathered from MANY
+          // arguments, which is the rest-parameter shape: every argument must
+          // agree, or the call says nothing rather than picking the first.
+          const types = args.map((a) => staticType(a));
+          if (types.length === 0 || types.some((t) => !t)) {
+            return null;
+          }
+          const first = widen(types[0]!);
+          if (!first || !types.every((t) => SameType(widen(t)!, first))) {
+            return null;
+          }
+          return arrayOfElement(first);
+        }
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        if (!element) {
+          return null;
+        }
+        if (args.length < 2) {
+          return arrayOfElement(widen(element)!);
+        }
+        // The mapped overload takes its result from the callback, as `map` does.
+        const callback = args[1] ? staticType(args[1]) : null;
+        const sigs = (callback as { Signatures?: readonly { Return?: Known, InferredReturn?: Known }[] } | null)?.Signatures;
+        const mapped = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
+        return mapped ? arrayOfElement(widen(mapped)!) : null;
+      };
+    }
+    if (base.name === 'Iterator' && method === 'from') {
+      return (args) => {
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        return element
+          ? libraryTypeRecord('IteratorHelper', [widen(element) as TypeRecord, voidTypeRecord, voidTypeRecord]) ?? null
+          : null;
+      };
+    }
+    if (base.name === 'Object' && method === 'keys') {
+      // `Object.keys(o: object): [].<string>` - no type parameter, since it
+      // answers Strings whatever it is given.
+      return () => arrayOfElement(makePrimitive('string') as TypeRecord);
     }
     if (base.name === 'Object' && method === 'groupBy') {
       return (args) => {

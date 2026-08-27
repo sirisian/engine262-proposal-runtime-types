@@ -346,3 +346,56 @@ test('Family A leaves the arithmetic and the methods alone', () => {
   // A shadowed base gets nothing.
   expect(ok('if (false) { class M2 { } const Math = M2; let n: string = Math.PI; } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// Group B - an element type in, an element type out
+// ---------------------------------------------------------------------------
+
+test('Array.from carries the element type through', () => {
+  // `standardlibrary.md`, "Building From an Iterable". The first parameter is
+  // the same `Iterable.<T>` the grouping functions take, so a typed array and a
+  // COLLECTION both reach it by the interface they declare.
+  expect(ok(`${A} let b: [].<uint32> = Array.from(a);`)).toBe(true);
+  expectStaticTypeError(`${A} let b: [].<string> = Array.from(a);`);
+  expect(ok('let s: Set.<uint8> = new Set(); let b: [].<uint8> = Array.from(s);')).toBe(true);
+  expectStaticTypeError('let s: Set.<uint8> = new Set(); let b: [].<string> = Array.from(s);');
+});
+
+test('the mapped overload takes its result from the callback', () => {
+  expect(ok(`${A} let b: [].<string> = Array.from(a, (x) => "k");`)).toBe(true);
+  expectStaticTypeError(`${A} let b: [].<uint32> = Array.from(a, (x) => "k");`);
+  // ...and the callback's parameter is typed from the source, as `groupBy`'s is.
+  expect(ok(`${A} Array.from(a, (x) => { let s: uint32 = x; return "k"; });`)).toBe(true);
+  expectStaticTypeError(`${A} Array.from(a, (x) => { let s: string = x; return "k"; });`);
+});
+
+test('Array.of gathers ONE element type from many arguments', () => {
+  expect(ok('let b: [].<uint8> = Array.of((1 := uint8), (2 := uint8));')).toBe(true);
+  expectStaticTypeError('let b: [].<string> = Array.of((1 := uint8), (2 := uint8));');
+  // Where the arguments DISAGREE the call says nothing rather than picking the
+  // first: a rest parameter binds one variable, and one variable cannot be two
+  // types. Answering `[].<uint8>` for `Array.of(u8, "x")` would be a claim the
+  // arguments contradict.
+  expect(ok('if (false) { let b: uint8 = Array.of((1 := uint8), "x"); } 1;')).toBe(true);
+  expect(ok('if (false) { let b: uint8 = Array.of(); } 1;')).toBe(true);
+});
+
+test('Iterator.from and Object.keys', () => {
+  expectStaticTypeError(`${A} let n: string = Iterator.from(a).toArray()[0];`);
+  expect(ok(`${A} let n: uint32 = Iterator.from(a).toArray()[0];`)).toBe(true);
+  // `Object.keys` answers Strings whatever it is given, so it takes no type
+  // parameter.
+  expect(ok('let b: [].<string> = Object.keys({ a: 1 });')).toBe(true);
+  expectStaticTypeError('let b: [].<uint8> = Object.keys({ a: 1 });');
+});
+
+test('Group B preserves participation and the run time', () => {
+  // An UNTYPED source yields an untyped result: where T cannot be determined the
+  // call has no static type, not one naming `any` in the element position -
+  // `[].<any>` would claim a typed array where the program built an ordinary one.
+  expect(ok('if (false) { const u = [1, 2]; let b: uint8 = Array.from(u); } 1;')).toBe(true);
+  expect(evaluated('const u = [1, 2]; const b = Array.from(u); String(b.length);')).toBe('2');
+  expect(evaluated(`${A} const b = Array.from(a); String(b.length) + String(Reflect.typeOf(b[0]) === (type uint32));`)).toBe('3true');
+  expect(evaluated('String(Array.from(new Set([1, 2])).length) + String(Object.keys({ a: 1 })[0]);')).toBe('2a');
+  expect(evaluated('String(Array.of(1, 2).length) + String(Iterator.from([1, 2]).toArray().length);')).toBe('22');
+});
