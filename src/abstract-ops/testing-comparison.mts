@@ -367,13 +367,30 @@ export function CopyValueClassInstance(v: Value): Value {
       value: source.BrandTypeRecord, enumerable: false, configurable: true,
     });
   }
+  // PRIVATE state, which is not reachable through Get and lives in
+  // [[PrivateElements]] instead. A private FIELD holds its own value and is
+  // copied; a private METHOD or ACCESSOR belongs to the class and is shared by
+  // every instance, so the record is carried across as it stands rather than
+  // duplicated - copying a method would give the copy a second function object
+  // for one declaration.
+  //
+  // This bailed out entirely before, leaving a value type class with any private
+  // field aliasing. Bailing was the right conservative answer while the private
+  // path was unwritten - a copy missing half its state is worse than none - and
+  // it is written now.
+  const sourcePrivate = (v as unknown as { PrivateElements?: { Key: unknown, Kind: string, Value?: Value }[] }).PrivateElements;
+  if (sourcePrivate !== undefined && sourcePrivate.length > 0) {
+    const targetPrivate = (copy as unknown as { PrivateElements: unknown[] }).PrivateElements;
+    for (const element of sourcePrivate) {
+      targetPrivate.push(element.Kind === 'field'
+        ? Object.assign(Object.create(Object.getPrototypeOf(element) as object), element)
+        : element);
+    }
+  }
   for (const field of layout.fields) {
-    // A PRIVATE field is not reachable through Get and needs the private element
-    // list. Bailing out leaves such a class aliasing, which is wrong - but a copy
-    // missing half its state is worse, and the gap is recorded rather than
-    // silently shipped.
+    // A private field's storage was copied above; it has no property to read.
     if (typeof field.key !== 'string') {
-      return v;
+      continue;
     }
     const key = Value(field.key);
     X(copy.DefineOwnProperty(key, Descriptor({

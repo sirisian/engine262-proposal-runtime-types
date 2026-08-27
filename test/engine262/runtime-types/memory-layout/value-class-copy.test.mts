@@ -67,11 +67,24 @@ test('nothing that is NOT a value type class is copied', () => {
   expect(evaluated('const m = new Map(); const n = m; n.set(1, 2); String(m.size);')).toBe('1');
 });
 
-test.fails('a PRIVATE field is not copied yet', () => {
-  // A private field is not reachable through Get and needs the private element
-  // list, so the copy bails out and such a class still aliases. Bailing is the
-  // conservative answer - a copy missing half its state would be worse than none
-  // - but it is a gap, not a decision.
-  expect(evaluated('class W { #s: uint8 = 0; get s() { return this.#s; } set s(v: uint8) { this.#s = v; } } '
-    + 'const a = new W(); a.s = (1 := uint8); const b = a; b.s = (9 := uint8); String(a.s);')).toBe('1');
+test('a PRIVATE field is copied; a private METHOD is shared', () => {
+  // Private state is not reachable through Get and lives in [[PrivateElements]].
+  // The copy bailed out entirely while that path was unwritten, leaving a value
+  // type class with any private field aliasing - the conservative answer, since
+  // a copy missing half its state is worse than none.
+  //
+  // A private FIELD holds its own value and is copied. A private METHOD or
+  // ACCESSOR belongs to the CLASS and is shared by every instance, so its record
+  // is carried across as it stands: duplicating one would give the copy a second
+  // function object for a single declaration.
+  const W = 'class W { #s: uint8 = 0; get s() { return this.#s; } set s(v: uint8) { this.#s = v; } } ';
+  expect(evaluated(`${W} const a = new W(); a.s = (1 := uint8); const b = a; b.s = (9 := uint8); String(a.s);`)).toBe('1');
+  expect(evaluated(`${W} const a = new W(); a.s = (1 := uint8); const b = a; String(b.s);`)).toBe('1');
+  // A private method still works through the copy.
+  expect(evaluated('class M { #n: uint8 = 0; #twice() { return 2; } run() { return this.#twice(); } } '
+    + 'const a = new M(); const b = a; String(b.run());')).toBe('2');
+  // A class with BOTH copies both halves independently.
+  expect(evaluated('class X { #p: uint8 = 0; x: uint8 = 0; get p() { return this.#p; } set p(v: uint8) { this.#p = v; } } '
+    + 'const a = new X(); a.x = 1; a.p = (2 := uint8); const b = a; b.x = 9; b.p = (8 := uint8); '
+    + 'String(a.x) + "/" + String(a.p);')).toBe('1/2');
 });
