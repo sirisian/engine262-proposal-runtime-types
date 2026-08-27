@@ -125,3 +125,107 @@ test('extending a library nominal relates to THAT one and no other', () => {
   expectThrown('class MyErr extends Error { } let m: MyErr = new Error("x");');
   expectThrown('class Plain { x: uint8 = 1; } let e: Error = new Plain();');
 });
+
+// -- The drift guard -----------------------------------------------------------
+//
+// `libraryExtends` is the ONE place the built-in hierarchy is stated, and it is
+// stated by hand: the alternative, reading `%TypeError.prototype%` off the realm,
+// was rejected because a relation derived from a realm answers differently in
+// different ones and the chain is mutable (OQ-library-nominal-subtyping.md, D3).
+//
+// A hand-written table can drift from the realm it describes, and nothing else
+// would notice: a library global added with a heritage, or an entry mistyped,
+// changes what programs mean and breaks no existing test. So the table is not
+// trusted, it is COMPARED - against the prototype chain the run time actually
+// walks, over every ordered pair, in the realm the tests run in.
+
+/** The library globals that are constructors, so the chain is the whole story. */
+const GLOBAL_CONSTRUCTORS = [
+  'AggregateError', 'ArrayBuffer', 'DataView', 'Date', 'Error', 'EvalError',
+  'FinalizationRegistry', 'Map', 'RangeError', 'ReferenceError', 'RegExp', 'Set',
+  'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError', 'URIError',
+  'WeakMap', 'WeakRef', 'WeakSet',
+];
+
+/**
+ * Source that walks the realm's prototype chains and compares each against the
+ * type relation. `corrupt` flips one answer, which is how this test proves it
+ * can SEE a mismatch rather than reporting none because it compares nothing.
+ */
+function sweepSource(corrupt: boolean): string {
+  const pairs: string[] = [];
+  for (const a of GLOBAL_CONSTRUCTORS) {
+    for (const b of GLOBAL_CONSTRUCTORS) {
+      if (a !== b) {
+        pairs.push(`["${a}","${b}",Reflect.isAssignable(type ${a}, type ${b})]`);
+      }
+    }
+  }
+  return `
+    const chain = (a, b) => {
+      if (typeof globalThis[a] !== "function" || typeof globalThis[b] !== "function") return null;
+      if (!globalThis[a].prototype || !globalThis[b].prototype) return null;
+      let p = globalThis[a].prototype;
+      while (p !== null && p !== undefined) {
+        if (p === globalThis[b].prototype) return true;
+        p = Object.getPrototypeOf(p);
+      }
+      return false;
+    };
+    const rel = [${pairs.join(',')}];
+    let mismatches = "";
+    let compared = 0;
+    for (const entry of rel) {
+      const a = entry[0], b = entry[1];
+      let says = entry[2];
+      ${corrupt ? 'if (a === "TypeError" && b === "Error") { says = !says; }' : ''}
+      const c = chain(a, b);
+      if (c === null) continue;
+      compared += 1;
+      if (c !== says) { mismatches += a + "->" + b + " "; }
+    }
+    String(compared + "|" + (mismatches || "NONE"));
+  `;
+}
+
+test('the hierarchy TABLE agrees with the realm it describes', () => {
+  const [compared, mismatches] = evaluated(sweepSource(false)).split('|');
+  // Every ordered pair of library constructors, both directions, which is what
+  // makes this a completeness check and not only a soundness one: a chain link
+  // the table OMITS shows up here exactly as a link it invents would.
+  expect(mismatches).toBe('NONE');
+  expect(Number(compared)).toBeGreaterThan(300);
+});
+
+test('...and the comparison can actually see a mismatch', () => {
+  // The control. A sweep that compares nothing reports no mismatches, and would
+  // pass for ever while the table rotted. Flipping one answer must be caught.
+  const [, mismatches] = evaluated(sweepSource(true)).split('|');
+  expect(mismatches).toContain('TypeError->Error');
+});
+
+test('the realm has exactly the hierarchy the table states', () => {
+  // Stated separately from the sweep so the EXPECTED set is written down rather
+  // than inferred: if a future library global arrives with a heritage, this
+  // fails with its name in the message.
+  const found = evaluated(`
+    const names = ${JSON.stringify(GLOBAL_CONSTRUCTORS)};
+    const out = [];
+    for (const a of names) for (const b of names) {
+      if (a === b) continue;
+      if (typeof globalThis[a] !== "function" || typeof globalThis[b] !== "function") continue;
+      if (!globalThis[a].prototype || !globalThis[b].prototype) continue;
+      let p = Object.getPrototypeOf(globalThis[a].prototype);
+      while (p !== null && p !== undefined) {
+        if (p === globalThis[b].prototype) { out.push(a + "<:" + b); break; }
+        p = Object.getPrototypeOf(p);
+      }
+    }
+    String(out.sort().join(","));
+  `);
+  expect(found).toBe([
+    'AggregateError<:Error', 'EvalError<:Error', 'RangeError<:Error',
+    'ReferenceError<:Error', 'SyntaxError<:Error', 'TypeError<:Error',
+    'URIError<:Error',
+  ].join(','));
+});
