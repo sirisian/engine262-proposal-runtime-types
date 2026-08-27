@@ -307,6 +307,36 @@ export class SymbolValue extends PrimitiveValue {
   declare static [Symbol.hasInstance]: (value: unknown) => value is SymbolValue;
 }
 
+/**
+ * A Symbol carrying an interned Type Record, so a parameterization of `symbol`
+ * survives a crossing.
+ *
+ * PLAN-brand-layering-F.md. `boolean` cannot have one: `Value.true` and
+ * `Value.false` are SINGLETONS and the engine compares against them by identity
+ * at 288 sites, so a carrier - necessarily a different object - fails every one,
+ * and a branded `true` came out falsy (F177).
+ *
+ * A Symbol has neither problem. Every `Symbol()` is already a fresh object, so
+ * there is no singleton to fail to be, and the engine compares symbols by
+ * identity in ONE place rather than 288. The two bases were filed together as
+ * "primitives that cannot carry a type" and only one of them cannot.
+ */
+export class TypedSymbolValue extends SymbolValue {
+  declare readonly type: 'Symbol';
+
+  declare readonly TypeRecord: unknown;
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is TypedSymbolValue;
+}
+
+/** Construct a Symbol value carrying the given interned Type Record. */
+export function TypedSymbol(description: JSStringValue | UndefinedValue, typeRecord: unknown): SymbolValue {
+  const sym = new SymbolValue(description) as TypedSymbolValue;
+  Object.defineProperty(sym, 'TypeRecord', { value: typeRecord, enumerable: false });
+  Object.setPrototypeOf(sym, TypedSymbolValue.prototype);
+  return sym;
+}
+
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types-symbol-type */
 export const wellKnownSymbols = {
   asyncIterator: new SymbolValue(Value('Symbol.asyncIterator')),

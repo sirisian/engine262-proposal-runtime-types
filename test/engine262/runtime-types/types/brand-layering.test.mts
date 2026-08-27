@@ -435,3 +435,42 @@ test('F183: a constant ANSWER in a value position stays legitimate', () => {
   expect(evaluated('function f(a: uint8) { const x = typeof a === "string"; return x; }'
     + ' String(f((1 := uint8)));')).toBe('false');
 });
+
+// ---------------------------------------------------------------------------
+// symbol: a carrier where boolean cannot have one
+// ---------------------------------------------------------------------------
+
+test('a symbol brand carries, passes, and refuses a bare value', () => {
+  // `boolean` and `symbol` were filed together as "primitives whose values
+  // cannot carry a Type Record". Only one of them cannot.
+  //
+  // `Value.true` and `Value.false` are SINGLETONS and the engine compares
+  // against them by identity at 288 sites, so a carrier - necessarily a
+  // different object - fails every one, and a branded `true` came out falsy
+  // (F177). A Symbol has neither problem: every `Symbol()` is already a fresh
+  // object, and the engine compares symbols by identity in ONE place.
+  const S = "type S = symbol.<{ brand: 'S' }>;";
+  expect(evaluated(`${S} const v = S(Symbol('a')); String(Reflect.typeOf(v) === S);`)).toBe('true');
+  expect(evaluated(`${S} function f(x: S) { return 1; } String(f(S(Symbol('a'))));`)).toBe('1');
+  expectThrown(`${S} function f(x: S) { return 1; } function h(u) { return f(u); } h(Symbol('a'));`);
+  expectThrown(`${S} type T = symbol.<{ brand: 'T' }>;`
+    + " function f(x: T) { return 1; } function h(s: S) { return f(s); } h(S(Symbol('a')));");
+});
+
+test('a branded symbol is still a symbol', () => {
+  // The guards. A carrier that changed what a Symbol IS would pass the tests
+  // above and break the language - which is exactly what happened to `boolean`.
+  const S = "type S = symbol.<{ brand: 'S' }>;";
+  expect(evaluated(`${S} const v = S(Symbol('a')); String(typeof v);`)).toBe('symbol');
+  expect(evaluated(`${S} const v = S(Symbol('hi')); String(v.description);`)).toBe('hi');
+  expect(evaluated(`${S} const k = S(Symbol('k')); const o = {}; o[k] = (1 := uint8); String(o[k]);`)).toBe('1');
+  expect(evaluated(`${S} const k = S(Symbol('k')); String(k === k);`)).toBe('true');
+  expect(evaluated(`${S} String(S(Symbol('x')) === S(Symbol('x')));`)).toBe('false');
+});
+
+test('boolean remains the one base without a carrier', () => {
+  // Recorded as state. F177: its values are singletons, so a carrier cannot be
+  // a different object, and no direction is currently proposed.
+  expect(evaluated("type B = boolean.<{ brand: 'B' }>; String(B(true));")).toBe('true');
+  expectThrown("type B = boolean.<{ brand: 'B' }>; function f(x: B) { return 1; } f(B(true));");
+});
