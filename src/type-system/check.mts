@@ -83,6 +83,38 @@ export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arg
 
 
 
+
+/**
+ * Static DATA properties whose type is fixed.
+ *
+ * PLAN-standard-library-statics.md Family A. At the types these already answer -
+ * `number`, `string`, `symbol` - and never a numeric value type.
+ * #sec-overloading-of-the-standard-library's bound is the reason: a value type
+ * "would change what every existing call returns", and `float64` is not
+ * assignable to `number`, so `Math.PI: float64` would refuse every existing
+ * `let _n_: number = Math.PI`.
+ *
+ * The gain is small and real: `let _s_: string = Math.PI` becomes an error.
+ */
+const FIXED_STATIC_PROPERTIES: Record<string, (() => TypeRecord) | undefined> = {
+  'Math.PI': () => makePrimitive('number'),
+  'Math.E': () => makePrimitive('number'),
+  'Math.LN2': () => makePrimitive('number'),
+  'Math.LN10': () => makePrimitive('number'),
+  'Math.LOG2E': () => makePrimitive('number'),
+  'Math.LOG10E': () => makePrimitive('number'),
+  'Math.SQRT2': () => makePrimitive('number'),
+  'Math.SQRT1_2': () => makePrimitive('number'),
+  'Number.MAX_SAFE_INTEGER': () => makePrimitive('number'),
+  'Number.MIN_SAFE_INTEGER': () => makePrimitive('number'),
+  'Number.MAX_VALUE': () => makePrimitive('number'),
+  'Number.MIN_VALUE': () => makePrimitive('number'),
+  'Number.EPSILON': () => makePrimitive('number'),
+  'Number.POSITIVE_INFINITY': () => makePrimitive('number'),
+  'Number.NEGATIVE_INFINITY': () => makePrimitive('number'),
+  'Number.NaN': () => makePrimitive('number'),
+};
+
 /**
  * Global functions whose result type depends on nothing the call passes.
  *
@@ -4553,6 +4585,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.IdentifierName && m.MemberExpression) {
+          // PLAN-standard-library-statics.md Family A: a static DATA property.
+          // Not a call, so neither static table above can reach it - the third
+          // dispatch site, and the reason a census of calls could not see these.
+          //
+          // At the EXISTING types, never a value type.
+          // #sec-overloading-of-the-standard-library states the bound: "giving
+          // its result a value type would change what every existing call
+          // returns... since the values of distinct value types are distinct".
+          // A property is the same case with no call at all - `Math.PI` is a
+          // Number that existing programs put in `number` positions, and
+          // `float64` is not assignable to `number`, so typing it that way would
+          // refuse code that works today.
+          const base = m.MemberExpression;
+          if (base.type === 'IdentifierReference') {
+            const baseName = (base as unknown as { name?: string }).name;
+            const fixedProperty = baseName !== undefined && !shadowedByProgram(baseName)
+              ? FIXED_STATIC_PROPERTIES[`${baseName}.${m.IdentifierName.name}`]
+              : undefined;
+            if (fixedProperty) {
+              return fixedProperty();
+            }
+          }
           const receiver = staticType(m.MemberExpression);
           // A method of a TYPED ARRAY takes the element type. The design gives a
           // typed collection element-typed method signatures, and the run time

@@ -304,3 +304,45 @@ test('Family B preserves the existing spellings and the run time', () => {
   // A program that shadows one gets its own, not the builtin's signature.
   expect(ok('if (false) { function parseInt(x) { return x; } let n: string = parseInt("1"); } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// Family A - static DATA properties
+// ---------------------------------------------------------------------------
+
+test('a static data property states its type, at the EXISTING type', () => {
+  // Not a call, so neither static table reaches it - a third dispatch site, and
+  // the reason a census of calls could not see these.
+  expectStaticTypeError('let n: string = Math.PI;');
+  expect(ok('let n: number = Math.PI;')).toBe(true);
+  expectStaticTypeError('let n: string = Number.MAX_SAFE_INTEGER;');
+  expect(ok('let n: number = Number.MAX_SAFE_INTEGER;')).toBe(true);
+  expect(ok('let n: number = Number.EPSILON;')).toBe(true);
+  expect(ok('let n: number = Math.SQRT2;')).toBe(true);
+});
+
+test('a value type is REFUSED for a static data property', () => {
+  // The compatibility bound, applied to a property.
+  // #sec-overloading-of-the-standard-library: a value type "would change what
+  // every existing call returns... since the values of distinct value types are
+  // distinct". `float64` is not assignable to `number`, so `Math.PI: float64`
+  // would refuse every existing `let n: number = Math.PI` - which is why the
+  // table holds the type these already answer and not the one that looks more
+  // precise.
+  expectStaticTypeError('let n: float64 = Math.PI;');
+  expectStaticTypeError('let n: uint64 = Number.MAX_SAFE_INTEGER;');
+  // A program that wants one writes the conversion, as the clause says.
+  expect(evaluated('const d: float64 = (Math.PI := float64); String(d > 3);')).toBe('true');
+});
+
+test('Family A leaves the arithmetic and the methods alone', () => {
+  expect(evaluated('String(typeof Math.PI);')).toBe('number');
+  expect(evaluated('String(Math.PI * 2 > 6);')).toBe('true');
+  expect(evaluated('String(Number.MAX_SAFE_INTEGER + 1 > 0);')).toBe('true');
+  // `Math.sqrt` is overloaded and unaffected by the property table beside it.
+  expect(ok('const x: float32 = 4; let n: float32 = Math.sqrt(x);')).toBe(true);
+  // An array's own members still resolve, which is what says the new branch
+  // returns early only for the names it knows.
+  expect(ok('const a: [].<uint8> = [1]; let n: uint64 = a.length;')).toBe(true);
+  // A shadowed base gets nothing.
+  expect(ok('if (false) { class M2 { } const Math = M2; let n: string = Math.PI; } 1;')).toBe(true);
+});
