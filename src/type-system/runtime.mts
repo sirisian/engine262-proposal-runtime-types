@@ -9,7 +9,7 @@ import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
-  TypedNumberValue, TypedStringValue, TypedBigIntValue, TypedSymbolValue, ReferenceValue, isTypedNumber, unwrapToNumber,
+  TypedNumberValue, TypedStringValue, TypedBigIntValue, TypedSymbolValue, TypedBooleanValue, ReferenceValue, isTypedNumber, unwrapToNumber,
   type Descriptor, type PropertyKeyValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
@@ -728,7 +728,7 @@ function elementLiteralTypeOf(value: Value): TypeRecord {
  */
 export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
   if (value instanceof TypedNumberValue || value instanceof TypedStringValue
-      || value instanceof TypedBigIntValue || value instanceof TypedSymbolValue
+      || value instanceof TypedBigIntValue || value instanceof TypedSymbolValue || value instanceof TypedBooleanValue
       || (value as Value)?.type === 'Vector') {
     return (value as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }

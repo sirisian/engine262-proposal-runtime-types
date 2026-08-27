@@ -278,13 +278,6 @@ test('F176: a bigint brand carries, as a string brand does', () => {
     + ' function f(x: H) { return 1; } function h(g: G) { return f(g); } h(G(1n));');
 });
 
-test('boolean is the one base a brand cannot yet carry on', () => {
-  // Recorded as the state, not asserted as correct. `boolean` has no
-  // `TypedBooleanValue`, so it is the only primitive left where the crossing
-  // produces something the receiving boundary cannot recognise.
-  expect(evaluated("type B = boolean.<{ brand: 'B' }>; String(B(true));")).toBe('true');
-  expectThrown("type B = boolean.<{ brand: 'B' }>; function f(x: B) { return 1; } f(B(true));");
-});
 
 // ---------------------------------------------------------------------------
 // T4: a carrier is chosen by the base's PRIMITIVE, looked through
@@ -313,17 +306,6 @@ test('T4: a plain brand is unchanged', () => {
   expect(evaluated("type G = bigint.<{ brand: 'G' }>; String(Reflect.typeOf(G(1n)) === G);")).toBe('true');
 });
 
-test('T4: a brand over a literal BOOLEAN is refused, and that is correct', () => {
-  // A Boolean has no carrier - `true` and `false` are single values, and a
-  // Boolean carrying a mark would not be them (F177). Narrowing to `true`
-  // does not help: without a carrier a branded `true` is indistinguishable
-  // from `true`, so admitting it would make the brand unenforced. Refusing is
-  // the sound answer, and `isAssignable(true, B)` is false in the same breath.
-  const B = "type L = true; type B = L.<{ brand: 'B' }>;";
-  expect(evaluated(`${B} String(Reflect.getReflection(B).kind);`)).toBe('parameterized');
-  expect(evaluated(`${B} String(Reflect.isAssignable(L, B));`)).toBe('false');
-  expectThrown(`${B} function f(x: B) { return 1; } f(B(true));`);
-});
 
 // ---------------------------------------------------------------------------
 // F179: the intersection crossing does not produce the INTERSECTION type
@@ -391,14 +373,6 @@ test('F179: layering works on every carrying base, not only strings', () => {
   }
 });
 
-test('F179: a layered boolean is unusable but SOUND', () => {
-  // Construction returns the bare value and `typeOf` reports `boolean`, exactly
-  // as for a single boolean brand - and every boundary that declares the
-  // layering refuses it. Nothing is silently admitted.
-  const d = "type A = boolean.<{ brand: 'A' }>; type B = boolean.<{ brand: 'B' }>; type AB = A & B;";
-  expect(evaluated(`${d} String(Reflect.getReflection(Reflect.typeOf(AB(true))).kind);`)).toBe('primitive');
-  expectThrown(`${d} function f(x: AB) { return 1; } function h(u) { return f(u); } h(true);`);
-});
 
 // ---------------------------------------------------------------------------
 // F183: a dead OPERAND is not the same defect as a constant ANSWER
@@ -468,9 +442,22 @@ test('a branded symbol is still a symbol', () => {
   expect(evaluated(`${S} String(S(Symbol('x')) === S(Symbol('x')));`)).toBe('false');
 });
 
-test('boolean remains the one base without a carrier', () => {
-  // Recorded as state. F177: its values are singletons, so a carrier cannot be
-  // a different object, and no direction is currently proposed.
-  expect(evaluated("type B = boolean.<{ brand: 'B' }>; String(B(true));")).toBe('true');
-  expectThrown("type B = boolean.<{ brand: 'B' }>; function f(x: B) { return 1; } f(B(true));");
+test('boolean brands work, and a branded boolean is still a boolean', () => {
+  // F177 ruled this out: `Value.true` and `Value.false` are singletons and a
+  // carrier is a different object, so a branded `true` came out FALSY.
+  //
+  // Fixed at the funnels rather than by avoiding a carrier. `ToBoolean` now
+  // normalizes to the singleton - observably identical for a plain Boolean, and
+  // the right reading besides, since it asks only for truth. `ToString` and
+  // `SameValueNonNumber` read `booleanValue()` instead of comparing objects.
+  const B = "type B = boolean.<{ brand: 'B' }>;";
+  expect(evaluated(`${B} function f(x: B) { return 1; } String(f(B(true)));`)).toBe('1');
+  expectThrown(`${B} function f(x: B) { return 1; } function h(u) { return f(u); } h(true);`);
+  // The guards - each one a way the carrier could break the language.
+  expect(evaluated(`${B} String(B(true) ? 'yes' : 'no');`)).toBe('yes');
+  expect(evaluated(`${B} String(B(false) ? 'yes' : 'no');`)).toBe('no');
+  expect(evaluated(`${B} String(typeof B(true));`)).toBe('boolean');
+  expect(evaluated(`${B} String(B(true) === true);`)).toBe('true');
+  expect(evaluated(`${B} String(B(true));`)).toBe('true');
+  expect(evaluated(`${B} String(B(true) && 'and');`)).toBe('and');
 });

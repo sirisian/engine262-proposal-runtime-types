@@ -131,7 +131,19 @@ export function ToBoolean(argument: Value): BooleanValue {
     return Value.false;
   } else if (argument instanceof BooleanValue) {
     // Return argument.
-    return argument;
+    // PLAN-brand-layering-F.md. NORMALIZE to the singleton rather than
+    // returning the argument.
+    //
+    // Observably identical for a plain Boolean - it IS the singleton - and it is
+    // what lets a BRANDED boolean be truthy. `Value.true` and `Value.false` are
+    // singletons and twelve sites test a ToBoolean result with `=== Value.true`,
+    // so a carrier, being a different object, failed every one and a branded
+    // `true` came out falsy (F177).
+    //
+    // ToBoolean produces a Boolean, not a branded boolean, so shedding the
+    // carrier here is also the right reading: the brand is a property of the
+    // value's type, and this operation asks only for its truth.
+    return argument.booleanValue() ? Value.true : Value.false;
   } else if (isTypedNumber(argument)) {
     // proposal-runtime-types R6: a typed number is falsy when its value is +0,
     // -0, or NaN, matching a plain Number.
@@ -193,7 +205,7 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     return F(+0);
   } else if (argument instanceof BooleanValue) {
     // If argument is true, return 1𝔽.
-    if (argument === Value.true) {
+    if (argument.booleanValue()) {
       return F(1);
     }
     // If argument is false, return +0𝔽.
@@ -436,7 +448,7 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
   } else if (argument instanceof BooleanValue) {
     // If argument is true, return "true".
     // If argument is false, return "false".
-    return Value(argument === Value.true ? 'true' : 'false');
+    return Value(argument.booleanValue() ? 'true' : 'false');
   } else if (isTypedNumber(argument)) {
     // proposal-runtime-types R6: a typed number stringifies as its underlying
     // decimal, with no type tag (String(5 := uint8) is "5").

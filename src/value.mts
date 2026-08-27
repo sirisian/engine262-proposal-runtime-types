@@ -209,7 +209,11 @@ export class BooleanValue<T extends boolean = boolean> extends PrimitiveValue {
 
   readonly value: T;
 
-  private constructor(value: T) {
+  // Not `private`: `TypedBooleanValue` extends this to carry a Type Record, as
+  // `TypedStringValue` extends JSStringValue. Construction stays internal - the
+  // static block below is the only place a plain Boolean is made, and the two
+  // singletons are what every other site uses.
+  protected constructor(value: T) {
     super();
     this.value = value;
   }
@@ -229,6 +233,34 @@ export class BooleanValue<T extends boolean = boolean> extends PrimitiveValue {
   }
 
   declare static [Symbol.hasInstance]: (value: unknown) => value is BooleanValue;
+}
+
+/**
+ * A Boolean carrying an interned Type Record.
+ *
+ * PLAN-brand-layering-F.md. `Value.true` and `Value.false` are SINGLETONS, and
+ * twelve sites test a `ToBoolean` result with `=== Value.true`. A carrier is a
+ * different object, so a branded `true` failed every one and came out FALSY
+ * (F177).
+ *
+ * That is fixed at the funnel rather than here: `ToBoolean` now normalizes to
+ * the singleton, which is observably identical for a plain Boolean and sheds
+ * the carrier where only truth is being asked for.
+ */
+export class TypedBooleanValue extends BooleanValue {
+  declare readonly type: 'Boolean';
+
+  declare readonly TypeRecord: unknown;
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is TypedBooleanValue;
+}
+
+/** Construct a Boolean value carrying the given interned Type Record. */
+export function TypedBoolean(value: boolean, typeRecord: unknown): BooleanValue {
+  const b = Object.create(TypedBooleanValue.prototype) as { value: boolean };
+  b.value = value;
+  Object.defineProperty(b, 'TypeRecord', { value: typeRecord, enumerable: false });
+  return b as unknown as BooleanValue;
 }
 
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types-string-type */

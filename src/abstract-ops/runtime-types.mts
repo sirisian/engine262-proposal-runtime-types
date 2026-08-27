@@ -4,7 +4,7 @@ import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
-import { TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
+import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
@@ -81,6 +81,14 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   // `TypedBigIntValue`, recognised by `RuntimeTypeOf` already - and the crossing
   // was not using it, so a branded BigInt was a bare BigInt for the same reason
   // a branded String was. The same operation on the same shape of value.
+  // And a Boolean. `ToBoolean` normalizes to the singleton, so a carried
+  // boolean is truthy where it should be - the failure that ruled this out
+  // before (F177) was at that funnel rather than here.
+  if (value instanceof BooleanValue && !(value instanceof TypedBooleanValue)
+    && (t.Kind === 'parameterized' || t.Kind === 'intersection')
+    && underlyingPrimitiveName(t) === 'boolean') {
+    return TypedBoolean(value.booleanValue(), t);
+  }
   // A Symbol carries one too. Unlike a Boolean it has no singleton to fail to
   // be - every `Symbol()` is already a fresh object - so the carrier that broke
   // `boolean` (F177) is sound here.

@@ -418,8 +418,10 @@ export function SameValueNonNumber(x: Value, y: Value): boolean {
   }
 
   if (x instanceof BooleanValue) {
-    if (x === Value.true && y === Value.true) return true;
-    if (x === Value.false && y === Value.false) return true;
+    // PLAN-brand-layering-F.md. Compare the VALUE, not the object: a Boolean
+    // carrying a Type Record is not one of the two singletons, and comparing by
+    // identity made `B(true) === true` answer false.
+    return x.booleanValue() === (y as BooleanValue).booleanValue();
     return false;
   }
   return x === y;
