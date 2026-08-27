@@ -1082,6 +1082,60 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
   return t;
 }
 
+/**
+ * The CANONICAL SOURCE FORM of a type: the text a developer could paste back.
+ *
+ * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` §3.3 promises this
+ * of `Type.prototype.toString` - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`"* -
+ * and nothing implemented it, so every type stringified as `[object Type]`.
+ *
+ * Distinct from `displayType`, which is a DIAGNOSTIC formatter and rightly names
+ * the KIND of thing that was wrong: it prints a literal as "a literal type of
+ * string", which is the correct text in an error message and does not round-trip
+ * as source. Checked kind by kind, that is the only case where the two differ -
+ * `uint.<32>` for a `uint32` looks unusual but IS valid source and interns to the
+ * same type - so this delegates to `displayType` everywhere else rather than
+ * duplicating a walk that would drift.
+ */
+export function canonicalTypeText(t: TypeRecord, seen: readonly TypeRecord[] = []): string {
+  if (seen.includes(t)) {
+    // A recursive type: the back-edge prints as the type it closes on rather
+    // than expanding forever. Named types reach here through their alias.
+    return displayType(t, seen);
+  }
+  const within = [...seen, t];
+  switch (t.Kind) {
+    case 'literal': {
+      const v = t.Value as { stringValue?(): string, numberValue?(): number, booleanValue?(): boolean };
+      if (typeof v?.stringValue === 'function') {
+        return JSON.stringify(v.stringValue()).replace(/^"|"$/g, "'");
+      }
+      if (typeof v?.numberValue === 'function') {
+        // eslint-disable-next-line @engine262/mathematical-value -- a literal's value is any literal Value, not only a NumberValue
+        return String(v.numberValue());
+      }
+      if (typeof v?.booleanValue === 'function') {
+        return String(v.booleanValue());
+      }
+      return displayType(t, seen);
+    }
+    case 'union':
+      return t.Members.length === 0
+        ? 'never'
+        : t.Members.map((m) => canonicalTypeText(m, within)).join(' | ');
+    case 'intersection':
+      return t.Members.map((m) => canonicalTypeText(m, within)).join(' & ');
+    case 'array':
+      return `[${t.Extent === 'dynamic' ? '' : t.Extent}].<${canonicalTypeText(t.Element, within)}>`;
+    case 'tuple':
+      return `[${t.Elements.map((e) => canonicalTypeText(e.Type, within)).join(', ')}]`;
+    case 'parameterized':
+      return `${canonicalTypeText(t.Base, within)}.<${displayMetadataValue(t.Metadata)}>`;
+    default:
+      return displayType(t, seen);
+  }
+}
+
 /** A readable rendering of a Type Record for error messages. */
 export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): string {
   // An ABSENT record renders rather than crashing. A diagnostic is built on the

@@ -11,6 +11,7 @@ import { Realm, Throw, R, wellKnownSymbols } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
 import { Float128FromNumber } from './Float128.mts';
 import { surroundingAgent } from '#self';
+import { canonicalTypeText } from '../type-system/records.mts';
 
 /**
  * proposal-runtime-types: %Type.prototype%, the prototype of every Type
@@ -506,9 +507,26 @@ function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallC
   return floatOnlyOfThis(thisValue, 'epsilon');
 }
 
+/**
+ * `Type.prototype.toString` - the canonical source form of the type.
+ *
+ * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` §3.3 promises this
+ * - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`, because builders throwing
+ * authored `TypeError`s need to print types"* - and nothing implemented it, so
+ * every Type Object stringified as `[object Type]`. A developer had no way to
+ * see a type in a console and a builder had nothing to put in a message.
+ */
+function TypeProto_toString(this: unknown, _args: Arguments, { thisValue }: FunctionCallContext) {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', Value('the receiver of Type.prototype.toString'));
+  }
+  return Value(canonicalTypeText((thisValue as { TypeRecord: TypeRecord }).TypeRecord));
+}
+
 export function bootstrapTypePrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [
     [wellKnownSymbols.hasInstance, TypeProto_hasInstance, 1],
+    ['toString', TypeProto_toString, 0],
     ['parse', TypeProto_parse, 1],
     ['tryParse', TypeProto_tryParse, 1],
     ['bitLength', [TypeProto_bitLengthGetter]],
