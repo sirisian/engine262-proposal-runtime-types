@@ -571,3 +571,47 @@ test('Promise.reject carries its reason', () => {
   // guessing.
   expect(ok('if (false) { let n: string = Promise.reject(new Error("x")); } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// Object.values / entries / fromEntries - unblocked by OQ17
+// ---------------------------------------------------------------------------
+
+test('values and entries read V from an index signature OR the properties', () => {
+  // `standardlibrary.md`, "Reading an Object's Own Properties". V comes from an
+  // index signature where the argument has one, and from the JOIN of the
+  // declared property types otherwise - which is what an index signature over
+  // that object already means, and what lets the ORDINARY spelling reach the
+  // signature at all.
+  const IX = 'let o: { [key: string]: uint8 } = {}; ';
+  const OB = 'let o: { a: uint8, b: uint8 } = { a: 1, b: 2 }; ';
+  expect(ok(`${IX} let n: [].<uint8> = Object.values(o);`)).toBe(true);
+  expectStaticTypeError(`${IX} let n: [].<string> = Object.values(o);`);
+  expect(ok(`${OB} let n: [].<uint8> = Object.values(o);`)).toBe(true);
+  expectStaticTypeError(`${OB} let n: [].<string> = Object.values(o);`);
+  // Differing property types join to their union.
+  expect(ok('let o: { a: uint8, b: string } = { a: 1, b: "x" }; let n: [].<uint8 | string> = Object.values(o);')).toBe(true);
+  // `entries` pairs a `string` with the value, not a property-key union: the
+  // keys `Object.keys` reports are Strings, a Symbol-keyed property not being
+  // among them.
+  expect(ok(`${IX} let n: [].<[string, uint8]> = Object.entries(o);`)).toBe(true);
+  expectStaticTypeError(`${IX} let n: [].<[string, string]> = Object.entries(o);`);
+});
+
+test('fromEntries inverts entries', () => {
+  // V comes out of the PAIR's second position, so the element must be a tuple of
+  // two - which is what an entries list is.
+  const E = 'let es: [].<[string, uint8]> = []; ';
+  expect(ok(`${E} let o: { [key: string]: uint8 } = Object.fromEntries(es);`)).toBe(true);
+  expectStaticTypeError(`${E} let o: { [key: string]: string } = Object.fromEntries(es);`);
+  // The round trip composes, which is the pair being genuinely inverse rather
+  // than two signatures that happen to mention the same type.
+  expect(ok('let o: { [key: string]: uint8 } = {}; let back: { [key: string]: uint8 } = Object.fromEntries(Object.entries(o));')).toBe(true);
+  expectStaticTypeError('let o: { [key: string]: uint8 } = {}; let back: { [key: string]: string } = Object.fromEntries(Object.entries(o));');
+});
+
+test('the three preserve participation and the run time', () => {
+  expect(ok('if (false) { const u = { a: 1 }; let n: uint8 = Object.values(u); } 1;')).toBe(true);
+  expect(evaluated('const o = { a: 1, b: 2 }; String(Object.values(o).length);')).toBe('2');
+  expect(evaluated('const o = { a: 1 }; const e = Object.entries(o); String(e[0][0]) + String(e[0][1]);')).toBe('a1');
+  expect(evaluated('const o = Object.fromEntries([["a", 1]]); String(o.a);')).toBe('1');
+});

@@ -1868,6 +1868,69 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return value ? widen(value) : null;
       };
     }
+    if (base.name === 'Object' && method === 'fromEntries') {
+      // `Object.fromEntries<V>(entries: Iterable.<[string, V]>): { [key: string]: V }`.
+      // The inverse of `entries`, and it reads V out of the PAIR's second
+      // position - so the element must be a tuple of two, which is what an
+      // entries list is.
+      return (args) => {
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        if (!element || element.Kind !== 'tuple') {
+          return null;
+        }
+        const positions = (element as { Elements?: readonly { Type: TypeRecord }[] }).Elements ?? [];
+        if (positions.length !== 2) {
+          return null;
+        }
+        return {
+          Kind: 'object',
+          Properties: [],
+          IndexSignatures: [{ Key: makePrimitive('string'), Value: widen(positions[1].Type) as TypeRecord }],
+        } as unknown as Known;
+      };
+    }
+    if (base.name === 'Object' && (method === 'values' || method === 'entries')) {
+      // `Object.values<V>(o: { [key: string]: V }): [].<V>` and
+      // `Object.entries<V>(o): [].<[string, V]>`, from `standardlibrary.md`'s
+      // "Reading an Object's Own Properties".
+      //
+      // V is read from an index signature where the argument has one, and from
+      // the JOIN of the declared property types otherwise - which is what an
+      // index signature over that object already means, and what lets the
+      // ordinary spelling `{ a: uint8, b: uint8 }` reach the signature at all.
+      //
+      // The pair's first position is `string` and not a property-key union: the
+      // keys `Object.keys` reports are Strings, a Symbol-keyed property not being
+      // among them.
+      return (args) => {
+        const o = args[0] ? staticType(args[0]) : null;
+        const shape = o ? structureOf(o) : null;
+        if (!shape || shape.Kind !== 'object') {
+          return null;
+        }
+        const named = shape.IndexSignatures.find((ix) => ix.Key.Kind === 'primitive'
+          && (ix.Key as { Name?: string }).Name === 'string');
+        const declared = shape.Properties.filter((prop) => !prop.optional).map((prop) => prop.type);
+        const value = named
+          ? named.Value as TypeRecord
+          : (declared.length === 0
+            ? null
+            : (declared.length === 1
+              ? declared[0]
+              : CanonicalizeType({ Kind: 'union', Members: declared } as TypeRecord) as TypeRecord));
+        if (!value) {
+          return null;
+        }
+        return method === 'values'
+          ? arrayOfElement(widen(value) as TypeRecord)
+          : arrayOfElement({
+            Kind: 'tuple',
+            Elements: [makePrimitive('string'), widen(value) as TypeRecord]
+              .map((x) => ({ Type: x, Rest: false, Initial: 'none' })),
+          } as unknown as TypeRecord);
+      };
+    }
     if (base.name === 'Object' && method === 'keys') {
       // `Object.keys(o: object): [].<string>` - no type parameter, since it
       // answers Strings whatever it is given.
