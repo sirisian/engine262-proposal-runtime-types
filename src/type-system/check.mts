@@ -1439,6 +1439,89 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  /**
+   * The typed signature a named standard-library STATIC carries, or *undefined*.
+   *
+   * Keyed on the pair `Object.name`, and only where the base is the unshadowed
+   * global. Returns a function of the call's argument nodes so that a signature
+   * whose result depends on its arguments - which all four of them do - can read
+   * them without this table knowing how.
+   */
+  /**
+   * The contextual parameter types a builtin static supplies to a callback
+   * argument, or *undefined*.
+   *
+   * Separate from the result signature because the two are read at different
+   * times: the result is asked for by `staticType`, and this is recorded by the
+   * argument walk before the literal's own body is typed. Sharing the element
+   * derivation keeps them from drifting.
+   */
+  const builtinStaticCallbackContext = (callee: ParseNode | undefined, args: readonly ParseNode[]): { index: number, types: readonly Known[] } | undefined => {
+    const member = callee as unknown as {
+      type?: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string },
+    } | undefined;
+    if (member?.type !== 'MemberExpression') {
+      return undefined;
+    }
+    const base = member.MemberExpression;
+    const method = member.IdentifierName?.name;
+    if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
+      return undefined;
+    }
+    if (base.name === 'Map' && method === 'groupBy') {
+      const items = args[0] ? staticType(args[0]) : null;
+      const element = items ? elementTypeOfIterable(items) : null;
+      if (!element) {
+        return undefined;
+      }
+      // `(value: T, index: uint32) => K`. The index is the design's own second
+      // parameter and is stated here so a callback that takes it is typed too.
+      return { index: 1, types: [element, indexTypeRecord()] };
+    }
+    return undefined;
+  };
+
+  const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[]) => Known) | undefined => {
+    const member = callee as unknown as {
+      type?: string,
+      MemberExpression?: { type?: string, name?: string },
+      IdentifierName?: { name?: string },
+    } | undefined;
+    if (member?.type !== 'MemberExpression') {
+      return undefined;
+    }
+    const base = member.MemberExpression;
+    const method = member.IdentifierName?.name;
+    if (base?.type !== 'IdentifierReference' || !base.name || !method) {
+      return undefined;
+    }
+    if (shadowedByProgram(base.name)) {
+      return undefined;
+    }
+    if (base.name === 'Map' && method === 'groupBy') {
+      return (args) => {
+        // T from the items, K from the callback's RETURN - the two the design
+        // says the signature exists to state, and the two Phase 0 made
+        // inferable. Read here rather than through a declared signature record
+        // because there is no declaration node for a builtin to hang one on.
+        const items = args[0] ? staticType(args[0]) : null;
+        const element = items ? elementTypeOfIterable(items) : null;
+        const callback = args[1] ? staticType(args[1]) : null;
+        const sigs = (callback as { Signatures?: readonly { Return?: Known, InferredReturn?: Known }[] } | null)?.Signatures;
+        const key = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
+        if (!element || !key) {
+          // Either half unknown means the result is unknown. Answering a
+          // half-built `Map.<any, …>` would state more than the call supports,
+          // and an untyped source must still yield an untyped result (sec 0).
+          return null;
+        }
+        const groups = { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord;
+        return libraryTypeRecord('Map', [widen(key) as TypeRecord, groups]) ?? null;
+      };
+    }
+    return undefined;
+  };
+
   const bindTypeParametersFromArguments = (
     parameters: readonly { Type?: Known }[],
     argumentTypes: readonly Known[],
@@ -4085,6 +4168,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const calleeNode = (node as { CallExpression?: ParseNode }).CallExpression;
+        // #sec-typed-standard-library-statics (PLAN-static-signatures.md phase 1):
+        // a named STATIC of the standard library may carry a typed signature.
+        //
+        // `standardlibrary.md` states four, and `Map.groupBy` is the first:
+        // "function Map.groupBy<K, T>(items: Iterable.<T>, callback: (value: T,
+        // index: uint32) => K): Map.<K, [].<T>>". None of them were typed,
+        // because an instance method is found through its RECEIVER's type and a
+        // static has no typed receiver - `Reflect.typeOf(Map)` is not `Map`.
+        //
+        // Dispatched by NAME rather than by giving the constructor objects
+        // types, which is the mechanism `Composite` below and `uint8.parse`
+        // above already use. A constructor is a value a program may shadow, so
+        // the base must be the unshadowed global: `const Map = MyMap;` then
+        // `Map.groupBy(…)` gets nothing from here.
+        {
+          const staticSig = builtinStaticSignature(calleeNode);
+          if (staticSig) {
+            return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []));
+          }
+        }
         if (calleeNode?.type === 'IdentifierReference'
           && (calleeNode as { name?: string }).name === 'Composite') {
           // The TOP composite type, which states no shape - and a shapeless
@@ -9274,6 +9377,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               requireAssignable(staticTypeIn(arg, param), param);
             });
+          }
+        }
+        // A builtin STATIC supplies its callback's parameter types the way a
+        // declared signature does. Recorded before the arguments are walked, so
+        // the literal's own body is typed under them - which is what
+        // `standardlibrary.md` means by "fully typed call sites infer their
+        // callbacks".
+        {
+          const ctx = builtinStaticCallbackContext(c.CallExpression, c.Arguments ?? []);
+          const target = ctx ? (c.Arguments ?? [])[ctx.index] : undefined;
+          if (ctx && target
+              && (target.type === 'ArrowFunction' || target.type === 'FunctionExpression')) {
+            contextualParameterTypes.set(target, ctx.types);
           }
         }
         walk(c.CallExpression);
