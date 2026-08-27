@@ -230,6 +230,19 @@ export function SameTypeList(a: readonly TypeRecord[], b: readonly TypeRecord[],
   return a.length === b.length && a.every((x, i) => SameTypeWithAssumptions(x, b[i], assumptions));
 }
 
+/**
+ * Whether two member lists are the same SET of types.
+ *
+ * Every member of each must have a partner in the other. Both directions are
+ * checked rather than one plus a length test, since a list holding a duplicate
+ * would otherwise pair twice against a single member and pass.
+ */
+function sameMemberSet(a: readonly TypeRecord[], b: readonly TypeRecord[], assumptions: readonly Assumption[]): boolean {
+  return a.length === b.length
+    && a.every((x) => b.some((y) => SameTypeWithAssumptions(x, y, assumptions)))
+    && b.every((y) => a.some((x) => SameTypeWithAssumptions(x, y, assumptions)));
+}
+
 function sameTupleElements(a: readonly TupleElementRecord[], b: readonly TupleElementRecord[], assumptions: readonly Assumption[]): boolean {
   return a.length === b.length && a.every((e, i) => e.Rest === b[i].Rest && e.Initial === b[i].Initial && SameTypeWithAssumptions(e.Type, b[i].Type, assumptions));
 }
@@ -407,7 +420,23 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       return t.Kind === 'nominal' && s.Declaration === t.Declaration && SameArgumentList(s.Arguments, t.Arguments, next);
     case 'union':
     case 'intersection':
-      return t.Kind === s.Kind && SameTypeList(s.Members, (t as { Members: readonly TypeRecord[] }).Members, next);
+      // Matched as a SET, not a sequence. A union is its members and nothing
+      // about their order - `uint8 | string` and `string | uint8` are one type -
+      // and comparing them position by position made two spellings of one union
+      // different types (D26).
+      //
+      // Invisible almost everywhere, because a union written in source is
+      // canonicalised and two spellings arrive already in the same order. It
+      // shows where a union is BUILT: `Promise.race` over a tuple joins its
+      // positions in the order it reads them, and the result was not assignable
+      // to the same union written the other way round. `Set.<string | uint8>`
+      // against a `Set.<uint8 | string>` shows it with no promise involved.
+      //
+      // This is D16 one container along - object PROPERTIES were compared
+      // positionally for the same reason and were fixed the same way - and it
+      // was found the same way, by an assertion that should have held in either
+      // spelling and held in only one.
+      return t.Kind === s.Kind && sameMemberSet(s.Members, (t as { Members: readonly TypeRecord[] }).Members, next);
     case 'tuple':
       return t.Kind === 'tuple' && sameTupleElements(s.Elements, t.Elements, next);
     case 'array':

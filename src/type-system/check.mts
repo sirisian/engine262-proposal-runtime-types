@@ -1799,6 +1799,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeof rejected === 'number' || rejected === undefined ? null : rejected as TypeRecord);
         };
       }
+      if (method === 'try') {
+        // `Promise.try<R, E>(callback: (...args) => R | Promise.<R, E>, ...args)`.
+        // R is the callback's RETURN, which is the same read `groupBy`'s key
+        // uses. Where the callback itself answers a promise, R is what THAT
+        // resolves with - `try` flattens, as `then` does.
+        return (args) => {
+          const callback = args[0] ? staticType(args[0]) : null;
+          const sigs = (callback as { Signatures?: readonly { Return?: Known, InferredReturn?: Known }[] } | null)?.Signatures;
+          const returned = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
+          if (!returned) {
+            return null;
+          }
+          const widened = widen(returned);
+          if (!widened) {
+            return null;
+          }
+          if (widened.Kind === 'nominal' && widened.LibraryName === 'Promise') {
+            const [inner, innerRejection] = widened.Arguments;
+            return typeof inner === 'number' || inner === undefined
+              ? null
+              : libraryTypeRecord('Promise', [
+                inner as TypeRecord,
+                typeof innerRejection === 'number' || innerRejection === undefined
+                  ? anyTypeRecord : innerRejection as TypeRecord,
+              ]) ?? null;
+          }
+          return libraryTypeRecord('Promise', [widened as TypeRecord, anyTypeRecord]) ?? null;
+        };
+      }
       if (method === 'resolve') {
         // `Promise.resolve<R>(value: R): Promise.<R, any>`. Not stated by the
         // design, and it follows from `all`'s shape: the value is what the

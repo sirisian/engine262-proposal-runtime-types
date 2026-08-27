@@ -468,7 +468,7 @@ test('a TUPLE of differently typed promises resolves positionally', () => {
   expect(evaluated('const p = Promise.all([Promise.resolve(1), Promise.resolve("a")]); String(typeof p.then);')).toBe('function');
 });
 
-test.fails('D26: a union inside a nominal ARGUMENT is compared by order', () => {
+test('D26 FIXED: a union inside a nominal argument is a SET of members', () => {
   // `race` and `any` over a tuple resolve with the UNION of its positions, and
   // the union comes out in the order the positions were read. That should not
   // matter and does: measured, `Promise.<string | uint8, Error>` is not
@@ -478,17 +478,55 @@ test.fails('D26: a union inside a nominal ARGUMENT is compared by order', () => 
   // two unions ARE equal everywhere else - `(type uint8 | string) === (type
   // string | uint8)` is *true*, `Reflect.isAssignable` between them is *true*,
   // and a bare `let b: string | uint8 = a` is accepted. Only the invariant
-  // comparison inside a nominal's arguments disagrees, and a `Set` shows it with
-  // no promise involved:
+  // comparison inside a nominal's arguments disagreed - `SameTypeList` walked
+  // members position by position - and a `Set` showed it with no promise
+  // involved. Members are matched as a SET now, which is D16's fix one container
+  // along.
   expect(ok('let a: Set.<uint8 | string> = new Set(); let b: Set.<string | uint8> = a;')).toBe(true);
   expect(ok(`${TUP} let p: Promise.<uint8 | string, Error> = Promise.race(t);`)).toBe(true);
 });
 
 test('race and any over a tuple resolve with the union of its positions', () => {
-  // Asserted in the order the positions are read, since D26 makes the other
-  // order refuse. When D26 is fixed both orders should pass and this test should
-  // gain the swapped spelling rather than change.
+  // BOTH spellings, which is what D26's fix bought: the union is a set of
+  // members, so the order the positions happened to be read in does not reach
+  // the caller's annotation.
   expect(ok(`${TUP} let p: Promise.<string | uint8, Error> = Promise.race(t);`)).toBe(true);
+  expect(ok(`${TUP} let p: Promise.<uint8 | string, Error> = Promise.race(t);`)).toBe(true);
+  expect(ok(`${TUP} let p: Promise.<uint8 | string, AggregateError> = Promise.any(t);`)).toBe(true);
   expectStaticTypeError(`${TUP} let p: Promise.<uint8, Error> = Promise.race(t);`);
   expect(ok(`${TUP} let p: Promise.<string | uint8, AggregateError> = Promise.any(t);`)).toBe(true);
+});
+
+test('Promise.try takes its value from the callback, and FLATTENS', () => {
+  // `standardlibrary.md`: `try<R, E>(callback: (...args) => R | Promise.<R, E>,
+  // ...args): Promise.<R, E>`. R is the callback's RETURN - the same read
+  // `groupBy`'s key uses - and where the callback itself answers a promise, R is
+  // what THAT resolves with, because `try` flattens as `then` does.
+  expect(ok('let p: Promise.<uint8, any> = Promise.try(() => (1 := uint8));')).toBe(true);
+  expectStaticTypeError('let p: Promise.<string, any> = Promise.try(() => (1 := uint8));');
+  // A block-bodied callback works, which needed the whole of Phase 0.
+  expect(ok('let p: Promise.<uint8, any> = Promise.try(() => { return (1 := uint8); });')).toBe(true);
+  // Flattening: one `Promise` in the result, not two. Guarded, since the stubs
+  // are *undefined* and no `Promise` annotation admits that at run time.
+  expect(ok('if (false) { let inner: Promise.<uint8, Error> = undefined; let p: Promise.<uint8, Error> = Promise.try(() => inner); } 1;')).toBe(true);
+  expectStaticTypeError('let inner: Promise.<uint8, Error> = undefined; let p: Promise.<Promise.<uint8, Error>, any> = Promise.try(() => inner);');
+  expect(evaluated('String(typeof Promise.try(() => 1).then);')).toBe('function');
+});
+
+test.fails('withResolvers cannot be typed by ARGUMENT inference', () => {
+  // `withResolvers<R, E>(): { promise: Promise.<R, E>, resolve: (value: R) =>
+  // void, reject: (reason: E) => void }` takes NO ARGUMENTS, so there is nothing
+  // for R and E to be inferred from. Every signature in this file reads its
+  // variables out of the call; this one would have to read them from the
+  // ANNOTATION the result is being assigned to, which is contextual typing in
+  // the opposite direction and a mechanism the dispatch does not have.
+  //
+  // Filed rather than approximated: answering `Promise.<any, any>` would state
+  // less than the program wrote and would refuse nothing.
+  //
+  // Stated as the RESULT being untyped. A first version asserted
+  // `let bad: uint8 = w` for an object-annotated `w`, which is a static error
+  // whatever `withResolvers` answers - true for an unrelated reason, and so no
+  // evidence about this gap at all.
+  expectStaticTypeError('let bad: uint8 = Promise.withResolvers();');
 });
