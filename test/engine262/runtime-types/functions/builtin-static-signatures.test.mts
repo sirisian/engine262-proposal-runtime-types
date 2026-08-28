@@ -996,3 +996,28 @@ test('D43 adapts only where the literal FITS', () => {
   // An already-typed argument is unaffected.
   expect(ok('if (false) { let a: [].<uint8> = Array.of((1 := uint8), (2 := uint8)); } 1;')).toBe(true);
 });
+
+test('D43: an ITERABLE argument carries the wanted element through', () => {
+  // `Array.from`, `Array.fromAsync`, `Iterator.from` and `Promise.all` take an
+  // iterable rather than per-argument values, so the wanted type is pushed
+  // through it - an array OF the wanted element - and an array literal argument
+  // then adapts its own literals contextually, as `let a: [].<uint8> = [1, 2]`
+  // already does.
+  //
+  // Only the LITERAL spellings failed: a typed binding argument always worked,
+  // which is what showed the decomposition was the whole problem.
+  expect(ok('if (false) { let a: [].<uint8> = Array.from([1, 2]); } 1;')).toBe(true);
+  expect(ok('if (false) { let i: IteratorHelper.<uint8, void, void> = Iterator.from([1, 2]); } 1;')).toBe(true);
+  expect(ok('if (false) { let p: Promise.<[].<uint8>, any> = Array.fromAsync([1, 2]); } 1;')).toBe(true);
+  // `Promise.all`'s iterable holds PROMISES, so the target's element is wrapped
+  // before being pushed down - the one thing separating it from the other three.
+  expect(ok('if (false) { let p: Promise.<[].<uint8>, any> = Promise.all([Promise.resolve(1)]); } 1;')).toBe(true);
+});
+
+test('D43: the iterable arms adapt only where the literal FITS', () => {
+  expectStaticTypeError('let a: [].<string> = Array.from([1, 2]);');
+  expectStaticTypeError('let i: IteratorHelper.<string, void, void> = Iterator.from([1, 2]);');
+  // A typed argument and a call with no contextual type are both unaffected.
+  expect(ok('if (false) { let s: [].<uint8> = [(1 := uint8)]; let a: [].<uint8> = Array.from(s); } 1;')).toBe(true);
+  expect(ok('if (false) { let a = Array.from([1, 2]); } 1;')).toBe(true);
+});

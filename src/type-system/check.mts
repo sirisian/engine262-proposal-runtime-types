@@ -1760,6 +1760,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * belongs at that type: it answers true for `1` at `uint8` and false for `1`
      * at `string`, where `IsAssignable` answers false to both.
      */
+    /**
+     * An ITERABLE argument's wanted type, given the ELEMENT the target wants of
+     * the result (D43).
+     *
+     * `Array.from`, `Array.fromAsync`, `Iterator.from` and `Promise.all` take an
+     * iterable rather than per-argument values, so the wanted type is pushed
+     * through it: an array OF the wanted element. An array literal argument then
+     * adapts its own literals contextually, exactly as
+     * `let a: [].<uint8> = [1, 2]` already does - which is why only the LITERAL
+     * argument spellings failed here, a typed binding argument having always
+     * worked.
+     */
+    const iterableOf = (element: TypeRecord | null): TypeRecord | null => (
+      element ? arrayOfElement(element) as TypeRecord | null : null
+    );
     const adaptArgument = (node: ParseNode | undefined, wanted: TypeRecord | null): Known => {
       if (!node) {
         return null;
@@ -1821,8 +1836,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A promise-valued ELEMENT contributes what it RESOLVES with, which is the
       // one thing this signature needs that no other does: `fromAsync` awaits
       // each element, so a `[].<Promise.<uint8, E>>` yields a `[].<uint8>`.
-      return (args) => {
-        const items = args[0] ? staticType(args[0]) : null;
+      return (args, contextual) => {
+        // The target resolves with an ARRAY, so its element is what the
+        // iterable argument's own elements adapt to (D43).
+        const wantedAsync = contextual && contextual.Kind === 'nominal'
+          && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
+          && (contextual.Arguments[0] as TypeRecord).Kind === 'array'
+          ? iterableOf((contextual.Arguments[0] as { Element: TypeRecord }).Element)
+          : null;
+        const items = adaptArgument(args[0], wantedAsync);
         const element = items ? elementTypeOfIterable(items) : null;
         if (!element) {
           return null;
@@ -1879,7 +1901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           return arrayOfElement(first);
         }
-        const items = args[0] ? staticType(args[0]) : null;
+        const items = adaptArgument(args[0], iterableOf(wantedElement));
         const element = items ? elementTypeOfIterable(items) : null;
         if (!element) {
           return null;
@@ -1895,8 +1917,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
     }
     if (base.name === 'Iterator' && method === 'from') {
-      return (args) => {
-        const items = args[0] ? staticType(args[0]) : null;
+      return (args, contextual) => {
+        // The target's element, pushed through the ITERABLE argument (D43).
+        const wantedIter = contextual && contextual.Kind === 'nominal'
+          && contextual.LibraryName === 'IteratorHelper' && contextual.Arguments.length >= 1
+          ? iterableOf(contextual.Arguments[0] as TypeRecord)
+          : null;
+        const items = adaptArgument(args[0], wantedIter);
         const element = items ? elementTypeOfIterable(items) : null;
         return element
           ? libraryTypeRecord('IteratorHelper', [widen(element) as TypeRecord, voidTypeRecord, voidTypeRecord]) ?? null
@@ -1942,8 +1969,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ]) ?? null,
       }[method];
       if (combinator) {
-        return (args) => {
-          const items = args[0] ? staticType(args[0]) : null;
+        return (args, contextual) => {
+          // `Promise.all`'s argument is an iterable of PROMISES, so the
+          // target's element must be wrapped before it can be pushed down:
+          // a `Promise.<[].<uint8>, any>` target wants
+          // `[].<Promise.<uint8, any>>`. That extra wrap is the only thing
+          // separating this arm from the other three iterable ones (D43).
+          const wantedAll = contextual && contextual.Kind === 'nominal'
+            && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
+            && (contextual.Arguments[0] as TypeRecord).Kind === 'array'
+            ? iterableOf(libraryTypeRecord('Promise', [
+              (contextual.Arguments[0] as { Element: TypeRecord }).Element, anyTypeRecord,
+            ]) as TypeRecord)
+            : null;
+          const items = adaptArgument(args[0], wantedAll);
           // A TUPLE of differently typed promises resolves POSITIONALLY.
           // `standardlibrary.md`: "Over a tuple of differently typed promises the
           // combinators return tuples instead: `Promise.all` of
