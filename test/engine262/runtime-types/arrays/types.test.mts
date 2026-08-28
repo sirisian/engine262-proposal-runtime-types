@@ -68,10 +68,11 @@ test('the bound composes with the rest of the array work', () => {
     + ' let ref r = b[0]; r = 5; String(a[0]);')).toBe('5');
   // and a borrow into a fixed-extent array still writes it
   expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
-  // an SoA is not an array and is still refused, as soa.md requires
-  expect(evaluated('class P { x: uint8; } const s = new SoA.<P>();'
-    + " function p(v: [].<any>): string { return 'ok'; }"
-    + " try { p(s); 'no'; } catch (e) { e.constructor.name; }")).toBe('TypeError');
+  // an SoA is not an array and is still refused, as soa.md requires - STATICALLY
+  // now, so there is no run-time throw for a `catch` to name. The judgment is the
+  // same one this asserted; the checker reaches it first.
+  expectStaticTypeError('class P { x: uint8; } const s = new SoA.<P>();'
+    + " function p(v: [].<any>): string { return 'ok'; } p(s);");
 });
 
 // -- An Array's runtime type -----------------------------------------------------

@@ -352,8 +352,11 @@ test('a window of the wrong element type is refused, not converted', () => {
   // `displayType` bug and not as a coercion one.
   expectThrownKind('const b = new ArrayBuffer(4);'
     + ' function f(p: Span.<uint32>) { return p.length; } f(Span.<uint8>(b));', 'TypeError');
-  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
-    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);', 'TypeError');
+  // The SoA column reaches the same refusal STATICALLY, its type being visible
+  // where the `Span.<uint8>(b)` above is built from a run-time buffer. Same
+  // judgment, seen earlier.
+  expectStaticTypeError('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);');
 });
 
 test('a matching window still passes, and an owned array still coerces', () => {
@@ -394,8 +397,13 @@ test('a column projection is a window at run time', () => {
 });
 
 test('a column projection of the wrong element type is refused', () => {
-  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
-    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);', 'TypeError');
+  // STATICALLY now, where this once wanted a catchable TypeError. The refusal is
+  // the same and it arrives earlier: a column of a `SoA.<P>` is a
+  // `Span.<float32>`, a window's element type is invariant, and the checker can
+  // see both. Asserting the catchable form would now be asserting that the
+  // checker does NOT see it.
+  expectStaticTypeError('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);');
 });
 
 test('fields is statically an object of windows', () => {

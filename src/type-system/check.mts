@@ -5819,7 +5819,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     : null))
                 .filter((a): a is TypeRecord => !!a);
               if (args.length === spec.TypeArguments.TypeArgumentList.length) {
-                return CanonicalizeType({ ...base, Arguments: args });
+                // A NUMERIC argument is a value, not a literal type. The
+                // annotation path already converts one - `let a: SoA.<P, 0>`
+                // reads `0` as the number - and this path did not, so
+                // `new SoA.<P, 0>()` was typed `SoA.<P, a literal type of
+                // number>` and matched no annotation. Converted the same way,
+                // for the reason #sec-type-references gives: "a type argument is
+                // written as a Type even when it is a value … the clause on
+                // generics decides which a given parameter expects".
+                const valueArgs: (TypeRecord | number)[] = args.map(
+                  (a) => ((a as TypeRecord).Kind === 'literal'
+                    && (a as { Value?: unknown }).Value instanceof NumberValue
+                    ? R((a as { Value: NumberValue }).Value)
+                    : a),
+                );
+                // A LIBRARY generic fills its declared defaults in
+                // `libraryTypeRecord`, and spreading the base bypassed it:
+                // `new SoA.<P>()` was typed `SoA.<P>` where the annotation
+                // `SoA.<P>` is `SoA.<P, 0>`, so a binding could not hold the
+                // value its own annotation named. Routed back through the
+                // builder, which is the one place those defaults are stated.
+                const asLibrary = libraryTypeRecord(specName, valueArgs);
+                if (asLibrary) {
+                  return CanonicalizeType(asLibrary as TypeRecord) as Known;
+                }
+                return CanonicalizeType({ ...base, Arguments: valueArgs });
               }
             }
             return base;
