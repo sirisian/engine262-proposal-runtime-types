@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, expectThrownFlagOff } from '../harness.mts';
+import { evaluated, expectThrown, expectThrownFlagOff, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-array-and-tuple-types (Array and Tuple Types), #sec-issubtype.
@@ -340,4 +340,39 @@ test('a wider view does not restamp the array it names', () => {
     + 'function big() { return 300; } try { b[0] = big(); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
   expect(evaluated('const a: [].<uint8> = [(1 := uint8)]; const b: [].<any> = a; '
     + 'function big() { return 300; } try { b[0] = big(); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+});
+
+test('D18: an array literal at a TUPLE annotation is checked for ARITY', () => {
+  // An array literal at a tuple target returned null from `staticTypeIn` and was
+  // checked nowhere, so every arity mismatch type-checked and threw at run time.
+  // An array literal at an ARRAY target was checked, an object literal was
+  // checked, and a tuple BINDING was compared properly - only this pairing was
+  // missing.
+  expect(ok('if (false) { let x: [] = []; } 1;')).toBe(true);
+  expectStaticTypeError('let x: [] = [1];');
+  expectStaticTypeError('let x: [] = [1, 2, 3];');
+  expect(ok('if (false) { let x: [uint8] = [(1 := uint8)]; } 1;')).toBe(true);
+  expectStaticTypeError('let x: [uint8] = [(1 := uint8), (2 := uint8)];');
+  // At a parameter and nested inside an array, not only at a binding.
+  expectStaticTypeError('function f(x: [uint8]) {} f([(1 := uint8), (2 := uint8)]);');
+  expectStaticTypeError('let a: [].<[uint8]> = [[(1 := uint8), (2 := uint8)]];');
+});
+
+test('D18: what the ARITY rule deliberately does not refuse', () => {
+  // TOO FEW is D33: a trailing position may carry a default and a literal that
+  // omits it is valid. The default IS recorded - two tuple types differing only
+  // in one are distinguishable - but this arm cannot read it, and refusing on a
+  // count it cannot compute would refuse a working program. A default cannot
+  // absorb an EXTRA element, so the too-many half needs no such knowledge.
+  expect(ok('if (false) { let x: [uint8] = []; } 1;')).toBe(true);
+  expect(ok('if (false) { let x: [uint8, string = "d"] = [(1 := uint8)]; } 1;')).toBe(true);
+  // A SPREAD contributes an unknown count, and a REST position admits any number
+  // past the fixed ones.
+  expect(ok('if (false) { const s: [].<uint8> = [(1 := uint8)]; let x: [uint8] = [...s]; } 1;')).toBe(true);
+  expect(ok('if (false) { let x: [uint8, ...string] = [(1 := uint8), "a", "b"]; } 1;')).toBe(true);
+  // The per-position ELEMENT TYPE is not checked here either - `[uint8] = ["a"]`
+  // still passes the checker and throws at run time. That half regressed a
+  // literal of PROMISES at a tuple of promise types when it was first attempted,
+  // and is left until the promise case is understood.
+  expect(ok('if (false) { let x: [uint8] = ["a"]; } 1;')).toBe(true);
 });

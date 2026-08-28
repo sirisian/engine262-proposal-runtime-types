@@ -750,17 +750,33 @@ test('the COLLECTION constructors are deliberately left untyped', () => {
 // The proposal's own REFLECTION statics
 // ---------------------------------------------------------------------------
 
-test('Reflect.typeOf answers a Type Object; Reflect.isAssignable a Boolean', () => {
-  // #sec-reflect-typeof: "Return GetTypeObject(RuntimeTypeOf(value))", so the
-  // result is a Type Object whatever it is asked about - a FIXED result and not
-  // an identity, since the argument decides WHICH type is described rather than
-  // what kind of thing is answered.
-  expectStaticTypeError('let n: string = Reflect.typeOf(1);');
-  expect(ok('let n: Reflect.Type = Reflect.typeOf(1);')).toBe(true);
+test('Reflect.isAssignable answers a Boolean', () => {
   // #sec-reflect-isassignable: "Return IsAssignable(source.[[TypeRecord]],
   // target.[[TypeRecord]])".
   expectStaticTypeError('let n: string = Reflect.isAssignable(type uint8, type uint8);');
   expect(ok('let n: boolean = Reflect.isAssignable(type uint8, type uint8);')).toBe(true);
+  // A result that CROSSES a boundary is fine, which is what `typeOf`'s row could
+  // not manage.
+  expect(evaluated('function f(a, b) { return Reflect.isAssignable(a, b); } String(f(type uint8, type uint8));')).toBe('true');
+});
+
+test.fails('Reflect.typeOf answers a Reflect.Type — WITHDRAWN, see D34/D35', () => {
+  // The row was written and then withdrawn. #sec-reflect-typeof says the result
+  // is `GetTypeObject(RuntimeTypeOf(value))`, so `Reflect.Type` is the right
+  // answer - but NO VALUE REPORTS AS `Reflect.Type`. A Type Object's runtime
+  // type is `{}`, and `Reflect.typeOf(type uint8) === (type Reflect.Type)` is
+  // *false*.
+  //
+  // So the row typed a function whose result its own annotation refuses, and
+  // `function f(v) { return Reflect.typeOf(v); } f(1)` began to throw
+  // `[Function] is not assignable to "Reflect.Type"`. A correct signature over a
+  // type nothing inhabits is worse than none: it turns working programs into
+  // errors at every boundary the value crosses.
+  //
+  // The signature is right and the MEMBERSHIP is missing (D35), so this is left
+  // failing rather than rewritten - it should pass unchanged once a Type Object
+  // reports as a `Reflect.Type`.
+  expectStaticTypeError('let n: string = Reflect.typeOf(1);');
 });
 
 test('ECMAScript\'s own Reflect surface is NOT swept in', () => {

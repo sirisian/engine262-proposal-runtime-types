@@ -2039,19 +2039,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // points there rather than restating them - the reflection clauses are where
     // this API's shape is settled, and putting it in two documents is how the two
     // would drift.
-    if (base.name === 'Reflect' && method === 'typeOf') {
-      // `Reflect.typeOf(_value_)` returns `GetTypeObject(RuntimeTypeOf(_value_))`,
-      // so its result is a Type Object whatever it is asked about - a FIXED
-      // result, not an identity: the argument decides WHICH type is described,
-      // not what kind of thing is answered.
-      // `Reflect.Type` is a QUALIFIED name, not a library one, so it is reached
-      // the way an annotation reaches it: through the binding, which is what
-      // `resolveType`'s `TypeReference` arm does for a dotted name. Asking
-      // `libraryTypeRecord` answers *null* and the row then says nothing - which
-      // is what a first attempt did, and the wrong-annotation test passed
-      // anyway because a row that says nothing refuses nothing.
-      return () => (BoundTypeRecordForName('Reflect.Type') as Known | undefined) ?? null;
-    }
+    // `Reflect.typeOf`'s row is WITHDRAWN (D34, D35). #sec-reflect-typeof says
+    // it returns `GetTypeObject(RuntimeTypeOf(_value_))`, so `Reflect.Type` is
+    // the right answer - but NO VALUE REPORTS AS `Reflect.Type`: a Type Object's
+    // runtime type is `{}`, and `Reflect.typeOf(type uint8) === (type
+    // Reflect.Type)` is *false*. The row therefore typed a function whose result
+    // its own annotation refuses, and any program letting that result cross a
+    // boundary began to fail - `function f(v) { return Reflect.typeOf(v); }
+    // f(1)` among them.
+    //
+    // The signature is correct and the MEMBERSHIP is what is missing, so this
+    // waits on D35 rather than being written a different way. `isAssignable`
+    // below answers a `boolean` and has no such problem.
     if (base.name === 'Reflect' && method === 'isAssignable') {
       // "Return IsAssignable(_source_.[[TypeRecord]], _target_.[[TypeRecord]])" -
       // a Boolean.
@@ -2763,6 +2762,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * of an unknown type, so it stops both judgments rather than being guessed
    * at - the alternative is reporting an arity the program does not have.
    */
+  /**
+   * An array literal at a TUPLE annotation — the ARITY half (D18).
+   *
+   * The sibling of `checkArrayLiteralAgainst` below, which this pairing had no
+   * counterpart for: an array literal at a tuple target returned null and was
+   * checked nowhere, so every arity mismatch type-checked and threw at run time.
+   * An array literal at an ARRAY target was checked, an object literal was
+   * checked, and a tuple BINDING was compared properly - only this pairing was
+   * missing.
+   *
+   * TOO MANY only. Two neighbouring rules are deliberately absent:
+   *
+   * - TOO FEW (D33). A trailing position may carry a default and a literal that
+   *   omits it is valid; the default is recorded - two tuple types differing
+   *   only in one are distinguishable - but reading `Initial` here does not find
+   *   it, and refusing on a count this arm cannot compute would refuse a working
+   *   program. A default cannot absorb an EXTRA element, so this half needs no
+   *   knowledge of defaults.
+   * - The per-position ELEMENT TYPE. A first attempt at it refused a literal of
+   *   PROMISES at a tuple of promise types, taking `Promise.all` over a tuple
+   *   with it. The check itself is what the array arm does; the difference is in
+   *   how a position's type reaches `staticTypeIn`, and that wants instrumenting
+   *   rather than guessing.
+   */
+  const checkArrayLiteralArityAgainstTuple = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'tuple' }) => {
+    const elements = (node.ElementList ?? []).filter((el): el is ParseNode => !!el && typeof el === 'object');
+    // A SPREAD contributes an unknown number of elements, so no arity can be
+    // matched up, and a REST position admits any number beyond the fixed ones.
+    if (elements.some((el) => el.type === 'SpreadElement') || target.Elements.some((p) => p.Rest)) {
+      return;
+    }
+    if (elements.length > target.Elements.length) {
+      report(
+        { Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) } as TypeRecord,
+        target,
+      );
+    }
+  };
+
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
     const elements = node.ElementList ?? [];
     let spread = false;
@@ -3090,6 +3128,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'tuple') {
+      checkArrayLiteralArityAgainstTuple(node as ParseNode.ArrayLiteral, contextual);
+      // The LITERAL still reports no type, for the reason the array arm below
+      // gives.
       return null;
     }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'array') {
