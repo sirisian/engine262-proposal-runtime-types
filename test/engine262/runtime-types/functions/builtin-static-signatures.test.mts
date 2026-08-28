@@ -745,3 +745,36 @@ test('the COLLECTION constructors are deliberately left untyped', () => {
   expectStaticTypeError('class MyErr extends Error { } let n: uint8 = new MyErr();');
   expect(evaluated('String(new Error("x").message);')).toBe('x');
 });
+
+// ---------------------------------------------------------------------------
+// The proposal's own REFLECTION statics
+// ---------------------------------------------------------------------------
+
+test('Reflect.typeOf answers a Type Object; Reflect.isAssignable a Boolean', () => {
+  // #sec-reflect-typeof: "Return GetTypeObject(RuntimeTypeOf(value))", so the
+  // result is a Type Object whatever it is asked about - a FIXED result and not
+  // an identity, since the argument decides WHICH type is described rather than
+  // what kind of thing is answered.
+  expectStaticTypeError('let n: string = Reflect.typeOf(1);');
+  expect(ok('let n: Reflect.Type = Reflect.typeOf(1);')).toBe(true);
+  // #sec-reflect-isassignable: "Return IsAssignable(source.[[TypeRecord]],
+  // target.[[TypeRecord]])".
+  expectStaticTypeError('let n: string = Reflect.isAssignable(type uint8, type uint8);');
+  expect(ok('let n: boolean = Reflect.isAssignable(type uint8, type uint8);')).toBe(true);
+});
+
+test('ECMAScript\'s own Reflect surface is NOT swept in', () => {
+  // `Reflect.set`, `defineProperty` and the rest are the language's, not this
+  // proposal's, and typing them is a separate question. A signature is a claim
+  // the function exists and behaves as stated, so each row is written only for
+  // an operation this proposal specifies.
+  expect(ok('if (false) { let n: string = Reflect.set({}, "a", 1); } 1;')).toBe(true);
+  expect(ok('if (false) { let n: string = Reflect.ownKeys({}); } 1;')).toBe(true);
+});
+
+test('the reflection statics keep their run time and respect shadowing', () => {
+  expect(evaluated('String(Reflect.typeOf(1) === (type number));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type uint8));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type string));')).toBe('false');
+  expect(ok('if (false) { class R2 { } const Reflect = R2; let n: string = Reflect.typeOf(1); } 1;')).toBe(true);
+});

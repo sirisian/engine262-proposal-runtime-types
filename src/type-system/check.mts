@@ -2034,6 +2034,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
       }
     }
+    // The proposal's own REFLECTION statics. Their signatures are stated in
+    // #sec-reflection, beside each operation's own clause, and #table-typed-statics
+    // points there rather than restating them - the reflection clauses are where
+    // this API's shape is settled, and putting it in two documents is how the two
+    // would drift.
+    if (base.name === 'Reflect' && method === 'typeOf') {
+      // `Reflect.typeOf(_value_)` returns `GetTypeObject(RuntimeTypeOf(_value_))`,
+      // so its result is a Type Object whatever it is asked about - a FIXED
+      // result, not an identity: the argument decides WHICH type is described,
+      // not what kind of thing is answered.
+      // `Reflect.Type` is a QUALIFIED name, not a library one, so it is reached
+      // the way an annotation reaches it: through the binding, which is what
+      // `resolveType`'s `TypeReference` arm does for a dotted name. Asking
+      // `libraryTypeRecord` answers *null* and the row then says nothing - which
+      // is what a first attempt did, and the wrong-annotation test passed
+      // anyway because a row that says nothing refuses nothing.
+      return () => (BoundTypeRecordForName('Reflect.Type') as Known | undefined) ?? null;
+    }
+    if (base.name === 'Reflect' && method === 'isAssignable') {
+      // "Return IsAssignable(_source_.[[TypeRecord]], _target_.[[TypeRecord]])" -
+      // a Boolean.
+      return () => makePrimitive('boolean');
+    }
     if (base.name === 'Object' && (method === 'freeze' || method === 'seal' || method === 'preventExtensions')) {
       // `Object.freeze<T>(o: T): T` and its siblings. The IDENTITY signature:
       // each answers the object it was given, so a type crossing one is not
