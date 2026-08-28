@@ -968,3 +968,31 @@ test('OQ18/OQ19: the rejection type flows without any per-call inference', () =>
   expect(ok('if (false) { function h(): Promise.<uint8, Error> { return Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
   expect(ok('if (false) { async function f(): Promise.<uint8, Error> { return await Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
 });
+
+test('D43: an untyped literal ADAPTS through a static\'s inferred return', () => {
+  // `staticType(args[i])` alone widens an untyped literal - `1` becomes
+  // `number` - and no later check recovers the `uint8` the position wanted, so
+  // `Array.of(1, 2)` at a `[].<uint8>` was refused. Reading the argument
+  // against its WANTED type lets it adapt as it does at a binding, an element
+  // or a parameter.
+  //
+  // `literalFitsNumericType` is the predicate `requireAssignable` consults
+  // before its own `IsAssignable`: true for `1` at `uint8`, false for `1` at
+  // `string`, where `IsAssignable` answers false to both.
+  expect(ok('if (false) { let a: [].<uint8> = Array.of(1, 2); } 1;')).toBe(true);
+  expect(ok('if (false) { let p: Promise.<uint8, Error> = Promise.resolve(1); } 1;')).toBe(true);
+  expect(ok('if (false) { let p: Promise.<never, uint8> = Promise.reject(1); } 1;')).toBe(true);
+});
+
+test('D43 adapts only where the literal FITS', () => {
+  // A wrong target still refuses: adaptation is not permission.
+  expectStaticTypeError('let a: [].<string> = Array.of(1, 2);');
+  expectStaticTypeError('let p: Promise.<string, Error> = Promise.resolve(1);');
+  expectStaticTypeError('let p: Promise.<never, string> = Promise.reject(1);');
+  // With NO contextual type the argument keeps its own widened type, which is
+  // what a call outside any target has always produced.
+  expect(ok('if (false) { let a = Array.of(1, 2); } 1;')).toBe(true);
+  expect(ok('if (false) { let p = Promise.resolve(1); } 1;')).toBe(true);
+  // An already-typed argument is unaffected.
+  expect(ok('if (false) { let a: [].<uint8> = Array.of((1 := uint8), (2 := uint8)); } 1;')).toBe(true);
+});

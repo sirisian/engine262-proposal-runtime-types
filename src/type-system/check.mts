@@ -1745,7 +1745,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[]) => Known) | undefined => {
+  const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[], contextual?: Known) => Known) | undefined => {
+    /**
+     * The type an ARGUMENT should be read at, given what the call's target wants
+     * of the RESULT (D43).
+     *
+     * `staticType(args[i])` alone widens an untyped literal - `1` becomes
+     * `number` - and no later check recovers the `uint8` the position wanted.
+     * Reading the argument with `staticTypeIn` against its wanted type lets it
+     * adapt exactly as it does at a binding, an element or a parameter.
+     *
+     * `literalFitsNumericType` is the predicate `requireAssignable` consults
+     * BEFORE its own `IsAssignable`, and it is what decides whether a literal
+     * belongs at that type: it answers true for `1` at `uint8` and false for `1`
+     * at `string`, where `IsAssignable` answers false to both.
+     */
+    const adaptArgument = (node: ParseNode | undefined, wanted: TypeRecord | null): Known => {
+      if (!node) {
+        return null;
+      }
+      if (!wanted) {
+        return staticType(node);
+      }
+      const read = staticTypeIn(node, wanted as Known);
+      if (read && literalFitsNumericType(read as TypeRecord, wanted)) {
+        return wanted as Known;
+      }
+      return read;
+    };
     const member = callee as unknown as {
       type?: string,
       MemberExpression?: { type?: string, name?: string },
@@ -1825,7 +1852,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
     }
     if (base.name === 'Array' && (method === 'from' || method === 'of')) {
-      return (args) => {
+      return (args, contextual) => {
+        // The target's ELEMENT type, where it wants an array. Each argument of
+        // `Array.of` is one element, so that is what its literals adapt to
+        // (D43). `Array.from`'s argument is an ITERABLE rather than an element,
+        // so it is not decomposed here.
+        const wantedElement = contextual && contextual.Kind === 'array'
+          ? contextual.Element as TypeRecord
+          : null;
         if (method === 'of') {
           // `Array.of<T>(...items: T): [].<T>`. One variable gathered from MANY
           // arguments, which is the rest-parameter shape: every argument must
@@ -1834,7 +1868,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `some((t) => !t)` guard proves no element is null but narrows
           // nothing, leaving each element ~Known~ where `widen` takes a
           // TypeRecord. The length comparison keeps the all-or-nothing meaning.
-          const types = args.map((a) => staticType(a));
+          const types = args.map((a) => adaptArgument(a, wantedElement));
           const present = types.filter((t): t is TypeRecord => t !== null && t !== undefined);
           if (present.length === 0 || present.length !== types.length) {
             return null;
@@ -1986,8 +2020,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // annotation, was refused. A comment explaining why something could not
         // be done is a claim about the codebase and goes stale exactly like a
         // signature.
-        return (args) => {
-          const reason = args[0] ? staticType(args[0]) : null;
+        return (args, contextual) => {
+          // The target's REJECTION type, this argument being what the promise
+          // rejects WITH - the mirror of `resolve` one arm below (D43).
+          const wantedReason = contextual && contextual.Kind === 'nominal'
+            && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
+            ? contextual.Arguments[1] as TypeRecord
+            : null;
+          const reason = adaptArgument(args[0], wantedReason);
           return reason
             ? libraryTypeRecord('Promise', [neverType, widen(reason) as TypeRecord]) ?? null
             : null;
@@ -2038,8 +2078,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // answered identically and the suite passed. It computed by hand, one
         // call at a time, what the variance rule now gives - and a checker path
         // that answers no question invites the next reader to extend it.
-        return (args) => {
-          const value = args[0] ? staticType(args[0]) : null;
+        return (args, contextual) => {
+          // The target's RESOLUTION type, where it wants a promise: the single
+          // argument becomes it, so that is what its literals adapt to (D43).
+          const wantedValue = contextual && contextual.Kind === 'nominal'
+            && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
+            ? contextual.Arguments[0] as TypeRecord
+            : null;
+          const value = adaptArgument(args[0], wantedValue);
           return value
             ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, anyTypeRecord]) ?? null
             : null;
@@ -2838,7 +2884,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         { Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) } as TypeRecord,
         target,
       );
+      return;
     }
+    // Each element against ITS OWN position (D18's element half) - the rule D37
+    // landed for a STORE, at the literal site. Only the ARITY was checked here,
+    // so `let _x_: [uint8, string] = ["a", (1 := uint8)]`, the positions
+    // SWAPPED, was accepted.
+    //
+    // A position the rest collects takes the rest's ELEMENT type, the annotation
+    // being what the rest collects (#sec-type-annotations).
+    //
+    // `staticTypeIn` gives each element its position's type as context, so an
+    // untyped literal ADAPTS as it does everywhere - `[1, "s"]` at
+    // `[uint8, string]` stays valid.
+    //
+    // Blocked twice on D43: the corpus spells a promise tuple
+    // `[Promise.resolve(1), Promise.resolve("a")]`, and a static's inferred
+    // return widened those literals to `number`, so the elements were refused
+    // for a reason unrelated to positions. That is fixed and this now lands.
+    elements.forEach((el, i) => {
+      if (!el || typeof el !== 'object' || (el as ParseNode).type === 'Elision') {
+        return;
+      }
+      const position = i < fixed.length
+        ? fixed[i]!.Type as Known
+        : (restIndex === -1 ? null : restElementType(target.Elements[restIndex]!.Type) as Known);
+      if (position) {
+        requireAssignable(staticTypeIn(el as ParseNode, position), position);
+      }
+    });
   };
 
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
@@ -2975,10 +3049,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Map<ParseNode, Known>();
+  /**
+   * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
+   * function literal's and read in the same place - `staticType`'s own arm for
+   * the node (D43).
+   *
+   * A near-identical map was added for D42 and REMOVED when covariance made it
+   * dead. This is not that: D42 wanted the target's REJECTION type, which the
+   * variance rule now supplies without asking. This wants each ARGUMENT's type,
+   * so that an untyped literal adapts as it does at every other position -
+   * `Array.of(1, 2)` at a `[].<uint8>` widened its literals to `number` and was
+   * refused. Variance does not reach that: a literal's adaptation is a different
+   * question, and `Promise.resolve(1)` stayed refused after covariance landed.
+   */
+  const contextualCallTypes = new Map<ParseNode, Known>();
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
+    if (node && contextual && (node as ParseNode).type === 'CallExpression') {
+      contextualCallTypes.set(node as ParseNode, contextual);
+    }
     if (!node) {
       return null;
     }
@@ -5084,6 +5175,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'CallExpression': {
+        // Read HERE, inside `staticType`'s own arm for the node, which is where
+        // `contextualReturnTypes` is read for a function literal. Passing it
+        // from the builtin-static call site instead was tried and the arm never
+        // saw it.
+        const contextualForCall = contextualCallTypes.get(node) ?? null;
         // proposal-runtime-types `sec-composite-types`: "The Static Type of a
         // call of the Composite function is the top composite type where the
         // call supplies no TypeArguments and no contextual type reaches it."
@@ -5157,7 +5253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const staticSig = builtinStaticSignature(calleeNode);
           if (staticSig) {
-            return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []));
+            return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []), contextualForCall);
           }
         }
         // PLAN-standard-library-statics.md Family B: a GLOBAL function, whose

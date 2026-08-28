@@ -398,11 +398,31 @@ test('D18/D33: what the ARITY rule refuses, and what it deliberately does not', 
   // past the fixed ones.
   expect(ok('if (false) { const s: [].<uint8> = [(1 := uint8)]; let x: [uint8] = [...s]; } 1;')).toBe(true);
   expect(ok('if (false) { let x: [uint8, ...string] = [(1 := uint8), "a", "b"]; } 1;')).toBe(true);
-  // The per-position ELEMENT TYPE is not checked here either - `[uint8] = ["a"]`
-  // still passes the checker and throws at run time. That half regressed a
-  // literal of PROMISES at a tuple of promise types when it was first attempted,
-  // and is left until the promise case is understood.
-  expect(ok('if (false) { let x: [uint8] = ["a"]; } 1;')).toBe(true);
+  // The per-position ELEMENT TYPE is checked NOW (D18's element half).
+  //
+  // It was left out twice because it regressed a literal of PROMISES at a tuple
+  // of promise types - and the promise case is now understood: a static's
+  // inferred return widened `Promise.resolve(1)`'s untyped literal to `number`,
+  // so those elements were refused for a reason unrelated to positions. D43
+  // fixed that and this landed the same day.
+  expectStaticTypeError('let x: [uint8] = ["a"];');
+});
+
+test('D18: each tuple element is checked against ITS OWN position', () => {
+  // `[uint8, string] = ["a", (1 := uint8)]` - the positions SWAPPED - was
+  // accepted while only the arity was checked. This is the rule D37 landed for
+  // a STORE, at the literal site.
+  expectStaticTypeError('let x: [uint8, string] = ["a", (1 := uint8)];');
+  expect(ok('if (false) { let x: [uint8, string] = [(1 := uint8), "a"]; } 1;')).toBe(true);
+  // An untyped literal still ADAPTS to its position, as it does everywhere.
+  expect(ok('if (false) { let x: [uint8, string] = [1, "s"]; } 1;')).toBe(true);
+  // A position the REST collects takes the rest's element type.
+  expectStaticTypeError('let y: [uint8, ...[].<string>] = [(1 := uint8), (2 := uint8)];');
+  expect(ok('if (false) { let y: [uint8, ...[].<string>] = [(1 := uint8), "a"]; } 1;')).toBe(true);
+  // And at a PARAMETER, not only a binding.
+  expectStaticTypeError('function f(p: [uint8, string]) { return 1; } f(["a", (1 := uint8)]);');
+  // The corpus's own spelling, which blocked this half twice.
+  expect(ok('if (false) { let t: [Promise.<uint8, Error>, Promise.<string, Error>] = [Promise.resolve(1), Promise.resolve("a")]; } 1;')).toBe(true);
 });
 
 test('D33: a tuple\'s length is a RANGE, set by its trailing defaults', () => {
