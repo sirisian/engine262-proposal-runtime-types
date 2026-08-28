@@ -10836,6 +10836,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           } else if (objType && objType.Kind === 'array' && m.Expression) {
             target = objType.Element;
+          } else if (objType && objType.Kind === 'tuple' && m.Expression) {
+            // A store into a TUPLE POSITION takes that position's type (D37).
+            // The array arm above existed and this one did not, so
+            // `_x_[1] = (9 := uint8)` on a `[uint8, string]` was accepted - and
+            // at run time the store CONVERTS, so the uint8 became the String
+            // "9". The run time is not the gap: it behaves identically for an
+            // array element, which the checker refuses; the asymmetry was
+            // entirely here.
+            //
+            // The index must be a literal to name a position. A computed index
+            // could be any of them, and the union of the positions is what such
+            // a store admits - not narrowed further here, since a wrong-position
+            // store through a computed index is a different rule from this one.
+            const idx = m.Expression as { type?: string, value?: unknown };
+            if (idx.type === 'NumericLiteral' && typeof idx.value === 'number') {
+              const positions = objType.Elements;
+              const restAt = positions.findIndex((e) => e.Rest);
+              const fixed = restAt === -1 ? positions : positions.slice(0, restAt);
+              if (idx.value < fixed.length) {
+                target = fixed[idx.value]!.Type as Known;
+              } else if (restAt !== -1) {
+                // A position the rest collects takes the rest's ELEMENT type,
+                // the annotation being what the rest collects.
+                target = restElementType(positions[restAt]!.Type) as Known;
+              }
+            }
           }
           if (target) {
             requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);

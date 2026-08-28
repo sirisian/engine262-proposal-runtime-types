@@ -259,13 +259,18 @@ test('an array type in expression position is inert with the feature off', () =>
 
 test('a store to a tuple position is checked against THAT position', () => {
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t[0] = "wrong";');
-  // A store into a `string` position CONVERTS a numeric rather than refusing it,
-  // which is what the array element store does too - RequireType converts, and
-  // #sec-the-conversion-rule says a primitive is assignable only to itself and
-  // `any`. Pinned here as the tuple's, and recorded against the shared cause in
-  // KNOWN-DIVERGENCES.md rather than fixed by this rule.
-  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"];'
-    + ' t[1] = (1 := uint8); `${t[1]}:${typeof t[1]}`;')).toBe('1:string');
+  // A store into a `string` position is now REFUSED STATICALLY (D37).
+  //
+  // This pinned the run-time coercion instead - `t[1] = (1 := uint8)` giving
+  // `1:string` - and deferred the cause to a `KNOWN-DIVERGENCES.md` that does not
+  // exist in this repository. The coercion is still there: `RequireType` converts,
+  // and the ARRAY element store reaches the same conversion. What differed was
+  // that the checker refused the array store and had no rule for a tuple
+  // position, so only the tuple's coercion was reachable.
+  //
+  // With the store rule in place the program no longer runs, which is the same
+  // answer the array element store gives for the same mistake.
+  expectStaticTypeError('type T = [uint8, string]; let t: T = [1, "s"]; t[1] = (1 := uint8);');
   // The legitimate stores still work, each at its own type.
   expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"];'
     + ' t[0] = (9 := uint8); t[1] = "ok"; `${t[0]}:${t[1]}`;')).toBe('9:ok');
@@ -278,10 +283,12 @@ test('a tuple keeps its arity', () => {
   // Unless a rest element admits the position, which is what a rest is for.
   expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
     + ' r[2] = "c"; r.push("d"); `${r.length}:${r[3]}`;')).toBe('4:d');
-  // Same conversion as above; what matters here is that the REST position's type
-  // is the one consulted.
+  // The REST position's type is the one consulted. Stored through an untyped
+  // binding so the D37 store rule, which would refuse this at the declaration,
+  // is out of the path - what is under test here is the RUN TIME's choice of
+  // position type, not whether the checker catches the store.
   expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
-    + ' r[2] = (5 := uint8); typeof r[2];')).toBe('string');
+    + ' const u = r; u[2] = (5 := uint8); typeof r[2];')).toBe('string');
 });
 
 test('the covariance of a tuple is closed at the store', () => {
@@ -311,11 +318,13 @@ test('a tuple carries its type even when it needed no conversion', () => {
   // ALREADY satisfied its type was not - the membership shortcut returned it
   // unstamped. The same shortcut already stamps an array's element type and a
   // typed collection's arguments, for the same reason.
-  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
-    + ' let m = ""; try { a[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  // Through an untyped binding, so the RUN TIME's stamp is what refuses the
+  // store rather than D37's static rule.
+  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x]; const u = a;'
+    + ' let m = ""; try { u[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
   // Through `any`, so the boundary certainly runs rather than being elided.
-  expect(evaluated('const x = (1 := uint8); let src: any = [x, x]; let a: [uint8, uint8] = src;'
-    + ' let m = ""; try { a[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
+  expect(evaluated('const x = (1 := uint8); let src: any = [x, x]; let a: [uint8, uint8] = src; const u = a;'
+    + ' let m = ""; try { u[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
   // The ARITY was missing with it, which is what made this hard to see: a
   // converted tuple refused a `push` and an already-conforming one did not.
   expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x];'
@@ -454,4 +463,42 @@ test('D38: a default may only be in a TRAILING position', () => {
   // describing the same rule differently.
   expectThrown('type T = [uint8 = 1, uint8]; 1;', 'may not follow one with a default');
   expectThrown('type T = [...[].<uint8>, uint8 = 1]; 1;', 'may not follow a rest');
+});
+
+test('D37: a store into a TUPLE POSITION is checked against that position', () => {
+  // The assignment arm had a branch for an ARRAY element - `objType.Element` -
+  // and none for a tuple, so a store into a position was unchecked. At run time
+  // the store CONVERTS, so `_x_[1] = (9 := uint8)` on a `[uint8, string]` put the
+  // String "9" there and nothing complained.
+  //
+  // The run time was never the gap: it reaches the same conversion for an ARRAY
+  // element, which the checker refuses. The asymmetry was entirely static, and
+  // this closes it.
+  const T = 'let x: [uint8, string] = [(1 := uint8), "a"]; ';
+  expectStaticTypeError(`${T} x[1] = (9 := uint8);`);
+  expectStaticTypeError(`${T} x[0] = "no";`);
+  expect(ok(`if (false) { ${T} x[1] = "z"; } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${T} x[0] = (2 := uint8); } 1;`)).toBe(true);
+});
+
+test('D37: a REST position takes the rest\'s element type', () => {
+  // A position the rest collects is checked against what the rest COLLECTS,
+  // which is #sec-type-annotations' reading of the annotation.
+  const R = 'let y: [uint8, ...[].<string>] = [(1 := uint8), "a"]; ';
+  expectStaticTypeError(`${R} y[1] = (9 := uint8);`);
+  expect(ok(`if (false) { ${R} y[1] = "z"; } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${R} y[0] = (2 := uint8); } 1;`)).toBe(true);
+});
+
+test('D37 leaves the neighbouring stores alone', () => {
+  // The ARRAY element store, which already worked.
+  expectStaticTypeError('let a: [].<string> = ["x"]; a[0] = (9 := uint8);');
+  expect(ok('if (false) { let a: [].<string> = ["x"]; a[0] = "z"; } 1;')).toBe(true);
+  // A COMPUTED index names no position, so this rule says nothing about it - a
+  // store through one is a different rule and is not narrowed here.
+  expect(ok('if (false) { let x: [uint8, string] = [(1 := uint8), "a"]; let i = 0; x[i] = "z"; } 1;')).toBe(true);
+  // An ordinary object property is untouched.
+  expect(ok('if (false) { let o = { p: 1 }; o.p = 2; } 1;')).toBe(true);
+  // An untyped literal still ADAPTS at a position, as it does everywhere.
+  expect(ok('if (false) { type T = [uint8, string]; let t: T = [1, "s"]; t[0] = 2; } 1;')).toBe(true);
 });
