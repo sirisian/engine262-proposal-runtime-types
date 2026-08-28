@@ -433,3 +433,25 @@ test('D33: the RUN TIME is unchanged - it was right already', () => {
   expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8)]; String(x.length);')).toBe('2');
   expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8), (7 := uint32)]; String(x[1]);')).toBe('7');
 });
+
+test('D38: a default may only be in a TRAILING position', () => {
+  // #sec-array-and-tuple-types: "A tuple's TRAILING position may carry a
+  // default". A tuple is positional, so the only way to leave a position
+  // unsupplied is to stop short of it - a default anywhere but the tail could
+  // never be taken, and one after a rest could never be reached.
+  //
+  // The RUN TIME already refused both. The CHECKER had neither rule, so
+  // `[uint8 = 1, uint8]` was a type a program could write and nothing could be
+  // assigned to: it failed at every USE rather than at its declaration, even for
+  // a literal of the right length with correctly typed elements.
+  expectStaticTypeError('type T = [uint8 = 1, uint8]; 1;');
+  expectStaticTypeError('let x: [uint8 = 1, uint8] = [(2 := uint8), (3 := uint8)];');
+  expectStaticTypeError('type T = [...[].<uint8>, uint8 = 1]; 1;');
+  // A TRAILING default is the form the clause allows, and several of them.
+  expect(ok('if (false) { let x: [uint8, uint8 = 1] = [(2 := uint8)]; } 1;')).toBe(true);
+  expect(ok('if (false) { let x: [uint8 = 1, uint32 = 2] = []; } 1;')).toBe(true);
+  // The diagnostic is the RUN TIME's own wording, so the two cannot drift into
+  // describing the same rule differently.
+  expectThrown('type T = [uint8 = 1, uint8]; 1;', 'may not follow one with a default');
+  expectThrown('type T = [...[].<uint8>, uint8 = 1]; 1;', 'may not follow a rest');
+});

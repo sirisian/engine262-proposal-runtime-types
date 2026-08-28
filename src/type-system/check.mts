@@ -4391,7 +4391,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'TupleType': {
         const Elements = [];
+        let sawDefault = false;
+        let sawRest = false;
         for (const e of node.TupleElementList) {
+          // #sec-array-and-tuple-types: "A tuple's TRAILING position may carry a
+          // default". A tuple is positional, so the only way to leave a position
+          // unsupplied is to stop short of it - a default anywhere but the tail
+          // could never be taken, and one after a rest could never be reached
+          // (D38).
+          //
+          // The RUN TIME already refuses both, with these diagnostics; the
+          // checker's arm had neither, so `[uint8 = 1, uint8]` was a type a
+          // program could WRITE and nothing could be assigned to. It failed at
+          // every use rather than at its declaration - even a literal of the
+          // right length with correctly typed elements.
+          if (sawDefault && !e.Initializer && !e.Rest) {
+            errors.push((Throw.TypeError(
+              '$1 is not a type',
+              Value('a tuple position without a default may not follow one with a default'),
+            ) as ThrowCompletion).Value as ObjectValue);
+            return null;
+          }
+          if (sawRest && e.Initializer) {
+            errors.push((Throw.TypeError(
+              '$1 is not a type',
+              Value('a tuple position with a default may not follow a rest'),
+            ) as ThrowCompletion).Value as ObjectValue);
+            return null;
+          }
+          if (e.Initializer) {
+            sawDefault = true;
+          }
+          if (e.Rest) {
+            sawRest = true;
+          }
           const r = resolveType(e.Type);
           if (!r) {
             return null;
