@@ -1745,7 +1745,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[], contextual?: Known) => Known) | undefined => {
+  const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[]) => Known) | undefined => {
     const member = callee as unknown as {
       type?: string,
       MemberExpression?: { type?: string, name?: string },
@@ -2024,43 +2024,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (method === 'resolve') {
         // #table-typed-statics: `(value: `R`): Promise.<`R`, `E`>`, E from the
-        // CONTEXTUAL type and `any` without one (D42).
+        // contextual type and `any` without one.
         //
-        // The rejection was pinned to `any`, reasoning that "nothing in the call
-        // says what it could be". True - it is the TARGET that says it, and a
-        // generic class is invariant in its arguments, so a pinned `any` made
-        // the result assignable to `Promise.<`R`, any>` and to no other
-        // instantiation. `let _a_: Promise.<uint8, Error> =
-        // Promise.resolve((1 := uint8))` was refused, and `Promise.<uint8, any>`
-        // was the only declared type it fitted.
+        // The rejection is `any` HERE because nothing in the call says what it
+        // could be - and that is now harmless, where once it made the result
+        // assignable to `Promise.<`R`, any>` and to no other instantiation.
+        // #sec-generic-variance declares a promise `Promise.<out `R`, out `E`>`
+        // and a covariant position admits what it is ASSIGNABLE FROM, so an
+        // `any` rejection reaches any declared one (OQ18/OQ19).
         //
-        // `Promise.reject` one arm above already parameterizes its error type;
-        // this makes `resolve` agree with it.
-        return (args, contextual) => {
-          // `LibraryName`, not `Name`. A nominal record carries its `Declaration`
-          // and its library name; `Name` is the PRIMITIVE record's field, and
-          // reading it here matched nothing while looking correct.
-          const wanted = contextual && contextual.Kind === 'nominal'
-            && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
-            ? contextual
+        // An arm that read E from the CONTEXTUAL type stood here (D42). It was
+        // measured dead once covariance landed: removed, all five of its rows
+        // answered identically and the suite passed. It computed by hand, one
+        // call at a time, what the variance rule now gives - and a checker path
+        // that answers no question invites the next reader to extend it.
+        return (args) => {
+          const value = args[0] ? staticType(args[0]) : null;
+          return value
+            ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, anyTypeRecord]) ?? null
             : null;
-          // BOTH arguments come from the target where there is one. The
-          // resolution type matters as much as the rejection: `Promise.resolve(1)`
-          // at a `Promise.<uint8, Error>` position widens its untyped `1` to
-          // `number`, which invariance then refuses - so the value is typed IN
-          // the wanted resolution type, exactly as any other untyped literal
-          // adapts to its position.
-          const wantedValue = wanted ? wanted.Arguments[0] as Known : null;
-          const value = args[0]
-            ? (wantedValue ? staticTypeIn(args[0], wantedValue) : staticType(args[0]))
-            : null;
-          if (!value) {
-            return null;
-          }
-          const resolution = wantedValue && IsAssignable(value as TypeRecord, wantedValue as TypeRecord)
-            ? wantedValue as TypeRecord
-            : widen(value) as TypeRecord;
-          return libraryTypeRecord('Promise', [resolution, wanted ? wanted.Arguments[1] as TypeRecord : anyTypeRecord]) ?? null;
         };
       }
     }
@@ -2993,25 +2975,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Map<ParseNode, Known>();
-  /**
-   * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
-   * function literal's and read in the same place - `staticType`'s own arm for
-   * the node (D42).
-   *
-   * `Promise.resolve`'s rejection type is not knowable from its argument, and a
-   * generic class is INVARIANT in its arguments (#sec-generic-variance), so a
-   * rejection pinned to a concrete type makes the result assignable to that
-   * instantiation and to no other. #table-typed-statics therefore states it as a
-   * PARAMETER fixed by the target, as `Promise.reject` states its _E_.
-   */
-  const contextualCallTypes = new Map<ParseNode, Known>();
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
-    if (node && contextual && (node as ParseNode).type === 'CallExpression') {
-      contextualCallTypes.set(node as ParseNode, contextual);
-    }
     if (!node) {
       return null;
     }
@@ -5117,11 +5084,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'CallExpression': {
-        // The call's contextual type, read HERE - inside `staticType`'s own arm
-        // for the node - which is where `contextualReturnTypes` is read for a
-        // function literal. An earlier attempt passed it from the call site of
-        // the builtin-static arm instead, and the arm never saw it (D42).
-        const contextualForCall = contextualCallTypes.get(node) ?? null;
         // proposal-runtime-types `sec-composite-types`: "The Static Type of a
         // call of the Composite function is the top composite type where the
         // call supplies no TypeArguments and no contextual type reaches it."
@@ -5195,7 +5157,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const staticSig = builtinStaticSignature(calleeNode);
           if (staticSig) {
-            return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []), contextualForCall);
+            return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []));
           }
         }
         // PLAN-standard-library-statics.md Family B: a GLOBAL function, whose

@@ -843,15 +843,23 @@ test('D36 leaves the neighbouring forms alone', () => {
   expect(ok('if (false) { function f<N: uint32>(...a: [N].<uint8>) { return 1; } } 1;')).toBe(true);
 });
 
-test('D42: Promise.resolve takes its rejection type from the TARGET', () => {
+test('D42/OQ18: a resolved promise reaches a declared rejection type', () => {
   // #table-typed-statics: `(value: R): Promise.<R, E>`, E from the contextual
   // type and `any` without one.
   //
-  // It was written `Promise.<R, any>` - `any` as a LITERAL type argument. A
-  // generic class is INVARIANT in its arguments (#sec-generic-variance), so that
-  // is a subtype of no other instantiation, and `Promise.<uint8, any>` was the
-  // ONLY declared type a resolved promise fitted. `Promise.reject` one arm above
-  // already parameterizes its error type; this makes `resolve` agree.
+  // It was written `Promise.<R, any>` - `any` as a LITERAL type argument - and a
+  // generic class was INVARIANT in its arguments, so that was a subtype of no
+  // other instantiation and `Promise.<uint8, any>` was the ONLY declared type a
+  // resolved promise fitted.
+  //
+  // A contextual arm read the rejection from the target to fix it. It is GONE:
+  // #sec-generic-variance now declares a promise `Promise.<out R, out E>` and a
+  // covariant position admits what it is ASSIGNABLE FROM, so an `any` rejection
+  // reaches any declared one (OQ18/OQ19). Removed, every row here answered
+  // identically and the suite passed - it computed by hand, one call at a time,
+  // what the variance rule gives.
+  //
+  // These rows therefore pin the VARIANCE rule, not the arm.
   expect(ok('if (false) { let a: Promise.<uint8, Error> = Promise.resolve((1 := uint8)); } 1;')).toBe(true);
   expect(ok('if (false) { let a: Promise.<uint8, any> = Promise.resolve((1 := uint8)); } 1;')).toBe(true);
   expect(ok('if (false) { function g(p: Promise.<uint8, Error>) { return 1; } g(Promise.resolve((1 := uint8))); } 1;')).toBe(true);
@@ -947,4 +955,16 @@ test('OQ18: a promise is COVARIANT in both parameters', () => {
   expect(ok('if (false) { const r = Promise.resolve((1 := uint8)); let q: Promise.<uint8, Error> = r; } 1;')).toBe(true);
   // A wrong RESOLUTION type is still refused: covariance is not permission.
   expectStaticTypeError('let q: Promise.<string, Error> = Promise.resolve((1 := uint8));');
+});
+
+test('OQ18/OQ19: the rejection type flows without any per-call inference', () => {
+  // The row the removed contextual arm could NEVER reach: a resolved promise
+  // bound to a name loses whatever target typed the call, so an arm reading the
+  // target one call at a time had nothing left to read. The variance rule does
+  // not care where the value is written.
+  expect(ok('if (false) { const r = Promise.resolve((1 := uint8)); let q: Promise.<uint8, Error> = r; } 1;')).toBe(true);
+  // And the same value flows into a parameter, a return and an await.
+  expect(ok('if (false) { function g(p: Promise.<uint8, Error>) { return 1; } g(Promise.resolve((1 := uint8))); } 1;')).toBe(true);
+  expect(ok('if (false) { function h(): Promise.<uint8, Error> { return Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
+  expect(ok('if (false) { async function f(): Promise.<uint8, Error> { return await Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
 });
