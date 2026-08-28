@@ -17,7 +17,7 @@ import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-con
 import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
 import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { restElementType } from '../type-system/records.mts';
+import { restElementType, displayType } from '../type-system/records.mts';
 import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
@@ -300,10 +300,12 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
     // annotation at all - the parameter was not even destructured - so a rest was
     // the ONE position in the language whose declared type the run time ignored.
     let restElement: TypeRecord | undefined;
+    let restDeclared: TypeRecord | undefined;
     if (TypeAnnotation) {
       const resolvedRest = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
       if (resolvedRest.Type !== 'throw' && resolvedRest.Value) {
-        restElement = restElementType(resolvedRest.Value as TypeRecord);
+        restDeclared = resolvedRest.Value as TypeRecord;
+        restElement = restElementType(restDeclared);
       }
     }
     // 2. Let A be ! ArrayCreate(0).
@@ -319,6 +321,50 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
         next = Q(yield* IteratorStepValue(iteratorRecord));
       }
       if (next === 'done') {
+        // #sec-type-annotations: "Where the annotation states an EXTENT -
+        // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
+        // part of the type and the call must supply that many arguments" (D41
+        // phase 2).
+        //
+        // Checked once the rest has collected everything, since `n` is the count
+        // it received. A DYNAMIC extent admits any number and is the common case;
+        // a fixed extent, or a tuple with no rest of its own, fixes it - less any
+        // TRAILING DEFAULTS, which is D33's length range and is why the minimum
+        // and the maximum are computed apart.
+        //
+        // This is the half that makes `PLAN-D36-implementation.md` §15's static
+        // check compatible: that check refuses these calls, and until now the run
+        // time accepted them, so the checker was refusing programs that worked.
+        if (restDeclared !== undefined) {
+          let least: number | null = null;
+          let most: number | null = null;
+          if (restDeclared.Kind === 'array' && typeof restDeclared.Extent === 'number') {
+            least = restDeclared.Extent;
+            most = restDeclared.Extent;
+          } else if (restDeclared.Kind === 'tuple' && !restDeclared.Elements.some((e) => e.Rest)) {
+            most = restDeclared.Elements.length;
+            least = most;
+            // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
+            // initializer, so a defaulted position carries its VALUE here;
+            // `DeclaredDefault` is the checker's flag, set where the resolution
+            // is synchronous and the value cannot be evaluated (D33). Reading
+            // the checker's field on this path found nothing and refused
+            // `...a: [uint8, string = "d"]` given one argument - a program the
+            // clause's own length range admits.
+            while (least > 0
+              && (restDeclared.Elements[least - 1]!.Initial !== 'none'
+                || restDeclared.Elements[least - 1]!.DeclaredDefault === true)) {
+              least -= 1;
+            }
+          }
+          if (least !== null && most !== null && (n < least || n > most)) {
+            return Throw.TypeError(
+              '$1 is not assignable to $2',
+              array,
+              Value(displayType(restDeclared)),
+            );
+          }
+        }
         // i. If environment is undefined, return ? PutValue(lhs, A).
         if (environment === Value.undefined) {
           return Q(yield* PutValue(lhs, array));

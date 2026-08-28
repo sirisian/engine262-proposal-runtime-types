@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff, expectStaticTypeError } from '../harness.mts';
+  evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff, expectStaticTypeError, run } from '../harness.mts';
 
 /**
  * Spec: #sec-type-annotations (Type Annotations) - rest parameters, and
@@ -317,4 +317,53 @@ test('D41: BINDING converts, it does not test membership', () => {
     f("a", 1, 1.0, () => {}, "b", 2, 2.0, () => {});
   `)).toBe('3,3');
   expect(evaluated('function f(...a: [].<number>, b: string) { return a.length + ":" + b; } f(1, 2, "x");')).toBe('2:x');
+});
+
+test('D41: a rest annotation\'s EXTENT fixes the argument count at run time', () => {
+  // #sec-type-annotations: "Where the annotation states an EXTENT ... the extent
+  // is part of the type and the call must supply that many arguments".
+  //
+  // Through an untyped binding so the CHECKER cannot fire - a static error
+  // surfaces as a throw too, and that confound is what let a static extent check
+  // land while the run time still accepted the same calls.
+  expectThrown('function f(...a: [2].<uint8>) { return 1; } const g = f; g((1 := uint8));', 'not assignable');
+  expectThrown('function f(...a: [2].<uint8>) { return 1; } const g = f; g((1 := uint8), (2 := uint8), (3 := uint8));', 'not assignable');
+  expectThrown('function f(...a: [string, string]) { return 1; } const g = f; g("a");', 'not assignable');
+  expect(evaluated('function f(...a: [2].<uint8>) { return a.length; } String(f((1 := uint8), (2 := uint8)));')).toBe('2');
+});
+
+test('D41: the extent rule respects D33\'s length RANGE', () => {
+  // A trailing default lowers the minimum, so `[uint8, string = "d"]` admits one
+  // element and two. The run time's resolution EVALUATES an initializer, so a
+  // defaulted position carries its VALUE in [[Initial]]; [[DeclaredDefault]] is
+  // the CHECKER's flag, set where the resolution is synchronous. Reading the
+  // checker's field on this path found nothing and refused a program the clause
+  // admits.
+  // The default lowers the MINIMUM; it is not filled into the collected array,
+  // which holds exactly what the call supplied. `[[Initial]]` fills a POSITION of
+  // a tuple value (D33), and a rest's array is built by collection rather than by
+  // conversion to the tuple type - so the length is 1 here and 2 below.
+  expect(evaluated('function f(...a: [uint8, string = "d"]) { return a.length; } String(f((1 := uint8)));')).toBe('1');
+  expect(evaluated('function f(...a: [uint8, string = "d"]) { return a[1]; } f((1 := uint8), "z");')).toBe('z');
+  // A DYNAMIC extent admits any count, which is the common case.
+  expect(evaluated('function f(...a: [].<uint32>) { return a.length; } String(f((1 := uint32), (2 := uint32), (3 := uint32)));')).toBe('3');
+  expect(evaluated('function f(...a: [].<uint32>) { return a.length; } String(f());')).toBe('0');
+});
+
+test('D41: the CHECKER and the RUN TIME now agree', () => {
+  // The point of this item is not that more programs throw; it is that the two
+  // sides answer the same question the same way. A static check that refuses what
+  // the run time accepts refuses WORKING programs, which is what
+  // PLAN-D36-implementation's extent check did until this landed.
+  const both = (src: string) => [ok(`if (false) { ${src} } 1;`), (run(src) as { Type: string }).Type !== 'throw'];
+  for (const src of [
+    'function f(...a: [2].<uint8>) { return 1; } f((1 := uint8));',
+    'function f(...a: [2].<uint8>) { return 1; } f((1 := uint8), (2 := uint8));',
+    'function f(...a: [string, string]) { return 1; } f("a");',
+    'function f(...a: [].<uint32>) { return 1; } f("no");',
+    'function f(...a: [uint8, string = "d"]) { return 1; } f((1 := uint8));',
+  ]) {
+    const [accepted, ran] = both(src);
+    expect(accepted).toBe(ran);
+  }
 });
