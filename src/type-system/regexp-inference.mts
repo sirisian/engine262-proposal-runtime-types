@@ -1,7 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { RegExpParser, type RegExpParserContext } from '../parser/RegExpParser.mts';
 import {
-  type TypeRecord, makePrimitive, voidType, anyType, libraryTypeRecord,
+  type TypeRecord, makePrimitive, libraryTypeRecord,
 } from './records.mts';
 
 /**
@@ -24,8 +24,25 @@ type CaptureInfo = { readonly name: string | undefined, readonly optional: boole
 
 const stringType: TypeRecord = makePrimitive('string');
 
+const undefinedType: TypeRecord = makePrimitive('undefined');
+
 function stringOrUndefined(optional: boolean): TypeRecord {
-  return optional ? { Kind: 'union', Members: [stringType, voidType] } : stringType;
+  // PLAN-typed-regexp-capture-types.md D1. `undefined`, NOT ~void~ - which is
+  // what this function was named for and did not do.
+  //
+  // The clause said "the union of `string` with the ~void~ type", and ~void~ is
+  // the type with NO VALUES, "written to say that a result must not be depended
+  // on" (#sec-null-and-undefined-types). A capture no matching path entered
+  // holds *undefined*: `/(a)?/.exec("")[1]` is *undefined*, not absent. So
+  // `string | void` had no arm that value belongs to, and the declared type of
+  // an optional capture could not hold what the capture takes -
+  // `let x: string | void = undefined` is refused.
+  //
+  // The same slip this specification records elsewhere, where resolving
+  // `undefined` to ~void~ "made `undefined` unassignable to `undefined`, which
+  // took the whole `T | undefined` optional idiom with it". An optional capture
+  // IS that idiom.
+  return optional ? { Kind: 'union', Members: [stringType, undefinedType] } : stringType;
 }
 
 function quantifierAllowsZero(q: ParseNode.RegExp.Quantifier): boolean {
@@ -117,13 +134,27 @@ export function inferRegExpLiteralType(body: string, flags: string): TypeRecord 
     return null;
   }
 
-  // The Captures argument. A no-capture pattern is `RegExp.<[], {}>`, and a bare
-  // `[]` type denotes a dynamic array here rather than an empty tuple, so the
-  // zero-capture case matches a written `[]` only when it is emitted the same
-  // way. A pattern with captures is a tuple of their types in source order.
-  const capturesTuple: TypeRecord = captures.length === 0
-    ? { Kind: 'array', Element: anyType, Extent: 'dynamic' }
-    : { Kind: 'tuple', Elements: captures.map((c) => ({ Type: stringOrUndefined(c.optional), Rest: false, Initial: 'none' as const })) };
+  // The Captures argument: a tuple of the capture types in source order, and for
+  // a no-capture pattern the tuple with NO elements.
+  //
+  // PLAN-typed-regexp-capture-types.md D2. This emitted a dynamic array for the
+  // zero-capture case, on the stated ground that "a bare `[]` type denotes a
+  // dynamic array here rather than an empty tuple".
+  //
+  // That was TRUE when written. `[]` was reassigned to the empty tuple a month
+  // later - deliberately, on corpus evidence that `[]` in bound position was
+  // never written while `[]` meaning the empty tuple appeared about thirty times
+  // - and the reassignment swept nothing: one line of spec.emu, no engine
+  // change, no mention of regular expressions.
+  //
+  // So this comment kept a rationale whose ground had moved, and the choice made
+  // to let `RegExp.<[], {}>` name a no-capture literal became exactly what
+  // refused it, while `RegExp.<[].<any>, {}>` - which no one would write - was
+  // what worked.
+  const capturesTuple: TypeRecord = {
+    Kind: 'tuple',
+    Elements: captures.map((c) => ({ Type: stringOrUndefined(c.optional), Rest: false, Initial: 'none' as const })),
+  };
 
   // Group names merge across the captures. A name that appears more than once,
   // which the pattern grammar permits only in separate alternation branches,

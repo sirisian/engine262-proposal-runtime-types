@@ -181,3 +181,67 @@ test('regexp: a literal carries its inferred capture shape as its type', () => {
   expect(evaluated('let r: RegExp.<[string, string], {}> = /(.)(.)/; "ok";')).toBe('ok');
   expect((run('let r: RegExp.<[string], {}> = /(.)(.)/; "ok";') as { Type: string }).Type).toBe('throw');
 });
+
+// -- Guards on the two neighbouring clauses this one depends on ---------------
+//
+// PLAN-typed-regexp-capture-types.md phase 3. `sec-typed-regular-expressions`
+// once stated both of these wrongly, and in each case the engine implemented the
+// clause faithfully, so nothing but these tests disagreed.
+//
+// D1: an optional capture was `string | void`. `void` is the type with NO VALUES
+// (#sec-null-and-undefined-types), and a capture no matching path entered holds
+// *undefined* - so the declared type could not hold what the capture takes.
+//
+// D2: the no-capture case was the empty ARRAY type, on the stated ground that
+// this was what a bare `[]` denotes. It is not - `[]` is the empty TUPLE - so the
+// choice made to let `RegExp.<[], {}>` name a no-capture literal was exactly what
+// refused it.
+
+test('an optional capture type can hold what exec puts there', () => {
+  // The fact D1 turns on, asserted as a VALUE crossing rather than as an
+  // annotation being accepted: a non-participating capture is `undefined`, and
+  // the declared type must admit it.
+  expect(evaluated('const m = /(a)?/.exec(""); let c: string | undefined = m[1];'
+    + ' String(c === undefined);')).toBe('true');
+  expect(evaluated('const m = /(a)?/.exec("a"); let c: string | undefined = m[1]; String(c);')).toBe('a');
+  // ...and `void` cannot, which is why it was the wrong type to assign.
+  expectThrown('let x: string | void = undefined;');
+});
+
+test('a bare [] is the empty tuple, which is what the no-capture case emits', () => {
+  // The fact D2 turns on. If `[]` ever becomes the array type, the clause's
+  // choice has to change with it, and this fails rather than the annotation
+  // quietly ceasing to work.
+  expect(evaluated('String(Reflect.getReflection(type []).kind);')).toBe('tuple');
+  expect(evaluated('String(Reflect.getReflection(type [].<any>).kind);')).toBe('array');
+  expect(evaluated('String((type []) === (type [].<any>));')).toBe('false');
+  expect(evaluated('let r: RegExp.<[], {}> = /abc/; "ok";')).toBe('ok');
+});
+
+test('the D2 trade: the array spelling stops naming a no-capture literal', () => {
+  // Recorded as INTENDED. `RegExp.<[].<any>, {}>` matched a no-capture literal
+  // before and does not now, because RegExp's arguments are invariant and
+  // Captures is a tuple. That is the cost of `RegExp.<[], {}>` working, which is
+  // the spelling the clause's own note calls the common one - but it is a change
+  // to something that used to work, so it is asserted rather than discovered.
+  expectThrown('let r: RegExp.<[].<any>, {}> = /abc/;');
+  expect(evaluated('String(Reflect.isAssignable(type [], type [].<any>));')).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type [].<any>, type []));')).toBe('false');
+});
+
+test('optionality itself is unchanged: only the type assigned to it moved', () => {
+  // Twenty shapes were measured before the change and every one had the right
+  // OPTIONALITY; the fix was one word. These are the rows that discriminate - a
+  // fix that over-reached would show up here.
+  expect(evaluated('let r: RegExp.<[string], {}> = /(a)+/; "ok";')).toBe('ok');
+  expect(evaluated('let r: RegExp.<[string], {}> = /(a){1,2}/; "ok";')).toBe('ok');
+  expect(evaluated('let r: RegExp.<[string | undefined], {}> = /(a){0,2}/; "ok";')).toBe('ok');
+  // Only the FIRST group is optional here, which is what shows the analysis is
+  // structural rather than blanket.
+  expect(evaluated('let r: RegExp.<[string | undefined, string], {}> = /(a)?(b)/; "ok";')).toBe('ok');
+  // A required capture must not gain an `undefined` arm.
+  expectThrown('let r: RegExp.<[string | undefined], {}> = /(a)/;');
+  // A non-capturing group and a backreference add no capture.
+  expect(evaluated('let r: RegExp.<[], {}> = /(?:a)/; "ok";')).toBe('ok');
+  expect(evaluated('let r: RegExp.<[string], {}> = /(a)\\1/; "ok";')).toBe('ok');
+});
