@@ -5825,7 +5825,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `new SoA.<P, 0>()` was typed `SoA.<P, a literal type of
                 // number>` and matched no annotation. Converted the same way,
                 // for the reason #sec-type-references gives: "a type argument is
-                // written as a Type even when it is a value … the clause on
+                // written as a Type even when it is a value â€¦ the clause on
                 // generics decides which a given parameter expects".
                 const valueArgs: (TypeRecord | number)[] = args.map(
                   (a) => ((a as TypeRecord).Kind === 'literal'

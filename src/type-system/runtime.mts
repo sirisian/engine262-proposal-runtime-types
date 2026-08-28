@@ -1006,6 +1006,22 @@ function runtimeArrayType(value: ObjectValue, seen: Set<ObjectValue>): TypeRecor
   const lengthValue = (value as { properties?: Map<PropertyKeyValue, Descriptor> })
     .properties?.get(Value('length'))?.Value;
   const length = lengthValue instanceof NumberValue ? Number(lengthValue.numberValue()) : 0; // eslint-disable-line @engine262/mathematical-value -- an Array length, not a mathematical value in the spec sense
+  // ON THE CYCLE BEING DESCRIBED. The walk below already declines to recurse into
+  // an element it has seen - "an element on the cycle already being described,
+  // admits anything as far as this type is concerned" - but nothing put THIS
+  // array into `seen`, so an array holding itself was never recognised and the
+  // walk recurred until the host stack went:
+  //
+  //   const s = [1]; s.push(s); s is [].<any>   // Maximum call stack size exceeded
+  //
+  // A host stack overflow escapes the engine, so no program observes it and the
+  // surrounding call dies with it - which #sec-evaluation-budget rules out:
+  // exhaustion "is not an abrupt completion the evaluated code can observe".
+  //
+  // `runtimeObjectType` adds itself for exactly this reason, which is why an
+  // object holding itself has always been fine and an array holding itself was
+  // not. The two walks share the set; only one was filling it.
+  seen.add(value);
   const members: TypeRecord[] = [];
   for (let i = 0; i < length; i += 1) {
     const element = (value as { properties: Map<PropertyKeyValue, Descriptor> })

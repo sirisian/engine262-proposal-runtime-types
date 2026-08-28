@@ -137,8 +137,23 @@ test('mixed, nested, and non-array values are unaffected', () => {
 test('the runtime type handles the awkward array shapes', () => {
   // a hole contributes nothing a type could name, and a cycle must not recurse
   expect(evaluated("function p(v: [].<any>): string { return 'ok'; } const s = [1, , 3]; p(s);")).toBe('ok');
+  // A self-referential array. The walk that describes an array already declined
+  // to recurse into an element it had SEEN - "an element on the cycle already
+  // being described" - but nothing put the array itself into that set, so an
+  // array holding itself was never recognised and the walk ran to the host's
+  // stack. `runtimeObjectType` adds itself for exactly this reason, which is why
+  // an object holding itself always worked; the two walks share the set and only
+  // one was filling it.
   expect(evaluated("function p(v: [].<any>): string { return 'ok'; }"
     + ' const s = [1]; s.push(s); p(s);')).toBe('ok');
+  // Reached through another array, and through a mutual cycle, since one guard
+  // has to cover all three or it covers none.
+  expect(evaluated('const inner = [1]; inner.push(inner); const outer = [inner];'
+    + ' let v: [].<any> = outer; "ok";')).toBe('ok');
+  expect(evaluated('const a = [1]; const b = [a]; a.push(b); let v: [].<any> = a; "ok";')).toBe('ok');
+  // And the type is still computed, not merely survived.
+  expect(evaluated('const s = [1]; s.push(s);'
+    + ' String(Reflect.getReflection(Reflect.typeOf(s)).kind);')).toBe('array');
   // a nested typed array is described through its element
   expect(evaluated('const inner: [].<uint8> = [1]; const outer = [inner];'
     + ' String(outer is [].<[].<uint8>>);')).toBe('true');
