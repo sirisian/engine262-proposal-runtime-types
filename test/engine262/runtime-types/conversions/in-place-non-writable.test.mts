@@ -117,6 +117,22 @@ test('the two facts the in-place rationale rests on still hold', () => {
     + ' String(f(o));')).toBe('e');
 });
 
+test('a member admitted by an INDEX SIGNATURE fails the same way', () => {
+  // It crosses the same boundary and is converted by the same steps, so it must
+  // refuse the same way. This write was left throwing `Cannot set property` when
+  // the declared-member one was fixed, and was found by writing the rule into
+  // the specification: saying an index-signature member "crosses by the same
+  // steps" made it a claim to check, and it was not yet true.
+  expect(message('const o = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
+    .toContain('not writable');
+  expect(message('const o = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
+    .not.toContain('Cannot set property');
+  // ...and the two cases that must not change.
+  expect(evaluated('let o = { a: 1 }; let v: { [k: string]: uint32 } = o; String(Number(v.a));')).toBe('1');
+  expect(evaluated('const o = Object.freeze({ a: (1 := uint32) }); let v: { [k: string]: uint32 } = o;'
+    + ' String(Number(v.a));')).toBe('1');
+});
+
 test('a missing member is still refused as a missing member', () => {
   // The other refusal in the same loop, which must keep its own message: an
   // absent property is not an unwritable one, and conflating them would send a

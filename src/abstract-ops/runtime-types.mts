@@ -1793,7 +1793,23 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         const current = Q(yield* Get(value, own));
         const converted = Q(yield* CheckedConvertValue(current, signature.Value));
         if (converted !== current) {
-          Q(yield* SetProperty(value, own, converted, Value.true));
+          // The same refusal as the declared-member loop above. A property
+          // admitted through an INDEX SIGNATURE crosses the same boundary and
+          // is converted the same way, so it fails the same way when it cannot
+          // be written - and this write was left throwing `Cannot set property`
+          // when the declared one was fixed.
+          //
+          // Found by writing the rule into the specification: stating that an
+          // index-signature member "crosses by the same steps" made it a claim
+          // to check, and it was not yet true.
+          const wroteIx = Q(yield* SetProperty(value, own, converted, Value.false));
+          if (wroteIx === Value.false) {
+            return Throw.TypeError(
+              '$1 cannot be converted to $2 in place, because it is not writable',
+              own,
+              Value(displayType(signature.Value)),
+            );
+          }
         }
       }
     }
