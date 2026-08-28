@@ -2790,10 +2790,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const elements = (node.ElementList ?? []).filter((el) => !!el && typeof el === 'object') as readonly ParseNode[];
     // A SPREAD contributes an unknown number of elements, so no arity can be
     // matched up, and a REST position admits any number beyond the fixed ones.
-    if (elements.some((el) => el.type === 'SpreadElement') || target.Elements.some((p) => p.Rest)) {
+    // A SPREAD in the literal contributes an unknown number of elements, so no
+    // arity can be matched up at all.
+    if (elements.some((el) => el.type === 'SpreadElement')) {
       return;
     }
-    if (elements.length > target.Elements.length) {
+    // A REST in the TARGET makes the maximum unbounded - but not the minimum.
+    // #sec-array-and-tuple-types: "`[uint32, ...[].<float32>]` accepts any
+    // length FROM ONE UPWARD". The positions before the rest are still required,
+    // less any of them that carry defaults.
+    const restIndex = target.Elements.findIndex((p) => p.Rest);
+    const fixed = restIndex === -1 ? target.Elements : target.Elements.slice(0, restIndex);
+    // #sec-array-and-tuple-types: "A tuple's length is a RANGE rather than a
+    // number because a trailing position may carry a default... `[uint8,
+    // uint32 = 10]` accepts a one-element and a two-element array". The minimum
+    // is the positions less the TRAILING defaults; a default further forward
+    // could never be taken, which #sec-array-and-tuple-types makes a type error
+    // of its own.
+    let required = fixed.length;
+    while (required > 0 && fixed[required - 1]!.DeclaredDefault === true) {
+      required -= 1;
+    }
+    if (elements.length < required) {
+      report(
+        { Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) } as TypeRecord,
+        target,
+      );
+      for (const el of elements) {
+        walk(el);
+      }
+      return;
+    }
+    if (restIndex === -1 && elements.length > target.Elements.length) {
       report(
         { Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) } as TypeRecord,
         target,
@@ -4368,7 +4396,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!r) {
             return null;
           }
-          Elements.push({ Type: r, Rest: e.Rest, Initial: 'none' as const });
+          // [[Initial]] stays ~none~: evaluating the initializer is a generator
+          // step and this resolution is synchronous. [[DeclaredDefault]] carries
+          // the FACT of the default, which is all the arity rule needs (D33).
+          Elements.push({ Type: r, Rest: e.Rest, Initial: 'none' as const, DeclaredDefault: !!e.Initializer });
         }
         return { Kind: 'tuple', Elements };
       }

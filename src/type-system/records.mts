@@ -273,6 +273,22 @@ export interface TupleElementRecord {
    * to go and the membership rule that reads it could never fire.
    */
   readonly Initial: Value | 'none';
+  /**
+   * Whether the position DECLARES a default, independent of whether its value
+   * has been evaluated.
+   *
+   * The run time evaluates the initializer — `sec-array-and-tuple-types`' "a
+   * tuple's trailing position may carry a default" needs the VALUE, to fill the
+   * position — and that evaluation is a generator step. `resolveType` in the
+   * checker is synchronous and cannot take it, so [[Initial]] there is always
+   * ~none~ however the type was written.
+   *
+   * The ARITY rule does not need the value, only the fact: a tuple's minimum
+   * length is its positions less its trailing defaults. This field carries that
+   * fact to the one consumer that needs it, rather than making the checker
+   * evaluate or the record carry a half-built value (D33).
+   */
+  readonly DeclaredDefault?: boolean;
 }
 
 /**

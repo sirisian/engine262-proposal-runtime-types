@@ -358,13 +358,16 @@ test('D18: an array literal at a TUPLE annotation is checked for ARITY', () => {
   expectStaticTypeError('let a: [].<[uint8]> = [[(1 := uint8), (2 := uint8)]];');
 });
 
-test('D18: what the ARITY rule deliberately does not refuse', () => {
-  // TOO FEW is D33: a trailing position may carry a default and a literal that
-  // omits it is valid. The default IS recorded - two tuple types differing only
-  // in one are distinguishable - but this arm cannot read it, and refusing on a
-  // count it cannot compute would refuse a working program. A default cannot
-  // absorb an EXTRA element, so the too-many half needs no such knowledge.
-  expect(ok('if (false) { let x: [uint8] = []; } 1;')).toBe(true);
+test('D18/D33: what the ARITY rule refuses, and what it deliberately does not', () => {
+  // TOO FEW is refused NOW (D33). It was left out here because this arm could not
+  // read a trailing default and would have refused
+  // `let x: [uint8, string = "d"] = [(1 := uint8)]` - the clause's own example.
+  //
+  // The cause was that `resolveType` discarded the parsed |Initializer|: the run
+  // time EVALUATES it, which is a generator step, and the checker's resolution is
+  // synchronous, so [[Initial]] was always ~none~ there. The arity rule does not
+  // need the value, only the fact, which [[DeclaredDefault]] now carries.
+  expectStaticTypeError('let x: [uint8] = [];');
   expect(ok('if (false) { let x: [uint8, string = "d"] = [(1 := uint8)]; } 1;')).toBe(true);
   // A SPREAD contributes an unknown count, and a REST position admits any number
   // past the fixed ones.
@@ -375,4 +378,42 @@ test('D18: what the ARITY rule deliberately does not refuse', () => {
   // literal of PROMISES at a tuple of promise types when it was first attempted,
   // and is left until the promise case is understood.
   expect(ok('if (false) { let x: [uint8] = ["a"]; } 1;')).toBe(true);
+});
+
+test('D33: a tuple\'s length is a RANGE, set by its trailing defaults', () => {
+  // #sec-array-and-tuple-types: "A tuple's length is a RANGE rather than a number
+  // because a trailing position may carry a default... `[uint8, uint32 = 10]`
+  // accepts a one-element and a two-element array, which is what lets a shorter
+  // array satisfy a longer tuple return".
+  //
+  // The RUN TIME already implemented all of this - the one-element case runs,
+  // `x[1]` is 10 and `x.length` becomes 2. Only the checker was blind, because
+  // `resolveType` discarded the parsed |Initializer|.
+  expect(ok('if (false) { let x: [uint8, uint32 = 10] = [(1 := uint8), (2 := uint32)]; } 1;')).toBe(true);
+  expect(ok('if (false) { let x: [uint8, uint32 = 10] = [(1 := uint8)]; } 1;')).toBe(true);
+  expectStaticTypeError('let x: [uint8, uint32 = 10] = [];');
+  // Both positions defaulted: the minimum falls to zero.
+  expect(ok('if (false) { let x: [uint8 = 1, uint32 = 2] = []; } 1;')).toBe(true);
+  // And with NO defaults the minimum is the full length - the rule is about the
+  // range, not about defaults.
+  expectStaticTypeError('let x: [uint8, uint32] = [(1 := uint8)];');
+});
+
+test('D33: the range composes with a REST, and holds at every position', () => {
+  // "`[uint32, ...[].<float32>]` accepts any length from one upward" - a rest
+  // makes the MAXIMUM unbounded and leaves the minimum alone.
+  expect(ok('if (false) { let x: [uint32, ...[].<float32>] = [(1 := uint32)]; } 1;')).toBe(true);
+  expectStaticTypeError('let x: [uint32, ...[].<float32>] = [];');
+  expect(ok('if (false) { let x: [uint8, uint32 = 10, ...[].<float32>] = [(1 := uint8)]; } 1;')).toBe(true);
+  // A parameter and a RETURN, the latter being the reason the clause gives for
+  // defaults existing at all.
+  expectStaticTypeError('function f(x: [uint8, uint32 = 10]) { return 1; } f([]);');
+  expectStaticTypeError('function f(): [uint8, uint32 = 10] { return []; } f();');
+  expect(ok('if (false) { function f(): [uint8, uint32 = 10] { return [(1 := uint8)]; } } 1;')).toBe(true);
+});
+
+test('D33: the RUN TIME is unchanged - it was right already', () => {
+  expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8)]; String(x[1]);')).toBe('10');
+  expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8)]; String(x.length);')).toBe('2');
+  expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8), (7 := uint32)]; String(x[1]);')).toBe('7');
 });
