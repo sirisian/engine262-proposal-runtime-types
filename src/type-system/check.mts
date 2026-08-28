@@ -10494,6 +10494,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 argTypesForMap,
               )
               : null;
+            // #sec-type-annotations: "Where the annotation states an EXTENT -
+            // `[2].<uint8>`, or `[`_N_`].<uint8>` for a value parameter _N_ - the
+            // extent is part of the type and the call must supply that many
+            // arguments; for a value parameter this is checked where _N_ is
+            // supplied" (D36).
+            //
+            // Checked HERE rather than at the declaration, because that is where
+            // the count is knowable: `[N].<uint8>` is well formed whatever N is,
+            // and `chosen` has the application's bindings substituted, so a value
+            // parameter has become a number by now. `counts` says how many
+            // arguments the rest slot actually received.
+            //
+            // A SPREAD argument contributes an unknown number and is left alone,
+            // as everywhere else.
+            if (counts && !c.Arguments.some((a) => (a as ParseNode).type === 'AssignmentRestElement')) {
+              chosen.Parameters.forEach((pp, k) => {
+                const restType = pp?.Rest ? pp.Type as TypeRecord | undefined : undefined;
+                if (!restType) {
+                  return;
+                }
+                const received = counts[k] ?? 0;
+                // A fixed-extent array fixes the count; a tuple with no rest of
+                // its own fixes it at its positions, less any trailing defaults
+                // (D33's range).
+                let least: number | null = null;
+                let most: number | null = null;
+                if (restType.Kind === 'array' && typeof restType.Extent === 'number') {
+                  least = restType.Extent;
+                  most = restType.Extent;
+                } else if (restType.Kind === 'tuple' && !restType.Elements.some((e) => e.Rest)) {
+                  most = restType.Elements.length;
+                  least = most;
+                  while (least > 0 && restType.Elements[least - 1]!.DeclaredDefault === true) {
+                    least -= 1;
+                  }
+                }
+                if (least !== null && most !== null && (received < least || received > most)) {
+                  report(
+                    { Kind: 'array', Element: anyTypeRecord, Extent: received } as TypeRecord,
+                    restType,
+                  );
+                }
+              });
+            }
             c.Arguments.forEach((arg, i) => {
               if (arg.type === 'AssignmentRestElement') {
                 return;

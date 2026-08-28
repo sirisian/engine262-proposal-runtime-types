@@ -263,3 +263,23 @@ test('D39: arguments are mapped by the SAME operation the run time uses', () => 
     f("a", 1, 1.0, () => {}, "b", 2, 2.0, () => {});
   `)).toBe('3,3');
 });
+
+test('D36: a rest annotation with an EXTENT fixes the argument count', () => {
+  // #sec-type-annotations: "Where the annotation states an EXTENT - `[2].<uint8>`,
+  // or `[N].<uint8>` for a value parameter N - the extent is part of the type and
+  // the call must supply that many arguments".
+  //
+  // Checked at the CALL and not at the declaration: that is where the count is
+  // knowable, and `assignArguments`' counts say how many the rest received.
+  expectStaticTypeError('function f(...a: [2].<uint8>) { return 1; } f((1 := uint8));');
+  expect(ok('if (false) { function f(...a: [2].<uint8>) { return 1; } f((1 := uint8), (2 := uint8)); } 1;')).toBe(true);
+  expectStaticTypeError('function f(...a: [2].<uint8>) { return 1; } f((1 := uint8), (2 := uint8), (3 := uint8));');
+  // A TUPLE rest fixes its arity the same way, and a trailing default lowers the
+  // minimum as D33's length range says.
+  expectStaticTypeError('function f(...a: [string, string]) { return 1; } f("a");');
+  expect(ok('if (false) { function f(...a: [string, string]) { return 1; } f("a", "b"); } 1;')).toBe(true);
+  // A DYNAMIC extent admits any count, which is the common case and must not
+  // start being refused.
+  expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f((1 := uint8), (2 := uint8), (3 := uint8)); } 1;')).toBe(true);
+  expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f(); } 1;')).toBe(true);
+});
