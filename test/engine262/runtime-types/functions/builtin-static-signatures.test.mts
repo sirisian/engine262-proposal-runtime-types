@@ -1021,3 +1021,32 @@ test('D43: the iterable arms adapt only where the literal FITS', () => {
   expect(ok('if (false) { let s: [].<uint8> = [(1 := uint8)]; let a: [].<uint8> = Array.from(s); } 1;')).toBe(true);
   expect(ok('if (false) { let a = Array.from([1, 2]); } 1;')).toBe(true);
 });
+
+test('D47: a promise method RESOLVES with what its handlers return', () => {
+  // `then` and `catch` built `Promise.<any, any>`, their signature arm getting
+  // the receiver's types and not the handler ARGUMENTS. That was harmless while
+  // a promise was INVARIANT - an `any` result reached no declared promise type -
+  // and became an UNDER-CHECK the moment a promise became covariant.
+  //
+  // Handled in the CALLER, as `map` is, for the same reason: a result that
+  // depends on an argument cannot be written into a signature at the member
+  // access.
+  const P = 'let p: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); ';
+  expectStaticTypeError(`${P} let q: Promise.<string, Error> = p.then((v) => (1 := uint8));`);
+  expectStaticTypeError(`${P} let q: Promise.<string, Error> = p.catch((e) => (1 := uint8));`);
+  expect(ok(`if (false) { ${P} let q: Promise.<string, Error> = p.then((v) => "s"); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then((v) => v); } 1;`)).toBe(true);
+});
+
+test('D47: an ABSENT handler passes its type through, and catch unions', () => {
+  // #table-promise-prototype-signatures: `then` resolves with U | V and `catch`
+  // with R | U - the receiver's value where the promise FULFILLED, the
+  // handler's where it rejected. So a caught promise resolves with both.
+  const P = 'let p: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); ';
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8 | string, Error> = p.catch((e) => "s"); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then(); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.finally(() => {}); } 1;`)).toBe(true);
+  // The handler PARAMETER checking from D45 is untouched, and so is `map`.
+  expectStaticTypeError(`${P} p.then((v) => { let s: string = v; return 1; });`);
+  expectStaticTypeError('let a: [].<uint8> = []; let b: [].<string> = a.map((v) => (1 := uint8));');
+});

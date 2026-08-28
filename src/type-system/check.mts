@@ -5395,6 +5395,67 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        // `p.then(f, g)` and `p.catch(g)` resolve with what their HANDLERS
+        // return, which a signature written at the member access cannot express -
+        // the same reason `map` is handled here (D47).
+        //
+        // `promiseMethodSignature` builds `Promise.<any, any>` because it gets
+        // the receiver's types and not the handler ARGUMENTS. That was harmless
+        // while a promise was INVARIANT - an `any` result reached no declared
+        // promise type - and became an UNDER-CHECK the moment a promise became
+        // covariant: `let q: Promise.<string, Error> = p.then((v) => (1 := uint8))`
+        // was accepted, the handler's uint8 never compared with the target.
+        //
+        // #table-promise-prototype-signatures: `then` resolves with U | V, its
+        // two handlers returning INDEPENDENTLY, and `catch` with R | U - the
+        // receiver's value where it fulfilled, the handler's where it rejected.
+        // Every result rejects with `any`, a handler being a function and
+        // anything being throwable.
+        if (calledName === 'then' || calledName === 'catch') {
+          const recvP = mem && (mem as unknown as { MemberExpression?: ParseNode }).MemberExpression
+            ? staticType((mem as unknown as { MemberExpression: ParseNode }).MemberExpression)
+            : null;
+          if (recvP && recvP.Kind === 'nominal' && recvP.LibraryName === 'Promise'
+              && recvP.Arguments.length === 2) {
+            const resolution = recvP.Arguments[0] as TypeRecord;
+            const rejection = recvP.Arguments[1] as TypeRecord;
+            const argsP = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+            const parts: TypeRecord[] = [];
+            let unknownHandler = false;
+            const contribute = (arg: ParseNode | undefined, takes: TypeRecord, whenAbsent: TypeRecord | null) => {
+              if (!arg) {
+                if (whenAbsent) {
+                  parts.push(whenAbsent);
+                }
+                return;
+              }
+              // A handler whose return cannot be read - a block body, which this
+              // checker does not infer through - leaves the whole result unknown
+              // rather than a union missing an arm.
+              const returned = inferredReturnType(arg, [takes]);
+              if (!returned) {
+                unknownHandler = true;
+                return;
+              }
+              parts.push(returned as TypeRecord);
+            };
+            if (calledName === 'then') {
+              contribute(argsP[0], resolution, resolution);
+              contribute(argsP[1], rejection, null);
+            } else {
+              // `catch` keeps the receiver's resolution - the promise may simply
+              // have fulfilled - and adds the handler's return.
+              parts.push(resolution);
+              contribute(argsP[0], rejection, null);
+            }
+            if (!unknownHandler && parts.length > 0) {
+              const resolved = parts.length === 1
+                ? parts[0]!
+                : { Kind: 'union', Members: parts } as TypeRecord;
+              return libraryTypeRecord('Promise', [resolved, anyTypeRecord]) as Known;
+            }
+          }
+        }
         // The SET OPERATIONS whose result draws from BOTH sides: the design
         // writes `union<U>(other: Set.<U>): Set.<T | U>` and the same for
         // `symmetricDifference`. The result therefore depends on an ARGUMENT's
