@@ -14,7 +14,7 @@ import {
 } from './iteration-types.mts';
 import { SoAColumnsOf } from './layout.mts';
 
-import { badKindedArgument, restElementType } from './records.mts';
+import { badKindedArgument, restElementType, parameterTypeRecord } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
@@ -1520,6 +1520,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (withElement.Element && mentionsTypeParameter(withElement.Element)) {
       return true;
     }
+    // An array's EXTENT may be a VALUE PARAMETER (D40) - the same omission the
+    // next comment records for a function type's signature.
+    const withExtentM = t as { Extent?: number | 'dynamic' | TypeRecord };
+    if (withExtentM.Extent && typeof withExtentM.Extent === 'object'
+        && mentionsTypeParameter(withExtentM.Extent as TypeRecord)) {
+      return true;
+    }
     // A FUNCTION type mentions a parameter through its signature. Without this
     // `() => K` did not count as mentioning `K`, so the guard at the argument
     // check did not fire and the argument was compared against the UNBOUND
@@ -2483,7 +2490,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const withElement = t as { Element?: TypeRecord };
     if (withElement.Element) {
-      return { ...t, Element: substituteTypeParameters(withElement.Element, bindings) as TypeRecord } as Known;
+      {
+        // A parameterized EXTENT is substituted alongside the element (D40).
+        // A literal record's [[Value]] is an ENGINE Value, not a JS number, and
+        // a value generic binds the value its constraint admits - `f.<4>` binds
+        // a TYPED uint32 4 - so it is unwrapped rather than read with `typeof`.
+        const withExtentS = t as { Extent?: number | 'dynamic' | TypeRecord };
+        let nextExtent = withExtentS.Extent;
+        if (nextExtent && typeof nextExtent === 'object') {
+          const done = substituteTypeParameters(nextExtent as Known, bindings);
+          const lit = done as { Kind?: string, Value?: { numberValue?: () => number } } | null;
+          const raw = lit && lit.Kind === 'literal' ? lit.Value : undefined;
+          const asNumber = raw && typeof raw.numberValue === 'function' ? raw.numberValue() : undefined;
+          nextExtent = typeof asNumber === 'number' ? asNumber : (done as TypeRecord | undefined) ?? nextExtent;
+        }
+        return {
+          ...t,
+          Element: substituteTypeParameters(withElement.Element, bindings) as TypeRecord,
+          ...(withExtentS.Extent !== undefined ? { Extent: nextExtent } : {}),
+        } as Known;
+      }
     }
     // A FUNCTION and an OBJECT type carry variables in their signatures and
     // members, and neither was substituted. So a bound `T` reached a callback
@@ -4510,8 +4536,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members };
       }
       case 'ArrayType': {
+        // A VALUE PARAMETER may fix the extent - `[N].<uint8>` for an
+        // `<N: uint32>` - and is carried so the substitution at an application
+        // replaces it, as it does an element type (D40). This refused any
+        // non-literal extent, so `[N].<uint8>` became `any` and `f.<2>("no")`
+        // was accepted.
+        let parameterExtent: TypeRecord | null = null;
         if (node.ArrayExtent && node.ArrayExtent.type !== 'NumericLiteral') {
-          return null;
+          const extentName = node.ArrayExtent.type === 'IdentifierReference'
+            ? (node.ArrayExtent as { name?: string }).name
+            : undefined;
+          if (!extentName || !typeParameterInScope(extentName)) {
+            return null;
+          }
+          parameterExtent = parameterTypeRecord(
+            extentName,
+            (typeParameterConstraintOf(extentName) ?? undefined) as TypeRecord | undefined,
+          ) as TypeRecord;
         }
         // sec-array-and-tuple-types: an array type takes ONE type argument, its
         // element. A second was read as the length type in an early draft of
@@ -4529,7 +4570,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!el) {
           return null;
         }
-        return { Kind: 'array', Element: el, Extent: node.ArrayExtent ? (node.ArrayExtent as { value: number }).value : 'dynamic' };
+        return {
+          Kind: 'array',
+          Element: el,
+          Extent: parameterExtent ?? (node.ArrayExtent ? (node.ArrayExtent as { value: number }).value : 'dynamic'),
+        };
       }
       case 'TupleType': {
         const Elements = [];

@@ -515,7 +515,11 @@ export type TypeRecord =
   | { readonly Kind: 'union', readonly Members: readonly TypeRecord[] }
   | { readonly Kind: 'intersection', readonly Members: readonly TypeRecord[] }
   | { readonly Kind: 'tuple', readonly Elements: readonly TupleElementRecord[] }
-  | { readonly Kind: 'array', readonly Element: TypeRecord, readonly Extent: number | 'dynamic' }
+  /**
+   * [[Extent]] is a NUMBER, ~dynamic~, or a Type Record for a VALUE PARAMETER
+   * that fixes it - `[`_N_`].<uint8>` for an `<`_N_`: uint32>` (D40).
+   */
+  | { readonly Kind: 'array', readonly Element: TypeRecord, readonly Extent: number | 'dynamic' | TypeRecord }
   | { readonly Kind: 'reference', readonly Target: TypeRecord }
   // proposal-runtime-types #sec-threading-shared-modifier: `shared T` is a value
   // type whose storage is shared between the threads of one heap. A VALUE of it
@@ -1152,7 +1156,7 @@ export function canonicalTypeText(t: TypeRecord, seen: readonly TypeRecord[] = [
     case 'intersection':
       return t.Members.map((m) => canonicalTypeText(m, within)).join(' & ');
     case 'array':
-      return `[${t.Extent === 'dynamic' ? '' : t.Extent}].<${canonicalTypeText(t.Element, within)}>`;
+      return `[${t.Extent === 'dynamic' ? '' : (typeof t.Extent === 'object' ? canonicalTypeText(t.Extent as TypeRecord, within) : t.Extent)}].<${canonicalTypeText(t.Element, within)}>`;
     case 'tuple':
       return `[${t.Elements.map((e) => canonicalTypeText(e.Type, within)).join(', ')}]`;
     case 'parameterized':
@@ -1187,7 +1191,9 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     case 'literal': return `a literal type of ${displayType(t.Base)}`;
     case 'union': return t.Members.length === 0 ? 'never' : t.Members.map(displayType).join(' | ');
     case 'intersection': return t.Members.map(displayType).join(' & ');
-    case 'array': return `[${t.Extent === 'dynamic' ? '' : t.Extent}].<${displayType(t.Element)}>`;
+    // TWO array arms live in this file; fixing one leaves `[[object Object]]`
+    // coming from the other (D40).
+    case 'array': return `[${t.Extent === 'dynamic' ? '' : (typeof t.Extent === 'object' ? displayType(t.Extent as TypeRecord) : t.Extent)}].<${displayType(t.Element)}>`;
     case 'tuple': return `[${t.Elements.map((e) => displayType(e.Type)).join(', ')}]`;
     case 'shared': return `shared ${displayType(t.Target)}`;
     // #sec-parameterized-types: printed as written, base and metadata, so the
