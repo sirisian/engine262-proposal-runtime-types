@@ -871,3 +871,36 @@ test('D42 narrows nothing it should not', () => {
   expect(ok('if (false) { let a: Promise.<never, Error> = Promise.reject(new Error()); } 1;')).toBe(true);
   expect(ok('if (false) { let a: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); } 1;')).toBe(true);
 });
+
+const PROM = 'let p: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); ';
+
+test('D45: a promise handler takes the type the receiver carries', () => {
+  // #table-promise-prototype-signatures. These were typed NOWHERE - not in the
+  // specification and not in the engine - so a handler's parameter was
+  // unchecked, while the same shape on an ARRAY was refused. That contrast is
+  // what made this a defect rather than a missing feature.
+  expectStaticTypeError(`${PROM} p.then((v) => { let s: string = v; return 1; });`);
+  expect(ok(`if (false) { ${PROM} p.then((v) => { let n: uint8 = v; return 1; }); } 1;`)).toBe(true);
+  // `then`'s SECOND handler takes the rejection type, and `catch` is that
+  // handler alone.
+  expectStaticTypeError(`${PROM} p.then((v) => 1, (e) => { let n: uint8 = e; return 1; });`);
+  expect(ok(`if (false) { ${PROM} p.then((v) => 1, (e) => { let x: Error = e; return 1; }); } 1;`)).toBe(true);
+  expectStaticTypeError(`${PROM} p.catch((e) => { let n: uint8 = e; return 1; });`);
+  expect(ok(`if (false) { ${PROM} p.catch((e) => { let x: Error = e; return 1; }); } 1;`)).toBe(true);
+});
+
+test('D45: every handler is OPTIONAL, and finally takes none', () => {
+  expect(ok(`if (false) { ${PROM} p.then(); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${PROM} p.catch(); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${PROM} p.finally(); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${PROM} p.finally(() => {}); } 1;`)).toBe(true);
+});
+
+test('D45 leaves the neighbouring receivers alone', () => {
+  // An UNTYPED promise carries no arguments to check against, and must not
+  // start refusing callbacks.
+  expect(ok('if (false) { let q = Promise.resolve(1); q.then((v) => { let s: string = v; return 1; }); } 1;')).toBe(true);
+  // The ARRAY arm, which already worked and is the model this followed.
+  expectStaticTypeError('let a: [].<uint8> = []; a.map((v) => { let s: string = v; return 1; });');
+  expect(ok('if (false) { let a: [].<uint8> = []; a.map((v) => { let n: uint8 = v; return 1; }); } 1;')).toBe(true);
+});

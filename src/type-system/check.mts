@@ -5516,6 +5516,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const receiver = staticType(m.MemberExpression);
+          // A PROMISE receiver: its two arguments are the resolution and the
+          // rejection type, and a handler's parameter is one of them (D45).
+          // Placed beside `receiver` rather than inside the ARRAY arm below,
+          // which binds its own `name` within a block guarded on array kinds.
+          if (receiver && receiver.Kind === 'nominal' && receiver.LibraryName === 'Promise'
+              && receiver.Arguments.length === 2 && m.IdentifierName) {
+            const psig = promiseMethodSignature(
+              (m.IdentifierName as { name: string }).name,
+              receiver.Arguments[0] as TypeRecord,
+              receiver.Arguments[1] as TypeRecord,
+            );
+            if (psig) {
+              return psig;
+            }
+          }
           // A method of a TYPED ARRAY takes the element type. The design gives a
           // typed collection element-typed method signatures, and the run time
           // enforces them (F68/F69); the checker knowing them is what turns
@@ -8270,6 +8285,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     'capacity', 'reserve', 'shrinkToFit',
     'push', 'pop', 'shift', 'unshift', 'splice',
   ]);
+
+  /**
+   * `then`, `catch` and `finally` on a `Promise.<R, E>` (D45).
+   *
+   * #table-promise-prototype-signatures. These were typed NOWHERE - not in the
+   * specification and not here - so `p.then((v) => { let s: string = v; })` on a
+   * `Promise.<uint8, Error>` was accepted, while the same shape on an array was
+   * refused. A handler's parameter is the type the receiver carries, and those
+   * positions are the only ones either type is read from.
+   *
+   * Every result rejects with `any`: a handler is a function, anything may
+   * throw, and "the reject type is never inferred". So a handled rejection does
+   * NOT narrow - a `never` there would claim a promise cannot reject when a
+   * throwing handler makes it reject - and `finally` widens for the same reason.
+   * `then` and `catch` answer alike because `p.then(f, g)` and
+   * `p.then(f).catch(g)` differ only in spelling.
+   */
+  const promiseMethodSignature = (name: string, resolution: TypeRecord, rejection: TypeRecord): Known => {
+    const anyType = { Kind: 'any' as const } as TypeRecord;
+    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
+    const handler = (takes: TypeRecord): TypeRecord => ({
+      Kind: 'function',
+      Signatures: [{ Parameters: [parameter(takes)], Return: anyType, Untyped: false }],
+    } as unknown as TypeRecord);
+    const promiseOf = (r: TypeRecord): TypeRecord => (libraryTypeRecord('Promise', [r, anyType]) ?? anyType) as TypeRecord;
+    // The handlers' RETURN types are independent, and neither is known from the
+    // receiver, so the result resolves with `any` rather than with a union this
+    // arm cannot compute. Naming a narrower type here would be a claim the
+    // signature cannot support - the same error `Promise.resolve`'s pinned `any`
+    // rejection was (D42), one position over.
+    switch (name) {
+      case 'then':
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(resolution), handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
+      case 'catch':
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
+      case 'finally':
+        return { Kind: 'function', Signatures: [{ Parameters: shapes([{ Kind: 'function', Signatures: [{ Parameters: [], Return: anyType, Untyped: false }] } as unknown as TypeRecord], 0), Return: promiseOf(resolution), Untyped: false }] } as unknown as Known;
+      default:
+        return null;
+    }
+  };
 
   const arrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
     const anyType = { Kind: 'any' as const };
