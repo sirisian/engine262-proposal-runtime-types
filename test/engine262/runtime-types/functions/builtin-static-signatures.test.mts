@@ -842,3 +842,32 @@ test('D36 leaves the neighbouring forms alone', () => {
   expect(ok('if (false) { function f(...a: [2].<uint8>) { return 1; } } 1;')).toBe(true);
   expect(ok('if (false) { function f<N: uint32>(...a: [N].<uint8>) { return 1; } } 1;')).toBe(true);
 });
+
+test('D42: Promise.resolve takes its rejection type from the TARGET', () => {
+  // #table-typed-statics: `(value: R): Promise.<R, E>`, E from the contextual
+  // type and `any` without one.
+  //
+  // It was written `Promise.<R, any>` - `any` as a LITERAL type argument. A
+  // generic class is INVARIANT in its arguments (#sec-generic-variance), so that
+  // is a subtype of no other instantiation, and `Promise.<uint8, any>` was the
+  // ONLY declared type a resolved promise fitted. `Promise.reject` one arm above
+  // already parameterizes its error type; this makes `resolve` agree.
+  expect(ok('if (false) { let a: Promise.<uint8, Error> = Promise.resolve((1 := uint8)); } 1;')).toBe(true);
+  expect(ok('if (false) { let a: Promise.<uint8, any> = Promise.resolve((1 := uint8)); } 1;')).toBe(true);
+  expect(ok('if (false) { function g(p: Promise.<uint8, Error>) { return 1; } g(Promise.resolve((1 := uint8))); } 1;')).toBe(true);
+  expect(ok('if (false) { function h(): Promise.<uint8, Error> { return Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
+  expect(ok('if (false) { async function f(): Promise.<uint8, Error> { return await Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
+});
+
+test('D42 narrows nothing it should not', () => {
+  // A wrong RESOLUTION type is still refused - only the rejection was unfixable.
+  expectStaticTypeError('let a: Promise.<string, Error> = Promise.resolve((1 := uint8));');
+  // With no contextual type the rejection stays `any`, which is what a call
+  // outside any target has always produced.
+  expect(ok('if (false) { let a = Promise.resolve((1 := uint8)); } 1;')).toBe(true);
+  // A NON-Promise target is not a source of arguments.
+  expectStaticTypeError('let a: uint8 = Promise.resolve((1 := uint8));');
+  // `reject` and the constructor are untouched.
+  expect(ok('if (false) { let a: Promise.<never, Error> = Promise.reject(new Error()); } 1;')).toBe(true);
+  expect(ok('if (false) { let a: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); } 1;')).toBe(true);
+});
