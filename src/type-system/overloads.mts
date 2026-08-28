@@ -141,7 +141,16 @@ export function minimumArity(params: readonly OverloadParameter[]): number {
  * one rest, which is every signature written before this feature, takes the
  * direct path and never reaches the matcher.
  */
-function assignArguments(params: readonly OverloadParameter[], argTypes: readonly TypeRecord[]): number[] | null {
+/**
+ * Exported for the CALL CHECK (D39), which asks the same question this file's
+ * overload ranking does: which parameter receives each argument, for a signature
+ * whose rests may be non-final or several.
+ *
+ * One assignment operation, not two. A checker that mapped arguments its own way
+ * would be a second thing to disagree with the run time - and the run time's own
+ * path calls `SequenceAssignment`, which this wraps.
+ */
+export function assignArguments(params: readonly OverloadParameter[], argTypes: readonly TypeRecord[]): number[] | null {
   const restCount = params.filter((p) => p.Rest).length;
   if (restCount <= 1) {
     // The familiar rule, stated as an assignment so that both callers read the

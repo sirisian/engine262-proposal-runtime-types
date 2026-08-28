@@ -14,7 +14,7 @@ import {
 } from './iteration-types.mts';
 import { SoAColumnsOf } from './layout.mts';
 
-import { badKindedArgument } from './records.mts';
+import { badKindedArgument, restElementType } from './records.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
@@ -27,7 +27,8 @@ import {
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord } from './runtime.mts';
 import { isWideIntegerType } from './arithmetic.mts';
-import { resolveOverloadByTypes } from './overloads.mts';
+import { resolveOverloadByTypes, assignArguments } from './overloads.mts';
+import { slotReceiving } from './sequence-assignment.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -8417,9 +8418,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const typeParameterScope = typeParameterNamesOf(n as ParseNode);
       const pushedTypeParameters = pushTypeParameterScopeOf(n as ParseNode);
       for (const p of fn.FormalParameters ?? []) {
+        // A REST parameter is usable (D39). This read "no arity to check against,
+        // so the whole name is left untyped rather than half-described", and the
+        // consequence was that ONE rest switched off argument checking for the
+        // entire call, the FIXED parameters included:
+        // `function h(_x_: uint8, ...a: [].<uint8>) {} h("no")` was accepted.
+        //
+        // A rest does have an arity: #sec-type-annotations makes its annotation
+        // the type of what it COLLECTS, so `[].<uint8>` admits any count while
+        // `[2].<uint8>` fixes one. A DESTRUCTURING parameter is still excluded -
+        // it binds a pattern rather than a name.
+        if (p.type === 'BindingRestElement') {
+          const rp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
+          const restResolved = rp.TypeAnnotation ? resolveType(rp.TypeAnnotation.Type) : null;
+          // D36's rule, restated here. Making a rest parameter USABLE routes the
+          // declaration through this branch instead of the one that carried the
+          // check, so `function f<C>(...a: C)` stopped being refused. A rule that
+          // lives at one of two sites resolving the same thing is the shape of
+          // D33 and D38 both; it is stated at both here rather than moved.
+          //
+          // #sec-type-annotations: the annotation must RESOLVE to an array or
+          // tuple type, and a type PARAMETER is judged by its CONSTRAINT.
+          if (rp.TypeAnnotation && restResolved) {
+            const judgedRest = restResolved.Kind === 'parameter'
+              ? (restResolved as { Constraint?: TypeRecord }).Constraint
+              : restResolved;
+            if (!judgedRest || (judgedRest.Kind !== 'array' && judgedRest.Kind !== 'tuple')) {
+              report(restResolved as TypeRecord, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as TypeRecord);
+            }
+          }
+          annotated.push(restResolved);
+          Parameters.push(parameter(restResolved ?? anyTypeRecord, {
+            Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
+            Rest: true,
+          }));
+          continue;
+        }
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
-          // A rest or destructuring parameter: no arity to check against, so
-          // the whole name is left untyped rather than half-described.
           usable = false;
           break;
         }
@@ -10433,11 +10468,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (sig) {
             const chosen = sig;
+            // Arguments are mapped to parameters by `assignArguments`, the SAME
+            // operation this file's overload ranking uses and which wraps the
+            // `SequenceAssignment` the run time calls. This proposal allows
+            // NON-FINAL and MULTIPLE rests - `f(...a1, cb1: () => void, ...a2,
+            // cb2: () => void)` and `f(...a: [].<number>, b: string)` - so a
+            // positional walk is wrong for both, and a second mapping here would
+            // be a second thing to disagree with the run time.
+            //
+            // It returns COUNTS PER SLOT, which `slotReceiving` turns into "which
+            // slot took this item"; that helper exists so two callers cannot
+            // compute it differently, and an earlier attempt indexed the counts
+            // as though they were the slot map.
+            const restPresent = chosen.Parameters.some((pp) => !!pp?.Rest);
+            const argTypesForMap = restPresent
+              ? c.Arguments.map((a) => (staticType(a as ParseNode) ?? anyTypeRecord) as TypeRecord)
+              : null;
+            const counts = argTypesForMap
+              ? assignArguments(
+                chosen.Parameters.map((pp) => ({
+                  Type: (pp?.Type ?? anyTypeRecord) as TypeRecord,
+                  Rest: !!pp?.Rest,
+                  Optional: !!pp?.Optional,
+                })) as never,
+                argTypesForMap,
+              )
+              : null;
             c.Arguments.forEach((arg, i) => {
-              if (i >= chosen.Parameters.length || arg.type === 'AssignmentRestElement') {
+              if (arg.type === 'AssignmentRestElement') {
                 return;
               }
-              let param = chosen.Parameters[i]?.Type;
+              const slotIndex = counts ? slotReceiving(counts, i) : i;
+              if (slotIndex < 0 || slotIndex >= chosen.Parameters.length) {
+                return;
+              }
+              const slot = chosen.Parameters[slotIndex];
+              // A REST slot's argument is checked against its ELEMENT type: the
+              // annotation is what the rest COLLECTS, so each argument
+              // contributes one element. `restElementType` is the helper
+              // `assignArguments`' own predicate uses - an array's element, a
+              // tuple's union of positions, and an untyped slot's type unchanged.
+              let param = slot?.Rest
+                ? restElementType(slot.Type as TypeRecord) as Known
+                : slot?.Type;
               // #sec-generic-functions: a call that supplies type arguments
               // binds them for the whole signature, parameters included. With
               // the return substituted but not the parameters, `first.<uint32>([1])`

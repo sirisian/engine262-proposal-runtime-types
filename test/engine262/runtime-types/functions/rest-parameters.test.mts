@@ -1,7 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff,
-} from '../harness.mts';
+  evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-type-annotations (Type Annotations) - rest parameters, and
@@ -221,4 +220,46 @@ test('overload resolution admits a signature the assignment satisfies', () => {
     function f(...a: [].<number>) { return "rest"; }
     f(1, 2);
   `)).toBe('rest');
+});
+
+test('D39: a REST parameter no longer disables the whole signature', () => {
+  // `check.mts` marked a signature unusable for any parameter that is not a
+  // SingleNameBinding or BindingElement, with the reason "a rest or
+  // destructuring parameter: no arity to check against". The consequence was
+  // that ONE rest switched off argument checking for the entire call - the
+  // FIXED parameters included.
+  //
+  // A rest DOES have an arity: #sec-type-annotations makes its annotation the
+  // type of what it collects (D36).
+  expectStaticTypeError('function f(...a: [].<uint8>) { return 1; } f("no");');
+  expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f((1 := uint8)); } 1;')).toBe(true);
+  expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f(); } 1;')).toBe(true);
+  // The parameters BEFORE the rest were never the reason for the exclusion.
+  expectStaticTypeError('function h(x: uint8, ...a: [].<uint8>) { return 1; } h("no");');
+  expect(ok('if (false) { function h(x: uint8, ...a: [].<uint8>) { return 1; } h((1 := uint8)); } 1;')).toBe(true);
+  // A DESTRUCTURING parameter is still excluded: it binds a pattern, not a name.
+  expect(ok('if (false) { function d({ x }) { return 1; } d({ x: 1 }); } 1;')).toBe(true);
+});
+
+test('D39: arguments are mapped by the SAME operation the run time uses', () => {
+  // This proposal allows NON-FINAL and MULTIPLE rests, so a positional walk over
+  // parameters is wrong for both. `assignArguments` - which this file's overload
+  // ranking already used, and which wraps the `SequenceAssignment` the run time
+  // calls - does the mapping, and `slotReceiving` turns its COUNTS PER SLOT into
+  // "which slot took this item". An earlier attempt indexed those counts as
+  // though they were the slot map.
+  //
+  // These two answers are the specification of the mapping: a change that
+  // refuses the wrong arguments above and breaks these has replaced one wrong
+  // answer with another.
+  expect(evaluated(`
+    function f(...a: [].<number>, b: string) { return a.length + ":" + b; }
+    f(1, 2, "x");
+  `)).toBe('2:x');
+  expect(evaluated(`
+    function f(...a1, cb1: () => void, ...a2, cb2: () => void) {
+      return a1.length + "," + a2.length;
+    }
+    f("a", 1, 1.0, () => {}, "b", 2, 2.0, () => {});
+  `)).toBe('3,3');
 });
