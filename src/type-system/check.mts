@@ -2787,7 +2787,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *   rather than guessing.
    */
   const checkArrayLiteralArityAgainstTuple = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'tuple' }) => {
-    const elements = (node.ElementList ?? []).filter((el): el is ParseNode => !!el && typeof el === 'object');
+    const elements = (node.ElementList ?? []).filter((el) => !!el && typeof el === 'object') as readonly ParseNode[];
     // A SPREAD contributes an unknown number of elements, so no arity can be
     // matched up, and a REST position admits any number beyond the fixed ones.
     if (elements.some((el) => el.type === 'SpreadElement') || target.Elements.some((p) => p.Rest)) {

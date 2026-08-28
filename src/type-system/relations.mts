@@ -1490,11 +1490,6 @@ function parameterAccepts(target: TypeRecord, source: TypeRecord, assumptions: r
 }
 
 export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
-  if ((globalThis as { __DBG?: boolean }).__DBG) {
-    // eslint-disable-next-line no-console
-    console.error('DBG ENTRY', s.Kind, (s as { LibraryName?: string }).LibraryName,
-      '->', t.Kind, (t as { LibraryName?: string }).LibraryName);
-  }
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
   }

@@ -1728,7 +1728,38 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       const current = Q(yield* Get(value, key));
       const converted = Q(yield* CheckedConvertValue(current, prop.type));
       if (converted !== current) {
-        Q(yield* SetProperty(value, key, converted, Value.true));
+        // PLAN-in-place-conversion-non-writable.md phase 1, W1. CONVERTING IN
+        // PLACE ASSUMES THE PROPERTY CAN BE WRITTEN, and nothing checked.
+        //
+        // The write faulted for any member that is not writable and holds a
+        // value needing conversion - a frozen object, an accessor with no
+        // setter, a `writable: false` descriptor - and the fault was
+        // `Cannot set property "n" on [object Object]`: a property-assignment
+        // error standing in for a type judgment, naming neither the type nor
+        // the reason, and reaching the program at run time.
+        //
+        // It struck at EVERY object boundary (parameter, `let`, return, a
+        // nested member, an array element) and it reached a COMPOSITE, which is
+        // frozen from its creation (#sec-composite-types), so
+        // `Composite.<{ n: number }>` could not be narrowed to `{ n: uint32 }`.
+        //
+        // Refusing is W1, chosen over copying (W3) because the callee receives
+        // the SAME object today - `f(o) === o` answers *true* - and undeclared
+        // properties survive the crossing; a copy would break the first and
+        // make sharing depend on the argument's property descriptors.
+        //
+        // `Set` with *false* answers whether the write SUCCEEDED rather than
+        // throwing, so the refusal is decided by trying it on the value itself.
+        // That is exact where a descriptor walk would not be: the property may
+        // be inherited, and `Map.prototype.size` is an accessor two links up.
+        const wrote = Q(yield* SetProperty(value, key, converted, Value.false));
+        if (wrote === Value.false) {
+          return Throw.TypeError(
+            '$1 cannot be converted to $2 in place, because it is not writable',
+            key,
+            Value(displayType(prop.type)),
+          );
+        }
       }
     }
     // A property the type admits through an INDEX SIGNATURE crosses the same
