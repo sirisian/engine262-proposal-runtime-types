@@ -10745,7 +10745,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // instantiation. The scope is for the BODY only.
           publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {
             const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-            return ann ? resolveType(ann.Type) : null;
+            const resolvedParam = ann ? resolveType(ann.Type) : null;
+            // #sec-type-annotations: "A rest element's annotation is the type of
+            // what it COLLECTS, an ~array~ or ~tuple~ type rather than an element
+            // type ... It is a type error if the annotation does not RESOLVE to
+            // an array or tuple type" (D36).
+            //
+            // On what it RESOLVES to, not on how it is written: a name, a type
+            // parameter and a computed type are each judged by what they denote,
+            // which is why this cannot be an Early Error. `resolveType` answers a
+            // type parameter's CONSTRAINT here, so a rest declared `...a: C` is
+            // judged by C's bound and the error lands at the declaration.
+            //
+            // Both readings were accepted before, with no rule saying which
+            // applied: `...a: [].<uint32>` collected uint32s and `...a: string`
+            // collected Strings. `sec-type-annotations` said one thing and
+            // `table-typed-statics`' `Array.of` row the other.
+            if (ann && (prm as ParseNode).type === 'BindingRestElement' && resolvedParam) {
+              // A type PARAMETER is judged by its CONSTRAINT, which is the whole
+              // reason this is a resolution-time rule rather than an Early Error:
+              // `resolveType` answers the parameter record itself, and its bound
+              // is what says whether the rest is well formed. An unconstrained
+              // parameter has none and is refused - which is the rule asking for
+              // `<C extends [].<any>>`, the form the design already writes.
+              const judged = resolvedParam.Kind === 'parameter'
+                ? (resolvedParam as { Constraint?: TypeRecord }).Constraint
+                : resolvedParam;
+              if (!judged || (judged.Kind !== 'array' && judged.Kind !== 'tuple')) {
+                report(resolvedParam as TypeRecord, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as TypeRecord);
+              }
+            }
+            return resolvedParam;
           }));
           bodyTypeParams = pushTypeParameterScopeOf(n as ParseNode);
           try {

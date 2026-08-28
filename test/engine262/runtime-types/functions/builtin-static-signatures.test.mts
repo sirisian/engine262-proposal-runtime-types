@@ -794,3 +794,51 @@ test('the reflection statics keep their run time and respect shadowing', () => {
   expect(evaluated('String(Reflect.isAssignable(type uint8, type string));')).toBe('false');
   expect(ok('if (false) { class R2 { } const Reflect = R2; let n: string = Reflect.typeOf(1); } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// D36 — a rest annotation is the type of what it COLLECTS
+// ---------------------------------------------------------------------------
+
+test('a rest annotation must RESOLVE to an array or tuple type', () => {
+  // #sec-type-annotations: "A rest element's annotation is the type of what it
+  // collects, an ~array~ or ~tuple~ type rather than an element type".
+  //
+  // Both readings were accepted before, with no rule saying which applied:
+  // `...a: [].<uint32>` collected uint32s and `...a: string` collected Strings.
+  // `sec-type-annotations` said one thing and `table-typed-statics`' `Array.of`
+  // row the other, so the engine had five behaviours and no rule.
+  expectStaticTypeError('function f(...a: string) { return 1; }');
+  expectStaticTypeError('function f(...a: uint32) { return 1; }');
+  expectStaticTypeError('type M = { a: uint8 }; function f(...a: M) { return 1; }');
+  expect(ok('if (false) { function f(...a: [].<uint32>) { return 1; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f(...a: [string, string]) { return 1; } } 1;')).toBe(true);
+  // Nesting, which previously collapsed to `[].<any>` and lost the type.
+  expect(ok('if (false) { function f(...a: [].<[].<uint32>>) { return 1; } } 1;')).toBe(true);
+});
+
+test('a type PARAMETER rest is judged by its CONSTRAINT', () => {
+  // The whole reason this is a resolution-time rule and not an Early Error: a
+  // parameter's form is not knowable from the text, and `resolveType` answers
+  // the parameter record, whose BOUND says whether the rest is well formed.
+  //
+  // An unconstrained parameter is refused, which is the rule asking for
+  // `<C extends [].<any>>` - the form `regexp.md` and `typechallenges.md`
+  // already write.
+  expect(ok('if (false) { function f<C extends [].<any>>(...a: C) { return 1; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f<C extends [].<uint32>>(...a: C) { return 1; } } 1;')).toBe(true);
+  expectStaticTypeError('function f<C>(...a: C) { return 1; }');
+  expectStaticTypeError('function f<C extends string>(...a: C) { return 1; }');
+});
+
+test('D36 leaves the neighbouring forms alone', () => {
+  // A NON-rest parameter takes its annotation as its own type, as always.
+  expect(ok('if (false) { function f(x: string) { return 1; } } 1;')).toBe(true);
+  // An unannotated rest is unaffected.
+  expect(ok('if (false) { function f(...a) { return 1; } } 1;')).toBe(true);
+  // A tuple's `...` is a SPREAD, governed by #sec-array-and-tuple-types and not
+  // by this rule - `[uint8, ...[string, string]]` has length 3.
+  expect(ok('if (false) { let x: [uint8, ...[].<string>] = [(1 := uint8), "a"]; } 1;')).toBe(true);
+  // An EXTENT is part of the type, including a value-parameter one.
+  expect(ok('if (false) { function f(...a: [2].<uint8>) { return 1; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f<N: uint32>(...a: [N].<uint8>) { return 1; } } 1;')).toBe(true);
+});
