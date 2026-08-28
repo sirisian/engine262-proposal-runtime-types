@@ -904,3 +904,47 @@ test('D45 leaves the neighbouring receivers alone', () => {
   expectStaticTypeError('let a: [].<uint8> = []; a.map((v) => { let s: string = v; return 1; });');
   expect(ok('if (false) { let a: [].<uint8> = []; a.map((v) => { let n: uint8 = v; return 1; }); } 1;')).toBe(true);
 });
+
+const SUB = 'class A { x: uint8 = (0 := uint8); } class B extends A { y: uint8 = (0 := uint8); } ';
+
+test('OQ19: a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
+  // #sec-generic-variance: "A position declared covariant admits an argument the
+  // position's own type is ASSIGNABLE FROM, not merely a subtype of."
+  //
+  // The two differ for `any`, which is assignable both ways while being a
+  // subtype only upward. Read by subtyping alone, the same pair answered one way
+  // at the top level - `let e: Error = a` for an `any` a is admitted - and
+  // another one position in.
+  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<any> = undefined; let q: Box.<A> = p; } 1;`)).toBe(true);
+  // Covariance still goes ONE WAY, and a real subtype pair still flows.
+  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<B> = undefined; let q: Box.<A> = p; } 1;`)).toBe(true);
+  expectStaticTypeError(`${SUB} class Box<out T> { } let p: Box.<A> = undefined; let q: Box.<B> = p;`);
+});
+
+test('OQ19 does not reach an INVARIANT parameter', () => {
+  // The mutable-container hazard #sec-generic-variance is written about: a
+  // `Map.<string, uint8>` used as `Map.<string, number>` "would accept a Number
+  // into storage typed uint8". Map is deliberately absent from the library
+  // variance table.
+  expectStaticTypeError(`${SUB} class Box<T> { } let p: Box.<any> = undefined; let q: Box.<A> = p;`);
+  expectStaticTypeError('let m: Map.<string, uint8> = new Map.<string, uint8>(); let n: Map.<string, number> = m;');
+  expectStaticTypeError('let m: Map.<string, any> = new Map.<string, any>(); let n: Map.<string, uint8> = m;');
+});
+
+test('OQ18: a promise is COVARIANT in both parameters', () => {
+  // Every promise method rejects with `any` - "the reject type is never
+  // inferred: anything may throw" - so these programs were unwritable under
+  // invariance AND under covariance-by-subtyping. They are the ordinary case.
+  const P = 'let p: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); ';
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then((v) => v); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.catch((e) => (0 := uint8)); } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.finally(() => {}); } 1;`)).toBe(true);
+  // D44: `Promise.reject`'s `Promise.<never, E>` now flows where a resolution
+  // type is wanted, its row having been correct all along.
+  expect(ok('if (false) { let q: Promise.<uint8, Error> = Promise.reject(new Error()); } 1;')).toBe(true);
+  // And a resolved promise flows through a NAMED binding, which the contextual
+  // approach could not do - the target that typed the call was lost at the name.
+  expect(ok('if (false) { const r = Promise.resolve((1 := uint8)); let q: Promise.<uint8, Error> = r; } 1;')).toBe(true);
+  // A wrong RESOLUTION type is still refused: covariance is not permission.
+  expectStaticTypeError('let q: Promise.<string, Error> = Promise.resolve((1 := uint8));');
+});

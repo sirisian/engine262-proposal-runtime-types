@@ -1157,17 +1157,55 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // clause calls conservative.
       if (s.Declaration === tn.Declaration && s.Arguments.length === tn.Arguments.length
         && s.Arguments.length > 0) {
-        const params = (s.Declaration as { TypeParameters?: { TypeParameterList?: readonly { Variance?: string }[] } } | undefined)
-          ?.TypeParameters?.TypeParameterList;
+        // A LIBRARY type has no Declaration to carry a variance annotation - it
+        // is a name in a set - so its declared variance is stated here (OQ18).
+        //
+        // #sec-generic-variance: "A promise's two parameters are COVARIANT ...
+        // Neither type is written through a promise - a promise is settled once,
+        // by the code that created it, and every position either type is read
+        // from is a HANDLER'S PARAMETER". So the mutable-container hazard that
+        // makes `Map`'s parameters invariant does not arise, and `Map` is
+        // deliberately absent from this table.
+        const libraryVariance: Record<string, readonly string[]> = { Promise: ['covariant', 'covariant'] };
+        const declaredLibrary = s.LibraryName ? libraryVariance[s.LibraryName] : undefined;
+        const params = declaredLibrary
+          ? declaredLibrary.map((v) => ({ Variance: v }))
+          : (s.Declaration as { TypeParameters?: { TypeParameterList?: readonly { Variance?: string }[] } } | undefined)
+            ?.TypeParameters?.TypeParameterList;
         if (params?.some((p) => p.Variance !== undefined)) {
           return s.Arguments.every((sa, i) => {
             const ta = tn.Arguments[i] as TypeRecord;
             const variance = params[i]?.Variance;
+            // #sec-generic-variance: a position declared covariant admits an
+            // argument the position's own type is ASSIGNABLE FROM, not merely a
+            // subtype of (OQ19).
+            //
+            // The two differ for `any`, which is assignable both ways while
+            // being a subtype only upward. Read by `IsSubtype` alone, the same
+            // pair answered one way at the top level - `let e: Error = a` for an
+            // `any` a is admitted - and another one position in, which is one
+            // relation asked two ways.
+            //
+            // It matters because it is unavoidable: every promise method
+            // rejects with `any` ("the reject type is never inferred: anything
+            // may throw"), so `let q: Promise.<uint8, Error> = p.then(f)` was
+            // unwritable under invariance AND under covariance until this.
+            //
+            // An INVARIANT parameter is untouched, which is what a mutable
+            // container has: `Map.<string, uint8>` remains usable as no other
+            // instantiation, `Map.<string, any>` included.
+            //
+            // `IsAssignable` is `IsSubtype` plus the `any` rule, and cannot be
+            // called here because it discards the assumption set a recursive
+            // comparison needs; the rule is applied directly instead.
+            const assignable = (from: TypeRecord, to: TypeRecord): boolean => (
+              from.Kind === 'any' || to.Kind === 'any' || IsSubtype(from, to, next)
+            );
             if (variance === 'covariant') {
-              return IsSubtype(sa as TypeRecord, ta, next);
+              return assignable(sa as TypeRecord, ta);
             }
             if (variance === 'contravariant') {
-              return IsSubtype(ta, sa as TypeRecord, next);
+              return assignable(ta, sa as TypeRecord);
             }
             return SameTypeWithAssumptions(sa as TypeRecord, ta, next);
           });
