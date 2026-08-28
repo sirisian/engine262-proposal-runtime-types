@@ -283,3 +283,38 @@ test('D36: a rest annotation with an EXTENT fixes the argument count', () => {
   expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f((1 := uint8), (2 := uint8), (3 := uint8)); } 1;')).toBe(true);
   expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f(); } 1;')).toBe(true);
 });
+
+test('D41: a rest parameter\'s ELEMENT type is enforced at run time', () => {
+  // #sec-type-annotations: "A rest element's annotation is the type of what it
+  // COLLECTS". A rest was the ONE position in the language whose declared type
+  // the run time ignored - a fixed parameter, a binding's element and a field's
+  // element all threw, and `...a: [].<uint32>` given a String did not.
+  //
+  // Called through an untyped binding so the CHECKER cannot fire: a static error
+  // surfaces as a throw too, so the two are indistinguishable otherwise. That
+  // confound is what hid this defect while two static checks were built on the
+  // assumption the run time already enforced it.
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g("no");', 'not assignable');
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g((1 := uint32), "no");', 'not assignable');
+});
+
+test('D41: BINDING converts, it does not test membership', () => {
+  // An untyped literal ADAPTS to a declared type, as it does for a fixed
+  // parameter, so these are valid and must stay valid. A first attempt used
+  // `IsOfType` - strict membership - and refused all of them.
+  //
+  // The ASSIGNED-PARAMETERS path does use `IsOfType`, because it is choosing
+  // WHICH SLOT takes an argument. This path is binding one. The two questions
+  // want different operations, and mirroring the wrong one was the error.
+  expect(evaluated('function f(a: string, ...args: [].<uint32>) { return args.length; } String(f("a", 0, 1, 2, 3));')).toBe('4');
+  expect(evaluated('function f(a: uint8, ...rest: [].<string>) { return rest[0]; } f((1 := uint8), "hello", "y");')).toBe('hello');
+  // An UNTYPED rest is unaffected, and so are the multi-rest forms.
+  expect(evaluated('function f(...a) { return a.length; } String(f("anything", 2));')).toBe('2');
+  expect(evaluated(`
+    function f(...a1, cb1: () => void, ...a2, cb2: () => void) {
+      return a1.length + "," + a2.length;
+    }
+    f("a", 1, 1.0, () => {}, "b", 2, 2.0, () => {});
+  `)).toBe('3,3');
+  expect(evaluated('function f(...a: [].<number>, b: string) { return a.length + ":" + b; } f(1, 2, "x");')).toBe('2:x');
+});

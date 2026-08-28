@@ -14,7 +14,7 @@ import {
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
-import { EnforceAnnotation, IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
+import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
 import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { restElementType } from '../type-system/records.mts';
@@ -290,10 +290,22 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
 // BindingRestElement :
 //   `...` BindingIdentifier
 //   `...` BindingPattern
-function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, BindingPattern }: ParseNode.BindingRestElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, BindingPattern, TypeAnnotation }: ParseNode.BindingRestElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
   if (BindingIdentifier) {
     // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
     const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
+    // #sec-type-annotations: "A rest element's annotation is the type of what it
+    // COLLECTS", so each argument the rest takes is checked against that type's
+    // ELEMENT type (D41, and D32's run-time half). This function did not read its
+    // annotation at all - the parameter was not even destructured - so a rest was
+    // the ONE position in the language whose declared type the run time ignored.
+    let restElement: TypeRecord | undefined;
+    if (TypeAnnotation) {
+      const resolvedRest = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
+      if (resolvedRest.Type !== 'throw' && resolvedRest.Value) {
+        restElement = restElementType(resolvedRest.Value as TypeRecord);
+      }
+    }
     // 2. Let A be ! ArrayCreate(0).
     const array = X(ArrayCreate(0));
     // 3. Let n be 0.
@@ -313,6 +325,21 @@ function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, 
         }
         // ii. Return InitializeReferencedBinding(lhs, A).
         return yield* InitializeReferencedBinding(lhs, array);
+      }
+      // `CheckedConvertValue`, which is what `EnforceAnnotation` reaches for a
+      // FIXED parameter - not `IsOfType`. Binding CONVERTS: an untyped literal
+      // adapts to a declared type, so `f("a", 0, 1, 2, 3)` at
+      // `...args: [].<uint32>` is valid and five corpus programs assert it. The
+      // ASSIGNED-PARAMETERS path uses `IsOfType` because it is choosing WHICH
+      // SLOT takes an argument; this path is binding one, and the two questions
+      // want different operations.
+      //
+      // Written as a STATEMENT. `Q` is a macro and is hoisted out of a
+      // short-circuit, so `guard && Q(yield* …)` evaluates the call whatever the
+      // guard says - which called the check with an absent type for every
+      // UNTYPED rest and faulted.
+      if (restElement !== undefined) {
+        next = Q(yield* CheckedConvertValue(next as Value, restElement));
       }
       // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
       // proposal-runtime-types (references extension): a rest parameter is an
