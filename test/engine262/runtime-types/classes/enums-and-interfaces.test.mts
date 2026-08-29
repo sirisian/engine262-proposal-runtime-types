@@ -74,9 +74,16 @@ test('interfaces check structurally', () => {
   // An interface member converts as an object type's does: 300 has a
   // canonical text and reaches `string` losslessly, so it converts rather than
   // failing - the same rule `let s: string = 300` has always followed.
-  expect(evaluated('interface I { x: string } function anyv() { return { x: 300 }; } let p: I = anyv(); p.x + "/" + typeof p.x;')).toBe('300/string');
+  //
+  // `anyv` is DECLARED `: any` now. It was unannotated, and the comment above
+  // called it "the `any` path where the checker cannot decide" - which stopped
+  // being true when an object literal gained a static type (D58): the inferred
+  // return became `{ x: number }` and the assignment an Early Error, so these
+  // two rows tested the checker where they meant to test the RUN TIME. Writing
+  // the annotation restores what they were for.
+  expect(evaluated('interface I { x: string } function anyv(): any { return { x: 300 }; } let p: I = anyv(); p.x + "/" + typeof p.x;')).toBe('300/string');
   // A member the type cannot hold is still refused.
-  expect(evaluated('interface J { x: uint8 } function anyv() { return { x: 300 }; } try { let p: J = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('interface J { x: uint8 } function anyv(): any { return { x: 300 }; } try { let p: J = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
 
 test('class operators dispatch on binary expressions', () => {
