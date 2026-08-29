@@ -4987,17 +4987,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // has handled a MethodSignature all along.
           const asMethod = (member as unknown as {
             MethodSignature?: {
+              TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
               FunctionTypeParameterList?: readonly ParseNode[] | null,
               TypeAnnotation?: ParseNode.TypeAnnotation | null,
             } | null,
           }).MethodSignature;
           if (asMethod) {
-            const Parameters: ParameterRecord[] = [];
-            for (const p of asMethod.FunctionTypeParameterList ?? []) {
-              const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-              Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
+            // A method's OWN type parameters are in scope across its signature
+            // and nowhere else (D68). #sec-type-members gives them to the
+            // signature - `MethodSignature : TypeParameters? '(' … ')'
+            // TypeAnnotation?` - and `TypeMember` is the production an object
+            // type and an interface body SHARE, so `{ m<T>(v: T): T }` is as
+            // grammatical as the interface spelling.
+            //
+            // Without the scope `T` fell through to a binding lookup and the
+            // DECLARATION alone raised `ReferenceError: "T" is not defined`.
+            //
+            // Pushed PER MEMBER, not for the member list: a sibling `n: T` must
+            // keep failing, since nothing binds T there.
+            const methodParamNames = (asMethod.TypeParameters?.TypeParameterList ?? [])
+              .map((q) => (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name)
+              .filter((n): n is string => typeof n === 'string');
+            if (methodParamNames.length > 0) {
+              typeParameterScopes.push(scopeOfNames(methodParamNames));
             }
-            const Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
+            let Parameters: ParameterRecord[] = [];
+            let Return: Known = null;
+            try {
+              Parameters = [];
+              for (const p of asMethod.FunctionTypeParameterList ?? []) {
+                const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+                Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
+              }
+              Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
+            } finally {
+              if (methodParamNames.length > 0) {
+                typeParameterScopes.pop();
+              }
+            }
             Properties.push({
               key,
               // [[ThisType]] carried, as the interface path carries it: a CLASS

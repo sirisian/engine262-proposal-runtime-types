@@ -3389,7 +3389,43 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // where that is said; a member written `m: () => uint8` says the
           // opposite and is left unmarked, which is the distinction the syntax
           // draws.
-          const built = Q(yield* functionRecordFromSignature(member.MethodSignature.FunctionTypeParameterList, member.MethodSignature.TypeAnnotation));
+          // A method's OWN type parameters are in scope across its signature and
+          // nowhere else (D68). #sec-type-members:
+          // `MethodSignature : TypeParameters? '(' … ')' TypeAnnotation?`, and
+          // `TypeMember` is the production an object type and an interface body
+          // SHARE - so `{ m<T>(v: T): T }` is as grammatical as the interface
+          // spelling and must resolve.
+          //
+          // Without the frame `T` fell through to a BINDING lookup here, and
+          // `type G = { m<T>(v: T): T }` raised `ReferenceError: "T" is not
+          // defined` on the declaration alone. The CHECKER resolved it correctly
+          // once its own scope was pushed - measured, params ["T"] return T - so
+          // this half is what remained.
+          //
+          // Bound to ~any~: nothing supplies an argument for a method's
+          // parameter at this point, and the frame exists to stop the name being
+          // read as a value. Pushed per MEMBER, so a sibling `n: T` still fails.
+          const methodTypeParameters = (member.MethodSignature as unknown as {
+            TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+          }).TypeParameters?.TypeParameterList ?? [];
+          const methodFrame = new Map<string, TypeRecord>();
+          for (const q of methodTypeParameters) {
+            const pname = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+            if (pname) {
+              methodFrame.set(pname, { Kind: 'any' } as TypeRecord);
+            }
+          }
+          if (methodFrame.size > 0) {
+            pushTypeParameterFrame(methodFrame);
+          }
+          let built;
+          try {
+            built = Q(yield* functionRecordFromSignature(member.MethodSignature.FunctionTypeParameterList, member.MethodSignature.TypeAnnotation));
+          } finally {
+            if (methodFrame.size > 0) {
+              popTypeParameterFrame();
+            }
+          }
           type = built.Kind === 'function'
             ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }
             : built;
