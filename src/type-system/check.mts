@@ -3949,6 +3949,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
 
   const resolvingAliases = new Set<string>();
+  /**
+   * A generic alias's body with every parameter bound to its
+   * |TypeParameterDefault|, or null where any has none (D59).
+   *
+   * Mirrors `AllDefaultsFrame` (`runtime.mts:133`) including its completeness
+   * requirement. BINDINGS then SUBSTITUTION: `typeParameterScopes` records a
+   * parameter's CONSTRAINT and not a value bound to it, so resolving the body
+   * inside a pushed scope leaves `T` a parameter record - measured, the
+   * structure came out `{ t: T }` and refused `{ t: float64 }`.
+   */
+  const defaultedAliasBody = (declaration: ParseNode): Known => {
+    const params = (declaration as unknown as {
+      TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+    }).TypeParameters?.TypeParameterList ?? [];
+    const body = (declaration as unknown as { Type?: ParseNode.Type | null }).Type;
+    if (params.length === 0 || !body) {
+      return null;
+    }
+    if (!params.every((q) => (q as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault)) {
+      return null;
+    }
+    const bindings = new Map<string, TypeRecord>();
+    const scope = new Map<string, Known | null>();
+    for (const q of params) {
+      const pname = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
+      if (!pname || !pdefault) {
+        return null;
+      }
+      const resolvedDefault = resolveType(pdefault);
+      if (!resolvedDefault) {
+        return null;
+      }
+      bindings.set(pname, resolvedDefault as TypeRecord);
+      scope.set(pname, null);
+    }
+    typeParameterScopes.push(scope);
+    let resolvedBody: Known = null;
+    try {
+      resolvedBody = resolveType(body);
+    } finally {
+      typeParameterScopes.pop();
+    }
+    return resolvedBody ? substituteTypeParameters(resolvedBody, bindings) : null;
+  };
+
   const lookupAlias = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
@@ -10510,9 +10556,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // binds. The declaration is recorded under its own name so those
           // positions can reach it, and a type position still refuses it,
           // because a nominal whose declaration is an alias is not a type.
+          //
+          // Where every parameter has a DEFAULT the resolved body rides along as
+          // [[Structure]] (D59). #sec-type-arguments: the bare name "takes ...
+          // its |TypeParameterDefault|", so `type G<T = float64> = { t: T }`
+          // written as `G` IS a type - while [[Declaration]] STAYS on the
+          // record, or `interface I<W<_> = G>` loses the constructor it binds.
+          // One record, both positions.
+          //
+          // A parameter with NO default keeps the bare nominal and its refusal:
+          // nothing binds it, which `sec-type-arguments` makes "a type error
+          // where a parameter has none".
+          const aliasDefaultsBody = defaultedAliasBody(n as unknown as ParseNode);
           frames[frames.length - 1].aliases.set(
             n.BindingIdentifier.name,
-            { Kind: 'nominal', Declaration: n, Arguments: [] } as unknown as TypeRecord,
+            {
+              Kind: 'nominal',
+              Declaration: n,
+              Arguments: [],
+              ...(aliasDefaultsBody ? { Structure: aliasDefaultsBody } : {}),
+            } as unknown as TypeRecord,
           );
         }
         return;

@@ -710,6 +710,28 @@ function ClassShapeOf(t: TypeRecord): TypeRecord | undefined {
  * already gives: the reflection contexts are distinguished by kind, not by
  * shape, and one whose members are a superset of another's must not satisfy it.
  */
+/**
+ * A TYPE ALIAS's structure, where its nominal record carries one (D59).
+ *
+ * A generic alias is registered as `{ Kind: 'nominal', Declaration, Arguments }`
+ * so a HIGHER-KINDED argument reaches the declaration - `interface I<W<_> =
+ * Identity>` binds the CONSTRUCTOR - and a type position was left refusing it.
+ * Right for `type Identity<T> = T` bare, where nothing binds T; wrong once every
+ * parameter has a default.
+ *
+ * Gated on the declaration KIND: a CLASS carries a structure too and must not
+ * compare structurally - "it is the identity that its type is for".
+ */
+function AliasStructureOf(t: TypeRecord): TypeRecord | undefined {
+  if (t.Kind !== 'nominal') {
+    return undefined;
+  }
+  if ((t as { Declaration?: { type?: string } }).Declaration?.type !== 'TypeAliasDeclaration') {
+    return undefined;
+  }
+  return t.Structure;
+}
+
 function InterfaceStructureOf(t: TypeRecord): TypeRecord | undefined {
   if (t.Kind !== 'nominal' || t.LibraryName !== undefined) {
     return undefined;
@@ -1012,6 +1034,17 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // The comment above says these are "different questions of the same record";
     // they are, and they need the same substitution to ask them of the right
     // structure.
+    // An ALIAS carrying a resolved structure compares through it (D59), as an
+    // interface does, and for the same reason these steps come BEFORE the one
+    // that separates the kinds.
+    const targetAlias = AliasStructureOf(t);
+    if (targetAlias && s.Kind === 'object') {
+      return IsSubtype(s, targetAlias, next);
+    }
+    const sourceAlias = AliasStructureOf(s);
+    if (sourceAlias && t.Kind === 'object') {
+      return IsSubtype(sourceAlias, t, next);
+    }
     const targetStructure = InterfaceStructureOf(t);
     if (targetStructure && s.Kind === 'object') {
       return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
