@@ -6918,7 +6918,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const instance = {
       Kind: 'nominal',
       Declaration: n,
-      Arguments: [],
+      // A bare generic CLASS takes its parameters' DEFAULTS as its arguments
+      // (D59), the way a bare generic interface does one registration over.
+      // #sec-type-arguments: a name supplying no argument takes "its
+      // |TypeParameterDefault|" - so `class C<T = uint8> {}` written as `C` is
+      // `C.<uint8>`, and `let c: C = new C.<uint8>()` stopped being an
+      // argument-count mismatch.
+      //
+      // An empty list where any parameter lacks a default, which keeps the
+      // existing refusal: `sec-type-arguments` makes that "a type error where a
+      // parameter has none".
+      Arguments: defaultArgumentsOf(n as unknown as ParseNode),
       Structure: { Kind: 'object', Properties: merged, IndexSignatures: [] },
       // The class this one extends, so the subtype relation has a chain to
       // walk. Nominal, not structural: two unrelated empty classes stay
