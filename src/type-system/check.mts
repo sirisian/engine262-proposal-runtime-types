@@ -5006,7 +5006,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // began to refuse once this type resolved at all.
               type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
               optional: !!(member as unknown as { Optional?: boolean }).Optional,
-              readonly: false,
+              // `readonly: true`, as the INTERFACE path sets it for a method and
+              // for the reason it records (D67). #sec-variance-annotations: "a
+              // covariant parameter is well-formed only where it appears in
+              // output positions of the declaration, a METHOD RETURN or a
+              // `readonly` field" - so a method is compared by IsSubtype, which
+              // lets function subtyping decide its own variance, and not by the
+              // invariance #sec-isobjectsubtype requires of a WRITABLE data
+              // member.
+              //
+              // With `false` here, `interface S { m(): uint8; }` was not
+              // assignable to `{ m(): uint8 }`: the target's member was writable,
+              // so the comparison went to INVARIANT identity and two
+              // field-for-field identical signatures still failed it.
+              readonly: true,
             });
             continue;
           }
