@@ -1063,6 +1063,38 @@ export function typeContextRecord(): TypeRecord {
   };
 }
 
+/**
+ * `Reflect.TypeObject` - the type of a TYPE OBJECT (OQ20).
+ *
+ * NOT a synonym for `Reflect.Type`, which is the type of a reflection NODE.
+ * The two sit on opposite sides of the reflection relationship: a Type Object
+ * IS a type reified as a value, and a node DESCRIBES one. Measured, a node's
+ * `kind` is `"union"` and its `members` decompose, while a Type Object exposes
+ * only `family` and `members` is *undefined* - and a node's members are
+ * themselves Type Objects, so walking alternates between the two.
+ *
+ * `Reflect.typeOf` returns a Type Object, which is why its row was WITHDRAWN
+ * (D34): naming `Reflect.Type` there would claim it returns a node.
+ * #sec-reflection states the consequence - "the signature would name a type its
+ * own result does not satisfy" - and the failure is a RUN-TIME one, since
+ * `typeOf` being untyped makes its result `any` and assignable to anything. So
+ * the row type-checked everywhere and threw at every boundary that ran.
+ *
+ * Registered like `Reflect.Type` and for the same reason: it is a type a
+ * program may write and is NOT a decorator context, so it must reach
+ * `RegisterBoundTypeRecord` ahead of the context filter.
+ */
+const typeObjectDeclaration = { type: 'ReflectionContext', name: 'TypeObject' } as unknown as ParseNode;
+
+export function typeObjectRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: typeObjectDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.TypeObject',
+  };
+}
+
 
 /**
  * proposal-runtime-types decorators.md, the CLASS family of decorator contexts.
@@ -1613,6 +1645,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   const reflect = realmRec.Intrinsics['%Reflect%'];
   X(reflect.DefineOwnProperty(Value('Type'), Descriptor({
     Value: GetTypeObject(typeContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('TypeObject'), Descriptor({
+    Value: GetTypeObject(typeObjectRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

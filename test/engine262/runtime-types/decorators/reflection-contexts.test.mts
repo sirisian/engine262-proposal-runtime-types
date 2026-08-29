@@ -336,3 +336,29 @@ test('a function\'s sub-targets fire on their own', () => {
   // resolve its own binding.
   expect(evaluated(`${tag} function g(x: uint8) { return x; } String(l.length);`)).toBe('0');
 });
+
+test('OQ20: `Reflect.TypeObject` is the type of a TYPE OBJECT', () => {
+  // NOT a synonym for `Reflect.Type`, which is the type of a reflection NODE.
+  // The two sit on opposite sides of the reflection relationship: a Type Object
+  // IS a type reified as a value; a node DESCRIBES one, and a node's members are
+  // themselves Type Objects.
+  //
+  // `Reflect.typeOf` returns a Type Object, which is why its row was WITHDRAWN
+  // (D34) - `Reflect.Type` was the only name available and is the wrong one.
+  expect(evaluated('String(Reflect.typeOf(1) is Reflect.TypeObject);')).toBe('true');
+  expect(evaluated('String((type uint8) is Reflect.TypeObject);')).toBe('true');
+  expect(evaluated('String(1 is Reflect.TypeObject);')).toBe('false');
+  expect(evaluated('String("s" is Reflect.TypeObject);')).toBe('false');
+});
+
+test('OQ20: the two reflection types stay APART', () => {
+  // A node satisfies `Reflect.Type` and is not a Type Object; a Type Object is
+  // the reverse. Neither may drift into the other.
+  expect(evaluated('String(Reflect.getReflection.<Reflect.Type, uint8>() is Reflect.Type);')).toBe('true');
+  expect(evaluated('String(Reflect.getReflection.<Reflect.Type, uint8>() is Reflect.TypeObject);')).toBe('false');
+  expect(evaluated('String((type uint8) is Reflect.Type);')).toBe('false');
+  // A decorator context is unaffected. An arm placed ABOVE `IsOfType`'s
+  // dereferencing arms turned this FALSE during an earlier attempt, though its
+  // guard could not match the name.
+  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } class A { @f a: uint8; } r;')).toBe('true');
+});

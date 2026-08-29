@@ -34,6 +34,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
+import { BoundTypeRecordForName } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
 } from './iteration-types.mts';
@@ -1697,6 +1698,22 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // construction converted each - so the check is the type's identity, not a
   // walk. SameType rather than reference equality, since a record reaching here
   // may be an equal one built elsewhere.
+  // A TYPE OBJECT is of `Reflect.TypeObject` (OQ20). `Reflect.typeOf` returns
+  // one, and its row was WITHDRAWN (D34) because `Reflect.Type` - the type of a
+  // reflection NODE - was the only name available and is the wrong one.
+  //
+  // Placed HERE and not at the top of this operation: the ~reference~ and
+  // ~shared~ arms above DEREFERENCE first, and an early return before them tests
+  // the reference rather than what it borrows. An attempt at D35 did exactly
+  // that and turned `c is Reflect.ClassField` FALSE for a decorator context,
+  // though its guard could not match that name.
+  //
+  // Tested with `isTypeObject`, never by the [[TypeRecord]] slot a Type Object
+  // also carries to hold what it DENOTES - the trap `CarriedTypeRecordOf`'s
+  // comment states and calls worth stating twice.
+  if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Reflect.TypeObject') {
+    return isTypeObject(value);
+  }
   if (value.type === 'Vector') {
     return SameType((value as VectorValue).TypeRecord as TypeRecord, t);
   }
