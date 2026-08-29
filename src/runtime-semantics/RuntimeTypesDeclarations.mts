@@ -460,14 +460,47 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // so a method member and a `(x: uint8) => uint8` member reach the same
         // record from the same code.
         const method = m.MethodSignature as ParseNode.MethodSignature;
-        const attempt = EnsureCompletion(yield* functionRecordFromSignature(
-          method.FunctionTypeParameterList,
-          method.TypeAnnotation,
-        ));
+        // A method's OWN type parameters are in scope across its signature (D68,
+        // which did this for an OBJECT TYPE in `runtime.mts`). Needed HERE too
+        // the moment the signature's failures are reported: without it
+        // `interface I { m<T>(v: T): T; }` began answering `"T" is not defined`,
+        // because `T` reached a binding lookup like any other name.
+        const methodTypeParameters = (method as unknown as {
+          TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+        }).TypeParameters?.TypeParameterList ?? [];
+        const methodFrame = new Map<string, TypeRecord>();
+        for (const q of methodTypeParameters) {
+          const pname = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+          if (pname) {
+            methodFrame.set(pname, { Kind: 'any' } as TypeRecord);
+          }
+        }
+        if (methodFrame.size > 0) {
+          pushTypeParameterFrame(methodFrame);
+        }
+        let attempt;
+        try {
+          attempt = EnsureCompletion(yield* functionRecordFromSignature(
+            method.FunctionTypeParameterList,
+            method.TypeAnnotation,
+          ));
+        } finally {
+          if (methodFrame.size > 0) {
+            popTypeParameterFrame();
+          }
+        }
         // The marker a METHOD's [[ThisType]] is, attached as the checker
         // attaches it: a class's method member carries it, [[ThisType]] is
         // contravariant, and absence is not a wildcard - so an unmarked
         // interface member refused the class that declared it.
+        // NOT propagated (D69 rows 3-4). Reporting a method signature's failures
+        // here is correct in principle and cannot land yet: an UNTYPED parameter
+        // resolves its own NAME as a type, so `interface Named { greet(a) }`
+        // answers `"a" is not defined` and a passing test broke. The signature's
+        // parameter handling has to stop doing that first.
+        //
+        // The D68 frame above is kept regardless - it is needed the moment this
+        // does propagate, and is harmless meanwhile.
         const built = attempt.Type === 'normal' ? attempt.Value as TypeRecord : undefined;
         resolved = built && built.Kind === 'function'
           ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }
