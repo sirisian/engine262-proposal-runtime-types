@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, settledAfterJobs } from '../harness.mts';
+import { evaluated, expectThrown, settledAfterJobs, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
  * PLAN-async-generator-types.md. Annotations on an `async` function or a
@@ -188,4 +188,34 @@ test('phase 5: a synchronous function is unaffected by any of this', () => {
   // and generator forms, and the synchronous path must read exactly as before.
   expectThrown('function s(a: uint8) { return a; } function h(x) { return s(x); } h("nope");');
   expect(evaluated('function s(a: uint8): uint8 { return a; } String(s((1 := uint8)));')).toBe('1');
+});
+
+test('D56: a `void` return admits *undefined* and nothing else', () => {
+  // The exemption that lets `return undefined;` through was gated on the
+  // CONTEXT - `if (!(context.Kind === 'void'))` - so it skipped the check
+  // WHOLESALE and a `void` function could return anything.
+  //
+  // #sec-void: "`void` is the type with no values", and "the `void` type is the
+  // statement that a program must not depend on that result". A function must
+  // therefore not RETURN one.
+  expectStaticTypeError('function f(): void { return (1 := uint8); }');
+  expectStaticTypeError('function f(): void { return "s"; }');
+  expectStaticTypeError('class A { m(): void { return "s"; } }');
+  expectStaticTypeError('let f = (): void => { return "s"; };');
+  // OQ1-C's row, which is how the skip was FOUND: a bare annotation "types the
+  // yields and returns nothing", so a generator's return position is void.
+  expectStaticTypeError('function* g(): uint8 { return (0 := uint8); }');
+});
+
+test('D56: what a `void` return still admits', () => {
+  // The value the exemption exists for (D52 row 19), and the two empty forms,
+  // which never reach the guarded call - it takes `if (expr)`.
+  expect(ok('if (false) { function f(): void { return undefined; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f(): void { return; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f(): void { } } 1;')).toBe(true);
+  // A generator's YIELD is typed even where its return is not.
+  expect(ok('if (false) { function* g(): uint8 { yield (1 := uint8); return; } } 1;')).toBe(true);
+  // And a CONTEXTUALLY typed arrow, which is checked as a whole function type
+  // and never reaches this arm.
+  expect(ok('if (false) { let f: () => void = () => { return undefined; }; } 1;')).toBe(true);
 });

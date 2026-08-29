@@ -11234,8 +11234,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its very next sentence says "a call of a function whose return type
           // is `void` evaluates to *undefined*". The same word, two positions,
           // and only this one admits the value.
-          if (!(context && (context as { Kind?: string }).Kind === 'void')) {
-            requireAssignable(staticTypeIn(expr, context), context);
+          //
+          // Gated on the VALUE, not on the context (D56). Written as
+          // `if (!(context.Kind === 'void'))` it skipped the check WHOLESALE, so
+          // `function f(): void { return "s"; }` and `{ return (1 := uint8); }`
+          // were both accepted - and so was
+          // `function* g(): uint8 { return (0 := uint8); }`, whose bare
+          // annotation "types the yields and returns nothing" (OQ1-C). That
+          // test failing is how the skip was found: a check that asks no
+          // question shows up only as something that USED to be refused.
+          //
+          // Every form writing `void` as its own return annotation went through
+          // here - declaration, method and `(): void =>` arrow alike. The one
+          // spelling that was refused, an unannotated arrow at a `() => void`
+          // binding, is checked as a whole FUNCTION TYPE and never reaches this
+          // arm, so nothing was compensating for the hole.
+          const returned = staticTypeIn(expr, context);
+          const voidAdmitsUndefined = context && (context as { Kind?: string }).Kind === 'void'
+            && returned && (returned as { Name?: string }).Name === 'undefined';
+          if (!voidAdmitsUndefined) {
+            requireAssignable(returned, context);
           }
           // The elision condition, per return. A `return` with NO expression
           // hands back *undefined*, which is the same unproven case as falling
