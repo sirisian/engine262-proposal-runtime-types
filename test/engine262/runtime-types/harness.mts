@@ -117,8 +117,33 @@ export function ok(source: string): boolean {
 }
 
 /** Assert `source` throws (a TypeError or other), i.e. is rejected at run time. */
-export function expectThrown(source: string) {
-  expect(run(source), `expected throw for: ${source}`).toMatchObject({ Type: 'throw' });
+/**
+ * `messageIncludes` is asserted, not ignored.
+ *
+ * Seven call sites already passed one - `expectThrown(src, 'may not follow one
+ * with a default')` - and the parameter did not exist, so JavaScript dropped it
+ * and the tests asserted only that SOMETHING threw. It type-checked nowhere:
+ * `build:dts` reported all seven as "Expected 1 arguments, but got 2" while
+ * `rollup` said nothing, because rollup does not type-check.
+ *
+ * Declaring it and asserting it is what those call sites were written to do.
+ */
+export function expectThrown(source: string, messageIncludes?: string) {
+  const completion = run(source);
+  expect(completion, `expected throw for: ${source}`).toMatchObject({ Type: 'throw' });
+  if (messageIncludes !== undefined) {
+    const value = (completion as { Value?: unknown }).Value;
+    const properties = (value as { properties?: Map<{ stringValue(): string }, { Value?: { stringValue(): string } }> })?.properties;
+    let message = '';
+    if (properties) {
+      for (const [key, descriptor] of properties) {
+        if (key.stringValue() === 'message') {
+          message = descriptor.Value?.stringValue() ?? '';
+        }
+      }
+    }
+    expect(message, `expected the throw for: ${source}\nto mention: ${messageIncludes}`).toContain(messageIncludes);
+  }
 }
 
 /**

@@ -294,8 +294,13 @@ test('D41: a rest parameter\'s ELEMENT type is enforced at run time', () => {
   // surfaces as a throw too, so the two are indistinguishable otherwise. That
   // confound is what hid this defect while two static checks were built on the
   // assumption the run time already enforced it.
-  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g("no");', 'not assignable');
-  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g((1 := uint32), "no");', 'not assignable');
+  // The ELEMENT failure is a CONVERSION failure, not an assignability one: a
+  // rest's element type is enforced through `CheckedConvertValue` (D41), which
+  // reports what it could not convert FROM. The fragment asserted here said
+  // "not assignable" and was never checked - `expectThrown` took one argument
+  // and JavaScript dropped the second.
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g("no");', 'not a conversion source');
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g((1 := uint32), "no");', 'not a conversion source');
 });
 
 test('D41: BINDING converts, it does not test membership', () => {

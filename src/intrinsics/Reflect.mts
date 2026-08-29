@@ -852,7 +852,13 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
     case 'array':
       set('kind', Value('array'));
       set('element', typeObj(t.Element));
-      set('extent', t.Extent === 'dynamic' ? Value.undefined : Value(t.Extent));
+      // [[Extent]] may be a NUMBER, ~dynamic~, or a Type Record for a value
+      // parameter that fixes it (D40). A reflection reports the parameter as a
+      // Type Object, the way every other type-valued field here does, rather
+      // than trying to pass a record to `Value`.
+      set('extent', t.Extent === 'dynamic'
+        ? Value.undefined
+        : (typeof t.Extent === 'object' ? typeObj(t.Extent as TypeRecord) : Value(t.Extent)));
       break;
     case 'reference':
       set('kind', Value('reference'));

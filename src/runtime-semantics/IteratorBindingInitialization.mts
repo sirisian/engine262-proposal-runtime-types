@@ -19,6 +19,7 @@ import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mt
 import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { restElementType, displayType } from '../type-system/records.mts';
 import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   Assert,

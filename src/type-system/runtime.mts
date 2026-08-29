@@ -35,7 +35,6 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
-import { BoundTypeRecordForName } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
 } from './iteration-types.mts';
