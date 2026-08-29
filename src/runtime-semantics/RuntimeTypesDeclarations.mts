@@ -65,6 +65,32 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunc
  */
 export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
 
+/**
+ * Whether a thrown completion is a temporal-dead-zone report rather than an
+ * unresolvable type (D69).
+ *
+ * A recursive interface reaches its own binding while that binding is still
+ * initializing. That is not the failure D69 reports - the name IS a type and
+ * IS bound - so it is left unreported, as it was before the report existed.
+ */
+function isInitializationError(value: ObjectValue): boolean {
+  try {
+    const message = (value as unknown as {
+      properties?: Map<{ stringValue(): string }, { Value?: { stringValue(): string } }>,
+    }).properties;
+    if (message) {
+      for (const [key, descriptor] of message) {
+        if (key.stringValue() === 'message') {
+          return (descriptor.Value?.stringValue() ?? '').includes('before initialization');
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration): PlainEvaluator {
   if (preEvaluatedTypeDeclarations.has(node)) {
     return undefined;
@@ -394,9 +420,33 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       }
       let resolved: TypeRecord = { Kind: 'any' };
       if (m.TypeAnnotation) {
+        // A member whose type will not resolve is REPORTED (D69). The throw was
+        // discarded here, so `interface I { n: U; }` for an unbound `U` was
+        // accepted in silence - and so was `const q = 5; interface I { n: q; }`,
+        // where `q` is bound and is not a type.
+        //
+        // #sec-type-references states both and separates them: "`Tokne` is bound
+        // by nothing, so resolution walks the scope chain, finds nothing, and
+        // reports a *ReferenceError* as it would for any unbound name. `q` IS
+        // bound; it simply does not denote a type, which is a *TypeError*. A
+        // reader who mistyped a name and a reader who reached for a value are
+        // told different things because they made different mistakes."
+        //
+        // `TypeNodeToTypeRecord` already raises the right one of the two;
+        // propagating its completion is the whole fix. Every OTHER position
+        // already does this, which is why an object type reports `U` and an
+        // interface did not.
+        // A RECURSIVE or MUTUALLY recursive interface names a binding that is
+        // still initializing, and that answers "cannot be used before
+        // initialization" - which is not an unresolvable type, it is this
+        // declaration's own reference to itself. Those are left as they were,
+        // so `interface Node { next: Node | undefined; }` and
+        // `interface A { b: B; } interface B { a: A; }` keep working.
         const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(m.TypeAnnotation.Type));
         if (attempt.Type === 'normal') {
           resolved = attempt.Value as TypeRecord;
+        } else if (!isInitializationError(attempt.Value as ObjectValue)) {
+          return attempt;
         }
       } else if (m.MethodSignature) {
         // PLAN-nominal-records.md v2 item 2.3. This was a STUB - a function type
