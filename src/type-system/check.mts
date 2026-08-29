@@ -3057,6 +3057,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const checkObjectLiteralAgainst = (node: ParseNode.ObjectLiteral, target: TypeRecord & { Kind: 'object' }, fresh: boolean) => {
+    // A member the TARGET requires and the literal does not supply (D64).
+    // #sec-isoftype: "an object that HAS THE MEMBERS satisfies an interface-typed
+    // position", and `IsOfType` "walks the members" - which the RUN TIME does,
+    // throwing on every row this admitted. The loop below walks the LITERAL's
+    // members, so one that is absent was never visited and nothing reported it.
+    //
+    // Asked of the literal's TYPE rather than its syntax, because a GETTER
+    // supplies a member with no data property and a computed key supplies one
+    // whose name is not known here. `objectLiteralShape` answers NULL for both -
+    // measured - which is exactly the "cannot enumerate" signal this needs, and
+    // it captures a SPREAD's contribution where the source's type is known.
+    //
+    // Only for a FRESH literal: "freshness is a property of the literal and not
+    // of its type", so a binding that merely HAS an object type is not this
+    // check's business.
+    if (fresh) {
+      const literalShape = objectLiteralShape(node as unknown as ParseNode);
+      if (literalShape) {
+        const supplied = new Set(((literalShape as unknown as {
+          Properties?: readonly { key: string }[],
+        }).Properties ?? []).map((q) => q.key));
+        for (const wanted of target.Properties ?? []) {
+          const q = wanted as unknown as { key: string, optional?: boolean };
+          if (!q.optional && !supplied.has(q.key)) {
+            const completion = Throw.TypeError('$1 is required by $2 and is not supplied', Value(q.key), Value(displayType(target))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+            break;
+          }
+        }
+      }
+    }
     for (const member of node.PropertyDefinitionList ?? []) {
       if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
         walk(member as ParseNode);
