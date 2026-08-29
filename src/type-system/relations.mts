@@ -1307,7 +1307,18 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         const { Structure: sStructure } = s;
         const { Structure: tStructure } = tn;
         if (sStructure && tStructure) {
-          return IsSubtype(sStructure, tStructure, next);
+          // The interface's structure names ITS OWN parameters and the arguments
+          // are on the target, so they are substituted before the comparison
+          // (D65) - the way every other arm that reads an interface structure
+          // already does. Without it `class C implements Box.<uint8>` compared
+          // its `v: uint8` against `v: T` and was refused, so the DECLARED
+          // hierarchy `sec-interfaces` promises did not carry a parameterised
+          // interface at all.
+          return IsSubtype(
+            sStructure,
+            SubstituteTypeArguments(tStructure, tn.Declaration, tn.Arguments),
+            next,
+          );
         }
       }
       // PLAN-nominal-records.md phase 1: [[Base]] is declared on the record
