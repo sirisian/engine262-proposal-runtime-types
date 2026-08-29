@@ -25,7 +25,7 @@ import { isBitLaneType } from './vector-ops.mts';
 import {
   NarrowTo, NarrowFrom, nullishType, empty,
 } from './narrowing.mts';
-import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord } from './runtime.mts';
+import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments } from './runtime.mts';
 import { isWideIntegerType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments } from './overloads.mts';
 import { slotReceiving } from './sequence-assignment.mts';
@@ -3386,7 +3386,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     if (node.type === 'ObjectLiteral' && contextual) {
-      const shape = structureOf(contextual);
+      // A nominal carrying [[Arguments]] has them SUBSTITUTED into its structure
+      // before the literal is checked member by member (D63). `structureOf`
+      // answers the DECLARED structure, whose members are still the
+      // declaration's own parameters - so `{ x: (1 := uint8) }` was compared
+      // against `T` and refused, a correct value failing for want of the
+      // substitution `IsSubtype`'s interface arm already applies.
+      //
+      // Done HERE and not inside `structureOf`, which has nine call sites; this
+      // is the one that walks an object literal's members.
+      const rawShape = structureOf(contextual);
+      const shapeArguments = (contextual as { Arguments?: readonly (TypeRecord | number)[] } | null)?.Arguments ?? [];
+      const shape = (rawShape && contextual && (contextual as { Kind?: string }).Kind === 'nominal' && shapeArguments.length > 0)
+        ? SubstituteTypeArguments(
+          rawShape as TypeRecord,
+          (contextual as { Declaration?: unknown }).Declaration,
+          shapeArguments,
+        ) as Known
+        : rawShape;
       if (shape && shape.Kind === 'object') {
         // Freshness applies to a STRUCTURAL type written at the position, and
         // is withheld in three places where the shape this pass can see is not
@@ -4356,6 +4373,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return substituteTypeParameters(body, bindings);
               }
             }
+          }
+          // A generic INTERFACE under written arguments (D63). This path resolved
+          // a user CLASS, an ALIAS (D62) and a builtin and NOT an interface, so
+          // `interface I<T> { x: T } let i: I.<uint8> = …` answered NULL - and a
+          // null target makes `requireAssignable` return before it compares, so
+          // the annotation accepted every value. The NON-generic
+          // `interface I { x: uint8 }` refused correctly, which is what kept the
+          // gap out of sight.
+          //
+          // `interfaceTypeOf` already builds `{ Kind: 'nominal', …, Structure }`;
+          // attaching the written arguments is the whole of this half, exactly as
+          // the class arm below does. The cast goes BEFORE the spread -
+          // `interfaceTypeOf` answers `Known`, and casting the result instead
+          // fails `tsgo -b .`.
+          //
+          // This half ALONE over-refuses: see the substitution at the object
+          // literal check, which is the other half and cannot be separated.
+          const userInterface = interfaceTypeOf(parameterizedName) as TypeRecord | null;
+          if (userInterface && userInterface.Kind === 'nominal') {
+            return CanonicalizeType({ ...userInterface, Arguments: args });
           }
           const userClass = classTypeOf(parameterizedName);
           if (userClass && userClass.Kind === 'nominal') {
