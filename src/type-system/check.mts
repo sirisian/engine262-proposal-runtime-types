@@ -4295,6 +4295,68 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // to nothing, so the arguments were dropped on this side too. Both
           // sides dropping them is why `const x: A.<uint16> = new A.<uint8>()`
           // matched: two empty argument lists agree.
+          // A generic ALIAS under WRITTEN arguments resolves to its body with
+          // those arguments substituted (D62). This path resolved a user CLASS,
+          // a builtin and one `Identity` special case and NOTHING else, so
+          // `type G<T> = { t: T }; let g: G.<uint8> = …` answered null - and a
+          // null target makes `requireAssignable` return before it compares, so
+          // the annotation accepted every value.
+          //
+          // The EXPRESSION path already does this: `(type G.<uint8>)` answers
+          // `{ t: uint.<8> }`, substituted and correct. This is that answer,
+          // reached from an annotation.
+          const aliasDecl = aliasNodes.get(parameterizedName) as unknown as {
+            TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+            Type?: ParseNode.Type | null,
+          } | undefined;
+          const aliasParams = aliasDecl?.TypeParameters?.TypeParameterList ?? [];
+          if (aliasDecl?.Type && aliasParams.length > 0 && args.length === aliasParams.length) {
+            const bindings = new Map<string, TypeRecord>();
+            aliasParams.forEach((prm, i) => {
+              const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+              const arg = args[i];
+              if (pname && arg && typeof arg !== 'number') {
+                bindings.set(pname, arg as TypeRecord);
+              }
+            });
+            if (bindings.size === aliasParams.length) {
+              // The body names the alias's OWN parameters, which are not in
+              // scope at the use site - `resolveType` answered null for
+              // `{ t: T }` without them. A scope is pushed so the names resolve,
+              // then `substituteTypeParameters` replaces them with the written
+              // arguments: `typeParameterScopes` records a CONSTRAINT rather
+              // than a binding, so both steps are needed.
+              const scope = new Map<string, Known | null>();
+              for (const prm of aliasParams) {
+                const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+                if (pname) {
+                  scope.set(pname, null);
+                }
+              }
+              // GUARDED by `resolvingAliases`, as `lookupAlias` is. Without it
+              // `type R<T> = { n: R.<T> }` re-enters this arm through its own
+              // body and exhausts the evaluation budget - the same recursion
+              // that guard exists to stop, reached by a second path.
+              typeParameterScopes.push(scope);
+              let body: Known = null;
+              const guardName = parameterizedName;
+              const alreadyResolving = resolvingAliases.has(guardName);
+              if (!alreadyResolving) {
+                resolvingAliases.add(guardName);
+              }
+              try {
+                body = alreadyResolving ? null : resolveType(aliasDecl.Type);
+              } finally {
+                if (!alreadyResolving) {
+                  resolvingAliases.delete(guardName);
+                }
+                typeParameterScopes.pop();
+              }
+              if (body) {
+                return substituteTypeParameters(body, bindings);
+              }
+            }
+          }
           const userClass = classTypeOf(parameterizedName);
           if (userClass && userClass.Kind === 'nominal') {
             // proposal-runtime-types #sec-higher-kinded-parameters: this is the
