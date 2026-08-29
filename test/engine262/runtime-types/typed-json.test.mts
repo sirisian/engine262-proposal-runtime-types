@@ -146,8 +146,15 @@ test('serialization: JSON.parse.<T> converts leaves and validates', () => {
 
 // -- Dependent record types: where clauses are enforced at boundaries ----------
 
-test('serialization: structuredClone is absent from the base engine (documents the gap)', () => {
-  expectThrown('let o = structuredClone({ a: 5 }); o.a;');
+test('serialization: structuredClone is PRESENT and typed', () => {
+  // This documented its absence - "structuredClone is absent from the base
+  // engine (documents the gap)" - and the gap was filled without the test being
+  // revisited. It has been failing ever since, unnoticed: it sits at the TOP of
+  // `runtime-types/`, and every regression sweep in this project named
+  // SUBDIRECTORIES, so twenty files here were never run.
+  expect(evaluated('let o = structuredClone({ a: 5 }); String(o.a);')).toBe('5');
+  // The identity signature: a clone has the type of what it cloned.
+  expect(ok('if (false) { let a: [].<uint8> = []; let b: [].<uint8> = structuredClone(a); } 1;')).toBe(true);
 });
 
 // -- Enum-typed members ---------------------------------------------------------
