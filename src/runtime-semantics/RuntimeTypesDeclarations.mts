@@ -530,14 +530,21 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // attaches it: a class's method member carries it, [[ThisType]] is
         // contravariant, and absence is not a wildcard - so an unmarked
         // interface member refused the class that declared it.
-        // NOT propagated (D69 rows 3-4). Reporting a method signature's failures
-        // here is correct in principle and cannot land yet: an UNTYPED parameter
-        // resolves its own NAME as a type, so `interface Named { greet(a) }`
-        // answers `"a" is not defined` and a passing test broke. The signature's
-        // parameter handling has to stop doing that first.
+        // A method signature whose types will not resolve is REPORTED, as a data
+        // member's are (D69 rows 3-4) - the same discard, one branch over.
         //
-        // The D68 frame above is kept regardless - it is needed the moment this
-        // does propagate, and is harmless meanwhile.
+        // A bare parameter name IS a type reference: #sec-function-types gives
+        // `FunctionTypeParameter : \`ref\`? Type` and
+        // `\`ref\`? BindingIdentifier \`?\`? TypeAnnotation`, with no production
+        // for a name alone. So `greet(a)` declares a parameter of type `a`, and
+        // reporting an unbound `a` is correct - the function-type and
+        // object-type spellings, `(a) => uint8` and `{ greet(a) }`, both report
+        // it already and only the interface was silent.
+        //
+        // The recursive case is exempted as the data branch exempts it.
+        if (attempt.Type !== 'normal' && !isRecursiveTypeReference(attempt.Value as ObjectValue)) {
+          return attempt;
+        }
         const built = attempt.Type === 'normal' ? attempt.Value as TypeRecord : undefined;
         resolved = built && built.Kind === 'function'
           ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }

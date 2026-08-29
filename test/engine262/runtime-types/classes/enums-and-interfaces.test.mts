@@ -63,7 +63,18 @@ test('a bare underlying value is not of the enum type; the enum call is the way 
 test('interfaces check structurally', () => {
   expect(evaluated(`interface Point { x: number; y: number }
     ({ x: 1, y: 2 } is Point) && !({ x: 1 } is Point) && !({ x: "a", y: 2 } is Point) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated(`interface Named { name: string; greet(a) }
+  // `greet(a: uint8)`, not `greet(a)`. A FunctionTypeParameter is
+  // "`ref`? Type" or "`ref`? BindingIdentifier `?`? TypeAnnotation" - a bare
+  // NAME is not a production, so `greet(a)` declares a parameter whose TYPE is
+  // `a`, and `a` is bound nowhere. The function-type and object-type spellings
+  // both report that already: `type F = (a) => uint8` and
+  // `type G = { greet(a) }` each answer `"a" is not defined`. Only the interface
+  // was silent, which is D69.
+  //
+  // The row is about MEMBERSHIP - a method member is satisfied by a method and
+  // not by a number - so the parameter is given a type and the row keeps testing
+  // what it was written to test.
+  expect(evaluated(`interface Named { name: string; greet(a: uint8) }
     ({ name: "n", greet() {} } is Named) && !({ name: "n", greet: 3 } is Named) ? "ok" : "no";`)).toBe('ok');
   // MIGRATED TO STATIC FORM. This asserted a RUNTIME throw, caught by the
   // try - which is what a mistyped object literal produced while the checker
