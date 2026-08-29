@@ -245,3 +245,25 @@ test('optionality itself is unchanged: only the type assigned to it moved', () =
   expect(evaluated('let r: RegExp.<[], {}> = /(?:a)/; "ok";')).toBe('ok');
   expect(evaluated('let r: RegExp.<[string], {}> = /(a)\\1/; "ok";')).toBe('ok');
 });
+
+test('D30: a REGEXP reports `RegExp.<Captures, Groups>` at run time', () => {
+  // It reported `{}` - an object with no structure - though the CHECKER has
+  // always known the type: `RegExp.<[string], {}>` at `/(a)/` is accepted and a
+  // wrong ARITY refused. Only REPORTING was missing.
+  //
+  // `inferRegExpLiteralType` is the same operation the checker uses, so the two
+  // cannot disagree about a pattern, and no stamp is needed: the capture count
+  // is derivable from `[[OriginalSource]]`.
+  expect(evaluated('String(Reflect.typeOf(/abc/));')).toBe('RegExp.<[], {}>');
+  expect(evaluated('String(Reflect.typeOf(/(a)/));')).toBe('RegExp.<[string], {}>');
+  expect(evaluated('String(Reflect.typeOf(/(a)(b)/));')).toBe('RegExp.<[string, string], {}>');
+  expect(evaluated('String(Reflect.typeOf(/(?<y>a)/));')).toBe('RegExp.<[string], { y: string }>');
+  expect(evaluated('String(Reflect.typeOf(new RegExp("(a)")));')).toBe('RegExp.<[string], {}>');
+});
+
+test('D30: the neighbouring reporters are unaffected', () => {
+  expect(evaluated('String(Reflect.typeOf(new Map.<string, uint8>()));')).toBe('Map.<string, uint.<8>>');
+  // A PROMISE still reports `{}` - the rest of D30, deliberately left: its
+  // arguments are not recoverable from the value.
+  expect(evaluated('String(Reflect.typeOf(Promise.resolve(1)));')).toBe('{}');
+});

@@ -34,6 +34,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
+import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { BoundTypeRecordForName } from './records.mts';
 import {
   iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
@@ -859,6 +860,30 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
       const record = libraryTypeRecord(library, collection ?? []);
       if (record) {
         return record;
+      }
+    }
+    // A REGEXP reports `RegExp.<Captures, Groups>`, inferred from its own
+    // pattern (D30). It reported `{}` - an object with no structure - though the
+    // CHECKER has always known the type: `RegExp.<[string], {}>` at `/(a)/` is
+    // accepted and a wrong ARITY refused. Only REPORTING was missing.
+    //
+    // No stamp is needed, which is what makes this the one of D30's three kinds
+    // the engine can answer today: a capture count is derivable from the source,
+    // and `[[OriginalSource]]`/`[[OriginalFlags]]` are on the object.
+    // `inferRegExpLiteralType` is the SAME operation the checker uses, so the two
+    // cannot disagree about a pattern.
+    //
+    // A PROMISE and a GENERATOR object stay `{}`: their arguments - a promise's
+    // R and E, a generator's Y/R/N - are not recoverable from the value and
+    // would need a stamp at construction, as a typed collection has.
+    const regexpSource = (value as unknown as { OriginalSource?: { stringValue(): string }, OriginalFlags?: { stringValue(): string } });
+    if (regexpSource.OriginalSource !== undefined && regexpSource.OriginalFlags !== undefined) {
+      const inferred = inferRegExpLiteralType(
+        regexpSource.OriginalSource.stringValue(),
+        regexpSource.OriginalFlags.stringValue(),
+      );
+      if (inferred) {
+        return inferred;
       }
     }
     const spanBacking = ArraySpanBackingOf(value as unknown as object);
