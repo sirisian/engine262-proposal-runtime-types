@@ -3056,7 +3056,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
-  const checkObjectLiteralAgainst = (node: ParseNode.ObjectLiteral, target: TypeRecord & { Kind: 'object' }, fresh: boolean) => {
+  const checkObjectLiteralAgainst = (
+    node: ParseNode.ObjectLiteral,
+    target: TypeRecord & { Kind: 'object' },
+    fresh: boolean,
+    requiresMembers: boolean = fresh,
+  ) => {
     // A member the TARGET requires and the literal does not supply (D64).
     // #sec-isoftype: "an object that HAS THE MEMBERS satisfies an interface-typed
     // position", and `IsOfType` "walks the members" - which the RUN TIME does,
@@ -3072,14 +3077,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Only for a FRESH literal: "freshness is a property of the literal and not
     // of its type", so a binding that merely HAS an object type is not this
     // check's business.
-    if (fresh) {
+    // `requiresMembers`, not `fresh`. `fresh` gates the EXCESS-member rule and is
+    // false for an INTERFACE target, because that rule needs a shape known to be
+    // complete and an interface arrives as a ~nominal~. The MISSING-member rule
+    // asks a different question - does the literal supply what the target
+    // requires - and an interface's members are exactly as knowable as an object
+    // type's.
+    if (requiresMembers) {
       const literalShape = objectLiteralShape(node as unknown as ParseNode);
       if (literalShape) {
         const supplied = new Set(((literalShape as unknown as {
           Properties?: readonly { key: string }[],
         }).Properties ?? []).map((q) => q.key));
         for (const wanted of target.Properties ?? []) {
-          const q = wanted as unknown as { key: string, optional?: boolean };
+          const q = wanted as unknown as { key: unknown, optional?: boolean };
+          // A SYMBOL-keyed member is skipped. Its [[key]] is a Value rather than
+          // a string, so it is not comparable against the shape's string keys and
+          // `Value(key)` throws a RangeError on it - which is what this reported
+          // before the guard, crashing two decorator tests instead of refusing
+          // anything.
+          //
+          // Skipping is the conservative answer and matches the rest of this
+          // check: where a member cannot be enumerated it is not demanded.
+          if (typeof q.key !== 'string') {
+            continue;
+          }
           if (!q.optional && !supplied.has(q.key)) {
             const completion = Throw.TypeError('$1 is required by $2 and is not supplied', Value(q.key), Value(displayType(target))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
@@ -3455,7 +3477,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const structural = contextual.Kind === 'object'
           && (shape.Properties.length > 0 || shape.IndexSignatures.length > 0)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
-        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural);
+        // An INTERFACE target requires its members too (D64 row 4). It is a
+        // ~nominal~, so `structural` above is false for it - that flag gates the
+        // EXCESS rule, which needs a complete shape - but the members an
+        // interface declares are as knowable as an object type's.
+        //
+        // A CLASS nominal is NOT included: whether an object literal may satisfy
+        // a class type at all is D61, and widening here would answer it by
+        // accident.
+        const targetIsInterface = contextual.Kind === 'nominal'
+          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
+        const requiresMembers = (structural || targetIsInterface)
+          && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
+        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
         return contextual;
       }
     }
