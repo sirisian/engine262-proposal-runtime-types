@@ -4968,7 +4968,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return null;
           }
           const key = (member.PropertyName as { name?: string, value?: string }).name ?? (member.PropertyName as { value?: string }).value;
-          if (typeof key !== 'string' || !member.TypeAnnotation) {
+          if (typeof key !== 'string') {
+            return null;
+          }
+          // A METHOD member, `{ get(): uint8 }` (D66). The parser gives a
+          // TypeMember carrying a [[MethodSignature]] and sets TypeAnnotation to
+          // NULL, so the bail below made the WHOLE object type resolve to null -
+          // and a null annotation is not checked at all, so
+          // `let p: { get(): uint8 } = { get: "s" }` was accepted, as was a
+          // missing member and an excess one, and a data member written beside
+          // the method went unchecked with it.
+          //
+          // The same type written `{ get: () => uint8 }` resolved and checked
+          // correctly, and both spell the same record - measured, each displays
+          // as `{ get: () => uint.<8> }`.
+          //
+          // Built the way the INTERFACE path builds it (`check.mts:3921`), which
+          // has handled a MethodSignature all along.
+          const asMethod = (member as unknown as {
+            MethodSignature?: {
+              FunctionTypeParameterList?: readonly ParseNode[] | null,
+              TypeAnnotation?: ParseNode.TypeAnnotation | null,
+            } | null,
+          }).MethodSignature;
+          if (asMethod) {
+            const Parameters: ParameterRecord[] = [];
+            for (const p of asMethod.FunctionTypeParameterList ?? []) {
+              const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+              Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
+            }
+            const Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
+            Properties.push({
+              key,
+              // [[ThisType]] carried, as the interface path carries it: a CLASS
+              // method's signature has one, and a signature without it did not
+              // match - `let o: Shape = new C()` for `type Shape = { read(): uint8 }`
+              // began to refuse once this type resolved at all.
+              type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
+              optional: !!(member as unknown as { Optional?: boolean }).Optional,
+              readonly: false,
+            });
+            continue;
+          }
+          if (!member.TypeAnnotation) {
             return null;
           }
           const r = resolveType(member.TypeAnnotation.Type);
