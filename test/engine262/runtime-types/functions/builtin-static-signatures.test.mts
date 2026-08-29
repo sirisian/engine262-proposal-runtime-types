@@ -760,23 +760,32 @@ test('Reflect.isAssignable answers a Boolean', () => {
   expect(evaluated('function f(a, b) { return Reflect.isAssignable(a, b); } String(f(type uint8, type uint8));')).toBe('true');
 });
 
-test.fails('Reflect.typeOf answers a Reflect.Type — WITHDRAWN, see D34/D35', () => {
-  // The row was written and then withdrawn. #sec-reflect-typeof says the result
-  // is `GetTypeObject(RuntimeTypeOf(value))`, so `Reflect.Type` is the right
-  // answer - but NO VALUE REPORTS AS `Reflect.Type`. A Type Object's runtime
-  // type is `{}`, and `Reflect.typeOf(type uint8) === (type Reflect.Type)` is
-  // *false*.
+test('OQ20: Reflect.typeOf answers a `Reflect.TypeObject` - D34\'s row, restored', () => {
+  // The row was written as `Reflect.Type` and WITHDRAWN (D34), because a Type
+  // Object does not report `Reflect.Type` - and it does not, correctly.
+  // `Reflect.Type` is the type of a reflection NODE; a Type Object is the type
+  // itself, reified as a value. Naming the SECOND is what the earlier row
+  // lacked, and D35 spent three attempts trying to make a Type Object report
+  // the first.
   //
-  // So the row typed a function whose result its own annotation refuses, and
-  // `function f(v) { return Reflect.typeOf(v); } f(1)` began to throw
-  // `[Function] is not assignable to "Reflect.Type"`. A correct signature over a
-  // type nothing inhabits is worse than none: it turns working programs into
-  // errors at every boundary the value crosses.
-  //
-  // The signature is right and the MEMBERSHIP is missing (D35), so this is left
-  // failing rather than rewritten - it should pass unchanged once a Type Object
-  // reports as a `Reflect.Type`.
+  // The failure the withdrawal prevented was a RUN-TIME one, not a refusal:
+  // `typeOf` being untyped made its result `any`, so the row type-checked at
+  // every boundary and threw at each one that ran.
   expectStaticTypeError('let n: string = Reflect.typeOf(1);');
+  expect(ok('if (false) { let t: Reflect.TypeObject = Reflect.typeOf(1); } 1;')).toBe(true);
+  expect(ok('if (false) { function f(v): Reflect.TypeObject { return Reflect.typeOf(v); } } 1;')).toBe(true);
+  // And the boundary RUNS, which is what D34 could not achieve.
+  expect(evaluated('function f(v): Reflect.TypeObject { return Reflect.typeOf(v); } String(f(1) is Reflect.TypeObject);')).toBe('true');
+});
+
+test('OQ20: what `Reflect.typeOf` REPORTS is unchanged', () => {
+  // It answers a value's STRUCTURE, and that was never the defect. An enum
+  // object gives its members - which is what makes `keyof Reflect.typeOf(E)`
+  // the enumerator names - and a plain Type Object gives `{}` by the same rule,
+  // accurately. An arm reporting `Reflect.TypeObject` there broke the enum case
+  // and was reverted: the signature holds on MEMBERSHIP alone.
+  expect(evaluated('enum E: uint8 { A, B } String(Reflect.typeOf(E));')).toBe('{ 0: E, 1: E, A: E, B: E }');
+  expect(ok('if (false) { enum E: uint8 { A, B } let k: keyof Reflect.typeOf(E) = "A"; } 1;')).toBe(true);
 });
 
 test('ECMAScript\'s own Reflect surface is NOT swept in', () => {

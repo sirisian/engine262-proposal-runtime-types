@@ -2160,6 +2160,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // a Boolean.
       return () => makePrimitive('boolean');
     }
+    if (base.name === 'Reflect' && method === 'typeOf') {
+      // #table-typed-statics: `<T>(value: T): Reflect.TypeObject` (OQ20).
+      //
+      // The row was WITHDRAWN once, written as `Reflect.Type` (D34), because a
+      // Type Object does not report `Reflect.Type` - and it does not, correctly.
+      // `Reflect.Type` is the type of a reflection NODE; a Type Object is the
+      // type itself, reified. Naming the second is what the earlier row lacked.
+      //
+      // No change to what `RuntimeTypeOf` REPORTS was needed. `Reflect.typeOf`
+      // answers a value's STRUCTURE - `Reflect.typeOf(E)` for an enum gives
+      // `{ 0: E, 1: E, A: E, B: E }`, which is what makes `keyof
+      // Reflect.typeOf(E)` the enumerator names - and `{}` for a plain Type
+      // Object is that same rule, accurately. An arm reporting
+      // `Reflect.TypeObject` there broke the enum case and was reverted; the
+      // signature holds on MEMBERSHIP alone, which is the question a boundary
+      // asks.
+      return () => (BoundTypeRecordForName('Reflect.TypeObject') ?? null) as Known;
+    }
     if (base.name === 'Object' && (method === 'freeze' || method === 'seal' || method === 'preventExtensions')) {
       // `Object.freeze<T>(o: T): T` and its siblings. The IDENTITY signature:
       // each answers the object it was given, so a type crossing one is not
