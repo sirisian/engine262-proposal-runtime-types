@@ -3716,6 +3716,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * A generic declaration's parameter DEFAULTS, as an argument list, or an empty
+   * list where any parameter has none (D59).
+   *
+   * A bare generic name takes its defaults - #sec-type-arguments - and the
+   * comparison arms already substitute [[Arguments]] into a [[Structure]], so
+   * supplying them here is the whole of the rule for an interface and a class.
+   */
+  const defaultArgumentsOf = (declaration: ParseNode): readonly TypeRecord[] => {
+    const params = (declaration as unknown as {
+      TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+    }).TypeParameters?.TypeParameterList ?? [];
+    if (params.length === 0) {
+      return [];
+    }
+    const out: TypeRecord[] = [];
+    for (const q of params) {
+      const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
+      if (!pdefault) {
+        return [];
+      }
+      const resolved = resolveType(pdefault);
+      if (!resolved) {
+        return [];
+      }
+      out.push(resolved as TypeRecord);
+    }
+    return out;
+  };
+
   const interfaceTypeOf = (name: string): Known => {
     const node = interfaceNodes.get(name);
     if (!node) {
@@ -3735,10 +3765,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments
+    // (D59). #sec-type-arguments: "Each parameter takes, in order: its positional
+    // argument where one was supplied, otherwise the named argument bearing its
+    // name, otherwise its |TypeParameterDefault|."
+    //
+    // Set as [[Arguments]] rather than substituted into [[Structure]], because
+    // the Properties array above is filled LATER and the record holds it by
+    // reference - and because `InterfaceStructureOf`'s arm in `relations.mts`
+    // already substitutes [[Arguments]] when it compares. The defaults are just
+    // the arguments nobody wrote.
+    //
+    // Every parameter must have one, as `AllDefaultsFrame` (`runtime.mts:133`)
+    // also requires: one without is "a type error where a parameter has none",
+    // and leaving the list empty keeps that refusal.
     const inProgress = {
       Kind: 'nominal',
       Declaration: node,
-      Arguments: [],
+      Arguments: defaultArgumentsOf(node as unknown as ParseNode),
       Structure: { Kind: 'object', Properties, IndexSignatures: [] },
     } as unknown as Known;
     interfaceTypeMemo.set(node, inProgress);
