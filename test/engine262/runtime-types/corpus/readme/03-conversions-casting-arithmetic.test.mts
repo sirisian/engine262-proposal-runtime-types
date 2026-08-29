@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, expectThrown, expectThrownKind } from '../../harness.mts';
+import { evaluated, bool, expectThrown, expectThrownKind, expectStaticTypeError } from '../../harness.mts';
 
 /**
  * README feature coverage - conversions, casting, and arithmetic.
@@ -57,7 +57,13 @@ test('Conversions: a checked boundary reports range and type failures differentl
   // a non-numeric source has no conversion to attempt: still a TypeError
   expectThrownKind('function g(){return {};} let a: uint8 = g();', 'TypeError');
   expectThrownKind('function g(){return "abc";} let a: uint8 = g();', 'TypeError');
-  expectThrownKind('function g(){return undefined;} let a: uint8 = g();', 'TypeError');
+  // An EARLY error now, not a catchable one (D52): `undefined` and `null` have
+  // static types and `IsAssignable` refuses them at `uint8`. The rows above
+  // still throw at RUN TIME because an unannotated function's return type is not
+  // inferred at the call - `return "abc"` is accepted statically and refused
+  // when it runs - which is D54, not this. So these two values are checked
+  // EARLIER than their neighbours here.
+  expectStaticTypeError('function g(){return undefined;} let a: uint8 = g();');
   // and a value that fits is simply the value
   expect(evaluated('function g(){return 5;} let a: uint8 = g(); String(Number(a));')).toBe('5');
   expect(evaluated('function g(){return 1e300;} let a: float64 = g(); String(Number(a));')).toBe('1e+300');
@@ -193,7 +199,8 @@ test('Conversions: a numeric annotation accepts only a numeric value', () => {
     expectThrownKind(`function g(){return "abc";} let a: ${t} = g();`, 'TypeError');
     // the quiet ones this closes
     expectThrownKind(`function g(){return "";} let a: ${t} = g();`, 'TypeError');
-    expectThrownKind(`function g(){return null;} let a: ${t} = g();`, 'TypeError');
+    // An EARLY error now (D52), where its neighbours remain run-time throws.
+    expectStaticTypeError(`function g(){return null;} let a: ${t} = g();`);
     expectThrownKind(`function g(){return true;} let a: ${t} = g();`, 'TypeError');
     expectThrownKind(`function g(){return [7];} let a: ${t} = g();`, 'TypeError');
     expectThrownKind(`function g(){return {valueOf(){return 7;}};} let a: ${t} = g();`, 'TypeError');
@@ -202,7 +209,7 @@ test('Conversions: a numeric annotation accepts only a numeric value', () => {
   }
   // THE SILENT NaN this closes: a float annotation could not fail before, so a
   // missing value or an object simply became NaN
-  expectThrownKind('function g(){return undefined;} let a: float64 = g();', 'TypeError');
+  expectStaticTypeError('function g(){return undefined;} let a: float64 = g();');
   expectThrownKind('function g(){return {};} let a: float64 = g();', 'TypeError');
 });
 
@@ -228,8 +235,9 @@ test('Conversions: a string annotation accepts what has a canonical text', () =>
   expect(evaluated('function g(){return true;} let s: string = g(); s;')).toBe('true');
   expect(evaluated('function g(){return "x";} let s: string = g(); s;')).toBe('x');
   // and refuses the ones whose text is a diagnostic
-  expectThrownKind('function g(){return undefined;} let s: string = g();', 'TypeError');
-  expectThrownKind('function g(){return null;} let s: string = g();', 'TypeError');
+  // Both EARLY errors now (D52).
+  expectStaticTypeError('function g(){return undefined;} let s: string = g();');
+  expectStaticTypeError('function g(){return null;} let s: string = g();');
   expectThrownKind('function g(){return {};} let s: string = g();', 'TypeError');
   expectThrownKind('function g(){return [1,2];} let s: string = g();', 'TypeError');
   // String(v) remains the written form for those
