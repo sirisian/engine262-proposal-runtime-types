@@ -5254,9 +5254,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // either and nothing downstream could be checked.
       case 'TypeArgumentsExpression':
         return staticType((node as unknown as { Expression: ParseNode }).Expression);
+      case 'ObjectLiteral':
+        // An object literal HAS a type (D58). #table-type-record-kinds, quoted
+        // in `sec-interfaces`: "an object literal's type is ~object~".
+        //
+        // `staticType` had no arm for one, so `let n: uint8 = {}` reached
+        // `requireAssignable` with a null source - whose first line is
+        // `if (!source || !target) return;` - and was never checked. The RUN
+        // TIME refused it every time.
+        //
+        // `objectLiteralShape` already builds the record and two callers already
+        // fall back to it by hand (`?? objectLiteralShape(...)`), which is the
+        // sign it belonged here: a type computed in the callers is a type
+        // `staticType` should have been returning.
+        return objectLiteralShape(node);
       case 'ArrayLiteral': {
         const elements = (node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
         if (elements.length === 0) {
+          // An EMPTY array literal is left UNTYPED (D58 half-two, NOT taken).
+          // Typing it as an array of `never` refuses `let a: T = []` at an
+          // opaque type parameter and `let a: U = []` where `U = [].<T>` - four
+          // existing tests - so it needs the type-parameter interaction worked
+          // out rather than a one-line record.
           return null;
         }
         let allElementsLiteral = true;
@@ -7789,8 +7808,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     const members = (node as unknown as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList ?? [];
+    // An EMPTY object literal has a type too: `{ }` with no properties (D58).
+    // Returning null here made `let n: uint8 = {}` unchecked, where
+    // `let n: uint8 = { a: 1 }` was refused - the same literal, one property
+    // apart, answering differently.
     if (members.length === 0) {
-      return null;
+      return { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as Known;
     }
     const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
     for (const member of members) {
