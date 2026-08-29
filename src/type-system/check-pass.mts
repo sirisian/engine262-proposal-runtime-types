@@ -6,6 +6,7 @@ import type { PlainEvaluator } from '../evaluator.mts';
 import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
+  typeDeclarationNamesInPass,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { Value } from '../value.mts';
@@ -257,6 +258,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       ));
       if (verdict.Type === 'throw') {
         return verdict;
+      }
+    }
+  }
+  // The names this pass is defining, so a recursive reference can be told from a
+  // member naming a VALUE binding (D72) - both report "cannot be used before
+  // initialization" from the same site.
+  for (const item of items ?? []) {
+    if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
+      const declared = (item as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      if (declared) {
+        typeDeclarationNamesInPass.add(declared);
       }
     }
   }

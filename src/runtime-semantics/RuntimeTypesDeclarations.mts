@@ -66,6 +66,25 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunc
 export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
 
 /**
+ * The names of TYPE declarations the pre-evaluation pass is currently defining
+ * (D72).
+ *
+ * A pre-evaluated interface resolves its members while top-level `let` and
+ * `const` bindings are still uninitialized, so a member naming one gets a
+ * temporal-dead-zone report - and a RECURSIVE interface reaching its own
+ * binding gets the SAME report, from the same site, with the same text.
+ *
+ * Measured: `const q = 5; interface I { n: q; }` gives
+ * `"q" cannot be used before initialization`, and
+ * `interface Node { next: Node | undefined; }` gives the same for `"Node"`.
+ * Nothing in the completion separates them, so the NAME is compared against
+ * this set instead: a type declaration's own name is the recursive case and is
+ * exempt; anything else is a value binding, which #sec-type-references makes a
+ * TypeError - "`q` IS bound; it simply does not denote a type".
+ */
+export const typeDeclarationNamesInPass = new Set<string>();
+
+/**
  * Whether a thrown completion is a temporal-dead-zone report rather than an
  * unresolvable type (D69).
  *
@@ -73,22 +92,40 @@ export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
  * initializing. That is not the failure D69 reports - the name IS a type and
  * IS bound - so it is left unreported, as it was before the report existed.
  */
-function isInitializationError(value: ObjectValue): boolean {
+/**
+ * Whether a thrown completion is a TYPE declaration referring to itself, rather
+ * than a member naming a VALUE binding (D72).
+ *
+ * Both are reported identically - `"q" cannot be used before initialization` and
+ * `"Node" cannot be used before initialization`, from the same site - so the
+ * NAME decides. A name this pass is defining is the recursive case and is
+ * exempt; anything else is a value binding, which #sec-type-references makes a
+ * TypeError: "`q` IS bound; it simply does not denote a type".
+ */
+function isRecursiveTypeReference(value: ObjectValue): boolean {
+  const name = initializationErrorName(value);
+  return name !== null && typeDeclarationNamesInPass.has(name);
+}
+
+/** The name a temporal-dead-zone report names, or null (D72). */
+function initializationErrorName(value: ObjectValue): string | null {
   try {
-    const message = (value as unknown as {
+    const properties = (value as unknown as {
       properties?: Map<{ stringValue(): string }, { Value?: { stringValue(): string } }>,
     }).properties;
-    if (message) {
-      for (const [key, descriptor] of message) {
+    if (properties) {
+      for (const [key, descriptor] of properties) {
         if (key.stringValue() === 'message') {
-          return (descriptor.Value?.stringValue() ?? '').includes('before initialization');
+          const message = descriptor.Value?.stringValue() ?? '';
+          const match = /^"(.*)" cannot be used before initialization$/.exec(message);
+          return match ? match[1] : null;
         }
       }
     }
   } catch {
-    return false;
+    return null;
   }
-  return false;
+  return null;
 }
 
 export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration): PlainEvaluator {
@@ -445,7 +482,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(m.TypeAnnotation.Type));
         if (attempt.Type === 'normal') {
           resolved = attempt.Value as TypeRecord;
-        } else if (!isInitializationError(attempt.Value as ObjectValue)) {
+        } else if (!isRecursiveTypeReference(attempt.Value as ObjectValue)) {
           return attempt;
         }
       } else if (m.MethodSignature) {
