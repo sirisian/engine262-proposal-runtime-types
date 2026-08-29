@@ -1660,6 +1660,30 @@ export function SubstituteTypeArguments(
       }));
       return out;
     }
+    // A FUNCTION type's SIGNATURES carry parameters in their Return and their
+    // Parameters, and were not walked (D63). `interface Box<T> { get(): T; }`
+    // substituted to `{ get(): T }` unchanged, so a class whose `get` returns a
+    // `uint8` did not satisfy `Box.<uint8>` - a program that worked until a
+    // parameterised interface began resolving.
+    //
+    // The same omission `Properties` had one position over: this walk handles an
+    // object, a union and an intersection, and a signature is the fourth place a
+    // parameter can sit.
+    if (r.Kind === 'function') {
+      const withSignatures = r as unknown as {
+        Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord }[],
+      };
+      if (withSignatures.Signatures) {
+        const out = { ...r } as TypeRecord;
+        seen.set(r, out);
+        (out as unknown as { Signatures: unknown }).Signatures = withSignatures.Signatures.map((sig) => ({
+          ...sig,
+          ...(sig.Parameters ? { Parameters: sig.Parameters.map((prm) => ({ ...prm, Type: prm.Type ? walk(prm.Type) : prm.Type })) } : {}),
+          ...(sig.Return ? { Return: walk(sig.Return) } : {}),
+        }));
+        return out;
+      }
+    }
     if (r.Kind === 'union' || r.Kind === 'intersection') {
       const out = { Kind: r.Kind, Members: r.Members } as TypeRecord;
       seen.set(r, out);
