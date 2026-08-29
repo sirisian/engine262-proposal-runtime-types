@@ -5217,8 +5217,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rx = node as { RegularExpressionBody: string, RegularExpressionFlags: string };
         return inferRegExpLiteralType(rx.RegularExpressionBody, rx.RegularExpressionFlags);
       }
-      case 'IdentifierReference':
-        return lookup((node as { name: string }).name);
+      case 'NullLiteral':
+        // `null` has a type for the same reason `undefined` does (D52) - it had
+        // no arm here at all, so `let n: uint8 = null` went unchecked.
+        return makePrimitive('null') as Known;
+      case 'IdentifierReference': {
+        // `undefined` is a VALUE with a type, not an absent one (D52).
+        //
+        // It resolved through `lookup`, which finds no binding for it and
+        // answers null - and `requireAssignable` returns early on a null source,
+        // so `let n: uint8 = undefined` was never checked at all. The RUN TIME
+        // refused it every time, so these programs type-checked and threw.
+        //
+        // `Reflect.typeOf(undefined)` already reports `undefined`, and
+        // `IsAssignable` already answers correctly with it: false against
+        // `uint8`, true against `uint8 | undefined`. Nothing else has to change -
+        // giving the reference its type is the whole fix.
+        const referenced = (node as { name: string }).name;
+        if (referenced === 'undefined' && !typeParameterInScope(referenced)) {
+          return undefinedType as Known;
+        }
+        return lookup(referenced);
+      }
       case 'ThisExpression':
         // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: within
         // an adopting literal's body, "`this` has that type". Outside one there
@@ -10989,7 +11009,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // Unbound: nothing to check against until a binding exists.
                 return;
               }
-              requireAssignable(staticTypeIn(arg, param), param);
+              // An OPTIONAL parameter admits *undefined* explicitly (D52 row
+              // 18): `f()` and `f(undefined)` are the same call, and refusing
+              // the second while accepting the first would make the spelling
+              // decide.
+              const argType = staticTypeIn(arg, param);
+              const optionalHere = (chosen.Parameters as readonly { Optional?: boolean }[])[i]?.Optional === true;
+              if (!(optionalHere && argType && (argType as { Name?: string }).Name === 'undefined')) {
+                requireAssignable(argType, param);
+              }
             });
           }
         }
@@ -11201,7 +11229,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const expr = (n as { Expression?: ParseNode | null }).Expression;
         const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {
-          requireAssignable(staticTypeIn(expr, context), context);
+          // A `void` RETURN admits *undefined* (D52 row 19). #sec-void makes
+          // `void` "the type with no values", so no BINDING may hold one - and
+          // its very next sentence says "a call of a function whose return type
+          // is `void` evaluates to *undefined*". The same word, two positions,
+          // and only this one admits the value.
+          if (!(context && (context as { Kind?: string }).Kind === 'void')) {
+            requireAssignable(staticTypeIn(expr, context), context);
+          }
           // The elision condition, per return. A `return` with NO expression
           // hands back *undefined*, which is the same unproven case as falling
           // off the end and is handled below.

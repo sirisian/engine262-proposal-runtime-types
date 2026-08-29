@@ -65,7 +65,11 @@ test('precedence: looser than a range, tighter than a conditional', () => {
   // the level the upstream proposal named for the pipeline's operands.
   expect(evaluated('String(0..<10 |> %.start);')).toBe('0');
   expect(evaluated('function f(x) { return x; } String(true ? 1 |> f(%) : 2);')).toBe('1');
-  expect(evaluated('function f(x) { return x; } String(null ?? 3 |> f(%));')).toBe('3');
+  // `null` LITERAL is not used here: it now has a static type (D52), so the
+  // dead-code analysis can see that `null ?? _x_` never takes its left branch
+  // and refuses the program - correctly, and for a reason unrelated to
+  // precedence, which is what this row tests.
+  expect(evaluated('function f(x) { return x; } let n = undefined; String(n ?? 3 |> f(%));')).toBe('3');
 });
 
 test('the remainder operator is untouched', () => {
