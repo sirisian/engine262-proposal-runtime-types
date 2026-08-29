@@ -8257,7 +8257,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `literalFitsNumericType` decides whether the literal belongs at the
       // wanted type.
       const wantedMember = wantedOf(key);
-      const adapted = wantedMember && literalFitsNumericType(memberType as TypeRecord, wantedMember)
+      // A member is taken at the type the target WANTS where the value belongs
+      // there: a numeric literal by `literalFitsNumericType`, and a NESTED
+      // OBJECT by assignability (D73).
+      //
+      // Widening a nested object lost it: `{ a: { x: (1 := int32) } }` at
+      // `{ a: { x: int32 } } & { }` widened `a` and the widened shape no longer
+      // matched, while the SAME value through a binding was accepted and the
+      // same literal at a SINGLE target was too - there the member walk checks
+      // the inner literal separately, and at a COMPOSITE only the shape is
+      // compared.
+      const adapted = wantedMember
+        && (literalFitsNumericType(memberType as TypeRecord, wantedMember)
+          || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
         ? wantedMember
         : widen(memberType) as TypeRecord;
       Properties.push({ key, type: adapted, optional: false });
