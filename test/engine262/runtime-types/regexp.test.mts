@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, run, expectThrown, runFlagOff } from './harness.mts';
+import { evaluated, run, expectThrown, runFlagOff, ok, expectStaticTypeError } from './harness.mts';
 
 /**
  * Design: regexp.md - the capture-type inference of a regular expression
@@ -266,4 +266,32 @@ test('D30: the neighbouring reporters are unaffected', () => {
   // A PROMISE still reports `{}` - the rest of D30, deliberately left: its
   // arguments are not recoverable from the value.
   expect(evaluated('String(Reflect.typeOf(Promise.resolve(1)));')).toBe('{}');
+});
+
+test('D49: a BARE `RegExp` is the supertype of every parameterization', () => {
+  // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
+  // every such parameterization, so it holds a literal of any shape while a
+  // written parameterization does not hold a value of another."
+  //
+  // Two tests here asserted this and had been FAILING unnoticed: they sit at the
+  // top of `runtime-types/`, and every regression sweep named SUBDIRECTORIES, so
+  // twenty files were never run.
+  expect(ok('if (false) { let r: RegExp = /(a)/; } 1;')).toBe(true);
+  expect(ok('if (false) { let r: RegExp = /abc/; } 1;')).toBe(true);
+  expect(ok('if (false) { let r: RegExp = /(?<y>a)/; } 1;')).toBe(true);
+  // A WRITTEN parameterization still holds no value of another.
+  expect(ok('if (false) { let r: RegExp.<[string], {}> = /(a)/; } 1;')).toBe(true);
+  expectStaticTypeError('let r: RegExp.<[string, string], {}> = /(a)/;');
+});
+
+test('D49 is stated for RegExp ALONE, not for every library name', () => {
+  // #sec-untyped-collections: the rule is "stated per family rather than as a
+  // general rule about an unparameterized built-in, because the families do not
+  // agree on what an unparameterized use means".
+  //
+  // A bare `Map` is the UNTYPED COLLECTION, whose typed and untyped forms
+  // "coexist in one program without interacting" - so it is NOT a supertype, and
+  // widening this rule to every library name would decide a question the
+  // specification has not asked.
+  expectStaticTypeError('let m: Map = new Map.<string, uint8>();');
 });

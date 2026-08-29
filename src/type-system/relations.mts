@@ -1155,6 +1155,22 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // only where some parameter carries a modifier - so a declaration that
       // declares no variance behaves exactly as it did, which is the default the
       // clause calls conservative.
+      // A BARE `RegExp` is the SUPERTYPE of every parameterization (D49).
+      // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
+      // every such parameterization, so it holds a literal of any shape while a
+      // written parameterization does not hold a value of another."
+      //
+      // Stated for RegExp ALONE, and deliberately: #sec-untyped-collections
+      // notes that the rule is "stated per family rather than as a general rule
+      // about an unparameterized built-in, because the families do not agree on
+      // what an unparameterized use means". A bare `Map` is NOT this - it is the
+      // untyped collection, whose typed and untyped forms "coexist in one
+      // program without interacting" - so widening this to every library name
+      // would decide a question the specification has not asked.
+      if (s.LibraryName === 'RegExp' && tn.LibraryName === 'RegExp'
+          && tn.Arguments.length === 0) {
+        return true;
+      }
       if (s.Declaration === tn.Declaration && s.Arguments.length === tn.Arguments.length
         && s.Arguments.length > 0) {
         // A LIBRARY type has no Declaration to carry a variance annotation - it
