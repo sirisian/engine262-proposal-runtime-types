@@ -195,7 +195,7 @@ test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => 
   // where T comes from the items and K from the callback's RETURN and from
   // nowhere else. This is that shape written as a user generic, and it is the
   // prerequisite PLAN-static-signatures.md's Phase 0 exists for.
-  const G = 'function g<T, K>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { return undefined; } '
+  const G = 'function g<T, K>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   // Guarded by `if (false)`, so what is asserted is the STATIC property: the
   // stub returns *undefined*, which no Map annotation admits at run time, and a
@@ -217,7 +217,7 @@ test('a type variable is inferred through an INTERFACE-typed parameter', () => {
   // Recovered by RECONSTRUCTION: for each unbound variable, rebuild the
   // interface at that variable and ask whether it is the parameter's own type.
   // Exact, and it cannot mistake a hand-written object type for an interface.
-  const F = 'function f<T>(i: Iterable.<T>): T { return undefined; } ';
+  const F = 'function f<T>(i: Iterable.<T>): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
   expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
@@ -273,7 +273,7 @@ test('a BLOCK-bodied callback binds a variable from its return', () => {
   // A wrong body is still refused - the wanted type GUIDES the contribution
   // rather than replacing it - which is the property that keeps this from making
   // every unannotated body trivially conform.
-  const G = 'function gb<T, K>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { return undefined; } '
+  const G = 'function gb<T, K>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${G} let m: Map.<string, [].<uint8>> = gb(a, (v) => { return "k"; });`))).toBe(true);
@@ -286,7 +286,7 @@ test('a type variable is inferred through a UNION parameter', () => {
   // had no case for a union - so a variable inside one bound nothing and
   // `f<T>(x: [].<T> | Set.<T>)` was unconstrained however plainly the argument
   // matched an arm.
-  const F = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
+  const F = 'function f<T>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
   expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
@@ -294,7 +294,7 @@ test('a type variable is inferred through a UNION parameter', () => {
   expectStaticTypeError(guard(`${F} let c: Set.<uint8> = new Set(); let s: string = f(c);`));
   expect(ok(guard(`${F} let c: Set.<uint8> = new Set(); let s: uint8 = f(c);`))).toBe(true);
   // A union with a plain arm - `T | undefined`, the shape an optional takes.
-  const P = 'function p<T>(x: T | undefined): T { return undefined; } const a: uint8 = (1 := uint8); ';
+  const P = 'function p<T>(x: T | undefined): T { throw new Error(); } const a: uint8 = (1 := uint8); ';
   expectStaticTypeError(guard(`${P} let s: string = p(a);`));
   expect(ok(guard(`${P} let s: uint8 = p(a);`))).toBe(true);
 });
@@ -307,8 +307,8 @@ test('the arm that binds is chosen by KIND, not by position', () => {
   // from the array arm, while the same union written the other way round worked.
   // Order is not supposed to decide this.
   const guard = (src: string) => `if (false) { ${src} } 1;`;
-  const forward = 'function f<T>(x: [].<T> | Set.<T>): T { return undefined; } ';
-  const reversed = 'function h<T>(x: Set.<T> | [].<T>): T { return undefined; } ';
+  const forward = 'function f<T>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
+  const reversed = 'function h<T>(x: Set.<T> | [].<T>): T { throw new Error(); } ';
   for (const [name, decl, call] of [['forward', forward, 'f'], ['reversed', reversed, 'h']]) {
     expectStaticTypeError(guard(`${decl} let c: Set.<uint8> = new Set(); let s: string = ${call}(c);`));
     expect(ok(guard(`${decl} let c: Set.<uint8> = new Set(); let s: uint8 = ${call}(c);`)), name).toBe(true);
@@ -326,7 +326,7 @@ test('a RESULT-ONLY variable is bound by the call\'s contextual type', () => {
   // #sec-overloading-on-return-type calls its contextual type and which
   // `staticTypeIn` already records on the node for overload resolution. This
   // reads the same record for a second purpose.
-  const F = 'function f<T>(): T { return undefined; } ';
+  const F = 'function f<T>(): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${F} let n: uint8 = f(); let good: uint8 = n;`))).toBe(true);
   expectStaticTypeError(guard(`${F} let n: uint8 = f(); let bad: string = n;`));
@@ -346,7 +346,7 @@ test('an ARGUMENT beats the contextual type', () => {
   expectStaticTypeError(guard(`${P} let n: string = p(a);`));
   // A signature with BOTH kinds binds each from its own source - T from the
   // argument, U from the annotation.
-  const M = 'function m<T, U>(x: T): U { return undefined; } const a: uint8 = (1 := uint8); ';
+  const M = 'function m<T, U>(x: T): U { throw new Error(); } const a: uint8 = (1 := uint8); ';
   expect(ok(guard(`${M} let n: string = m(a); let good: string = n;`))).toBe(true);
   expectStaticTypeError(guard(`${M} let n: string = m(a); let bad: uint8 = n;`));
 });

@@ -542,8 +542,8 @@ test('Promise.try takes its value from the callback, and FLATTENS', () => {
   expect(ok('let p: Promise.<uint8, any> = Promise.try(() => { return (1 := uint8); });')).toBe(true);
   // Flattening: one `Promise` in the result, not two. Guarded, since the stubs
   // are *undefined* and no `Promise` annotation admits that at run time.
-  expect(ok('if (false) { let inner: Promise.<uint8, Error> = undefined; let p: Promise.<uint8, Error> = Promise.try(() => inner); } 1;')).toBe(true);
-  expectStaticTypeError('let inner: Promise.<uint8, Error> = undefined; let p: Promise.<Promise.<uint8, Error>, any> = Promise.try(() => inner);');
+  expect(ok('if (false) { let inner: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); let p: Promise.<uint8, Error> = Promise.try(() => inner); } 1;')).toBe(true);
+  expectStaticTypeError('let inner: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); let p: Promise.<Promise.<uint8, Error>, any> = Promise.try(() => inner);');
   expect(evaluated('String(typeof Promise.try(() => 1).then);')).toBe('function');
 });
 
@@ -932,10 +932,10 @@ test('OQ19: a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
   // subtype only upward. Read by subtyping alone, the same pair answered one way
   // at the top level - `let e: Error = a` for an `any` a is admitted - and
   // another one position in.
-  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<any> = undefined; let q: Box.<A> = p; } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p; } 1;`)).toBe(true);
   // Covariance still goes ONE WAY, and a real subtype pair still flows.
-  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<B> = undefined; let q: Box.<A> = p; } 1;`)).toBe(true);
-  expectStaticTypeError(`${SUB} class Box<out T> { } let p: Box.<A> = undefined; let q: Box.<B> = p;`);
+  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<B> = new Box.<B>(); let q: Box.<A> = p; } 1;`)).toBe(true);
+  expectStaticTypeError(`${SUB} class Box<out T> { } let p: Box.<A> = new Box.<A>(); let q: Box.<B> = p;`);
 });
 
 test('OQ19 does not reach an INVARIANT parameter', () => {
@@ -943,7 +943,7 @@ test('OQ19 does not reach an INVARIANT parameter', () => {
   // `Map.<string, uint8>` used as `Map.<string, number>` "would accept a Number
   // into storage typed uint8". Map is deliberately absent from the library
   // variance table.
-  expectStaticTypeError(`${SUB} class Box<T> { } let p: Box.<any> = undefined; let q: Box.<A> = p;`);
+  expectStaticTypeError(`${SUB} class Box<T> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p;`);
   expectStaticTypeError('let m: Map.<string, uint8> = new Map.<string, uint8>(); let n: Map.<string, number> = m;');
   expectStaticTypeError('let m: Map.<string, any> = new Map.<string, any>(); let n: Map.<string, uint8> = m;');
 });

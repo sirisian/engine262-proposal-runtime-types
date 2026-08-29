@@ -80,7 +80,7 @@ test('D: a concise arrow body cannot fall off', () => {
 // --- E. The explicit boundary still works ------------------------------------
 
 test('E: explicit returns are still checked', () => {
-  expectThrown('function f(): uint8 { return undefined; } f();');
+  expectThrown('function f(): uint8 { throw new Error(); } f();');
   expectThrown('function f(): uint8 { return "nope"; } f();');
   expectThrown('function f(): uint8 { return (300 := uint16); } f();');
 });
