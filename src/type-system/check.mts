@@ -3146,12 +3146,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * question, and `Promise.resolve(1)` stayed refused after covariance landed.
    */
   const contextualCallTypes = new Map<ParseNode, Known>();
+  /**
+   * An OBJECT LITERAL's contextual type (D58).
+   *
+   * Its members were recorded as `widen(memberType)`, so
+   * `let g: Grid = { t: 1.0, c: 1 }` for a `Grid` of `{ t: float64, c: uint8 }`
+   * built `{ t: number, c: number }` and was refused - the untyped literals
+   * widened before they could adapt. That is D43's defect one level in, and
+   * this is D43's mechanism: read each member against the type the target wants
+   * of it, and take that type where `literalFitsNumericType` says the literal
+   * belongs there.
+   */
+  const contextualObjectTypes = new Map<ParseNode, Known>();
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (node && contextual && (node as ParseNode).type === 'CallExpression') {
       contextualCallTypes.set(node as ParseNode, contextual);
+    }
+    // An OBJECT LITERAL's members adapt to the target's members (D58), the way
+    // a static's arguments adapt to its target (D43). Recorded here and read in
+    // `objectLiteralShape`, which is reached from `staticType`'s own arm and so
+    // cannot take the target as a parameter.
+    if (node && contextual && (node as ParseNode).type === 'ObjectLiteral') {
+      contextualObjectTypes.set(node as ParseNode, contextual);
     }
     if (!node) {
       return null;
@@ -7816,6 +7835,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as Known;
     }
     const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    // The target's member types, where the literal has a target. Recorded by
+    // `staticTypeIn` because this operation is reached from `staticType`'s own
+    // arm and cannot take one as a parameter.
+    const wanted = node ? contextualObjectTypes.get(node as ParseNode) : undefined;
+    // INCOMPLETE: the target arrives as a ~nominal~ for an alias or an
+    // interface - traced, `let g: Grid = {…}` gives Kind `nominal`, not
+    // `object` - so its members are not on `Properties` and must be resolved
+    // through the declaration first. Reading `Properties` alone finds nothing
+    // and every member still widens.
+    const wantedOf = (key: string): TypeRecord | null => {
+      const props = (wanted as { Properties?: readonly { key: string, type: TypeRecord }[] } | undefined)?.Properties;
+      return props?.find((q) => q.key === key)?.type ?? null;
+    };
     for (const member of members) {
       if (!member || member.type !== 'PropertyDefinition') {
         return null;
@@ -7838,7 +7870,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!memberType) {
         return null;
       }
-      Properties.push({ key, type: widen(memberType) as TypeRecord, optional: false });
+      // A member ADAPTS to what the target wants of it, and is widened only
+      // where there is no target to adapt to (D58). Widening unconditionally
+      // made `let g: Grid = { t: 1.0, c: 1 }` build `{ t: number, c: number }`
+      // and be refused, the untyped literals losing their adaptability before
+      // the comparison - D43's defect one level in, and this is D43's fix:
+      // `literalFitsNumericType` decides whether the literal belongs at the
+      // wanted type.
+      const wantedMember = wantedOf(key);
+      const adapted = wantedMember && literalFitsNumericType(memberType as TypeRecord, wantedMember)
+        ? wantedMember
+        : widen(memberType) as TypeRecord;
+      Properties.push({ key, type: adapted, optional: false });
     }
     return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
   };
