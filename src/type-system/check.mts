@@ -8801,7 +8801,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // compared.
       const adapted = wantedMember
         && (literalFitsNumericType(memberType as TypeRecord, wantedMember)
-          || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
+          // ANY member that fits its wanted type takes it, not only an ~object~
+          // one (D95).
+          //
+          // D73 added the `IsAssignable` arm for a nested OBJECT member and
+          // scoped it to that kind, which was the case it had. A member of any
+          // other kind fell through to `widen`, so at
+          // `type L = { value: uint8, next: L | null }` the inner literal's
+          // `next: null` kept the literal type `null` where its position wanted
+          // `L | null`. `next` is WRITABLE and therefore compared INVARIANTLY
+          // (#sec-isobjectsubtype, "subtyped in depth only through a `readonly`
+          // member"), so `SameType(null, L | null)` decided it and the whole
+          // literal was refused - correctly by the relation, wrongly for a
+          // literal, which is created at the type its position asks for.
+          //
+          // `wantedOf` was already returning `{ value: uint8, next: ... } | null`
+          // here; traced, only this gate discarded it.
+          //
+          // Adaptation still happens ONLY where the member is assignable, so a
+          // member that does not fit is untouched and refused as before.
+          //
+          // D73's arm is kept EXACTLY as it was and a second one added beside
+          // it, rather than the kind test being dropped. Widening D73's arm to
+          // every kind was measured first and LOOSENED freshness: an excess
+          // member in the nested literal stopped being reported, because taking
+          // `wantedMember` wholesale replaces the shape the excess member lives
+          // in. Restricting the new arm to NON-object members leaves every
+          // object member on D73's path, where freshness still sees it.
+          || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember))
+          || ((memberType as TypeRecord).Kind !== 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
         ? wantedMember
         : widen(memberType) as TypeRecord;
       // `readonly` is SET, not left absent (D91). A Property Type Record has a

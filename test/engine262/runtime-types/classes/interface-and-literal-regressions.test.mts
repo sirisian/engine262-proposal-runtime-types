@@ -494,6 +494,41 @@ test('a self-referential union reports instead of overflowing', () => {
   expect(evaluated('let n: uint32 | uint8 = 1; String(Reflect.typeOf(n));')).toBe('uint.<8>');
 });
 
+test('a nested literal at a recursive type takes its wanted member types', () => {
+  // D95: `adapted` took the wanted type only for an ~object~ member - D73 added
+  // that arm for the case it had and scoped it to that kind. A member of any
+  // other kind fell through to `widen`, so at
+  // `type L = { value: uint8, next: L | null }` the inner literal's `next: null`
+  // kept the literal type `null` where its position wanted `L | null`.
+  //
+  // `next` is WRITABLE and so compared INVARIANTLY, and SameType(null, L | null)
+  // is false - the relation was RIGHT to refuse. A literal is created at the
+  // type its position asks for, which is what was not happening.
+  const L = 'type L = { value: uint8, next: L | null }; ';
+  expect(accepts(`${L} const n: L = { value: 1, next: { value: 2, next: null } };`)).toBe(true);
+  expect(accepts(`${L} const n: L = { value: 1, next: { value: 2, next: { value: 3, next: null } } };`)).toBe(true);
+  expect(accepts('type A = { b: B | null }; type B = { a: A | null }; const v: A = { b: { a: null } };')).toBe(true);
+  // A recursive INTERFACE and a GENERIC one, which fail the same way.
+  expect(accepts('interface I { value: uint8, next: I | null } const n: I = { value: 1, next: { value: 2, next: null } };')).toBe(true);
+  expect(accepts('interface N<T> { v: T, next: N.<T> | null } const n: N.<uint8> = { v: (1 := uint8), next: { v: (2 := uint8), next: null } };')).toBe(true);
+
+  // A genuinely wrong nested value is still refused - adaptation happens ONLY
+  // where the member is assignable.
+  expect(accepts(`${L} const n: L = { value: 1, next: { value: "s", next: null } };`)).toBe(false);
+  // Depth 1, a BINDING of the inner value, and the NON-recursive equivalent were
+  // the three controls that identified this as adaptation rather than
+  // comparison; all still hold.
+  expect(accepts(`${L} const n: L = { value: 1, next: null };`)).toBe(true);
+  expect(accepts('type M = { value: uint8, next: { value: uint8 } | null }; const n: M = { value: 1, next: { value: 2 } };')).toBe(true);
+  // A `readonly` member was always accepted - covariant, so SameType is never
+  // asked - which is what confirmed the invariance reading.
+  expect(accepts('type RO = { v: uint8, readonly next: RO | null }; const n: RO = { v: 1, next: { v: 2, next: null } };')).toBe(true);
+
+  // D73's OBJECT arm is untouched: freshness still reaches a nested object
+  // member at a plain (non-union) position.
+  expect(accepts('type P = { v: uint8, inner: { w: uint8 } }; const p: P = { v: 1, inner: { w: 2, u: "x" } };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
