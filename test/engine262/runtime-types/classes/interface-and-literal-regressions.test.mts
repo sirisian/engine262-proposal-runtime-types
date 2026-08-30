@@ -79,6 +79,16 @@ test('a method in an object type is checked, and its type parameters are in scop
   expect(accepts('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return "s"; } };')).toBe(false);
   expect(accepts('interface I<T> { n: T } let c: I.<uint8> = { n: "s" };')).toBe(false);
 
+  // ...and a METHOD's key is compared like any other. `checkObjectLiteralAgainst`
+  // skipped every non-PropertyDefinition, so an intersection of CONFLICTING
+  // method arms accepted a literal where the DATA and ARROW spellings refused.
+  expect(accepts('let c: { m(): int32 } & { m(): string } = { m() { return (1 := int32); } };')).toBe(false);
+  expect(accepts('let c: { m(): int32 } & { m(): string } = { m() { return "s"; } };')).toBe(false);
+  expect(accepts('let c: { m: () => int32 } & { m: () => string } = { m: () => (1 := int32) };')).toBe(false);
+  // ...while AGREEING arms and a non-overlapping method still pass.
+  expect(accepts('let c: { m(): int32 } & { m(): int32 } = { m() { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m(): int32 } & { n: int32 } = { m() { return (1 := int32); }, n: 1 };')).toBe(true);
+
   // D67: an interface with a method reaches an object type, both readonly.
   expect(accepts(`interface S { m(): uint8; }
     let s: S = { m() { return (0 := uint8); } };

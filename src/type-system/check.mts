@@ -3111,6 +3111,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     for (const member of node.PropertyDefinitionList ?? []) {
+      // A METHOD in shorthand is walked for its body and its KEY is checked
+      // against the target, so a key the target cannot supply a type for is
+      // reported (D71's last row).
+      //
+      // The walk below skipped every non-`PropertyDefinition` outright, so a
+      // method's key was never compared: an intersection of CONFLICTING method
+      // arms accepted a literal where the DATA equivalent refused and the ARROW
+      // spelling refused. D84 gives such a key `never` in the merged shape -
+      // nothing satisfies it, a method included.
+      //
+      // Only the KEY is judged here. The method's RETURN is checked where the
+      // body is entered, from the contextual return the target's member gives
+      // it, which is the other half of D71.
+      if (member && (member as ParseNode).type === 'MethodDefinition') {
+        const methodName = (member as unknown as {
+          ClassElementName?: { name?: string, value?: string } | null,
+        }).ClassElementName;
+        const methodKey = methodName?.name ?? methodName?.value;
+        if (typeof methodKey === 'string') {
+          const wantedForMethod = target.Properties.find((prop) => prop.key === methodKey);
+          const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
+          const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
+          if (wantedForMethod && wantedIsNever) {
+            errors.push((Throw.TypeError(
+              '$1 is not assignable to $2',
+              Value('a method'),
+              Value(displayType(wantedForMethod.type)),
+            ) as { Value: ObjectValue }).Value);
+          }
+        }
+        walk(member as ParseNode);
+        continue;
+      }
       if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
         walk(member as ParseNode);
         continue;
