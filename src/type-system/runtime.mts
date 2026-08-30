@@ -1698,6 +1698,24 @@ export function SubstituteTypeArguments(
         return out;
       }
     }
+    if (r.Kind === 'tuple') {
+      // A NOMINAL reaches this walk where an ALIAS reaches
+      // `substituteTypeParameters` in `check.mts` (D87, and D86 before it), so
+      // `interface B<T> { n: [T, string] }` needs the arm here as well - it was
+      // the row that stayed REFUSED with only the checker's two edits.
+      //
+      // There is no ARRAY arm here and generic arrays work, so this walk is not
+      // reached for every kind; a tuple inside a nominal does reach it.
+      const withElements = r as unknown as { Elements?: readonly { Type?: TypeRecord }[] };
+      if (withElements.Elements) {
+        const out = { ...r } as TypeRecord;
+        seen.set(r, out);
+        (out as unknown as { Elements: unknown }).Elements = withElements.Elements.map((el) => (el?.Type
+          ? { ...el, Type: walk(el.Type) }
+          : el));
+        return out;
+      }
+    }
     if (r.Kind === 'union' || r.Kind === 'intersection') {
       const out = { Kind: r.Kind, Members: r.Members } as TypeRecord;
       seen.set(r, out);

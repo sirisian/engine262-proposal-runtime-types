@@ -1520,6 +1520,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (withElement.Element && mentionsTypeParameter(withElement.Element)) {
       return true;
     }
+    // A TUPLE's elements, beside the array's singular [[Element]] one line above
+    // (D87). The plural was missing where the singular was handled - one letter
+    // apart - so `type P<T> = [T, string]` read as mentioning no parameter, and
+    // the substitution arm keyed on this predicate never ran for it.
+    const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
+    if (withElements.Elements?.some((el) => !!el?.Type && mentionsTypeParameter(el.Type))) {
+      return true;
+    }
     // An array's EXTENT may be a VALUE PARAMETER (D40) - the same omission the
     // next comment records for a function type's signature.
     const withExtentM = t as { Extent?: number | 'dynamic' | TypeRecord };
@@ -2523,6 +2531,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? a
           : substituteTypeParameters(a, bindings) as TypeRecord)),
       } as Known;
+    }
+    // A TUPLE's elements, beside the array's singular [[Element]] arm below
+    // (D87). `substituteTypeParameters` handled `Element` and not `Elements`,
+    // exactly as `mentionsTypeParameter` did, so `type P<T> = [T, string]` kept
+    // its `T` and `P.<uint8>` was satisfied by nothing - an exact
+    // `[uint8, string]` source included.
+    //
+    // Each element is spread, so a REST or an initial marker rides along
+    // untouched and only [[Type]] is replaced.
+    const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
+    if (withElements.Elements) {
+      return {
+        ...t,
+        Elements: withElements.Elements.map((el) => (el?.Type
+          ? { ...el, Type: substituteTypeParameters(el.Type, bindings) }
+          : el)),
+      } as unknown as Known;
     }
     const withElement = t as { Element?: TypeRecord };
     if (withElement.Element) {

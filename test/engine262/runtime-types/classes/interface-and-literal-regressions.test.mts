@@ -307,6 +307,33 @@ test('a parameterised type substitutes its index signatures', () => {
   expect(accepts('interface B<T> { m(): T; } let b: B.<uint8> = { m() { return (1 := uint8); } };')).toBe(true);
 });
 
+test('a parameterised tuple substitutes its elements', () => {
+  // D87: the SINGULAR [[Element]] an array carries was handled in both walks and
+  // the PLURAL [[Elements]] a tuple carries was not - one letter apart, at
+  // check.mts:1519 and :2527. Three edits, as D86 needed: the predicate the arm
+  // is gated on, the alias walk, and the nominal one.
+  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T> = [T, string]; let s: [uint8, string] = [(1 := uint8), "s"]; let p: P.<uint8> = s;')).toBe(true);
+  expect(accepts('type P<T, U> = [T, U]; let p: P.<uint8, string> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T> = [T]; let p: P.<uint8> = [(1 := uint8)];')).toBe(true);
+
+  // A tuple inside a NOMINAL reaches the runtime walk, not the checker's - this
+  // row stayed REFUSED with only the two check.mts edits and is what proves the
+  // third is needed.
+  expect(accepts('interface B<T> { n: [T, string] } let b: B.<uint8> = { n: [(1 := uint8), "s"] };')).toBe(true);
+
+  // A REST marker and a NESTED tuple ride along; each element is spread, so only
+  // [[Type]] is replaced.
+  expect(accepts('type P<T> = [T, ...string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T> = [[T], string]; let p: P.<uint8> = [[(1 := uint8)], "s"];')).toBe(true);
+
+  // ...and a value that does not fit still refuses, generic or not.
+  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = ["s", "s"];')).toBe(false);
+  expect(accepts('type P = [uint8, string]; let p: P = ["s", "s"];')).toBe(false);
+  // A generic ARRAY, which carries the singular field, was never affected.
+  expect(accepts('type A<T> = [].<T>; let a: A.<uint8> = [(1 := uint8)];')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
