@@ -8589,58 +8589,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ) as unknown as { Properties?: readonly { key: string, type: TypeRecord }[] };
         return substituted?.Properties ?? structure.Properties;
       };
-      const direct = propertiesOf(wanted)?.find((q) => q.key === key)?.type;
-      if (direct) {
-        return direct;
-      }
-      const wantedKind = (wanted as { Kind?: string } | undefined)?.Kind;
-      // A UNION's arms are consulted the way an intersection's are (D89), and
-      // the rule is the same one for a different reason.
+      // Every arm is consulted, at any DEPTH (D93).
       //
-      // #sec-union-boundary-selection settles "which arm" for a VALUE: "which
-      // one is decided by what the VALUE is rather than by where a member was
-      // written ... A rule that read the order of the members would therefore
-      // give one type two behaviours." So the FIRST arm declaring the key is not
-      // an answer, and the engine already follows that rule for a scalar -
-      // `uint8 | uint32` and `uint32 | uint8` both report `uint8`, the NARROWEST,
-      // whichever way they are written.
+      // A composite written inside another - `({ x: int32 } | { y: string }) |
+      // { z: boolean }` - reaches here UNFLATTENED: traced, `arms=2
+      // armKinds=["union","object"]` where the FLAT spelling of the same type
+      // gives `arms=3 armKinds=["object","object","object"]`. The two
+      // annotations denote one type and the canonical form proves it, so the
+      // display is not what the literal is checked against.
       //
-      // Taken only where every arm declaring the key AGREES, by `SameType`.
-      // Where they disagree there is no single answer and nothing is adapted,
-      // so the member widens and the literal is refused as before - deciding
-      // that case is a design question this does not settle.
+      // Recursion covers both shapes: an arm of the same kind that would have
+      // been flattened, and an arm of the OTHER kind that never flattens and
+      // carries no [[Properties]] for `propertiesOf` to read.
       //
-      // An arm that does not declare the key at all is passed over: a union is
-      // satisfied by ONE arm, so a key only one arm declares is unambiguous.
-      if (wantedKind === 'union') {
-        let unionAgreed: TypeRecord | null = null;
-        for (const arm of (wanted as unknown as { Members?: readonly TypeRecord[] }).Members ?? []) {
-          const found = propertiesOf(arm)?.find((q) => q.key === key)?.type;
-          if (!found) {
+      // ONE agreement check across ALL levels, not one per level. The arms of
+      // `({ x: int32 } | { x: string }) | { z }` are two levels apart and must
+      // still be seen to disagree - D89 left a disagreeing key REFUSED as an
+      // open design question, and a per-level check would pick an arm instead.
+      //
+      // `seen` guards a recursive alias putting a composite inside itself, the
+      // discipline every arm of the substitution walk uses (D88).
+      const collectWanted = (t: unknown, seen: Set<unknown>): { found: boolean, type: TypeRecord | null } => {
+        if (!t || typeof t !== 'object' || seen.has(t)) {
+          return { found: false, type: null };
+        }
+        seen.add(t);
+        const own = propertiesOf(t)?.find((q) => q.key === key)?.type;
+        if (own) {
+          return { found: true, type: own };
+        }
+        const kind = (t as { Kind?: string }).Kind;
+        if (kind !== 'union' && kind !== 'intersection') {
+          return { found: false, type: null };
+        }
+        let agreedType: TypeRecord | null = null;
+        let sawAny = false;
+        for (const arm of (t as { Members?: readonly TypeRecord[] }).Members ?? []) {
+          const inner = collectWanted(arm, seen);
+          if (!inner.found) {
             continue;
           }
-          if (unionAgreed && !SameType(unionAgreed, found)) {
-            return null;
+          sawAny = true;
+          if (!inner.type) {
+            return { found: true, type: null };
           }
-          unionAgreed = found;
+          if (agreedType && !SameType(agreedType, inner.type)) {
+            return { found: true, type: null };
+          }
+          agreedType = inner.type;
         }
-        return unionAgreed;
-      }
-      if (wantedKind !== 'intersection') {
-        return null;
-      }
-      let agreed: TypeRecord | null = null;
-      for (const arm of (wanted as unknown as { Members?: readonly TypeRecord[] }).Members ?? []) {
-        const found = propertiesOf(arm)?.find((q) => q.key === key)?.type;
-        if (!found) {
-          continue;
-        }
-        if (agreed && !SameType(agreed, found)) {
-          return null;
-        }
-        agreed = found;
-      }
-      return agreed;
+        return { found: sawAny, type: agreedType };
+      };
+      return collectWanted(wanted, new Set()).type;
     };
     for (const member of members) {
       // A METHOD written in shorthand contributes a member rather than voiding

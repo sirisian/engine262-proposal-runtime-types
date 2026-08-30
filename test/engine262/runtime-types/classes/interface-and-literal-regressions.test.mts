@@ -434,6 +434,35 @@ test("a literal's method member takes the signature its position wants", () => {
   expect(accepts('let c: { m: (a: int32) => int32 } = { m: () => (1 := int32) };')).toBe(true);
 });
 
+test('a NESTED composite annotation reaches every arm', () => {
+  // D93: a composite written inside another arrived UNFLATTENED - traced,
+  // `arms=2 armKinds=["union","object"]` where the FLAT spelling of the same
+  // type gives three object arms. The two annotations denote one type and the
+  // canonical form proves it, so the display was not what the literal met.
+  expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: ({ x: int32 } & { z: int32 }) & { w: int32 } = { x: 1, z: 2, w: 3 };')).toBe(true);
+  // MIXED kinds never flatten, so recursion is what reaches them - an arm that
+  // is itself a composite carries no [[Properties]] to read.
+  expect(accepts('let c: ({ x: int32 } | { y: string }) & { z: int32 } = { x: 1, z: 2 };')).toBe(true);
+  expect(accepts('let c: ({ x: int32 } & { z: int32 }) | { y: string } = { x: 1, z: 2 };')).toBe(true);
+  // ...and through an ALIAS, so this was never a parenthesis artefact.
+  expect(accepts('type U = { x: int32 } | { y: string }; let c: U & { z: int32 } = { x: 1, z: 2 };')).toBe(true);
+
+  // ONE agreement check across ALL levels, not one per level. These three arms
+  // are two levels apart and must still be seen to disagree - D89 left a
+  // disagreeing key REFUSED as an open design question, and a per-level check
+  // would pick an arm instead.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
+  expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(false);
+  expect(accepts('let c: ({ x: int32 } | { z: boolean }) | { x: string } = { x: 1 };')).toBe(false);
+
+  // Reaching into an arm must not invent a wanted type nor excuse a wrong value.
+  expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { w: 1 };')).toBe(false);
+  expect(accepts('let c: ({ x: int32 } | { y: string }) & { z: int32 } = { x: "s", z: 2 };')).toBe(false);
+  // An arm declaring NOTHING contributes nothing - D90's row.
+  expect(accepts('let c: { x: int32 } | never = { x: 1 };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
