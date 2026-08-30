@@ -3898,6 +3898,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    // An interface's INDEX SIGNATURES, filled beside its members (D78). The
+    // structure below hardcoded `IndexSignatures: []` and the walk skipped every
+    // non-TypeMember, so a declared signature was PARSED and then dropped -
+    // measured, `iface member type=IndexSignature` reaches the walk - and
+    // `interface I { [k: string]: int32 } let c: I = { x: "s" }` was accepted by
+    // the checker AND by the run time, since neither had anything to enforce.
+    const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
     // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments
     // (D59). #sec-type-arguments: "Each parameter takes, in order: its positional
     // argument where one was supplied, otherwise the named argument bearing its
@@ -3916,7 +3923,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Kind: 'nominal',
       Declaration: node,
       Arguments: defaultArgumentsOf(node as unknown as ParseNode),
-      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+      Structure: { Kind: 'object', Properties, IndexSignatures },
     } as unknown as Known;
     interfaceTypeMemo.set(node, inProgress);
     const decl = node as unknown as {
@@ -3935,6 +3942,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     try {
     for (const member of decl.InterfaceMemberList ?? []) {
+      if (member.type === 'IndexSignature') {
+        // Built as the OBJECT TYPE arm builds one (`check.mts:5027`): the key
+        // and value annotations resolved, and the signature skipped where either
+        // does not - a half-read signature would admit keys it cannot check.
+        const ix = member as unknown as {
+          KeyTypeAnnotation?: { Type: ParseNode.Type },
+          ValueTypeAnnotation?: { Type: ParseNode.Type },
+        };
+        const ixKey = ix.KeyTypeAnnotation ? resolveType(ix.KeyTypeAnnotation.Type) : null;
+        const ixValue = ix.ValueTypeAnnotation ? resolveType(ix.ValueTypeAnnotation.Type) : null;
+        if (ixKey && ixValue) {
+          IndexSignatures.push({ Key: ixKey as TypeRecord, Value: ixValue as TypeRecord });
+        }
+        continue;
+      }
       if (member.type !== 'TypeMember') {
         continue;
       }

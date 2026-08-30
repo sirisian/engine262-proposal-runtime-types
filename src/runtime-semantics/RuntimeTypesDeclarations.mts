@@ -423,7 +423,30 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     }
     try {
     const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean, initial?: Value }[] = [];
+    // An interface's INDEX SIGNATURES (D78). The structure below hardcoded
+    // `IndexSignatures: []` and this walk skipped every non-TypeMember, so a
+    // declared signature was dropped HERE as well as in the checker - which is
+    // why `({ x: "s" } is I)` answered *true* for
+    // `interface I { [k: string]: int32 }`, where the ALIAS spelling answers
+    // *false*. Two spellings of one type disagreeing on a value question.
+    //
+    // Both sides are needed: a checker that enforced a signature the run time
+    // did not would make `is` and an annotation disagree the other way.
+    const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
     for (const member of node.InterfaceMemberList) {
+      if (member.type === 'IndexSignature') {
+        const ix = member as unknown as {
+          KeyTypeAnnotation?: { Type: ParseNode.Type },
+          ValueTypeAnnotation?: { Type: ParseNode.Type },
+        };
+        if (ix.KeyTypeAnnotation && ix.ValueTypeAnnotation) {
+          IndexSignatures.push({
+            Key: Q(yield* TypeNodeToTypeRecord(ix.KeyTypeAnnotation.Type)) as TypeRecord,
+            Value: Q(yield* TypeNodeToTypeRecord(ix.ValueTypeAnnotation.Type)) as TypeRecord,
+          });
+        }
+        continue;
+      }
       if (member.type !== 'TypeMember') {
         continue;
       }
@@ -617,7 +640,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Kind: 'nominal',
       Declaration: node,
       Arguments: [],
-      Structure: { Kind: 'object', Properties, IndexSignatures: [] },
+      Structure: { Kind: 'object', Properties, IndexSignatures },
     };
     value = GetTypeObject(record);
     } finally {
