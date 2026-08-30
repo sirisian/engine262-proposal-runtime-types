@@ -8422,9 +8422,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * comes first would be arbitrary.
      */
     const wantedOf = (key: string): TypeRecord | null => {
-      const propertiesOf = (t: unknown): readonly { key: string, type: TypeRecord }[] | undefined => (t as {
-        Properties?: readonly { key: string, type: TypeRecord }[],
-      } | undefined)?.Properties;
+      // A NOMINAL target - an interface or an alias - carries its members on
+      // [[Structure]] rather than directly, so reading [[Properties]] alone
+      // found nothing: traced, an interface arrives as
+      // `kind=nominal keys=["Kind","Declaration","Arguments","Structure"] props=0`.
+      //
+      // That left every member of a literal at an interface target unadapted and
+      // every METHOD there without the return type its position wants (D71).
+      const propertiesOf = (t: unknown): readonly { key: string, type: TypeRecord }[] | undefined => {
+        const own = (t as { Properties?: readonly { key: string, type: TypeRecord }[] } | undefined)?.Properties;
+        if (own) {
+          return own;
+        }
+        const structure = (t as { Structure?: { Properties?: readonly { key: string, type: TypeRecord }[] } } | undefined)?.Structure;
+        if (!structure?.Properties) {
+          return undefined;
+        }
+        // A PARAMETERISED nominal's [[Structure]] holds its members
+        // UNSUBSTITUTED - `interface Box<T> { get(): T; }` carries `T`, not the
+        // argument - so the members must be substituted before they can be
+        // compared, as D63 does everywhere else this structure is read. Without
+        // it a correct `Box.<uint8>` literal was refused for returning `uint8`
+        // where `T` was wanted.
+        const nominalArguments = (t as { Arguments?: readonly (TypeRecord | number)[] } | undefined)?.Arguments ?? [];
+        if (nominalArguments.length === 0) {
+          return structure.Properties;
+        }
+        const substituted = SubstituteTypeArguments(
+          structure as unknown as TypeRecord,
+          (t as { Declaration?: unknown }).Declaration,
+          nominalArguments,
+        ) as unknown as { Properties?: readonly { key: string, type: TypeRecord }[] };
+        return substituted?.Properties ?? structure.Properties;
+      };
       const direct = propertiesOf(wanted)?.find((q) => q.key === key)?.type;
       if (direct) {
         return direct;

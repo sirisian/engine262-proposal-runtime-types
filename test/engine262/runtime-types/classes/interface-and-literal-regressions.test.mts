@@ -67,6 +67,18 @@ test('a method in an object type is checked, and its type parameters are in scop
   // A method with NO contextual type is not constrained by this.
   expect(accepts('let p = { m() { return "s"; } };')).toBe(true);
 
+  // ...at an INTERFACE target too: a nominal carries its members on
+  // [[Structure]], so reading [[Properties]] alone found nothing and every
+  // member of a literal at an interface went unadapted.
+  expect(accepts('interface I { m(): uint8; } let p: I = { m() { return "s"; } };')).toBe(false);
+  expect(accepts('interface I { m(): uint8; } let p: I = { m() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('interface I { n: uint8 } let p: I = { n: 1 };')).toBe(true);
+  // A PARAMETERISED nominal's structure is unsubstituted, so its members must be
+  // substituted before comparison - `Box<T>` carries `T`, not the argument.
+  expect(accepts('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return "s"; } };')).toBe(false);
+  expect(accepts('interface I<T> { n: T } let c: I.<uint8> = { n: "s" };')).toBe(false);
+
   // D67: an interface with a method reaches an object type, both readonly.
   expect(accepts(`interface S { m(): uint8; }
     let s: S = { m() { return (0 := uint8); } };
