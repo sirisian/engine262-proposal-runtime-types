@@ -3457,7 +3457,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           shapeArguments,
         ) as Known
         : rawShape;
-      if (shape && shape.Kind === 'object') {
+      // An INTERSECTION target is MERGED into one object shape so the member
+      // walk can run at all (D75). Freshness was withheld there entirely -
+      // traced, `contextual=intersection shape=intersection`, so this block and
+      // every flag inside it were skipped, and
+      // `let c: { x: int32 } & { } = { x: (1 := int32), u: "s" }` accepted a
+      // property neither arm declares.
+      //
+      // #sec-literal-freshness: "an own property the expected type neither
+      // declares nor admits through an index signature is a type error". An
+      // intersection DECLARES the union of its arms, so the arms' [[Properties]]
+      // are unioned - the OPPOSITE of D70's adaptation rule for the same target
+      // form, where the arms had to AGREE on a key's type. Two questions, two
+      // rules; conflating them breaks one.
+      //
+      // A UNION is NOT merged: it is satisfied by ONE arm, so "what the expected
+      // type declares" has no single answer, and a union target accepts an
+      // excess member today.
+      //
+      // Merged only where EVERY arm is an object with no index signature. An
+      // index signature admits keys this walk cannot enumerate, and an arm that
+      // is not an object has members it cannot read - in either case the whole
+      // shape is left alone rather than half-read.
+      const intersectionArms = shape && shape.Kind === 'intersection'
+        ? (shape as unknown as { Members?: readonly TypeRecord[] }).Members ?? []
+        : [];
+      const mergeableArms = intersectionArms.length > 0
+        && intersectionArms.every((arm) => arm.Kind === 'object'
+          && ((arm as unknown as { IndexSignatures?: readonly unknown[] }).IndexSignatures ?? []).length === 0);
+      const walkable = mergeableArms
+        ? ({
+          Kind: 'object',
+          Properties: intersectionArms.flatMap((arm) => (arm as unknown as {
+            Properties?: readonly unknown[],
+          }).Properties ?? []),
+          IndexSignatures: [],
+        } as unknown as Known)
+        : shape;
+      if (walkable && walkable.Kind === 'object') {
+        const shape = walkable;
         // Freshness applies to a STRUCTURAL type written at the position, and
         // is withheld in three places where the shape this pass can see is not
         // the whole of what the position admits:
@@ -3474,7 +3512,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Each is an incompleteness of the shape rather than of the rule, and
         // each is pinned by a test so the limit is recorded rather than assumed.
-        const structural = contextual.Kind === 'object'
+        // `mergeableArms` is the INTERSECTION case (D75): the shape above is the
+        // union of its arms, so it is as structural as an inline object type and
+        // the same two rules apply to it. Without this the walk ran with BOTH
+        // flags false - the gate admitted a composite and then disabled every
+        // check inside it, which silenced the MISSING-member rule that
+        // assignability had been catching.
+        const structural = (contextual.Kind === 'object' || mergeableArms)
           && (shape.Properties.length > 0 || shape.IndexSignatures.length > 0)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
         // An INTERFACE target requires its members too (D64 row 4). It is a
@@ -3487,7 +3531,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // accident.
         const targetIsInterface = contextual.Kind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
-        const requiresMembers = (structural || targetIsInterface)
+        const requiresMembers = (structural || targetIsInterface || mergeableArms)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
         checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
         return contextual;
