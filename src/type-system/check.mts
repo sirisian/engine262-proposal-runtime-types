@@ -3995,9 +3995,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // load". Taking the first and not overwriting keeps this pass order-
     // independent for the programs that are legal.
     const declarations = interfaceDeclarations.get(name) ?? [decl];
-    for (const member of declarations.flatMap((d) => (d as unknown as {
+    // Each member paired with the INDEX of the declaration it came from, so a
+    // redeclaration ACROSS declarations can be told from two members written in
+    // one (D83).
+    //
+    // #sec-partial-declarations: "A member already declared on the interface is
+    // a *TypeError* rather than an override, so the meaning of an interface does
+    // not depend on the order its declarations load." The RUN TIME reports it -
+    // "`n` is already declared on this interface" - and the checker accepted it
+    // in silence.
+    //
+    // Two members of the SAME declaration are left alone: the run time accepts
+    // `interface P { n: int32, n: string }` as well, so whether that is legal is
+    // a separate question this does not settle.
+    const memberSources = declarations.flatMap((d, declarationIndex) => ((d as unknown as {
       InterfaceMemberList?: readonly ParseNode[],
-    }).InterfaceMemberList ?? [])) {
+    }).InterfaceMemberList ?? []).map((m) => ({ member: m, declarationIndex })));
+    const declaredIn = new Map<string, number>();
+    for (const { member, declarationIndex } of memberSources) {
       if (member.type === 'IndexSignature') {
         // Built as the OBJECT TYPE arm builds one (`check.mts:5027`): the key
         // and value annotations resolved, and the signature skipped where either
@@ -4024,6 +4039,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Readonly?: boolean,
       };
       const key = memberKeyOf(tm.PropertyName);
+      // A member ALREADY DECLARED by an EARLIER declaration is a TypeError, as
+      // the run time makes it (D83). Keyed on the declaration INDEX so two
+      // members of the same declaration are not reported, and the FIRST is kept
+      // so the structure does not depend on load order.
+      if (typeof key === 'string') {
+        const declaredAt = declaredIn.get(key);
+        if (declaredAt !== undefined && declaredAt !== declarationIndex) {
+          errors.push((Throw.TypeError(
+            '$1 is already declared on this interface',
+            Value(key),
+          ) as { Value: ObjectValue }).Value);
+          continue;
+        }
+        declaredIn.set(key, declarationIndex);
+      }
       if (key !== undefined && typeof key !== 'string') {
         // A SYMBOL-keyed member, keyed by the minted Symbol of the `const` its
         // computed name resolves to. Recorded like any other member from here
