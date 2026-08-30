@@ -1334,6 +1334,21 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   }
 }
 
+/**
+ * Whether an index signature's KEY type admits ordinary string keys (D85).
+ *
+ * A signature may be keyed by a union, so `string` inside one counts.
+ */
+function keyTypeAdmitsStringKey(keyType: TypeRecord): boolean {
+  if (keyType.Kind === 'primitive') {
+    return keyType.Name === 'string';
+  }
+  if (keyType.Kind === 'union') {
+    return keyType.Members.some((m) => keyTypeAdmitsStringKey(m));
+  }
+  return false;
+}
+
 /** Width subtyping: s has every property t requires, at a subtype. */
 function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<TypeRecord, { Kind: 'object' }>, assumptions: readonly Assumption[]): boolean {
   const propsOk = t.Properties.every((tp) => {
@@ -1379,8 +1394,46 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
     }
     return IsSubtype(sp.type, tp.type, assumptions);
   });
-  // Each of t's index signatures must be covered by one of s's.
-  const indexOk = t.IndexSignatures.every((tx) => s.IndexSignatures.some((sx) => SameType(sx.Key, tx.Key) && IsSubtype(sx.Value, tx.Value, assumptions)));
+  /**
+   * Each of t's index signatures is covered by one of s's, OR - where s declares
+   * no signature at all - by s's own PROPERTIES (D85).
+   *
+   * The first arm was already here and is unchanged. The second is the gap it
+   * left: `every(... some(...))` is vacuously false for an empty
+   * `s.IndexSignatures`, so `{ }` and `{ x: int32 }` were not subtypes of
+   * `{ [k: string]: int32 }` while `{ x: int32, [k: string]: int32 }` was.
+   *
+   * #sec-type-members gives the meaning the rule follows: `{ [key: string]:
+   * uint32 }` is "the type whose remaining string-keyed properties, beyond those
+   * declared, are `uint32`". A type whose every such property fits is therefore
+   * one of its values, which is what the LITERAL path and the value boundary
+   * both already say - `checkObjectLiteralAgainst` consults `keyAdmittedBy`, and
+   * #sec-value-boundary crosses an admitted property "against that element's
+   * value type". Only this relation disagreed, so
+   * `let o: { a: uint8 } = ...; f(o)` was refused at a
+   * `{ [key: string]: any }` parameter while the same value written INLINE was
+   * accepted - and `serialize`/`deserialize`, which the design calls the
+   * principal use of the form, could not be written with typed objects.
+   *
+   * COVARIANT on the value, by `IsSubtype`, matching the first arm EXACTLY - it
+   * reads `IsSubtype(sx.Value, tx.Value)`, not `SameType`.
+   *
+   * That is easy to misread: for NUMERIC value types the two are
+   * indistinguishable, because #sec-aredisjoint makes two primitives disjoint
+   * unless they are the same, so `{ [k: string]: uint8 }` is not a subtype of
+   * `{ [k: string]: int32 }` under EITHER rule. `any` is what separates them -
+   * `uint8` IS a subtype of `any` - and it is the value type the design's own
+   * `{ [key: string]: any }` uses throughout.
+   *
+   * A property t declares BY NAME is t's own business and is judged by the
+   * property loop above, so it is skipped here.
+   */
+  const indexOk = t.IndexSignatures.every((tx) => s.IndexSignatures.some((sx) => SameType(sx.Key, tx.Key) && IsSubtype(sx.Value, tx.Value, assumptions))
+    || (s.IndexSignatures.length === 0
+      && s.Properties.every((sp) => typeof sp.key !== 'string'
+        || !keyTypeAdmitsStringKey(tx.Key)
+        || t.Properties.some((tp) => tp.key === sp.key)
+        || IsSubtype(sp.type, tx.Value, assumptions))));
   return propsOk && indexOk;
 }
 

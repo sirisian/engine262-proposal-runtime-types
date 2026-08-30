@@ -253,6 +253,36 @@ test('every declaration of a `partial interface` contributes its members', () =>
   expect(accepts('interface P { n: int32 } partial interface P { [k: string]: int32 } let c: P = { n: (1 := int32), zz: (2 := int32) };')).toBe(true);
 });
 
+test('an object type is a subtype of an index-signature type it satisfies', () => {
+  // D85: `IsObjectSubtype` covered t's signatures only from s's OWN signatures,
+  // so `every(... some(...))` was vacuously false for a source declaring none.
+  // `{ x: int32, [k: string]: int32 }` passed where `{ x: int32 }` did not.
+  expect(evaluated('type F = { }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
+  expect(evaluated('type F = { x: int32 }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
+  expect(evaluated('type F = { x: string }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('false');
+
+  // COVARIANT on the value, matching the arm it extends. Numeric value types
+  // cannot show this - two primitives are disjoint unless the same
+  // (#sec-aredisjoint) - so `any` is the row that distinguishes covariance from
+  // invariance, and it is what the design's `{ [key: string]: any }` uses.
+  expect(evaluated('type F = { x: uint8 }; type T = { [k: string]: any }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
+  expect(evaluated('type F = { x: uint8 }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('false');
+
+  // The design's own worked pattern: a TYPED value reaching an index-signature
+  // position, which `dependentrecordtypes.md` calls the principal use.
+  expect(accepts('function f(data: { [key: string]: any }) { return 1; } let o: { a: uint8 } = { a: (1 := uint8) }; f(o);')).toBe(true);
+  expect(accepts('function g(): { [key: string]: any } { let o: { a: uint8 } = { a: (1 := uint8) }; return o; }')).toBe(true);
+  // ...and D76, which was this defect seen through an intersection.
+  expect(accepts('let c: { [k: string]: int32 } & { } = { };')).toBe(true);
+  expect(accepts('let c: { [k: string]: int32 } & { } = { x: (1 := int32) };')).toBe(true);
+
+  // A property t declares BY NAME is judged by the property loop, not the
+  // signature, so a named member of a different type is still fine.
+  expect(evaluated('type F = { x: string }; type T = { x: string, [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
+  // ...and D77's value rule at a literal is untouched.
+  expect(accepts('let c: { [k: string]: int32 } = { x: "s" };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
