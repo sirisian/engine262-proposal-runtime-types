@@ -3210,6 +3210,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Map<ParseNode, Known>();
   /**
+   * The RETURN type a METHOD written in an object literal is expected to have,
+   * taken from the member the target declares (D71's body half).
+   *
+   * `contextualReturnTypes` above is set only for an `ArrowFunction` or a
+   * `FunctionExpression`, and `enterFunction` enforces a return only where a
+   * `returnAnnotation` was WRITTEN - so `let p: { m(): uint8 } = { m() { return
+   * "s"; } }` was accepted while the ANNOTATED body, the ARROW member
+   * `{ m: () => "s" }` and a standalone function were all refused.
+   */
+  const contextualMethodReturns = new Map<ParseNode, Known>();
+  /**
    * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
    * function literal's and read in the same place - `staticType`'s own arm for
    * the node (D43).
@@ -8460,6 +8471,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (typeof methodKey !== 'string') {
           return null;
         }
+        // The member the TARGET declares gives this method its return type
+        // (D71's body half), recorded against the method node and read by
+        // `enterFunction` - which otherwise enforces a return only where one was
+        // written.
+        const wantedMethod = wantedOf(methodKey);
+        const wantedSignatures = (wantedMethod as { Kind?: string, Signatures?: readonly { Return?: TypeRecord | null }[] } | null);
+        if (wantedSignatures?.Kind === 'function' && wantedSignatures.Signatures?.length === 1) {
+          const wantedReturn = wantedSignatures.Signatures[0].Return;
+          if (wantedReturn) {
+            contextualMethodReturns.set(member as ParseNode, wantedReturn as Known);
+          }
+        }
         Properties.push({
           key: methodKey,
           type: { Kind: 'function', Signatures: [] } as unknown as TypeRecord,
@@ -10334,7 +10357,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     errors.push((Throw.TypeError('$1 is protected', Value(String(prop.key))) as ThrowCompletion).Value as ObjectValue);
   };
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean) => {
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // PLAN-async-generator-types.md F188 / OQ1-C. A `return` is compared against
     // what the function RETURNS, and for a generator that is the _R_ of
@@ -10351,9 +10374,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // annotation maps to `Generator.<Y, void, void>`, so its _R_ is `void` and a
     // value-returning `return` is refused - which is the rule OQ1-C chose, and
     // it falls out of the mapping rather than needing one of its own.
-    const declaredForReturn = checkReturns && returnAnnotation
-      ? resolveType(returnAnnotation.Type)
+    // A METHOD in an object literal has no written annotation; its return comes
+    // from the member the target declares (D71's body half). Either source
+    // yields a declared return, and the gates below test THAT rather than the
+    // presence of an annotation.
+    const declaredForReturn = checkReturns
+      ? (returnAnnotation ? resolveType(returnAnnotation.Type) : (contextualReturn ?? null))
       : null;
+    const hasDeclaredReturn = !!returnAnnotation || !!contextualReturn;
     const generatorReturn = generatorType
       ? ((generatorType as { Arguments?: readonly TypeRecord[] }).Arguments?.[1] ?? null)
       : null;
@@ -10436,6 +10464,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const proven = returnsProven.pop();
     const declaredReturn = returnTypes[returnTypes.length - 1];
+    // This arm marks a WRITTEN annotation elidable, so it keeps testing
+    // `returnAnnotation` - a contextual return has no annotation to elide.
     if (checkReturns && returnAnnotation && declaredReturn && proven
         && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
       elidableAnnotations.add(returnAnnotation);
@@ -10443,7 +10473,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // PLAN-implicit-return.md phase 1: MEASURE ONLY. Counts what the Early
     // Error would reject, without rejecting anything, so the blast radius is a
     // number before it is a decision.
-    if (checkReturns && returnAnnotation && declaredReturn
+    if (checkReturns && hasDeclaredReturn && declaredReturn
       // PLAN-async-generator-types.md phase 1. A GENERATOR or ASYNC function
       // does not return its annotation's type by falling off its end: a
       // generator that reaches its end returns from the ITERATOR, whose type is
@@ -12114,7 +12144,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
         return;
       case 'MethodDefinition':
-        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
+          undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
         return;
       case 'ClassDeclaration':
       case 'ClassExpression': {

@@ -52,6 +52,21 @@ test('a method in an object type is checked, and its type parameters are in scop
   expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); } };')).toBe(true);
   expect(accepts('let p: { m(): uint8, n: uint8 } = { m() { return (1 := uint8); }, n: 1 };')).toBe(true);
 
+  // D71's body half: an UNANNOTATED method body's return, taken from the member
+  // the target declares. `enterFunction` enforced a return only where one was
+  // WRITTEN, so this escaped while the annotated, arrow and standalone
+  // spellings were all refused.
+  expect(accepts('let p: { m(): uint8 } = { m() { return "s"; } };')).toBe(false);
+  expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('let p: { m(): uint8 } = { m() { return 1; } };')).toBe(true);
+  expect(accepts('let p: { m(): void } = { m() { } };')).toBe(true);
+  // ...and the three spellings that already worked must keep working.
+  expect(accepts('let p: { m(): uint8 } = { m(): uint8 { return "s"; } };')).toBe(false);
+  expect(accepts('let p: { m: () => uint8 } = { m: () => "s" };')).toBe(false);
+  expect(accepts('class C { m(): uint8 { return "s"; } }')).toBe(false);
+  // A method with NO contextual type is not constrained by this.
+  expect(accepts('let p = { m() { return "s"; } };')).toBe(true);
+
   // D67: an interface with a method reaches an object type, both readonly.
   expect(accepts(`interface S { m(): uint8; }
     let s: S = { m() { return (0 := uint8); } };
