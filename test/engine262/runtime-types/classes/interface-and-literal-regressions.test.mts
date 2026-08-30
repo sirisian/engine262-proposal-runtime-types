@@ -148,9 +148,13 @@ test('an untyped literal adapts at an INTERSECTION where the arms agree', () => 
   expect(accepts('let c: { x?: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
   expect(accepts('let c: { readonly x: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
 
-  // A UNION is deliberately untouched - satisfied by ONE arm, so a key with a
-  // different type in each has no single answer.
-  expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(false);
+  // A UNION adapts too (D89), where every arm declaring the key AGREES - here
+  // only one arm declares `x`, so it is unambiguous.
+  expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(true);
+  // ...and where the arms DISAGREE nothing is adapted, so the member widens and
+  // the literal is refused. #sec-union-boundary-selection decides that case for
+  // a VALUE; deciding it for a LITERAL is an open design question.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
 
   // ...and the wrong-value twins.
   expect(accepts(`${arms} let c: C = { x: "s", y: (2 := int32) };`)).toBe(false);
@@ -382,10 +386,13 @@ test("an object literal's shape carries readonly", () => {
   expect(accepts('let s: { a: int32 } = { a: (1 := int32) }; let c: { readonly a: int32 } = s;')).toBe(true);
   expect(evaluated('type R = { readonly a: int32 }; type W = { a: int32 }; String(Reflect.isAssignable((type R), (type W)));')).toBe('false');
 
-  // A readonly INNER member at a writable outer one stays REFUSED: the outer is
-  // invariant, so it needs SameType, and the two inner records differ by the
-  // flag. A BINDING of the same value refuses identically.
-  expect(accepts('let c: { a: { readonly x: int32 } } | { y: string } = { a: { x: (1 := int32) } };')).toBe(false);
+  // A readonly INNER member: a LITERAL adapts to it, at a union as at a single
+  // target (D89 gave the union a wanted type, so the two agree), while a BINDING
+  // of an already-typed value does not - a writable source cannot satisfy a
+  // readonly target. The literal/binding split is the point: a literal is
+  // created at the target type, a binding already has one.
+  expect(accepts('let c: { a: { readonly x: int32 } } | { y: string } = { a: { x: (1 := int32) } };')).toBe(true);
+  expect(accepts('let c: { a: { readonly x: int32 } } = { a: { x: (1 := int32) } };')).toBe(true);
   expect(accepts('let s: { a: { x: int32 } } = { a: { x: (1 := int32) } }; let c: { a: { readonly x: int32 } } = s;')).toBe(false);
 
   // ...and a wrong value is still refused.

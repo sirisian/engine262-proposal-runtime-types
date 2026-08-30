@@ -8593,7 +8593,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (direct) {
         return direct;
       }
-      if ((wanted as { Kind?: string } | undefined)?.Kind !== 'intersection') {
+      const wantedKind = (wanted as { Kind?: string } | undefined)?.Kind;
+      // A UNION's arms are consulted the way an intersection's are (D89), and
+      // the rule is the same one for a different reason.
+      //
+      // #sec-union-boundary-selection settles "which arm" for a VALUE: "which
+      // one is decided by what the VALUE is rather than by where a member was
+      // written ... A rule that read the order of the members would therefore
+      // give one type two behaviours." So the FIRST arm declaring the key is not
+      // an answer, and the engine already follows that rule for a scalar -
+      // `uint8 | uint32` and `uint32 | uint8` both report `uint8`, the NARROWEST,
+      // whichever way they are written.
+      //
+      // Taken only where every arm declaring the key AGREES, by `SameType`.
+      // Where they disagree there is no single answer and nothing is adapted,
+      // so the member widens and the literal is refused as before - deciding
+      // that case is a design question this does not settle.
+      //
+      // An arm that does not declare the key at all is passed over: a union is
+      // satisfied by ONE arm, so a key only one arm declares is unambiguous.
+      if (wantedKind === 'union') {
+        let unionAgreed: TypeRecord | null = null;
+        for (const arm of (wanted as unknown as { Members?: readonly TypeRecord[] }).Members ?? []) {
+          const found = propertiesOf(arm)?.find((q) => q.key === key)?.type;
+          if (!found) {
+            continue;
+          }
+          if (unionAgreed && !SameType(unionAgreed, found)) {
+            return null;
+          }
+          unionAgreed = found;
+        }
+        return unionAgreed;
+      }
+      if (wantedKind !== 'intersection') {
         return null;
       }
       let agreed: TypeRecord | null = null;
