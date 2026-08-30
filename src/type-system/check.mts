@@ -7065,7 +7065,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
-    const Properties: { key: string, type: TypeRecord, optional: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may (F59). A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
@@ -7179,7 +7179,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (t) {
-            Properties.push({ key, type: t, optional: false });
+            // `readonly` set for completeness (D91). Not observable here - a
+            // class reaches the relation as a ~nominal~ judged by identity, so
+            // these records never meet the exact-match arm - but a record either
+            // carries its fields or it does not, and three defects this session
+            // were a field missing from a record nothing happened to read.
+            //
+            // `false` preserves the current answer. Whether a GETTER-only member
+            // is readonly is a separate question and is not decided here.
+            Properties.push({ key, type: t, optional: false, readonly: false });
             getterKeys.add(key);
           }
           continue;
@@ -7245,7 +7253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = resolveType(f.TypeAnnotation.Type);
       if (t) {
-        Properties.push({ key, type: t, optional: false, protected: (f as { protected?: boolean }).protected === true });
+        Properties.push({ key, type: t, optional: false, readonly: false, protected: (f as { protected?: boolean }).protected === true });
         // An `accessor` is a FieldDefinition carrying the marker, and it is the
         // one member kind whose OVERRIDE is invariant - recorded here because
         // the Properties list keeps a type per key and no member kind.
@@ -8524,7 +8532,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (members.length === 0) {
       return { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as Known;
     }
-    const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean }[] = [];
     // The target's member types, where the literal has a target. Recorded by
     // `staticTypeIn` because this operation is reached from `staticType`'s own
     // arm and cannot take one as a parameter.
@@ -8643,6 +8651,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           key: methodKey,
           type: { Kind: 'function', Signatures: [] } as unknown as TypeRecord,
           optional: false,
+          readonly: false,
         });
         continue;
       }
@@ -8708,7 +8717,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
         ? wantedMember
         : widen(memberType) as TypeRecord;
-      Properties.push({ key, type: adapted, optional: false });
+      // `readonly` is SET, not left absent (D91). A Property Type Record has a
+      // [[Readonly]] field (#sec-type-records), and `relations.mts`'s exact-match
+      // arm compares it with `===` - so a record omitting it carried `undefined`
+      // where a written type carries `false`, and two structurally identical
+      // objects were not `SameType`.
+      //
+      // Measured: `ro undefined/false sameType=true` for the member types, and
+      // the comparison failed anyway. That made an inner `{ x: int32 }` unequal,
+      // which failed the member holding it, which refused
+      // `let c: { a: { x: int32 } } | { y: string } = { a: { x: (1 := int32) } }`
+      // - a literal matching the first arm exactly.
+      //
+      // Only a UNION surfaced it: a single or intersection target reaches
+      // `checkObjectLiteralAgainst`, which compares members individually and
+      // never asks whether the whole literal is the SAME TYPE.
+      Properties.push({ key, type: adapted, optional: false, readonly: false });
     }
     return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
   };

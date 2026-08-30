@@ -361,6 +361,39 @@ test('the runtime substitution walk reaches every kind it must', () => {
   expect(rejects('interface Tree<T> { v: T, kids: [].<Tree.<T>> }')).toBe(false);
 });
 
+test("an object literal's shape carries readonly", () => {
+  // D91: `objectLiteralShape` pushed `{ key, type, optional }` with no
+  // `readonly`, so a literal's property records held `undefined` where a written
+  // type holds `false`, and relations.mts's exact-match arm compares them with
+  // `===`. Instrumented: `ro undefined/false sameType=true` - the member TYPES
+  // matched and the comparison failed on the flag.
+  //
+  // Only a UNION surfaced it. A single or intersection target reaches
+  // `checkObjectLiteralAgainst`, which compares members individually and never
+  // asks whether the whole literal is the SAME TYPE; a union falls through to
+  // `requireAssignable`, where an invariant member comparison needs it.
+  expect(accepts('let c: { a: { x: int32 } } | { y: string } = { a: { x: (1 := int32) } };')).toBe(true);
+  expect(accepts('let c: { a: { x: int32 } } = { a: { x: (1 := int32) } };')).toBe(true);
+  expect(accepts('let c: { a: { x: int32 } } & { } = { a: { x: (1 := int32) } };')).toBe(true);
+
+  // The readonly rules are ASYMMETRIC and both must survive: a readonly TARGET
+  // takes a writable source covariantly, and a readonly SOURCE does not satisfy
+  // a writable target.
+  expect(accepts('let s: { a: int32 } = { a: (1 := int32) }; let c: { readonly a: int32 } = s;')).toBe(true);
+  expect(evaluated('type R = { readonly a: int32 }; type W = { a: int32 }; String(Reflect.isAssignable((type R), (type W)));')).toBe('false');
+
+  // A readonly INNER member at a writable outer one stays REFUSED: the outer is
+  // invariant, so it needs SameType, and the two inner records differ by the
+  // flag. A BINDING of the same value refuses identically.
+  expect(accepts('let c: { a: { readonly x: int32 } } | { y: string } = { a: { x: (1 := int32) } };')).toBe(false);
+  expect(accepts('let s: { a: { x: int32 } } = { a: { x: (1 := int32) } }; let c: { a: { readonly x: int32 } } = s;')).toBe(false);
+
+  // ...and a wrong value is still refused.
+  expect(accepts('let c: { a: { x: int32 } } | { y: string } = { a: { x: "s" } };')).toBe(false);
+  // An OPTIONAL member, the flag set beside this one, is unaffected.
+  expect(accepts('let c: { a?: int32 } = { };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
