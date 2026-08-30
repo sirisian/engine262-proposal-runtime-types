@@ -1536,23 +1536,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * against a bare `T` would refuse `id(5)` for `function id<T>(v: T): T`,
    * which is the ordinary way a generic is called.
    */
-  const mentionsTypeParameter = (t: Known): boolean => {
+  const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): boolean => {
     if (!t) {
       return false;
     }
+    // A record already being asked about contributes no NEW parameter mention
+    // (D98), so `false` is the honest answer on a revisit rather than a guess.
+    //
+    // This is the THIRD walk of this shape: D94 guarded `eraseMetadata` and
+    // `literalFitsNumericType` after a self-referential union overflowed the
+    // host stack. Here the cyclic record is a recursive ALIAS reached through a
+    // function PARAMETER inside a BLOCK - at top level the same program is
+    // merely unchecked (D96), and the block takes a path that walks the type
+    // instead of decaying it to `any`.
+    if (seen.has(t)) {
+      return false;
+    }
+    seen.add(t);
     if (t.Kind === 'parameter') {
       return true;
     }
     const withMembers = t as { Members?: readonly TypeRecord[] };
-    if (withMembers.Members?.some((m) => mentionsTypeParameter(m))) {
+    if (withMembers.Members?.some((m) => mentionsTypeParameter(m, seen))) {
       return true;
     }
     const withArgs = t as { Arguments?: readonly (TypeRecord | number)[] };
-    if (withArgs.Arguments?.some((a) => typeof a !== 'number' && mentionsTypeParameter(a))) {
+    if (withArgs.Arguments?.some((a) => typeof a !== 'number' && mentionsTypeParameter(a, seen))) {
       return true;
     }
     const withElement = t as { Element?: TypeRecord };
-    if (withElement.Element && mentionsTypeParameter(withElement.Element)) {
+    if (withElement.Element && mentionsTypeParameter(withElement.Element, seen)) {
       return true;
     }
     // A TUPLE's elements, beside the array's singular [[Element]] one line above
@@ -1560,14 +1573,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // apart - so `type P<T> = [T, string]` read as mentioning no parameter, and
     // the substitution arm keyed on this predicate never ran for it.
     const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
-    if (withElements.Elements?.some((el) => !!el?.Type && mentionsTypeParameter(el.Type))) {
+    if (withElements.Elements?.some((el) => !!el?.Type && mentionsTypeParameter(el.Type, seen))) {
       return true;
     }
     // An array's EXTENT may be a VALUE PARAMETER (D40) - the same omission the
     // next comment records for a function type's signature.
     const withExtentM = t as { Extent?: number | 'dynamic' | TypeRecord };
     if (withExtentM.Extent && typeof withExtentM.Extent === 'object'
-        && mentionsTypeParameter(withExtentM.Extent as TypeRecord)) {
+        && mentionsTypeParameter(withExtentM.Extent as TypeRecord, seen)) {
       return true;
     }
     // A FUNCTION type mentions a parameter through its signature. Without this
@@ -1583,8 +1596,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const withSignatures = t as {
       Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[],
     };
-    if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type))
-      || (!!sig.Return && mentionsTypeParameter(sig.Return)))) {
+    if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type, seen))
+      || (!!sig.Return && mentionsTypeParameter(sig.Return, seen)))) {
       return true;
     }
     // An OBJECT type mentions a parameter through its members. An interface
@@ -1612,12 +1625,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const withIndexSignatures = t as {
       IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
     };
-    if (withIndexSignatures.IndexSignatures?.some((ix) => (!!ix?.Key && mentionsTypeParameter(ix.Key))
-      || (!!ix?.Value && mentionsTypeParameter(ix.Value)))) {
+    if (withIndexSignatures.IndexSignatures?.some((ix) => (!!ix?.Key && mentionsTypeParameter(ix.Key, seen))
+      || (!!ix?.Value && mentionsTypeParameter(ix.Value, seen)))) {
       return true;
     }
     const withProperties = t as { Properties?: readonly { type?: TypeRecord }[] };
-    return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type));
+    return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type, seen));
   };
 
   /**

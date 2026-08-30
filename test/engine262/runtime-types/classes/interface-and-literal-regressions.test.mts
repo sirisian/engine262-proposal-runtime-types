@@ -529,6 +529,30 @@ test('a nested literal at a recursive type takes its wanted member types', () =>
   expect(accepts('type P = { v: uint8, inner: { w: uint8 } }; const p: P = { v: 1, inner: { w: 2, u: "x" } };')).toBe(false);
 });
 
+test('mentionsTypeParameter terminates on a cyclic record', () => {
+  // D98: the THIRD walk of this shape, after D94 guarded `eraseMetadata` and
+  // `literalFitsNumericType`. A recursive ALIAS reached through a function
+  // PARAMETER inside a BLOCK overflowed the host stack - at top level the same
+  // program is merely unchecked (D96), because the block takes a path that
+  // WALKS the type instead of decaying it to `any`.
+  //
+  // `false` on a revisit is the honest answer: a record already being asked
+  // about contributes no new parameter mention.
+  const L = 'type L = { v: uint8, next: L | null }; ';
+  // Not an overflow, and correctly REFUSED - in a block the parameter is
+  // genuinely checked once the walk terminates.
+  expect(rejects(`${L} { function f(p: L) { return 1; } f({ v: "s", next: null }); }`)).toBe(true);
+  expect(accepts(`${L} { function f(p: L) { return 1; } f({ v: (1 := uint8), next: null }); }`)).toBe(true);
+
+  // The generic machinery this predicate gates is unchanged - it is what D62,
+  // D86 and D87 all turned on, so a `seen` set that returned the wrong answer
+  // would show here first.
+  expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
