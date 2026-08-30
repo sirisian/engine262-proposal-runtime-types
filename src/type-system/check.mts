@@ -3120,9 +3120,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         AssignmentExpression?: ParseNode,
       };
       const key = memberKeyOf(def.PropertyName);
+      // A member's wanted type: its NAMED declaration, or failing that the INDEX
+      // SIGNATURE that admits its key (D77).
+      //
+      // `Properties` alone left a key reached through a signature with no
+      // `declared` at all, so the block below was skipped and its value was
+      // checked against NOTHING - `let c: { [k: string]: int32 } = { x: "s" }`
+      // was accepted, and `{ [k: string]: uint8 } = { x: 999 }` with it. At a
+      // RETURN type and at an INTERFACE the run time misses them too, so they
+      // were enforced nowhere.
+      //
+      // `keyAdmittedBy` is the same predicate the freshness rule below already
+      // uses to decide whether a key is EXCESS: the machinery answered the KEY
+      // question and was never asked the VALUE question.
+      //
+      // NAMED first, as it already was - a named member beside a signature keeps
+      // its own type and is enforced with it - and the RAW key is passed, since
+      // `keyAdmittedBy` tests `typeof key !== 'string'` for a symbol signature
+      // and a stringified key would match the wrong one.
       const declared = key === undefined
         ? undefined
-        : target.Properties.find((prop) => prop.key === key);
+        : target.Properties.find((prop) => prop.key === key)
+          ?? (() => {
+            const admitting = target.IndexSignatures.find((ix) => keyAdmittedBy(key, ix.Key));
+            return admitting
+              ? { key, type: admitting.Value, optional: false, readonly: false } as typeof target.Properties[number]
+              : undefined;
+          })();
       if (declared && def.AssignmentExpression) {
         // PLAN-declarative-checker-facts.md phase 1b. A method's [[ThisType]]
         // is the SELF MARKER - "the receiver this method expects" - which has
