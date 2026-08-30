@@ -83,12 +83,23 @@ test('an untyped literal adapts at an INTERSECTION where the arms agree', () => 
   // The arms must AGREE: taking either would admit a literal at a target
   // wanting both. This is the OPPOSITE of D75's rule for the same target form.
   //
-  // REGRESSED (D84): this was measured REFUSED when D70 landed and is now
-  // accepted STATICALLY, caught by the run-time boundary alone. D75's merge
-  // unions the arms' [[Properties]], so the merged shape carries `x` twice and
-  // the walk matches the first. Asserted as `rejects` so the row keeps its
-  // value while the static half is restored.
-  expect(rejects('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(true);
+  // D84 regressed this and it is restored: D75's merge concatenated the arms'
+  // [[Properties]], so a key two arms declare appeared TWICE and the walk
+  // matched the first. Merged BY KEY now, with a disagreeing key taking `never`
+  // - declared, so freshness still admits it, and satisfied by nothing.
+  expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
+  // ...at every position, and where the RUN TIME misses it: a value typed for
+  // the FIRST arm, and a return type.
+  expect(accepts('let c: { x: int32 } & { x: string } = { x: (1 := int32) };')).toBe(false);
+  expect(accepts('function f(): { x: int32 } & { x: string } { return { x: 1 }; }')).toBe(false);
+  expect(accepts('function f(p: { x: int32 } & { x: string }) { return 1; } f({ x: 1 });')).toBe(false);
+  expect(accepts('let c: { a: { x: int32 } } & { a: { x: string } } = { a: { x: 1 } };')).toBe(false);
+  // An INTERFACE arm is `nominal`, so the merge never fires and assignability
+  // refuses it - a path the fix must not disturb.
+  expect(accepts('interface A { x: int32 } interface B { x: string } let c: A & B = { x: 1 };')).toBe(false);
+  // ...while an OPTIONAL and a READONLY difference are not conflicts.
+  expect(accepts('let c: { x?: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: { readonly x: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
 
   // A UNION is deliberately untouched - satisfied by ONE arm, so a key with a
   // different type in each has no single answer.

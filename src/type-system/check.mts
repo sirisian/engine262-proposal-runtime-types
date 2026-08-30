@@ -3509,12 +3509,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const mergeableArms = intersectionArms.length > 0
         && intersectionArms.every((arm) => arm.Kind === 'object'
           && ((arm as unknown as { IndexSignatures?: readonly unknown[] }).IndexSignatures ?? []).length === 0);
+      // Merged BY KEY, not concatenated (D84). Flat-mapping the arms put a key
+      // two arms declare into the list TWICE, and `checkObjectLiteralAgainst`
+      // matches the first with `Properties.find(...)` - so
+      // `let c: { x: int32 } & { x: string } = { x: 1 }` was checked against
+      // `int32` alone and accepted, where D70's `wantedOf` had refused it for
+      // want of agreement between the arms. The merge introduced a second,
+      // laxer path to a question D70 had already answered.
+      //
+      // A key every arm agrees on keeps its type. A key the arms DISAGREE on
+      // takes `never`: it stays DECLARED, so freshness still admits it - the
+      // arms UNION their keys (D75) - while no value satisfies it, which is what
+      // an intersection of incompatible member types means. The two rules stay
+      // separate, which is the whole difficulty of this seam.
+      //
+      // `never` is what the engine itself answers for a disjoint intersection -
+      // `(type uint8 & int32)` and `(type int32 & string)` both display as
+      // `never` - so this reports what the type already says rather than
+      // inventing a verdict.
+      const mergedProperties: { key: string, type: TypeRecord }[] = [];
+      if (mergeableArms) {
+        for (const arm of intersectionArms) {
+          for (const property of ((arm as unknown as {
+            Properties?: readonly { key: string, type: TypeRecord }[],
+          }).Properties ?? [])) {
+            const already = mergedProperties.find((q) => q.key === property.key);
+            if (!already) {
+              mergedProperties.push({ ...property });
+            } else if (!SameType(already.type, property.type)) {
+              already.type = neverType;
+            }
+          }
+        }
+      }
       const walkable = mergeableArms
         ? ({
           Kind: 'object',
-          Properties: intersectionArms.flatMap((arm) => (arm as unknown as {
-            Properties?: readonly unknown[],
-          }).Properties ?? []),
+          Properties: mergedProperties,
           IndexSignatures: [],
         } as unknown as Known)
         : shape;
