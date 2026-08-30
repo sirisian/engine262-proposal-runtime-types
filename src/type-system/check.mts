@@ -3542,7 +3542,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // flags false - the gate admitted a composite and then disabled every
         // check inside it, which silenced the MISSING-member rule that
         // assignability had been catching.
-        const structural = (contextual.Kind === 'object' || mergeableArms)
+        // Hoisted above `structural`, which now reads it (D79).
+        const targetIsInterface = contextual.Kind === 'nominal'
+          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
+        // `targetIsInterface` joins the sources of `structural` (D79). The
+        // comment above lists an INTERFACE among the three places freshness is
+        // withheld, "whose structure here does not carry what a `partial
+        // interface` contributes, so a member a partial declares reads as
+        // undeclared".
+        //
+        // That WAS true and is no longer: the structure held ONE declaration -
+        // the first at one site and the last at another - and D82 made every
+        // declaration of a name contribute. Applying this before D82 refused a
+        // correct partial-interface literal, which is why the two are ordered.
+        //
+        // Without it an interface accepted a property it does not declare, at
+        // the RUN TIME as well, which misses the case entirely - so it could not
+        // be left to the boundary as an ordinary member could.
+        //
+        // A key an INDEX SIGNATURE admits is still not excess: D78 made an
+        // interface's signatures survive into the structure, and the rule below
+        // consults them through `keyAdmittedBy`.
+        const structural = (contextual.Kind === 'object' || mergeableArms || targetIsInterface)
           && (shape.Properties.length > 0 || shape.IndexSignatures.length > 0)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
         // An INTERFACE target requires its members too (D64 row 4). It is a
@@ -3553,8 +3574,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A CLASS nominal is NOT included: whether an object literal may satisfy
         // a class type at all is D61, and widening here would answer it by
         // accident.
-        const targetIsInterface = contextual.Kind === 'nominal'
-          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
         const requiresMembers = (structural || targetIsInterface || mergeableArms)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
         checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
