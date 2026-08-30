@@ -1716,6 +1716,48 @@ export function SubstituteTypeArguments(
         return out;
       }
     }
+    // An ARRAY's element, and its EXTENT where that is a Type Record (D88).
+    //
+    // This walk dispatches on [[Kind]] and had five arms - parameter, object,
+    // function, tuple, union/intersection - where `substituteTypeParameters` in
+    // `check.mts` dispatches on FIELDS. A kind with no arm here reaches
+    // `return r` at the tail and comes back UNSUBSTITUTED, in silence, which is
+    // why `interface B<T> { n: [].<T> }` was satisfied by nothing while the
+    // ALIAS spelling of the same thing worked.
+    //
+    // [[Extent]] is "a non-negative integer or ~dynamic~" per #sec-type-records
+    // and may also be a Type Record for a VALUE parameter (D40), which the alias
+    // walk already reads that way - so it is walked rather than assumed numeric.
+    if (r.Kind === 'array') {
+      const out = { ...r } as TypeRecord;
+      seen.set(r, out);
+      const withArray = r as unknown as { Element?: TypeRecord, Extent?: number | 'dynamic' | TypeRecord };
+      if (withArray.Element) {
+        (out as unknown as { Element: unknown }).Element = walk(withArray.Element);
+      }
+      if (withArray.Extent && typeof withArray.Extent === 'object') {
+        (out as unknown as { Extent: unknown }).Extent = walk(withArray.Extent as TypeRecord);
+      }
+      return out;
+    }
+    // A nested NOMINAL's arguments (D88). `Outer<T>` carrying `Inner.<T>` is
+    // ordinary generic code and was refused, while `Inner.<uint8>` - a CONCRETE
+    // argument, needing no substitution - passed. That difference is what says
+    // this is [[Arguments]].
+    //
+    // [[Structure]] is NOT walked: it is populated from the declaration rather
+    // than rewritten in place, and D71 handles the reading side.
+    if (r.Kind === 'nominal') {
+      const withArguments = r as unknown as { Arguments?: readonly (TypeRecord | number)[] };
+      if (withArguments.Arguments && withArguments.Arguments.length > 0) {
+        const out = { ...r } as TypeRecord;
+        seen.set(r, out);
+        (out as unknown as { Arguments: unknown }).Arguments = withArguments.Arguments.map((a) => (typeof a === 'number'
+          ? a
+          : walk(a as TypeRecord)));
+        return out;
+      }
+    }
     if (r.Kind === 'union' || r.Kind === 'intersection') {
       const out = { Kind: r.Kind, Members: r.Members } as TypeRecord;
       seen.set(r, out);

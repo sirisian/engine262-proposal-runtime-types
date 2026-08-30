@@ -334,6 +334,33 @@ test('a parameterised tuple substitutes its elements', () => {
   expect(accepts('type A<T> = [].<T>; let a: A.<uint8> = [(1 := uint8)];')).toBe(true);
 });
 
+test('the runtime substitution walk reaches every kind it must', () => {
+  // D88: the walk dispatches on [[Kind]] and had five arms, where the checker's
+  // `substituteTypeParameters` dispatches on FIELDS - so a kind with no arm
+  // returned UNSUBSTITUTED at the tail, silently. That asymmetry is why D86, D87
+  // and D88 were each found on the NOMINAL side after the alias side worked.
+  expect(accepts('interface B<T> { n: [].<T> } let b: B.<uint8> = { n: [(1 := uint8)] };')).toBe(true);
+  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
+  // The arms must COMPOSE: a handled kind containing an unhandled one failed.
+  expect(accepts('interface B<T> { n: [].<[T, string]> } let b: B.<uint8> = { n: [[(1 := uint8), "s"]] };')).toBe(true);
+  expect(accepts('interface B<T> { n: [[].<T>, string] } let b: B.<uint8> = { n: [[(1 := uint8)], "s"] };')).toBe(true);
+  expect(accepts('interface B<T> { n: { m: [].<T> } } let b: B.<uint8> = { n: { m: [(1 := uint8)] } };')).toBe(true);
+
+  // A CONCRETE argument needs no substitution and always passed - that contrast
+  // is what identifies the nested case as [[Arguments]], not [[Structure]].
+  expect(accepts('interface I<T> { v: T } interface B { n: I.<uint8> } let b: B = { n: { v: (1 := uint8) } };')).toBe(true);
+
+  // ...and wrong values still refuse through both new arms.
+  expect(accepts('interface B<T> { n: [].<T> } let b: B.<uint8> = { n: ["s"] };')).toBe(false);
+  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: "s" } };')).toBe(false);
+
+  // Every arm does `seen.set` before filling, so a cycle terminates. Nothing
+  // exercised this before the change; an arm that omits it hangs.
+  expect(rejects('interface Node<T> { v: T, next: Node.<T> | undefined } let n: Node.<uint8> = { v: (1 := uint8), next: undefined };')).toBe(false);
+  expect(rejects('interface A<T> { b: B.<T> | undefined } interface B<T> { a: A.<T> | undefined } let a: A.<uint8> = { b: undefined };')).toBe(false);
+  expect(rejects('interface Tree<T> { v: T, kids: [].<Tree.<T>> }')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
