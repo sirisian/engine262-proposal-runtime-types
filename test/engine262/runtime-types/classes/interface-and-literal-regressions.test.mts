@@ -42,6 +42,16 @@ test('a method in an object type is checked, and its type parameters are in scop
   // D64 row 11: a missing method member.
   expect(accepts('let p: { m(): uint8 } = { };')).toBe(false);
 
+  // D71's shape half: a METHOD written in shorthand made the literal's whole
+  // shape null, so NOTHING about it was checked - not the method, and not its
+  // siblings. Every row below was accepted before.
+  expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); }, u: "s" };')).toBe(false);
+  expect(accepts('let p: { m(): uint8, n: uint8 } = { m() { return (1 := uint8); } };')).toBe(false);
+  expect(accepts('let p: { m(): uint8, n: uint8 } = { m() { return (1 := uint8); }, n: "s" };')).toBe(false);
+  // ...while a correct literal, and a sibling that ADAPTS, still pass.
+  expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('let p: { m(): uint8, n: uint8 } = { m() { return (1 := uint8); }, n: 1 };')).toBe(true);
+
   // D67: an interface with a method reaches an object type, both readonly.
   expect(accepts(`interface S { m(): uint8; }
     let s: S = { m() { return (0 := uint8); } };

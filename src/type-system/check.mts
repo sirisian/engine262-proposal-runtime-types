@@ -8435,6 +8435,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return agreed;
     };
     for (const member of members) {
+      // A METHOD written in shorthand contributes a member rather than voiding
+      // the whole shape (D71, and D84's row G).
+      //
+      // `member.type !== 'PropertyDefinition'` returned null for the LITERAL, so
+      // `{ m() { … } }` had no shape at all and NOTHING about it was checked -
+      // not the method, and not its siblings. Measured, `{ m(): uint8 }` accepted
+      // `{ m() { return "s"; } }` while the arrow spelling `{ m: () => "s" }`
+      // was refused, and an intersection with CONFLICTING method arms accepted a
+      // literal where the data equivalent refused.
+      //
+      // The member is typed as a function whose signature is UNKNOWN: an
+      // unannotated body's return is not inferred here, so `~any~` is the honest
+      // answer for it. That is enough to make the member EXIST - so freshness,
+      // the missing-member rule and a non-function value all see it - without
+      // claiming a return type this pass has not computed. Checking the body
+      // against the declared signature is D71's other half and is not this.
+      if (member && member.type === 'MethodDefinition') {
+        const asMethodDefinition = member as unknown as {
+          ClassElementName?: { name?: string, value?: string } | null,
+        };
+        const methodKey = asMethodDefinition.ClassElementName?.name
+          ?? asMethodDefinition.ClassElementName?.value;
+        if (typeof methodKey !== 'string') {
+          return null;
+        }
+        Properties.push({
+          key: methodKey,
+          type: { Kind: 'function', Signatures: [] } as unknown as TypeRecord,
+          optional: false,
+        });
+        continue;
+      }
       if (!member || member.type !== 'PropertyDefinition') {
         return null;
       }
