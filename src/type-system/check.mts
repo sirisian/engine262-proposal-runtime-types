@@ -1555,6 +1555,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // and an interface each failed twice over - neither constraining a variable
     // nor being recognised as mentioning one. Fixing either half alone changes
     // nothing observable, which is what made the pair hard to see.
+    // An INDEX SIGNATURE mentions a parameter through either half (D86). The
+    // predicate walked Members, Arguments, Element, Extent, Signatures and
+    // Properties, and not this - so `{ [k: string]: T }` read as mentioning
+    // nothing, and the substitution arm below, which is GATED on this, never
+    // ran for it.
+    //
+    // This is D62's shape exactly: there the same predicate was missing
+    // `Properties`, and `PLAN-D62` §14 records that the substitution arm already
+    // existed and was gated off, so the fix that added an arm changed nothing.
+    // The KEY is walked as well as the value, since `{ [k: K]: V }` may
+    // parameterise either.
+    const withIndexSignatures = t as {
+      IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
+    };
+    if (withIndexSignatures.IndexSignatures?.some((ix) => (!!ix?.Key && mentionsTypeParameter(ix.Key))
+      || (!!ix?.Value && mentionsTypeParameter(ix.Value)))) {
+      return true;
+    }
     const withProperties = t as { Properties?: readonly { type?: TypeRecord }[] };
     return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type));
   };
@@ -2564,13 +2582,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         })),
       } as Known;
     }
-    const withProperties = t as { Properties?: readonly PropertyTypeRecord[] };
-    if (withProperties.Properties && mentionsTypeParameter(t)) {
+    // An INDEX SIGNATURE's halves are substituted beside the properties (D86).
+    // This walk had a `Properties` arm and NO `IndexSignatures` arm at all, so
+    // `interface Box<T> { [k: string]: T }` kept its `T` and `Box.<uint8>` was
+    // satisfied by nothing - not even by a source declaring the very signature
+    // it wanted.
+    //
+    // `SubstituteTypeArguments` in `runtime.mts` copies [[IndexSignatures]]
+    // verbatim and has the same gap, but is NOT the site this reaches: traced,
+    // it is not called for these programs at all.
+    const withProperties = t as {
+      Properties?: readonly PropertyTypeRecord[],
+      IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
+    };
+    if ((withProperties.Properties || withProperties.IndexSignatures) && mentionsTypeParameter(t)) {
       return {
         ...t,
-        Properties: withProperties.Properties.map((prop) => (prop?.type
-          ? { ...prop, type: substituteTypeParameters(prop.type, bindings) }
-          : prop)),
+        ...(withProperties.Properties ? {
+          Properties: withProperties.Properties.map((prop) => (prop?.type
+            ? { ...prop, type: substituteTypeParameters(prop.type, bindings) }
+            : prop)),
+        } : {}),
+        ...(withProperties.IndexSignatures ? {
+          IndexSignatures: withProperties.IndexSignatures.map((ix) => ({
+            ...ix,
+            ...(ix?.Key ? { Key: substituteTypeParameters(ix.Key, bindings) } : {}),
+            ...(ix?.Value ? { Value: substituteTypeParameters(ix.Value, bindings) } : {}),
+          })),
+        } : {}),
       } as Known;
     }
     return t;

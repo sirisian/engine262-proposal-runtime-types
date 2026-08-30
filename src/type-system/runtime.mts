@@ -1658,6 +1658,20 @@ export function SubstituteTypeArguments(
       (out as { Properties: unknown }).Properties = r.Properties.map((prop) => ({
         ...prop, type: walk(prop.type as TypeRecord),
       }));
+      // [[IndexSignatures]] was copied VERBATIM beside a [[Properties]] that is
+      // walked (D86), so a NOMINAL target kept its parameter:
+      // `interface Box<T> { [k: string]: T }` at `Box.<uint8>` was satisfied by
+      // nothing, an exact `{ [k: string]: uint8 }` source included.
+      //
+      // The ALIAS spelling reaches `substituteTypeParameters` in `check.mts`
+      // instead, which had no signature arm at all - two walks, the same gap,
+      // and both needed. The KEY is walked as well as the value, since
+      // `{ [k: K]: V }` may parameterise either.
+      (out as { IndexSignatures: unknown }).IndexSignatures = r.IndexSignatures.map((ix) => ({
+        ...ix,
+        Key: walk(ix.Key as TypeRecord),
+        Value: walk(ix.Value as TypeRecord),
+      }));
       return out;
     }
     // A FUNCTION type's SIGNATURES carry parameters in their Return and their

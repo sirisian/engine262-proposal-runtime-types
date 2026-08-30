@@ -283,6 +283,30 @@ test('an object type is a subtype of an index-signature type it satisfies', () =
   expect(accepts('let c: { [k: string]: int32 } = { x: "s" };')).toBe(false);
 });
 
+test('a parameterised type substitutes its index signatures', () => {
+  // D86: TWO substitution walks, the same gap in each. `substituteTypeParameters`
+  // in check.mts had no signature arm at all and serves the ALIAS spelling;
+  // `SubstituteTypeArguments` in runtime.mts copied [[IndexSignatures]] verbatim
+  // beside a walked [[Properties]] and serves the NOMINAL one. Both were needed.
+  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('type B<T> = { [k: string]: T }; let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
+  // The exact-match row is the sharp one: a source carrying the very signature
+  // the target wants was refused.
+  expect(accepts('interface B<T> { [k: string]: T } let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
+  // The KEY is substituted as well as the value.
+  expect(accepts('type M<K, V> = { [k: K]: V }; let m: M.<string, uint8> = { a: (1 := uint8) };')).toBe(true);
+
+  // ...and a source that does NOT fit still refuses, both ways.
+  expect(accepts('interface B<T> { [k: string]: T } let s: { [k: string]: string } = {}; let b: B.<uint8> = s;')).toBe(false);
+  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: "s" };')).toBe(false);
+
+  // The arm is GATED on `mentionsTypeParameter`, which was missing the same
+  // case - D62's shape, where an arm existed and was gated off so the fix did
+  // nothing. These rows fail if only one half is applied.
+  expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('interface B<T> { m(): T; } let b: B.<uint8> = { m() { return (1 := uint8); } };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
