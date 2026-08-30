@@ -8680,9 +8680,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             contextualMethodReturns.set(member as ParseNode, wantedReturn as Known);
           }
         }
+        // The member takes the signature the TARGET wants, where one is wanted
+        // (D92). D71 introduced `Signatures: []` here deliberately - "without
+        // claiming a return type this pass has not computed" - which is right
+        // for the member WALK, where each member is compared on its own, and
+        // fails at an EXACT-MATCH comparison, where a signature-less function is
+        // not the same type as any signature. `PLAN-D71` section 9 recorded that
+        // as a limit; a union target is where it came due, since a union reaches
+        // neither `checkObjectLiteralAgainst` nor the merge.
+        //
+        // The WANTED signature, not an inferred one, so D71's honesty is kept:
+        // this pass still does not infer a body's return. It records what the
+        // position asks for, exactly as `contextualMethodReturns` above already
+        // does - and the BODY is checked against that return independently, so
+        // adopting the signature does not excuse a wrong body.
+        //
+        // Where nothing is wanted the stub stays, which is also the path this
+        // shape takes when built with no contextual type at all.
         Properties.push({
           key: methodKey,
-          type: { Kind: 'function', Signatures: [] } as unknown as TypeRecord,
+          type: (wantedSignatures?.Kind === 'function' && (wantedSignatures.Signatures?.length ?? 0) === 1
+            ? wantedMethod
+            : { Kind: 'function', Signatures: [] }) as unknown as TypeRecord,
           optional: false,
           readonly: false,
         });

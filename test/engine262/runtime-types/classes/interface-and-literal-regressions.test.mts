@@ -401,6 +401,39 @@ test("an object literal's shape carries readonly", () => {
   expect(accepts('let c: { a?: int32 } = { };')).toBe(true);
 });
 
+test("a literal's method member takes the signature its position wants", () => {
+  // D92: the member was typed `{ Kind: 'function', Signatures: [] }` - D71's
+  // deliberate stub, right for the member WALK where each member is compared on
+  // its own, wrong at an EXACT-MATCH comparison where a signature-less function
+  // is not the same type as any signature. A union reaches neither
+  // checkObjectLiteralAgainst nor the merge, so it is where the limit came due.
+  expect(accepts('let c: { m(): int32 } | { y: string } = { m() { return (1 := int32); } };')).toBe(true);
+  // An ANNOTATED method failed too, so the stub was never about an uninferable
+  // body - the shape builder did not read a signature at all.
+  expect(accepts('let c: { m(): int32 } | { y: string } = { m(): int32 { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m(): int32, x: int32 } | { y: string } = { m() { return (1 := int32); }, x: 1 };')).toBe(true);
+  expect(accepts('interface I { m(): int32; } let c: I | { y: string } = { m() { return (1 := int32); } };')).toBe(true);
+  // Two arms declaring `m` and AGREEING - D89 made wantedOf answer across arms.
+  expect(accepts('let c: { m(): int32 } | { m(): int32, y: string } = { m() { return (1 := int32); } };')).toBe(true);
+
+  // The WANTED signature is adopted, never an inferred one, so the BODY is still
+  // checked against that return independently. These two must keep firing.
+  expect(accepts('let c: { m(): int32 } | { y: string } = { m() { return "s"; } };')).toBe(false);
+  expect(accepts('let p: { m(): uint8 } = { m() { return "s"; } };')).toBe(false);
+  // ...and a non-function value, a method no arm declares, and DISAGREEING arms.
+  expect(accepts('let c: { m(): int32 } | { y: string } = { m: "s" };')).toBe(false);
+  expect(accepts('let c: { y: string } | { z: int32 } = { m() { return (1 := int32); } };')).toBe(false);
+  expect(accepts('let c: { m(): int32 } | { m(): string } = { m() { return (1 := int32); } };')).toBe(false);
+
+  // ARITY tolerance: a zero-parameter method satisfies a one-parameter
+  // signature, at a union as at a single target, an intersection, a binding and
+  // the arrow spelling. Recorded because it looked like a regression - it was
+  // the union catching up with the other four.
+  expect(accepts('let c: { m(a: int32): int32 } | { y: string } = { m() { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m(a: int32): int32 } = { m() { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m: (a: int32) => int32 } = { m: () => (1 := int32) };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
