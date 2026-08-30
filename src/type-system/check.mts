@@ -3716,6 +3716,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * pick up the members of an interface it implements.
    */
   const interfaceNodes = new Map<string, ParseNode>();
+  /**
+   * EVERY declaration of an interface name, in source order (D82).
+   *
+   * `interfaceNodes` holds ONE node - the first at one site, the last at the
+   * other - so a `partial interface` REPLACED the interface's members instead of
+   * adding to them: with `interface P { n: int32 }` and
+   * `partial interface P { u: string }`, `{ n: "s", u: "s" }` was accepted
+   * because `n` was not in the structure at all.
+   *
+   * #sec-partial-declarations: "A `partial` declaration over an INTERFACE may
+   * add members", and a `partial` "re-opens ... and adds". The RUN TIME already
+   * merges (`RuntimeTypesDeclarations.mts:600`); the checker had no `Partial`
+   * handling whatever.
+   */
+  const interfaceDeclarations = new Map<string, ParseNode[]>();
+  const recordInterfaceDeclaration = (name: string, node: ParseNode): void => {
+    const list = interfaceDeclarations.get(name);
+    if (list) {
+      if (!list.includes(node)) {
+        list.push(node);
+      }
+    } else {
+      interfaceDeclarations.set(name, [node]);
+    }
+  };
   /** Alias declarations found by the name pre-pass, resolved on demand. */
   const aliasNodes = new Map<string, ParseNode>();
   /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
@@ -3941,7 +3966,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       typeParameterScopes.push(scopeOfNames(ifaceParamNames));
     }
     try {
-    for (const member of decl.InterfaceMemberList ?? []) {
+    // EVERY declaration of the name contributes, base and `partial` alike (D82),
+    // as `RuntimeTypesDeclarations.mts:600` already does for the run time.
+    //
+    // A member ALREADY DECLARED is left to the run time, which reports
+    // "`n` is already declared on this interface" - #sec-partial-declarations
+    // makes a redeclaration "a *TypeError* rather than an override, so the
+    // meaning of an interface does not depend on the order its declarations
+    // load". Taking the first and not overwriting keeps this pass order-
+    // independent for the programs that are legal.
+    const declarations = interfaceDeclarations.get(name) ?? [decl];
+    for (const member of declarations.flatMap((d) => (d as unknown as {
+      InterfaceMemberList?: readonly ParseNode[],
+    }).InterfaceMemberList ?? [])) {
       if (member.type === 'IndexSignature') {
         // Built as the OBJECT TYPE arm builds one (`check.mts:5027`): the key
         // and value annotations resolved, and the signature skipped where either
@@ -9270,8 +9307,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // pre-pass that collected only classes silently un-checked
         // `class C implements I { }`.
         const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        if (interfaceName && !interfaceNodes.has(interfaceName)) {
-          interfaceNodes.set(interfaceName, n);
+        if (interfaceName) {
+          recordInterfaceDeclaration(interfaceName, n);
+          if (!interfaceNodes.has(interfaceName)) {
+            interfaceNodes.set(interfaceName, n);
+          }
         }
       } else if (n.type === 'TypeAliasDeclaration') {
         // AND ALIASES, for the reason the interface note above gives. An alias
@@ -9573,6 +9613,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkVariancePositions(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
+          recordInterfaceDeclaration(name, n);
           interfaceNodes.set(name, n);
         }
       }
