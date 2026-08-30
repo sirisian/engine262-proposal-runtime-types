@@ -3651,6 +3651,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // accident.
         const requiresMembers = (structural || targetIsInterface || mergeableArms)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
+        // A CLASS type is NOT satisfied by an object literal (D61).
+        //
+        // #sec-object-types: "Every interface has one [a structural form]. A
+        // class has none: a class states a construction and an identity as well
+        // as a shape, and it is the identity that its type is for." OQ22 settled
+        // the same rule from the `implements` side.
+        //
+        // The arm below returns `contextual` - the literal is GIVEN the target's
+        // type and never compared against it - so whatever the member walk did
+        // not catch was accepted by construction: `let c: C = { }` passed with
+        // no member supplied, and `{ a: …, u: "s" }` with an excess one. Only a
+        // WRONG member type was caught, by the walk's own comparison.
+        //
+        // The RUN TIME already refuses it - `[object Object] is not assignable
+        // to "C"` - so this restores the verdict the boundary gives, at the
+        // point the arm skips.
+        //
+        // Keyed on the DECLARATION kind, as `targetIsInterface` above is: an
+        // interface, an object type and an alias all keep taking literals.
+        const targetIsClass = contextual.Kind === 'nominal'
+          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
+        if (targetIsClass) {
+          errors.push((Throw.TypeError(
+            '$1 is not assignable to $2',
+            Value('an object literal'),
+            Value(displayType(contextual as TypeRecord)),
+          ) as { Value: ObjectValue }).Value);
+          return contextual;
+        }
         checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
         return contextual;
       }

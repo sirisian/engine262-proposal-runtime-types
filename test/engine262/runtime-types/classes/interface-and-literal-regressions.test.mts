@@ -253,6 +253,31 @@ test('every declaration of a `partial interface` contributes its members', () =>
   expect(accepts('interface P { n: int32 } partial interface P { [k: string]: int32 } let c: P = { n: (1 := int32), zz: (2 := int32) };')).toBe(true);
 });
 
+test('a CLASS type is not satisfied by an object literal', () => {
+  const C = 'class C { a: uint8 = (0 := uint8); } ';
+  // D61: the literal arm ended `return contextual`, GIVING the literal the
+  // target's type without comparing - so a missing member and an excess one both
+  // passed, and only a wrong member TYPE was caught by the walk's own check.
+  //
+  // #sec-object-types: "Every interface has one [a structural form]. A class has
+  // none: a class states a construction and an identity as well as a shape, and
+  // it is the identity that its type is for."
+  expect(accepts(`${C} let c: C = { a: (1 := uint8) };`)).toBe(false);
+  expect(accepts(`${C} let c: C = { };`)).toBe(false);
+  expect(accepts(`${C} let c: C = { a: (1 := uint8), u: "s" };`)).toBe(false);
+
+  // A class is satisfied by CONSTRUCTION, which is unaffected.
+  expect(accepts(`${C} let c: C = new C();`)).toBe(true);
+  expect(accepts(`${C} class D extends C { } let c: C = new D();`)).toBe(true);
+  expect(accepts('interface I { a: uint8 } class D implements I { a: uint8 = (0 := uint8); } let c: I = new D();')).toBe(true);
+
+  // ...and the other three targets this arm serves still take a literal.
+  expect(accepts('interface I { a: uint8 } let c: I = { a: (1 := uint8) };')).toBe(true);
+  expect(accepts('let c: { a: uint8 } = { a: (1 := uint8) };')).toBe(true);
+  expect(accepts('type A = { a: uint8 }; let c: A = { a: (1 := uint8) };')).toBe(true);
+  expect(accepts(`${C} let c: any = { a: (1 := uint8) };`)).toBe(true);
+});
+
 test('a member already declared on an interface is a TypeError', () => {
   // D83: the run time reported this and the checker accepted it in silence.
   expect(accepts('interface P { n: int32 } partial interface P { n: int32 }')).toBe(false);
