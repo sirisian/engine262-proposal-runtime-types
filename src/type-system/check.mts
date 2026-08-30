@@ -8241,6 +8241,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       const declaredMember = prop.TypeAnnotation ? resolveType(prop.TypeAnnotation.Type) : null;
+      // What the TARGET wants of this member, computed BEFORE the recursive
+      // shape call below so a NESTED literal has a contextual type of its own
+      // (D74).
+      //
+      // `objectLiteralShape` reads its target from `contextualObjectTypes`, and
+      // the recursive call recorded nothing - traced, the inner literal of
+      // `{ a: { x: 1 } }` was shaped four times, every time with no target - so
+      // its members widened and `{ a: { x: int32 } } & { }` refused a value the
+      // same target accepts when the inner member is written with a type.
+      //
+      // Only a COMPOSITE target lost it: at a single target the member walk
+      // checks the inner literal separately, where at a composite only the shape
+      // is compared. That is the asymmetry D73 turned on, one level in.
+      const wantedForMember = wantedOf(key);
+      if (wantedForMember && prop.AssignmentExpression
+        && (prop.AssignmentExpression as ParseNode).type === 'ObjectLiteral') {
+        contextualObjectTypes.set(prop.AssignmentExpression as ParseNode, wantedForMember as Known);
+      }
       // Recursive: a member that is itself an object literal has no Static Type
       // either, and `{ inner: { p: g() } }` is an ordinary shape.
       const memberType = declaredMember
@@ -8256,7 +8274,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the comparison - D43's defect one level in, and this is D43's fix:
       // `literalFitsNumericType` decides whether the literal belongs at the
       // wanted type.
-      const wantedMember = wantedOf(key);
+      const wantedMember = wantedForMember;
       // A member is taken at the type the target WANTS where the value belongs
       // there: a numeric literal by `literalFitsNumericType`, and a NESTED
       // OBJECT by assignability (D73).
