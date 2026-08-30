@@ -463,6 +463,37 @@ test('a NESTED composite annotation reaches every arm', () => {
   expect(accepts('let c: { x: int32 } | never = { x: 1 };')).toBe(true);
 });
 
+test('a self-referential union reports instead of overflowing', () => {
+  // D94: `type R = { a: int32 } | R` has no finite layout and the DECLARATION
+  // said so. The literal path went through `requireAssignable`, which erases
+  // both sides, and TWO walks recursed over [[Members]] with no cycle guard -
+  // `eraseMetadata` and `literalFitsNumericType`. Guarding the first only moved
+  // the overflow to the second.
+  //
+  // A host RangeError is not a throw completion, so nothing downstream could
+  // catch it, and it fired at CHECK time - `if (false)` around the literal did
+  // not avoid it. `rejects` returning true is the whole point: a TypeError now
+  // reaches the program where a stack trace used to escape it.
+  expect(rejects('type R = { a: int32 } | R; let c: R = { a: 1 };')).toBe(true);
+  expect(rejects('type R = { a: int32 } | R; let c: R = { a: (1 := int32) };')).toBe(true);
+  expect(rejects('type R = { a: int32 } | R; if (false) { let c: R = { a: 1 }; }')).toBe(true);
+  expect(rejects('type R = { a: int32 } | R;')).toBe(true);
+  expect(rejects('type S = { next: S };')).toBe(true);
+
+  // Four shapes of LEGITIMATE recursion, which must keep working - an ~object~
+  // is returned untouched by the erasure, so none of them takes the guarded arm.
+  expect(accepts('type S = { next: S | null }; let s: S = { next: null };')).toBe(true);
+  expect(accepts('type Arr = { items: [].<Arr> }; const t: Arr = { items: [] };')).toBe(true);
+  expect(accepts('type L1 = { next: L1 | null }; type L2 = { next: L2 | null };')).toBe(true);
+  expect(accepts('interface I { next: I | null }')).toBe(true);
+  expect(accepts('type A = { b: B | null }; type B = { a: A | null };')).toBe(true);
+
+  // The numeric-union path the second guard sits on is unchanged, narrowest
+  // arm included.
+  expect(accepts('let n: uint8 | string = 1;')).toBe(true);
+  expect(evaluated('let n: uint32 | uint8 = 1; String(Reflect.typeOf(n));')).toBe('uint.<8>');
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

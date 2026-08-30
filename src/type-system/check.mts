@@ -1234,7 +1234,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // type is assignable to it; the boundary constructs the typed value. This is
   // the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
   // space is genuinely distinct, and this is how a plain literal enters it.
-  const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord): boolean => {
+  const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean => {
     // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` already
     // looks through the marker (relations.mts), but a numeric literal reaches a
     // numeric type by CONVERSION rather than by subtyping, and this path did not
@@ -1260,7 +1260,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return true;
     }
     if (target.Kind === 'union') {
-      return target.Members.some((m) => literalFitsNumericType(source, m));
+      // A union that contains ITSELF terminates here too (D94). This is the
+      // SECOND unguarded recursion over [[Members]] on this path: guarding
+      // `eraseMetadata` alone moved the overflow rather than removing it, and
+      // the frame count named this one next.
+      //
+      // `false` on a revisit is the honest answer - an arm already being asked
+      // about supplies no new way for the literal to fit.
+      if (seen.has(target)) {
+        return false;
+      }
+      seen.add(target);
+      return target.Members.some((m) => literalFitsNumericType(source, m, seen));
     }
     return false;
   };
@@ -1271,12 +1282,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // on it keeps this pass's diagnostics byte-identical to what they were: the
   // one new judgment this cycle adds, the metadata subtype judgment, is the
   // checking pass's, not this one's.
-  const eraseMetadata = (t: TypeRecord): TypeRecord => {
+  const eraseMetadata = (t: TypeRecord, seen: Set<TypeRecord> = new Set()): TypeRecord => {
+    // A member that is the union ITSELF terminates the walk (D94).
+    //
+    // `type R = { a: int32 } | R` has no finite layout, and the declaration says
+    // so - "R contains itself through field, so it has no finite layout", from
+    // `FirstInlineCycle`. The LITERAL path never reached that message: it went
+    // through `requireAssignable`, which erases both sides first, and this walk
+    // recursed through [[Members]] with no guard until the HOST stack gave out.
+    //
+    // A RangeError is not a throw completion, so nothing downstream could catch
+    // or report it - and it fired at CHECK time, so `if (false) { … }` around
+    // the literal did not avoid it either.
+    //
+    // Returning `t` on a revisit leaves the cycle in place for the comparison
+    // that follows rather than pretending the type is finite. The comparison is
+    // reached, answers, and the declaration's own diagnostic is what the program
+    // sees.
+    //
+    // An ~object~ is returned untouched here as before, so the four shapes of
+    // LEGITIMATE recursion - a nullable member, an array element, two aliases of
+    // one shape, an interface - do not pass through this arm at all.
     if (t.Kind === 'parameterized') {
-      return eraseMetadata(t.Base);
+      return eraseMetadata(t.Base, seen);
     }
     if (t.Kind === 'union' || t.Kind === 'intersection') {
-      return { Kind: t.Kind, Members: t.Members.map(eraseMetadata) };
+      if (seen.has(t)) {
+        return t;
+      }
+      seen.add(t);
+      return { Kind: t.Kind, Members: t.Members.map((m) => eraseMetadata(m, seen)) };
     }
     return t;
   };
