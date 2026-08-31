@@ -3304,6 +3304,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         PropertyName?: { name?: string, value?: string } | null,
         AssignmentExpression?: ParseNode,
       };
+      // A SPREAD carries its operand's members, and each is judged as though it
+      // had been written here (D64d).
+      //
+      // The walk reads `PropertyDefinitionList`, so a spread - a
+      // PropertyDefinition with NO PropertyName - contributed no key and the
+      // freshness rule saw nothing. `{ ...u }` at `{ a: uint8 }` was accepted
+      // with `u`'s excess `zz` unreported, while the same members written
+      // plainly were refused.
+      //
+      // `objectLiteralMembers` (D64c) is the enumeration to use, and it keeps
+      // the NULL where the keys are unknowable - an `any`-typed operand, a
+      // getter - so an unknowable spread reports nothing rather than everything.
+      if (!def.PropertyName && def.AssignmentExpression) {
+        const spreadShape = objectLiteralMembers(member as ParseNode)
+          ?? staticType(def.AssignmentExpression);
+        const spreadProps = (spreadShape as unknown as {
+          Kind?: string, Properties?: readonly { key: string }[],
+        } | null);
+        if (fresh && spreadProps?.Kind === 'object' && spreadProps.Properties) {
+          for (const sp of spreadProps.Properties) {
+            const declaredForSpread = (target.Properties ?? []).find(
+              (q) => (q as unknown as { key?: unknown }).key === sp.key,
+            );
+            if (declaredForSpread === undefined
+              && !target.IndexSignatures.some((ix) => keyAdmittedBy(sp.key, ix.Key))) {
+              errors.push((Throw.StaticTypeError(
+                '$1 is not declared by $2', Value(sp.key), Value(displayType(target as TypeRecord)),
+              ) as { Value: ObjectValue }).Value);
+              break;
+            }
+          }
+        }
+        continue;
+      }
       const key = memberKeyOf(def.PropertyName);
       // A member's wanted type: its NAMED declaration, or failing that the INDEX
       // SIGNATURE that admits its key (D77).

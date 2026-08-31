@@ -945,6 +945,32 @@ test('a spread supplies members for a MEMBERSHIP question', () => {
   expect(accepts('let c: { w: uint8 } | null = { };')).toBe(false);
 });
 
+test('a spread carries its members into the FRESHNESS rule', () => {
+  // D64d: `checkObjectLiteralAgainst` walks `PropertyDefinitionList`, so a
+  // spread - a PropertyDefinition with NO PropertyName - contributed no key and
+  // the excess-member rule saw nothing. `{ ...u }` at `{ a: uint8 }` was
+  // accepted with `u`'s excess `zz` unreported, while the same members written
+  // plainly were refused.
+  //
+  // This is the THIRD site reading a literal's members, after the two D64c
+  // split. It uses `objectLiteralMembers`, so the NULL is kept where the keys
+  // are unknowable and an unknowable spread reports nothing rather than
+  // everything.
+  const U = 'const u: { a: uint8, zz: string } = { a: (1 := uint8), zz: "s" }; ';
+  expect(accepts(`type E = { a: uint8 }; ${U}let e: E = { ...u };`)).toBe(false);
+  expect(accepts(`type E = { a: uint8 }; ${U}let e: E = { a: (1 := uint8), ...u };`)).toBe(false);
+  expect(accepts('type E = { a: uint8 }; let e: E = { a: (1 := uint8), zz: "s" };')).toBe(false);
+
+  // A spread with nothing excess, and an UNANNOTATED operand whose keys are
+  // unknowable (~any~ by D54), are both accepted.
+  expect(accepts('type E = { a: uint8 }; const u: { a: uint8 } = { a: (1 := uint8) }; let e: E = { ...u };')).toBe(true);
+  expect(accepts('type E = { a: uint8 }; const u = { a: (1 := uint8), zz: "s" }; let e: E = { ...u };')).toBe(true);
+
+  // An INDEX SIGNATURE admits the key (D78), and an OPTIONAL member declares it.
+  expect(accepts('type I = { [k: string]: int32 }; const u: { a: int32, zz: int32 } = { a: (1 := int32), zz: (2 := int32) }; let i: I = { ...u };')).toBe(true);
+  expect(accepts(`type Q = { a: uint8, zz?: string }; ${U}let q: Q = { ...u };`)).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
