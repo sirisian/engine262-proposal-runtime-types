@@ -777,6 +777,26 @@ function licensesLowerBound(
   return false;
 }
 
+/**
+ * Whether a target's return position requires nothing of a source (D57).
+ *
+ * #sec-issubtype states this beside the ~none~ step the engine already had:
+ * "1. If _b_.[[Return]] is ~none~, return *true*. 1. If _b_.[[Return]].[[Kind]]
+ * is ~void~, return *true*." The clause gives the reason in the same place - "a
+ * caller that has declared it will not use the result" - and
+ * #sec-the-void-type puts it as `void` constraining "the CONSUMER of the result
+ * and not the value leaving the function".
+ *
+ * Without the ~void~ half, `() => string` was refused at `() => void`: every
+ * callback whose body ends in an expression - `arr.forEach(x => other.push(x))`,
+ * where `push` answers a length - had to be rewritten to discard its own
+ * result. That is a VALID PROGRAM REFUSED, and the target's own declaration is
+ * what says the result will not be read.
+ */
+function returnRequiredOfNothing(r: TypeRecord | null | undefined): boolean {
+  return !r || r.Kind === 'void';
+}
+
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
   // A record that is ABSENT relates to nothing. The recursions in
   // SameTypeWithAssumptions follow `s.Base` for a literal and `s.Constraint`
@@ -1530,7 +1550,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
       }
       return sg.Parameters.every((sp, i) => sp.Rest === tg.Parameters[i].Rest
         && parameterAccepts(parameterArgumentType(tg.Parameters[i]), parameterArgumentType(sp), assumptions))
-        && (!sg.Return || !tg.Return || IsSubtype(sg.Return, tg.Return, assumptions));
+        && (!sg.Return || returnRequiredOfNothing(tg.Return) || IsSubtype(sg.Return, tg.Return!, assumptions));
     }
     // Where the SOURCE has several rests and the target supplies a finite list,
     // the exact question is whether some assignment of that list to the source's
@@ -1547,7 +1567,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
       if (assigned === 'unmatched') {
         return false;
       }
-      return !sg.Return || !tg.Return || IsSubtype(sg.Return, tg.Return, assumptions);
+      return !sg.Return || returnRequiredOfNothing(tg.Return) || IsSubtype(sg.Return, tg.Return!, assumptions);
     }
     const positionsOk = tg.Parameters.every((tp, j) => {
       // A source with several rests may receive a position at more than one
@@ -1595,6 +1615,10 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
     // matters, and stage C2 asserts it directly, over every type-node kind,
     // where a divergence is attributable.
     if (sg.Return && tg.Return) {
+      // The MAIN path, and the one the earlier two do not cover (D57).
+      if (returnRequiredOfNothing(tg.Return)) {
+        return true;
+      }
       return IsSubtype(sg.Return, tg.Return, assumptions);
     }
     return true;

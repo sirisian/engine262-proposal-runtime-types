@@ -817,6 +817,63 @@ test('an inference anchored in a nested list still publishes', () => {
   expect(accepts('function g4(p: uint32){ return "s"; } g4 = function(p){ return 1; }; const q: number = g4((1 := uint32));')).toBe(true);
 });
 
+test('a void return is required of nothing', () => {
+  // D57 half (a): #sec-issubtype states the step beside the ~none~ one the
+  // engine already had - "If _b_.[[Return]].[[Kind]] is ~void~, return *true*" -
+  // and gives the reason in the same clause: "a caller that has declared it will
+  // not use the result".
+  //
+  // Without it every callback whose body ends in an expression -
+  // `arr.forEach(x => other.push(x))`, where `push` answers a length - had to be
+  // rewritten to discard its own result. A VALID PROGRAM REFUSED.
+  const V = 'type VF = () => void; ';
+  for (const src of [
+    `${V}const h: VF = (() => "s");`,
+    `${V}const h: VF = function () { return "s"; };`,
+    `${V}const g: () => string = () => "s"; const h: VF = g;`,
+    `${V}function take(cb: VF) { return 1; } take(() => "s");`,
+    `${V}const h: VF = async function () { return "s"; };`,
+    'type N = () => () => void; const h: N = () => (() => "s");',
+    'type O = { m: () => void }; const o: O = { m: () => "s" };',
+    'type PF = (x: uint8) => void; const h: PF = (x: uint8) => "s";',
+    'type O = { m(): void }; class C { m() { return "s"; } } const o: O = new C();',
+  ]) {
+    expect(accepts(src), `should accept: ${src}`).toBe(true);
+  }
+
+  // The METHOD-SHORTHAND member is a SECOND site: it reaches the
+  // `ReturnStatement` arm rather than `IsFunctionSubtype`, so the rule had to be
+  // stated there too. The origin of the `void` is what separates it from D56 - a
+  // CONTEXTUAL `void` requires nothing, an OWN annotation still refuses.
+  expect(accepts('type O = { m(): void }; const o: O = { m() { return "s"; } };')).toBe(true);
+  expect(accepts('type O = { m(): void }; const o: O = { m() { } };')).toBe(true);
+  expect(accepts('type O = { m(): string }; const o: O = { m() { return "s"; } };')).toBe(true);
+  expect(accepts('type O = { m(): string }; const o: O = { m() { return (1 := uint8); } };')).toBe(false);
+
+  // D56 is intact: a body contradicting its OWN annotation still refuses.
+  expect(accepts('function f(): void { return "s"; }')).toBe(false);
+  expect(accepts('const o = { m(): void { return "s"; } };')).toBe(false);
+
+  // A real return type is still checked, and the VARIANCE rules are untouched.
+  // These use CLASS INHERITANCE deliberately: "this proposal performs no
+  // implicit numeric widening, a ~primitive~ type is a subtype of no other
+  // numeric type", so a numeric pair reads false in BOTH directions and could
+  // not detect a regression here.
+  expect(accepts('type SF = () => string; const h: SF = (() => (1 := uint8));')).toBe(false);
+  const AB = 'class A {} class B extends A {} ';
+  expect(evaluated(`${AB}String(Reflect.isAssignable((type () => B), (type () => A)));`)).toBe('true');
+  expect(evaluated(`${AB}String(Reflect.isAssignable((type () => A), (type () => B)));`)).toBe('false');
+  expect(evaluated(`${AB}String(Reflect.isAssignable((type (A) => void), (type (B) => void)));`)).toBe('true');
+  expect(evaluated(`${AB}String(Reflect.isAssignable((type (B) => void), (type (A) => void)));`)).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable((type () => uint8), (type () => number)));')).toBe('false');
+
+  // The step itself.
+  expect(evaluated('String(Reflect.isAssignable((type () => string), (type () => void)));')).toBe('true');
+
+  // The RESULT is still not usable: the call's Static Type is `void`.
+  expect(accepts('type VF = () => void; const h: VF = (() => "s"); let s: string = h();')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

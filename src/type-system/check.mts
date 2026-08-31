@@ -1101,6 +1101,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
+  /**
+   * Whether the return context at each depth came from a CONTEXTUAL type rather
+   * than the function's OWN annotation (D57).
+   *
+   * The two are merged into `declaredForReturn` and the `ReturnStatement` arm
+   * sees only the result, so `void` reaching it says nothing about who declared
+   * it - and the two callers need opposite answers:
+   *
+   *   function f(): void { return "s"; }            must REFUSE (D56) - a body
+   *                                                 contradicting its OWN
+   *                                                 annotation
+   *   type O = { m(): void };
+   *   const o: O = { m() { return "s"; } };         must ACCEPT (D57) - the
+   *                                                 TARGET declared it, and
+   *                                                 #sec-issubtype says "a
+   *                                                 `void` return is required of
+   *                                                 nothing, since a caller that
+   *                                                 has declared it will not use
+   *                                                 the result"
+   *
+   * A WHOLESALE skip on `context.Kind === 'void'` was tried before and is
+   * recorded in the arm as wrong: it admitted the first row too.
+   */
+  const returnContextIsContextual: boolean[] = [];
 
   /**
    * Depth of branches whose guard this walk cannot judge yet.
@@ -11098,6 +11122,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     returnTypes.push(generatorType
       ? generatorReturn as Known | null
       : (asyncResolution as Known | null) ?? declaredForReturn);
+    // `declaredForReturn` above is `returnAnnotation ? … : contextualReturn`, so
+    // the origin is known HERE and nowhere downstream (D57).
+    returnContextIsContextual.push(!returnAnnotation && !!contextualReturn);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
     let index = 0;
@@ -11182,6 +11209,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push(completion.Value as ObjectValue);
     }
     returnTypes.pop();
+    returnContextIsContextual.pop();
     generatorTypes.pop();
     frames.pop();
   };
@@ -12705,7 +12733,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const returned = staticTypeIn(expr, context);
           const voidAdmitsUndefined = context && (context as { Kind?: string }).Kind === 'void'
             && returned && (returned as { Name?: string }).Name === 'undefined';
-          if (!voidAdmitsUndefined) {
+          // A CONTEXTUAL `void` requires nothing of the body (D57). The target
+          // said the result will not be used; the function never claimed to
+          // produce none. An OWN annotation still refuses, which is D56.
+          const contextualVoid = (context as { Kind?: string } | null)?.Kind === 'void'
+            && returnContextIsContextual[returnContextIsContextual.length - 1] === true;
+          if (!voidAdmitsUndefined && !contextualVoid) {
             requireAssignable(returned, context);
           }
           // The elision condition, per return. A `return` with NO expression
