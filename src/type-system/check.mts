@@ -3920,6 +3920,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ) as { Value: ObjectValue }).Value);
           return contextual;
         }
+        // An INTERSECTION names itself and the member that rejected (D108).
+        //
+        // The merge above collapses a same-key member the arms disagree on to
+        // `never`, and a missing member is reported against the MERGED shape - a
+        // type the program never wrote. Either way the diagnostic loses both the
+        // intersection and which arm refused it.
+        //
+        // The RUN TIME already says it properly: `CheckedConvertValue`'s
+        // intersection branch walks `t.Members` and reports the first that
+        // rejects with `"$1 is not assignable to $2: it does not satisfy $3"`.
+        // That path is reached only where the source arrives as ~any~; a literal
+        // is decided statically, so the good message was unreachable for exactly
+        // the programs that state the type inline.
+        //
+        // The same walk is done here, over the ARMS AS WRITTEN rather than the
+        // merged shape, and reuses that message string. It reports nothing the
+        // walk below would not have reported - it names it better - so the
+        // refusal set is unchanged.
+        if (intersectionArms.length > 1) {
+          const literalHere = objectLiteralShape(node as unknown as ParseNode);
+          if (literalHere) {
+            const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
+            if (offending) {
+              errors.push((Throw.TypeError(
+                '$1 is not assignable to $2: it does not satisfy $3',
+                Value('an object literal'),
+                // The CANONICAL form, which is what `(type C)` and the run-time
+                // message both print - the arms are ordered by canonicalization,
+                // not by source, and a diagnostic that disagreed with the type's
+                // own display would be a third spelling of one type.
+                Value(displayType(CanonicalizeType(contextual as TypeRecord) as TypeRecord)),
+                Value(displayType(offending)),
+              ) as { Value: ObjectValue }).Value);
+              return contextual;
+            }
+          }
+        }
         checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
         return contextual;
       }
