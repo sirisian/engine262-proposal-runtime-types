@@ -3662,6 +3662,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const intersectionArms = shape && shape.Kind === 'intersection'
         ? (shape as unknown as { Members?: readonly TypeRecord[] }).Members ?? []
         : [];
+      // Arms of a UNION target whose freshness can be judged (D97): every arm is
+      // an object, a nominal with a structure, or `null`.
+      const collectFreshArms = (t: unknown, seen: Set<unknown>, out: TypeRecord[]): void => {
+        if (!t || typeof t !== 'object' || seen.has(t)) {
+          return;
+        }
+        seen.add(t);
+        const kind = (t as { Kind?: string }).Kind;
+        if (kind === 'object' || (kind === 'nominal' && !!(t as { Structure?: unknown }).Structure)) {
+          out.push(t as TypeRecord);
+          return;
+        }
+        // An arm that is ITSELF a composite is flattened, not dropped (D93's
+        // lesson): `({ x } | { y }) | { z }` denotes one three-arm union, and a
+        // filter that kept only object arms reported `x` as excess. `seen`
+        // guards a recursive alias, as D94's walks do.
+        if (kind === 'union' || kind === 'intersection') {
+          for (const member of (t as { Members?: readonly TypeRecord[] }).Members ?? []) {
+            collectFreshArms(member, seen, out);
+          }
+        }
+      };
+      const unionFreshArms: TypeRecord[] = [];
+      if (shape && shape.Kind === 'union') {
+        collectFreshArms(shape, new Set(), unionFreshArms);
+      }
       const mergeableArms = intersectionArms.length > 0
         && intersectionArms.every((arm) => arm.Kind === 'object'
           && ((arm as unknown as { IndexSignatures?: readonly unknown[] }).IndexSignatures ?? []).length === 0);
@@ -3705,6 +3731,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           IndexSignatures: [],
         } as unknown as Known)
         : shape;
+      // FRESHNESS at a UNION target, checked WITHOUT entering the structural arm
+      // below (D97).
+      //
+      // #sec-literal-freshness is written for "an expected OBJECT TYPE", so a
+      // union was outside it and an excess property survived - at RUN TIME as
+      // well as statically, which made it a LOOSENING. Every union shape was
+      // affected: the top level, a nested member, three arms, an interface arm.
+      //
+      // This is REPORTED here and the arm below is NOT entered. Widening
+      // `structural` to admit a union was measured first and REGRESSED
+      // `{ x: int32 } | { x: string } = { x: 1 }` from refused to accepted: that
+      // arm ends `return contextual`, so entering it GIVES the literal the
+      // target's type and skips the `requireAssignable` that was refusing the
+      // disagreeing-arm row. Freshness has to be additive here, not a new gate.
+      //
+      // The CONSERVATIVE rule: a property is excess only where NO arm declares
+      // or admits it. A stricter rule - fresh against the arm that actually
+      // takes the literal - needs an arm CHOSEN, which D89 left open where the
+      // arms disagree. Every property refused here is refused under either.
+      if (unionFreshArms.length > 0) {
+        for (const member of node.PropertyDefinitionList ?? []) {
+          if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
+            continue;
+          }
+          const def = member as unknown as { PropertyName?: { name?: string, value?: string } | null };
+          const key = def.PropertyName?.name ?? def.PropertyName?.value;
+          if (typeof key !== 'string') {
+            continue;
+          }
+          const declaredByAnyArm = unionFreshArms.some((arm) => {
+            const armObject = (arm.Kind === 'nominal'
+              ? (arm as unknown as { Structure?: unknown }).Structure
+              : arm) as {
+                Properties?: readonly { key: string }[],
+                IndexSignatures?: readonly { Key: TypeRecord }[],
+              } | undefined;
+            return (armObject?.Properties ?? []).some((q) => q.key === key)
+              || (armObject?.IndexSignatures ?? []).some((ix) => keyAdmittedBy(key, ix.Key));
+          });
+          if (!declaredByAnyArm) {
+            errors.push((Throw.TypeError(
+              '$1 is not declared by $2',
+              Value(key),
+              Value(displayType(contextual as TypeRecord)),
+            ) as { Value: ObjectValue }).Value);
+          }
+        }
+      }
       if (walkable && walkable.Kind === 'object') {
         const shape = walkable;
         // Freshness applies to a STRUCTURAL type written at the position, and

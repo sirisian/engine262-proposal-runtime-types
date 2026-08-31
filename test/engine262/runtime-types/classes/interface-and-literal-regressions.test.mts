@@ -553,6 +553,42 @@ test('mentionsTypeParameter terminates on a cyclic record', () => {
   expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
 });
 
+test('freshness reaches a UNION target', () => {
+  // D97: #sec-literal-freshness is written for "an expected OBJECT TYPE", so a
+  // union was outside it and an excess property SURVIVED - at run time as well
+  // as statically, which made it a loosening rather than a missing diagnostic.
+  //
+  // The rule applied is the CONSERVATIVE one: excess only where NO arm declares
+  // or admits the key. A stricter rule - fresh against the arm that takes the
+  // literal - needs an arm CHOSEN, which D89 left open. Every property refused
+  // here is refused under either rule.
+  expect(accepts('let c: { x: int32 } | { y: string } = { x: (1 := int32), u: "t" };')).toBe(false);
+  expect(accepts('type P = { v: uint8, inner: { w: uint8 } | null }; let p: P = { v: 1, inner: { w: 2, u: "x" } };')).toBe(false);
+  expect(accepts('type P = { inner: { w: uint8 } | { z: string } | null }; let p: P = { inner: { w: 2, u: "x" } };')).toBe(false);
+  expect(accepts('type P = { a: { b: { c: uint8 } | null } }; let p: P = { a: { b: { c: 1, u: "x" } } };')).toBe(false);
+  expect(accepts('interface I { w: uint8 } type P = { inner: I | null }; let p: P = { inner: { w: 2, u: "x" } };')).toBe(false);
+
+  // Checked WITHOUT entering the structural arm. Widening `structural` to admit
+  // a union was measured first and REGRESSED this row from refused to accepted:
+  // that arm ends `return contextual`, so entering it skips the
+  // `requireAssignable` that refuses a disagreeing-arm literal.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
+  // ...and D89's adaptation is untouched.
+  expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(true);
+
+  // A key SOME arm declares is admitted: this is the conservative rule's own
+  // limit, and the row that says which rule was implemented.
+  expect(accepts('let c: { x: int32 } | { y: string } = { x: (1 := int32), y: "s" };')).toBe(true);
+  // An arm's INDEX SIGNATURE admits arbitrary keys, as at a plain object type.
+  expect(accepts('let c: { [k: string]: int32 } | { y: string } = { x: (1 := int32), zz: (2 := int32) };')).toBe(true);
+  // Freshness is lost through a BINDING - the rule's own limit, at a union too.
+  expect(accepts('let s = { x: (1 := int32), u: "t" }; let c: { x: int32 } | { y: string } = s;')).toBe(true);
+
+  // An arm that is itself a COMPOSITE is flattened, not dropped: a filter that
+  // kept only object arms reported `x` as excess here (D93's lesson).
+  expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { x: 1 };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
