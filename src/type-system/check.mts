@@ -4372,8 +4372,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // members of the same declaration are not reported, and the FIRST is kept
       // so the structure does not depend on load order.
       if (typeof key === 'string') {
+        // A duplicate is reported WITHIN one declaration as well as across two
+        // (OQ25). D83 added this walk for the ACROSS case and excluded the
+        // within-declaration one with `declaredAt !== declarationIndex`; the
+        // index comparison is what is dropped here.
+        //
+        // Both members survived into the Type Record - `(type G)` displayed
+        // `{ n: int.<32>, n: string }` - and the two halves then read it
+        // differently: the RUN TIME requires a value to satisfy EVERY member
+        // with the key, the checker only the FIRST. So
+        // `{ n: int32, n: string }` was statically ordinary and dynamically
+        // UNINHABITABLE, and `let g: G = { n: (1 := int32) }` type-checked and
+        // threw.
+        //
+        // A SAME-type duplicate is harmless today - inhabitable, both halves
+        // agreeing - and is refused here too. That is a deliberate tightening
+        // rather than a fix: `sec-partial-declarations` already makes a
+        // redeclaration ACROSS declarations "a *TypeError* rather than an
+        // override", and a duplicate is a mistake wherever it is written.
         const declaredAt = declaredIn.get(key);
-        if (declaredAt !== undefined && declaredAt !== declarationIndex) {
+        if (declaredAt !== undefined) {
           errors.push((Throw.TypeError(
             '$1 is already declared on this interface',
             Value(key),
@@ -5443,6 +5461,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ObjectType': {
         const Properties = [];
         const IndexSignatures = [];
+        // Keys already seen in THIS object type, for the duplicate check below
+        // (OQ25). The interface path has its own, D83's `declaredIn`.
+        const objectTypeKeys = new Set<string>();
         for (const member of node.TypeMemberList) {
           // An INDEX SIGNATURE member (OQ17). Any member that was not a
           // `TypeMember` made the WHOLE type resolve to *null*, so
@@ -5475,6 +5496,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (typeof key !== 'string') {
             return null;
           }
+          // A duplicate |PropertyName| in ONE object type is a TypeError
+          // (OQ25), matching the interface path and
+          // `sec-partial-declarations`' rule that a redeclaration is "a
+          // *TypeError* rather than an override".
+          //
+          // Both members used to survive into the record, and the two halves
+          // then read it differently: the RUN TIME requires a value to satisfy
+          // EVERY member with the key, the checker only the FIRST - so
+          // `{ n: int32, n: string }` was statically ordinary and dynamically
+          // UNINHABITABLE.
+          if (objectTypeKeys.has(key)) {
+            errors.push((Throw.TypeError(
+              '$1 is already declared on this type',
+              Value(key),
+            ) as { Value: ObjectValue }).Value);
+            continue;
+          }
+          objectTypeKeys.add(key);
           // A METHOD member, `{ get(): uint8 }` (D66). The parser gives a
           // TypeMember carrying a [[MethodSignature]] and sets TypeAnnotation to
           // NULL, so the bail below made the WHOLE object type resolve to null -

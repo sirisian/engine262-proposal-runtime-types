@@ -646,9 +646,22 @@ test('a member already declared on an interface is a TypeError', () => {
   expect(accepts('interface P { m(): int32; } partial interface P { m(): string; }')).toBe(false);
   expect(accepts('interface P { z: int32 } partial interface P { n: int32 } partial interface P { n: string }')).toBe(false);
 
-  // Two members of ONE declaration are left alone: the run time accepts that
-  // too, and making the checker refuse would introduce a disagreement rather
-  // than remove one (OQ25).
-  expect(accepts('interface P { n: int32, n: string }')).toBe(true);
+  // Two members of ONE declaration are refused too (OQ25). The note here used to
+  // say the run time accepted that, so refusing would introduce a disagreement -
+  // measured, it does NOT: `interface P { n: int32, n: string }` THROWS at
+  // declaration time, as do the object-type and same-type forms. The checker was
+  // the half that was silent.
+  //
+  // The values told the same story from the other side: the run time requires a
+  // value to satisfy EVERY member with the key, so `{ n: int32, n: string }` was
+  // UNINHABITABLE while `let g: G = { n: (1 := int32) }` type-checked.
+  expect(accepts('interface P { n: int32, n: string }')).toBe(false);
+  expect(accepts('type G = { n: int32, n: string };')).toBe(false);
+  // A SAME-type duplicate is refused as well - a deliberate tightening, since
+  // the mistake is the duplication and the run time refuses it too.
+  expect(accepts('type G = { n: int32, n: int32 };')).toBe(false);
+  // ...and a duplicate KEY in a JS object LITERAL stays legal: that is
+  // ECMA-262's rule about values, not this one about type members.
+  expect(accepts('let o = { n: 1, n: 2 };')).toBe(true);
   expect(accepts('interface P { n: int32 } partial interface P { u: string }')).toBe(true);
 });
