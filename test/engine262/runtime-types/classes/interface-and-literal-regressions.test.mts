@@ -971,6 +971,39 @@ test('a spread carries its members into the FRESHNESS rule', () => {
   expect(accepts(`type Q = { a: uint8, zz?: string }; ${U}let q: Q = { ...u };`)).toBe(true);
 });
 
+test('the LAST member writing a key decides its type', () => {
+  // D64e: the walk had no notion of ORDER. It tested each member against the
+  // target as it met it, so `{ a: (1 := uint8), ...t }` was accepted by checking
+  // the NAMED `a` and never learning that `t`'s String `a` overwrote it, and
+  // `{ ...u, ...t }` was accepted for the same reason one spread later.
+  //
+  // This is JavaScript's own evaluation order, not a type rule. A pre-pass finds
+  // each key's last writer and the walk checks only that member.
+  const P = 'type P = { a: uint8, b: uint8 }; ';
+  const T = 'const t: { a: string, b: uint8 } = { a: "x", b: (2 := uint8) }; ';
+  const U = 'const u: { a: uint8 } = { a: (1 := uint8) }; ';
+
+  // A spread member the target declares must have the right TYPE...
+  expect(accepts(`${P}${T}let p: P = { ...t };`)).toBe(false);
+  expect(accepts(`${P}const s: { a: uint16, b: uint8 } = { a: (300 := uint16), b: (2 := uint8) }; let p: P = { ...s };`)).toBe(false);
+  // ...including where it arrives via a second spread.
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; const w: { b: string } = { b: "x" }; let p: P = { ...s, ...w };`)).toBe(false);
+
+  // ORDER decides. A named member OVERWRITTEN by a later spread is refused;
+  // one that overwrites an earlier spread is accepted.
+  expect(accepts(`${P}${T}let p: P = { a: (1 := uint8), ...t };`)).toBe(false);
+  expect(accepts(`${P}${T}let p: P = { ...t, a: (1 := uint8) };`)).toBe(true);
+  expect(accepts(`${P}${T}${U}let p: P = { ...u, ...t };`)).toBe(false);
+  expect(accepts(`${P}${T}${U}let p: P = { ...t, ...u };`)).toBe(true);
+
+  // An UNANNOTATED operand is ~any~ (D54) and says nothing about its members.
+  expect(accepts(`${P}const s = { a: "x", b: (2 := uint8) }; let p: P = { ...s };`)).toBe(true);
+
+  // D64c's presence rule and D64d's excess rule are unchanged.
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(false);
+  expect(accepts('type E = { a: uint8 }; const g: { a: uint8, zz: string } = { a: (1 := uint8), zz: "s" }; let e: E = { ...g };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

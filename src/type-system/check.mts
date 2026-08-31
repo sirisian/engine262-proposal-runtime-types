@@ -3262,6 +3262,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // The LAST member writing a key decides its type (D64e).
+    //
+    // The walk had no notion of order: it tested each member against the target
+    // as it met it. So `{ a: (1 := uint8), ...t }` was accepted by checking the
+    // NAMED `a` and never learning that `t`'s String `a` overwrote it, and
+    // `{ ...u, ...t }` was accepted for the same reason one spread later. The
+    // mirror case, `{ ...t, a: (1 := uint8) }`, is correct and must stay so:
+    // there the named member IS the last writer and the object is well-typed.
+    //
+    // This is JavaScript's own evaluation order, not a type rule; the walk just
+    // has to ask who wrote last before deciding whom to check.
+    const lastWriterOf = new Map<string, object>();
+    for (const member of node.PropertyDefinitionList ?? []) {
+      const asAny = member as unknown as { type?: string, PropertyName?: never, AssignmentExpression?: ParseNode };
+      if (asAny.type !== 'PropertyDefinition') {
+        continue;
+      }
+      if (asAny.PropertyName) {
+        const namedKey = memberKeyOf(asAny.PropertyName);
+        if (typeof namedKey === 'string') {
+          lastWriterOf.set(namedKey, member as unknown as object);
+        }
+        continue;
+      }
+      const spreadShape = objectLiteralMembers(member as ParseNode)
+        ?? (asAny.AssignmentExpression ? staticType(asAny.AssignmentExpression) : null);
+      const spreadProps = (spreadShape as unknown as {
+        Kind?: string, Properties?: readonly { key: string }[],
+      } | null);
+      if (spreadProps?.Kind === 'object' && spreadProps.Properties) {
+        for (const sp of spreadProps.Properties) {
+          lastWriterOf.set(sp.key, member as unknown as object);
+        }
+      }
+    }
     for (const member of node.PropertyDefinitionList ?? []) {
       // A METHOD in shorthand is walked for its body and its KEY is checked
       // against the target, so a key the target cannot supply a type for is
@@ -3322,6 +3357,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const spreadProps = (spreadShape as unknown as {
           Kind?: string, Properties?: readonly { key: string }[],
         } | null);
+        // A spread member the target DECLARES must also have the right type
+        // (D64e), and only where this spread is the key's LAST writer.
+        const spreadTyped = (spreadShape as unknown as {
+          Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[],
+        } | null);
+        if (spreadTyped?.Kind === 'object' && spreadTyped.Properties) {
+          for (const sp of spreadTyped.Properties) {
+            if (lastWriterOf.get(sp.key) !== (member as unknown as object)) {
+              continue;
+            }
+            const declaredHere = (target.Properties ?? []).find(
+              (q) => (q as unknown as { key?: unknown }).key === sp.key,
+            ) as unknown as { type?: TypeRecord } | undefined;
+            if (declaredHere?.type && !IsAssignable(sp.type, declaredHere.type)) {
+              errors.push((Throw.StaticTypeError(
+                '$1 is not assignable to $2',
+                Value(displayType(sp.type)),
+                Value(displayType(declaredHere.type)),
+              ) as { Value: ObjectValue }).Value);
+              break;
+            }
+          }
+        }
         if (fresh && spreadProps?.Kind === 'object' && spreadProps.Properties) {
           for (const sp of spreadProps.Properties) {
             const declaredForSpread = (target.Properties ?? []).find(
