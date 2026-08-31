@@ -145,7 +145,11 @@ test('a reflection context is a STRUCTURAL type, as the design writes it', () =>
   expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.Class); } class A { @f a: uint8; } r;')).toBe('false');
   // An object of the wrong shape is not of the type, so the judgment is doing
   // work rather than admitting any object.
-  expectThrownKind('let x: Reflect.ClassField = { kind: "nope" };', 'TypeError');
+  // A DECIDABLE violation is an Early Error, not a catchable TypeError:
+  // #sec-type-errors "realizes such a violation as an Early Error, and reserves
+  // a thrown *TypeError* for the ~any~ boundary and other genuinely dynamic
+  // checks". The literal's shape is known here, so the refusal is static.
+  expectStaticTypeError('let x: Reflect.ClassField = { kind: "nope" };');
   // The wrong KIND is refused before evaluation, since
   // `PLAN-checker-type-resolution.md stage A` taught the checker to resolve a
   // qualified name. The shape row above stays a runtime judgment: a `kind`
