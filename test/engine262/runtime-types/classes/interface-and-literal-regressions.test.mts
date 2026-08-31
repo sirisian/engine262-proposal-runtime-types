@@ -908,6 +908,43 @@ test('a concise arrow body is checked against its own return annotation', () => 
   expect(accepts('const f = (): void => { return "s"; };')).toBe(false);
 });
 
+test('a spread supplies members for a MEMBERSHIP question', () => {
+  // D64c: `objectLiteralShape` answers what TYPE a literal has and is
+  // deliberately conservative - "a spread, a computed key, and a method each
+  // yield NOTHING rather than an object type that omits what could not be read".
+  //
+  // That is right for a type and wrong for MEMBERSHIP. The missing-member rule
+  // is not publishing a type; it asks whether a required key is present, and a
+  // spread whose operand's type is KNOWN answers that. So `{ ...s }` at
+  // `{ a: uint8, b: uint8 }` was accepted with `b` never supplied, while the
+  // same members written plainly were refused.
+  //
+  // D64b changed the shape for EVERY caller and broke the conservatism test;
+  // the split is why both can hold at once.
+  const P = 'type P = { a: uint8, b: uint8 }; ';
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(false);
+  expect(accepts(`${P}const s: { } = { }; let p: P = { ...s };`)).toBe(false);
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; const t: { } = { }; let p: P = { ...s, ...t };`)).toBe(false);
+
+  // A spread that supplies everything, or is completed by a named member.
+  expect(accepts(`${P}const s: P = { a: (1 := uint8), b: (2 := uint8) }; let p: P = { ...s };`)).toBe(true);
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, b: (2 := uint8) };`)).toBe(true);
+
+  // The NULL is KEPT where the keys are genuinely unknowable: an UNANNOTATED
+  // operand is ~any~ (D54), and a getter cannot be read. Enumerating either
+  // would report every declared member as missing.
+  expect(accepts(`${P}const s = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(true);
+  expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, get b() { return (2 := uint8); } };`)).toBe(true);
+
+  // An OPTIONAL member the spread does not supply is still fine.
+  expect(accepts('type Q = { a: uint8, b?: uint8 }; const s: { a: uint8 } = { a: (1 := uint8) }; let q: Q = { ...s };')).toBe(true);
+
+  // The plain spelling and the freshness rules are unchanged.
+  expect(accepts(`${P}let p: P = { a: (1 := uint8) };`)).toBe(false);
+  expect(accepts('type E = { a: uint8 }; let e: E = { a: (1 := uint8), zz: "s" };')).toBe(false);
+  expect(accepts('let c: { w: uint8 } | null = { };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

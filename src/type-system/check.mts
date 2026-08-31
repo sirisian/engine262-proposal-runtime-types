@@ -3236,7 +3236,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // requires - and an interface's members are exactly as knowable as an object
     // type's.
     if (requiresMembers) {
-      const literalShape = objectLiteralShape(node as unknown as ParseNode);
+      const literalShape = objectLiteralMembers(node as unknown as ParseNode);
       if (literalShape) {
         const supplied = new Set(((literalShape as unknown as {
           Properties?: readonly { key: string }[],
@@ -3963,7 +3963,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // walk below would not have reported - it names it better - so the
         // refusal set is unchanged.
         if (intersectionArms.length > 1) {
-          const literalHere = objectLiteralShape(node as unknown as ParseNode);
+          const literalHere = objectLiteralMembers(node as unknown as ParseNode);
           if (literalHere) {
             const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
             if (offending) {
@@ -8898,6 +8898,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * rather than an object type that omits what it could not read and thereby
    * describes a value with fewer members than it has.
    */
+  /**
+   * The literal's members for a MEMBERSHIP question (D64c).
+   *
+   * `objectLiteralShape` answers what TYPE a literal has, and is deliberately
+   * conservative: "a spread, a computed key, and a method each yield NOTHING
+   * rather than an object type that omits what could not be read - such a type
+   * would describe a value with fewer members than it has, and the contribution
+   * would state it".
+   *
+   * That is right for a type and wrong for MEMBERSHIP. The missing-member rule
+   * and D75's excess rule are not publishing a type; they ask whether a required
+   * key is present, and a spread whose operand's type is KNOWN answers that. So
+   * `{ ...s }` at `{ a: uint8, b: uint8 }` was accepted with `b` never supplied,
+   * and a literal written plainly was refused - the same program, two answers.
+   *
+   * The NULL is kept where the keys are genuinely unknowable: an `any`-typed
+   * operand (D54), a getter, a computed key. Enumerating those would report
+   * every declared member as missing.
+   */
+  const objectLiteralMembers = (node: ParseNode): Known => {
+    const plain = objectLiteralShape(node);
+    if (plain) {
+      return plain;
+    }
+    const members = (node as unknown as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList;
+    if (!members) {
+      return null;
+    }
+    const Properties: { key: string, type: TypeRecord, optional: boolean }[] = [];
+    for (const member of members) {
+      const asProp = member as unknown as { type?: string, PropertyName?: unknown, AssignmentExpression?: ParseNode };
+      if (asProp.type !== 'PropertyDefinition') {
+        return null;
+      }
+      if (!asProp.PropertyName) {
+        const spreadType = asProp.AssignmentExpression ? staticType(asProp.AssignmentExpression) : null;
+        const spread = spreadType as unknown as {
+          Kind?: string, Properties?: readonly { key: string, type: TypeRecord, optional?: boolean }[],
+        } | null;
+        if (!spread || spread.Kind !== 'object' || !spread.Properties) {
+          return null;
+        }
+        for (const sp of spread.Properties) {
+          Properties.push({ key: sp.key, type: sp.type, optional: sp.optional === true });
+        }
+        continue;
+      }
+      return null;
+    }
+    return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
+  };
+
   const objectLiteralShape = (node: ParseNode | null | undefined): Known => {
     if (!node || node.type !== 'ObjectLiteral') {
       return null;
