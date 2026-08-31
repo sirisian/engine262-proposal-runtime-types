@@ -693,6 +693,27 @@ test('a returned value type class instance is copied', () => {
   expect(evaluated('class P { x: uint8 = (0 := uint8); } let r: [].<P> = [new P()]; r[0].x = (5 := uint8); let e: P = r[0]; r[0].x = (9 := uint8); String(e.x);')).toBe('5');
 });
 
+test('Promise.resolve rejects with never, as the statics table states', () => {
+  // D48: the row is "`(value: R): Promise.<R, never>`, a resolved promise having
+  // nothing to reject with", and the engine built `Promise.<R, any>` - the
+  // opposite claim, that it may reject with anything.
+  //
+  // The exact MIRROR of the `reject` arm, which was already corrected to give
+  // its RESOLVED position `never`; this was the half not done.
+  //
+  // Nothing observable changes, and that is why the rows below all pass either
+  // way: `any` is assignable to everything, and `never` is assignable to
+  // everything for the opposite reason. The fix is to what the type CLAIMS.
+  expect(accepts('let p: Promise.<uint8, never> = Promise.resolve((1 := uint8));')).toBe(true);
+  expect(accepts('let p: Promise.<uint8, string> = Promise.resolve((1 := uint8));')).toBe(true);
+  expect(accepts('let p: Promise.<uint8, any> = Promise.resolve((1 := uint8));')).toBe(true);
+  // The RESOLVED type is still checked, so this is not a blanket acceptance.
+  expect(accepts('let p: Promise.<string, never> = Promise.resolve((1 := uint8));')).toBe(false);
+  // ...and `reject`'s own rows are unmoved.
+  expect(accepts('let p: Promise.<uint8, never> = Promise.reject("boom");')).toBe(false);
+  expect(accepts('let p: Promise.<uint8, string> = Promise.reject("boom");')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

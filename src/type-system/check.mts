@@ -2207,7 +2207,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : null;
           const value = adaptArgument(args[0], wantedValue);
           return value
-            ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, anyTypeRecord]) ?? null
+          // The REJECTION type is ~never~, not ~any~ (D48), which is the exact
+          // mirror of the `reject` arm above and was the half not done.
+          //
+          // The statics table gives `Promise.resolve` the row
+          // "`(value: R): Promise.<R, never>`, a RESOLVED PROMISE HAVING
+          // NOTHING TO REJECT WITH". `any` says the opposite - that it may
+          // reject with anything.
+          //
+          // Both spellings ACCEPT identically at every target: `any` is
+          // assignable to everything, and `never` is assignable to everything
+          // for the opposite reason. So nothing observable changes. What
+          // changes is what the type CLAIMS, and the `reject` arm records why
+          // that is worth fixing anyway - a weaker type than the engine can
+          // state is a claim that goes stale, and it would become visible the
+          // moment a promise reports its arguments (`Reflect.typeOf` answers a
+          // bare `Promise` today, D30b).
+            ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, neverType]) ?? null
             : null;
         };
       }
