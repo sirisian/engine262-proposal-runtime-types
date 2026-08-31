@@ -9832,12 +9832,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // parameter is the index type and not `number`, so that a reserve
         // argument is checked exactly as a length or a capacity would be.
         return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeRecord()], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
+      // `concat` is NOT one of the five below (D102).
+      //
+      // It shared their case and so returned the RECEIVER, ignoring its
+      // arguments - but concat's result unions the arguments' element types,
+      // which is what the RUN TIME already answers:
+      // `Reflect.typeOf(a.concat(["s"]))` is `[].<string | uint.<8>>` where the
+      // checker said `[].<uint.<8>>`.
+      //
+      // The consequence was a LOOSENING, not a display quirk: the checker
+      // believed the result had the receiver's type, so
+      // `let b: [].<uint8> = a.concat(["s"])` matched and ran, and `b[1]` was
+      // the string `"s"` inside an array typed `[].<uint8>`. BOTH halves missed
+      // it. `a.slice()` bound at `[].<string>` was caught throughout, which is
+      // what located the shared case.
+      //
+      // The parameters are arrays OF THE ELEMENT rather than the `any` pair the
+      // shared case gives, so a foreign element is refused at the argument too -
+      // the same entry caused both.
+      case 'concat': {
+        const arrayOfElement = { Kind: 'array', Element: element, Extent: undefined } as unknown as TypeRecord;
+        return {
+          Kind: 'function',
+          Signatures: [{ Parameters: shapes([arrayOfElement, arrayOfElement], 0), Return: receiver }],
+        } as Known;
+      }
       case 'slice':
       case 'reverse':
       case 'sort':
       case 'toReversed':
       case 'toSorted':
-      case 'concat':
         return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
       default:
         return null;

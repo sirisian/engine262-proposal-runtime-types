@@ -614,6 +614,32 @@ test('an empty array literal is refused where no array fits', () => {
   expect(accepts('let a: [].<uint8> = [(1 := uint8)];')).toBe(true);
 });
 
+test('concat does not admit a foreign element', () => {
+  // D102: `concat` shared a table case with `slice`, `reverse`, `sort`,
+  // `toReversed` and `toSorted`, all returning the RECEIVER. That is right for
+  // the other five and wrong for concat, whose result unions the ARGUMENTS'
+  // element types - which the RUN TIME already answered:
+  // `Reflect.typeOf(a.concat(["s"]))` is `[].<string | uint.<8>>` where the
+  // checker said `[].<uint.<8>>`.
+  //
+  // A LOOSENING, not a display quirk: the checker believed the result had the
+  // receiver's type, so the binding matched and RAN, and `b[1]` was the string
+  // `"s"` inside an array typed `[].<uint8>`.
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(false);
+  // The parameters are arrays OF THE ELEMENT now, so the argument is refused on
+  // its own - one table entry caused both halves.
+  expect(accepts('let a: [].<uint8> = []; a.concat(["s"]);')).toBe(false);
+  // A matching element still passes, and its result still binds.
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat([(2 := uint8)]);')).toBe(true);
+
+  // The five that KEEP the shared case: their result really is the receiver's.
+  expect(accepts('let a: [].<uint8> = []; let b: [].<string> = a.slice();')).toBe(false);
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.slice();')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.sort();')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.reverse();')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.toSorted();')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
