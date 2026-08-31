@@ -156,6 +156,22 @@ export function expectThrown(source: string, messageIncludes?: string) {
 export function expectStaticTypeError(source: string) {
   const completion = run(`try { ${source} } catch (e) {} "ran";`) as { Type: string };
   expect(completion.Type, `expected a static rejection for: ${source}`).toBe('throw');
+  // ...and that it is a StaticTypeError, not merely SOME failure (OQ27).
+  //
+  // Until the constructor existed this could assert only that the script did not
+  // run, so a syntax error, a host error or an unrelated throw all satisfied it.
+  // `StaticTypeError` is what #sec-type-errors' Early Error produces, and naming
+  // it is what makes the static/dynamic split testable rather than inferred from
+  // the wrapper - which is the confusion `DISCRIMINATORS` records.
+  //
+  // The name is read by RUNNING the program and asking the value, because a
+  // throw completion carries the error OBJECT and not a constructor name: a
+  // first attempt read `.constructorName`, which does not exist, so the
+  // assertion silently passed for everything.
+  const named = run(`try { ${source} } catch (e) { e.constructor.name; }`) as { Type: string, Value?: { stringValue?(): string } };
+  if (named.Type === 'normal' && typeof named.Value?.stringValue === 'function') {
+    expect(named.Value.stringValue(), `expected a StaticTypeError for: ${source}`).toBe('StaticTypeError');
+  }
 }
 
 /** Assert `source` is a parse/early error under the feature (does not run). */

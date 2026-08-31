@@ -1196,7 +1196,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (offending.length === 1) {
         const origin = originNotes.find((o) => SameType(o.type, offending[0]!));
         if (origin) {
-          const completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
+          const completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return;
         }
@@ -1204,11 +1204,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     let completion: ThrowCompletion;
     if (provenanceNote && anchorNote) {
-      completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
+      completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
     } else if (provenanceNote) {
-      completion = Throw.TypeError('$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
+      completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
     } else {
-      completion = Throw.TypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+      completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
     }
     errors.push(completion.Value as ObjectValue);
   };
@@ -1500,7 +1500,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const prop = objType.Properties.find((candidate) => candidate.key === key);
     if (prop && (prop as { readonly?: boolean }).readonly) {
-      const completion = Throw.TypeError('$1 is a readonly member and cannot be assigned', typeof key === 'string' ? Value(key) : key) as ThrowCompletion;
+      const completion = Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', typeof key === 'string' ? Value(key) : key) as ThrowCompletion;
       errors.push(completion.Value as ObjectValue);
     }
   };
@@ -3231,7 +3231,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             continue;
           }
           if (!q.optional && !supplied.has(q.key)) {
-            const completion = Throw.TypeError('$1 is required by $2 and is not supplied', Value(q.key), Value(displayType(target))) as ThrowCompletion;
+            const completion = Throw.StaticTypeError('$1 is required by $2 and is not supplied', Value(q.key), Value(displayType(target))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             break;
           }
@@ -3262,7 +3262,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
           const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
           if (wantedForMethod && wantedIsNever) {
-            errors.push((Throw.TypeError(
+            errors.push((Throw.StaticTypeError(
               '$1 is not assignable to $2',
               Value('a method'),
               Value(displayType(wantedForMethod.type)),
@@ -3339,7 +3339,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (fresh && declared === undefined && key !== undefined
           && !target.IndexSignatures.some((ix) => keyAdmittedBy(key, ix.Key))) {
         const shown = typeof key === 'string' ? Value(key) : key;
-        const completion = Throw.TypeError('$1 is not declared by $2', shown, Value(displayType(target))) as ThrowCompletion;
+        const completion = Throw.StaticTypeError('$1 is not declared by $2', shown, Value(displayType(target))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
       if (def.AssignmentExpression) {
@@ -3639,7 +3639,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (targetKind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration');
       if (noArraySatisfies) {
-        errors.push((Throw.TypeError(
+        errors.push((Throw.StaticTypeError(
           '$1 is not assignable to $2',
           Value('an empty array'),
           Value(displayType(contextual as TypeRecord)),
@@ -3825,7 +3825,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || (armObject?.IndexSignatures ?? []).some((ix) => keyAdmittedBy(key, ix.Key));
           });
           if (!declaredByAnyArm) {
-            errors.push((Throw.TypeError(
+            errors.push((Throw.StaticTypeError(
               '$1 is not declared by $2',
               Value(key),
               Value(displayType(contextual as TypeRecord)),
@@ -3913,7 +3913,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const targetIsClass = contextual.Kind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
         if (targetIsClass) {
-          errors.push((Throw.TypeError(
+          errors.push((Throw.StaticTypeError(
             '$1 is not assignable to $2',
             Value('an object literal'),
             Value(displayType(contextual as TypeRecord)),
@@ -3943,7 +3943,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (literalHere) {
             const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
             if (offending) {
-              errors.push((Throw.TypeError(
+              errors.push((Throw.StaticTypeError(
                 '$1 is not assignable to $2: it does not satisfy $3',
                 Value('an object literal'),
                 // The CANONICAL form, which is what `(type C)` and the run-time
@@ -4445,7 +4445,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // override", and a duplicate is a mistake wherever it is written.
         const declaredAt = declaredIn.get(key);
         if (declaredAt !== undefined) {
-          errors.push((Throw.TypeError(
+          errors.push((Throw.StaticTypeError(
             '$1 is already declared on this interface',
             Value(key),
           ) as { Value: ObjectValue }).Value);
@@ -4488,7 +4488,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const namesSymbolConst = computed?.type === 'IdentifierReference'
           && typeof computed.name === 'string' && symbolConsts.has(computed.name);
         if (computed && !namesSymbolConst && !isWrittenLiteral) {
-          const completion = Throw.TypeError('a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
+          const completion = Throw.StaticTypeError('a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         continue;
@@ -5387,7 +5387,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             for (let j = i + 1; j < Members.length; j += 1) {
               if (AreDisjoint(Members[i], Members[j])) {
                 reportedEmptyIntersections.add(node);
-                const completion = Throw.TypeError(
+                const completion = Throw.StaticTypeError(
                   'no value is of both $1 and $2, so their intersection is never',
                   Value(displayType(Members[i])),
                   Value(displayType(Members[j])),
@@ -5428,7 +5428,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // feature indistinguishable. Refused here rather than ignored; the
         // index type is fixed by the specification, not declared per array.
         if (node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 1) {
-          const completion = Throw.TypeError('an array type takes a single type argument') as ThrowCompletion;
+          const completion = Throw.StaticTypeError('an array type takes a single type argument') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return null;
         }
@@ -5459,14 +5459,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // every use rather than at its declaration - even a literal of the
           // right length with correctly typed elements.
           if (sawDefault && !e.Initializer && !e.Rest) {
-            errors.push((Throw.TypeError(
+            errors.push((Throw.StaticTypeError(
               '$1 is not a type',
               Value('a tuple position without a default may not follow one with a default'),
             ) as ThrowCompletion).Value as ObjectValue);
             return null;
           }
           if (sawRest && e.Initializer) {
-            errors.push((Throw.TypeError(
+            errors.push((Throw.StaticTypeError(
               '$1 is not a type',
               Value('a tuple position with a default may not follow a rest'),
             ) as ThrowCompletion).Value as ObjectValue);
@@ -5560,7 +5560,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `{ n: int32, n: string }` was statically ordinary and dynamically
           // UNINHABITABLE.
           if (objectTypeKeys.has(key)) {
-            errors.push((Throw.TypeError(
+            errors.push((Throw.StaticTypeError(
               '$1 is already declared on this type',
               Value(key),
             ) as { Value: ObjectValue }).Value);
@@ -6844,7 +6844,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return indexTypeRecord();
               }
               if (spanForbiddenMembers.has(name)) {
-                const completion = Throw.TypeError(
+                const completion = Throw.StaticTypeError(
                   '$1 is not declared by $2',
                   Value(name),
                   Value(displayType(receiver!)),
@@ -6955,7 +6955,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // to fill in later.
             if (WEAK_COLLECTION_ABSENT.has(name)
                 && (receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
-              const completion = Throw.TypeError(
+              const completion = Throw.StaticTypeError(
                 '$1 is not declared by $2',
                 Value(name),
                 Value(displayType(receiver)),
@@ -7021,7 +7021,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (spanExtent !== undefined && spanIndex.type === 'NumericLiteral'
                 && typeof spanIndex.value === 'number'
                 && (!Number.isInteger(spanIndex.value) || spanIndex.value < 0 || spanIndex.value >= spanExtent)) {
-              const completion = Throw.TypeError(
+              const completion = Throw.StaticTypeError(
                 '$1 is not an index of $2',
                 Value(String(spanIndex.value)),
                 Value(displayType(receiver!)),
@@ -7043,7 +7043,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
                 && typeof index.value === 'number'
                 && (!Number.isInteger(index.value) || index.value < 0 || index.value >= receiver.Extent)) {
-              const completion = Throw.TypeError(
+              const completion = Throw.StaticTypeError(
                 '$1 is not an index of $2',
                 Value(String(index.value)),
                 Value(displayType(receiver)),
@@ -8215,10 +8215,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || (t.Kind === 'union' && t.Members.every(decidable));
     if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
       if (whenTrue === empty) {
-        const completion = Throw.TypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+        const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       } else if (whenFalse === empty) {
-        const completion = Throw.TypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+        const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
     }
@@ -8830,7 +8830,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // rather than leaving the function silently untyped.
         for (const item of queue) {
           if (item.signature.InferredReturn || item.signature.ProvisionalReturn) {
-            const completion = Throw.TypeError('the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
+            const completion = Throw.StaticTypeError('the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             item.signature.InferredReturn = undefined;
             item.signature.ProvisionalReturn = undefined;
@@ -10257,7 +10257,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // ANNOTATION can name the wrong one - an unannotated generator now
           // leaves this field null deliberately, since its shape is published
           // rather than declared.
-          const completion = Throw.TypeError('a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
+          const completion = Throw.StaticTypeError('a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           declared = Return;
         }
@@ -10344,7 +10344,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return sameForOverloading(e.Return, declared);
       });
       if (duplicate) {
-        const completion = Throw.TypeError('$1 is declared twice with the same parameter types and return type', Value(name)) as ThrowCompletion;
+        const completion = Throw.StaticTypeError('$1 is declared twice with the same parameter types and return type', Value(name)) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
       signatures.push(signature as never);
@@ -10672,7 +10672,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const numericFamilies = ['uint', 'int', 'float16', 'float32', 'float64', 'float128'];
           if (positionType.Kind === 'primitive' && numericFamilies.includes(positionType.Name)
               && !fitsNumericType(numeric, positionType.Name, positionType.Arguments)) {
-            const completion = Throw.TypeError('$1 is not a value of $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+            const completion = Throw.StaticTypeError('$1 is not a value of $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           } else if (positionType.Kind === 'union') {
             // "A numeric literal against a union of NUMERIC types is a type
@@ -10686,7 +10686,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const numericNames = ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128'];
             const numericMembers = positionType.Members.filter((m) => m.Kind === 'primitive' && numericNames.includes(m.Name));
             if (numericMembers.length > 1) {
-              const completion = Throw.TypeError('$1 is ambiguous against $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('$1 is ambiguous against $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -11037,7 +11037,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (classContext.some((c) => c === owner || inheritsFrom(c, owner))) {
       return;
     }
-    errors.push((Throw.TypeError('$1 is protected', Value(String(prop.key))) as ThrowCompletion).Value as ObjectValue);
+    errors.push((Throw.StaticTypeError('$1 is protected', Value(String(prop.key))) as ThrowCompletion).Value as ObjectValue);
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
@@ -11175,7 +11175,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // It admits the implicit return by meaning, not by assignability.
       && declaredReturn.Kind !== 'void'
       && !IsAssignable(undefinedType, declaredReturn)) {
-      const completion = Throw.TypeError(
+      const completion = Throw.StaticTypeError(
         'a function declared to return $1 can complete without a return, and that type does not admit undefined',
         Value(displayType(declaredReturn)),
       );
@@ -11319,12 +11319,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (NarrowTo(s, t) === empty) {
-      const completion = Throw.TypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
+      const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
       errors.push(completion.Value as ObjectValue);
       return;
     }
     if (NarrowFrom(s, t) === empty) {
-      const completion = Throw.TypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
+      const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
       errors.push(completion.Value as ObjectValue);
     }
   };
@@ -11552,7 +11552,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const declared = resolveType(ann.Type);
             if (declared && !canCarryDisposal(declared)) {
-              const completion = Throw.TypeError('a using declaration cannot be typed $1, whose values carry no disposal method', Value(displayType(declared))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('a using declaration cannot be typed $1, whose values carry no disposal method', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -11654,7 +11654,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `||` skips its right operand when the left is truthy; `&&` when
             // the left is falsy.
             if (t !== undefined && t === isOr) {
-              const completion = Throw.TypeError(
+              const completion = Throw.StaticTypeError(
                 'the right operand of $1 can never be evaluated, so it is dead code',
                 Value(isOr ? '||' : '&&'),
               );
@@ -11910,7 +11910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!chainDefault) {
             const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
             if (missing.length > 0) {
-              const completion = Throw.TypeError(
+              const completion = Throw.StaticTypeError(
                 'match over $1 is missing $2 and has no default',
                 Value(displayType(subjectType!)),
                 Value(missing.map((a) => a.key).join(', ')),
@@ -11962,7 +11962,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!hasDefault) {
             const missing = matchInfo.names.filter((nm) => !covered.has(nm));
             if (missing.length > 0) {
-              const completion = Throw.TypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -12012,7 +12012,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
                 .join(', ');
               const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
-              const completion = Throw.TypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -12029,7 +12029,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (clauses && clauses.length > 1) {
           for (let i = 0; i < clauses.length - 1; i += 1) {
             if (!(clauses[i] as { TypeAnnotation?: unknown }).TypeAnnotation) {
-              const completion = Throw.TypeError('an untyped catch clause must be last') as ThrowCompletion;
+              const completion = Throw.StaticTypeError('an untyped catch clause must be last') as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -12059,14 +12059,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A valid label is `EnumName.Member`. Any other label in an enum
           // switch is not an enumerator of the enum and is a type error.
           for (const { shown } of coverage.invalid) {
-            const completion = Throw.TypeError('$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
+            const completion = Throw.StaticTypeError('$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
           const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
           if (!hasDefault) {
             const missing = coverage.names.filter((nm) => !coverage.covered.has(nm));
             if (missing.length > 0) {
-              const completion = Throw.TypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -12253,11 +12253,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               );
               if (resolution.Kind === 'none') {
                 // "It is a type error if ResolveOverload returns ~none~."
-                const completion = Throw.TypeError('no declared signature accepts an argument of type $1', Value(displayType(argTypes[0] as TypeRecord))) as ThrowCompletion;
+                const completion = Throw.StaticTypeError('no declared signature accepts an argument of type $1', Value(displayType(argTypes[0] as TypeRecord))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               } else if (resolution.Kind === 'ambiguous') {
                 // "and it is a type error if it returns ~ambiguous~."
-                const completion = Throw.TypeError('the call is ambiguous between two declared signatures') as ThrowCompletion;
+                const completion = Throw.StaticTypeError('the call is ambiguous between two declared signatures') as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               } else if (resolution.Kind === 'resolved') {
                 const index = candidates.indexOf(resolution.Signature as never);
@@ -12571,7 +12571,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (operand as { LocationConsuming?: boolean }).LocationConsuming === true) {
           const produced = staticType(operand);
           if (produced && produced.Kind !== 'reference') {
-            const completion = Throw.TypeError(
+            const completion = Throw.StaticTypeError(
               'a call in a ++ or -- operand must return a ref, and $1 does not',
               Value(displayType(produced)),
             ) as ThrowCompletion;
@@ -12595,7 +12595,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (a.LeftHandSideExpression as { LocationConsuming?: boolean }).LocationConsuming === true) {
           const produced = staticType(a.LeftHandSideExpression);
           if (produced && produced.Kind !== 'reference') {
-            const completion = Throw.TypeError(
+            const completion = Throw.StaticTypeError(
               'a call assigned to must return a ref, and $1 does not',
               Value(displayType(produced)),
             ) as ThrowCompletion;

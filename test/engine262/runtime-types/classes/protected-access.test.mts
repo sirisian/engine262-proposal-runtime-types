@@ -16,11 +16,11 @@ const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringi
 
 test('an OUTSIDE read is refused', () => {
   // The README's own example: `// a.balance; // TypeError: balance is protected`.
-  expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('TypeError');
-  expect(outcome('class B { protected a: uint8 = 1; } function f(x: B) { return x.a; }')).toBe('TypeError');
+  expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('StaticTypeError');
+  expect(outcome('class B { protected a: uint8 = 1; } function f(x: B) { return x.a; }')).toBe('StaticTypeError');
   // An UNRELATED class is outside too - being in *a* class is not being in
   // *the* class.
-  expect(outcome('class B { protected a: uint8 = 1; } class Z { m(x: B) { return x.a; } }')).toBe('TypeError');
+  expect(outcome('class B { protected a: uint8 = 1; } class Z { m(x: B) { return x.a; } }')).toBe('StaticTypeError');
   // A PUBLIC member is unaffected, which says the rule reads the modifier
   // rather than refusing every typed member access.
   expect(outcome('class B { a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('ACCEPTED');
@@ -55,11 +55,11 @@ test('a `const` bound to a construction is typed, so protected access is checked
   // whose initializer is a `new` expression takes that construction's type, so
   // the protected rule - "checked WHERE THE STATIC TYPE IS KNOWN" - now reaches
   // the spelling a program actually writes rather than only the annotated one.
-  expect(outcome('class B { protected a: uint8 = 1; } const b = new B(); b.a;')).toBe('TypeError');
+  expect(outcome('class B { protected a: uint8 = 1; } const b = new B(); b.a;')).toBe('StaticTypeError');
   // A `let` is still untyped, deliberately: fixing a mutable binding's type from
   // its initializer would refuse assignments an untyped program may make.
   expect(outcome('class B { protected a: uint8 = 1; } let b = new B(); b.a;')).toBe('ACCEPTED');
   // The annotated form of the same program IS refused, which is what says the
   // gap is the binding's type and not the rule.
-  expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('TypeError');
+  expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('StaticTypeError');
 });

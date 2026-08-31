@@ -37,12 +37,12 @@ test('an accessor override must be invariant', () => {
   expect(evaluated(`${base} class D extends B { accessor a: uint32 = 2; } String(new D().a);`)).toBe('2');
   // NARROWING breaks the setter half: the base's accepted every uint32, and a
   // uint8 setter would not.
-  expect(outcome(`${base} class D extends B { accessor a: uint8 = 2; }`)).toBe('TypeError');
+  expect(outcome(`${base} class D extends B { accessor a: uint8 = 2; }`)).toBe('StaticTypeError');
   // WIDENING breaks the getter half: the base's promised a uint32 reader no
   // more than a uint32, and a uint8 accessor promises less... in the other
   // direction. Both are refused, which is what invariance means - asserting
   // only one would pass against a rule that had implemented plain covariance.
-  expect(outcome('class B { accessor a: uint8 = 1; } class D extends B { accessor a: uint32 = 2; }')).toBe('TypeError');
+  expect(outcome('class B { accessor a: uint8 = 1; } class D extends B { accessor a: uint32 = 2; }')).toBe('StaticTypeError');
 });
 
 test('the rule applies where it should and nowhere else', () => {
@@ -60,7 +60,7 @@ test('a class NOTHING REFERENCES is checked, which is the infrastructure', () =>
   // naming the class, nothing that would have demanded its type. Before the
   // walk was forced this reported nothing at all, and every rule judged there
   // would have inherited that.
-  expect(outcome('class B { accessor a: uint32 = 1; } class D extends B { accessor a: uint8 = 2; } 1;')).toBe('TypeError');
+  expect(outcome('class B { accessor a: uint32 = 1; } class D extends B { accessor a: uint8 = 2; } 1;')).toBe('StaticTypeError');
 });
 
 test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', () => {
@@ -72,7 +72,7 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
   expect(outcome(`${A} class C { get x(): Dog { return new Dog(); } set x(v: Animal) {} }`)).toBe('ACCEPTED');
   expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Animal) {} }`)).toBe('ACCEPTED');
   // A NARROWER setter is not: the getter can yield an Animal that is no Dog.
-  expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('TypeError');
+  expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('StaticTypeError');
 
   // TWO DIFFERING NUMERIC TYPES ARE ALSO AN ERROR, and this is the assertion
   // two earlier cycles got backwards. Both treated this as a legal pair the
@@ -80,7 +80,7 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
   // explicit: "A value of one value type never implicitly becomes a value of
   // another. `uint8` does not widen to `uint16`" - the rule Rust, Swift, and Go
   // use. So the pair genuinely does not round-trip.
-  expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint32) {} }')).toBe('TypeError');
+  expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint32) {} }')).toBe('StaticTypeError');
   expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint8) {} }')).toBe('ACCEPTED');
 
   // An untyped pair is unjudged, and an `accessor` cannot violate the rule at
@@ -97,13 +97,13 @@ test('a derived setter must be CONTRAVARIANT', () => {
   const A = 'class Animal {} class Dog extends Animal {} ';
   expect(outcome(`${A} class S { set r(v: Dog) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
   expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
-  expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('TypeError');
+  expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Dog) {} }`)).toBe('StaticTypeError');
   // Nothing to be contravariant against.
   expect(outcome(`${A} class S { m() {} } class K extends S { set r(v: Dog) {} }`)).toBe('ACCEPTED');
   // The base's WRITE type had to be carried on the class type to make this
   // decidable: a Structure holds one type per property and the getter already
   // claims it, so a setter is invisible to a derived class without it.
-  expect(outcome('class S { set r(v: uint32) {} } class K extends S { set r(v: uint8) {} }')).toBe('TypeError');
+  expect(outcome('class S { set r(v: uint32) {} } class K extends S { set r(v: uint8) {} }')).toBe('StaticTypeError');
 });
 
 test('README\'s worked Shelter/Kennel example, both directions', () => {
@@ -115,7 +115,7 @@ test('README\'s worked Shelter/Kennel example, both directions', () => {
   expect(outcome(`${decl} class Kennel extends Shelter { get resident(): Dog { return new Dog(); } set resident(value: Animal) {} }`)).toBe('ACCEPTED');
   // README's own commented-out line: "// set resident(value: Dog) {} //
   // TypeError: the base setter accepts any Animal".
-  expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('TypeError');
+  expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('StaticTypeError');
 });
 
 test('the one rule not implemented: field and accessor substitution', () => {
@@ -126,7 +126,7 @@ test('the one rule not implemented: field and accessor substitution', () => {
   // type never implicitly becomes another, so refusing this is correct. The run
   // time converting from an untyped parameter is a CHECKED conversion at a
   // boundary, which is a different rule.
-  expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('TypeError');
+  expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('StaticTypeError');
   expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
 });
 
@@ -144,8 +144,8 @@ test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
   // And still NOMINAL, which is the half a structural fix would have broken:
   // the base is not a subtype of the derived, and two unrelated EMPTY classes
   // are unrelated though their structures are identical.
-  expect(outcome(`${A} let d: Dog = new Animal();`)).toBe('TypeError');
-  expect(outcome('class X {} class Y {} let x: X = new Y();')).toBe('TypeError');
+  expect(outcome(`${A} let d: Dog = new Animal();`)).toBe('StaticTypeError');
+  expect(outcome('class X {} class Y {} let x: X = new Y();')).toBe('StaticTypeError');
   // The run-time judgment it was disagreeing with is unchanged.
   expect(evaluated(`${A} String(new Dog() is Animal);`)).toBe('true');
 });
@@ -158,16 +158,16 @@ test('a derived getter must refine COVARIANTLY', () => {
   expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
   expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('ACCEPTED');
   // The violation: widening the getter breaks the base's promise.
-  expect(outcome(`${A} class S { get r(): Dog { return new Dog(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('TypeError');
+  expect(outcome(`${A} class S { get r(): Dog { return new Dog(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('StaticTypeError');
   // An unrelated class is not a refinement either, which a rule comparing only
   // "different" rather than "not a subtype" would also catch - but this one
   // distinguishes it from the covariant case above, which that rule would not.
-  expect(outcome(`${A} class X {} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): X { return new X(); } }`)).toBe('TypeError');
+  expect(outcome(`${A} class X {} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): X { return new X(); } }`)).toBe('StaticTypeError');
   expect(outcome(`${A} class K { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
   // A NUMERIC refinement is judged too: one value type never implicitly
   // becomes another, so a differing numeric is a failed refinement like any
   // other, and the rule is not restricted to class types.
-  expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('TypeError');
+  expect(outcome('class S { get r(): uint32 { return 1; } } class K extends S { get r(): uint8 { return 1; } }')).toBe('StaticTypeError');
 });
 
 // -- readonly accessor -----------------------------------------------------------

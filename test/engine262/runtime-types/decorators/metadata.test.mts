@@ -258,8 +258,8 @@ test('what bounds a symbol-keyed metadata member', () => {
   // and the Symbol-keyed section below.
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const decl = 'const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; } ';
-  expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
-  expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('TypeError');
+  expect(outcome(`${decl} let m: ClassFieldMetadata = { [k]: "ok" }; m[k] = 5;`)).toBe('StaticTypeError');
+  expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('StaticTypeError');
   // 2. The checker now KNOWS the intrinsic names, so a wrong kind is rejected in
   // a never-called function exactly as a user interface's is - the convention
   // this used to be the documented exception to
@@ -276,7 +276,7 @@ test('what bounds a symbol-keyed metadata member', () => {
   expectStaticTypeError('let m: ClassMetadata = 5;');
   // The shape rules the exception was protecting, unchanged.
   expect(evaluated('let m: ClassMetadata = {}; "admitted";')).toBe('admitted');
-  expect(outcome('partial interface ClassMetadata { c: string; } let m: ClassMetadata = {};')).toBe('TypeError');
+  expect(outcome('partial interface ClassMetadata { c: string; } let m: ClassMetadata = {};')).toBe('StaticTypeError');
   expect(outcome('partial interface ClassMetadata { c: string; } let m: ClassMetadata = { c: "x" };')).toBe('ACCEPTED');
 });
 
@@ -409,15 +409,15 @@ test('interface member types are enforced STATICALLY, and only so - for BOTH key
   const S = 'const k = Symbol("k"); interface I { [k]: string; } ';
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // What the checker sees, it refuses - for a string key.
-  expect(outcome2(`${T} let m: J = { s: "ok" }; m.s = 5;`)).toBe('TypeError');
-  expect(outcome2(`${T} let m: J = { s: 5 };`)).toBe('TypeError');
+  expect(outcome2(`${T} let m: J = { s: "ok" }; m.s = 5;`)).toBe('StaticTypeError');
+  expect(outcome2(`${T} let m: J = { s: 5 };`)).toBe('StaticTypeError');
   // What it does not see, it does not - ALSO for a string key. This is the
   // assertion that says the gap is the checker's reach and not the key.
   expect(outcome2(`${T} function f(o) { o.s = 5; } let m: J = { s: "ok" }; f(m);`)).toBe('ACCEPTED');
   expect(outcome2(`${T} function g(v) { let m: J = v; return m; } g({ s: 5 });`)).toBe('ACCEPTED');
   // A SYMBOL key is judged wherever a string key is, so what bounds both is
   // the checker's REACH, which is the real boundary.
-  expect(outcome2(`${S} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
-  expect(outcome2(`${S} let m: I = { [k]: 5 };`)).toBe('TypeError');
+  expect(outcome2(`${S} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('StaticTypeError');
+  expect(outcome2(`${S} let m: I = { [k]: 5 };`)).toBe('StaticTypeError');
   expect(outcome2(`${S} function f(o) { o[k] = 5; } let m: I = { [k]: "ok" }; f(m);`)).toBe('ACCEPTED');
 });

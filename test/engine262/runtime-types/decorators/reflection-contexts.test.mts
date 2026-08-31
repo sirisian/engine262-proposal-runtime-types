@@ -170,7 +170,7 @@ test('the library nominals this branch sits in front of are unaffected', () => {
   expect(evaluated('let e: Error = new TypeError("x"); "ok";')).toBe('ok');
   expect(evaluated('let m: Map = new Map(); "ok";')).toBe('ok');
   expect(evaluated('let s: Set = new Set(); "ok";')).toBe('ok');
-  expect(rejectionKind('let e: Error = 5;')).toBe('TypeError');
+  expect(rejectionKind('let e: Error = 5;')).toBe('StaticTypeError');
 });
 
 test('the rest of #sec-decorator-application', () => {
