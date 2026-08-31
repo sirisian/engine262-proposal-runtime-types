@@ -640,6 +640,28 @@ test('concat does not admit a foreign element', () => {
   expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.toSorted();')).toBe(true);
 });
 
+test('push, unshift and splice check their element', () => {
+  // D102 row 2: all three were ABSENT from `arrayMethodSignature`, so a foreign
+  // element raised no static error - `a.push("s")` on a `[].<uint8>`
+  // type-checked. The RUN TIME refused every one, and these entries are copied
+  // from it.
+  expect(accepts('let a: [].<uint8> = []; a.push("s");')).toBe(false);
+  expect(accepts('let a: [].<uint8> = []; a.unshift("s");')).toBe(false);
+  expect(accepts('let a: [].<uint8> = []; a.splice(0, 0, "s");')).toBe(false);
+
+  // The element parameter is a REST - all three are variadic.
+  expect(accepts('let a: [].<uint8> = []; a.push((1 := uint8));')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; a.push((1 := uint8), (2 := uint8));')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; a.splice(0, 1);')).toBe(true);
+
+  // `splice`'s RETURN is the receiver, as `slice`'s is. Building a fresh array
+  // record gave `Extent: undefined` and refused this row - which MATCHES the run
+  // time, and the run time is wrong there: it reports
+  // `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`. Copying an
+  // error is not agreement (D103).
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.splice(0, 1);')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

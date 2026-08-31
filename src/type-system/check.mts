@@ -9832,6 +9832,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // parameter is the index type and not `number`, so that a reserve
         // argument is checked exactly as a length or a capacity would be.
         return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeRecord()], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
+      // `push`, `unshift` and `splice` were absent from this table entirely
+      // (D102 row 2), so a foreign element raised no static error at all -
+      // `a.push("s")` on a `[].<uint8>` type-checked. The RUN TIME refused every
+      // one of them, which is what these entries are copied from: it throws for
+      // a wrong element and accepts a right one, `push` and `unshift` answer the
+      // new length, and `splice` answers an array of the element.
+      //
+      // The element parameter is a REST, since all three are variadic -
+      // `a.push(x, y)` is legal and must stay so.
+      case 'push':
+      case 'unshift':
+        return {
+          Kind: 'function',
+          Signatures: [{ Parameters: [parameter(element, { Rest: true })], Return: numberType }],
+        } as Known;
+      case 'splice':
+        // The RETURN is `receiver`, as `slice`'s is, and NOT a freshly built
+        // array record. Building one gave `Extent: undefined`, and the checker
+        // then refused `let b: [].<uint8> = a.splice(0, 1)` - which happens to
+        // match what the RUN TIME does, and the run time is WRONG there: it
+        // reports `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`,
+        // a malformed extent. Copying an error is not agreement (D103).
+        return {
+          Kind: 'function',
+          Signatures: [{
+            Parameters: [
+              parameter(numberType, { Optional: true }),
+              parameter(numberType, { Optional: true }),
+              parameter(element, { Rest: true }),
+            ],
+            Return: receiver,
+          }],
+        } as Known;
       // `concat` is NOT one of the five below (D102).
       //
       // It shared their case and so returned the RECEIVER, ignoring its
