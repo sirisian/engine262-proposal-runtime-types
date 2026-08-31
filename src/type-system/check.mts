@@ -10019,7 +10019,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const declareFunctionSignatures = (outerList: readonly ParseNode[]) => {
+  const declareFunctionSignatures = (outerList: readonly ParseNode[], publishNow: boolean = true) => {
     // An `export`ed declaration is wrapped, and the collection below reads the
     // list positionally, so `export function f(): uint32 {}` was never
     // collected: its signature existed nowhere, and a call of it was ~any~ in
@@ -10355,7 +10355,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       declare(name, { Kind: 'function', Signatures } as unknown as Known);
     }
-    publishInferredReturns();
+    // The fixpoint is NOT run here when the caller will run it after the list's
+    // own declarations are walked (D106).
+    //
+    // This function runs BEFORE its statement list is walked - which is the
+    // point, so `f(300)` above `function f(v: uint8) {}` is an Early Error - and
+    // publishing here meant the fixpoint sampled the list's bindings before they
+    // existed. At top level that is invisible, because `checkInTwoPasses` hands
+    // pass 1's FRAME to pass 2 and the second pass's first sample already finds
+    // them; a BLOCK's declarations do not survive that way, so a nested
+    // fixpoint saw `NULL` in both passes and never converged.
+    if (publishNow) {
+      publishInferredReturns();
+    }
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
     for (const n of list) {
@@ -11476,8 +11488,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // declaration. Their signatures are declared over the whole list before
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be (F56).
-      declareFunctionSignatures(node as readonly ParseNode[]);
+      declareFunctionSignatures(node as readonly ParseNode[], false);
       node.forEach((n) => walk(n));
+      // The list's own bindings are declared by now, so an inference anchored by
+      // one of them has something to read (D106). `let s: string = "s";
+      // function g(){ return s; }` in a block published nothing before this,
+      // and the same program at top level published `string`.
+      publishInferredReturns();
       return;
     }
     const n = node as ParseNode;

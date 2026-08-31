@@ -783,6 +783,40 @@ test('a signature is trusted only where the name cannot be replaced', () => {
   expect(accepts('const g = (p: uint32): string => "s"; const q: number = g((1 := uint32));')).toBe(true);
 });
 
+test('an inference anchored in a nested list still publishes', () => {
+  // D106: `publishInferredReturns()` ran as the last step of
+  // `declareFunctionSignatures`, which runs BEFORE its statement list is walked -
+  // deliberately, so `f(300)` above `function f(v: uint8) {}` is an Early Error.
+  // The cost was that the fixpoint sampled the list's own bindings before they
+  // existed.
+  //
+  // At TOP LEVEL that is invisible: `checkInTwoPasses` hands pass 1's frame to
+  // pass 2, so the second pass's first sample already finds them. A BLOCK's
+  // declarations do not survive that way, so a nested fixpoint saw `NULL` in
+  // both passes and never converged - and the same program was an Early Error at
+  // top level and not inside a block.
+  const G = 'function g(){ return s; } const q: number = g();';
+  expect(accepts(`{ let s: string = "s"; ${G} }`)).toBe(false);
+  expect(accepts(`try { let s: string = "s"; ${G} } catch (e) { }`)).toBe(false);
+  expect(accepts(`function w() { let s: string = "s"; ${G} }`)).toBe(false);
+  expect(accepts(`let s: string = "s"; ${G}`)).toBe(false);
+
+  // It was never lexical SCOPING: a `var` is function-scoped and failed
+  // identically, so the test is purely "declared in a nested statement list".
+  expect(accepts(`{ var s: string = "s"; ${G} }`)).toBe(false);
+
+  // F56: the scan still runs BEFORE the list is walked, so a call above its
+  // declaration is still an Early Error. Only the PUBLISH moved.
+  expect(accepts('f(300); function f(v: uint8) {}')).toBe(false);
+
+  // An unannotated binding is ~any~, and a self-describing contribution does not
+  // anchor (D105): both stay deferred.
+  expect(accepts(`{ let s = "s"; ${G} }`)).toBe(true);
+  expect(accepts('function g2(){ return {}; } let a: uint8 = g2();')).toBe(true);
+  // ...and a reassigned name is still not trusted (D107).
+  expect(accepts('function g4(p: uint32){ return "s"; } g4 = function(p){ return 1; }; const q: number = g4((1 := uint32));')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
