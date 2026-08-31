@@ -466,7 +466,7 @@ export abstract class FunctionParser extends IdentifierParser {
   // proposal-runtime-types: `ref` is contextual, consumed only when what
   // follows can begin a BindingElement, so a parameter named `ref` still works.
   parseFormalParameter(): ParseNode.FormalParameter {
-    // proposal-runtime-types decorators.md: `d(@f a: uint32)` — a parameter
+    // proposal-runtime-types decorators.md: `d(@f a: uint32)` â€” a parameter
     // carries its own decorators, which take the ClassMethodParameter,
     // ClassSetterParameter, ClassOperatorParameter, or FunctionParameter
     // context depending on what declares the parameter list.

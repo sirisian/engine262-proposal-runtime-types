@@ -67,7 +67,7 @@ export function PrescanPreprocessorNames(source: string): ReadonlyMap<string, Pr
   IMPORT_WITH_ATTRIBUTES.lastIndex = 0;
   let match = IMPORT_WITH_ATTRIBUTES.exec(source);
   while (match !== null) {
-    // `import d from …`, `import { a, b } from …`, and `import d, { a } from …`.
+    // `import d from â€¦`, `import { a, b } from â€¦`, and `import d, { a } from â€¦`.
     // A default binding contributes its own name bound to the `default` export;
     // sec-static-semantics-replacementdecoratornames admits it because `@d` is
     // exactly the kind of name a decoration is spelled with, and a preprocessor

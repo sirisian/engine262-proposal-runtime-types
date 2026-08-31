@@ -12,7 +12,7 @@ import { Agent, setSurroundingAgent } from '#self';
  * no name a decoration can be spelled with". That is true of the other two - a
  * namespace import gives `ns.jsx`, a member access rather than an
  * IdentifierReference, and a bare specifier binds nothing - and false of a
- * default import, which binds exactly the kind of name `@jsx { … }` takes.
+ * default import, which binds exactly the kind of name `@jsx { â€¦ }` takes.
  *
  * It is also the common shape: a preprocessor module usually provides one macro,
  * which is what `export default` is for.

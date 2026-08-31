@@ -16,33 +16,33 @@ import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptR
  * ordinary module - nothing below is engine magic, and the same text loads
  * unchanged as a user module, which is what makes the polyfill claim testable.
  *
- * Written over the primitives of typeprogramming.md ง3.6 - `Reflect.makeType`,
+ * Written over the primitives of typeprogramming.md ยง3.6 - `Reflect.makeType`,
  * `Reflect.getReflection`, `Reflect.isAssignable`, and `type never` - plus
- * `Reflect.typeOf`, which `literal` needs and which neither ง3.6 nor the annex
+ * `Reflect.typeOf`, which `literal` needs and which neither ยง3.6 nor the annex
  * lists (PLAN-std-types.md, phase 5: the two lists also differ from each other
  * on `keyof`).
  *
  * WHERE THIS DEPARTS FROM THE DESIGN DOCUMENT, and why. Each is a finding fed
  * back by PLAN-std-types.md phase 5; none is a silent edit.
  *
- *   F105  ง4.1's `js` block is missing from typeprogramming.md, so `indexed`
+ *   F105  ยง4.1's `js` block is missing from typeprogramming.md, so `indexed`
  *         had no definition anywhere. Reconstructed here against
  *         #sec-indexed-access-types and checked to agree with the `T[K]`
  *         operator.
- *   F113  ง4.0 annotates with `Reflect.TypeReflection`,
+ *   F113  ยง4.0 annotates with `Reflect.TypeReflection`,
  *         `TypePropertyReflection`, `TypeTupleElement` and `TypeIndexSignature`
  *         - twenty uses of four names that exist in NEITHER the specification
  *         nor the engine. Erased here rather than invented.
- *   F114  ง4.5's `head` is `elementTypes(T)[0] ?? never`, which does not run: a
+ *   F114  ยง4.5's `head` is `elementTypes(T)[0] ?? never`, which does not run: a
  *         `[].<type>` annotation makes the result a CHECKED array, so the guard
  *         is statically dead code and the empty case raises rather than
  *         yielding `undefined`. Written as a length test.
- *   F116  ง4.3's `awaited` compares `node.generic?.base === Promise`, which is
+ *   F116  ยง4.3's `awaited` compares `node.generic?.base === Promise`, which is
  *         the CONSTRUCTOR, not the type. `type Promise` is the operand.
  *   F117  a signature's `this` slot reflects as a NODE where every other
- *         type-valued slot reflects as a Type Object, so ง6.3's
+ *         type-valued slot reflects as a Type Object, so ยง6.3's
  *         `thisParameterType` needs a `makeType` to normalise it.
- *   F120  ง4.0's `genericApplication` spreads the READ view
+ *   F120  ยง4.0's `genericApplication` spreads the READ view
  *         (`{ ...reflect(base), generic: {...} }`). The write side ignores a
  *         `generic` field on a primitive node, so that spelling silently
  *         returns the BARE BASE - a wrong type rather than an error. The write
@@ -77,7 +77,7 @@ import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptR
 export const STD_TYPES_SPECIFIER = 'std:types';
 
 export const STD_TYPES_SOURCE = `
-// ---- foundations — ง4.0 ----------------------------------------
+// ---- foundations โ€” ยง4.0 ----------------------------------------
 
 export function reflect(T: type) {
   return Reflect.getReflection(T);
@@ -129,7 +129,7 @@ export function elementTypes(T: type): [].<type> {
   return tupleElements(T).map(e => e.type);
 }
 
-// ---- property and element mapping — ง4.0 -----------------------
+// ---- property and element mapping โ€” ยง4.0 -----------------------
 
 export function mapProperties(T: type, f): type {
   const node = reflect(T);
@@ -159,7 +159,7 @@ export function propertyType(T: type, name: string | symbol) {
   throw new TypeError(\`propertyType expects an object type, got \${String(T)}\`);
 }
 export function genericApplication(base: type, args: [].<any>): type {
-  // F120: ง4.0 writes \`{ ...reflect(base), generic: { base, arguments } }\`,
+  // F120: ยง4.0 writes \`{ ...reflect(base), generic: { base, arguments } }\`,
   // which mirrors the READ view. The write side ignores a \`generic\` FIELD on a
   // primitive node, so that spelling silently returns the bare base instead of
   // the application - a wrong answer rather than an error. The write form is
@@ -167,7 +167,7 @@ export function genericApplication(base: type, args: [].<any>): type {
   return Reflect.makeType({ kind: 'generic', base, arguments: args });
 }
 
-// ---- object utilities — ง4.2 -----------------------------------
+// ---- object utilities โ€” ยง4.2 -----------------------------------
 
 export function partial(T: type): type  { return mapProperties(T, p => ({ ...p, optional: true  })); }
 export function required(T: type): type { return mapProperties(T, p => ({ ...p, optional: false })); }
@@ -206,7 +206,7 @@ export function renameProperties(T: type, f): type {
   return mapProperties(T, p => ({ ...p, name: typeof p.name === 'string' ? f(p.name) : p.name }));
 }
 
-// ---- unions and discriminated unions — ง4.3, ง4.7 --------------
+// ---- unions and discriminated unions โ€” ยง4.3, ยง4.7 --------------
 
 export function exclude(T: type, U: type): type {
   return union(arms(T).filter(arm => !Reflect.isAssignable(arm, U)));
@@ -234,7 +234,7 @@ export function handlers(T: type, R: type, tag: string = 'kind'): type {
   return objectOf(discriminants(T, tag).map(k => prop(k, fn([byKind(T, k, tag)], R))));
 }
 
-// ---- functions — ง4.0, ง4.3 ------------------------------------
+// ---- functions โ€” ยง4.0, ยง4.3 ------------------------------------
 
 export function fn(parameterTypes: [].<type>, returnType: type): type {
   return Reflect.makeType({ kind: 'function', signatures: [{
@@ -263,7 +263,7 @@ export function parameters(F: type): type {
     elements: signature.parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
 }
 
-// ---- literals and strings — ง4.2, ง4.4 -------------------------
+// ---- literals and strings โ€” ยง4.2, ยง4.4 -------------------------
 
 const capitalizeFirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -285,10 +285,10 @@ export function listeners(T: type): type {
     : prop(\`on\${capitalizeFirst(p.name)}Changed\`, fn([p.type], type void)));
 }
 
-// ---- tuples and arrays — ง4.5 ----------------------------------
+// ---- tuples and arrays โ€” ยง4.5 ----------------------------------
 
 export function head(T: type): type {
-  // F114: \`elementTypes(T)[0] ?? never\`, as ง4.5 writes it, does not work. The
+  // F114: \`elementTypes(T)[0] ?? never\`, as ยง4.5 writes it, does not work. The
   // \`[].<type>\` return annotation makes the result a CHECKED array, so the
   // guard is statically dead code (refused at check time) and the empty case
   // raises a range error at run time rather than yielding \`undefined\`. A length
@@ -304,7 +304,7 @@ export function zip(A: type, B: type): type {
   return tupleOf(a.slice(0, Math.min(a.length, b.length)).map((t, i) => tupleOf([t, b[i]])));
 }
 
-// ---- recursion and composition — ง4.6, ง4.9 --------------------
+// ---- recursion and composition โ€” ยง4.6, ยง4.9 --------------------
 
 export function deepPartial(T: type): type {
   const node = reflect(T);
@@ -347,7 +347,7 @@ export function traverse(T: type, { leaf = t => t, property = p => p, element = 
 }
 export function deepMap(T: type, leaf): type { return traverse(T, { leaf }); }
 
-// ---- keys and indexing, promises, routes, and the maximal set — ง4.1, ง4.3, ง4.4, ง6 ----
+// ---- keys and indexing, promises, routes, and the maximal set โ€” ยง4.1, ยง4.3, ยง4.4, ยง6 ----
 
 export function keys(T: type): type {
   // OQ1-C. The function form of \`keyof\`, and literally the operator: not a
@@ -369,7 +369,7 @@ export function keys(T: type): type {
   return type keyof T;
 }
 export function indexed(T: type, K: type): type {
-  // F105: ง4.1's \`js\` block is missing from the design document. This
+  // F105: ยง4.1's \`js\` block is missing from the design document. This
   // reproduces #sec-indexed-access-types / IndexedAccessTypeRecord: distribute
   // over T's arms and K's keys; an optional property's read admits \`undefined\`.
   return union(arms(T).flatMap(arm => literalValues(K).map(key => {
@@ -382,7 +382,7 @@ export function indexed(T: type, K: type): type {
 export function awaited(T: type): type {
   const node = reflect(T);
   if (node.kind === 'union') return union(node.members.map(awaited));
-  if (node.kind === 'primitive' && node.generic?.base === type Promise)   // F116: ง4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
+  if (node.kind === 'primitive' && node.generic?.base === type Promise)   // F116: ยง4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
     return awaited(node.generic.arguments[0]);
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
   if (then) {
@@ -404,7 +404,7 @@ export function withThisType(F: type, Self: type): type {
 export function thisParameterType(F: type): type {
   // F117: the \`this\` slot holds a reflection NODE, where every other
   // type-valued slot on a signature holds a Type Object. \`makeType\` normalises
-  // it. ง6.3 writes \`?? any\` against the Type Object the model promises.
+  // it. ยง6.3 writes \`?? any\` against the Type Object the model promises.
   const thisNode = reflect(F).signatures[0].this;
   return thisNode === undefined ? any : Reflect.makeType(thisNode);
 }
@@ -427,7 +427,7 @@ export function brand(T: type, tag: string | symbol): type {
 // is a hardcoded intrinsic claiming a good name out of a flat, first-come
 // namespace, and its \`subtype\` judgment is at the floor of reflexivity and not
 // consulted anywhere yet - so the reservation currently buys nothing over
-// interning. Export both when ง6.4's exact automaton subtyping lands, or sooner
+// interning. Export both when ยง6.4's exact automaton subtyping lands, or sooner
 // if a scoping design for claims arrives.
 function suffixed(suffix: string): type {
   return Reflect.makeType({ kind: 'parameterized', base: string,
@@ -443,17 +443,17 @@ export function constructorParameters(C: type): type {
   return Reflect.makeType({ kind: 'tuple',
     elements: signatures[0].parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
 }
-// RETIRED - OQ10-C. For a class it is the IDENTITY: ง4.3 says "a class's type
+// RETIRED - OQ10-C. For a class it is the IDENTITY: ยง4.3 says "a class's type
 // object is the class and the class name is its instance type - there is no
-// \`typeof C\` constructor-type / instance-type split", and ง4.11's coverage
+// \`typeof C\` constructor-type / instance-type split", and ยง4.11's coverage
 // table says "a class is its own". For a function type it is \`returnType\`
 // under a second name. Shipping it would advertise a split this proposal
-// deliberately does not have, which is the reasoning ง4.12 used to decline
+// deliberately does not have, which is the reasoning ยง4.12 used to decline
 // \`isEqual\`. Use \`returnType\` for the factory case.
 
 // NOT EXPORTED - OQ8-C, see \`suffixed\` above.
 function stringPattern(pattern, ...holes) {
-  // ง6.4. Callable with a RegExp, or as a template tag where each hole
+  // ยง6.4. Callable with a RegExp, or as a template tag where each hole
   // contributes the sub-pattern its type matches. BLOCKED on F110 in the same
   // way \`brand\` and \`suffixed\` are: it builds a \`parameterized\` node.
   const holePattern = (t: type): string => {

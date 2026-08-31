@@ -9,7 +9,7 @@ import {
  *
  * "A `const` declaration without an |Initializer| is a Syntax Error where the
  * binding carries no |TypeAnnotation|, as it is in ECMA-262: the Early Errors of
- * |LexicalDeclaration| are amended so that the rule … does not apply to a
+ * |LexicalDeclaration| are amended so that the rule â€¦ does not apply to a
  * |LexicalBinding| whose |BindingIdentifier| carries one. Such a binding is
  * initialized to the default value of its type, exactly as a `let` binding of
  * that type is, and it is a type error where that type has no default."

@@ -1336,7 +1336,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   // `float32.<{ m, s }>` it never names.
   const shape = record ?? (isTypeObject(typeObject) ? (typeObject as { TypeRecord?: TypeRecord }).TypeRecord : undefined);
   // PLAN-generic-meta-evaluation.md phase 2. A GENERIC constraint shape resolves
-  // to the alias's nominal record rather than to its body - `type G<T> = { … }`
+  // to the alias's nominal record rather than to its body - `type G<T> = { â€¦ }`
   // binds as `Kind: 'nominal'` with `Declaration` the |TypeAliasDeclaration| -
   // so the object guard below saw no ~object~ and claimed no keys. The
   // declaration parsed (PLAN-generic-meta-declarations.md phase 1), registered

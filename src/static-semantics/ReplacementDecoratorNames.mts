@@ -33,8 +33,8 @@ export function ReplacementDecoratorNames(module: ParseNode.Module | ParseNode.M
     // A DEFAULT import and NamedImports both contribute; a namespace import and
     // a bare ModuleSpecifier do not.
     //
-    // The line is what the decoration can be SPELLED with. `import jsx from …`
-    // binds `jsx`, and `@jsx { … }` names it - so a default import introduces
+    // The line is what the decoration can be SPELLED with. `import jsx from â€¦`
+    // binds `jsx`, and `@jsx { â€¦ }` names it - so a default import introduces
     // exactly the kind of name a decoration takes, and is the common shape,
     // since a preprocessor module usually provides one macro. A namespace import
     // binds only `ns`, reached as `ns.jsx`, which is a member access rather than

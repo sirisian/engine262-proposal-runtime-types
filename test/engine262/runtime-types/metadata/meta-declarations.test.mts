@@ -445,7 +445,7 @@ test('a builder that names ambient state is not compile-time evaluable', () => {
 test('a meta declaration may be generic', () => {
   // PLAN-generic-meta-declarations.md. #sec-meta-declarations has carried
   // `TypeParameters?` in the production; the parser read a TypeName and went
-  // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { … }` - the
+  // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { â€¦ }` - the
   // central worked example of primitivemetadata.md - did not parse.
   const ord = 'interface Ordered<T> { v: T; } ';
   expect(run(`type NB<T> = { nonZero?: boolean }; meta NB<T> { default = {}; subtype(a, b) { return true; } } "ok";`)).toMatchObject({ Type: 'normal' });
@@ -457,7 +457,7 @@ test('a meta declaration may be generic', () => {
   expect(run(`${ord} type NB3<T: Ordered.<T>> = { nonZero?: boolean }; `
     + 'meta NB3<T: Ordered.<T>> { default = {}; subtype(sub: NB3.<T>, sup: NB3.<T>): boolean { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   // The non-generic form is unchanged, and an empty parameter list is refused by
-  // parseTypeParameters rather than by a rule of its own - `type E<> = …` is
+  // parseTypeParameters rather than by a rule of its own - `type E<> = â€¦` is
   // already a SyntaxError, and this pins that it keeps coming from there.
   expect(run('type NB4 = { nonZero?: boolean }; meta NB4 { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   expect(run('type NB5<> = { nonZero?: boolean };')).toMatchObject({ Type: 'throw' });
@@ -538,7 +538,7 @@ test('a hook may name the meta type\'s type parameter in its annotations', () =>
   // not do.
   //
   // #sec-meta-declarations says what to bind: the parameter "is bound to the
-  // base at each parameterization the meta type governs … the name of what the
+  // base at each parameterization the meta type governs â€¦ the name of what the
   // base IS". So it is bound per invocation, from the base the caller is
   // deciding about, and the frame is pushed around the Call in ApplyMetaHook -
   // EvaluateBody pushes one only from the FUNCTION's own type parameters, and a
@@ -571,7 +571,7 @@ test('a meta declaration takes one type parameter, matching its constraint shape
   // the declaration takes."
   //
   // The parameter is not an ordinary generic one - it "is bound to the base at
-  // each parameterization the meta type governs … the name of what the base IS",
+  // each parameterization the meta type governs â€¦ the name of what the base IS",
   // and `uint8.<{ bounds: 1..=6 }>` binds it to `uint8` because `uint8` is what
   // is being parameterized. One base, one parameter, and the shape must take the
   // same number because the shape is what the parameter is threaded into.
@@ -597,7 +597,7 @@ test('a meta declaration takes one type parameter, matching its constraint shape
 });
 
 test('a hook signature is its ARITY, which is what the table gives', () => {
-  // PLAN-meta-hook-signatures.md §1, and the reason D36 was withdrawn.
+  // PLAN-meta-hook-signatures.md Â§1, and the reason D36 was withdrawn.
   // #table-meta-hooks writes each hook as `subtype(sub, sup)` - names and counts,
   // NO types - so "a hook whose signature does not match the table" is the arity.
   expect(run('type MD = { md?: boolean }; meta MD { default = {}; subtype(a) { return true; } }'))
@@ -625,7 +625,7 @@ test('a meta declaration takes one type parameter, matching its constraint shape
   // the declaration takes."
   //
   // The parameter is not an ordinary generic one - it "is bound to the base at
-  // each parameterization the meta type governs … the name of what the base IS",
+  // each parameterization the meta type governs â€¦ the name of what the base IS",
   // and `uint8.<{ bounds: 1..=6 }>` binds it to `uint8` because `uint8` is what
   // is being parameterized. One base, one parameter, and the shape must take the
   // same number because the shape is what the parameter is threaded into.
@@ -651,7 +651,7 @@ test('a meta declaration takes one type parameter, matching its constraint shape
 });
 
 test('a hook signature is its ARITY, which is what the table gives', () => {
-  // PLAN-meta-hook-signatures.md §1, and the reason D36 was withdrawn.
+  // PLAN-meta-hook-signatures.md Â§1, and the reason D36 was withdrawn.
   // #table-meta-hooks writes each hook as `subtype(sub, sup)` - names and counts,
   // NO types - so "a hook whose signature does not match the table" is the arity.
   expect(run('type MD = { md?: boolean }; meta MD { default = {}; subtype(a) { return true; } }'))
@@ -818,7 +818,7 @@ test('the four meta hook diagnostics that already worked still do', () => {
 });
 
 test('meta hook spellings this entry deliberately leaves open', () => {
-  // PLAN-meta-hook-form-diagnostics.md §9. All four are ungrammatical - a
+  // PLAN-meta-hook-form-diagnostics.md Â§9. All four are ungrammatical - a
   // MetaHook is `default =` or a MethodDefinition, and none of these is either -
   // and all four are ACCEPTED. They are recorded rather than fixed because each
   // needs a decision the form rule does not: which duplicate wins, whether an

@@ -615,7 +615,7 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // proposal-runtime-types #sec-span-coercion: a coercion to `Span.<T>`
   // MATERIALIZES. The window is a value distinct from the array coerced, so
-  // that one static type does not stand for two different kinds of value —
+  // that one static type does not stand for two different kinds of value â€”
   // which is the confusion the type exists to end. A window reaching a window
   // position is already one and is passed through.
   if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
@@ -669,7 +669,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
   // #sec-parameterized-types: the crossing between two parameterizations of one
-  // base is ConvertParameterization, which each meta type gates independently —
+  // base is ConvertParameterization, which each meta type gates independently â€”
   // and it must be consulted BEFORE the value-level membership shortcut below,
   // because `is` is deliberately provenance-blind (a raw value the validation
   // judgment admits IS of the target), while the crossing is exactly the
@@ -1010,7 +1010,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         }
         if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
           // #sec-conversions: a BigInt is a numeric family, and the float rule
-          // is the one that has an answer for it — round to the width, overflow
+          // is the one that has an answer for it â€” round to the width, overflow
           // to an infinity. (An INTEGER target stays refused below: exactness at
           // the wide widths is the pinned prerequisite, F11's third divergence.)
           const payload = Number(R(value) as bigint);
@@ -2472,7 +2472,7 @@ export function LookupMetaTypeName(typeObject: object): string | undefined {
  * PLAN-hook-parameter-binding.md phase 3. A type-parameter frame maps a NAME to
  * a record, so binding the parameter at a hook invocation needs the name the
  * declaration wrote - and nothing kept it. #sec-meta-declarations: the parameter
- * "is bound to the base at each parameterization the meta type governs … the
+ * "is bound to the base at each parameterization the meta type governs â€¦ the
  * name of what the base IS".
  *
  * Registered beside the meta type's own name, for the same reason: both are
@@ -2608,7 +2608,7 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
   // PLAN-hook-parameter-binding.md phase 1. A hook may annotate its parameters
   // with the meta type's type parameter, and #sec-meta-declarations says what
   // that parameter is: "bound to the base at each parameterization the meta type
-  // governs … the name of what the base IS". So it is bound HERE, per
+  // governs â€¦ the name of what the base IS". So it is bound HERE, per
   // invocation, from the base the caller is deciding about - not at the
   // declaration, where the base is not yet known.
   //
@@ -3427,7 +3427,7 @@ function clauseSourceText(clause: object): string | undefined {
  *
  * Only one clause shape carries an edge - `Reflect.isAssignable(X, return)`,
  * which states `X <: thisApplication`, the LOWER bound a generic body producing
- * the result needs (`typeprogramming.md` §6.2: "Direction is everything here,
+ * the result needs (`typeprogramming.md` Â§6.2: "Direction is everything here,
  * and it is easy to get backwards"). A clause asserting a kind carries none and
  * yields no fact; it is verified at each evaluation instead.
  *

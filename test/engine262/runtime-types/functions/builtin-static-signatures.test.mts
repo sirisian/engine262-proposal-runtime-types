@@ -18,7 +18,7 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
  * NONE of the four were typed, and this is the first. An instance method is
  * found through its RECEIVER's type; a static has no typed receiver, since
  * `Reflect.typeOf(Map)` is not `Map`. So it is dispatched BY NAME, which is the
- * mechanism `Composite(…)` and `uint8.parse` already use.
+ * mechanism `Composite(â€¦)` and `uint8.parse` already use.
  *
  * Every assertion is written BOTH WAYS. A refusal alone proves that something
  * was checked, never that the right thing was inferred - a survey of this area
@@ -66,7 +66,7 @@ test('a SHADOWED `Map` gets no signature', () => {
 test('an UNTYPED source yields an untyped result, per participation', () => {
   // sec 0: a program that does not use these types pays nothing. Where the
   // element type is unknown the result carries none rather than a half-built
-  // `Map.<any, …>`, which would state more than the call supports.
+  // `Map.<any, â€¦>`, which would state more than the call supports.
   // Guarded for the same reason: a `uint8` annotation is refused at RUN TIME by
   // the boundary, and what this asserts is that the CHECKER says nothing.
   expect(ok('if (false) { const u = [1, 2]; let g: uint8 = Map.groupBy(u, (n) => "k"); } 1;')).toBe(true);
@@ -281,7 +281,7 @@ test('a TAGGED TEMPLATE reaches the static dispatch', () => {
 
 test('a global function states what it returns', () => {
   // The same rule as the fixed statics, for a callee that is a bare identifier
-  // rather than a member. `Composite(…)` is the precedent for keying on one.
+  // rather than a member. `Composite(â€¦)` is the precedent for keying on one.
   expectStaticTypeError('let n: string = parseInt("1");');
   expect(ok('let n: number = parseInt("1");')).toBe(true);
   expectStaticTypeError('let n: string = parseFloat("1");');
@@ -805,7 +805,7 @@ test('the reflection statics keep their run time and respect shadowing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D36 — a rest annotation is the type of what it COLLECTS
+// D36 â€” a rest annotation is the type of what it COLLECTS
 // ---------------------------------------------------------------------------
 
 test('a rest annotation must RESOLVE to an array or tuple type', () => {

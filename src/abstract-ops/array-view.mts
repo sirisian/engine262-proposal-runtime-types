@@ -260,7 +260,7 @@ export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, by
  *
  * A view knows a buffer, an offset, and a stride; there is nothing to decode
  * here, because the storage is the array's own indexed elements. What the two
- * share is the thing that matters — the liveness rule — so the generation is
+ * share is the thing that matters â€” the liveness rule â€” so the generation is
  * recorded the same way an `SoA` column projection records it, and the check
  * below is the same comparison `requireLive` makes.
  */
@@ -279,7 +279,7 @@ export interface ArraySpanBacking {
   /**
    * [[TypedGeneration]] when the window was taken. A growth that reallocates
    * bumps it, and the window then describes storage the array no longer uses,
-   * so it is refused rather than read — the rule a `ref` into the same array
+   * so it is refused rather than read â€” the rule a `ref` into the same array
    * already obeys.
    */
   readonly TakenAtGeneration: number;
@@ -299,7 +299,7 @@ function generationOf(source: ObjectValue): number {
 /**
  * #sec-span-coercion: a coercion MATERIALIZES. The window is a value distinct
  * from the array coerced, and two coercions of one array need not be the same
- * value — which is why this constructs rather than tagging the array.
+ * value â€” which is why this constructs rather than tagging the array.
  */
 export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0): ObjectValue {
   const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
@@ -318,7 +318,7 @@ export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: 
  * #sec-span-liveness. A window over a growable array is invalidated when that
  * array's allocation relocates. An operation that does NOT relocate does not
  * invalidate: a `reserve` for room the array already has, and a `shrinkToFit`
- * on an array already at fit, leave every window over it valid — which is why
+ * on an array already at fit, leave every window over it valid â€” which is why
  * this compares generations rather than asking whether anything was called.
  */
 function requireSpanLive(backing: ArraySpanBacking) {
@@ -364,7 +364,7 @@ export function ArraySpanLength(backing: ArraySpanBacking): number {
 
 /**
  * The length of a value that presents a run of elements without owning
- * properties for them — a `Span.<T>` over an array, or a view over a buffer —
+ * properties for them â€” a `Span.<T>` over an array, or a view over a buffer â€”
  * or ~undefined~ for anything else.
  *
  * Both kinds answer their elements from a backing rather than from stored
@@ -392,7 +392,7 @@ export function SpanLikeLengthOf(instance: object): number | undefined {
  * The two go together. Seven places stamp `[[TypedElement]]`, and a place that
  * set the slot without setting the prototype would produce an array that is
  * typed for every purpose except the three members that describe its
- * allocation — a difference invisible until someone called `capacity` on it.
+ * allocation â€” a difference invisible until someone called `capacity` on it.
  * Routing them through one helper is what stops that drifting apart again.
  */
 export function StampTypedArray(array: ObjectValue, element: TypeRecord): void {

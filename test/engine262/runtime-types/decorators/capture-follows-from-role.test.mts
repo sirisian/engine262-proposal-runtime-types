@@ -6,17 +6,17 @@ import { Agent, setSurroundingAgent } from '#self';
  * Capture follows from BEING a replacement decorator.
  *
  * `#sec-preprocessor-modules`: "A replacement decorator's region is captured,
- * always, because it is a replacement decorator … Capture is not a mode a macro
+ * always, because it is a replacement decorator â€¦ Capture is not a mode a macro
  * selects; it follows from what a replacement decorator is. A decoration whose
- * imported binding is NOT one — a function that does not take a `TokenStream`
- * and return a token sequence — takes a Block, parsed."
+ * imported binding is NOT one â€” a function that does not take a `TokenStream`
+ * and return a token sequence â€” takes a Block, parsed."
  *
  * The context TYPE used to decide it, and that made declaring the MODE the same
  * act as declaring which POSITIONS a macro takes: a macro annotating
  * `Reflect.Block` could not decorate a class, because the annotation is enforced
  * where the macro is called. The workaround was a union enumerating every
- * position — measured at EIGHTEEN in `syntax-context.mts`, and one more whenever
- * the language gains a position. `PLAN-region-context-removal` §20.
+ * position â€” measured at EIGHTEEN in `syntax-context.mts`, and one more whenever
+ * the language gains a position. `PLAN-region-context-removal` Â§20.
  */
 
 const TOKENS = '[{ kind: "identifier", value: "X", span: t[0].span, tokens: undefined },'
@@ -44,7 +44,7 @@ test('a macro annotating NO context captures its region', () => {
   expect(expand(ANY_POSITION, '@m { <<< not ecmascript >>> }')).toContain('X');
 });
 
-test('… and the SAME macro decorates a class', () => {
+test('â€¦ and the SAME macro decorates a class', () => {
   // The coupling this removes. While the context type decided capture, a macro
   // that declared the mode could not appear anywhere else, and saying "also a
   // class" meant naming the class in a union.

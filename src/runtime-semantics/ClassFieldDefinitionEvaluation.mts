@@ -34,7 +34,7 @@ export interface ClassFieldDefinitionRecord {
    */
   readonly Access?: 'protected' | undefined;
   /**
-   * proposal-runtime-types (PLAN-accessor.md ง2.3): a PRIVATE accessor's
+   * proposal-runtime-types (PLAN-accessor.md ยง2.3): a PRIVATE accessor's
    * get/set pair, as a PrivateElement.
    *
    * `accessor #internal` desugars to a private backing field PLUS A PRIVATE
@@ -183,7 +183,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   // only from inside the accessor); C#'s reflection-visible backing field is
   // the one this deliberately does not copy.
   if (surroundingAgent.feature('runtime-types') && (FieldDefinition as { accessor?: boolean }).accessor === true) {
-    // PLAN-accessor.md ง2.3, settled: `accessor #internal` desugars to a private
+    // PLAN-accessor.md ยง2.3, settled: `accessor #internal` desugars to a private
     // backing field PLUS A PRIVATE PAIR - two Private Names for one
     // declaration. The pair is a PrivateElement rather than a property, which
     // is the whole of what made this harder than the public case; the backing
@@ -221,7 +221,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
         Setter: set,
       });
     } else {
-      // PLAN-accessor.md ง2.5, settled: `readonly accessor` is LEGAL and means
+      // PLAN-accessor.md ยง2.5, settled: `readonly accessor` is LEGAL and means
       // a GETTER-ONLY accessor. The modifier parsed and did nothing before -
       // assignment succeeded and the context did not report it - which is worse
       // than refusing the syntax, since the declaration read as a constraint

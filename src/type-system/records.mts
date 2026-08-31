@@ -277,9 +277,9 @@ export interface TupleElementRecord {
    * Whether the position DECLARES a default, independent of whether its value
    * has been evaluated.
    *
-   * The run time evaluates the initializer — `sec-array-and-tuple-types`' "a
+   * The run time evaluates the initializer â€” `sec-array-and-tuple-types`' "a
    * tuple's trailing position may carry a default" needs the VALUE, to fill the
-   * position — and that evaluation is a generator step. `resolveType` in the
+   * position â€” and that evaluation is a generator step. `resolveType` in the
    * checker is synchronous and cannot take it, so [[Initial]] there is always
    * ~none~ however the type was written.
    *
@@ -378,7 +378,7 @@ export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
  *
  * #sec-checked-contracts: "the checker takes each clause as a known fact about
  * the ~application~ Type Record". A fact is a SUBTYPE EDGE, and the clause says
- * which way it points - `typeprogramming.md` §6.2: "Direction is everything
+ * which way it points - `typeprogramming.md` Â§6.2: "Direction is everything
  * here, and it is easy to get backwards."
  *
  * `LowerBound` is what `Reflect.isAssignable(X, return)` states: every X value
@@ -1115,7 +1115,7 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
 /**
  * The CANONICAL SOURCE FORM of a type: the text a developer could paste back.
  *
- * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` §3.3 promises this
+ * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` Â§3.3 promises this
  * of `Type.prototype.toString` - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`"* -
  * and nothing implemented it, so every type stringified as `[object Type]`.
  *

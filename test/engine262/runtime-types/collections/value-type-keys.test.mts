@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md ง6.3 (`typed-keys-valuetypes`) and D5.
+ * PLAN-typed-collections.md ยง6.3 (`typed-keys-valuetypes`) and D5.
  *
  * THESE ARE EXPECTED FAILURES, and they are written now, before the work they
  * describe, so that they convert to passes the moment D5 lands and cannot be

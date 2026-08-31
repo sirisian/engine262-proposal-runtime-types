@@ -99,7 +99,7 @@ test('a TYPED array literal copies its elements', () => {
   // disagreed - the second copied and the first aliased.
   //
   // The clause's elision does NOT cover this. It exempts "an object-literal
-  // CONVERSION" - a literal BECOMING a value type, as in `{ … } := Matrix4` -
+  // CONVERSION" - a literal BECOMING a value type, as in `{ â€¦ } := Matrix4` -
   // not a literal whose ELEMENTS are value type instances. Reading it the second
   // way would elide a copy the clause requires two sentences earlier.
   const V = 'class P { x: uint8 = 0; } ';

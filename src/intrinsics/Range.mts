@@ -385,7 +385,7 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   // a typed number counts - and so does a bigint, over a bigint range. `R`
   // yields each one's mathematical value and JS compares across them.
   // An element type of its own: compare through `operator<`, which is the whole
-  // of what `Ordered` requires. `Q(yield* …)` may not appear in a ternary - the
+  // of what `Ordered` requires. `Q(yield* â€¦)` may not appear in a ternary - the
   // build's Babel pass rewrites Q and cannot place the result there - so each
   // branch is a statement.
   if (value instanceof ObjectValue && !isRangeObject(value)) {

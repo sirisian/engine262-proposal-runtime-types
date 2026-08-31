@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
-// OQ-type-arguments-vs-metadata.md, D2. What `X.<…>` means.
+// OQ-type-arguments-vs-metadata.md, D2. What `X.<â€¦>` means.
 //
 // `Box.<{ a: uint8 }>` has two readings and the grammar separates neither: a
 // generic application whose one type argument is an object type, and a metadata

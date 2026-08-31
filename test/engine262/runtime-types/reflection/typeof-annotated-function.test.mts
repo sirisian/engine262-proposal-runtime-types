@@ -20,15 +20,15 @@ test('Reflect.typeOf resolves an annotation naming a user ALIAS', () => {
   expect(evaluated('type MyType = uint8; function m(c: MyType): uint8 { return 1; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
 });
 
-test('… a CLASS', () => {
+test('â€¦ a CLASS', () => {
   expect(evaluated('class C {} function m(c: C): uint8 { return 1; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
 });
 
-test('… a QUALIFIED reflection name', () => {
+test('â€¦ a QUALIFIED reflection name', () => {
   expect(evaluated('function m(c: Reflect.Block): uint8 { return 1; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
 });
 
-test('… and a LIBRARY type inside a composite annotation', () => {
+test('â€¦ and a LIBRARY type inside a composite annotation', () => {
   expect(evaluated('function m(s: uint8): [].<Token> { return []; } String(Reflect.typeOf(m) !== undefined);')).toBe('true');
 });
 

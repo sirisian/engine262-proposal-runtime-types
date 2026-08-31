@@ -18,7 +18,7 @@ import { Agent, setSurroundingAgent } from '#self';
  * `TokenStream`, and reported "no overload matches these arguments".
  *
  * `FINDING-overload-resolution-host-nominals.md`. These tests exist so the two
- * paths cannot drift apart again silently — a value that a direct call accepts
+ * paths cannot drift apart again silently â€” a value that a direct call accepts
  * for a nominal parameter must also be MATCHABLE against it.
  */
 

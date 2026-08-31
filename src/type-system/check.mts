@@ -1292,7 +1292,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // recursed through [[Members]] with no guard until the HOST stack gave out.
     //
     // A RangeError is not a throw completion, so nothing downstream could catch
-    // or report it - and it fired at CHECK time, so `if (false) { … }` around
+    // or report it - and it fired at CHECK time, so `if (false) { â€¦ }` around
     // the literal did not avoid it either.
     //
     // Returning `t` on a revisit leaves the cycle in place for the comparison
@@ -1618,7 +1618,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // ran for it.
     //
     // This is D62's shape exactly: there the same predicate was missing
-    // `Properties`, and `PLAN-D62` §14 records that the substitution arm already
+    // `Properties`, and `PLAN-D62` Â§14 records that the substitution arm already
     // existed and was gated off, so the fix that added an arm changed nothing.
     // The KEY is walked as well as the value, since `{ [k: K]: V }` may
     // parameterise either.
@@ -2373,7 +2373,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const key = sigs?.length === 1 ? (sigs[0].Return ?? sigs[0].InferredReturn ?? null) : null;
         if (!element || !key) {
           // Either half unknown means the result is unknown. Answering a
-          // half-built `Map.<any, …>` would state more than the call supports,
+          // half-built `Map.<any, â€¦>` would state more than the call supports,
           // and an untyped source must still yield an untyped result (sec 0).
           return null;
         }
@@ -3016,7 +3016,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * at - the alternative is reporting an arity the program does not have.
    */
   /**
-   * An array literal at a TUPLE annotation — the ARITY half (D18).
+   * An array literal at a TUPLE annotation â€” the ARITY half (D18).
    *
    * The sibling of `checkArrayLiteralAgainst` below, which this pairing had no
    * counterpart for: an array literal at a tuple target returned null and was
@@ -3885,7 +3885,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The arm below returns `contextual` - the literal is GIVEN the target's
         // type and never compared against it - so whatever the member walk did
         // not catch was accepted by construction: `let c: C = { }` passed with
-        // no member supplied, and `{ a: …, u: "s" }` with an excess one. Only a
+        // no member supplied, and `{ a: â€¦, u: "s" }` with an excess one. Only a
         // WRONG member type was caught, by the walk's own comparison.
         //
         // The RUN TIME already refuses it - `[object Object] is not assignable
@@ -4090,14 +4090,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   /** Alias declarations found by the name pre-pass, resolved on demand. */
   const aliasNodes = new Map<string, ParseNode>();
-  /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
+  /** `const k = Symbol(...)` bindings, by name: Â§6.6's unique symbol types. */
   const symbolConsts = new Map<string, ParseNode>();
   /**
    * One stable Symbol per symbol-`const` DECLARATION, minted for the checker's
    * own use. A Property Type Record's [[Key]] is "a String or a Symbol", so a
    * symbol-keyed member needs a Symbol to be keyed by - and a checker has no
    * access to the one the program will create at run time. Minting per
-   * declaration gives the identity §6.6 asks for: two consts mint two symbols
+   * declaration gives the identity Â§6.6 asks for: two consts mint two symbols
    * and compare unequal, one const named twice resolves to one symbol and
    * compares equal, which is exactly the rule read where no value exists.
    */
@@ -4417,7 +4417,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (typeof key !== 'string') {
-        // A COMPUTED key. §6.6 types one whose expression is a symbol literal -
+        // A COMPUTED key. Â§6.6 types one whose expression is a symbol literal -
         // a `const` bound to `Symbol(...)` - and nothing else can be typed at
         // all: a `let`, a parameter, or any other expression has no identity a
         // checker can compare. TypeScript refuses exactly this case ("A
@@ -4992,7 +4992,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A generic ALIAS under WRITTEN arguments resolves to its body with
           // those arguments substituted (D62). This path resolved a user CLASS,
           // a builtin and one `Identity` special case and NOTHING else, so
-          // `type G<T> = { t: T }; let g: G.<uint8> = …` answered null - and a
+          // `type G<T> = { t: T }; let g: G.<uint8> = â€¦` answered null - and a
           // null target makes `requireAssignable` return before it compares, so
           // the annotation accepted every value.
           //
@@ -5053,13 +5053,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // A generic INTERFACE under written arguments (D63). This path resolved
           // a user CLASS, an ALIAS (D62) and a builtin and NOT an interface, so
-          // `interface I<T> { x: T } let i: I.<uint8> = …` answered NULL - and a
+          // `interface I<T> { x: T } let i: I.<uint8> = â€¦` answered NULL - and a
           // null target makes `requireAssignable` return before it compares, so
           // the annotation accepted every value. The NON-generic
           // `interface I { x: uint8 }` refused correctly, which is what kept the
           // gap out of sight.
           //
-          // `interfaceTypeOf` already builds `{ Kind: 'nominal', …, Structure }`;
+          // `interfaceTypeOf` already builds `{ Kind: 'nominal', â€¦, Structure }`;
           // attaching the written arguments is the whole of this half, exactly as
           // the class arm below does. The cast goes BEFORE the spread -
           // `interfaceTypeOf` answers `Known`, and casting the result instead
@@ -5538,7 +5538,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (asMethod) {
             // A method's OWN type parameters are in scope across its signature
             // and nowhere else (D68). #sec-type-members gives them to the
-            // signature - `MethodSignature : TypeParameters? '(' … ')'
+            // signature - `MethodSignature : TypeParameters? '(' â€¦ ')'
             // TypeAnnotation?` - and `TypeMember` is the production an object
             // type and an interface body SHARE, so `{ m<T>(v: T): T }` is as
             // grammatical as the interface spelling.
@@ -6266,7 +6266,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // types, which is the mechanism `Composite` below and `uint8.parse`
         // above already use. A constructor is a value a program may shadow, so
         // the base must be the unshadowed global: `const Map = MyMap;` then
-        // `Map.groupBy(…)` gets nothing from here.
+        // `Map.groupBy(â€¦)` gets nothing from here.
         {
           // A callee carrying WRITTEN type arguments is a
           // `TypeArgumentsExpression` wrapping the name, so the lookup is given
@@ -6297,7 +6297,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // PLAN-standard-library-statics.md Family B: a GLOBAL function, whose
         // callee is a bare identifier rather than a member. The dispatch above
-        // requires a member callee, so `parseInt(…)` matched nothing; this is
+        // requires a member callee, so `parseInt(â€¦)` matched nothing; this is
         // the same table one shape along, and `Composite` below is the
         // precedent for keying on a bare name.
         if (calleeNode?.type === 'IdentifierReference') {
@@ -8846,7 +8846,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the whole shape (D71, and D84's row G).
       //
       // `member.type !== 'PropertyDefinition'` returned null for the LITERAL, so
-      // `{ m() { … } }` had no shape at all and NOTHING about it was checked -
+      // `{ m() { â€¦ } }` had no shape at all and NOTHING about it was checked -
       // not the method, and not its siblings. Measured, `{ m(): uint8 }` accepted
       // `{ m() { return "s"; } }` while the arrow spelling `{ m: () => "s" }`
       // was refused, and an intersection with CONFLICTING method arms accepted a
@@ -10279,11 +10279,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // which is no rule at all. `instanceTypeOf` memoizes, so forcing it here
     // runs the walk exactly once per class and every later demand is a cache
     // hit: the errors below are reported once, not once per reference.
-    // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
+    // typeprogramming.md Â§6.6: "a declared `const s = Symbol()` used in type
     // position IS the unique symbol type, without a keyword". A checker has no
     // VALUES, so that identity is carried by the DECLARATION - two consts are
     // two types, and one const named twice is one type, which is exactly what
-    // §6.6's identity rule means where no symbol can be held.
+    // Â§6.6's identity rule means where no symbol can be held.
     for (const n of list) {
       if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
         continue;
@@ -12203,7 +12203,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   });
                 } else {
                   // INFERRED arguments bind the parameters too, and only the
-                  // explicit ones did. So `g(a, (v) => …)` for
+                  // explicit ones did. So `g(a, (v) => â€¦)` for
                   // `g<T>(a: [].<T>, cb: (v: T) => void)` pushed the UNBOUND
                   // `(v: T) => void` into the callback, and its parameter was
                   // typed at the bare variable - `"T" is not assignable to
@@ -12792,7 +12792,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           while (base?.Declaration && !seen.has(base.Declaration)) {
             seen.add(base.Declaration);
             // A class BETWEEN this one and the declaration may implement it -
-            // `abstract class K extends G { m() { … } }` satisfies `G`'s member
+            // `abstract class K extends G { m() { â€¦ } }` satisfies `G`'s member
             // for everything below K - so each level's concrete members join the
             // set before that level's abstract ones are asked about.
             for (const el of (base.Declaration as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {

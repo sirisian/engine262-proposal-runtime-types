@@ -131,7 +131,7 @@ function IsReplacementDecorator(
   // The DECLARED return, or the one the checker PUBLISHED for it. A macro may
   // write `: [].<Token>` and many do, but `linq` does not:
   //
-  //   function linq(tokens: TokenStream, context: Reflect.Block) { … }
+  //   function linq(tokens: TokenStream, context: Reflect.Block) { â€¦ }
   //
   // and its return is inferred. `OverloadSignatureOf` fills `ReturnType` from the
   // ANNOTATION alone, so reading only that made an inferred return look like no
@@ -153,7 +153,7 @@ function IsReplacementDecorator(
  * The signature says two things and they are separable, which is why both are
  * read from it rather than one being inferred from the other:
  *
- *   - `(TokenStream, …) => [].<Token>` says it is a replacement decorator at all;
+ *   - `(TokenStream, â€¦) => [].<Token>` says it is a replacement decorator at all;
  *   - a `Reflect.Block` CONTEXT says the region it takes is captured.
  *
  * A decorator with the first and not the second is an ordinary replacement
@@ -198,7 +198,7 @@ function TakesARegionContext(macro: ObjectValue): boolean {
   // enforced where the macro is called. Working around it meant a union
   // enumerating every position a macro might appear in - measured at EIGHTEEN,
   // and one more whenever the language gains a position.
-  // `PLAN-region-context-removal` §20.
+  // `PLAN-region-context-removal` Â§20.
   return candidates.some((signature) => IsReplacementDecorator(signature, macro));
 }
 
@@ -659,7 +659,7 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
     }
     if (expandedOnce.expanded > 0 && expandedOnce.text !== sourceText) {
       // `??` binds LOOSER than `>`, so `depth ?? 0 > LIMIT` parses as
-      // `depth ?? (0 > LIMIT)` — which is the depth itself once it is non-zero,
+      // `depth ?? (0 > LIMIT)` â€” which is the depth itself once it is non-zero,
       // and every second pass tripped the limit. The parenthesis is the fix and
       // the bug was invisible in a single-pass test.
       const depth = (hostDefined as { expansionDepth?: number }).expansionDepth ?? 0;

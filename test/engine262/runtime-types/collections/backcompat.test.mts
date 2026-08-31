@@ -4,7 +4,7 @@ import {
 } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md ง6.1 - THE BACKCOMPAT GUARD.
+ * PLAN-typed-collections.md ยง6.1 - THE BACKCOMPAT GUARD.
  *
  * The governing invariant of the typed-collections work: **a `Map` or `Set`
  * written without type arguments is an ordinary JavaScript `Map` or `Set` and
@@ -319,7 +319,7 @@ test('a typed collection in the same program does not change an untyped one', ()
 
 test('the [[TypedCollection]] stamp travels with the VALUE, not the binding', () => {
   // Measured during the plan's audit and recorded here, because it is the one
-  // thing ง0's invariant needs that is not simply "nothing happens": an untyped
+  // thing ยง0's invariant needs that is not simply "nothing happens": an untyped
   // BINDING of a typed VALUE keeps the typed behaviour. Otherwise the carve-out
   // would be a hole - a program could launder a typed collection through `let u
   // = s` and write anything into it.

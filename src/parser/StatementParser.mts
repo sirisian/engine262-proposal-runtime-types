@@ -309,7 +309,7 @@ export abstract class StatementParser extends TypeParser {
     // PLAN-generic-meta-declarations.md phase 3 (D4). #sec-meta-declarations: a
     // meta declaration "may instead name a PRIMITIVE type rather than an object
     // type, declaring a base-form meta type". A primitive has no parameter to
-    // bind, so `meta uint8<T> { … }` states something the language cannot mean.
+    // bind, so `meta uint8<T> { â€¦ }` states something the language cannot mean.
     //
     // An early error rather than a parse failure, because the production allows
     // `TypeParameters?` after ANY TypeName - and refused now rather than
@@ -318,7 +318,7 @@ export abstract class StatementParser extends TypeParser {
     // PLAN-meta-hook-signatures.md phase 2. #sec-meta-declarations: "It is an
     // early error for a |MetaDeclaration| to declare more than one type
     // parameter". The parameter is not an ordinary generic one - it "is bound to
-    // the base at each parameterization the meta type governs … the name of what
+    // the base at each parameterization the meta type governs â€¦ the name of what
     // the base IS", and `uint8.<{ bounds: 1..=6 }>` binds it to `uint8` because
     // `uint8` is what is being parameterized. There is one base, so there is at
     // most one parameter.
@@ -912,7 +912,7 @@ export abstract class StatementParser extends TypeParser {
     switch (this.peek().type) {
       case Token.AT: {
         // proposal-runtime-types decorators.md: `if (c) @f { }`,
-        // `while (c) @f { }`, `for (...) @f { }` — a loop or conditional BODY
+        // `while (c) @f { }`, `for (...) @f { }` â€” a loop or conditional BODY
         // is parsed here, so a decorated block needs the case in this dispatch
         // as well as in the statement-list one. Only a block may be decorated
         // in statement position; anything else falls through to the ordinary
@@ -996,7 +996,7 @@ export abstract class StatementParser extends TypeParser {
 
   // Block : `{` StatementList `}`
   /**
-   * proposal-runtime-types decorators.md: a BLOCK carries decorators —
+   * proposal-runtime-types decorators.md: a BLOCK carries decorators â€”
    * `@f { ... }`, `if (c) @f { }`, `while (c) @f { }`, and the rest. The list
    * is parsed here so every block position gets it at once rather than each
    * statement form growing its own.
@@ -1092,8 +1092,8 @@ export abstract class StatementParser extends TypeParser {
   /**
    * Records the label a decorated block was written under.
    *
-   * The label may name the block directly - `lbl: { … }` - or the STATEMENT
-   * that owns it: `outer: while (c) { … }` labels the loop, and the block is
+   * The label may name the block directly - `lbl: { â€¦ }` - or the STATEMENT
+   * that owns it: `outer: while (c) { â€¦ }` labels the loop, and the block is
    * its body. decorators.md gives `WhileBlock` and its siblings a `label`, and
    * the label those forms have is the owning statement's, so it propagates one
    * level into the body. Anything deeper is a different block with a label of

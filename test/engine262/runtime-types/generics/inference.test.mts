@@ -233,7 +233,7 @@ test('an INFERRED binding reaches a callback\'s unannotated parameter', () => {
   // Contextual typing was never missing: a CONCRETE parameter has always worked,
   // and so has `a.map`. What was missing is the substitution ahead of it - only
   // EXPLICIT type arguments were substituted before the parameter type was
-  // pushed into the literal, so `g(a, (v) => …)` pushed the unbound
+  // pushed into the literal, so `g(a, (v) => â€¦)` pushed the unbound
   // `(v: T) => void` and the body read `v` at the bare variable.
   //
   // This is the design's stated purpose for the standard library's signatures,

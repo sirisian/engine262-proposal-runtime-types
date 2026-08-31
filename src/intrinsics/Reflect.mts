@@ -273,7 +273,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     if (overloaded) {
       overloads = Q(yield* SignaturesOf(value));
     } else {
-      // `Q(yield* …)` may not appear inside an array literal - the build's Babel
+      // `Q(yield* â€¦)` may not appear inside an array literal - the build's Babel
       // pass rewrites Q and cannot place the result there.
       const one = Q(yield* OverloadSignatureOf(value));
       overloads = [one];

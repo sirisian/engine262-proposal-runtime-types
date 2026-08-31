@@ -122,8 +122,8 @@ test('an ordinary import introduces nothing', () => {
 });
 
 test('a DEFAULT import contributes; a namespace and a bare specifier do not', () => {
-  // The line is what a DECORATION can be spelled with. `import d from …` binds
-  // `d`, and `@d { … }` names it, so a default import contributes - and it is
+  // The line is what a DECORATION can be spelled with. `import d from â€¦` binds
+  // `d`, and `@d { â€¦ }` names it, so a default import contributes - and it is
   // the common shape, since a preprocessor module usually provides one macro.
   expect(names('import d from "./m.js" with { preprocessor: "true" };')).toBe('d');
   expect(names('import d, { n } from "./m.js" with { preprocessor: "true" };')).toBe('d,n');

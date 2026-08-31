@@ -145,7 +145,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   }
   if (t.Kind === 'application') {
     // PLAN-where-on-methods.md, unblocking D1, step 4. #sec-canonicalizetype:
-    // "If _t_.[[Kind]] is ~application~ … for each element _a_ of
+    // "If _t_.[[Kind]] is ~application~ â€¦ for each element _a_ of
     // _t_.[[Arguments]], if _a_ is a Type Record append CanonicalizeType(_a_),
     // else append _a_."
     //

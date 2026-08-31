@@ -11,7 +11,7 @@ import { Agent, setSurroundingAgent } from '#self';
  *
  * At expansion the dispatcher is called `(tokens, context, args)`. Where the
  * decoration is on a CLASS, the context is a `Reflect.Class` and no replacement
- * overload accepts one — resolution answers `none`, correctly. That must mean
+ * overload accepts one â€” resolution answers `none`, correctly. That must mean
  * "no replacement applies here, leave it for decoration time", NOT that the macro
  * rejected what it decorates.
  *
@@ -20,7 +20,7 @@ import { Agent, setSurroundingAgent } from '#self';
  * question is asked of resolution BEFORE the call rather than inferred from the
  * error after it.
  *
- * `FINDING-overload-resolution-host-nominals.md` §9.3.
+ * `FINDING-overload-resolution-host-nominals.md` Â§9.3.
  */
 
 function compile(moduleSource: string, body: string): { type: string, text: string } {
@@ -43,7 +43,7 @@ function compile(moduleSource: string, body: string): { type: string, text: stri
  * A module whose `jsx` is a replacement decorator AND an ordinary one.
  *
  * The third parameter is OPTIONAL because the same name is written both
- * `@jsx { … }` and `@jsx(1) { … }`: the first passes two arguments and the second
+ * `@jsx { â€¦ }` and `@jsx(1) { â€¦ }`: the first passes two arguments and the second
  * three, and a required third parameter makes the bare form match no signature.
  * That is a real constraint on how a macro is written, found by measuring
  * `[disp] sigs=2 args=2 kind=none params=[3,1]`.
@@ -63,7 +63,7 @@ test('the REPLACEMENT half takes a region', () => {
   expect(out.text).toContain('EXPANDED');
 });
 
-test('… and with ARGUMENTS on the decoration', () => {
+test('â€¦ and with ARGUMENTS on the decoration', () => {
   const out = compile(BOTH_ROLES, '@jsx(1) { <<< not ecmascript >>> }');
   expect(out.type).toBe('ok');
   expect(out.text).toContain('EXPANDED');
@@ -80,7 +80,7 @@ test('the decoration on a CLASS is DECLINED, not failed', () => {
   expect(out.text).toContain('@jsx');
 });
 
-test('… with arguments too', () => {
+test('â€¦ with arguments too', () => {
   const out = compile(BOTH_ROLES, '@jsx(1) class C { x = 1; }');
   expect(out.type).toBe('ok');
   expect(out.text).not.toContain('EXPANDED');

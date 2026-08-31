@@ -3,14 +3,14 @@ import { realmWithPreprocessors } from '../harness.mts';
 import { Agent, setSurroundingAgent } from '#self';
 
 /**
- * `#sec-syntax-replacement`: "A name denotes one REPLACEMENT decorator … A name
+ * `#sec-syntax-replacement`: "A name denotes one REPLACEMENT decorator â€¦ A name
  * may nonetheless carry an ORDINARY decorator as well, since the two are told
- * apart by their signatures rather than by their arguments … the replacement
+ * apart by their signatures rather than by their arguments â€¦ the replacement
  * runs at expansion and the ordinary one at decoration, in that order."
  *
  * One name transforms a construct and then decorates what it produced, which is
  * the compact form this is for. The clause used to say a replacement decorator
- * name "denotes one function" and was "not resolved by overload resolution" —
+ * name "denotes one function" and was "not resolved by overload resolution" â€”
  * true of selecting AMONG replacement decorators, whose arguments are all Token
  * Records, and not of separating the replacement role from the ordinary one.
  *
@@ -24,7 +24,7 @@ function bothRoles(ordinaryParams: string): string {
     // The replacement half: a TokenStream in, a token sequence out.
     // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
     // calls a replacement decorator `(tokens, context, args)`, so a macro that may
-    // be written `@jsx(1) { … }` must declare it or no signature has that arity.
+    // be written `@jsx(1) { â€¦ }` must declare it or no signature has that arity.
     'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.
@@ -61,7 +61,7 @@ test('the REPLACEMENT overload is found beside an ordinary one', () => {
   expect(out.text).toContain('EXPANDED');
 });
 
-test('… and with ARGUMENTS on the decoration', () => {
+test('â€¦ and with ARGUMENTS on the decoration', () => {
   // The argument run is the path that broke twice while this area was converted,
   // so it is asserted rather than assumed to follow.
   const out = compile(bothRoles('c: Reflect.Class'), '@jsx(1) { <<< not ecmascript >>> }');
@@ -80,7 +80,7 @@ test('… and with ARGUMENTS on the decoration', () => {
 // Measured: `[disp] sigs=2 args=2 kind=none params=[3,1]`. The set is right, the
 // arity is right, and the context genuinely does not match - the answer is
 // correct and what is done with it is not.
-// `FINDING-overload-resolution-host-nominals.md` §9.
+// `FINDING-overload-resolution-host-nominals.md` Â§9.
 test('the ordinary overload still decorates its own position', () => {
   // The same name on a CLASS is the ordinary decoration: the replacement half
   // does not claim it, and the class is not a region.
@@ -89,7 +89,7 @@ test('the ordinary overload still decorates its own position', () => {
   expect(out.text).not.toContain('EXPANDED');
 });
 
-test('… with arguments too', () => {
+test('â€¦ with arguments too', () => {
   const out = compile(bothRoles('c: Reflect.Class'), '@jsx(1) class C { x = 1; }');
   expect(out.type).toBe('ok');
   expect(out.text).not.toContain('EXPANDED');
@@ -101,7 +101,7 @@ test('a name with ONLY a replacement overload is unaffected', () => {
   const only = [
     // The third parameter is the decoration's ARGUMENTS: `#sec-syntax-replacement`
     // calls a replacement decorator `(tokens, context, args)`, so a macro that may
-    // be written `@jsx(1) { … }` must declare it or no signature has that arity.
+    // be written `@jsx(1) { â€¦ }` must declare it or no signature has that arity.
     'function jsx(t: TokenStream, c: Reflect.Block, args?): [].<Token> {',
     // REPLACING the region, not appending to it: the region's text is not
     // ECMAScript, so concatenating it back would emit something unparseable.

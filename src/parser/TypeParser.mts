@@ -632,13 +632,13 @@ export abstract class TypeParser extends ExpressionParser {
   parseTypeAnnotation(allowDecorators = false): ParseNode.TypeAnnotation {
     const node = this.startNode<ParseNode.TypeAnnotation>();
     this.expect(Token.COLON);
-    // proposal-runtime-types decorators.md: `d(a: uint32): @f uint32` — a
+    // proposal-runtime-types decorators.md: `d(a: uint32): @f uint32` â€” a
     // RETURN carries decorators, written before the type. They belong to the
     // annotation rather than to the type: `Reflect.Type` "is the one reflection
     // target that is not also a decorator context", so this is decorating the
     // return POSITION and not the type in it.
     // A DECORATOR MAY PRECEDE A TYPE ONLY IN A POSITION THAT HAS A REFLECTION
-    // CONTEXT, which is a return and nothing else. §7.3 of the decorators plan
+    // CONTEXT, which is a return and nothing else. Â§7.3 of the decorators plan
     // asked whether `Reflect.Type` is a decorator context and the design
     // answers no - "a bare type expression carries no decorator" - but the
     // grammar had been admitting `let x: @f uint8`, a class field's `a: @f T`,

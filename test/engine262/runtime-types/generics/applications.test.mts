@@ -112,7 +112,7 @@ test('a checked contract names the builder, the arguments and the clause', () =>
 });
 
 test('the where positions the plan claimed were covered', () => {
-  // PLAN-where-on-methods.md ง6, audited. Three of its required tests had no
+  // PLAN-where-on-methods.md ยง6, audited. Three of its required tests had no
   // assertion, and writing them found one behaviour it had asserted wrongly.
   //
   // An ABSTRACT method carries a clause, since `simd.md` writes them bodiless.
@@ -175,10 +175,10 @@ test('a checked contract is ASSUMED before specialization', () => {
   // builder, before the code that relied on it runs."
   //
   // The fact is a SUBTYPE EDGE and its direction is the whole point -
-  // `typeprogramming.md` ง6.2: "checking a generic body that PRODUCES the result
+  // `typeprogramming.md` ยง6.2: "checking a generic body that PRODUCES the result
   // needs a lower bound, and for `omit` the true one is `T <: return`".
   const omit = 'function omit(T: type, k: string): type where Reflect.isAssignable(T, return) { return T; } ';
-  // ADMITTED by the fact: a body returning a `T` where `omit(T, …)` is declared.
+  // ADMITTED by the fact: a body returning a `T` where `omit(T, โ€ฆ)` is declared.
   // Nothing structural relates them - `omit(T, "password")` cannot be evaluated
   // with `T` unbound - so this passes only because the contract says so.
   expect(ok(`${omit} function good<T>(value: T): omit(T, "password") { return value; }`)).toBe(true);

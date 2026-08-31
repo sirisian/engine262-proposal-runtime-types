@@ -167,7 +167,7 @@ function* SoAProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallCon
 }
 
 /**
- * soa.md: "capacity — Growable arrays; the allocation backing every column."
+ * soa.md: "capacity â€” Growable arrays; the allocation backing every column."
  *
  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
  */
@@ -196,7 +196,7 @@ function* SoAProto_byteLengthGetter(_args: Arguments, { thisValue }: FunctionCal
 }
 
 /**
- * `reserve(n)` — "Grow every column to hold at least n elements".
+ * `reserve(n)` â€” "Grow every column to hold at least n elements".
  *
  * Growing moves every column after the first, because a column's offset is
  * computed from the capacity. That is the same fact soa.md gives as the reason
@@ -259,7 +259,7 @@ export {
 
 /**
  * The buffer element type a column's field is stored as, reusing the placement
- * module's mapping so an SoA column and a placed field encode identically —
+ * module's mapping so an SoA column and a placed field encode identically â€”
  * which is what lets a byte view over either see the same thing.
  */
 function columnElementType(t: TypeRecord) {
@@ -267,7 +267,7 @@ function columnElementType(t: TypeRecord) {
 }
 
 /**
- * `s[i]` — GATHER a `T` from the columns.
+ * `s[i]` â€” GATHER a `T` from the columns.
  *
  * soa.md: "particles[0]; // Gathers a Particle value from the columns". The
  * result is a VALUE, and a value type copies, so `s[0].x = 5` writes to that
@@ -432,7 +432,7 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
 }
 
 /**
- * `s[i] = v` — SCATTER the fields into the columns.
+ * `s[i] = v` â€” SCATTER the fields into the columns.
  *
  * soa.md: "particles[0] = spawned; // Scatters the fields into the columns".
  * Each field is checked against the column's declared type on the way, so the
@@ -472,7 +472,7 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
 }
 
 /**
- * `push(value)` — "Appends to every column."
+ * `push(value)` â€” "Appends to every column."
  *
  * Growable only: a fixed extent has nothing to reallocate, and soa.md says
  * `push`, `pop`, and `reserve` "are already absent from an `SoA.<T, N>` as they
@@ -502,7 +502,7 @@ function* SoAProto_push([value = Value.undefined]: Arguments, { thisValue }: Fun
 }
 
 /**
- * `pop()` — the last element, or *undefined* where there is none.
+ * `pop()` â€” the last element, or *undefined* where there is none.
  *
  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
  */
@@ -523,7 +523,7 @@ function* SoAProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): Va
 }
 
 /**
- * `fill(value)` — every element, returning the SoA.
+ * `fill(value)` â€” every element, returning the SoA.
  *
  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
  */
@@ -539,7 +539,7 @@ function* SoAProto_fill([value = Value.undefined]: Arguments, { thisValue }: Fun
 }
 
 /**
- * `toArray()` — a `[].<T>` of the elements, COPIED.
+ * `toArray()` â€” a `[].<T>` of the elements, COPIED.
  *
  * soa.md: "`SoA.<T>` and `[].<T>` are distinct types with distinct layouts, and
  * neither is assignable to the other. Conversion is explicit and copies."
@@ -798,11 +798,11 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
 }
 
 /**
- * `SoA.from(values)` — soa.md's conversion from an array.
+ * `SoA.from(values)` â€” soa.md's conversion from an array.
  *
  * "SoA.<T> and [].<T> are distinct types with distinct layouts, and neither is
  * assignable to the other. CONVERSION IS EXPLICIT AND COPIES." The element type
- * comes from the array's own, so the caller does not restate it — and an
+ * comes from the array's own, so the caller does not restate it â€” and an
  * untyped array has none, which is refused rather than guessed at.
  *
  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
@@ -845,7 +845,7 @@ function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
 }
 
 /**
- * `SoA.withCapacity.<T>(n)` — "Empty, capacity >= n".
+ * `SoA.withCapacity.<T>(n)` â€” "Empty, capacity >= n".
  *
  * The element type is a TYPE argument here rather than inferred, because there
  * is no value to infer it from; the call is intercepted where the type
@@ -877,7 +877,7 @@ export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator
 export { SoA_from };
 
 /**
- * `fields` — soa.md: "`fields` projects each of `T`'s immediate fields as an
+ * `fields` â€” soa.md: "`fields` projects each of `T`'s immediate fields as an
  * array view ALIASING THAT FIELD'S COLUMN. The views are LIVE: writes through
  * them are visible through the element API and the reverse."
  *

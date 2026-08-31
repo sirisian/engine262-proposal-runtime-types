@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * PLAN-brand-layering-F.md. Layering a brand — "a Verified Email" — and the
+ * PLAN-brand-layering-F.md. Layering a brand â€” "a Verified Email" â€” and the
  * criteria a layering mechanism has to meet.
  *
  * The mechanism is INTERSECTION. `PLAN-brand-layering.md` compared six
@@ -29,7 +29,7 @@ test('C1: a layered type is expressible', () => {
     .toBe('intersection:2');
 });
 
-test('C2: the inner brand survives — a Verified IS an Email', () => {
+test('C2: the inner brand survives â€” a Verified IS an Email', () => {
   // The criterion layering exists for. Without it, `send(verify(e))` cannot
   // work and a second brand is just an unrelated type.
   expect(evaluated(`${EV}String(Reflect.isAssignable(EV, E));`)).toBe('true');
@@ -50,7 +50,7 @@ test('C9: the same layering written twice is one type', () => {
 });
 
 // ---------------------------------------------------------------------------
-// C5: normalization — F169, phase 1
+// C5: normalization â€” F169, phase 1
 // ---------------------------------------------------------------------------
 
 test('C5: layering is order-independent', () => {
@@ -94,7 +94,7 @@ test('C5: normalizing did not collapse distinct types', () => {
 // C8, C12: properties a brand must not lose by being layered
 // ---------------------------------------------------------------------------
 
-test('C8: no wrapper — a layered value is its base value', () => {
+test('C8: no wrapper â€” a layered value is its base value', () => {
   expect(evaluated(`${EV}function f(x: EV) { return typeof x; } String(1);`)).toBe('1');
 });
 
@@ -125,7 +125,7 @@ test('an intersection that is NOT all parameterizations of one base refuses cons
 });
 
 // ---------------------------------------------------------------------------
-// C6: the construction boundary — phase 2
+// C6: the construction boundary â€” phase 2
 // ---------------------------------------------------------------------------
 
 test('C6: a layered type is constructible', () => {
@@ -141,7 +141,7 @@ test('C6: an already-branded value can cross into the layering', () => {
   expect(evaluated(`${EV}String(EV(E('a@b')));`)).toBe('a@b');
 });
 
-test('C6: the guard holds — a mixed intersection still refuses', () => {
+test('C6: the guard holds â€” a mixed intersection still refuses', () => {
   // An object type and a brand have no single value to cross. Asserted twice,
   // here and above, because widening the crossing rule is the likeliest wrong
   // fix and this is what catches it.

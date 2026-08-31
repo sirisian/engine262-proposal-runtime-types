@@ -304,7 +304,7 @@ test('a cast into a meta type that defines no validate admits the crossing', () 
   expect(evaluated(`${dim}${velocity}${cast} let a: any = 10; let v: Velocity = a; String(Number(v));`)).toBe('10');
 
   // A value that crossed IS of the type afterwards - #sec-isoftype's first
-  // step, "If IsSubtype(RuntimeTypeOf(value), _t_, «») is *true*, return
+  // step, "If IsSubtype(RuntimeTypeOf(value), _t_, Â«Â») is *true*, return
   // *true*", which was absent. Without it the binding held a Velocity that
   // `is Velocity` denied and no Velocity parameter would take, since the
   // judgment answers *false* for a meta type defining no `validate`.

@@ -2,10 +2,10 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError, ok } from '../harness.mts';
 
 /**
- * `PLAN-parameter-composition.md` Stage E — the plan's own acceptance criteria,
+ * `PLAN-parameter-composition.md` Stage E โ€” the plan's own acceptance criteria,
  * asserted rather than claimed.
  *
- * The plan's "done when": ง1.1's two lines refused, ง1.3's four still accepted,
+ * The plan's "done when": ยง1.1's two lines refused, ยง1.3's four still accepted,
  * and no suite regresses. Each is pinned below with the section it comes from,
  * so a later change that breaks one is told which promise it broke.
  *
@@ -18,16 +18,16 @@ import { evaluated, expectError, ok } from '../harness.mts';
 
 const okSrc = (s: string) => expect(ok(s), `expected accepted: ${s}`).toBe(true);
 
-// -- ง1.1, the reported gap: these must be REFUSED -----------------------------
+// -- ยง1.1, the reported gap: these must be REFUSED -----------------------------
 
-test('ง1.1 an indexed access over a parameter refuses a concrete value', () => {
+test('ยง1.1 an indexed access over a parameter refuses a concrete value', () => {
   expectError('function p<T, K: keyof T>(o: T, k: K): T[K] { return 5; }');
   expectError('function p<T, K: keyof T>(o: T, k: K) { let v: T[K] = 5; }');
 });
 
-// -- ง1.3, what must not break: these must be ACCEPTED -------------------------
+// -- ยง1.3, what must not break: these must be ACCEPTED -------------------------
 
-test('ง1.3 a generic accessor still type checks', () => {
+test('ยง1.3 a generic accessor still type checks', () => {
   // The one the whole staging was ordered around: it passes because `o[k]` and
   // `T[K]` reach one operation and answer one record, not because either is
   // unresolvable.
@@ -35,12 +35,12 @@ test('ง1.3 a generic accessor still type checks', () => {
   expect(evaluated('function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; } let u = { n: "x" }; String(p(u, "n"));')).toBe('x');
 });
 
-test('ง1.3 the identities hold', () => {
+test('ยง1.3 the identities hold', () => {
   okSrc('function q<T>(o: T, k: keyof T): keyof T { return k; }');
   okSrc('function f<T>(x: T): T { return x; }');
 });
 
-test('ง1.3 the call boundary is unchanged', () => {
+test('ยง1.3 the call boundary is unchanged', () => {
   okSrc('function id<T>(v: T) { return v; } id(5); id("hi"); id({});');
 });
 

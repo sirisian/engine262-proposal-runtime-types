@@ -323,8 +323,8 @@ test('a view built this way is a window in full', () => {
 });
 
 test('the old view spellings are retired, not reinterpreted', () => {
-  // `[].<T>(buffer, …)` named the GROWABLE ARRAY type to produce a value that
-  // owns nothing, and `[N].<T>(buffer, …)` put a window's extent inside the
+  // `[].<T>(buffer, â€¦)` named the GROWABLE ARRAY type to produce a value that
+  // owns nothing, and `[N].<T>(buffer, â€¦)` put a window's extent inside the
   // brackets of an owned type. Both are gone.
   //
   // They RAISE rather than being quietly re-read, because the third argument

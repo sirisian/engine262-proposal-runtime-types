@@ -279,7 +279,7 @@ export function ExpandSource(
       //
       // `#sec-syntax-replacement`: "Where a name carries both, the replacement
       // runs at expansion and the ordinary one at decoration, in that order." A
-      // name carrying both is the point of this: `@jsx { … }` expands and
+      // name carrying both is the point of this: `@jsx { â€¦ }` expands and
       // `@jsx class C {}` decorates, and the second is not a failure of the
       // first. Distinct from a macro THROWING, which is how a macro rejects what
       // it was given and which must not be ignored.
