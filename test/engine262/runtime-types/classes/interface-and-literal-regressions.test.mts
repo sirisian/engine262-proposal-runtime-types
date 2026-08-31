@@ -749,6 +749,40 @@ test('a self-describing contribution does not anchor inference', () => {
   expect(accepts('let n: null = null; let a: uint8 = n;')).toBe(false);
 });
 
+test('a signature is trusted only where the name cannot be replaced', () => {
+  // D107: a `function` declaration creates a MUTABLE binding, so
+  // `function g(p: uint32){ return "s"; } g = function(p){ return 1; }` leaves
+  // `g` holding a function that returns a NUMBER. The checker read `string` from
+  // the declaration and refused `const q: number = g(...)` - rejecting a program
+  // that is CORRECT, before it ran.
+  //
+  // #sec-check-elision states the rule and the engine already implemented it
+  // there: "a name that nothing assigns cannot be replaced, whatever declared
+  // it ... only one that writes to the name pays for the possibility, and it
+  // pays at the boundaries that read a signature from it". Reading a call's
+  // Static Type is one of those boundaries and asked nothing.
+  //
+  // A written-to name defers to the boundary, where the value is still checked.
+  expect(accepts('function g(p: uint32){ return "s"; } g = function(p){ return 1; }; const q: number = g((1 := uint32));')).toBe(true);
+  expect(accepts('function g(p: uint32){ return "s"; } if (globalThis.z) { g = function(p){ return 1; }; } const q: number = g((1 := uint32));')).toBe(true);
+  // The test is on the SOURCE TEXT, so a self-assignment counts.
+  expect(accepts('function g(p: uint32){ return "s"; } g = g; const q: number = g((1 := uint32));')).toBe(true);
+
+  // An ordinary program keeps its early error - "an ordinary program therefore
+  // keeps every elision it had".
+  expect(accepts('function g(p: uint32){ return "s"; } const q: number = g((1 := uint32));')).toBe(false);
+  expect(accepts('function g(p: uint32): string { return "s"; } const q: number = g((1 := uint32));')).toBe(false);
+  expect(accepts('class C { m(p: uint32) { return "s"; } } const c = new C(); const q: number = c.m((1 := uint32));')).toBe(false);
+  expect(accepts('const g: (p: uint32) => string = (p) => "s"; const q: number = g((1 := uint32));')).toBe(false);
+
+  // The DESIGN'S own elision example must stay refused: not trusting a
+  // signature must not become not checking at all.
+  expect(accepts('function f(): uint32 { return (5 := uint32); } function g2(): uint32 { return f(); } f = function () { return "now-a-string"; }; const n2: uint32 = g2();')).toBe(false);
+
+  // An UNANNOTATED binding is ~any~ and was always deferred - not this fix.
+  expect(accepts('const g = (p: uint32): string => "s"; const q: number = g((1 := uint32));')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

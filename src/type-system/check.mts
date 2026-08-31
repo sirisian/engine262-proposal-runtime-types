@@ -6583,7 +6583,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // this call site can use.
             return null;
           }
-          if (only.Return || only.InferredReturn) {
+          // A signature is trusted only where the CALLEE'S NAME cannot be replaced
+      // (D107).
+      //
+      // A `function` declaration creates a MUTABLE binding, so
+      // `function g(p: uint32){ return "s"; } g = function(p){ return 1; }`
+      // leaves `g` holding a function that returns a number. The checker read
+      // `string` from the declaration and refused `const q: number = g(...)` -
+      // rejecting a program that is CORRECT, before it ran.
+      //
+      // #sec-check-elision states the rule and this engine already implements it
+      // there: "the condition is on the source text rather than on the form of
+      // the declaration, because A NAME THAT NOTHING ASSIGNS CANNOT BE REPLACED,
+      // whatever declared it. An ordinary program therefore keeps every elision
+      // it had; only one that writes to the name pays for the possibility, and
+      // it pays at the boundaries that read a signature from it."
+      //
+      // `immutablyBound` is that judgment, and it was consulted at exactly one
+      // site - the elision check. Reading a call's Static Type is the other
+      // boundary "that reads a signature from it", and it asked nothing.
+      //
+      // The predicate is REUSED rather than restated so that its second half
+      // comes along: a direct `eval` can assign to any name in scope, so its
+      // presence withdraws the judgment for the whole source text.
+      const calleeName = ((node as { CallExpression?: ParseNode }).CallExpression as {
+        type?: string, name?: string
+      } | undefined);
+      if (calleeName?.type === 'IdentifierReference' && typeof calleeName.name === 'string'
+        && !immutablyBound(calleeName.name)) {
+        // The name may hold a different function by the time the call runs, so
+        // neither a declared nor an inferred return can be relied on. The value
+        // is still checked where it crosses into the annotation, which is the
+        // "bounded admission" the clause describes.
+        return null;
+      }
+      if (only.Return || only.InferredReturn) {
             if (!only.Return && only.InferredReturn) {
               const named = (node as { CallExpression?: ParseNode }).CallExpression as { type?: string, name?: string } | undefined;
               if (named?.type === 'IdentifierReference' && named.name) {
