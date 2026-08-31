@@ -3593,6 +3593,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticTypeIn(inner, contextual);
       }
     }
+    // An EMPTY array literal at a target no array can satisfy (D58b).
+    //
+    // `staticType` returns `null` for an element-less `ArrayLiteral`, so the
+    // annotation had nothing to compare against: `let n: uint8 = []` and
+    // `let o: { x: uint8 } = []` raised no static error while
+    // `let o: { x: uint8 } = [1]` did - emptiness was the whole difference. The
+    // RUN TIME refused both, so this was a missing diagnostic and not a
+    // loosening.
+    //
+    // Reported HERE rather than by typing the literal. Typing it `[].<never>` or
+    // `[].<any>` were BOTH measured and both refuse `let a: U = []` where
+    // `U = [].<T>` - an array whose element is an opaque type PARAMETER, which no
+    // concrete element type is assignable to. A note in `staticType` already
+    // recorded that for `never`; `any` fails the same rows. So `staticType` keeps
+    // answering `null` and nothing downstream changes.
+    //
+    // Only kinds NO array can satisfy are refused - a ~primitive~, an ~object~,
+    // and a ~nominal~ that is not a library array type. An ~array~, a ~tuple~,
+    // `any`, a type ~parameter~ and a ~union~ or ~intersection~ that might
+    // contain one are all left alone, which is what keeps the four
+    // type-parameter rows silent.
+    if (node.type === 'ArrayLiteral'
+      && ((node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? []).length === 0
+      && contextual) {
+      const targetKind = contextual.Kind;
+      const noArraySatisfies = targetKind === 'primitive'
+        || targetKind === 'object'
+        || (targetKind === 'nominal'
+          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration');
+      if (noArraySatisfies) {
+        errors.push((Throw.TypeError(
+          '$1 is not assignable to $2',
+          Value('an empty array'),
+          Value(displayType(contextual as TypeRecord)),
+        ) as { Value: ObjectValue }).Value);
+        return null;
+      }
+    }
     if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'tuple') {
       checkArrayLiteralArityAgainstTuple(node as ParseNode.ArrayLiteral, contextual);
       // The LITERAL still reports no type, for the reason the array arm below

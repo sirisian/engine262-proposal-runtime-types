@@ -589,6 +589,31 @@ test('freshness reaches a UNION target', () => {
   expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { x: 1 };')).toBe(true);
 });
 
+test('an empty array literal is refused where no array fits', () => {
+  // D58b: `staticType` returns `null` for an element-less ArrayLiteral, so the
+  // annotation had nothing to compare against - `let n: uint8 = []` raised no
+  // static error while `let o: { x: uint8 } = [1]` did. The RUN TIME refused
+  // both, so this was a missing diagnostic and not a loosening.
+  expect(accepts('let n: uint8 = [];')).toBe(false);
+  expect(accepts('let o: { x: uint8 } = [];')).toBe(false);
+  expect(accepts('interface I { x: uint8 } let i: I = [];')).toBe(false);
+
+  // Reported ADDITIVELY rather than by typing the literal. `[].<never>` and
+  // `[].<any>` were BOTH measured and both refuse `let a: U = []` where
+  // `U = [].<T>` - an array whose element is an opaque type PARAMETER, which no
+  // concrete element type is assignable to. This row is why.
+  expect(accepts('function f<T, U = [].<T>>(v: T) { let a: U = []; return 1; }')).toBe(true);
+
+  // Every target an array CAN satisfy is untouched.
+  expect(accepts('let a: [].<uint8> = [];')).toBe(true);
+  expect(accepts('let a: [].<uint8> = []; a.push((1 := uint8));')).toBe(true);
+  expect(accepts('let a: any = [];')).toBe(true);
+  expect(accepts('let t: [uint8, string] = [];')).toBe(false);
+  // ...and a NON-empty array is checked as it always was.
+  expect(accepts('let o: { x: uint8 } = [1];')).toBe(false);
+  expect(accepts('let a: [].<uint8> = [(1 := uint8)];')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

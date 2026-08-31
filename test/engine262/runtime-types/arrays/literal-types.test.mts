@@ -131,7 +131,12 @@ test('a bare literal has the type of its elements joined', () => {
   expectOk('let u: [].<uint8> = [];');
   // An empty literal reports nothing, so the boundary decides and names the
   // VALUE rather than a type.
-  expect(thrown('const s: string = [];')).toContain('[object Array]');
+  // An EMPTY array literal is refused STATICALLY now (D58b), where it used to
+  // reach the run-time boundary and report the VALUE - `[object Array] is not
+  // assignable to "string"`. The static message names the form instead, which is
+  // what a reader of the source can act on.
+  expect(thrown('const s: string = [];')).toContain('is not assignable to');
+  expect(thrown('const s: string = [];')).toContain('an empty array');
 });
 
 test('an array literal contributes to an inferred return', () => {
