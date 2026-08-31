@@ -263,9 +263,20 @@ test('D30: a REGEXP reports `RegExp.<Captures, Groups>` at run time', () => {
 
 test('D30: the neighbouring reporters are unaffected', () => {
   expect(evaluated('String(Reflect.typeOf(new Map.<string, uint8>()));')).toBe('Map.<string, uint.<8>>');
-  // A PROMISE still reports `{}` - the rest of D30, deliberately left: its
-  // arguments are not recoverable from the value.
-  expect(evaluated('String(Reflect.typeOf(Promise.resolve(1)));')).toBe('{}');
+  // A PROMISE reports its library type (D30b). The note here used to say it
+  // stays `{}` because "its arguments are not recoverable from the value" -
+  // which is TRUE and is why no arguments are passed, but the NAME is
+  // recoverable, from the `[[PromiseState]]` slot, exactly as `[[MapData]]`
+  // gives `Map` on the line above.
+  //
+  // A BARE library type is legitimate: the test below records that "a bare
+  // `RegExp`, the raw library type, is the supertype of every such
+  // parameterization". `{}` was not a weaker answer, it was a WRONG one - the
+  // checker says `Promise.<uint.<8>>` for the same shape.
+  expect(evaluated('String(Reflect.typeOf(Promise.resolve(1)));')).toBe('Promise');
+  expect(evaluated('function* g() { yield 1; } String(Reflect.typeOf(g()));')).toBe('Generator');
+  expect(evaluated('async function af() { return 1; } String(Reflect.typeOf(af()));')).toBe('Promise');
+  expect(evaluated('async function* ag() { yield 1; } String(Reflect.typeOf(ag()));')).toBe('AsyncGenerator');
 });
 
 test('D49: a BARE `RegExp` is the supertype of every parameterization', () => {

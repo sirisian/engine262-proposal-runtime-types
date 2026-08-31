@@ -850,11 +850,28 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     // bare nominal rather than a shape.
     const collection = (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
     const slots = value as unknown as Record<string, unknown>;
+    // A PROMISE, a GENERATOR and their async forms report their library type
+    // rather than `{}` (D30b), by the same slot test the collections above use.
+    //
+    // `Reflect.typeOf(Promise.resolve(1))` answered `{}` while the CHECKER
+    // answered `Promise.<uint.<8>>` for the same shape - two mechanisms
+    // disagreeing about one value, which is what the regexp half of D30 fixed
+    // for a fourth kind and what `Reflect_typeOf`'s own comment calls out for
+    // callables.
+    //
+    // No type ARGUMENTS are passed. `TypedCollection` is STAMPED by
+    // `StampTypedCollection` when a collection is created through a typed path;
+    // a promise's value type and a generator's yield type are not stamped
+    // anywhere, so there is nothing to read and inventing `any` arguments would
+    // be inference the program did not ask for. The NAME is what was missing.
     const library = slots.MapData !== undefined ? 'Map'
       : slots.SetData !== undefined ? 'Set'
         : slots.WeakMapData !== undefined ? 'WeakMap'
           : slots.WeakSetData !== undefined ? 'WeakSet'
-            : undefined;
+            : slots.PromiseState !== undefined ? 'Promise'
+              : slots.AsyncGeneratorState !== undefined ? 'AsyncGenerator'
+                : slots.GeneratorState !== undefined ? 'Generator'
+                  : undefined;
     if (library !== undefined) {
       const record = libraryTypeRecord(library, collection ?? []);
       if (record) {
