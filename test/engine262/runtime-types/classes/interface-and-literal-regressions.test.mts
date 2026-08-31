@@ -662,6 +662,37 @@ test('push, unshift and splice check their element', () => {
   expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.splice(0, 1);')).toBe(true);
 });
 
+test('a returned value type class instance is copied', () => {
+  // D104: `returning` is one of the positions #sec-value-type-copying lists and
+  // was the ONLY one that did not copy - a binding, an assignment, a typed
+  // field, a typed array element and an argument all did.
+  //
+  // The cause was CHECK ELISION: `EnforceAnnotation` returns early on the elided
+  // path, which stamps a typed ARRAY and never reaches `CheckedConvertValue`.
+  // The array branch there already says the copy for the same reason, quoting
+  // #sec-elision-stability - "eliding a check must not change what a value IS".
+  const V = 'class P { x: uint8 = (0 := uint8); } const a = new P(); a.x = (1 := uint8); ';
+  // 1 means the returned value was COPIED before `a` was mutated; 9 means it aliased.
+  expect(evaluated(`${V} function f(): P { return a; } const b = f(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
+  expect(evaluated(`${V} const f = (): P => { return a; }; const b = f(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
+  expect(evaluated(`${V} class H { m(): P { return a; } } const b = new H().m(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
+  // An ELEMENT read returned: it copied into every other position already.
+  expect(evaluated(`${V} let r: [].<P> = [new P()]; r[0].x = (5 := uint8); function f(): P { return r[0]; } const b = f(); r[0].x = (9 := uint8); String(b.x);`)).toBe('5');
+
+  // An arrow's CONCISE body always copied - it is not elided, which is what made
+  // the same annotation behave differently in the two arrow forms.
+  expect(evaluated(`${V} const f = (): P => a; const b = f(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
+
+  // An ORDINARY class instance has no layout and keeps the identity a return
+  // must preserve.
+  expect(evaluated('class Q { } const q = new Q(); function f() { return q; } String(f() === q);')).toBe('true');
+  // ...and a freshly constructed instance has nothing to alias.
+  expect(evaluated(`${V} function f(): P { return new P(); } const b = f(); String(b.x);`)).toBe('0');
+
+  // The clause's own worked example, unchanged: `let e: V = arr[0]` holds a copy.
+  expect(evaluated('class P { x: uint8 = (0 := uint8); } let r: [].<P> = [new P()]; r[0].x = (5 := uint8); let e: P = r[0]; r[0].x = (9 := uint8); String(e.x);')).toBe('5');
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

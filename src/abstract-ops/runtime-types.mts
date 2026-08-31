@@ -1104,6 +1104,29 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
         (value as { TypedExtent?: number }).TypedExtent = elided.Extent as number;
       }
     }
+    // A VALUE TYPE CLASS instance is copied on the elided path too (D104).
+    //
+    // The array branch above already says the copy here rather than leaving it
+    // to `CheckedConvertValue`, and gives the reason: #sec-elision-stability,
+    // "eliding a check must not change what a value IS". A returned instance
+    // that aliases its source is a different value from one that is a copy, by
+    // exactly that argument.
+    //
+    // `returning` is one of the positions #sec-value-type-copying lists, and it
+    // was the ONLY one that did not copy: a binding, an assignment, a typed
+    // field, a typed array element and an argument all did. `function f(): P {
+    // return a; }` handed back `a` itself, so mutating `a` afterwards was
+    // visible through the result.
+    //
+    // The same test `ConvertValue` uses - a ~nominal~ with a layout - so this is
+    // not a new rule, only the existing one said on the path that skipped it.
+    // An ORDINARY class instance has no layout and is untouched, keeping the
+    // identity a return must preserve.
+    if (value instanceof ObjectValue && elided.Kind === 'nominal'
+      && (elided as { EnumMembers?: unknown }).EnumMembers === undefined
+      && LayoutOf(elided) !== null) {
+      return CopyValueClassInstance(value);
+    }
     return value;
   }
   // #sec-contextual-types: the binding boundary applies the CHECKED conversion
