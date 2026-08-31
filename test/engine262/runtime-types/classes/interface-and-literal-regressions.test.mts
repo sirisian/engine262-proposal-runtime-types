@@ -714,6 +714,41 @@ test('Promise.resolve rejects with never, as the statics table states', () => {
   expect(accepts('let p: Promise.<uint8, string> = Promise.reject("boom");')).toBe(true);
 });
 
+test('a self-describing contribution does not anchor inference', () => {
+  // D105: #sec-anchored-contributions says a contribution anchors when its
+  // Static Type "derives from a DECLARED type". The checker asked instead
+  // whether the type was NOT A LITERAL, and its own comment states the
+  // assumption: "a known, non-literal contribution is one that derives from an
+  // annotation somewhere".
+  //
+  // That is false for a form that DESCRIBES ITSELF. `{}` is `{}` and
+  // `function(){}` is `() => void` - non-literal, and no declaration supplied
+  // either. So an unannotated function returning one PARTICIPATED, its call had
+  // a Static Type where the clause gives it ~any~, and the mismatch was refused
+  // BEFORE THE PROGRAM RAN.
+  //
+  // Each row below must reach the boundary and throw, not be refused early.
+  const runsThenThrows = (src: string) => {
+    // A static rejection would fail even with the throw swallowed.
+    expect(ok(`try { ${src} } catch (e) {} "ran";`), `should not be an early error: ${src}`).toBe(true);
+    return (run(`${src} 1;`) as { Type: string }).Type === 'throw';
+  };
+  for (const v of ['{}', '{ x: 1 }', 'function(){}', '() => 1', 'null', 'undefined', '[1]', '"s"']) {
+    expect(runsThenThrows(`function g(){ return ${v}; } let a: uint8 = g();`), `for ${v}`).toBe(true);
+  }
+
+  // `null` and `undefined` are ~primitive~ Type Records, not ~literal~ ones
+  // (#sec-the-null-and-undefined-types), which is why the old test anchored
+  // them. They have ONE VALUE each, so knowing the type says nothing a
+  // declaration supplied - the same reasoning, generalized.
+
+  // A real anchor still participates, and the mismatch is an early error.
+  expect(accepts('function g(p: string){ return p; } let a: uint8 = g("s");')).toBe(false);
+  expect(accepts('function g(): string { return "s"; } let a: uint8 = g();')).toBe(false);
+  expect(accepts('let a: uint8 = "s";')).toBe(false);
+  expect(accepts('let n: null = null; let a: uint8 = n;')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

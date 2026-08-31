@@ -8499,6 +8499,74 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Array literals every element of which is a literal; they anchor nothing. */
   const literalDerivedArrays = new WeakSet<object>();
 
+  /**
+   * Whether an expression DERIVES FROM A DECLARED TYPE, which is what
+   * #sec-anchored-contributions asks (D105).
+   *
+   * The comment above states the assumption this replaces: "a known,
+   * non-literal contribution is one that derives from an annotation
+   * somewhere". It is FALSE for a form that DESCRIBES ITSELF - an object
+   * literal is `{}`, a function expression is `() => void`, `null` is `null` -
+   * all non-literal, all deriving from no declaration at all.
+   *
+   * The consequence was that `function g(){ return {}; } let a: uint8 = g();`
+   * PARTICIPATED in inference, so the call had a Static Type where the clause
+   * gives it ~any~, and the mismatch was refused BEFORE THE PROGRAM RAN. An
+   * ~any~ value rejected statically is the direction that breaks working
+   * programs, and it is why six suite rows asserting a catchable TypeError
+   * were failing: those tests were right.
+   *
+   * Two tests are applied, and BOTH are the code comment's own reasoning
+   * generalized rather than a new idea:
+   *
+   *  - the TYPE has exactly one value - a ~literal~, or the ~primitive~ `null`
+   *    or `undefined` (#sec-the-null-and-undefined-types gives those two
+   *    [[Kind]]: ~primitive~, which is why the old proxy anchored them). Such a
+   *    type "knows its type perfectly well and still says nothing a program
+   *    annotated";
+   *  - the EXPRESSION is a self-describing literal FORM, which is the same
+   *    point for an object or function whose type has many values but whose
+   *    shape no declaration supplied.
+   *
+   * `literalDerivedArrays` is this discovery made once already, for one form,
+   * and patched with a set rather than by correcting the test.
+   */
+  const selfDescribingType = (t: { Kind?: string, Name?: string } | null | undefined): boolean => !!t
+    && (t.Kind === 'literal'
+      || (t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined')));
+
+  const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
+    if (!t || selfDescribingType(t)) {
+      return false;
+    }
+    if (!expr || typeof expr !== 'object') {
+      return false;
+    }
+    if (literalDerivedArrays.has(expr as unknown as object)) {
+      return false;
+    }
+    switch ((expr as { type?: string }).type) {
+      case 'ObjectLiteral':
+      case 'ArrayLiteral':
+      case 'FunctionExpression':
+      case 'ArrowFunction':
+      case 'AsyncFunctionExpression':
+      case 'AsyncArrowFunction':
+      case 'GeneratorExpression':
+      case 'AsyncGeneratorExpression':
+      case 'ClassExpression':
+      case 'RegularExpressionLiteral':
+      case 'TemplateLiteral':
+      case 'NullLiteral':
+      case 'BooleanLiteral':
+      case 'NumericLiteral':
+      case 'StringLiteral':
+        return false;
+      default:
+        return true;
+    }
+  };
+
 
 
   /**
@@ -9155,7 +9223,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `() => { return f(); }` published - the two spellings of one function
         // disagreeing, which is what #sec-inferred-result-type exists to
         // prevent.
-        if (conciseType && conciseType.Kind !== 'literal') {
+        if (derivesFromDeclaration(body as ParseNode, conciseType)) {
           anchorage.anchored = true;
           anchorage.from = anchorage.from ?? anchorDescription(body as ParseNode);
         }
@@ -9198,7 +9266,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               unknown = true;
               return;
             }
-            if (t.Kind !== 'literal') {
+            if (derivesFromDeclaration(y.AssignmentExpression as ParseNode, t)) {
               anchorage.anchored = true;
             }
             contributions.push(widen(t));
@@ -9371,7 +9439,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // is indistinguishable from a contribution that a declaration
           // supplied. Anchoring is a property of the contribution, so it is
           // taken from the contribution.
-          if (t.Kind !== 'literal' && !literalDerivedArrays.has(expr as unknown as object)) {
+          if (derivesFromDeclaration(expr, t)) {
             anchorage.anchored = true;
             anchorage.from = anchorage.from ?? anchorDescription(expr);
           }
