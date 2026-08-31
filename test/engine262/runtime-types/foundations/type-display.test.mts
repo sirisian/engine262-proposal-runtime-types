@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { run } from '../harness.mts';
+import { run, evaluated } from '../harness.mts';
 
 /**
  * How a type renders in a diagnostic.
@@ -136,4 +136,26 @@ test('an inhabitable intersection is unaffected', () => {
   // inhabitable intersection gets the same improved message.
   const c = run('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1, y: 2 }; String(Number(c.x));') as { Value?: { stringValue?: () => string } };
   expect(c.Value?.stringValue?.()).toBe('1');
+});
+
+test('StaticTypeError is a SyntaxError subclass', () => {
+  // OQ27: #sec-type-errors makes a DECIDABLE violation an Early Error and
+  // "reserves a thrown *TypeError* for the ~any~ boundary". It does not say what
+  // the rejection throws, and one constructor cannot mean both "catchable here"
+  // and "the source was rejected" - a program could not tell which it had.
+  //
+  // It EXTENDS `SyntaxError` so every loader, bundler and `eval` caller that
+  // treats one as "this source did not load" keeps working, while anything that
+  // cares can say "this failed TYPE checking" rather than "this failed to
+  // parse". No native ECMAScript error subclasses another; this is ordinary
+  // elsewhere, and Python's `IndentationError` is the same pattern.
+  expect(evaluated('String(typeof StaticTypeError);')).toBe('function');
+  expect(evaluated('String(StaticTypeError.name);')).toBe('StaticTypeError');
+  // Both links: the constructor's and the prototype's.
+  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError) === SyntaxError);')).toBe('true');
+  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError.prototype) === SyntaxError.prototype);')).toBe('true');
+  expect(evaluated('const e = new StaticTypeError("x"); String((e instanceof StaticTypeError) && (e instanceof SyntaxError) && (e instanceof Error));')).toBe('true');
+  // ...and it is NOT the thing it must be distinguishable from.
+  expect(evaluated('const e = new StaticTypeError("x"); String(e instanceof TypeError);')).toBe('false');
+  expect(evaluated('String(new StaticTypeError("boom"));')).toBe('StaticTypeError: boom');
 });

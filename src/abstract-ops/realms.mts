@@ -17,6 +17,8 @@ import {
 interface Intrinsics_Table6 {
   '%AbstractModuleSource%': FunctionObject;
   '%AggregateError%': FunctionObject;
+  /** proposal-runtime-types #sec-type-errors (OQ27): a DECIDABLE type violation. */
+  '%StaticTypeError%': FunctionObject;
   '%Array%': FunctionObject;
   '%ArrayBuffer%': FunctionObject;
   '%ArrayIteratorPrototype%': ObjectValue;
@@ -100,6 +102,8 @@ interface Intrinsics_Table6 {
 export interface Intrinsics extends Intrinsics_Table6 {
   '%AbstractModuleSource.prototype%': ObjectValue;
   '%AggregateError.prototype%': ObjectValue;
+  /** proposal-runtime-types (OQ27): its [[Prototype]] is %SyntaxError.prototype%. */
+  '%StaticTypeError.prototype%': ObjectValue;
   '%Array.prototype.values%': FunctionObject;
   '%Array.prototype%': ObjectValue;
   '%ArrayBuffer.prototype%': ObjectValue;

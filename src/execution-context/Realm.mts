@@ -50,6 +50,8 @@ import { bootstrapMapIteratorPrototype } from '../intrinsics/MapIteratorPrototyp
 import { bootstrapMapPrototype } from '../intrinsics/MapPrototype.mts';
 import { bootstrapMath } from '../intrinsics/Math.mts';
 import { bootstrapNativeError } from '../intrinsics/NativeError.mts';
+import { bootstrapStaticTypeErrorPrototype } from '../intrinsics/StaticTypeErrorPrototype.mts';
+import { bootstrapStaticTypeError } from '../intrinsics/StaticTypeError.mts';
 import { bootstrapNumber } from '../intrinsics/Number.mts';
 import { bootstrapNumberPrototype } from '../intrinsics/NumberPrototype.mts';
 import { bootstrapObject } from '../intrinsics/Object.mts';
@@ -195,6 +197,10 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapNativeError(realmRec);
   bootstrapAggregateErrorPrototype(realmRec);
   bootstrapAggregateError(realmRec);
+  // AFTER `bootstrapNativeError`, which creates `%SyntaxError%` and
+  // `%SyntaxError.prototype%` - both are this pair's [[Prototype]] (OQ27).
+  bootstrapStaticTypeErrorPrototype(realmRec);
+  bootstrapStaticTypeError(realmRec);
 
   bootstrapFunction(realmRec);
   bootstrapAbstractModuleSource(realmRec);
@@ -537,6 +543,9 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
 
     // Constructor Properties of the Global Object
     'AggregateError',
+    // proposal-runtime-types #sec-type-errors (OQ27): reachable so a loader can
+    // tell a failed TYPE check from a failed parse.
+    'StaticTypeError',
     'Array',
     'ArrayBuffer',
     'Boolean',
