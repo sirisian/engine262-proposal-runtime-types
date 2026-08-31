@@ -11168,6 +11168,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ?? (body as { AssignmentExpression?: ParseNode }).AssignmentExpression;
         if (expr) {
           (expr as unknown as { ContextualType?: Known }).ContextualType = conciseReturn;
+          // ...and CHECKED against it (D109). The contextual was recorded and
+          // never compared, so `(): uint8 => "s"` and `(): void => "s"` were
+          // both accepted although the comment above says the declaration is
+          // refused before any call runs.
+          //
+          // For every type but `void` the run time caught it at
+          // EnforceReturnType, so the cost was a diagnostic arriving late. For
+          // `void` there is NO backstop: `void` is the type with no values, so
+          // RequireType against it would refuse the legitimate *undefined* too,
+          // and the static check is the only one there can be.
+          //
+          // The `void` exception here is D57's, not a hole: a CONTEXTUAL `void`
+          // requires nothing of the body - #sec-issubtype's "a `void` return is
+          // required of nothing" - while an arrow's OWN `: void` still refuses,
+          // which is what this arm is for.
+          const conciseIsContextual = returnContextIsContextual[returnContextIsContextual.length - 1] === true;
+          const conciseVoid = (conciseReturn as { Kind?: string } | null)?.Kind === 'void';
+          if (!(conciseVoid && conciseIsContextual)) {
+            const produced = staticTypeIn(expr, conciseReturn);
+            const producesUndefined = conciseVoid
+              && (produced as { Name?: string } | null)?.Name === 'undefined';
+            if (!producesUndefined) {
+              requireAssignable(produced, conciseReturn);
+            }
+          }
         }
       }
       walk(body);

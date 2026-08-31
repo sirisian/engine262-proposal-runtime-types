@@ -874,6 +874,40 @@ test('a void return is required of nothing', () => {
   expect(accepts('type VF = () => void; const h: VF = (() => "s"); let s: string = h();')).toBe(false);
 });
 
+test('a concise arrow body is checked against its own return annotation', () => {
+  // D109: the declared return was RECORDED on the concise body's expression as a
+  // contextual type and never COMPARED to it, so `(): uint8 => "s"` and
+  // `(): void => "s"` were both accepted - although the code's own comment said
+  // "the checker refuses the declaration before any call runs".
+  //
+  // For every type but `void` the run time caught it at EnforceReturnType, so
+  // the cost was a diagnostic arriving late. `void` has NO backstop: it is the
+  // type with no values, so RequireType against it would refuse the legitimate
+  // *undefined* too, and the static check is the only one there can be.
+  expect(accepts('const f = (): void => "s";')).toBe(false);
+  expect(accepts('const f = (): void => (1 := uint8);')).toBe(false);
+  expect(accepts('const f = async (): Promise.<void, never> => "s";')).toBe(false);
+  expect(accepts('const f = (): uint8 => "s";')).toBe(false);
+  expect(accepts('const f = (): uint8 => (300 := uint16);')).toBe(false);
+
+  // A correct concise body is untouched, and `undefined` satisfies `void`.
+  expect(accepts('const f = (): string => "s";')).toBe(true);
+  expect(accepts('const f = (): uint8 => (1 := uint8);')).toBe(true);
+  expect(accepts('const f = (): void => undefined;')).toBe(true);
+  expect(accepts('const f = (): void => { };')).toBe(true);
+
+  // The rule matches the BLOCK form rather than inventing one: a converting
+  // return is refused there, at a declaration, and at a plain binding alike.
+  expect(accepts('const f = (): string => (1 := uint8);')).toBe(false);
+  expect(accepts('const f = (): string => { return (1 := uint8); };')).toBe(false);
+  expect(accepts('let s: string = (1 := uint8);')).toBe(false);
+
+  // D57's rule is NOT this one: a CONTEXTUAL `void` requires nothing of the
+  // body, and only an arrow's OWN annotation refuses.
+  expect(accepts('type VF = () => void; const h: VF = (() => "s");')).toBe(true);
+  expect(accepts('const f = (): void => { return "s"; };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
