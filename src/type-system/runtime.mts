@@ -3322,7 +3322,39 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // publish an in-progress copy before walking members - so a
       // SELF-REFERENTIAL union, which #sec-type-alias-declarations admits,
       // does not survive it. Sorting is the whole of what this defect needs.
-      const ordered = [...Members];
+      // A member that is itself a UNION contributes ITS members (D112).
+      //
+      // `(uint8 | int8) | uint16` and `type P = uint8 | int8; P | uint16` build
+      // the SAME nested record here, and the alias one is flattened downstream
+      // by its declaration's canonicalization while the written annotation's is
+      // not. The boundary then sees two members rather than three, and
+// `ConvertValueToUnion`'s numeric ranking - which is what picks the
+      // narrowest arm a value fits - skips a member that is not itself numeric.
+      // So `let v: (uint8 | int8) | uint16 = 10` answered `uint.<16>` where every
+      // other spelling of that type answers `uint.<8>`.
+      //
+      // `displayType` flattens for presentation, so all three spellings LOOK
+      // identical and the difference surfaces only as a selection.
+      //
+      // A `seen` set is required, not optional: #sec-type-alias-declarations
+      // admits `type L = { value: uint8, next: L | null }`, whose union member
+      // contains the union. CanonicalizeType flattens but does not survive that
+      // - its union branch walks members without publishing an in-progress copy
+      // - which is why this does the flattening itself rather than calling it.
+      const flattenArms = (arms: readonly TypeRecord[], seen: Set<TypeRecord>): TypeRecord[] => {
+        const out: TypeRecord[] = [];
+        for (const arm of arms) {
+          const nested = arm as { Kind?: string, Members?: readonly TypeRecord[] };
+          if (nested.Kind === 'union' && nested.Members && !seen.has(arm)) {
+            seen.add(arm);
+            out.push(...flattenArms(nested.Members, seen));
+            continue;
+          }
+          out.push(arm);
+        }
+        return out;
+      };
+      const ordered = flattenArms(Members, new Set());
       const armKeys = new Map(ordered.map((m) => [m, orderKey(m)]));
       ordered.sort((a, b) => ((armKeys.get(a) ?? '') < (armKeys.get(b) ?? '') ? -1 : 1));
       return { Kind: 'union', Members: ordered };

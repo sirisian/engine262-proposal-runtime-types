@@ -1087,6 +1087,41 @@ test('one union type selects one arm, whatever the spelling', () => {
   expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
 });
 
+test('a nested union in an annotation is flattened', () => {
+  // D112: `(uint8 | int8) | uint16` and `type P = uint8 | int8; P | uint16`
+  // build the SAME nested record, and the alias one is flattened downstream by
+  // its declaration's canonicalization while the written annotation's is not.
+  // The boundary then saw two members rather than three, and
+  // `ConvertValueToUnion`'s numeric ranking - which picks the narrowest arm a
+  // value fits - skips a member that is not itself numeric.
+  //
+  // `displayType` flattens for presentation, so all three spellings LOOK
+  // identical and the difference surfaced only as a selection.
+  expect(evaluated('let v: (uint8 | int8) | uint16 = 10; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(evaluated('type P = uint8 | int8; type Q = P | uint16; let q: Q = 10; String(Reflect.typeOf(q));')).toBe('uint.<8>');
+  expect(evaluated('let f: uint8 | int8 | uint16 = 10; String(Reflect.typeOf(f));')).toBe('uint.<8>');
+
+  // A `seen` set is required, not optional: #sec-type-alias-declarations admits
+  // a self-referential alias, whose union member contains the union.
+  // CanonicalizeType flattens but does not survive that - its union branch walks
+  // members without publishing an in-progress copy - which is why the flattening
+  // here is done directly.
+  expect(evaluated('type L = { value: uint8, next: L | null };'
+    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next.value);')).toBe('2');
+  expect(evaluated('type A2 = { b: B2 | null }; type B2 = { a: A2 | null };'
+    + ' const v: A2 = { b: { a: null } }; String(v.b.a);')).toBe('null');
+
+  // A nested OBJECT union agrees in either spelling, as D110's ordering left it.
+  const G = 'function g(): any { return { x: 1 }; } ';
+  const nested = evaluated(`${G}let c: ({ x: int32 } | { x: uint8 }) | { x: uint16 } = g(); String(Reflect.typeOf(c));`);
+  const swapped = evaluated(`${G}let c: { x: uint16 } | ({ x: int32 } | { x: uint8 }) = g(); String(Reflect.typeOf(c));`);
+  expect(nested).toBe(swapped);
+
+  // The scalar ranking and the no-fit refusal are unchanged.
+  expect(evaluated('let v: uint8 | null = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(accepts('let bad: (uint8 | int8) | uint16 = 70000;')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
