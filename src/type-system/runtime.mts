@@ -28,6 +28,7 @@ import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue,
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
+import { orderKey } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -3301,7 +3302,30 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       for (const m of node.Types) {
         Members.push(Q(yield* TypeNodeToTypeRecord(m)));
       }
-      return { Kind: 'union', Members };
+      // A written UNION's arms are ORDERED (D110).
+      //
+      // `Members` is built by walking `node.Types` in SOURCE order, and this is
+      // the record the BOUNDARY receives: `ConvertValueToUnion` iterates the
+      // [[Members]] it is handed. So `{ x: int32 } | { x: uint8 }` and its
+      // reverse were the same interned type, displayed identically and compared
+      // `===`, and a value crossing into them selected a DIFFERENT arm - which
+      // #sec-union-boundary-selection names as what its canonical ordering
+      // exists to prevent: "a rule that read the order of the members would
+      // therefore give one type two behaviours".
+      //
+      // The SCALAR case hid it, because `ConvertValueToUnion` ranks numeric
+      // members by width and signedness and so does not depend on the order it
+      // receives. An OBJECT arm has no ranking and the raw order showed through.
+      //
+      // Only the ORDER is taken, not the whole of CanonicalizeType. That
+      // function also reduces and flattens, and its union branch does not
+      // publish an in-progress copy before walking members - so a
+      // SELF-REFERENTIAL union, which #sec-type-alias-declarations admits,
+      // does not survive it. Sorting is the whole of what this defect needs.
+      const ordered = [...Members];
+      const armKeys = new Map(ordered.map((m) => [m, orderKey(m)]));
+      ordered.sort((a, b) => ((armKeys.get(a) ?? '') < (armKeys.get(b) ?? '') ? -1 : 1));
+      return { Kind: 'union', Members: ordered };
     }
     case 'IntersectionType': {
       const Members: TypeRecord[] = [];

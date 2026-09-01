@@ -1046,6 +1046,47 @@ test('a member read from a UNION is the union of the arms', () => {
   expect(accepts('function h(): any { return { a: 1, b: "s" }; } let i2: { a: uint8 } & { b: string } = h(); let n2: uint8 = i2.a;')).toBe(true);
 });
 
+test('one union type selects one arm, whatever the spelling', () => {
+  // D110: `TypeNodeToTypeRecord` built [[Members]] by walking `node.Types` in
+  // SOURCE order and returned it raw, and that is the record the BOUNDARY
+  // receives - `ConvertValueToUnion` iterates the members it is handed. So
+  // `{ x: int32 } | { x: uint8 }` and its reverse were the same interned type,
+  // displayed identically and compared `===`, and a value crossing into them
+  // selected a DIFFERENT arm.
+  //
+  // #sec-union-boundary-selection names that outcome as what its canonical
+  // ordering exists to prevent: "a rule that read the order of the members would
+  // therefore give one type two behaviours".
+  //
+  // The SCALAR case hid it: `ConvertValueToUnion` ranks numeric members by width
+  // and signedness, so it does not depend on the order it receives. An OBJECT
+  // arm has no ranking and the raw order showed through.
+  const A = 'function g(): any { return { x: 1 }; } ';
+  const one = evaluated(`${A}let c: { x: int32 } | { x: uint8 } = g(); String(Reflect.typeOf(c));`);
+  const two = evaluated(`${A}let c: { x: uint8 } | { x: int32 } = g(); String(Reflect.typeOf(c));`);
+  expect(one).toBe(two);
+  const three = evaluated(`${A}let c: { x: int32 } | { x: uint8 } | { x: uint16 } = g(); String(Reflect.typeOf(c));`);
+  const four = evaluated(`${A}let c: { x: uint16 } | { x: uint8 } | { x: int32 } = g(); String(Reflect.typeOf(c));`);
+  expect(three).toBe(four);
+
+  // Only the ORDER is taken, not the whole of CanonicalizeType: that also
+  // reduces and flattens, and its union branch does not publish an in-progress
+  // copy before walking members, so a SELF-REFERENTIAL union does not survive
+  // it. These two rows are what caught that.
+  expect(evaluated('type L = { value: uint8, next: L | null };'
+    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next.value);')).toBe('2');
+  expect(evaluated('type A2 = { b: B2 | null }; type B2 = { a: A2 | null };'
+    + ' const v: A2 = { b: { a: null } }; String(v.b.a);')).toBe('null');
+
+  // The scalar ranking keeps every answer it had, in either spelling.
+  expect(evaluated('let v: uint8 | uint16 = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(evaluated('let v: uint16 | uint8 = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(evaluated('let v: float32 | uint8 = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(evaluated('let v: uint8 | null = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
+  expect(accepts('let v: uint8 | uint16 = 70000;')).toBe(false);
+  expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
