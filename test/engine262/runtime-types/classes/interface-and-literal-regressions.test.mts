@@ -1241,6 +1241,14 @@ test('an ARRAY literal member adapts at a union target', () => {
   expect(accepts('let c: { p: [].<int32> } | { p: [].<string> } = { p: ["s"] };')).toBe(true);
   expect(accepts('let c: { p: [].<uint8> } | { p: [].<int8> } = { p: [70000] };')).toBe(false);
 
+  // The trial that chooses an arm tests ERRORS, not the returned type: an array
+  // literal's `staticTypeIn` answers NULL by design, so requiring a non-null
+  // result made every arm lose and an array member at DISAGREEING arms was never
+  // adapted while its object twin was.
+  expect(accepts('let c: { p: [].<int32> } | { p: [].<string> } = { p: [1] };')).toBe(true);
+  expect(accepts('let c: { p: [int32, int32] } | { p: [string, string] } = { p: [1, 2] };')).toBe(true);
+  expect(accepts('let c: { p: [].<{ x: int32 }> } | { p: [].<{ x: string }> } = { p: [{ x: 1 }] };')).toBe(true);
+
   // The conversion the withheld type protects still runs: the boundary is where
   // a typed array is built, and eliding it would hand back plain Numbers.
   expect(evaluated('function f(): [].<uint8> { return [1]; } String(Reflect.typeOf(f()));')).toBe('[].<uint.<8>>');

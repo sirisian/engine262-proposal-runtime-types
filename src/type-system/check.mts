@@ -9436,10 +9436,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const arm of wantedArmsFor(key)) {
           const before = errors.length;
           const won = speculate(() => {
-            const t = staticTypeIn(memberNode, arm);
-            return t !== null && errors.length === before;
+            // ERRORS are the signal, not the returned type. `staticTypeIn`
+            // answers NULL for an ARRAY literal by design - reporting the target
+            // would manufacture assignability and elide the boundary where a
+            // typed array is built (D114) - so requiring a non-null result made
+            // every arm lose and an array member at DISAGREEING arms was never
+            // adapted, while its object twin was.
+            //
+            // A member that adapts cleanly reports nothing whatever it returns,
+            // which is the same test D113 arrived at for the object case.
+            staticTypeIn(memberNode, arm);
+            return errors.length === before;
           });
           errors.length = before;
+          const dbg = (globalThis as unknown as { process?: { env?: Record<string, string> }, console: { error(m: string): void } });
+          if (dbg.process?.env?.D114) {
+            dbg.console.error('[D114] trial key=' + String(key)
+              + ' node=' + String((prop.AssignmentExpression as ParseNode | undefined)?.type)
+              + ' arm=' + displayType(arm as TypeRecord) + ' won=' + String(won));
+          }
           if (won) {
             return arm as Known;
           }
