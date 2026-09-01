@@ -1218,6 +1218,34 @@ test('a literal adapts where a union\'s arms differ ONE LEVEL DOWN', () => {
   expect(accepts('type L = { v: uint8, next: L | null }; const n2: L = { v: (1 := uint8), next: null };')).toBe(true);
 });
 
+test('an ARRAY literal member adapts at a union target', () => {
+  // D114: an OBJECT-literal member reaches its contextual by recursing into
+  // `objectLiteralShape`, which consults `contextualObjectTypes`. An ARRAY
+  // literal has no such recursion - `staticType` answers with the unadapted
+  // array type - so the shape carried `[].<number>` where the target wanted
+  // `[].<int32>`, and the literal was refused at a union target although the
+  // OBJECT twin in the same position is accepted.
+  //
+  // `staticTypeIn` cannot supply the type: its array branch deliberately answers
+  // NULL, because reporting the target would manufacture assignability and the
+  // boundary would be elided - and the boundary is where the typed array is
+  // built. It DOES check the elements, which is the part needed here, so the
+  // elements are checked against the arm and the arm is taken as the type.
+  expect(accepts('let c: { p: [].<int32> } | { q: string } = { p: [1] };')).toBe(true);
+  expect(accepts('let c: { p: { x: int32 } } | { q: string } = { p: { x: 1 } };')).toBe(true);
+
+  // The single-target rows, an element needing no adaptation, and an element
+  // fitting no arm are all unchanged.
+  expect(accepts('let c: { p: [].<int32> } = { p: [1] };')).toBe(true);
+  expect(accepts('let c: [].<int32> = [1];')).toBe(true);
+  expect(accepts('let c: { p: [].<int32> } | { p: [].<string> } = { p: ["s"] };')).toBe(true);
+  expect(accepts('let c: { p: [].<uint8> } | { p: [].<int8> } = { p: [70000] };')).toBe(false);
+
+  // The conversion the withheld type protects still runs: the boundary is where
+  // a typed array is built, and eliding it would hand back plain Numbers.
+  expect(evaluated('function f(): [].<uint8> { return [1]; } String(Reflect.typeOf(f()));')).toBe('[].<uint.<8>>');
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

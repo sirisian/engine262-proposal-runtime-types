@@ -9453,7 +9453,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       // Recursive: a member that is itself an object literal has no Static Type
       // either, and `{ inner: { p: g() } }` is an ordinary shape.
+      // An ARRAY or TUPLE literal member takes its CONTEXTUAL as its type, once
+      // the elements have been checked against it (D114).
+      //
+      // An OBJECT-literal member reaches its contextual by recursing into
+      // `objectLiteralShape`, which consults `contextualObjectTypes`. An ARRAY
+      // literal has no such recursion: `staticType` answers with the unadapted
+      // array type, so the shape carried `[].<number>` where the target wanted
+      // `[].<int32>` and the literal was refused - at ANY union target, whether
+      // or not the arms disagreed, while the OBJECT twin was accepted.
+      //
+      // `staticTypeIn` cannot supply the type: its array branch deliberately
+      // answers NULL, because reporting the target would manufacture
+      // assignability and the boundary would be elided as already-satisfied -
+      // and the boundary is where the typed array is built. It DOES check the
+      // elements, which is the part needed here.
+      //
+      // So the elements are checked against the arm and the arm is taken as the
+      // member's type. A losing arm reports, and the trial that chose it has
+      // already rolled that back.
+      const arrayMemberNode = (prop.AssignmentExpression as ParseNode | undefined);
+      const arrayMemberKind = arrayMemberNode?.type;
+      let adaptedArrayMember: Known = null;
+      if (armForMember && arrayMemberNode && arrayMemberKind === 'ArrayLiteral') {
+        const before = errors.length;
+        staticTypeIn(arrayMemberNode, armForMember);
+        if (errors.length === before) {
+          adaptedArrayMember = armForMember;
+        } else {
+          errors.length = before;
+        }
+      }
       const memberType = declaredMember
+        ?? adaptedArrayMember
         ?? staticType(prop.AssignmentExpression)
         ?? objectLiteralShape(prop.AssignmentExpression);
       if (!memberType) {
