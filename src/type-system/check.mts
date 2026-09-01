@@ -7089,6 +7089,62 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return sig;
             }
           }
+          // A read from a UNION is the union of that key's type across the arms,
+          // and an ERROR where any arm does not declare it (D111).
+          //
+          // `structureOf` resolves a ~nominal~ to its structure and returns
+          // everything else unchanged, so a union receiver arrived as `Kind:
+          // 'union'` and the `=== 'object'` guard below skipped the lookup
+          // entirely - the read then fell through to ~any~. So `c.x` on
+          // `{ x: int32 } | { x: int8 }` was accepted at `uint8`, at `boolean` and
+          // at an object type, none of which either arm declares, while the
+          // SINGLE-arm spelling refused a wrong read.
+          //
+          // The accessible keys are the INTERSECTION of the arms' and the type is
+          // the UNION of that key's types - the rule TypeScript, Flow, Scala 3 and
+          // mypy all reached, and which tagged-union languages enforce by
+          // construction. A key one arm lacks is an error because the program
+          // cannot know which arm it holds; narrowing is the escape, and the
+          // DISCRIMINANT - a key every arm declares - still reads, which is what
+          // makes narrowing possible in the first place.
+          const unionReceiver = receiver as { Kind?: string, Members?: readonly TypeRecord[] } | null | undefined;
+          if (unionReceiver?.Kind === 'union' && unionReceiver.Members && m.IdentifierName) {
+            const readKey = (m.IdentifierName as { name?: string }).name;
+            if (typeof readKey === 'string') {
+              const perArm: TypeRecord[] = [];
+              let everyArmDeclaresIt = true;
+              for (const arm of unionReceiver.Members) {
+                const armShape = structureOf(arm) as { Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[] } | null;
+                const here = armShape?.Kind === 'object'
+                  ? armShape.Properties?.find((q) => q.key === readKey)
+                  : undefined;
+                if (!here) {
+                  everyArmDeclaresIt = false;
+                  break;
+                }
+                perArm.push(here.type);
+              }
+              if (everyArmDeclaresIt && perArm.length > 0) {
+                return CanonicalizeType({ Kind: 'union', Members: perArm } as TypeRecord) as Known;
+              }
+              // A key one arm does NOT declare is an ERROR, not a fall-through to
+              // ~any~ (D111, direction A). The accessible keys are the INTERSECTION of
+              // the arms', because the program cannot know which arm it holds:
+              // `{ x: int32 } | { y: string }` has an `x` only if it took the first.
+              // Narrowing is the escape, and the DISCRIMINANT still reads, since a key
+              // every arm declares is answered above - which is what makes narrowing
+              // possible at all.
+              if (!everyArmDeclaresIt) {
+                const completion = Throw.StaticTypeError(
+                  '$1 is not declared by every member of $2',
+                  Value(readKey),
+                  Value(displayType(receiver as TypeRecord)),
+                );
+                errors.push(completion.Value as ObjectValue);
+                return null;
+              }
+            }
+          }
           const objType = structureOf(receiver);
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);

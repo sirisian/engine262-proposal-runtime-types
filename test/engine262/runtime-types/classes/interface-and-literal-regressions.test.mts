@@ -1004,6 +1004,48 @@ test('the LAST member writing a key decides its type', () => {
   expect(accepts('type E = { a: uint8 }; const g: { a: uint8, zz: string } = { a: (1 := uint8), zz: "s" }; let e: E = { ...g };')).toBe(false);
 });
 
+test('a member read from a UNION is the union of the arms', () => {
+  // D111: `structureOf` resolves a ~nominal~ to its structure and returns
+  // everything else unchanged, so a union receiver arrived as `Kind: 'union'`
+  // and the `=== 'object'` guard skipped the lookup entirely - the read fell
+  // through to ~any~. `c.x` on `{ x: int32 } | { x: int8 }` was accepted at
+  // `uint8`, at `boolean` and at an object type, none of which either arm
+  // declares, while the SINGLE-arm spelling refused a wrong read.
+  //
+  // The accessible keys are the INTERSECTION of the arms' and the type is the
+  // UNION of that key's types - the rule TypeScript, Flow, Scala 3 and mypy all
+  // reached, and which tagged-union languages enforce by construction.
+  const A = 'function g(): any { return { x: 1 }; } ';
+  const C = `${A}let c: { x: int32 } | { x: int8 } = g(); `;
+  expect(accepts(`${C}let n2: int32 = c.x;`)).toBe(false);
+  expect(accepts(`${C}let n2: int8 = c.x;`)).toBe(false);
+  expect(accepts(`${C}let n2: uint8 = c.x;`)).toBe(false);
+  expect(accepts(`${C}let b: boolean = c.x;`)).toBe(false);
+  expect(accepts(`${C}let o: { z: uint8 } = c.x;`)).toBe(false);
+  // ...and reading it AS the union is what the type permits.
+  expect(accepts(`${C}let u: int32 | int8 = c.x;`)).toBe(true);
+
+  // A key one arm does NOT declare is an error: the program cannot know which
+  // arm it holds. `null` counts as such an arm.
+  expect(accepts(`${A}let e: { x: int32 } | { y: string } = g(); let n2: int32 = e.x;`)).toBe(false);
+  expect(accepts(`${A}let o: { x: uint8 } | null = g(); let n2: uint8 = o.x;`)).toBe(false);
+
+  // The DISCRIMINANT still reads - a key every arm declares - which is what
+  // makes narrowing possible, and every narrowing form then works.
+  const D = 'type Circle = { kind: "circle", r: float64 }; type Square = { kind: "square", side: float64 };'
+    + ' type Shape = Circle | Square; function g2(): any { return { kind: "circle", r: 2 }; } let s: Shape = g2(); ';
+  expect(accepts(`${D}String(s.kind);`)).toBe(true);
+  expect(accepts(`${D}if (s.kind === "circle") { let r2: float64 = s.r; }`)).toBe(true);
+  expect(accepts(`${D}if (s is Circle) { let r2: float64 = s.r; }`)).toBe(true);
+  expect(accepts(`${D}match (s) { when { kind: "circle" }: s.r; default: 0; };`)).toBe(true);
+
+  // A SINGLE arm is unchanged, and an INTERSECTION has no counterpart: every
+  // value satisfies every arm, so its member reads are already known.
+  expect(accepts(`${A}let d: { x: int32 } = g(); let n2: int8 = d.x;`)).toBe(false);
+  expect(accepts(`${A}let d: { x: int32 } = g(); let n2: int32 = d.x;`)).toBe(true);
+  expect(accepts('function h(): any { return { a: 1, b: "s" }; } let i2: { a: uint8 } & { b: string } = h(); let n2: uint8 = i2.a;')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
