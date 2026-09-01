@@ -1178,6 +1178,46 @@ test('a literal adapts toward the union arm it fits', () => {
   expect(accepts('type L = { v: uint8, next: L | null }; const n2: L = { v: (1 := uint8), next: null };')).toBe(true);
 });
 
+test('a literal adapts where a union\'s arms differ ONE LEVEL DOWN', () => {
+  // D113: the nested literal was handed a contextual only where `wantedOf`
+  // returned ONE answer, and a union whose arms disagree returns null - so the
+  // arms were invisible one level down and nothing adapted. The FLAT spelling of
+  // the same question is accepted (D70b), and so
+  // `{ p: { x: int32 } } | { p: { x: string } }` refused `{ p: { x: 1 } }`, as
+  // did `{ p: { x: int32 } } | { p: { x: uint8 } }` whose arms do not disagree
+  // about being numeric at all.
+  //
+  // Each arm is tried with the adaptation ITSELF, and the test is whether the
+  // attempt REPORTED anything. It cannot be whether the result is assignable to
+  // the arm: `staticTypeIn` answers with the CONTEXTUAL where it adapts, so that
+  // asks whether an arm is assignable to itself and names the first arm the
+  // winner every time - which sent `{ p: { x: "s" } }` to the `int32` arm.
+  //
+  // A losing arm's records are rolled back through a journal on the contextual
+  // maps, since the walk records a type for every literal it touches.
+  const U = 'let c: { p: { x: int32 } } | { p: { x: string } } = ';
+  expect(accepts(`${U}{ p: { x: 1 } };`)).toBe(true);
+  expect(accepts('let c: { p: { q: { x: int32 } } } | { p: { q: { x: string } } } = { p: { q: { x: 1 } } };')).toBe(true);
+  expect(accepts('let c: { p: { x: int32 } } | { p: { x: uint8 } } = { p: { x: 1 } };')).toBe(true);
+  expect(accepts('let c: { p: { x: int32 }, q: uint8 } | { p: { x: string }, q: uint8 } = { p: { x: 1 }, q: (2 := uint8) };')).toBe(true);
+
+  // The value that needs NO adaptation reaches the OTHER arm, which is the row
+  // the self-confirming test broke.
+  expect(accepts(`${U}{ p: { x: "s" } };`)).toBe(true);
+
+  // A literal fitting NO arm, a wrong shape, and D75's excess through a nested
+  // arm are all still refused.
+  expect(accepts('let c: { p: { x: uint8 } } | { p: { x: int8 } } = { p: { x: 70000 } };')).toBe(false);
+  expect(accepts(`${U}{ p: { zz: 1 } };`)).toBe(false);
+  expect(accepts(`${U}{ p: { x: (1 := int32), zz: "s" } };`)).toBe(false);
+
+  // D70b's flat rows, D89's intersection rule and a self-referential alias are
+  // untouched.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
+  expect(accepts('type L = { v: uint8, next: L | null }; const n2: L = { v: (1 := uint8), next: null };')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the

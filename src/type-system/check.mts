@@ -1013,9 +1013,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** The `this` a non-arrow literal adopted from its contextual signature. */
-  const contextualThisTypes = new Map<ParseNode, Known>();
+  /**
+   * A Map whose writes can be UNDONE, for trying an adaptation speculatively
+   * (D113). `staticTypeIn` is not a query - it RECORDS a contextual type for
+   * every literal it walks - so an arm that loses a trial must be rolled back.
+   *
+   * On the MAP rather than at its callers: the write sites were miscounted twice
+   * by grep, and there are seven of these maps.
+   */
+  const trialJournal: { map: Map<ParseNode, unknown>, key: ParseNode, had: boolean, old: unknown }[] = [];
+  let trialDepth = 0;
+
+  class Journaled<V> extends Map<ParseNode, V> {
+    override set(key: ParseNode, value: V): this {
+      if (trialDepth > 0) {
+        trialJournal.push({
+          map: this as unknown as Map<ParseNode, unknown>, key, had: this.has(key), old: this.get(key),
+        });
+      }
+      return super.set(key, value) as this;
+    }
+  }
+
+  /** Run `attempt`, discarding what it recorded unless it reports success. */
+  const speculate = (attempt: () => boolean): boolean => {
+    const mark = trialJournal.length;
+    trialDepth += 1;
+    let ok: boolean;
+    try {
+      ok = attempt();
+    } finally {
+      trialDepth -= 1;
+    }
+    if (!ok) {
+      for (let i = trialJournal.length - 1; i >= mark; i -= 1) {
+        const e = trialJournal[i]!;
+        if (e.had) {
+          e.map.set(e.key, e.old);
+        } else {
+          e.map.delete(e.key);
+        }
+      }
+    }
+    trialJournal.length = mark;
+    return ok;
+  };
+
+  const contextualThisTypes = new Journaled<Known>();
   /** The type that OWNS the signature a literal adopted, where one is known. */
-  const contextualThisOwners = new Map<ParseNode, Known>();
+  const contextualThisOwners = new Journaled<Known>();
   /**
    * The type parameters in scope, innermost last. A generic declaration binds
    * its parameters for its whole signature and body, so they are pushed while
@@ -3485,7 +3531,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     || name === 'RangeFrom' || name === 'RangeTo' || name === 'RangeFull' || name === 'RangeBounds';
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
-  const contextualReturnTypes = new Map<ParseNode, Known>();
+  const contextualReturnTypes = new Journaled<Known>();
   /**
    * The RETURN type a METHOD written in an object literal is expected to have,
    * taken from the member the target declares (D71's body half).
@@ -3496,7 +3542,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * "s"; } }` was accepted while the ANNOTATED body, the ARROW member
    * `{ m: () => "s" }` and a standalone function were all refused.
    */
-  const contextualMethodReturns = new Map<ParseNode, Known>();
+  const contextualMethodReturns = new Journaled<Known>();
   /**
    * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
    * function literal's and read in the same place - `staticType`'s own arm for
@@ -3510,7 +3556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * refused. Variance does not reach that: a literal's adaptation is a different
    * question, and `Promise.resolve(1)` stayed refused after covariance landed.
    */
-  const contextualCallTypes = new Map<ParseNode, Known>();
+  const contextualCallTypes = new Journaled<Known>();
   /**
    * An OBJECT LITERAL's contextual type (D58).
    *
@@ -3522,7 +3568,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * of it, and take that type where `literalFitsNumericType` says the literal
    * belongs there.
    */
-  const contextualObjectTypes = new Map<ParseNode, Known>();
+  const contextualObjectTypes = new Journaled<Known>();
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
@@ -9369,9 +9415,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // checks the inner literal separately, where at a composite only the shape
       // is compared. That is the asymmetry D73 turned on, one level in.
       const wantedForMember = wantedOf(key);
-      if (wantedForMember && prop.AssignmentExpression
-        && (prop.AssignmentExpression as ParseNode).type === 'ObjectLiteral') {
-        contextualObjectTypes.set(prop.AssignmentExpression as ParseNode, wantedForMember as Known);
+      // Where a UNION's arms DISAGREE about this key, `wantedOf` has no single
+      // answer and the nested literal was handed NO contextual - so the arms
+      // were invisible one level down and nothing adapted (D113).
+      //
+      // Each arm is tried with the adaptation ITSELF, and the test is whether
+      // the attempt REPORTED anything. It cannot be whether the result is
+      // assignable to the arm: `staticTypeIn` answers with the CONTEXTUAL where
+      // it adapts, so that asks whether an arm is assignable to itself and names
+      // the first arm the winner every time - which sent `{ p: { x: "s" } }` to
+      // the `int32` arm.
+      //
+      // A losing arm's records are rolled back through the journal, and its
+      // errors are discarded with them.
+      const armForMember = wantedForMember ?? ((): Known | null => {
+        const memberNode = prop.AssignmentExpression as ParseNode | undefined;
+        if (!memberNode || typeof key !== 'string') {
+          return null;
+        }
+        for (const arm of wantedArmsFor(key)) {
+          const before = errors.length;
+          const won = speculate(() => {
+            const t = staticTypeIn(memberNode, arm);
+            return t !== null && errors.length === before;
+          });
+          errors.length = before;
+          if (won) {
+            return arm as Known;
+          }
+        }
+        return null;
+      })();
+      const memberLiteral = (prop.AssignmentExpression as ParseNode | undefined)?.type;
+      if (armForMember && prop.AssignmentExpression
+        && (memberLiteral === 'ObjectLiteral' || memberLiteral === 'ArrayLiteral')) {
+        contextualObjectTypes.set(prop.AssignmentExpression as ParseNode, armForMember as Known);
       }
       // Recursive: a member that is itself an object literal has no Static Type
       // either, and `{ inner: { p: g() } }` is an ordinary shape.
@@ -11238,7 +11316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * resolution uses, because a contextual type has to travel from where it is
    * known to where it is needed (F80).
    */
-  const contextualParameterTypes = new Map<ParseNode, readonly Known[]>();
+  const contextualParameterTypes = new Journaled<readonly Known[]>();
   /** A callback's inferred return type, keyed by the CALL that passed it. */
   const callbackReturnTypes = new Map<ParseNode, TypeRecord>();
 
