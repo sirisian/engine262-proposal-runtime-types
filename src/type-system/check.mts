@@ -2,7 +2,7 @@ import { BigIntValue, NumberValue, Value, type ObjectValue, SymbolValue } from '
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
-import { ContractFactsOf } from '../abstract-ops/runtime-types.mts';
+import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
@@ -9133,6 +9133,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * different type in each has no single answer and adapting to whichever arm
      * comes first would be arbitrary.
      */
+    /**
+     * The arms a UNION offers for a key its arms DISAGREE about (D70b).
+     *
+     * `wantedOf` answers ONE type, and a union whose arms disagree has none - so
+     * an untyped numeric literal was never adapted toward any arm. `{ x: 1 }`
+     * was refused at `{ x: int32 } | { x: string }` although `{ x: int32 }`
+     * written ALONE accepts it, and at `{ x: int32 } | { x: uint8 }`, whose arms
+     * do not disagree about being numeric at all. A literal needing NO
+     * adaptation - `{ x: "s" }`, `{ x: true }` - was accepted throughout, which
+     * places the defect at ADAPTATION rather than at disagreement.
+     *
+     * The SAME question one level up is already answered: `let v: string | uint8
+     * = 1` adapts and gives `uint.<8>`. Only the literal as an object MEMBER was
+     * refused, so this makes the member position answer what the scalar position
+     * answers - `literalFitsNumericType`'s rule, not a new one.
+     *
+     * A SECOND entry point rather than a change to `wantedOf`, because that
+     * walk's "no single answer" is read four ways: adaptation hears "do not
+     * adapt", D89's intersection rule hears "the arms disagree, refuse", D97's
+     * union freshness hears "no key here, stay conservative", and the nested-arm
+     * walk hears "recurse no further". Collecting inside it broke the last three.
+     */
+    const wantedArmsFor = (key: string): readonly TypeRecord[] => {
+      const target = wanted as { Kind?: string, Members?: readonly TypeRecord[] } | null | undefined;
+      if (target?.Kind !== 'union' || !target.Members) {
+        return [];
+      }
+      const arms: TypeRecord[] = [];
+      // A NESTED union contributes ITS arms. D112 flattens the record the RUN
+      // TIME receives; the checker resolves its own, which is still nested - so
+      // `({ x: int32 } | { x: string }) | { z: boolean }` offered two arms here
+      // where three exist. The `seen` set is required for the same reason it is
+      // there: a self-referential alias reaches this walk.
+      const collectArms = (members: readonly TypeRecord[], seen: Set<TypeRecord>): void => {
+        for (const arm of members) {
+          const nested = arm as unknown as { Kind?: string, Members?: readonly TypeRecord[] };
+          if (nested.Kind === 'union' && nested.Members && !seen.has(arm)) {
+            seen.add(arm);
+            collectArms(nested.Members, seen);
+            continue;
+          }
+          const props = (arm as unknown as {
+            Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[],
+          });
+          if (props.Kind !== 'object' || !props.Properties) {
+            continue;
+          }
+          const here = props.Properties.find((q) => q.key === key);
+          if (here) {
+            arms.push(here.type);
+          }
+        }
+      };
+      collectArms(target.Members, new Set());
+      return arms.length > 1 ? arms : [];
+    };
+
     const wantedOf = (key: string): TypeRecord | null => {
       // A NOMINAL target - an interface or an alias - carries its members on
       // [[Structure]] rather than directly, so reading [[Properties]] alone
@@ -9331,7 +9388,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the comparison - D43's defect one level in, and this is D43's fix:
       // `literalFitsNumericType` decides whether the literal belongs at the
       // wanted type.
-      const wantedMember = wantedForMember;
+      // Where the arms disagree, `wantedOf` has no answer and the SCALAR rule
+      // still does: the arm the literal FITS (D70b, direction A'). The union's
+      // arms are ordered and flattened by now (D110, D112), so this is a
+      // function of the TYPE and not of how the program spelled it.
+      const wantedMember = wantedForMember ?? (() => {
+        if (typeof key !== 'string') {
+          return null;
+        }
+        const fits = wantedArmsFor(key).filter(
+          (c) => literalFitsNumericType(memberType as TypeRecord, c),
+        );
+        if (fits.length === 0) {
+          return null;
+        }
+        // The SAME ranking the boundary uses - narrower first, integers before
+        // floats - taken from `NumericArmRank` rather than restated, so the
+        // member position cannot answer differently from the scalar one.
+        let best = fits[0]!;
+        let bestRank = NumericArmRank(best);
+        for (const c of fits.slice(1)) {
+          const rank = NumericArmRank(c);
+          if (rank !== null && (bestRank === null || rank < bestRank)) {
+            best = c;
+            bestRank = rank;
+          }
+        }
+        return best;
+      })();
       // A member is taken at the type the target WANTS where the value belongs
       // there: a numeric literal by `literalFitsNumericType`, and a NESTED
       // OBJECT by assignability (D73).

@@ -154,7 +154,13 @@ test('an untyped literal adapts at an INTERSECTION where the arms agree', () => 
   // ...and where the arms DISAGREE nothing is adapted, so the member widens and
   // the literal is refused. #sec-union-boundary-selection decides that case for
   // a VALUE; deciding it for a LITERAL is an open design question.
-  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
+  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // SCALAR position already used - `let v: string | uint8 = 1` has always
+  // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
+  // VALUE is rather than by where a member was written", and this is that rule
+  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // answer is a function of the TYPE and not of the spelling.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
 
   // ...and the wrong-value twins.
   expect(accepts(`${arms} let c: C = { x: "s", y: (2 := int32) };`)).toBe(false);
@@ -452,9 +458,15 @@ test('a NESTED composite annotation reaches every arm', () => {
   // are two levels apart and must still be seen to disagree - D89 left a
   // disagreeing key REFUSED as an open design question, and a per-level check
   // would pick an arm instead.
-  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
-  expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(false);
-  expect(accepts('let c: ({ x: int32 } | { z: boolean }) | { x: string } = { x: 1 };')).toBe(false);
+  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // SCALAR position already used - `let v: string | uint8 = 1` has always
+  // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
+  // VALUE is rather than by where a member was written", and this is that rule
+  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // answer is a function of the TYPE and not of the spelling.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: ({ x: int32 } | { z: boolean }) | { x: string } = { x: 1 };')).toBe(true);
 
   // Reaching into an arm must not invent a wanted type nor excuse a wrong value.
   expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { w: 1 };')).toBe(false);
@@ -572,7 +584,13 @@ test('freshness reaches a UNION target', () => {
   // a union was measured first and REGRESSED this row from refused to accepted:
   // that arm ends `return contextual`, so entering it skips the
   // `requireAssignable` that refuses a disagreeing-arm literal.
-  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(false);
+  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // SCALAR position already used - `let v: string | uint8 = 1` has always
+  // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
+  // VALUE is rather than by where a member was written", and this is that rule
+  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // answer is a function of the TYPE and not of the spelling.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
   // ...and D89's adaptation is untouched.
   expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(true);
 
@@ -1120,6 +1138,44 @@ test('a nested union in an annotation is flattened', () => {
   // The scalar ranking and the no-fit refusal are unchanged.
   expect(evaluated('let v: uint8 | null = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
   expect(accepts('let bad: (uint8 | int8) | uint16 = 70000;')).toBe(false);
+});
+
+test('a literal adapts toward the union arm it fits', () => {
+  // D70b, direction A': `wantedOf` answers ONE type and a union whose arms
+  // disagree has none, so an untyped numeric literal was never adapted toward
+  // any arm. `{ x: 1 }` was refused at `{ x: int32 } | { x: string }` although
+  // `{ x: int32 }` written ALONE accepts it, and at `{ x: int32 } | { x: uint8 }`,
+  // whose arms do not disagree about being numeric at all.
+  //
+  // The SAME question one level up was already answered - `let v: string | uint8
+  // = 1` has always adapted - so the member position now answers what the scalar
+  // position answers, using `NumericArmRank` itself rather than a copy of it.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: { x: string } | { x: int32 } = { x: 1 };')).toBe(true);
+  expect(accepts('let c: { x: int32 } | { x: uint8 } = { x: 1 };')).toBe(true);
+  // A union nested with parentheses contributes its arms (D112's checker half).
+  expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(true);
+
+  // The answer is a function of the TYPE, not the spelling: D110 orders the arms
+  // and D112 flattens them, so both spellings select alike.
+  const one = evaluated('let c: { x: int32 } | { x: uint8 } = { x: 1 }; String(Reflect.typeOf(c));');
+  const two = evaluated('let c: { x: uint8 } | { x: int32 } = { x: 1 }; String(Reflect.typeOf(c));');
+  expect(one).toBe(two);
+
+  // A literal needing NO adaptation was always accepted, and a value fitting NO
+  // arm is still refused.
+  expect(accepts('let c: { x: int32 } | { x: string } = { x: "s" };')).toBe(true);
+  expect(accepts('let c: { x: uint8 } | { x: int8 } = { x: 70000 };')).toBe(false);
+
+  // D75's freshness, D97's union row and D89's INTERSECTION rule are untouched:
+  // an intersection's arms must ALL be satisfied, so disagreement there is still
+  // no answer.
+  expect(accepts('let c: { x: int32 } | { y: string } = { x: (1 := int32), zz: "s" };')).toBe(false);
+  expect(accepts('let c: { w: uint8 } | null = { };')).toBe(false);
+  expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
+
+  // A self-referential alias reaches the arm walk, which carries a `seen` set.
+  expect(accepts('type L = { v: uint8, next: L | null }; const n2: L = { v: (1 := uint8), next: null };')).toBe(true);
 });
 
 test('a CLASS type is not satisfied by an object literal', () => {

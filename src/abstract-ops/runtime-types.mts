@@ -558,6 +558,32 @@ function isBooleanConversionSource(value: Value): boolean {
  * _convert_ is the conversion the caller performs, so the checked and unchecked
  * boundaries share one selection rule rather than drifting apart.
  */
+/**
+ * How a numeric union arm ranks for selection: narrower first, integers before
+ * floats. Exported so the CHECKER's member-adaptation path uses this rule rather
+ * than a copy of it (D70b) - the two positions cannot then disagree.
+ */
+export function NumericArmRank(m: TypeRecord): number | null {
+    if (m.Kind !== 'primitive') {
+    return null;
+  }
+  const name = m.Name;
+  const bits = typeof m.Arguments[0] === 'number' ? m.Arguments[0] as number : null;
+  if ((name === 'uint' || name === 'int') && bits !== null) {
+    // An integer member of N bits ranks by width, signed after unsigned of the
+    // same width so a non-negative value takes the tighter of the two.
+    return bits * 2 + (name === 'int' ? 1 : 0);
+  }
+  if (name === 'float16') { return 200; }
+  if (name === 'float32') { return 201; }
+  if (name === 'float64' || name === 'number') { return 202; }
+  if (name === 'float128') { return 203; }
+  if (name === 'decimal32') { return 210; }
+  if (name === 'decimal64') { return 211; }
+  if (name === 'decimal128') { return 212; }
+  return null;
+}
+
 export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
   const members = t.Members;
   for (const m of members) {
@@ -565,26 +591,7 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
       return value;
     }
   }
-  const numericRank = (m: TypeRecord): number | null => {
-    if (m.Kind !== 'primitive') {
-      return null;
-    }
-    const name = m.Name;
-    const bits = typeof m.Arguments[0] === 'number' ? m.Arguments[0] as number : null;
-    if ((name === 'uint' || name === 'int') && bits !== null) {
-      // An integer member of N bits ranks by width, signed after unsigned of the
-      // same width so a non-negative value takes the tighter of the two.
-      return bits * 2 + (name === 'int' ? 1 : 0);
-    }
-    if (name === 'float16') { return 200; }
-    if (name === 'float32') { return 201; }
-    if (name === 'float64' || name === 'number') { return 202; }
-    if (name === 'float128') { return 203; }
-    if (name === 'decimal32') { return 210; }
-    if (name === 'decimal64') { return 211; }
-    if (name === 'decimal128') { return 212; }
-    return null;
-  };
+  const numericRank = NumericArmRank;
   const numericValue: number | bigint | null = value instanceof NumberValue
     ? value.numberValue()
     : (isTypedNumber(value) ? (value as TypedNumberValue).numberValue()
