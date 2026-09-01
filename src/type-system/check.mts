@@ -10572,6 +10572,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // A plain alias is PUBLISHED to the frame before the signatures that may
+    // name it are built (D101).
+    //
+    // The scan above records the alias NODE, and the walk publishes the TYPE
+    // when it reaches the declaration - which for a NESTED list is after the
+    // signatures in that list have been read. Instrumented, a lookup of `L`
+    // finds it at the top level (a placeholder, then the filled record) and
+    // finds NOTHING at any frame when the alias is declared inside a function:
+    // `p: L` then resolves through a fallback that the argument check does not
+    // use, so `f({ v: "s", next: null })` was accepted where the same program
+    // at the top level is refused.
+    //
+    // A BINDING at the same alias refuses either way, because it is walked
+    // after the declaration; only a SIGNATURE is read early. A NON-recursive
+    // alias is unaffected for the same reason it needs no placeholder.
+    //
+    // This is D106's shape for an alias: that moved a publication AFTER the
+    // list's declarations, and this moves one BEFORE the signatures.
+    for (const n of list) {
+      if (n.type !== 'TypeAliasDeclaration') {
+        continue;
+      }
+      const early = n as unknown as { BindingIdentifier?: { name: string } | null, TypeParameters?: unknown, Type?: ParseNode.Type | null };
+      const earlyName = early.BindingIdentifier?.name;
+      if (!earlyName || early.TypeParameters || !early.Type) {
+        continue;
+      }
+      const scope = frames[frames.length - 1].aliases;
+      if (scope.has(earlyName)) {
+        continue;
+      }
+      // Published as a placeholder and filled, so a self-reference in the body
+      // lands on the record the frame already holds.
+      const early_placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
+      scope.set(earlyName, early_placeholder);
+      const earlyResolved = resolveType(early.Type);
+      if (!earlyResolved) {
+        scope.delete(earlyName);
+        continue;
+      }
+      if (earlyResolved !== early_placeholder) {
+        const target = early_placeholder as unknown as Record<string, unknown>;
+        for (const k of Object.keys(target)) {
+          delete target[k];
+        }
+        Object.assign(target, earlyResolved);
+      }
+    }
     for (const n of list) {
       // PLAN-do-expressions.md phase 1, #sec-generator-types. A generator
       // declaration was skipped entirely, so a call of one had no type at all.

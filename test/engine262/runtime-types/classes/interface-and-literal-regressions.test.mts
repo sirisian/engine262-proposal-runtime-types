@@ -1254,6 +1254,37 @@ test('an ARRAY literal member adapts at a union target', () => {
   expect(evaluated('function f(): [].<uint8> { return [1]; } String(Reflect.typeOf(f()));')).toBe('[].<uint.<8>>');
 });
 
+test('an alias declared in a NESTED list is published before the signatures', () => {
+  // D101: the scan records an alias NODE, and the walk publishes its TYPE when it
+  // reaches the declaration - which for a NESTED list is after the signatures in
+  // that list have been read. Instrumented, a lookup of `L` finds it at the top
+  // level (a placeholder, then the filled record) and finds NOTHING at any frame
+  // when the alias is declared inside a function.
+  //
+  // `p: L` then resolved through a fallback the argument check does not use, so
+  // the call was accepted where the same program at the top level is refused.
+  const L = 'type L = { v: uint8, next: L | null }; ';
+  const F = 'function f(p: L) { return 1; } f({ v: "s", next: null });';
+  expect(accepts(`function w() { ${L}${F} }`)).toBe(false);
+  expect(accepts(`{ ${L}${F} }`)).toBe(false);
+  expect(accepts(`const w = () => { ${L}${F} };`)).toBe(false);
+  expect(accepts(`function a() { function w() { ${L}${F} } }`)).toBe(false);
+  expect(accepts(`${L}${F}`)).toBe(false);
+
+  // A BINDING at the same alias refuses either way - it is walked after the
+  // declaration - and only a SIGNATURE is read early. A NON-recursive alias is
+  // unaffected for the reason it needs no placeholder.
+  expect(accepts(`function w() { ${L}let x: L = { v: (1 := uint8), next: null }; }`)).toBe(true);
+  expect(accepts('function w() { type M = { v: uint8 }; function f(p: M) { return 1; } f({ v: "s" }); }')).toBe(false);
+
+  // A valid argument, a cycle through TWO aliases, a generic alias, and an alias
+  // SHADOWING an outer one are all unaffected.
+  expect(accepts(`function w() { ${L}function f(p: L) { return 1; } f({ v: (1 := uint8), next: null }); }`)).toBe(true);
+  expect(accepts('function w() { type A2 = { b: B2 | null }; type B2 = { a: A2 | null }; const v: A2 = { b: { a: null } }; }')).toBe(true);
+  expect(accepts('function w() { type G<T> = { v: T }; let g: G.<uint8> = { v: (1 := uint8) }; }')).toBe(true);
+  expect(accepts(`${L}function w() { type L = { z: string }; let x: L = { z: "s" }; }`)).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // D61: the literal arm ended `return contextual`, GIVING the literal the
