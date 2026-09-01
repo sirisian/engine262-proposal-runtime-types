@@ -15,6 +15,7 @@ import {
 import { SoAColumnsOf } from './layout.mts';
 
 import { badKindedArgument, restElementType, parameterTypeRecord } from './records.mts';
+import { libraryTypeParameterNames as libraryTypeParameterNamesShared, orderTypeArguments as orderTypeArgumentsShared, typeArgumentNameOf as typeArgumentNameOfShared } from './type-argument-order.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
@@ -5068,7 +5069,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return null;
           }
-          for (const a of node.TypeArguments!.TypeArgumentList) {
+          // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): the
+          // checker resolved named arguments POSITIONALLY, so its judgment and
+          // the runtime's disagreed about what one annotation meant. It orders
+          // by the shared operation where the names are known (the library
+          // table), and answers null - "this pass does not know" - where they
+          // are not, so the runtime's ordering (or its refusal) governs alone
+          // rather than being contradicted.
+          const rawArgList = node.TypeArguments!.TypeArgumentList;
+          const rawArgNames = rawArgList.map((a) => typeArgumentNameOfShared(a));
+          let orderedArgList: readonly ParseNode.Type[] = rawArgList as readonly ParseNode.Type[];
+          if (rawArgNames.some((n) => n !== undefined)) {
+            const libNames = libraryTypeParameterNamesShared(node.TypeName.IdentifierReference.name);
+            if (!libNames) {
+              return null;
+            }
+            const order = orderTypeArgumentsShared(libNames, rawArgList, rawArgNames);
+            if (!order.ok || order.ordered.some((slot) => slot === undefined)) {
+              return null;
+            }
+            orderedArgList = order.ordered as readonly ParseNode.Type[];
+          }
+          for (const a of orderedArgList) {
             const r = resolveType(a);
             if (!r) {
               return null;
@@ -6728,7 +6750,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
             {
               const bindings = new Map<string, TypeRecord>();
-              (argNodes ?? []).forEach((argNode, i) => {
+              // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A):
+              // explicit arguments are ordered by name before they bind. A
+              // list the ordering refuses binds NOTHING here - the runtime
+              // raises the diagnostic - rather than binding the wrong thing.
+              const rawExplicit = argNodes ?? [];
+              const rawExplicitNames = rawExplicit.map((a) => typeArgumentNameOfShared(a));
+              let orderedExplicit: readonly (ParseNode | undefined)[] = rawExplicit;
+              if (rawExplicitNames.some((n) => n !== undefined)) {
+                const order = orderTypeArgumentsShared(only.TypeParameterNames!, rawExplicit, rawExplicitNames);
+                orderedExplicit = order.ok ? order.ordered : [];
+              }
+              orderedExplicit.forEach((argNode, i) => {
+                if (argNode === undefined) {
+                  return;
+                }
                 const name = only.TypeParameterNames![i];
                 const bound = resolveType(argNode as ParseNode.Type);
                 if (name && bound) {

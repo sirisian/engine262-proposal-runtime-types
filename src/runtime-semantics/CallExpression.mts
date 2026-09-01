@@ -9,6 +9,8 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
@@ -1096,6 +1098,33 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const kindedParam = params?.some((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
     if (params && params.length > 0 && !kindedParam) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
+      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): `f.<V: 5>()`
+      // bound V's argument to the FIRST parameter. Named arguments are ordered
+      // into parameter order here, before the arity check and the binding loop,
+      // by the same shared operation every other application site uses.
+      const explicitArgNames = typeArgs.map((a) => typeArgumentNameOf(a));
+      const namedTypeArgs = explicitArgNames.some((n) => n !== undefined);
+      let orderedTypeArgs: readonly (ParseNode.Type | undefined)[] | null = null;
+      if (namedTypeArgs) {
+        const order = orderTypeArguments(
+          params.map((p: ParseNode.TypeParameter) => p.BindingIdentifier?.name),
+          typeArgs,
+          explicitArgNames,
+        );
+        if (!order.ok) {
+          switch (order.kind) {
+            case 'positional-after-named':
+              return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value('the call'));
+            case 'unknown-name':
+              return Throw.TypeError('$1 does not name a type parameter of $2', Value(order.name), Value('the call'));
+            case 'supplied-twice':
+              return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(order.name), Value('the call'));
+            default:
+              return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value('the call'), Value(String(typeArgs.length)), Value(params[0]!.BindingIdentifier.name), Value(String(params.length)));
+          }
+        }
+        orderedTypeArgs = order.ordered;
+      }
       // #sec-generics: an argument list may omit a TRAILING parameter that has
       // a default, which then binds the default's type. A parameter without one
       // may not be omitted, and the parse-time rule that defaults come last
@@ -1103,7 +1132,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // first default.
       const required = params.findIndex((p: ParseNode.TypeParameter) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
       const least = required === -1 ? params.length : required;
-      if (typeArgs.length < least || typeArgs.length > params.length) {
+      if (!namedTypeArgs && (typeArgs.length < least || typeArgs.length > params.length)) {
         return Throw.TypeError(
           '$1 takes $2 type arguments; $3 expects one taking $4',
           Value('the call'), Value(String(typeArgs.length)),
@@ -1115,8 +1144,13 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: ParseNode.Type | null };
         // A parameter past the supplied arguments takes its default, which is
         // resolved with the frame built so far in scope - so a later default
-        // may name an earlier parameter.
-        const argNode = i < typeArgs.length ? typeArgs[i]! : p.TypeParameterDefault!;
+        // may name an earlier parameter. With named arguments, "past the
+        // supplied" is a hole in the ordered list.
+        const suppliedNode = namedTypeArgs ? orderedTypeArgs![i] : (i < typeArgs.length ? typeArgs[i] : undefined);
+        const argNode = suppliedNode ?? p.TypeParameterDefault;
+        if (!argNode) {
+          return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(p.BindingIdentifier?.name ?? String(i)), Value('the call'));
+        }
         pushTypeParameterFrame(frame);
         let record;
         try {
@@ -1128,11 +1162,21 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // literal it binds carries a value of that type rather than the plain
         // number the argument was written as.
         if (record.Kind === 'literal' && p.TypeParameterConstraint) {
-          const declared = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
-          const converted = EnsureCompletion(yield* ConvertValue(record.Value as Value, declared as never));
-          if (converted.Type === 'normal') {
-            record = { ...record, Value: converted.Value as Value } as never;
+          // #sec-computed-constraints: the constraint is evaluated over the
+          // bindings so far, so it resolves UNDER the frame - `V: T = 0` read
+          // T with no frame in scope and threw "'T' is not defined" (F-M).
+          pushTypeParameterFrame(frame);
+          let declared;
+          try {
+            declared = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
+          } finally {
+            popTypeParameterFrame();
           }
+          const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, declared as never));
+          if (converted.Type !== 'normal') {
+            return converted as never;
+          }
+          record = { ...record, Value: converted.Value as Value } as never;
         }
         if (p.BindingIdentifier?.name) {
           bindTypeParameter(frame, p.BindingIdentifier.name, record, p);

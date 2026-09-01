@@ -33,6 +33,7 @@ import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
+import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf } from './type-argument-order.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -267,7 +268,7 @@ export function lookupTypeParameter(name: string): TypeRecord | null {
  * argument returns the list unchanged and takes the same path it does today,
  * which is the point: the cost of the feature falls only on those using it.
  */
-function* OrderNamedTypeArguments(
+export function* OrderNamedTypeArguments(
   params: readonly ParseNode.TypeParameter[],
   argRecords: readonly TypeRecord[],
   argNames: readonly (string | undefined)[],
@@ -3178,6 +3179,74 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         }
       }
       if (baseRecord) {
+        // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): named
+        // type arguments are ordered into PARAMETER order here, at the single
+        // attach point, so a class, an interface, and a library nominal honour
+        // a name the way a generic alias already does. Ordering runs before the
+        // iteration-interface and nominal branches so both see the positional
+        // shape they always saw; a name matching nothing is refused rather than
+        // dropped into position 0.
+        if (argNames2.some((n) => n !== undefined)) {
+          const declParams = baseRecord.Kind === 'nominal'
+            ? (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList
+            : undefined;
+          const params2 = declParams
+            ?? libraryTypeParameterNames(name)?.map((n2) => ({ BindingIdentifier: { name: n2 } } as unknown as ParseNode.TypeParameter));
+          if (!params2) {
+            return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
+          }
+          const ordered2 = Q(yield* OrderNamedTypeArguments(params2, argRecords, argNames2, name));
+          argRecords.length = 0;
+          argRecords.push(...ordered2);
+        }
+        // F-N: a VALUE parameter's argument in TYPE position stayed the plain
+        // literal it was written as, while `SpecializeGenericClass` converts it
+        // to the constraint's type - so `let c: B.<uint8, 9> = new B.<uint8, 9>()`
+        // compared a plain 9 against a uint32 9 and refused its own value. The
+        // conversion (and the frame the constraint resolves under,
+        // #sec-computed-constraints) mirror the specialization loop.
+        if (baseRecord.Kind === 'nominal') {
+          const declParamsC = (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList;
+          if (declParamsC && argRecords.length > 0) {
+            const frameC = new Map<string, TypeRecord>();
+            const hadNames = argNames2.some((n) => n !== undefined);
+            const reach = hadNames ? declParamsC.length : Math.min(argRecords.length, declParamsC.length);
+            for (let i = 0; i < reach; i += 1) {
+              const paramC = declParamsC[i] as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: { Type?: ParseNode.Type } | ParseNode.Type | null };
+              if (argRecords[i] === undefined) {
+                const defC = paramC.TypeParameterDefault;
+                if (!defC) {
+                  return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(paramC.BindingIdentifier?.name ?? String(i)), Value(name));
+                }
+                pushTypeParameterFrame(frameC);
+                try {
+                  argRecords[i] = Q(yield* TypeNodeToTypeRecord(((defC as { Type?: ParseNode.Type }).Type ?? defC) as ParseNode.Type));
+                } finally {
+                  popTypeParameterFrame();
+                }
+              }
+              let recordC = argRecords[i]!;
+              if (recordC.Kind === 'literal' && paramC.TypeParameterConstraint) {
+                pushTypeParameterFrame(frameC);
+                let declaredC;
+                try {
+                  declaredC = Q(yield* TypeNodeToTypeRecord(paramC.TypeParameterConstraint));
+                } finally {
+                  popTypeParameterFrame();
+                }
+                const convertedC = EnsureCompletion(yield* ConvertValue(recordC.Value as Value, declaredC as never));
+                if (convertedC.Type !== 'normal') {
+                  return convertedC as never;
+                }
+                recordC = { ...recordC, Value: convertedC.Value as Value } as never;
+                argRecords[i] = recordC;
+              }
+              if (paramC.BindingIdentifier?.name) {
+                frameC.set(paramC.BindingIdentifier.name, recordC);
+              }
+            }
+          }
+        }
         // proposal-runtime-types #sec-iteration-types: an iteration interface is
         // a STRUCTURAL record rather than a nominal one - its members are the
         // shape, and its type arguments appear inside them - so the
@@ -3251,6 +3320,25 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return { ...baseRecord, Arguments: argRecords };
         }
         return baseRecord;
+      }
+      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): a library
+      // generic that resolves BELOW the class attach point - `Map`, `Set`, the
+      // iteration interfaces reached by name - orders its named arguments here,
+      // by the names the specification writes (OQ-17). An unknown name is
+      // refused rather than silently positional.
+      if (argNames2.some((n) => n !== undefined)) {
+        const libNames = libraryTypeParameterNames(name);
+        if (!libNames) {
+          return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
+        }
+        const orderedLib = Q(yield* OrderNamedTypeArguments(
+          libNames.map((n2) => ({ BindingIdentifier: { name: n2 } } as unknown as ParseNode.TypeParameter)),
+          argRecords,
+          argNames2,
+          name,
+        ));
+        argRecords.length = 0;
+        argRecords.push(...orderedLib);
       }
       const named = namedNumericLiteralRecord(name);
       if (named) {

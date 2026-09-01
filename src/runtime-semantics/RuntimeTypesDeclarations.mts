@@ -27,6 +27,8 @@ import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature } from '../type-system/runtime.mts';
+import { OrderNamedTypeArguments } from '../type-system/runtime.mts';
+import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
@@ -1696,11 +1698,38 @@ export function SpecializedClassConstructor(
 function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const args = node.TypeArguments.TypeArgumentList;
+  const className = declaration.BindingIdentifier?.name ?? 'a class';
+  // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): order named
+  // arguments into parameter order before anything resolves; a hole then takes
+  // the parameter's default under the same frame the positional path uses.
+  const argNames = args.map((a) => typeArgumentNameOf(a));
+  const namedArgs = argNames.some((n) => n !== undefined);
+  let orderedNodes: readonly (ParseNode.Type | undefined)[] | null = null;
+  if (namedArgs) {
+    const order = orderTypeArguments(
+      params.map((p) => (p as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name),
+      args,
+      argNames,
+    );
+    if (!order.ok) {
+      switch (order.kind) {
+        case 'positional-after-named':
+          return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value(className));
+        case 'unknown-name':
+          return Throw.TypeError('$1 does not name a type parameter of $2', Value(order.name), Value(className));
+        case 'supplied-twice':
+          return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(order.name), Value(className));
+        default:
+          return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(className), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
+      }
+    }
+    orderedNodes = order.ordered;
+  }
   // #sec-generics: a trailing parameter with a default may be omitted, so a
   // class every one of whose parameters has a default may be applied with none.
   const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
   const leastArgs = firstDefault === -1 ? params.length : firstDefault;
-  if (args.length < leastArgs || args.length > params.length) {
+  if (!namedArgs && (args.length < leastArgs || args.length > params.length)) {
     return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(declaration.BindingIdentifier?.name ?? 'a class'), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
   }
   const frame = new Map<string, TypeRecord>();
@@ -1718,7 +1747,12 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     const name = param.BindingIdentifier?.name;
     // A parameter past the supplied arguments takes its default, resolved with
     // the frame built so far so that a default may name an earlier parameter.
-    const argNode = i < args.length ? args[i]! : (param as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault!;
+    // With named arguments, "past the supplied" is a HOLE in the ordered list.
+    const supplied = namedArgs ? orderedNodes![i] : (i < args.length ? args[i] : undefined);
+    const argNode = supplied ?? (param as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault;
+    if (!argNode) {
+      return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(i)), Value(className));
+    }
     pushTypeParameterFrame(frame);
     let record;
     try {
@@ -1733,11 +1767,21 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     // whose other operands are `uint32` - reported that the two numeric types
     // do not mix.
     if (record.Kind === 'literal' && param.TypeParameterConstraint) {
-      const declared = Q(yield* TypeNodeToTypeRecord(param.TypeParameterConstraint));
-      const converted = EnsureCompletion(yield* ConvertValue(record.Value as Value, declared as never));
-      if (converted.Type === 'normal') {
-        record = { ...record, Value: converted.Value as Value } as never;
+      // #sec-computed-constraints: resolved UNDER the frame (F-M), and a value
+      // the constraint refuses is a refusal, not a silent literal of the wrong
+      // type (§2.2 step 8's check).
+      pushTypeParameterFrame(frame);
+      let declared;
+      try {
+        declared = Q(yield* TypeNodeToTypeRecord(param.TypeParameterConstraint));
+      } finally {
+        popTypeParameterFrame();
       }
+      const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, declared as never));
+      if (converted.Type !== 'normal') {
+        return converted as never;
+      }
+      record = { ...record, Value: converted.Value as Value } as never;
     }
     if (name) {
       bindTypeParameter(frame, name, record, param);
@@ -1882,10 +1926,22 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     const record = value.TypeRecord;
     if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
       const argRecords: TypeRecord[] = [];
+      const argNames: (string | undefined)[] = [];
       for (const argNode of node.TypeArguments.TypeArgumentList) {
+        argNames.push(typeArgumentNameOf(argNode));
         argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
       }
-      const instantiated = Q(yield* InstantiateGenericAlias(record.Declaration as ParseNode.TypeAliasDeclaration, argRecords));
+      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): the alias
+      // honoured names in TYPE position and dropped them in expression
+      // position, so `G8` and `type G8 = Grid.<Cols: 8>` disagreed.
+      const aliasDecl = record.Declaration as ParseNode.TypeAliasDeclaration;
+      const orderedAliasArgs = Q(yield* OrderNamedTypeArguments(
+        aliasDecl.TypeParameters?.TypeParameterList ?? [],
+        argRecords,
+        argNames,
+        aliasDecl.BindingIdentifier.name,
+      ));
+      const instantiated = Q(yield* InstantiateGenericAlias(aliasDecl, orderedAliasArgs));
       return GetTypeObject(instantiated);
     }
     // proposal-runtime-types: everything that is NOT a generic alias fell
