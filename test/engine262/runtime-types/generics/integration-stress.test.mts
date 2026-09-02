@@ -81,11 +81,13 @@ test('B.3: a class satisfies a generic interface by shape under its own paramete
   expect(evaluated('interface Bus { on(name: string): void; } let b: Bus = { on(name: string): void {} }; "ok";')).toBe('ok');
 });
 
-// F-AB, pinned: `implements` accepts a generic method of the WRONG SHAPE - a
-// class declaring `on<T, U>` for an interface's `on<T>` is not refused. The
-// implements check does not compare generic signatures by identity up to
-// renaming (or compares the method's type without its TypeParameters).
-test.fails('B.3: implements refuses a generic method of a different shape (F-AB)', () => {
+// F-AB, pinned as a PRE-EXISTING general gap: `implements` verifies nothing at
+// declaration - a missing method, a wrong concrete parameter type, and a
+// generic method of the wrong shape (`on<T, U>` for `on<T>`) are all accepted.
+// `ClassImplements` is name-based. The generic case will follow whatever
+// member verification the design adopts for `implements`; the identity-up-to-
+// renaming relation it needs is in place.
+test.fails('B.3: implements refuses a generic method of a different shape (F-AB, pre-existing)', () => {
   expectThrown('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T, U>(name: string, h: (e: T) => void): void {} }');
 });
 
@@ -184,15 +186,14 @@ test.fails('B.6: rung three - a declared inverse binds a pack, and its absence n
   expectThrown('type wrapOf(Ts: type): type { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf');
 });
 
-// F-Z, pinned: a spread of a DYNAMIC array into a rest typed by a pack must be
-// refused statically. The rule is written at two checker sites (the
-// overload-candidate argument check and the generic-call return path) and
-// neither fires for this call; the site a plain generic call's arguments take
-// is elsewhere. Worse, the RUNTIME then misbehaves - F-AC: `tup(...dyn)`
-// returns an object rather than the count or a refusal, so the pack bound
-// from a dynamic spread is not the tuple the body expects.
-test.fails('B.6: a pack refuses to bind from a spread of unknown length (F-Z, F-AC)', () => {
-  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const dyn: [].<uint32> = [0, 1]; tup(...dyn);', 'statically known length');
+test('B.6: a pack refuses to bind from a spread of unknown length (F-Z closed; F-AC retracted)', () => {
+  // A spread ARGUMENT is an AssignmentRestElement in the parse tree (a
+  // SpreadElement is an array literal's), which is why two correctly placed
+  // checks never fired. A truly dynamic array is a parameter of array type;
+  // a const initialized from a literal has an extent the checker may know.
+  // (F-AC was a probe artifact: an unwrapped NumberValue printed as
+  // "[object Object]"; `tup(...dyn)` returns the count.)
+  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } function u(dyn: [].<uint32>): uint32 { return tup(...dyn); }', 'statically known length');
 });
 
 test('B.6: a tuple spreads into a pack, and a pack forwards (the idioms F-Z must keep)', () => {

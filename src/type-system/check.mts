@@ -6923,7 +6923,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const variadicNames = new Set(only.TypeParameters!.filter((tp) => tp.Variadic).map((tp) => tp.Name));
                 if (restType?.Kind === 'parameter' && restType.Name && variadicNames.has(restType.Name)) {
                   for (const a of (node as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
-                    if ((a as { type?: string }).type === 'SpreadElement') {
+                    // A spread ARGUMENT is an AssignmentRestElement (a SpreadElement is an array literal's).
+                    if ((a as { type?: string }).type === 'AssignmentRestElement') {
                       const spreadType = staticType((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
                       const ext = (spreadType as { Extent?: number | string } | null)?.Extent;
                       if (spreadType && spreadType.Kind === 'array' && typeof ext !== 'number') {
@@ -13005,7 +13006,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const variadicNames = new Set(((chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters ?? []).filter((tp) => tp.Variadic).map((tp) => tp.Name));
               if (restType?.Kind === 'parameter' && restType.Name && variadicNames.has(restType.Name)) {
                 for (const a of c.Arguments) {
-                  if ((a as { type?: string }).type === 'SpreadElement') {
+                  if ((a as { type?: string }).type === 'AssignmentRestElement') {
                     const spreadType = staticType((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
                     const ext = (spreadType as { Extent?: number | string } | null)?.Extent;
                     // Only a DYNAMIC array is refused: a tuple, a stated-extent
