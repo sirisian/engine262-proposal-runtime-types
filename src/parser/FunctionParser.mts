@@ -185,6 +185,27 @@ export abstract class FunctionParser extends IdentifierParser {
   }
 
   validateFormalParameters(parameters: ParseNode.FormalParameters, body: ParseNode.FunctionBodyLike | ParseNode.ConciseBody | ParseNode.AsyncConciseBody, wantsUnique = false) {
+    // proposal-runtime-types README "Rest Parameters" (F-D): "Two rests with
+    // nothing typed between them are an error, since there is no boundary
+    // between them and no assignment more right than another." An untyped rest
+    // admits everything, so two adjacent rests where EITHER is untyped have no
+    // boundary a type can draw - the first takes every argument, always - and
+    // the README's own worked examples rely on the refusal. Two adjacent TYPED
+    // rests stay legal (the design's `f(...a: [].<uint32>, ...b: [].<uint32>,
+    // c)` example), split greedily by their element types.
+    if (surroundingAgent.feature('runtime-types')) {
+      for (let i = 0; i + 1 < parameters.length; i += 1) {
+        const here = parameters[i]!;
+        const next = parameters[i + 1]!;
+        if (here.type === 'BindingRestElement' && next.type === 'BindingRestElement') {
+          const typedHere = (here as { TypeAnnotation?: unknown }).TypeAnnotation;
+          const typedNext = (next as { TypeAnnotation?: unknown }).TypeAnnotation;
+          if (!typedHere || !typedNext) {
+            this.addEarlyError(Throw.SyntaxError('$1', 'two rests with nothing typed between them have no boundary'), next);
+          }
+        }
+      }
+    }
     const isStrict = body.strict;
     const hasStrictDirective = body.directives && body.directives.includes('use strict');
     if (wantsUnique === false && !IsSimpleParameterList(parameters)) {

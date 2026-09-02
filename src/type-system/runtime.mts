@@ -3048,6 +3048,31 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return record;
         }
       }
+      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-O): the
+      // builtin/library branches below resolve BEFORE the declaration-backed
+      // path my other ordering sites cover, so `Map.<V: uint8, K: string>`
+      // bound positionally here while the checker's site ordered - the two
+      // resolvers disagreed about what one annotation meant, each enforcing
+      // its own reading. Names are ordered here, by the table (OQ-17), and a
+      // name the table does not know on a base these branches WOULD resolve is
+      // refused rather than silently positional - the same rule a misspelling
+      // gets. A user declaration's name falls through untouched; the
+      // declaration-backed sites below order it against the real parameters.
+      if (argNames2.some((n) => n !== undefined)) {
+        const earlyLibNames = libraryTypeParameterNames(name);
+        if (earlyLibNames) {
+          const orderedEarly = Q(yield* OrderNamedTypeArguments(
+            earlyLibNames.map((n2) => ({ BindingIdentifier: { name: n2 } } as unknown as ParseNode.TypeParameter)),
+            argRecords,
+            argNames2,
+            name,
+          ));
+          argRecords.length = 0;
+          argRecords.push(...orderedEarly);
+        } else if (builtinTypeRecord(name, argRecords.map(toNumericArgument)) || libraryTypeRecord(name, argRecords.map(toNumericArgument))) {
+          return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
+        }
+      }
       const builtin = builtinTypeRecord(name, argRecords.map(toNumericArgument));
       if (builtin) {
         // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is

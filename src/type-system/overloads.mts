@@ -226,6 +226,41 @@ function isNumericValueType(t: TypeRecord): boolean {
 }
 
 /**
+ * Whether a literal argument's VALUE fits a numeric value type: the integer
+ * families check their range, and every other numeric family is representable
+ * enough for a DISTRIBUTION - the binding's conversion is the exact judgment,
+ * and it runs after. A non-numeric literal value answers false.
+ */
+function literalValueFitsNumeric(argType: TypeRecord, paramType: TypeRecord): boolean {
+  if (paramType.Kind !== 'primitive') {
+    return false;
+  }
+  const v = (argType as { Value?: unknown }).Value as { numberValue?(): number, bigintValue?(): bigint } | undefined;
+  let n: number | bigint | null = null;
+  if (v && typeof v.numberValue === 'function') {
+    n = v.numberValue();
+  } else if (v && typeof v.bigintValue === 'function') {
+    n = v.bigintValue();
+  }
+  if (n === null) {
+    return false;
+  }
+  const bits = (paramType as { Bits?: number }).Bits;
+  if ((paramType.Name === 'uint' || paramType.Name === 'int') && typeof bits === 'number') {
+    const asInt = typeof n === 'bigint' ? n : (Number.isInteger(n) ? BigInt(n) : null);
+    if (asInt === null) {
+      return false;
+    }
+    if (paramType.Name === 'uint') {
+      return asInt >= 0n && asInt < (1n << BigInt(bits));
+    }
+    const half = 1n << BigInt(bits - 1);
+    return asInt >= -half && asInt < half;
+  }
+  return true;
+}
+
+/**
  * The tier at which `argType` (the runtime type of an argument value) matches
  * `paramType`, or null if it is not assignable at all. A parameter typed `any` is
  * the catch-all tier; an exact type identity is the best tier; a literal argument
@@ -282,6 +317,18 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   // for an untyped bigint taking an arbitrary-precision integer parameter.
   if (isNumericValueType(argType) && isNumericValueType(paramType)) {
     return Tier.Literal;
+  }
+  // PLAN-variadic-and-named-generic-arguments.md Phase 0.6 (F-E, checker half):
+  // a LITERAL argument - `{Kind: 'literal'}` over a numeric base, which is what
+  // `staticType(0)` reports - fell through both arms above against a sized
+  // numeric parameter, so `assignArguments` answered 'unmatched' for the
+  // README's own multi-rest example and the per-argument check fell back to
+  // positions. The literal rule of #sec-literal-propagation admits it WHERE THE
+  // VALUE FITS; the range check is what keeps this distribution agreeing with
+  // the run time's, whose probe is the conversion itself and refuses 300
+  // against a `uint.<8>` element.
+  if (argType.Kind === 'literal' && isNumericValueType(paramType)) {
+    return literalValueFitsNumeric(argType, paramType) ? Tier.Literal : null;
   }
   // proposal-runtime-types #sec-interfaces-semantics: an interface is NOMINAL
   // where a class declares it implements one and STRUCTURAL where a value is

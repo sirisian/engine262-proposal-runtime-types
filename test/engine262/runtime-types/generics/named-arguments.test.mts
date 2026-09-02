@@ -116,3 +116,23 @@ test('positional applications keep their exact behaviour and messages (A37)', ()
   expect(evaluated(`${FILL} String(fill.<uint8, 8>());`)).toBe('8');
   expectThrown('function g<T>(): uint32 { return 1; } g.<>();', 'type arguments');
 });
+
+test('annotation and construction agree across spellings (B7 boundary)', () => {
+  expect(evaluated(`${BUFFER} let c: Buffer.<Size: 1024> = new Buffer.<uint8, 1024>(); 'ok';`)).toBe('ok');
+  expectThrown(`${BUFFER} let c: Buffer.<Size: 1024> = new Buffer.<Size: 512>();`, 'is not assignable');
+});
+
+test('library generics bind by the names the specification writes (A26, A27)', () => {
+  // Before: `Map.<V: uint8, K: string>` was silently `Map.<uint8, string>`.
+  expect(evaluated("let m: Map.<K: string, V: uint8> = new Map(); m.set('k', 1); String(m.size);")).toBe('1');
+  expect(evaluated("let m: Map.<V: uint8, K: string> = new Map(); m.set('k', 1); String(m.size);")).toBe('1');
+  expect(evaluated('let s: Set.<T: uint8> = new Set(); s.add(1); String(s.size);')).toBe('1');
+});
+
+test('an unknown name on a library generic is refused, not guessed (A29)', () => {
+  expectThrown('let m: Map.<Z: uint8> = new Map();', 'does not name a type parameter');
+});
+
+test('a library generic whose required parameter a named list leaves out is reported (A26 shape)', () => {
+  expectThrown('let m: Map.<V: uint8> = new Map();', 'has no argument and no default');
+});

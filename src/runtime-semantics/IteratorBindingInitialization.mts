@@ -1,4 +1,4 @@
-import { Value, ReferenceValue } from '../value.mts';
+import { Value, ReferenceValue, ObjectValue } from '../value.mts';
 import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import {
   EnsureCompletion,
@@ -125,7 +125,20 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
       }
       const declared = resolved.Value;
       const wanted = p.type === 'BindingRestElement' ? restElementType(declared) : declared;
-      row.push(Q(yield* IsOfType(arg, wanted)));
+      let ok = Q(yield* IsOfType(arg, wanted));
+      if (!ok && !(arg instanceof ObjectValue)) {
+        // #sec-literal-propagation (F-E): an untyped primitive argument takes a
+        // typed parameter by CONVERSION at binding, so the distribution admits
+        // exactly what the enforcement below will accept - the README's
+        // `f(...a: [].<uint32>, c: uint32)` called `f(0, 1, 2)` splits, while a
+        // value the element type refuses still refuses. The dry run is the same
+        // operation binding performs, so the two cannot disagree; it is
+        // attempted for primitives only, since converting an object could run
+        // its own code inside what is merely a distribution question.
+        const convertedProbe = EnsureCompletion(yield* CheckedConvertValue(arg, wanted as never));
+        ok = convertedProbe.Type === 'normal';
+      }
+      row.push(ok);
     }
     admitted.push(row);
   }
