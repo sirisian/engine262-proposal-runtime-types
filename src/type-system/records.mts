@@ -226,6 +226,48 @@ export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord
   };
 }
 
+/**
+ * proposal-runtime-types #sec-signature-records
+ * (PLAN-variadic-and-named-generic-arguments.md 2.11): one declared type
+ * parameter of a generic signature or declaration. [[Kind]] distinguishes a
+ * VALUE parameter (`V: uint32`, the node's IsValueParameter, F166) from a type
+ * parameter. [[Variadic]] is the pack marker - always false until the pack
+ * grammar lands, carried now so identity, subtyping, and reflection read one
+ * shape from the start. The constraint and the default stay as Parse Nodes
+ * rather than Type Records because both evaluate PER APPLICATION, under the
+ * frame of the bindings before them (#sec-computed-constraints); a record that
+ * evaluated them once would freeze `V: T = 0` at whatever `T` meant first.
+ * [[Declaration]] is the node itself - the identity a ~parameter~ Type Record
+ * substitutes by, and what makes two references to one parameter one thing.
+ */
+export interface TypeParameterRecord {
+  readonly Name: string;
+  readonly Kind: 'type' | 'value';
+  readonly Variadic: boolean;
+  readonly Variance: 'invariant' | 'covariant' | 'contravariant';
+  readonly Arity: number;
+  readonly ConstraintNode: ParseNode.Type | null;
+  readonly DefaultNode: ParseNode.Type | null;
+  readonly Declaration: ParseNode.TypeParameter;
+}
+
+/** The Type Parameter Records of a declared TypeParameterList, in declaration order. */
+export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] | undefined | null): readonly TypeParameterRecord[] {
+  if (!list || list.length === 0) {
+    return [];
+  }
+  return list.map((tp) => ({
+    Name: tp.BindingIdentifier?.name ?? '',
+    Kind: tp.IsValueParameter ? 'value' as const : 'type' as const,
+    Variadic: false,
+    Variance: tp.Variance ?? 'invariant' as const,
+    Arity: tp.Arity ?? 0,
+    ConstraintNode: tp.TypeParameterConstraint ?? null,
+    DefaultNode: (tp as unknown as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault ?? null,
+    Declaration: tp,
+  }));
+}
+
 export interface SignatureRecord {
   readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
@@ -243,6 +285,15 @@ export interface SignatureRecord {
    * behaviour by annotating with the one it wants.
    */
   readonly Narrows?: readonly NarrowingRecord[];
+  /**
+   * proposal-runtime-types #sec-generic-functions: the signature's declared
+   * type parameters, absent where it declares none (the spec's
+   * [[TypeParameters]], as Records rather than Parse Nodes). Identity is up to
+   * renaming - [[Name]] is carried for named arguments and tooling, never
+   * compared - which is what SameFunctionType reads when generic signatures
+   * compare (Phase 5).
+   */
+  readonly TypeParameters?: readonly TypeParameterRecord[];
 }
 
 /**

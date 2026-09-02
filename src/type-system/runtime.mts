@@ -28,7 +28,7 @@ import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue,
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
-import { orderKey } from './records.mts';
+import { orderKey, typeParameterRecordsOf } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -3680,7 +3680,11 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           }
           let built;
           try {
-            built = Q(yield* functionRecordFromSignature(member.MethodSignature.FunctionTypeParameterList, member.MethodSignature.TypeAnnotation));
+            built = Q(yield* functionRecordFromSignature(
+              member.MethodSignature.FunctionTypeParameterList,
+              member.MethodSignature.TypeAnnotation,
+              (member.MethodSignature as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } }).TypeParameters?.TypeParameterList,
+            ));
           } finally {
             if (methodFrame.size > 0) {
               popTypeParameterFrame();
@@ -4113,7 +4117,26 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
 }
 
-export function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null): PlainEvaluator<TypeRecord> {
+export function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null, typeParameters?: readonly ParseNode.TypeParameter[] | null): PlainEvaluator<TypeRecord> {
+  // PLAN-variadic-and-named-generic-arguments.md Phase 0.1: a GENERIC
+  // signature's own parameters are in scope for its parameter and return
+  // types, each resolving to a ~parameter~ record, and the signature record
+  // carries their Type Parameter Records - the interface-member site passed
+  // neither, so a generic method signature dropped its parameters on the
+  // floor and `T` in `on<T>(h: (e: T) => void)` had nothing to resolve to.
+  let pushedTypeParameterFrame = false;
+  if (typeParameters && typeParameters.length > 0) {
+    const tpFrame = new Map<string, TypeRecord>();
+    for (const tp of typeParameters) {
+      const tpName = tp.BindingIdentifier?.name;
+      if (tpName) {
+        tpFrame.set(tpName, { Kind: 'parameter', Name: tpName } as TypeRecord);
+      }
+    }
+    pushTypeParameterFrame(tpFrame);
+    pushedTypeParameterFrame = true;
+  }
+  try {
   const Parameters: ParameterRecord[] = [];
   let ThisType: TypeRecord | null = null;
   for (const p of params) {
@@ -4153,7 +4176,19 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
   if (returnAnnotation) {
     Return = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
   }
-  return { Kind: 'function', Signatures: [{ Parameters, Return, ThisType }] };
+  return {
+    Kind: 'function',
+    Signatures: [
+      typeParameters && typeParameters.length > 0
+        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters) }
+        : { Parameters, Return, ThisType },
+    ],
+  };
+  } finally {
+    if (pushedTypeParameterFrame) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Value> {

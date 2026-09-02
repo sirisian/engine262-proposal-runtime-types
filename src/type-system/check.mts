@@ -7,7 +7,9 @@ import { resolvedAlias } from './resolving-aliases.mts';
 import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
-  neverType, libraryTypeRecord as libraryType } from './records.mts';
+  neverType, libraryTypeRecord as libraryType,
+  typeParameterRecordsOf, type TypeParameterRecord,
+} from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -6737,13 +6739,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // overload-set formation, ranking, and viability can read the
           // declared one alone.
           const only = callee.Signatures[0] as {
-            Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameterNames?: readonly string[],
+            Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
           // #sec-generic-functions: a call that supplies type arguments binds
           // them to the signature's type parameters, and the return type is
           // read with that binding applied. Without this a generic call had no
           // Static Type at all, however completely it was annotated.
-          if (only.TypeParameterNames && only.TypeParameterNames.length > 0) {
+          if (only.TypeParameters && only.TypeParameters.length > 0) {
             const spec = (node as { CallExpression?: ParseNode }).CallExpression as unknown as {
               type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
             } | undefined;
@@ -6758,14 +6760,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const rawExplicitNames = rawExplicit.map((a) => typeArgumentNameOfShared(a));
               let orderedExplicit: readonly (ParseNode | undefined)[] = rawExplicit;
               if (rawExplicitNames.some((n) => n !== undefined)) {
-                const order = orderTypeArgumentsShared(only.TypeParameterNames!, rawExplicit, rawExplicitNames);
+                const order = orderTypeArgumentsShared(only.TypeParameters!.map((t) => t.Name), rawExplicit, rawExplicitNames);
                 orderedExplicit = order.ok ? order.ordered : [];
               }
               orderedExplicit.forEach((argNode, i) => {
                 if (argNode === undefined) {
                   return;
                 }
-                const name = only.TypeParameterNames![i];
+                const name = only.TypeParameters![i]?.Name;
                 const bound = resolveType(argNode as ParseNode.Type);
                 if (name && bound) {
                   bindings.set(name, bound);
@@ -6778,7 +6780,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 bindTypeParametersFromArguments(
                   (only as unknown as { Parameters?: readonly { Type?: Known }[] }).Parameters ?? [],
                   passed,
-                  new Set(only.TypeParameterNames),
+                  new Set(only.TypeParameters!.map((t) => t.Name)),
                   bindings,
                 );
               }
@@ -6803,7 +6805,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   bindTypeParametersFromArguments(
                     [{ Type: declaredOrPublished as Known }],
                     [wanted],
-                    new Set(only.TypeParameterNames),
+                    new Set(only.TypeParameters!.map((t) => t.Name)),
                     bindings,
                   );
                 }
@@ -10783,16 +10785,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (pushedTypeParameters) {
         typeParameterScopes.pop();
       }
-      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameterNames?: readonly string[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
-      // #sec-generic-functions: the names a call binds with its type arguments.
-      // Recorded here because a call site needs them to substitute into the
-      // return type, and the declaration node is not reachable from the
-      // signature record.
+      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
+      // #sec-generic-functions: the type parameters a call binds with its
+      // arguments, as RECORDS (PLAN-variadic-and-named-generic-arguments.md
+      // Phase 0.1) - name, kind, variance, arity, and the constraint and
+      // default nodes - because a call site needs them to order named
+      // arguments and substitute into the return type, and the declaration
+      // node is not reachable from the signature record. The string-list
+      // side field this replaces carried names alone, so everything else a
+      // later phase reads (identity up to renaming, pack flags, reflection)
+      // had no home.
       const tps = (n as unknown as {
-        TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
+        TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] },
       }).TypeParameters?.TypeParameterList;
       if (tps && tps.length > 0) {
-        signature.TypeParameterNames = tps.map((tp) => tp.BindingIdentifier?.name ?? '');
+        signature.TypeParameters = typeParameterRecordsOf(tps);
       }
       if (baselineGenerator) {
         signature.InferredReturn = baselineGenerator;
@@ -12777,7 +12784,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Untyped: (s as unknown as { Untyped?: boolean }).Untyped === true,
                 // Carried so the argument check can bind them; the record is
                 // rebuilt from a subset of fields and dropped them.
-                TypeParameterNames: (s as unknown as { TypeParameterNames?: readonly string[] }).TypeParameterNames,
+                TypeParameters: (s as unknown as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters,
                 // #sec-overloading-on-return-type: "a signature is identified by
                 // its return type as well as its parameter types". The signature
                 // already carries a Return and this dropped it, so the resolver
@@ -12905,7 +12912,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // the return substituted but not the parameters, `first.<uint32>([1])`
               // checked its argument against `[].<T>` - the unbound parameter -
               // and refused a correct program.
-              const generic = (chosen as { TypeParameterNames?: readonly string[] }).TypeParameterNames;
+              const generic = (chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters;
               if (param && generic && generic.length > 0) {
                 const spec = c.CallExpression as unknown as {
                   type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
@@ -12913,10 +12920,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
                 const bindings = new Map<string, TypeRecord>();
                 if (argNodes && argNodes.length > 0) {
-                  generic.forEach((tpName, k) => {
-                    const bound = argNodes[k] ? resolveType(argNodes[k] as ParseNode.Type) : null;
-                    if (tpName && bound) {
-                      bindings.set(tpName, bound);
+                  // Named explicit arguments are ordered before they zip - the
+                  // same shared operation every application site uses (F-A);
+                  // this zip read them positionally, so `f.<V: 5>(x)` checked
+                  // its arguments under the wrong binding. A list the ordering
+                  // refuses binds nothing here; the call's evaluation raises
+                  // the diagnostic.
+                  const explicitNames = argNodes.map((a) => typeArgumentNameOfShared(a));
+                  const order = orderTypeArgumentsShared(generic.map((t) => t.Name), argNodes, explicitNames);
+                  const orderedExplicitNodes = order.ok ? order.ordered : [];
+                  generic.forEach((tp, k) => {
+                    const nodeK = orderedExplicitNodes[k];
+                    const bound = nodeK ? resolveType(nodeK as ParseNode.Type) : null;
+                    if (tp.Name && bound) {
+                      bindings.set(tp.Name, bound);
                     }
                   });
                 } else {
@@ -12940,7 +12957,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   bindTypeParametersFromArguments(
                     chosen.Parameters as readonly { Type?: Known }[],
                     (c.Arguments ?? []).map((a) => staticType(a as ParseNode)),
-                    new Set(generic),
+                    new Set(generic.map((t) => t.Name)),
                     bindings,
                   );
                 }
