@@ -27,7 +27,7 @@ import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature } from '../type-system/runtime.mts';
-import { OrderNamedTypeArguments } from '../type-system/runtime.mts';
+import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
@@ -1707,13 +1707,18 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const args = node.TypeArguments.TypeArgumentList;
   const className = declaration.BindingIdentifier?.name ?? 'a class';
+  // Phase 4: a list with a variadic parameter, or an argument list with a
+  // spread, binds by the engine's BindTypeArguments; the pack-free path is
+  // unchanged.
+  const usesPacks = params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
+    || args.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
   // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): order named
   // arguments into parameter order before anything resolves; a hole then takes
   // the parameter's default under the same frame the positional path uses.
   const argNames = args.map((a) => typeArgumentNameOf(a));
   const namedArgs = argNames.some((n) => n !== undefined);
   let orderedNodes: readonly (ParseNode.Type | undefined)[] | null = null;
-  if (namedArgs) {
+  if (namedArgs && !usesPacks) {
     const order = orderTypeArguments(
       params.map((p) => (p as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name),
       args,
@@ -1737,7 +1742,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
   // class every one of whose parameters has a default may be applied with none.
   const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
   const leastArgs = firstDefault === -1 ? params.length : firstDefault;
-  if (!namedArgs && (args.length < leastArgs || args.length > params.length)) {
+  if (!namedArgs && !usesPacks && (args.length < leastArgs || args.length > params.length)) {
     return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(declaration.BindingIdentifier?.name ?? 'a class'), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
   }
   const frame = new Map<string, TypeRecord>();
@@ -1747,6 +1752,13 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
   // an instance built from the specialization has to carry them too - without
   // them `const b: B.<Identity> = new B.<Identity>()` refused its own value.
   const argRecords: TypeRecord[] = [];
+  if (usesPacks) {
+    const boundAll = Q(yield* BindTypeArgumentsInto(params, args, frame, className));
+    for (const r of boundAll) {
+      key.push(specializationKeyOf(r));
+      argRecords.push(r);
+    }
+  } else {
   for (let i = 0; i < params.length; i += 1) {
     const param = params[i] as unknown as {
       BindingIdentifier?: { name?: string },
@@ -1796,6 +1808,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     }
     key.push(specializationKeyOf(record));
     argRecords.push(record);
+  }
   }
   let byArgs = classSpecializations.get(declaration);
   if (byArgs === undefined) {

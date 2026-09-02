@@ -12,6 +12,8 @@
  * not.
  */
 
+import { SequenceAssignment } from './sequence-assignment.mts';
+
 export type TypeArgumentOrderFailure =
   | { readonly ok: false, readonly kind: 'positional-after-named' }
   | { readonly ok: false, readonly kind: 'unknown-name', readonly name: string }
@@ -101,4 +103,93 @@ export function libraryTypeParameterNames(name: string): readonly string[] | nul
 /** The `ArgumentName` a named type argument's node carries (rides on the type node). */
 export function typeArgumentNameOf(node: unknown): string | undefined {
   return (node as { ArgumentName?: string }).ArgumentName;
+}
+
+/** What `assignTypeArguments` needs to know of a parameter. */
+export interface TypeArgumentSlotParam {
+  readonly Name: string;
+  readonly Variadic: boolean;
+  readonly HasDefault: boolean;
+}
+
+export type TypeArgumentAssignment<T> =
+  | { readonly ok: true, readonly runs: readonly (readonly T[])[], readonly named: ReadonlySet<number> }
+  | TypeArgumentOrderFailure
+  | { readonly ok: false, readonly kind: 'unmatched' };
+
+/**
+ * #sec-bindtypearguments, the SYNTACTIC half with variadic parameters
+ * (PLAN-variadic-and-named-generic-arguments.md 2.2 steps 2-6): names resolve
+ * first - a named variadic parameter opens a RUN that takes the unnamed
+ * arguments after it - and the positional prefix is distributed by
+ * SequenceAssignment, the rest-parameter operation, a pack being a rest slot.
+ * A non-variadic slot admits by arity alone (its constraint is checked once
+ * bound); a named pack admits nothing positionally; a pack's element bound is
+ * the caller's `admits`. The result is one run per parameter, in order.
+ */
+export function assignTypeArguments<T>(
+  params: readonly TypeArgumentSlotParam[],
+  args: readonly T[],
+  names: readonly (string | undefined)[],
+  admits: (paramIndex: number, arg: T) => boolean,
+): TypeArgumentAssignment<T> {
+  const n = args.length;
+  let firstNamed = names.findIndex((x) => x !== undefined);
+  if (firstNamed === -1) {
+    firstNamed = n;
+  }
+  const positional = args.slice(0, firstNamed);
+  const named = new Map<number, T[]>();
+  let i = firstNamed;
+  while (i < n) {
+    const nm = names[i];
+    if (nm === undefined) {
+      return { ok: false, kind: 'positional-after-named' };
+    }
+    const at = params.findIndex((q) => q.Name === nm);
+    if (at === -1) {
+      return { ok: false, kind: 'unknown-name', name: nm };
+    }
+    if (named.has(at)) {
+      return { ok: false, kind: 'supplied-twice', name: nm };
+    }
+    const run: T[] = [args[i]!];
+    i += 1;
+    if (params[at]!.Variadic) {
+      while (i < n && names[i] === undefined) {
+        run.push(args[i]!);
+        i += 1;
+      }
+    }
+    named.set(at, run);
+  }
+  const slots = params.map((q) => (q.Variadic ? { Rest: true, Optional: false } : { Rest: false, Optional: q.HasDefault }));
+  const counts = SequenceAssignment(slots, positional.length, (itemIndex, slotIndex) => {
+    const q = params[slotIndex]!;
+    if (!q.Variadic) {
+      return true;
+    }
+    if (named.has(slotIndex)) {
+      return false;
+    }
+    return admits(slotIndex, positional[itemIndex]!);
+  });
+  if (counts === 'unmatched') {
+    return { ok: false, kind: 'unmatched' };
+  }
+  const runs: T[][] = [];
+  let cursor = 0;
+  for (let j = 0; j < params.length; j += 1) {
+    let supplied = positional.slice(cursor, cursor + counts[j]!);
+    cursor += counts[j]!;
+    const byName = named.get(j);
+    if (byName) {
+      if (supplied.length > 0) {
+        return { ok: false, kind: 'supplied-twice', name: params[j]!.Name };
+      }
+      supplied = byName;
+    }
+    runs.push(supplied);
+  }
+  return { ok: true, runs, named: new Set(named.keys()) };
 }

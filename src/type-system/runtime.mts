@@ -33,7 +33,7 @@ import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
-import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf } from './type-argument-order.mts';
+import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -255,6 +255,324 @@ export function lookupTypeParameter(name: string): TypeRecord | null {
   return null;
 }
 
+/** The elements a spread type argument contributes: a tuple's, or an extent-many copies of an array's; null where the length is not static. */
+export function spreadElementsOf(t: TypeRecord): TypeRecord[] | null {
+  if (t.Kind === 'tuple') {
+    if (t.Elements.some((e) => e.Rest)) {
+      return null;
+    }
+    return t.Elements.map((e) => e.Type);
+  }
+  if (t.Kind === 'array') {
+    const extent = (t as { Extent?: number | null }).Extent;
+    if (typeof extent === 'number') {
+      return Array.from({ length: extent }, () => t.Element);
+    }
+  }
+  return null;
+}
+
+/** The element type a variadic parameter's constraint admits per argument; null where the constraint is not a collection. */
+function packElementTypeOf(constraint: TypeRecord): TypeRecord | null {
+  if (constraint.Kind === 'array' || constraint.Kind === 'tuple') {
+    return restElementType(constraint);
+  }
+  return null;
+}
+
+/**
+ * Whether a pack's element bound admits an argument for the SPLIT: assignable,
+ * or a literal the element type can hold (#sec-literal-propagation - a literal
+ * takes the type of its position, so `0` joins a `[].<uint32>` run as it fills
+ * a `uint32` parameter; the binding's conversion is the exact judgment after).
+ */
+function packElementAdmits(record: TypeRecord, elementBound: TypeRecord): boolean {
+  if (IsAssignable(record, elementBound)) {
+    return true;
+  }
+  if (record.Kind === 'literal' && elementBound.Kind === 'primitive') {
+    const v = record.Value as { numberValue?(): number, bigintValue?(): bigint };
+    const mv = typeof v.numberValue === 'function' ? v.numberValue() : (typeof v.bigintValue === 'function' ? v.bigintValue() : null);
+    if (mv === null) {
+      return false;
+    }
+    return elementBound.Name === 'number' || fitsNumericType(mv, elementBound.Name, (elementBound as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? []);
+  }
+  return false;
+}
+
+/**
+ * Whether a bound pack fails its constraint (#sec-bindtypearguments step 8 for
+ * a variadic parameter): an array constraint with a stated extent fixes the
+ * length, a tuple constraint fixes length and typing position by position, and
+ * every element must be admitted by the element type - by the same literal
+ * rule the split used, so a converted value element passes as its scalar twin
+ * does. A constraint that is no collection at all is the E2 type error.
+ */
+function packConstraintRefuses(elements: readonly TypeRecord[], constraint: TypeRecord): boolean {
+  if (constraint.Kind === 'array') {
+    const extent = (constraint as { Extent?: number | null }).Extent;
+    if (typeof extent === 'number' && elements.length !== extent) {
+      return true;
+    }
+    return elements.some((e) => !packElementAdmits(e, constraint.Element));
+  }
+  if (constraint.Kind === 'tuple') {
+    if (constraint.Elements.some((e) => e.Rest)) {
+      const element = restElementType(constraint);
+      return elements.some((e) => !packElementAdmits(e, element));
+    }
+    if (elements.length !== constraint.Elements.length) {
+      return true;
+    }
+    return elements.some((e, i) => !packElementAdmits(e, constraint.Elements[i]!.Type));
+  }
+  return true;
+}
+
+function typeArgumentBindingError(kind: string, applied: string, name?: string): ThrowCompletion {
+  switch (kind) {
+    case 'positional-after-named':
+      return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value(applied));
+    case 'unknown-name':
+      return Throw.TypeError('$1 does not name a type parameter of $2', Value(name ?? ''), Value(applied));
+    case 'supplied-twice':
+      return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(name ?? ''), Value(applied));
+    default:
+      return Throw.TypeError('$1', Value(`no assignment of the type arguments of ${applied} satisfies its parameter list`));
+  }
+}
+
+/**
+ * PLAN-variadic-and-named-generic-arguments.md Phase 4, #sec-bindtypearguments:
+ * the engine's BindTypeArguments for an application whose parameters include a
+ * VARIADIC one or whose arguments include a SPREAD. Expands spreads, resolves
+ * every argument, distributes the positional prefix by SequenceAssignment with
+ * the pack's element bound as the admits (a bound that cannot be evaluated
+ * before binding is OPEN and admits everything for the split), then binds left
+ * to right under the frame: a pack to the ~tuple~ of its run - each element of a
+ * VALUE pack converted to the element type as a scalar value argument is - or
+ * to its tuple default, or to the empty tuple; a scalar exactly as the
+ * pack-free path binds it. Every binding lands in `frame` (marking value
+ * parameters, so the body reads a value pack as its array), and the records are
+ * returned in parameter order for the caller's specialization key.
+ */
+export function* BindTypeArgumentsInto(
+  params: readonly ParseNode.TypeParameter[],
+  argNodes: readonly ParseNode.Type[],
+  frame: Map<string, TypeRecord>,
+  applied: string,
+): PlainEvaluator<TypeRecord[]> {
+  type Entry = { record: TypeRecord, name: string | undefined };
+  const entries: Entry[] = [];
+  for (const a of argNodes) {
+    pushTypeParameterFrame(frame);
+    let t: TypeRecord;
+    try {
+      t = Q(yield* TypeNodeToTypeRecord(a));
+    } finally {
+      popTypeParameterFrame();
+    }
+    if ((a as { IsSpread?: boolean }).IsSpread) {
+      const elements = spreadElementsOf(t);
+      if (!elements) {
+        return Throw.TypeError('$1', Value(`a spread type argument of ${applied} must be a tuple or an array of stated extent`));
+      }
+      for (const e of elements) {
+        entries.push({ record: e, name: undefined });
+      }
+    } else {
+      entries.push({ record: t, name: typeArgumentNameOf(a) });
+    }
+  }
+  const elementBounds: (TypeRecord | null)[] = [];
+  for (const q of params) {
+    let bound: TypeRecord | null = null;
+    if (q.IsVariadic && q.TypeParameterConstraint) {
+      pushTypeParameterFrame(frame);
+      let c;
+      try {
+        c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+      } finally {
+        popTypeParameterFrame();
+      }
+      if (c.Type === 'normal') {
+        bound = packElementTypeOf(c.Value as TypeRecord);
+      }
+    }
+    elementBounds.push(bound);
+  }
+  const assigned = assignTypeArguments(
+    params.map((q) => ({ Name: q.BindingIdentifier?.name ?? '', Variadic: q.IsVariadic === true, HasDefault: !!q.TypeParameterDefault })),
+    entries,
+    entries.map((e) => e.name),
+    (j, e) => (elementBounds[j] ? packElementAdmits(e.record, elementBounds[j]!) : true),
+  );
+  if (!assigned.ok) {
+    return typeArgumentBindingError(assigned.kind, applied, (assigned as { name?: string }).name);
+  }
+  const bound: TypeRecord[] = [];
+  for (let j = 0; j < params.length; j += 1) {
+    const q = params[j]!;
+    const run = assigned.runs[j]!;
+    const name = q.BindingIdentifier?.name;
+    let constraint: TypeRecord | null = null;
+    if (q.TypeParameterConstraint) {
+      pushTypeParameterFrame(frame);
+      try {
+        constraint = Q(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+      } finally {
+        popTypeParameterFrame();
+      }
+    }
+    let record: TypeRecord;
+    if (q.IsVariadic) {
+      if (run.length === 0 && q.TypeParameterDefault) {
+        pushTypeParameterFrame(frame);
+        try {
+          record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+        } finally {
+          popTypeParameterFrame();
+        }
+        if (record.Kind !== 'tuple') {
+          return Throw.TypeError('$1', Value(`the default of the variadic parameter ${name ?? String(j)} of ${applied} must be a tuple`));
+        }
+      } else {
+        const elementBound = constraint ? packElementTypeOf(constraint) : null;
+        const elements: TypeRecord[] = [];
+        for (const e of run) {
+          let r = e.record;
+          if (q.IsValueParameter && r.Kind === 'literal' && elementBound) {
+            const converted = EnsureCompletion(yield* CheckedConvertValue(r.Value as Value, elementBound as never));
+            if (converted.Type !== 'normal') {
+              return converted as never;
+            }
+            r = { ...r, Value: converted.Value as Value } as TypeRecord;
+          }
+          elements.push(r);
+        }
+        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false })) } as TypeRecord);
+      }
+      if (constraint && packConstraintRefuses((record as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => e.Type), constraint)) {
+        return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
+      }
+    } else {
+      if (run.length === 0) {
+        if (!q.TypeParameterDefault) {
+          return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(j)), Value(applied));
+        }
+        pushTypeParameterFrame(frame);
+        try {
+          record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+        } finally {
+          popTypeParameterFrame();
+        }
+      } else {
+        record = run[0]!.record;
+      }
+      if (record.Kind === 'literal' && constraint) {
+        const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, constraint as never));
+        if (converted.Type !== 'normal') {
+          return converted as never;
+        }
+        record = { ...record, Value: converted.Value as Value } as TypeRecord;
+      }
+    }
+    if (name) {
+      bindTypeParameter(frame, name, record, q);
+    }
+    bound.push(record);
+  }
+  return bound;
+}
+
+/**
+ * The record-based twin for TYPE position, where the arguments arrive already
+ * resolved: the same distribution and tuple binding, defaults filled, no frame
+ * a body reads. Returns the full list, one record per parameter.
+ */
+export function* BindTypeArgumentRecords(
+  params: readonly ParseNode.TypeParameter[],
+  argRecords: readonly TypeRecord[],
+  argNames: readonly (string | undefined)[],
+  applied: string,
+): PlainEvaluator<TypeRecord[]> {
+  const elementBounds: (TypeRecord | null)[] = [];
+  for (const q of params) {
+    let bound: TypeRecord | null = null;
+    if (q.IsVariadic && q.TypeParameterConstraint) {
+      const c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+      if (c.Type === 'normal') {
+        bound = packElementTypeOf(c.Value as TypeRecord);
+      }
+    }
+    elementBounds.push(bound);
+  }
+  const assigned = assignTypeArguments(
+    params.map((q) => ({ Name: q.BindingIdentifier?.name ?? '', Variadic: q.IsVariadic === true, HasDefault: !!q.TypeParameterDefault })),
+    argRecords,
+    argNames,
+    (j, r) => (elementBounds[j] ? packElementAdmits(r, elementBounds[j]!) : true),
+  );
+  if (!assigned.ok) {
+    return typeArgumentBindingError(assigned.kind, applied, (assigned as { name?: string }).name);
+  }
+  const frame = new Map<string, TypeRecord>();
+  const out: TypeRecord[] = [];
+  for (let j = 0; j < params.length; j += 1) {
+    const q = params[j]!;
+    const run = assigned.runs[j]!;
+    const name = q.BindingIdentifier?.name;
+    let record: TypeRecord;
+    if (q.IsVariadic) {
+      if (run.length === 0 && q.TypeParameterDefault) {
+        pushTypeParameterFrame(frame);
+        try {
+          record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+        } finally {
+          popTypeParameterFrame();
+        }
+      } else {
+        const elements: TypeRecord[] = [];
+        for (let r of run) {
+          if (q.IsValueParameter && r.Kind === 'literal' && elementBounds[j]) {
+            const converted = EnsureCompletion(yield* CheckedConvertValue(r.Value as Value, elementBounds[j] as never));
+            if (converted.Type !== 'normal') {
+              return converted as never;
+            }
+            r = { ...r, Value: converted.Value as Value } as TypeRecord;
+          }
+          elements.push(r);
+        }
+        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false })) } as TypeRecord);
+      }
+      if (q.TypeParameterConstraint) {
+        const c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+        if (c.Type === 'normal' && packConstraintRefuses((record as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => e.Type), c.Value as TypeRecord)) {
+          return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(c.Value as TypeRecord)));
+        }
+      }
+    } else if (run.length === 0) {
+      if (!q.TypeParameterDefault) {
+        return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(j)), Value(applied));
+      }
+      pushTypeParameterFrame(frame);
+      try {
+        record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+      } finally {
+        popTypeParameterFrame();
+      }
+    } else {
+      record = run[0]!;
+    }
+    if (name) {
+      frame.set(name, record);
+    }
+    out.push(record);
+  }
+  return out;
+}
+
 /**
  * Orders type arguments by the parameters they name.
  *
@@ -274,6 +592,10 @@ export function* OrderNamedTypeArguments(
   argNames: readonly (string | undefined)[],
   typeName: string,
 ): PlainEvaluator<readonly TypeRecord[]> {
+  // Phase 4: a list with a VARIADIC parameter distributes by the pack rule.
+  if (params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)) {
+    return yield* BindTypeArgumentRecords(params, argRecords, argNames, typeName);
+  }
   if (!argNames.some((n) => n !== undefined)) {
     return argRecords;
   }
@@ -2839,6 +3161,20 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const argNames2: (string | undefined)[] = [];
       if (node.TypeArguments) {
         for (const argNode of node.TypeArguments.TypeArgumentList) {
+          // #sec-type-references: a SPREAD argument splices its tuple's elements
+          // into the list before anything binds (Phase 4).
+          if ((argNode as { IsSpread?: boolean }).IsSpread) {
+            const spreadRecord = Q(yield* TypeNodeToTypeRecord(argNode));
+            const spreadElements = spreadElementsOf(spreadRecord);
+            if (!spreadElements) {
+              return Throw.TypeError('$1', Value(`a spread type argument of ${name} must be a tuple or an array of stated extent`));
+            }
+            for (const e of spreadElements) {
+              argNames2.push(undefined);
+              argRecords.push(e);
+            }
+            continue;
+          }
           argNames2.push((argNode as { ArgumentName?: string }).ArgumentName);
           // proposal-runtime-types #sec-higher-kinded-parameters: an argument
           // binding a higher-kinded parameter is a DECLARATION, not a type, and
@@ -3211,10 +3547,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // iteration-interface and nominal branches so both see the positional
         // shape they always saw; a name matching nothing is refused rather than
         // dropped into position 0.
-        if (argNames2.some((n) => n !== undefined)) {
-          const declParams = baseRecord.Kind === 'nominal'
-            ? (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList
-            : undefined;
+        const declParamsEarly = baseRecord.Kind === 'nominal'
+          ? (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList
+          : undefined;
+        // Phase 4: a declaration with a VARIADIC parameter distributes its
+        // arguments by the pack rule whether or not any is named.
+        if (argNames2.some((n) => n !== undefined) || (declParamsEarly?.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true) ?? false)) {
+          const declParams = declParamsEarly;
           const params2 = declParams
             ?? libraryTypeParameterNames(name)?.map((n2) => ({ BindingIdentifier: { name: n2 } } as unknown as ParseNode.TypeParameter));
           if (!params2) {

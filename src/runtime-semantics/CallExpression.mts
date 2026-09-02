@@ -8,7 +8,7 @@ import { Throw } from '../host-defined/error-messages.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
@@ -1104,8 +1104,11 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // by the same shared operation every other application site uses.
       const explicitArgNames = typeArgs.map((a) => typeArgumentNameOf(a));
       const namedTypeArgs = explicitArgNames.some((n) => n !== undefined);
+      // Phase 4: packs and spreads bind by the engine's BindTypeArguments.
+      const usesPacks = params.some((q: ParseNode.TypeParameter) => q.IsVariadic === true)
+        || typeArgs.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
       let orderedTypeArgs: readonly (ParseNode.Type | undefined)[] | null = null;
-      if (namedTypeArgs) {
+      if (namedTypeArgs && !usesPacks) {
         const order = orderTypeArguments(
           params.map((p: ParseNode.TypeParameter) => p.BindingIdentifier?.name),
           typeArgs,
@@ -1132,7 +1135,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // first default.
       const required = params.findIndex((p: ParseNode.TypeParameter) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
       const least = required === -1 ? params.length : required;
-      if (!namedTypeArgs && (typeArgs.length < least || typeArgs.length > params.length)) {
+      if (!namedTypeArgs && !usesPacks && (typeArgs.length < least || typeArgs.length > params.length)) {
         return Throw.TypeError(
           '$1 takes $2 type arguments; $3 expects one taking $4',
           Value('the call'), Value(String(typeArgs.length)),
@@ -1140,6 +1143,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         );
       }
       const frame = new Map<string, TypeRecord>();
+      if (usesPacks) {
+        Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call'));
+      } else {
       for (let i = 0; i < params.length; i += 1) {
         const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: ParseNode.Type | null };
         // A parameter past the supplied arguments takes its default, which is
@@ -1181,6 +1187,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         if (p.BindingIdentifier?.name) {
           bindTypeParameter(frame, p.BindingIdentifier.name, record, p);
         }
+      }
       }
       // #sec-where-clauses: a `where` clause is "a compile-time-evaluable
       // Boolean expression over its parameters, checked at each specialization
