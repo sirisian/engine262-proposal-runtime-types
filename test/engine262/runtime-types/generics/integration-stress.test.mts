@@ -73,10 +73,20 @@ test('B.3: specializations as values are interned, keyed, and typed', () => {
   expect(evaluated(`${BUS} String(Reflect.typeOf(logAny.<Click>));`)).toBe('(e: Click) => void');
 });
 
-// F-Q, pinned (pre-existing): an INSTANCE is not assignable to an interface by
-// shape when the interface declares a method - concrete or generic.
-test.fails('B.3: a class satisfies a generic interface by shape under its own parameter names (F-Q)', () => {
-  expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
+test('B.3: a class satisfies a generic interface by shape under its own parameter names, via implements (F-Q dissolved)', () => {
+  // F-Q was not a gap: classes are NOMINAL here, so an instance satisfies an
+  // interface by declaring `implements` (an object literal satisfies by shape).
+  // Under `implements`, the generic method compares up to renaming.
+  expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus implements Bus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
+  expect(evaluated('interface Bus { on(name: string): void; } let b: Bus = { on(name: string): void {} }; "ok";')).toBe('ok');
+});
+
+// F-AB, pinned: `implements` accepts a generic method of the WRONG SHAPE - a
+// class declaring `on<T, U>` for an interface's `on<T>` is not refused. The
+// implements check does not compare generic signatures by identity up to
+// renaming (or compares the method's type without its TypeParameters).
+test.fails('B.3: implements refuses a generic method of a different shape (F-AB)', () => {
+  expectThrown('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T, U>(name: string, h: (e: T) => void): void {} }');
 });
 
 test('B.3: the pack member of an overload set takes what the others cannot', () => {
@@ -87,8 +97,8 @@ test('B.3: the pack member of an overload set takes what the others cannot', () 
 test('B.4: a specialization chain grows a tuple by splicing (F-S closed)', () => {
   // `[...Ts, T]` under Ts = [uint8] interns as `[uint8, string]`: CanonicalizeType
   // splices a rest element whose type is a tuple, and the class specialization
-  // keys on the canonical record. (`Reader.<…>` in expression position is the
-  // specialized CONSTRUCTOR; the type is `type Reader.<…>`.)
+  // keys on the canonical record. (`Reader.<â€¦>` in expression position is the
+  // specialized CONSTRUCTOR; the type is `type Reader.<â€¦>`.)
   expect(evaluated('class Reader<Ts extends [].<any> = []> { read<T>(): Reader.<[...Ts, T]> { return new Reader.<[...Ts, T]>(); } } const r = new Reader().read.<uint8>().read.<string>(); String(r instanceof Reader.<[uint8, string]> && Reflect.typeOf(r) === type Reader.<[uint8, string]>);')).toBe('true');
   expect(evaluated('type A = [...[uint8, string], boolean]; String(A === type [uint8, string, boolean]);')).toBe('true');
 });
@@ -126,11 +136,16 @@ test('B.5: identity is the ordered bindings, never the spelling', () => {
   expect(evaluated(`${STRESS} String(stress.<uint8, N: 4> !== stress.<uint8, N: 5>);`)).toBe('true');
 });
 
-// F-AA, pinned: E6 is a STATIC refusal - the checker must report a spread type
-// argument whose operand is not a tuple or stated-extent array without the
-// program running it; today the checker's binder answers silently and only the
-// runtime refuses.
-test.fails('B.5: a spread of a non-tuple is refused statically (F-AA)', () => {
+test('B.5: a spread of a dynamic array TYPE is refused statically (F-AA closed for types)', () => {
+  // E6 without running the program: the body of `u` is never evaluated.
+  expectThrown(`${STRESS} function u() { return stress.<uint8, ...[].<uint32>, N: 4>(); }`, 'stated extent');
+});
+
+// F-AA remainder, pinned: a spread whose operand NAMES A VALUE (`...xs`) is
+// nothing the checker's resolveType can answer but null - the same null a
+// deferred computed type gives - so it cannot yet tell "not a type" from
+// "unknown here"; the runtime refuses it when called.
+test.fails('B.5: a spread naming a value is refused statically (F-AA remainder)', () => {
   expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); }`);
 });
 
@@ -169,10 +184,20 @@ test.fails('B.6: rung three - a declared inverse binds a pack, and its absence n
   expectThrown('type wrapOf(Ts: type): type { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf');
 });
 
-// F-Z, pinned: a spread of a DYNAMIC array cannot bind a pack - the call must
-// refuse statically (E6's inference twin), not bind from the values it finds.
-test.fails('B.6: a pack refuses to bind from a spread of unknown length (F-Z)', () => {
-  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const dyn: [].<uint32> = [0, 1]; tup(...dyn);', 'length');
+// F-Z, pinned: a spread of a DYNAMIC array into a rest typed by a pack must be
+// refused statically. The rule is written at two checker sites (the
+// overload-candidate argument check and the generic-call return path) and
+// neither fires for this call; the site a plain generic call's arguments take
+// is elsewhere. Worse, the RUNTIME then misbehaves - F-AC: `tup(...dyn)`
+// returns an object rather than the count or a refusal, so the pack bound
+// from a dynamic spread is not the tuple the body expects.
+test.fails('B.6: a pack refuses to bind from a spread of unknown length (F-Z, F-AC)', () => {
+  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const dyn: [].<uint32> = [0, 1]; tup(...dyn);', 'statically known length');
+});
+
+test('B.6: a tuple spreads into a pack, and a pack forwards (the idioms F-Z must keep)', () => {
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const two: [uint8, string] = [1, "a"]; String(tup(...two));')).toBe('2');
+  expect(evaluated('function inner<...Ts>(...xs: Ts): uint32 { return xs.length; } function outer<...Ts>(...xs: Ts): uint32 { return inner(...xs); } String(outer(1, "a", true));')).toBe('3');
 });
 
 // ---- B.7 Reflection, library names, generic-typed slots ----

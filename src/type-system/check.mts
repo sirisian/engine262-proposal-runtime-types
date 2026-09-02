@@ -2698,11 +2698,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const a of argNodes) {
       if ((a as { IsSpread?: boolean }).IsSpread) {
         const t = resolveType(a as ParseNode.Type);
-        if (!t || t.Kind !== 'tuple') {
+        if (!t) {
           return;
         }
-        for (const e of (t as { Elements: readonly { Type: TypeRecord }[] }).Elements) {
-          entries.push({ node: null, record: e.Type, name: undefined });
+        const extent = (t as { Extent?: number | string }).Extent;
+        if (t.Kind === 'tuple') {
+          for (const e of (t as { Elements: readonly { Type: TypeRecord }[] }).Elements) {
+            entries.push({ node: null, record: e.Type, name: undefined });
+          }
+        } else if (t.Kind === 'array' && typeof extent === 'number') {
+          for (let k = 0; k < extent; k += 1) {
+            entries.push({ node: null, record: (t as { Element: TypeRecord }).Element, name: undefined });
+          }
+        } else if (t.Kind === 'array') {
+          // #sec-type-references E6 (F-AA): a spread of a DYNAMIC array cannot
+          // say how many parameters it fills - a STATIC refusal, reported here
+          // without the program running it.
+          const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return;
+        } else {
+          // A pack in scope (`...Ts`, a ~parameter~ record) or anything else the
+          // checker cannot expand: bind nothing here; the runtime binds it.
+          return;
         }
       } else {
         entries.push({ node: a, record: null, name: typeArgumentNameOfShared(a) });
@@ -6892,6 +6910,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // list the ordering refuses binds NOTHING here - the runtime
               // raises the diagnostic - rather than binding the wrong thing.
               bindExplicitTypeArguments(only.TypeParameters!, argNodes ?? [], bindings);
+              // #sec-variadic-parameters (F-Z): a spread argument binds a PACK
+              // only where its length is static. The rest annotated with the
+              // pack collects a tuple whose length the binding must know, so a
+              // spread of a DYNAMIC array into such a rest is refused here - the
+              // path a plain generic call takes - statically. A tuple, a
+              // stated-extent array, and a pack-typed value (`...xs` with
+              // `xs: Ts`, the forwarding idiom) all carry the length.
+              {
+                const restParam = ((only as unknown as { Parameters?: readonly { Rest?: boolean, Type?: Known }[] }).Parameters ?? []).find((pp) => pp.Rest);
+                const restType = restParam?.Type as { Kind?: string, Name?: string } | null | undefined;
+                const variadicNames = new Set(only.TypeParameters!.filter((tp) => tp.Variadic).map((tp) => tp.Name));
+                if (restType?.Kind === 'parameter' && restType.Name && variadicNames.has(restType.Name)) {
+                  for (const a of (node as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
+                    if ((a as { type?: string }).type === 'SpreadElement') {
+                      const spreadType = staticType((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+                      const ext = (spreadType as { Extent?: number | string } | null)?.Extent;
+                      if (spreadType && spreadType.Kind === 'array' && typeof ext !== 'number') {
+                        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
+                        errors.push(completion.Value as ObjectValue);
+                      }
+                    }
+                  }
+                }
+              }
               if (bindings.size === 0) {
                 // No explicit arguments: read them from what was passed.
                 const passed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])
@@ -12952,6 +12994,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // compute it differently, and an earlier attempt indexed the counts
             // as though they were the slot map.
             const restPresent = chosen.Parameters.some((pp) => !!pp?.Rest);
+            // #sec-variadic-parameters (F-Z): a spread argument, `f(...xs)`,
+            // binds a PACK only where its length is static - the rest annotated
+            // with the pack collects a tuple whose length the binding must know.
+            // A spread of a dynamic array into such a rest is refused here,
+            // statically, rather than bound from whatever values the call finds.
+            {
+              const restParam = chosen.Parameters.find((pp) => !!pp?.Rest);
+              const restType = restParam?.Type as { Kind?: string, Name?: string } | undefined;
+              const variadicNames = new Set(((chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters ?? []).filter((tp) => tp.Variadic).map((tp) => tp.Name));
+              if (restType?.Kind === 'parameter' && restType.Name && variadicNames.has(restType.Name)) {
+                for (const a of c.Arguments) {
+                  if ((a as { type?: string }).type === 'SpreadElement') {
+                    const spreadType = staticType((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+                    const ext = (spreadType as { Extent?: number | string } | null)?.Extent;
+                    // Only a DYNAMIC array is refused: a tuple, a stated-extent
+                    // array, and a value typed by a pack (`...xs` with `xs: Ts`,
+                    // the forwarding idiom) all have the length the pack needs.
+                    if (spreadType && spreadType.Kind === 'array' && typeof ext !== 'number') {
+                      const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
+                      errors.push(completion.Value as ObjectValue);
+                    }
+                  }
+                }
+              }
+            }
             const argTypesForMap = restPresent
               ? c.Arguments.map((a) => (staticType(a as ParseNode) ?? anyTypeRecord) as TypeRecord)
               : null;
