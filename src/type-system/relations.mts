@@ -1590,7 +1590,7 @@ function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings
 }
 
 /** Replaces bound ~parameter~ records throughout `t`, structurally, for the relation's own use. */
-function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): TypeRecord {
+export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): TypeRecord {
   if (t.Kind === 'parameter') {
     return bindings.get(t) ?? t;
   }

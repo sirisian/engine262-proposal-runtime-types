@@ -10,6 +10,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
+import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee } from './RuntimeTypesDeclarations.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
@@ -121,7 +122,7 @@ function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: O
  * is every ordinary call: a function's own clause needs no such frame, and
  * pushing an empty one would only cost a pop.
  */
-function classTypeParameterFrame(ref: unknown): Map<string, TypeRecord> | null {
+export function classTypeParameterFrame(ref: unknown): Map<string, TypeRecord> | null {
   const base = (ref as { Base?: Value } | undefined)?.Base;
   if (!base || typeof base !== 'object') {
     return null;
@@ -246,7 +247,18 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       return Q(yield* CreateArrayView(element, 'dynamic', argList as unknown as readonly Value[]));
     }
   }
-  const ref = Q(yield* Evaluate(memberExpr));
+  // F-C: a `TypeArgumentsExpression` callee evaluates to the BARE function
+  // here - this call binds the arguments itself - and to its specialization
+  // value everywhere else (#sec-generic-function-values).
+  if (memberExpr.type === 'TypeArgumentsExpression') {
+    MarkTypeArgumentsCallee();
+  }
+  let ref;
+  try {
+    ref = Q(yield* Evaluate(memberExpr));
+  } finally {
+    ClearTypeArgumentsCallee();
+  }
   // 5. Let func be ? GetValue(ref).
   const func = Q(yield* GetValue(ref));
   // proposal-runtime-types #sec-higher-kinded-parameters: "A higher-kinded

@@ -115,7 +115,8 @@ export interface TypeArgumentSlotParam {
 export type TypeArgumentAssignment<T> =
   | { readonly ok: true, readonly runs: readonly (readonly T[])[], readonly named: ReadonlySet<number> }
   | TypeArgumentOrderFailure
-  | { readonly ok: false, readonly kind: 'unmatched' };
+  | { readonly ok: false, readonly kind: 'unmatched' }
+  | { readonly ok: false, readonly kind: 'missing', readonly name: string };
 
 /**
  * #sec-bindtypearguments, the SYNTACTIC half with variadic parameters
@@ -163,7 +164,17 @@ export function assignTypeArguments<T>(
     }
     named.set(at, run);
   }
-  const slots = params.map((q) => (q.Variadic ? { Rest: true, Optional: false } : { Rest: false, Optional: q.HasDefault }));
+  // A NAMED non-variadic parameter is satisfied by its name, so for the
+  // positional split its slot is optional - `id.<T: uint8>` has no positional
+  // argument for T and must not be 'unmatched'. (A named pack takes count 0
+  // through the admits below.)
+  const slots = params.map((q, j) => (q.Variadic ? { Rest: true, Optional: false } : { Rest: false, Optional: q.HasDefault || named.has(j) }));
+  // A required parameter that neither a name nor the positional prefix can
+  // reach is reported by NAME - the diagnostic the pack-free path gives.
+  const requiredUnnamed = params.filter((q, j) => !q.Variadic && !q.HasDefault && !named.has(j));
+  if (positional.length < requiredUnnamed.length) {
+    return { ok: false, kind: 'missing', name: requiredUnnamed[positional.length]!.Name };
+  }
   const counts = SequenceAssignment(slots, positional.length, (itemIndex, slotIndex) => {
     const q = params[slotIndex]!;
     if (!q.Variadic) {

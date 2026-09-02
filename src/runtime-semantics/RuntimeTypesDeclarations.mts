@@ -1,7 +1,7 @@
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord } from '../type-system/check.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { CheckedConvertValue, LookupClassOperator } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses } from '../abstract-ops/runtime-types.mts';
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
@@ -26,8 +26,10 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature } from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, RegisterSpecializedFunctionType } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
+import { classTypeParameterFrame } from './CallExpression.mts';
+import { substituteParameterRecords } from '../type-system/relations.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
@@ -1875,7 +1877,108 @@ function* FamilyApplicationFor(node: ParseNode.TypeArgumentsExpression): PlainEv
   return GetTypeObject(record);
 }
 
+/** F-C: one specialization per (function object, ordered bindings). */
+const genericFunctionSpecializations = new WeakMap<object, Map<string, Value>>();
+
+/**
+ * Set by the call paths around evaluating a `TypeArgumentsExpression` CALLEE,
+ * and consumed at the top of Evaluate_TypeArgumentsExpression: an explicit call
+ * binds its own type arguments (with its own diagnostics and `where` check), so
+ * the callee must evaluate to the bare function there, not to a specialization
+ * that would be bound twice.
+ */
+let evaluatingTypeArgumentsCallee = false;
+export function MarkTypeArgumentsCallee(): void {
+  evaluatingTypeArgumentsCallee = true;
+}
+export function ClearTypeArgumentsCallee(): void {
+  evaluatingTypeArgumentsCallee = false;
+}
+
+/**
+ * proposal-runtime-types #sec-generic-function-values (PLAN-variadic-and-named-generic-arguments.md
+ * Phase 4, F-C): a generic function applied in expression position, `f.<uint8>`,
+ * denotes its SPECIALIZATION as a value - a function object interned per
+ * function and ordered bindings, so `f.<uint8> === f.<uint8>` and `f.<uint8> ===
+ * f.<T: uint8>`, a Map keyed on one round-trips, and `arr.map(f.<uint8>)` runs
+ * the specialized body. Its `where` clauses run once, here; it captures no
+ * receiver (`obj.m.<uint8>` is the method's specialization, receiver
+ * independent, and a call supplies `this` as any member call does); and its
+ * type is the instantiated signature while the bare name keeps the generic one.
+ * Before this the expression evaluated to the bare function and the bindings
+ * were lost.
+ */
+function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNode.TypeArgumentsExpression, params: readonly ParseNode.TypeParameter[]): ValueEvaluator {
+  const frame = new Map<string, TypeRecord>();
+  const fnName = ((fn as unknown as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } }).ECMAScriptCode?.parent?.BindingIdentifier?.name) ?? 'the function';
+  const bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName));
+  const key = bound.map(specializationKeyOf).join('|');
+  let table = genericFunctionSpecializations.get(fn as unknown as object);
+  if (!table) {
+    table = new Map<string, Value>();
+    genericFunctionSpecializations.set(fn as unknown as object, table);
+  }
+  const existing = table.get(key);
+  if (existing) {
+    return existing;
+  }
+  // #sec-generic-where: checked once, at creation, over the class's frame (a
+  // method's clause may name its class's parameters) and this one.
+  const whereClauses = functionWhereClauses(fn as never);
+  if (whereClauses && whereClauses.length > 0) {
+    const classFrame = classTypeParameterFrame(ref);
+    if (classFrame) {
+      pushTypeParameterFrame(classFrame);
+    }
+    pushTypeParameterFrame(frame);
+    try {
+      for (const clause of whereClauses) {
+        const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+        if (!predicate) {
+          continue;
+        }
+        const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+        if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+          return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+        }
+      }
+    } finally {
+      popTypeParameterFrame();
+      if (classFrame) {
+        popTypeParameterFrame();
+      }
+    }
+  }
+  const specialized = CreateBuiltinFunction(function* SpecializedCall(args: readonly Value[], context: { thisValue?: Value }): ValueEvaluator {
+    pushTypeParameterFrame(frame);
+    try {
+      return Q(yield* Call(fn, context.thisValue ?? Value.undefined, args as Value[]));
+    } finally {
+      popTypeParameterFrame();
+    }
+  }, 0, Value(fnName), []);
+  // The instantiated signature: the declared one, its ~parameter~ records
+  // replaced by the bindings.
+  const declared = EnsureCompletion(yield* OverloadSignatureOf(fn as never));
+  if (declared.Type === 'normal') {
+    const sig = declared.Value as { Parameters: readonly unknown[], ReturnType?: TypeRecord, TypeParameters?: readonly { Name: string, Parameter?: TypeRecord }[] };
+    const bindings = new Map<TypeRecord, TypeRecord>();
+    for (const tp of sig.TypeParameters ?? []) {
+      const b = frame.get(tp.Name);
+      if (tp.Parameter && b) {
+        bindings.set(tp.Parameter, b);
+      }
+    }
+    const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters, Return: sig.ReturnType ?? null, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
+    RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));
+  }
+  table.set(key, specialized);
+  return specialized;
+}
+
 export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
+  const asCallee = evaluatingTypeArgumentsCallee;
+  evaluatingTypeArgumentsCallee = false;
   // proposal-runtime-types (README "Typed Arrays"): an ARRAY TYPE written in
   // expression position - `new [100].<uint8>()`, or `class G extends
   // [W * H].<uint8>` - denotes the type's constructor.
@@ -1928,6 +2031,19 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   // evaluated again over the application's bindings, so its heritage clause and
   // every body in it read the parameters as this application bound them, and
   // two applications with the same arguments are one specialization.
+  if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
+    // F-C: a GENERIC FUNCTION (a declaration or a method with its own type
+    // parameters) applied in expression position is its specialization value.
+    const fnDeclaration = (value as unknown as { ECMAScriptCode?: { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null } | null }).ECMAScriptCode?.parent;
+    const fnParams = fnDeclaration?.TypeParameters?.TypeParameterList;
+    // Not for a call's callee (the call binds), and not for a higher-kinded
+    // list (#sec-higher-kinded-parameters: its argument is a declaration, bound
+    // by the explicit call alone).
+    const kindedFn = fnParams?.some((q) => ((q as { Arity?: number }).Arity ?? 0) > 0) ?? false;
+    if (!asCallee && !kindedFn && fnParams && fnParams.length > 0 && !LookupClassType(value as unknown as object)) {
+      return Q(yield* SpecializeGenericFunction(value, inspected.Value, node, fnParams));
+    }
+  }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const classType = LookupClassType(value as unknown as object);
     const declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'

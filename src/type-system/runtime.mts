@@ -338,6 +338,8 @@ function typeArgumentBindingError(kind: string, applied: string, name?: string):
       return Throw.TypeError('$1 does not name a type parameter of $2', Value(name ?? ''), Value(applied));
     case 'supplied-twice':
       return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(name ?? ''), Value(applied));
+    case 'missing':
+      return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? ''), Value(applied));
     default:
       return Throw.TypeError('$1', Value(`no assignment of the type arguments of ${applied} satisfies its parameter list`));
   }
@@ -1133,7 +1135,24 @@ export function ResolveTypeName(name: JSStringValue) {
   return ResolveBinding(name, env, true);
 }
 
+/**
+ * PLAN-variadic-and-named-generic-arguments.md Phase 4 (F-C,
+ * #sec-generic-function-values): the instantiated type of a specialization
+ * value - `Reflect.typeOf(id.<uint8>)` is `(uint8) => uint8` while the bare name
+ * keeps `<T>(x: T) => T`.
+ */
+const specializedFunctionTypes = new WeakMap<object, TypeRecord>();
+export function RegisterSpecializedFunctionType(fn: object, record: TypeRecord): void {
+  specializedFunctionTypes.set(fn, record);
+}
+
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  if (value instanceof ObjectValue) {
+    const specialized = specializedFunctionTypes.get(value as unknown as object);
+    if (specialized) {
+      return specialized;
+    }
+  }
   // proposal-runtime-types #sec-span-type: a WINDOW carries the Type Record it
   // was built at, for the reason a vector does - the type is not recoverable
   // from the value.
