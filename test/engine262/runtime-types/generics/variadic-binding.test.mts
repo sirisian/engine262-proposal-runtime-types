@@ -19,12 +19,10 @@ test('an empty pack is the empty tuple (D4)', () => {
   expect(evaluated(`${V} String(new vec.<uint8, 4>().swizzle.<>());`)).toBe('0');
 });
 
-// F-R, pinned for Phase 6 (checker pack-awareness): with a tuple DEFAULT
-// declared, the checker types the pack in the body by the default rather than
-// the constraint - `I.length` becomes the literal `3` and is refused against
-// the `uint32` return ("a literal type of number is not assignable to
-// uint.<32>"). The runtime binder fills and reads the default correctly.
-test.fails('a tuple default fills an empty pack (E1, F-R)', () => {
+test('a tuple default fills an empty pack (E1; F-R closed)', () => {
+  // F-R's cause was inference running before the explicit frame was consulted
+  // and evaluating the default with the pack unbound; inference is now seeded
+  // with the already-bound frame.
   expect(evaluated('function d<...I: [].<uint32> = [0, 1, 2]>(): uint32 { return I.length; } String(d.<>());')).toBe('3');
 });
 

@@ -1,9 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
-import { isValueParameterBinding, lookupTypeParameter } from '../type-system/runtime.mts';
-
-/** Phase 4: the array a value pack reads as, one per binding record (a specialization's constant). */
-const packValueViews = new WeakMap<object, Value>();
+import { isValueParameterBinding, lookupTypeParameter, ValuePackView } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
@@ -31,7 +28,6 @@ import {
   IsPropertyKey,
   ToPropertyKey,
   getActiveScriptId,
-  CreateArrayFromList, SetIntegrityLevel,
 } from './all.mts';
 import {
   DynamicParsedCodeRecord, surroundingAgent, EnvironmentRecord, GetGlobalObject, Throw, Call,
@@ -114,21 +110,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         // specialization - the same array on every read, so `I === I` - which
         // is what makes `I.length` and `I[k]` constants a `where` can test.
         if (bound.Kind === 'tuple' && isValueParameterBinding(bound)) {
-          const cached = packValueViews.get(bound as unknown as object);
-          if (cached) {
-            return cached;
-          }
-          const values: Value[] = [];
-          for (const e of bound.Elements) {
-            if (e.Type.Kind !== 'literal') {
-              return Throw.TypeError('$1', Value('a value pack reads as an array only when every element is a value'));
-            }
-            values.push(e.Type.Value as Value);
-          }
-          const view = CreateArrayFromList(values);
-          Q(yield* SetIntegrityLevel(view, 'frozen'));
-          packValueViews.set(bound as unknown as object, view);
-          return view;
+          return Q(yield* ValuePackView(bound));
         }
         return GetTypeObject(bound);
       }

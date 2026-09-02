@@ -5137,6 +5137,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
+            // #sec-computed-constraints (F-W): `I.length` in a default or a
+            // constraint reads a type parameter's BINDING - a value pack's
+            // array - which exists per application. Statically the head is a
+            // parameter in scope and the member is unknowable, so the type is
+            // deferred (null): the binder evaluates it under the frame.
+            if (typeParameterInScope(node.TypeName.IdentifierReference.name)) {
+              return null;
+            }
             // A QUALIFIED name - `Reflect.Block`. This answered null
             // unconditionally, and a null type is treated as no constraint, so
             // every annotation naming one was silently never compared:

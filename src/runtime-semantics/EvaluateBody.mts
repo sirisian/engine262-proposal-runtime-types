@@ -70,7 +70,7 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
       && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: a generic function infers its type parameters from the call
     // arguments and evaluates its parameter and return types over those bindings.
-    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame()));
     // proposal-runtime-types #sec-generics: a parameter already bound by a
     // frame in scope - a specialization's, or the explicit arguments of
     // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a
@@ -148,7 +148,7 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
       && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: infer generic type parameters from the call arguments.
-    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList));
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame()));
     // proposal-runtime-types #sec-generics: a parameter already bound by a
     // frame in scope - a specialization's, or the explicit arguments of
     // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a

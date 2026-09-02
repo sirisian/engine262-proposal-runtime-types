@@ -1,0 +1,189 @@
+// PLAN-variadic-and-named-generic-arguments.md Appendix B (Phase 8): the
+// integrated stress programs, each combining features the A-files isolate.
+// A failure here with green A-files is a COMPOSITION bug - the likeliest kind
+// after two resolvers. What a remainder still owes is pinned as `test.fails`
+// with its finding, so a silent fix or a regression is equally loud.
+import { test, expect } from 'vitest';
+import { evaluated, expectThrown } from '../harness.mts';
+
+// ---- B.1 SIMD slice: value packs, where over class parameters, value view, specialized values, identity ----
+const VEC = `
+class vec<T, N: uint32> {
+  #lanes: [].<T>;
+  constructor(xs: [].<T>) { this.#lanes = xs; }
+  swizzle<...I: [].<uint32>>(): [].<T> where I.every((i) => i < N) && I.length > 0 {
+    const out: [].<T> = [];
+    for (let j = 0; j < I.length; j++) { out.push(this.#lanes[I[j]]); }
+    return out;
+  }
+}
+const V4 = vec.<float32, 4>;
+const v = new V4([1, 2, 3, 4]);`;
+
+test('B.1: a value pack drives a method, checked by a where over the CLASS parameter', () => {
+  expect(evaluated(`${VEC} v.swizzle.<0, 0, 0, 0>().join(",");`)).toBe('1,1,1,1');
+  expect(evaluated(`${VEC} v.swizzle.<3, 2, 1, 0>().join(",");`)).toBe('4,3,2,1');
+  expect(evaluated(`${VEC} v.swizzle.<I: 3, 2>().join(",");`)).toBe('4,3');
+  expectThrown(`${VEC} v.swizzle.<0, 4>();`, 'where');
+  expectThrown(`${VEC} v.swizzle.<>();`, 'where');
+  expectThrown(`${VEC} v.swizzle.<0, -1>();`);
+});
+
+test('B.1: spread and specialization-as-value compose - one specialization, receiver-independent', () => {
+  expect(evaluated(`${VEC} type Pair = [1, 0]; v.swizzle.<...Pair>().join(",");`)).toBe('2,1');
+  expect(evaluated(`${VEC} String(V4.prototype.swizzle.<0, 1> === v.swizzle.<0, 1>);`)).toBe('true');
+  expect(evaluated(`${VEC} String(v.swizzle.<0, 1> === v.swizzle.<...[0, 1]>);`)).toBe('true');
+  expect(evaluated(`${VEC} const s = v.swizzle.<0, 1>; s.call(v).join(",");`)).toBe('1,2');
+  expect(evaluated(`${VEC} String([v].map((x) => x.swizzle.<0, 1>()).length);`)).toBe('1');
+});
+
+test('B.1: the pack reflects with its variadic flag', () => {
+  expect(evaluated(`${VEC} const r = Reflect.getReflection(Reflect.typeOf(V4.prototype.swizzle)); String(r.signatures[0].typeParameters[0].name + ":" + r.signatures[0].typeParameters[0].variadic);`)).toBe('I:true');
+});
+
+// ---- B.2 ECS: ref-distribution, two same-bound packs, named runs, forwarding ----
+test('B.2: two same-bound adjacent type packs bind by names and positionally', () => {
+  const W = 'class Transform {} class Velocity {} class Frozen {} class World { each<...Cs extends [].<any>, ...Not extends [].<any>>(): string { return String(Reflect.getReflection(Cs).elements.length) + "/" + String(Reflect.getReflection(Not).elements.length); } }';
+  expect(evaluated(`${W} new World().each.<Cs: Transform, Not: Frozen>();`)).toBe('1/1');
+  expect(evaluated(`${W} new World().each.<Transform, Velocity>();`)).toBe('2/0');
+});
+
+// F-T, pinned: rung one THROUGH A CALLBACK'S SIGNATURE with a `ref` rest - the
+// pack must bind from the callback literal's individually-ref parameters, and
+// the ref rest's second-class rule must bind no array. Both are Phase 4/6
+// remainders (the `ref`-rest rule; callback-signature inference).
+test.fails('B.2: a pack infers from a callback with a ref rest, and a ref run forwards (F-T)', () => {
+  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x += 1; y += 1; }, ref a, ref f); String(a === 2 && f === 3);')).toBe('true');
+});
+
+// ---- B.3 Typed event bus: generic signature records end to end ----
+const BUS = 'class Click { x: uint8 = 1; } class KeyDown {} function logAny<T>(e: T): void {} function route(e: Click): string { return "click"; } function route<T>(e: T): string { return "one"; } function route<...Es>(...es: Es): string { return "many"; }';
+
+test('B.3: identity, the assignability directions, and the overload ladder compose', () => {
+  expect(evaluated(`${BUS} type Handler = <T>(e: T) => void; String(Reflect.typeOf(logAny) === Handler);`)).toBe('true');
+  expect(evaluated(`${BUS} let h: <U>(e: U) => void = logAny; "ok";`)).toBe('ok');
+  expectThrown(`${BUS} let h2: <T>(e: T) => void = (e: Click): void => {};`, 'not assignable');
+  expect(evaluated(`${BUS} let g: (e: Click) => void = logAny; g(new Click()); "ok";`)).toBe('ok');
+  expect(evaluated(`${BUS} route(new Click());`)).toBe('click');
+  expect(evaluated(`${BUS} route(new KeyDown());`)).toBe('one');
+});
+
+test('B.3: specializations as values are interned, keyed, and typed', () => {
+  expect(evaluated(`${BUS} const lc = logAny.<Click>; const m = new Map(); m.set(lc, 1); String(m.get(logAny.<Click>));`)).toBe('1');
+  expect(evaluated(`${BUS} String(Reflect.typeOf(logAny.<Click>));`)).toBe('(e: Click) => void');
+});
+
+// F-Q, pinned (pre-existing): an INSTANCE is not assignable to an interface by
+// shape when the interface declares a method - concrete or generic.
+test.fails('B.3: a class satisfies a generic interface by shape under its own parameter names (F-Q)', () => {
+  expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
+});
+
+test('B.3: the pack member of an overload set takes what the others cannot', () => {
+  expect(evaluated(`${BUS} route(new Click(), new KeyDown());`)).toBe('many');
+});
+
+// ---- B.4 Packet reader: tuple growth, the budget ----
+test('B.4: a specialization chain grows a tuple by splicing (F-S closed)', () => {
+  // `[...Ts, T]` under Ts = [uint8] interns as `[uint8, string]`: CanonicalizeType
+  // splices a rest element whose type is a tuple, and the class specialization
+  // keys on the canonical record. (`Reader.<…>` in expression position is the
+  // specialized CONSTRUCTOR; the type is `type Reader.<…>`.)
+  expect(evaluated('class Reader<Ts extends [].<any> = []> { read<T>(): Reader.<[...Ts, T]> { return new Reader.<[...Ts, T]>(); } } const r = new Reader().read.<uint8>().read.<string>(); String(r instanceof Reader.<[uint8, string]> && Reflect.typeOf(r) === type Reader.<[uint8, string]>);')).toBe('true');
+  expect(evaluated('type A = [...[uint8, string], boolean]; String(A === type [uint8, string, boolean]);')).toBe('true');
+});
+
+test('B.4: polymorphic recursion is stopped by the budget, not the stack (F-V closed)', () => {
+  // Nested specialized calls each push a frame; past the depth limit the
+  // application is refused with a diagnostic naming the budget - before this
+  // the host's stack died and took the test worker with it.
+  expectThrown('function grow<...Ts>(...xs: Ts): uint32 { return grow.<...Ts, uint8>(...xs, 0); } grow();', 'budget');
+});
+
+// ---- B.5 The binder kitchen sink: every argument form against one declaration ----
+const STRESS = 'function stress<T = float64, ...I: [].<uint32>, N: uint32, ...S: [].<string>, M: uint32 = 3>(): string where I.every((i) => i < N) { return String(I.length) + "/" + String(N) + "/" + String(S.length) + "/" + String(M); }';
+
+test('B.5: positional, named, named-run, spread, and default forms bind one declaration', () => {
+  expect(evaluated(`${STRESS} stress.<uint8, 0, 1, 2, N: 4, S: "a", "b">();`)).toBe('3/4/2/3');
+  expect(evaluated(`${STRESS} stress.<0, 1, 2>();`)).toBe('1/2/0/3');           // T takes the literal type 0; I=[1]; N=2
+  expect(evaluated(`${STRESS} stress.<T: uint8, N: 2, I: 0, 1, M: 5>();`)).toBe('2/2/0/5');
+  expect(evaluated(`${STRESS} stress.<...[uint8, 0, 1], N: 4>();`)).toBe('2/4/0/3');
+  expect(evaluated(`${STRESS} stress.<N: 4>();`)).toBe('0/4/0/3');
+  expect(evaluated(`${STRESS} stress.<uint8, 0, 1, N: 2, S: "x">();`)).toBe('2/2/1/3');
+});
+
+test('B.5: the refusals, each by its own rule', () => {
+  expectThrown(`${STRESS} stress.<uint8, 0, 1, "x", 3>();`);                        // the type-blind split hands 'x' to N; step 8 refuses
+  expectThrown(`${STRESS} stress.<T: uint8, N: 1, I: 0, 1>();`, 'where');
+  expectThrown(`${STRESS} stress.<>();`, 'has no argument and no default');
+  expectThrown(`${STRESS} stress.<uint8, I: 0, N: 4, 1>();`, 'positional');
+  expectThrown(`${STRESS} stress.<uint8, N: 4, N: 5>();`, 'supplied twice');
+  expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); } u([1]);`);   // a spread operand that is no type; the checker's static E6 is F-AA below
+});
+
+test('B.5: identity is the ordered bindings, never the spelling', () => {
+  expect(evaluated(`${STRESS} String(stress.<uint8, N: 4> === stress.<T: uint8, N: 4, M: 3>);`)).toBe('true');
+  expect(evaluated(`${STRESS} String(stress.<uint8, N: 4> !== stress.<uint8, N: 5>);`)).toBe('true');
+});
+
+// F-AA, pinned: E6 is a STATIC refusal - the checker must report a spread type
+// argument whose operand is not a tuple or stated-extent array without the
+// program running it; today the checker's binder answers silently and only the
+// runtime refuses.
+test.fails('B.5: a spread of a non-tuple is refused statically (F-AA)', () => {
+  expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); }`);
+});
+
+test('B.5: a default reads an earlier pack - class form (F-W, runtime half closed)', () => {
+  // `M: uint32 = I.length`: the qualified name's head is a VALUE parameter and
+  // reads as its value - the pack's frozen array - under the binder's frame.
+  expect(evaluated('class C<...I: [].<uint32>, M: uint32 = I.length> { m(): uint32 { return M; } } String(new C.<0, 1, 2>().m());')).toBe('3');
+  expect(evaluated('function d<...I: [].<uint32>, N: uint32>(): uint32 where I.length < 5 { return N; } String(d.<0, 1, N: 5>());')).toBe('5');
+});
+
+test('B.5: a default reads an earlier pack - function form (F-W closed)', () => {
+  // The root cause was in inference, not the checker: at every generic call
+  // InferGenericBindings ran BEFORE the explicit frame was consulted, bound
+  // `N`/`I` to `any`, and evaluated `M = N.foo` / `I.length` against a Type
+  // Object. Inference is now seeded with the already-bound frame.
+  expect(evaluated('function d<...I: [].<uint32>, M: uint32 = I.length>(): uint32 { return M; } String(d.<0, 1, 2>());')).toBe('3');
+  expect(evaluated('function d<N: uint32, M: uint32 = N>(): uint32 { return M; } String(d.<4>());')).toBe('4');
+});
+
+// ---- B.6 The inference ladder, one function per rung ----
+test('B.6: rung one - direct, recursive, and through explicit arguments', () => {
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } String(tup(1, "a"));')).toBe('2');
+  expect(evaluated('function pairUp<T, ...Rest>(p: [T, ...Rest]): uint32 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
+  expect(evaluated('function lit<...K: [].<string>>(...ks: K): string { return K[1]; } lit("a", "b");')).toBe('b');
+});
+
+// F-X, pinned: rung two - a pack that appears only inside a builder with a
+// CLOSED constraint is bound by trialling the constraint's inhabitants.
+test.fails('B.6: rung two - trial over a closed constraint (F-X)', () => {
+  expect(evaluated('type maskOf(Bs: type): type { const es = Reflect.getReflection(Bs).elements; return Reflect.makeType({ kind: "literal", value: (es[0].type === true ? 2 : 0) + (es[1].type === true ? 1 : 0) }); } function withFlags<...Bs extends [2].<boolean1>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(2 := uint8));')).toBe('2');
+});
+
+// F-Y, pinned: rung three - a builder between the pack and the arguments binds
+// only through its declared inverse, and the refusal NAMES the builder.
+test.fails('B.6: rung three - a declared inverse binds a pack, and its absence names the builder (F-Y)', () => {
+  expectThrown('type wrapOf(Ts: type): type { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf');
+});
+
+// F-Z, pinned: a spread of a DYNAMIC array cannot bind a pack - the call must
+// refuse statically (E6's inference twin), not bind from the values it finds.
+test.fails('B.6: a pack refuses to bind from a spread of unknown length (F-Z)', () => {
+  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const dyn: [].<uint32> = [0, 1]; tup(...dyn);', 'length');
+});
+
+// ---- B.7 Reflection, library names, generic-typed slots ----
+test('B.7: named arguments on user and library generics nest, and a generic slot forwards inference', () => {
+  expect(evaluated('type Grid<T = float64, Rows: uint32 = 4, Cols: uint32 = 4> = [].<T>; let g: Grid.<Cols: 8> = []; "ok";')).toBe('ok');
+  expect(evaluated("let m: Map.<V: uint8, K: string> = new Map(); m.set('k', 1); String(m.get('k'));")).toBe('1');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } let forward: <...Us>(...xs: Us) => uint32 = tup; String(forward(1, "a"));')).toBe('2');
+});
+
+test('B.7: the declaration reflects its whole parameter list', () => {
+  expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; tps.map((t) => t.name).join(",");`)).toBe('T,I,N,S,M');
+  expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; String(tps[1].variadic && tps[3].variadic && !tps[2].variadic);`)).toBe('true');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } type TupT = <...Us>(...xs: Us) => uint32; String(Reflect.typeOf(tup) === TupT);')).toBe('true');
+});

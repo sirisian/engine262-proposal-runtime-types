@@ -1805,6 +1805,12 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
       }
       record = { ...record, Value: converted.Value as Value } as never;
     }
+    // Canonical BEFORE it binds: the frame's record and the stored argument
+    // must be one object, since a frame later derived from the instance's
+    // [[Arguments]] (a method's `where` over the class's parameters) reads the
+    // value-parameter mark off that very record. A literal is rebuilt by
+    // CanonicalizeType, so canonicalizing after binding split them (F-S).
+    record = CanonicalizeType(record);
     if (name) {
       bindTypeParameter(frame, name, record, param);
     }

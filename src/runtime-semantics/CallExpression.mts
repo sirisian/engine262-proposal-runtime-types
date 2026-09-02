@@ -1,7 +1,7 @@
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
-import { functionTypeParameters, functionWhereClauses } from '../abstract-ops/runtime-types.mts';
+import { functionTypeParameters, functionWhereClauses, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
 import { vectorConstantLane } from '../type-system/vector-ops.mts';
 import { VectorValue } from '../value.mts';
 import { Throw } from '../host-defined/error-messages.mts';
@@ -10,6 +10,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
+import { IsAssignable } from '../type-system/relations.mts';
+import { displayType } from '../type-system/records.mts';
 import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee } from './RuntimeTypesDeclarations.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
@@ -123,27 +125,10 @@ function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: O
  * pushing an empty one would only cost a pop.
  */
 export function classTypeParameterFrame(ref: unknown): Map<string, TypeRecord> | null {
+  // Phase 8: an instance's run-time type, or a prototype's constructor - one
+  // derivation for both, shared with the method-typing site.
   const base = (ref as { Base?: Value } | undefined)?.Base;
-  if (!base || typeof base !== 'object') {
-    return null;
-  }
-  const record = RuntimeTypeOf(base as Value) as unknown as {
-    Arguments?: readonly TypeRecord[],
-    Declaration?: { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] } },
-  };
-  const args = record?.Arguments;
-  const params = record?.Declaration?.TypeParameters?.TypeParameterList;
-  if (!args || !params || args.length === 0 || params.length === 0) {
-    return null;
-  }
-  const frame = new Map<string, TypeRecord>();
-  for (let i = 0; i < params.length && i < args.length; i += 1) {
-    const name = params[i]?.BindingIdentifier?.name;
-    if (typeof name === 'string' && args[i]) {
-      frame.set(name, args[i]!);
-    }
-  }
-  return frame.size === 0 ? null : frame;
+  return classFrameOfObject(base);
 }
 
 export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpression): ValueEvaluator {
@@ -1195,6 +1180,22 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
             return converted as never;
           }
           record = { ...record, Value: converted.Value as Value } as never;
+        } else if (record.Kind !== 'literal' && p.TypeParameterConstraint) {
+          // #sec-computed-constraints step 8 for a NON-literal explicit argument:
+          // `f<T: string>` applied `f.<number>` was caught only because inference
+          // re-checked the call's ARGUMENT against T; the explicit site is where
+          // the constraint belongs (F-W's root fix made inference honour the
+          // explicit binding, which removed that accidental check).
+          pushTypeParameterFrame(frame);
+          let declaredForType;
+          try {
+            declaredForType = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
+          } finally {
+            popTypeParameterFrame();
+          }
+          if (!IsAssignable(record, declaredForType)) {
+            return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(declaredForType)));
+          }
         }
         if (p.BindingIdentifier?.name) {
           bindTypeParameter(frame, p.BindingIdentifier.name, record, p);

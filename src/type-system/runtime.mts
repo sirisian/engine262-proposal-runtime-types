@@ -19,7 +19,7 @@ import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mt
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
-import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate } from '../abstract-ops/all.mts';
+import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
@@ -102,6 +102,26 @@ export function currentContextualType(): TypeRecord | undefined {
  * parameter types, body, and return type over its inferred bindings). Mirrors the
  * frame InstantiateGenericAlias pushes for an alias body.
  */
+/** The nesting depth of type-parameter frames: the specialization depth a body is running at. */
+export function typeParameterFrameDepth(): number {
+  return typeParameterFrames.length;
+}
+
+/**
+ * PLAN-variadic-and-named-generic-arguments.md Phase 8 (F-V, #sec-evaluation-budget):
+ * a declaration that specializes ITSELF without end - `grow.<...Ts, uint8>`
+ * inside `grow` - must be stopped by the budget with a diagnostic, never by the
+ * host's stack. Nested specialized calls each push a frame, so the frame depth
+ * is the specialization depth; beyond this limit the application is refused.
+ */
+const SPECIALIZATION_DEPTH_LIMIT = 200;
+export function specializationDepthExhausted(): ThrowCompletion | null {
+  if (typeParameterFrames.length > SPECIALIZATION_DEPTH_LIMIT) {
+    return Throw.TypeError('$1', Value('the evaluation budget is exhausted: a declaration specializes itself without end'));
+  }
+  return null;
+}
+
 export function pushTypeParameterFrame(frame: Map<string, TypeRecord>): void {
   typeParameterFrames.push(frame);
 }
@@ -234,6 +254,33 @@ export function bindTypeParameter(
 }
 
 /** Whether _record_ is a value parameter's binding. */
+/** Phase 4: the array a value pack reads as, one per binding record (a specialization's constant). */
+const packValueViews = new WeakMap<object, Value>();
+
+/**
+ * #sec-variadic-parameters: a VALUE pack reads as a frozen fixed-extent array of
+ * its literal elements' values, the same array on every read of one
+ * specialization. Shared by GetValue (a body's `I`) and by the qualified type
+ * name path (`I.length` in a computed default or constraint, F-W).
+ */
+export function* ValuePackView(bound: TypeRecord): ValueEvaluator {
+  const cached = packValueViews.get(bound as unknown as object);
+  if (cached) {
+    return cached;
+  }
+  const values: Value[] = [];
+  for (const e of (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements) {
+    if (e.Type.Kind !== 'literal') {
+      return Throw.TypeError('$1', Value('a value pack reads as an array only when every element is a value'));
+    }
+    values.push(e.Type.Value as Value);
+  }
+  const view = CreateArrayFromList(values);
+  Q(yield* SetIntegrityLevel(view, 'frozen'));
+  packValueViews.set(bound as unknown as object, view);
+  return view;
+}
+
 export function isValueParameterBinding(record: TypeRecord): boolean {
   return valueParameterBindings.has(record as unknown as object);
 }
@@ -365,6 +412,10 @@ export function* BindTypeArgumentsInto(
   frame: Map<string, TypeRecord>,
   applied: string,
 ): PlainEvaluator<TypeRecord[]> {
+  const exhausted = specializationDepthExhausted();
+  if (exhausted) {
+    return exhausted;
+  }
   type Entry = { record: TypeRecord, name: string | undefined };
   const entries: Entry[] = [];
   for (const a of argNodes) {
@@ -478,8 +529,14 @@ export function* BindTypeArgumentsInto(
           return converted as never;
         }
         record = { ...record, Value: converted.Value as Value } as TypeRecord;
+      } else if (constraint && !IsAssignable(record, constraint)) {
+        // A non-literal explicit argument is checked against the constraint here (step 8).
+        return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
       }
     }
+    // Canonical before it binds or keys anything: a spliced tuple, `[...Ts, T]`,
+    // must key the same specialization as the tuple it spells (F-S).
+    record = CanonicalizeType(record);
     if (name) {
       bindTypeParameter(frame, name, record, q);
     }
@@ -918,6 +975,7 @@ export function* InferGenericBindings(
   typeParameters: readonly ParseNode.TypeParameter[],
   formals: readonly ParseNode[],
   args: readonly Value[],
+  preBound?: ReadonlyMap<string, TypeRecord>,
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = new Map<string, TypeRecord>();
   // Index the formal parameters: the ordinary ones by position, and the rest
@@ -940,6 +998,17 @@ export function* InferGenericBindings(
   try {
     for (const tp of typeParameters) {
       const paramName = tp.BindingIdentifier.name;
+      // PLAN-variadic-and-named-generic-arguments.md F-W: a parameter ALREADY
+      // BOUND - by the explicit arguments of `d.<4, 1>()`, or a specialization's
+      // frame - keeps that binding, and the parameters after it evaluate their
+      // computed constraints and defaults OVER it. Inferring here first, with
+      // `N` falling back to `any`, evaluated `M: uint32 = N.foo` against a Type
+      // Object and refused every call of such a declaration.
+      const pre = preBound?.get(paramName);
+      if (pre) {
+        frame.set(paramName, pre);
+        continue;
+      }
       // Evaluate the constraint over the bindings so far (computed constraints may
       // read earlier parameters, which are already in `frame`).
       let constraint: TypeRecord | null = null;
@@ -3096,8 +3165,20 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // reachable case today is an enum member, whose type is the literal
         // type of that member's value.
         const baseName = node.TypeName.IdentifierReference.name;
-        const baseRef = Q(yield* ResolveTypeName(Value(baseName)));
-        let base = Q(yield* GetValue(baseRef));
+        // #sec-computed-constraints (F-W): a head that is a VALUE parameter
+        // reads as its value - the literal, or a pack's array - so `I.length`
+        // in a default or a constraint is the pack's length. ResolveTypeName
+        // answered with the Type Object, whose `length` is nothing.
+        const boundHead = lookupTypeParameter(baseName);
+        let base: Value;
+        if (boundHead && isValueParameterBinding(boundHead) && boundHead.Kind === 'literal') {
+          base = boundHead.Value as Value;
+        } else if (boundHead && isValueParameterBinding(boundHead) && boundHead.Kind === 'tuple') {
+          base = Q(yield* ValuePackView(boundHead));
+        } else {
+          const baseRef = Q(yield* ResolveTypeName(Value(baseName)));
+          base = Q(yield* GetValue(baseRef));
+        }
         for (const part of node.TypeName.MemberNames) {
           if (!(base instanceof ObjectValue)) {
             return Throw.TypeError('$1 is not a type', Value(`${baseName}.${part.name}`));

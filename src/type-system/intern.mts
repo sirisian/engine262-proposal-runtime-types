@@ -141,7 +141,23 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   }
 
   if (t.Kind === 'tuple') {
-    return { Kind: 'tuple', Elements: t.Elements.map((e) => ({ Type: CanonicalizeType(e.Type, copies), Rest: e.Rest, Initial: e.Initial })) };
+    // #sec-canonicalizetype (F-S, spec.emu item 7): a REST element whose type
+    // is itself a tuple is that tuple's elements in place - `[...[uint8,
+    // string], T]` is `[uint8, string, T]` - which is what lets a spread of a
+    // bound variadic parameter, `[...Ts, T]`, intern as the tuple it spells
+    // rather than as a tuple holding a tuple.
+    const Elements: { Type: TypeRecord, Rest: boolean, Initial: typeof t.Elements[number]['Initial'] }[] = [];
+    for (const e of t.Elements) {
+      const c = CanonicalizeType(e.Type, copies);
+      if (e.Rest && c.Kind === 'tuple') {
+        for (const n of c.Elements) {
+          Elements.push({ Type: n.Type, Rest: n.Rest, Initial: n.Initial });
+        }
+      } else {
+        Elements.push({ Type: c, Rest: e.Rest, Initial: e.Initial });
+      }
+    }
+    return { Kind: 'tuple', Elements };
   }
   if (t.Kind === 'application') {
     // PLAN-where-on-methods.md, unblocking D1, step 4. #sec-canonicalizetype:

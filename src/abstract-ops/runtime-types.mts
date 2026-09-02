@@ -3253,6 +3253,53 @@ export function functionWhereClauses(fn: AnnotatedFunction): readonly ParseNode[
   return list && list.length > 0 ? list : null;
 }
 
+/**
+ * PLAN-variadic-and-named-generic-arguments.md Phase 8 (B.1 composition): the
+ * frame of a specialized class's bindings, derived from an object that is an
+ * INSTANCE (its run-time type is the nominal record with [[Arguments]]) or a
+ * PROTOTYPE (its own `constructor` is the specialized class). A method's
+ * `where`, a method's annotations, and a call through `V4.prototype.m.<…>`
+ * all need it; `RuntimeTypeOf` alone answered only for instances.
+ */
+export function classFrameOfObject(obj: unknown): Map<string, TypeRecord> | null {
+  if (!obj || typeof obj !== 'object') {
+    return null;
+  }
+  const fromRecord = (record: unknown): Map<string, TypeRecord> | null => {
+    const r = record as { Kind?: string, Arguments?: readonly TypeRecord[], Declaration?: { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] } } } | null | undefined;
+    const args = r?.Arguments;
+    const params = r?.Declaration?.TypeParameters?.TypeParameterList;
+    if (r?.Kind !== 'nominal' || !args || !params || args.length === 0 || params.length === 0) {
+      return null;
+    }
+    const frame = new Map<string, TypeRecord>();
+    for (let i = 0; i < params.length && i < args.length; i += 1) {
+      const name = params[i]?.BindingIdentifier?.name;
+      if (typeof name === 'string' && args[i]) {
+        frame.set(name, args[i]!);
+      }
+    }
+    return frame.size === 0 ? null : frame;
+  };
+  const asInstance = fromRecord(RuntimeTypeOf(obj as Value));
+  if (asInstance) {
+    return asInstance;
+  }
+  const ctor = (obj as { properties?: Map<unknown, { Value?: unknown }> }).properties?.get?.('constructor')?.Value;
+  if (ctor && typeof ctor === 'object') {
+    const classType = LookupClassType(ctor as object);
+    const record = classType && (classType as { TypeRecord?: unknown }).TypeRecord;
+    return fromRecord(record);
+  }
+  return null;
+}
+
+/** The class frame a METHOD's body and annotations read: derived from its [[HomeObject]]. */
+export function classFrameOfMethod(fn: unknown): Map<string, TypeRecord> | null {
+  const home = (fn as { HomeObject?: unknown }).HomeObject;
+  return home ? classFrameOfObject(home) : null;
+}
+
 export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
   const code = fn.ECMAScriptCode as { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } } | null | undefined;
   const list = code?.parent?.TypeParameters?.TypeParameterList;
@@ -3265,7 +3312,7 @@ export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNod
  * call arguments. A non-generic function returns null; the caller then does not
  * push a frame.
  */
-export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[]): PlainEvaluator<Map<string, TypeRecord> | null> {
+export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[], preBound?: ReadonlyMap<string, TypeRecord>): PlainEvaluator<Map<string, TypeRecord> | null> {
   const typeParameters = functionTypeParameters(fn);
   if (!typeParameters) {
     // proposal-runtime-types: a METHOD of a generic class has no type
@@ -3294,7 +3341,7 @@ export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly 
     return null;
   }
   const formals = (fn.FormalParameters as readonly ParseNode[] | undefined) ?? [];
-  return Q(yield* InferGenericBindings(typeParameters, formals, args.map((a) => a ?? Value.undefined)));
+  return Q(yield* InferGenericBindings(typeParameters, formals, args.map((a) => a ?? Value.undefined), preBound));
 }
 
 /** Converts each annotated parameter's bound value in place at entry. */
@@ -3751,6 +3798,12 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   // call that selects it binds them from the arguments as any generic call does.
   const genericDeclaration = (((fn as { ECMAScriptCode?: { parent?: unknown } | null }).ECMAScriptCode?.parent) ?? null) as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null;
   const genericTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList;
+  // A METHOD's annotations may name its CLASS's parameters (`[].<T>` on a
+  // method of `vec<T, N>`); they resolve under the specialized class's frame.
+  const methodClassFrame = resolveAnnotations ? classFrameOfMethod(fn) : null;
+  if (methodClassFrame) {
+    pushTypeParameterFrame(methodClassFrame);
+  }
   let genericFrame: Map<string, TypeRecord> | null = null;
   if (resolveAnnotations && genericTypeParameters && genericTypeParameters.length > 0) {
     genericFrame = new Map<string, TypeRecord>();
@@ -3815,6 +3868,9 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   };
   } finally {
     if (genericFrame) {
+      popTypeParameterFrame();
+    }
+    if (methodClassFrame) {
       popTypeParameterFrame();
     }
   }
