@@ -17,7 +17,7 @@ import {
 import { SoAColumnsOf } from './layout.mts';
 
 import { badKindedArgument, restElementType, parameterTypeRecord } from './records.mts';
-import { libraryTypeParameterNames as libraryTypeParameterNamesShared, orderTypeArguments as orderTypeArgumentsShared, typeArgumentNameOf as typeArgumentNameOfShared } from './type-argument-order.mts';
+import { libraryTypeParameterNames as libraryTypeParameterNamesShared, orderTypeArguments as orderTypeArgumentsShared, typeArgumentNameOf as typeArgumentNameOfShared, assignTypeArguments as assignTypeArgumentsShared } from './type-argument-order.mts';
 import { voidType as voidTypeRecord } from './records.mts';
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
@@ -1105,6 +1105,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         TypeParameterList?: readonly {
           BindingIdentifier?: { name?: string },
           TypeParameterConstraint?: ParseNode.Type | null,
+          IsVariadic?: boolean,
         }[],
       },
     } | null | undefined)?.TypeParameters?.TypeParameterList;
@@ -1121,6 +1122,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       scope.set(name, null);
       if (tp.TypeParameterConstraint) {
         scope.set(name, resolveType(tp.TypeParameterConstraint));
+      } else if (tp.IsVariadic) {
+        // #sec-variadic-parameters (Phase 6): a bare `...Ts` binds a tuple by
+        // construction, so its effective constraint is `[].<any>` - a pack of
+        // anything - which is what lets `...xs: Ts` pass the rest-annotation
+        // rule that rightly refuses a scalar `T` with no constraint.
+        scope.set(name, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known);
       }
     }
     return true;
@@ -2643,7 +2650,88 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     };
-    parameters.forEach((p, i) => match(p.Type ?? null, argumentTypes[i] ?? null));
+    for (let i = 0; i < parameters.length; i += 1) {
+      const p = parameters[i]!;
+      const pt = p.Type ?? null;
+      if ((p as { Rest?: boolean }).Rest === true && pt) {
+        // PLAN-variadic-and-named-generic-arguments.md Phase 6, rung one
+        // (#sec-variadic-parameters): a REST parameter annotated with a type
+        // parameter, `...xs: Ts`, binds it to the TUPLE of the trailing
+        // arguments' types - the rule the runtime binder already applies - and
+        // one annotated with an array binds through its element against each
+        // trailing argument. Zipping the rest with the one argument at its
+        // index bound `Ts` to the first argument's type and refused the second.
+        const trailing = argumentTypes.slice(i);
+        if (pt.Kind === 'parameter') {
+          const name = (pt as { Name: string }).Name;
+          if (names.has(name) && !into.has(name) && trailing.every((a) => a !== null)) {
+            into.set(name, {
+              Kind: 'tuple',
+              Elements: trailing.map((a) => ({ Type: widen(a!) as TypeRecord, Rest: false, Initial: 'none' })),
+            } as unknown as TypeRecord);
+          }
+        } else if (pt.Kind === 'array') {
+          for (const a of trailing) {
+            match((pt as { Element: TypeRecord }).Element, a ?? null);
+          }
+        } else {
+          match(pt, argumentTypes[i] ?? null);
+        }
+        break;
+      }
+      match(pt, argumentTypes[i] ?? null);
+    }
+  };
+
+  /**
+   * PLAN-variadic-and-named-generic-arguments.md Phase 6: binds a call's
+   * EXPLICIT type arguments into `into` by the shared assignment - names, a
+   * named pack's run, spreads spliced first, and a variadic parameter bound to
+   * the tuple of its run - so the checker's reading of `count.<uint8, string>`
+   * is the runtime binder's. A list the assignment refuses binds nothing; the
+   * call's evaluation raises the diagnostic. (The split runs by arity alone
+   * here; a second pack needs the element bounds, Phase 6's remainder.)
+   */
+  const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>): void => {
+    type Entry = { node: ParseNode | null, record: TypeRecord | null, name: string | undefined };
+    const entries: Entry[] = [];
+    for (const a of argNodes) {
+      if ((a as { IsSpread?: boolean }).IsSpread) {
+        const t = resolveType(a as ParseNode.Type);
+        if (!t || t.Kind !== 'tuple') {
+          return;
+        }
+        for (const e of (t as { Elements: readonly { Type: TypeRecord }[] }).Elements) {
+          entries.push({ node: null, record: e.Type, name: undefined });
+        }
+      } else {
+        entries.push({ node: a, record: null, name: typeArgumentNameOfShared(a) });
+      }
+    }
+    const assigned = assignTypeArgumentsShared(
+      typeParams.map((t) => ({ Name: t.Name, Variadic: t.Variadic, HasDefault: t.DefaultNode !== null })),
+      entries,
+      entries.map((e) => e.name),
+      () => true,
+    );
+    if (!assigned.ok) {
+      return;
+    }
+    typeParams.forEach((tp, k) => {
+      const run = assigned.runs[k]!;
+      const resolvedRun = run.map((e) => e.record ?? resolveType(e.node as ParseNode.Type));
+      if (resolvedRun.some((r) => !r)) {
+        return;
+      }
+      if (tp.Variadic) {
+        into.set(tp.Name, {
+          Kind: 'tuple',
+          Elements: resolvedRun.map((r) => ({ Type: r as TypeRecord, Rest: false, Initial: 'none' })),
+        } as unknown as TypeRecord);
+      } else if (resolvedRun.length > 0) {
+        into.set(tp.Name, resolvedRun[0] as TypeRecord);
+      }
+    });
   };
 
   const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
@@ -5688,7 +5776,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const tp of fnTypeParameters) {
             const tpName = tp.BindingIdentifier?.name;
             if (tpName) {
-              fnScope.set(tpName, tp.TypeParameterConstraint ? resolveType(tp.TypeParameterConstraint) : null);
+              fnScope.set(tpName, tp.TypeParameterConstraint
+                ? resolveType(tp.TypeParameterConstraint)
+                : (tp.IsVariadic ? ({ Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known) : null));
             }
           }
         }
@@ -6793,23 +6883,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // explicit arguments are ordered by name before they bind. A
               // list the ordering refuses binds NOTHING here - the runtime
               // raises the diagnostic - rather than binding the wrong thing.
-              const rawExplicit = argNodes ?? [];
-              const rawExplicitNames = rawExplicit.map((a) => typeArgumentNameOfShared(a));
-              let orderedExplicit: readonly (ParseNode | undefined)[] = rawExplicit;
-              if (rawExplicitNames.some((n) => n !== undefined)) {
-                const order = orderTypeArgumentsShared(only.TypeParameters!.map((t) => t.Name), rawExplicit, rawExplicitNames);
-                orderedExplicit = order.ok ? order.ordered : [];
-              }
-              orderedExplicit.forEach((argNode, i) => {
-                if (argNode === undefined) {
-                  return;
-                }
-                const name = only.TypeParameters![i]?.Name;
-                const bound = resolveType(argNode as ParseNode.Type);
-                if (name && bound) {
-                  bindings.set(name, bound);
-                }
-              });
+              bindExplicitTypeArguments(only.TypeParameters!, argNodes ?? [], bindings);
               if (bindings.size === 0) {
                 // No explicit arguments: read them from what was passed.
                 const passed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])
@@ -12963,16 +13037,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   // its arguments under the wrong binding. A list the ordering
                   // refuses binds nothing here; the call's evaluation raises
                   // the diagnostic.
-                  const explicitNames = argNodes.map((a) => typeArgumentNameOfShared(a));
-                  const order = orderTypeArgumentsShared(generic.map((t) => t.Name), argNodes, explicitNames);
-                  const orderedExplicitNodes = order.ok ? order.ordered : [];
-                  generic.forEach((tp, k) => {
-                    const nodeK = orderedExplicitNodes[k];
-                    const bound = nodeK ? resolveType(nodeK as ParseNode.Type) : null;
-                    if (tp.Name && bound) {
-                      bindings.set(tp.Name, bound);
-                    }
-                  });
+                  bindExplicitTypeArguments(generic, argNodes, bindings);
                 } else {
                   // INFERRED arguments bind the parameters too, and only the
                   // explicit ones did. So `g(a, (v) => …)` for
@@ -13000,6 +13065,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
                 if (bindings.size > 0) {
                   param = substituteTypeParameters(param, bindings) as TypeRecord;
+                if (slot?.Rest && param && param.Kind === 'tuple') {
+                  // Phase 6: a rest bound to a TUPLE checks each argument
+                  // against the element at its position in the run, not the
+                  // whole tuple; `restElementType` above ran before the
+                  // substitution and saw only the parameter.
+                  const restStart = counts ? counts.slice(0, slotIndex).reduce((acc, n) => acc + n, 0) : slotIndex;
+                  const elementAt = (param as { Elements: readonly { Type: TypeRecord }[] }).Elements[i - restStart];
+                  param = elementAt ? elementAt.Type : restElementType(param as TypeRecord) as Known;
+                }
                 }
               }
               // A FUNCTION LITERAL in a position whose type is a function type
