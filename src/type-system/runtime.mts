@@ -27,7 +27,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
-import type { ParameterRecord, TypeRecord } from './records.mts';
+import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
 import { orderKey, typeParameterRecordsOf } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
@@ -3591,6 +3591,30 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return { Kind: 'literal', Value: Value(raw as never), Base: literalBase(node.kind) };
     }
     case 'ObjectType': {
+      // proposal-runtime-types #sec-object-types: an object type whose members
+      // are all CALL SIGNATURES denotes the function type they form, so
+      // `{ (uint32): uint32 }` is `(uint32) => uint32` in braces and the braces
+      // buy the overloaded and generic forms the arrow cannot spell. Mixing
+      // call signatures with named members is refused: a callable value has a
+      // function type and a keyed value an object type, and the design writes
+      // no shape that is both.
+      const callSignatures = node.TypeMemberList.filter((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null) as ParseNode.TypeMember[];
+      if (callSignatures.length > 0) {
+        if (callSignatures.length !== node.TypeMemberList.length) {
+          return Throw.TypeError('$1', Value('call signatures do not mix with named members in one object type'));
+        }
+        const Signatures: SignatureRecord[] = [];
+        for (const m of callSignatures) {
+          const sig = m.MethodSignature!;
+          const built = Q(yield* functionRecordFromSignature(
+            sig.FunctionTypeParameterList,
+            sig.TypeAnnotation,
+            sig.TypeParameters?.TypeParameterList,
+          ));
+          Signatures.push(...(built as { Signatures: SignatureRecord[] }).Signatures);
+        }
+        return CanonicalizeType({ Kind: 'function', Signatures } as TypeRecord);
+      }
       const Properties = [];
       const IndexSignatures = [];
       for (const member of node.TypeMemberList) {
@@ -3701,7 +3725,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return { Kind: 'object', Properties, IndexSignatures };
     }
     case 'FunctionType':
-      return Q(yield* functionRecordFromSignature(node.FunctionTypeParameterList, { Type: node.ReturnType } as ParseNode.TypeAnnotation));
+      // #sec-function-types: a generic function type's own parameters are in
+      // scope for its parameter and return types (F-F).
+      return Q(yield* functionRecordFromSignature(
+        node.FunctionTypeParameterList,
+        { Type: node.ReturnType } as ParseNode.TypeAnnotation,
+        (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList,
+      ));
     case 'ReferenceType': {
       // proposal-runtime-types (references extension; spec ~reference~ kind): a
       // `ref T` type is a reference to a storage location holding a T. Its Type

@@ -453,6 +453,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         continue;
       }
       const m = member as unknown as { PropertyName?: ParseNode & { name?: string, value?: string }, Readonly?: boolean, Optional?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null, MethodSignature?: unknown };
+      // #sec-object-types admits a CALL SIGNATURE (a member with no name); an
+      // interface made of them denotes a function type, which the interface
+      // record here (an object structure) cannot yet hold. Refused loudly
+      // rather than bound to a nameless key - Phase 5 gives interfaces the
+      // function-typed reading with generic-signature satisfaction.
+      if (m.PropertyName === null && m.MethodSignature) {
+        return Throw.TypeError('$1', Value('a call signature in an interface is not supported yet; write the function type, or an object type of call signatures'));
+      }
       // A SYMBOL-KEYED member is written `[k]: T`, a COMPUTED property name -
       // an index signature needs an identifier and a `:` inside the brackets,
       // so the two forms do not collide. Its key has to be EVALUATED, and this

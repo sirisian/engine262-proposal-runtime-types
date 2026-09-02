@@ -231,9 +231,8 @@ export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord
  * (PLAN-variadic-and-named-generic-arguments.md 2.11): one declared type
  * parameter of a generic signature or declaration. [[Kind]] distinguishes a
  * VALUE parameter (`V: uint32`, the node's IsValueParameter, F166) from a type
- * parameter. [[Variadic]] is the pack marker - always false until the pack
- * grammar lands, carried now so identity, subtyping, and reflection read one
- * shape from the start. The constraint and the default stay as Parse Nodes
+ * parameter. [[Variadic]] is the pack marker, the node's IsVariadic (declared
+ * with `...`), so identity, subtyping, and reflection read one shape. The constraint and the default stay as Parse Nodes
  * rather than Type Records because both evaluate PER APPLICATION, under the
  * frame of the bindings before them (#sec-computed-constraints); a record that
  * evaluated them once would freeze `V: T = 0` at whatever `T` meant first.
@@ -259,7 +258,7 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
   return list.map((tp) => ({
     Name: tp.BindingIdentifier?.name ?? '',
     Kind: tp.IsValueParameter ? 'value' as const : 'type' as const,
-    Variadic: false,
+    Variadic: (tp as unknown as { IsVariadic?: boolean }).IsVariadic === true,
     Variance: tp.Variance ?? 'invariant' as const,
     Arity: tp.Arity ?? 0,
     ConstraintNode: tp.TypeParameterConstraint ?? null,

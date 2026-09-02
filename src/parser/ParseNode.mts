@@ -3298,7 +3298,12 @@ export namespace ParseNode {
   // TypeMember : PropertyName `?`? TypeAnnotation Initializer? / PropertyName `?`? MethodSignature
   export interface TypeMember extends BaseParseNode {
     readonly type: 'TypeMember';
-    readonly PropertyName: PropertyNameLike;
+    /**
+     * *null* for a CALL SIGNATURE (#sec-object-types): a MethodSignature with no
+     * name. An object type of call signatures alone denotes the function type
+     * they form, `{ (uint32): uint32 }` being `(uint32) => uint32` in braces.
+     */
+    readonly PropertyName: PropertyNameLike | null;
     readonly Readonly: boolean;
     readonly Optional: boolean;
     readonly TypeAnnotation: TypeAnnotation | null;
@@ -3325,6 +3330,11 @@ export namespace ParseNode {
   // FunctionType : FunctionTypeParameters `=>` Type
   export interface FunctionType extends BaseParseNode {
     readonly type: 'FunctionType';
+    /**
+     * proposal-runtime-types #sec-function-types: `<T>(x: T) => T` is the type
+     * of a GENERIC function; *null* where the type declares no parameters.
+     */
+    readonly TypeParameters: TypeParameters | null;
     readonly FunctionTypeParameterList: readonly FunctionTypeParameter[];
     readonly ReturnType: Type;
   }
@@ -3377,6 +3387,13 @@ export namespace ParseNode {
     readonly TypeParameterConstraint: Type | null;
     /** Declared with `:` - a VALUE parameter - rather than `extends` or unbounded. F166. */
     readonly IsValueParameter: boolean;
+    /**
+     * proposal-runtime-types #sec-type-parameters: declared with `...` - a
+     * VARIADIC parameter, collecting any number of arguments into a tuple
+     * (#sec-variadic-parameters). Its constraint is the type of what it
+     * collects, as a rest parameter's annotation is.
+     */
+    readonly IsVariadic: boolean;
     readonly TypeParameterDefault: Type | null;
   }
 

@@ -2,6 +2,7 @@ import { ExpressionParser } from './ExpressionParser.mts';
 import type { ParseNode } from './ParseNode.mts';
 import { TokenValues, Token } from './tokens.mts';
 import { surroundingAgent } from '#self';
+import { Throw } from '../host-defined/error-messages.mts';
 
 /**
  * proposal-runtime-types: the type sublanguage.
@@ -29,10 +30,24 @@ export abstract class TypeParser extends ExpressionParser {
     // this proposal adds" half of ADMITS TYPE NAMES. The call half is recorded
     // where a call is parsed.
     this.state.admitsTypeNames = true;
+    // proposal-runtime-types #sec-function-types: `<T>(x: T) => T` - a type
+    // parameter list can begin nothing else in a type, so `<` here is a
+    // GENERIC function type and the parenthesized list that follows is not a
+    // cover: it must be a function type.
+    if (this.test(Token.LT)) {
+      const generic = this.startNode<ParseNode.FunctionType>();
+      generic.TypeParameters = this.parseTypeParameters();
+      const { list } = this.parseCoverParenthesizedTypeAndFunctionTypeParameters();
+      this.expect(Token.ARROW);
+      generic.FunctionTypeParameterList = list;
+      generic.ReturnType = this.parseType();
+      return this.finishNode(generic, 'FunctionType');
+    }
     if (this.test(Token.LPAREN)) {
       const node = this.startNode<ParseNode.FunctionType | ParseNode.ParenthesizedType>();
       const { list, trailingComma } = this.parseCoverParenthesizedTypeAndFunctionTypeParameters();
       if (this.eat(Token.ARROW)) {
+        node.TypeParameters = null;
         node.FunctionTypeParameterList = list;
         node.ReturnType = this.parseType();
         return this.finishNode(node, 'FunctionType');
@@ -447,6 +462,14 @@ export abstract class TypeParser extends ExpressionParser {
    * to match is what makes it an error.
    */
   parseTypeArgument(): ParseNode.Type {
+    // proposal-runtime-types #sec-type-references: `... Type` SPREADS a tuple
+    // into the argument list, spliced before anything binds. The flag rides on
+    // the type node exactly as ArgumentName does, for the same reason.
+    if (this.eat(Token.ELLIPSIS)) {
+      const spread = this.parseType();
+      (spread as { IsSpread?: boolean }).IsSpread = true;
+      return spread;
+    }
     // An identifier followed by `:` has no other reading in this position: a
     // named argument is told from a type by the colon alone.
     if (this.test(Token.IDENTIFIER) && this.testAhead(Token.COLON)) {
@@ -525,11 +548,19 @@ export abstract class TypeParser extends ExpressionParser {
         this.next();
         Variance = 'contravariant';
       } else if (this.test(Token.IDENTIFIER) && this.peek().value === 'out'
-        && this.testAhead(Token.IDENTIFIER)) {
+        // `VarianceModifier? ... BindingIdentifier`: the modifier precedes the
+        // pack marker, so `out ...Ts` is a covariant pack, and `...` can follow
+        // a parameter's own name in no other reading.
+        && (this.testAhead(Token.IDENTIFIER) || this.testAhead(Token.ELLIPSIS))) {
         this.next();
         Variance = 'covariant';
       }
       param.Variance = Variance;
+      // proposal-runtime-types #sec-type-parameters: `...` declares a VARIADIC
+      // parameter (PLAN-variadic-and-named-generic-arguments.md Phase 3). Its
+      // constraint is the type of what it collects, and what it binds is a
+      // tuple; the marker sits where a rest parameter's does.
+      param.IsVariadic = this.eat(Token.ELLIPSIS);
       param.BindingIdentifier = this.parseBindingIdentifier();
       // proposal-runtime-types #sec-higher-kinded-parameters: a parameter is
       // higher-kinded when its name is followed by a bracketed list of `_`,
@@ -583,9 +614,21 @@ export abstract class TypeParser extends ExpressionParser {
       // it: `Iterator<T, R, N, W<_> = Identity>` places its wrapper last
       // BECAUSE of this rule, and an unenforced rule is not a reason for
       // anything.
+      //
+      // #sec-type-parameters-static-semantics-early-errors states it PER RUN: a
+      // variadic parameter counts as defaulted (an application may leave it
+      // empty) and ENDS the run, so `<...A: [].<uint32>, N: uint32>` is legal
+      // with `N` required - the parameter after a pack is what stops the run.
       const previous = TypeParameterList[TypeParameterList.length - 1];
-      if (previous && previous.TypeParameterDefault && !param.TypeParameterDefault) {
+      if (previous && !previous.IsVariadic && !param.IsVariadic && previous.TypeParameterDefault && !param.TypeParameterDefault) {
         return this.unexpected();
+      }
+      // The same clause's second rule: two adjacent variadic parameters where
+      // the first has no constraint have no boundary between them - the first
+      // admits everything, so the second could never receive an argument
+      // positionally. The rest-parameter sentence, restated for packs.
+      if (previous && previous.IsVariadic && param.IsVariadic && !previous.TypeParameterConstraint) {
+        this.addEarlyError(Throw.SyntaxError('$1', 'two variadic parameters with nothing typed between them have no boundary'), previous);
       }
       TypeParameterList.push(this.finishNode(param, 'TypeParameter'));
     } while (this.eat(Token.COMMA));
@@ -788,6 +831,18 @@ export abstract class TypeParser extends ExpressionParser {
         Readonly = true;
       }
     }
+    // proposal-runtime-types #sec-object-types: a MethodSignature with no name
+    // is a CALL SIGNATURE. `(` or `<` at the start of a member has no other
+    // reading, so no lookahead is needed.
+    if (this.test(Token.LPAREN) || this.test(Token.LT)) {
+      node.PropertyName = null;
+      node.Readonly = false;
+      node.Optional = false;
+      node.MethodSignature = this.parseMethodSignature();
+      node.TypeAnnotation = null;
+      node.Initializer = null;
+      return this.finishNode(node, 'TypeMember');
+    }
     let PropertyName: ParseNode.PropertyNameLike;
     if (this.test(Token.LBRACK)) {
       const nameNode = this.startNode<ParseNode.PropertyName>();
@@ -891,7 +946,9 @@ export abstract class TypeParser extends ExpressionParser {
     node.Ref = !refTok.escaped
       && refTok.type === Token.IDENTIFIER
       && refTok.value === 'ref'
-      && this.aheadStartsPrimaryType()
+      // #sec-function-types: `ref` DISTRIBUTES over a rest, `ref ...refs: Cs`,
+      // so an ellipsis after it claims it as the modifier too.
+      && (this.aheadStartsPrimaryType() || this.testAhead(Token.ELLIPSIS))
       && this.eat('ref');
     node.Rest = this.eat(Token.ELLIPSIS);
     if (this.test(Token.IDENTIFIER)

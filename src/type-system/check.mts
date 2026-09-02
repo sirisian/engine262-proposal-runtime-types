@@ -5698,6 +5698,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: 'function', Signatures: [{ Parameters, Return }] };
       }
       case 'ObjectType': {
+        // #sec-object-types: a CALL SIGNATURE (a member with no name) makes
+        // this a function type. The checker answers null - this pass does not
+        // know - and the runtime resolver builds the function record, so the
+        // two never disagree about it (Phase 5 gives the checker its own
+        // reading alongside generic-signature subtyping).
+        if (node.TypeMemberList.some((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null)) {
+          return null;
+        }
         const Properties = [];
         const IndexSignatures = [];
         // Keys already seen in THIS object type, for the duplicate check below

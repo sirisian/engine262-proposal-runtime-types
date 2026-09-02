@@ -765,7 +765,15 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           // fourth character then separates `<..<` and `<..=` from `<..`, which is
           // why each is ONE token: `a <.. < b` does not assemble the open range,
           // it compares against the open-start from-range `a<..`.
+          //
+          // PLAN-variadic-and-named-generic-arguments.md Phase 3: `<...` is NOT
+          // an open-start range followed by a dot - it is `<` then `...`, the
+          // start of a variadic type parameter list, `f<...Ts>`. Longest match
+          // gives the ellipsis the three dots, as it does everywhere else in
+          // the language; a range that wants `<..` before a leading-dot decimal
+          // literal (`<.. .5`) writes the space.
           if (c1 === '.' && this.source[this.position + 1] === '.'
+              && this.source[this.position + 2] !== '.'
               && surroundingAgent.feature('runtime-types')) {
             this.position += 2;
             if (this.source[this.position] === '<') {

@@ -565,8 +565,21 @@ export abstract class FunctionParser extends IdentifierParser {
         if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
           pendingDecorators = this.parseDecorators();
         }
+        // proposal-runtime-types #sec-type-annotations: `ref ...refs: Cs` - the
+        // modifier distributes over the run the rest collects (the second-class
+        // rule that binds no array is the binder's, Phase 4). Claimed same-line,
+        // as at every other `ref` site.
+        let refRest = false;
+        if (surroundingAgent.feature('runtime-types') && this.test('ref')
+            && this.peekAhead().type === Token.ELLIPSIS && !this.peekAhead().hadLineTerminatorBefore) {
+          this.next(); // `ref`
+          refRest = true;
+        }
         if (this.test(Token.ELLIPSIS)) {
           const element = this.parseBindingRestElement();
+          if (refRest) {
+            (element as { Ref?: boolean }).Ref = true;
+          }
           if (pendingDecorators) {
             (element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = pendingDecorators;
           }
