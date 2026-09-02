@@ -20,17 +20,18 @@ test('explicit named type arguments bind through the records at a call (C1 regre
   expect(evaluated('function fill<T = uint8, N: uint32 = 4>(): uint32 { return N; } String(fill.<N: 8>());')).toBe('8');
 });
 
-// F-G, pinned for Phase 5.2 (overload sets with a generic member):
-test.fails('a CONCRETE call on a mixed overload set resolves to the concrete member (F-G)', () => {
-  // Today: '"T" is not defined' - the declared-overload runtime path resolves
+// F-G, closed by Phase 5.2 (overload sets with a generic member):
+test('a CONCRETE call on a mixed overload set resolves to the concrete member (F-G)', () => {
+  // Was: '"T" is not defined' - the declared-overload runtime path resolved
   // the generic member's parameter types with no frame, so even the call that
-  // never needed the generic member crashes.
+  // never needed the generic member crashed. The member now resolves under a
+  // frame of ~parameter~ records and ranks at the Generic tier, below concrete.
   expect(evaluated("function r(e: uint8): string { return 'u8'; } function r<T>(e: T): string { return 'g'; } String(r(1));")).toBe('u8');
 });
 
-test.fails('a generic member is viable by inference where no concrete member accepts (F-G)', () => {
-  // Today: 'no declared signature accepts an argument of type "string"' - the
-  // generic member is never instantiated, so it is never viable. Phase 5.2
-  // binds it from the arguments and ranks the instantiated signature.
+test('a generic member is viable where no concrete member accepts (F-G)', () => {
+  // Was: 'no declared signature accepts an argument of type "string"' - the
+  // generic member was never viable. Its type parameter admits the argument at
+  // the Generic tier; the call that selects it binds T from the argument.
   expect(evaluated("function r(e: uint8): string { return 'u8'; } function r<T>(e: T): string { return 'g'; } String(r('s'));")).toBe('g');
 });

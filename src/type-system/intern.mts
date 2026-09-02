@@ -246,6 +246,17 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         // signature's narrowings: they were built, and then canonicalization
         // returned a copy without them.
         Narrows: g.Narrows === undefined ? undefined : g.Narrows.map((nw) => ({ Target: nw.Target, Type: CanonicalizeType(nw.Type, copies) })),
+        // #sec-signature-records: a GENERIC signature's [[TypeParameters]] are
+        // part of what it is, and the same field-by-field hazard the note above
+        // records dropped them here - so `<T>(x: T) => T` and `<T, U>(x: T) => T`
+        // interned as ONE type (both "concrete" with a parameter named T) while
+        // `<T>` and `<U>` interned as two, the reverse of identity up to
+        // renaming. Carried through with each parameter's ~parameter~ record
+        // canonicalized to the very record the parameter types reference, which
+        // is what lets SameTypeWithAssumptions identify the two lists by pairs.
+        ...(g.TypeParameters && g.TypeParameters.length > 0
+          ? { TypeParameters: g.TypeParameters.map((r) => ({ ...r, Parameter: r.Parameter ? CanonicalizeType(r.Parameter, copies) : undefined })) }
+          : {}),
       })),
     };
   }

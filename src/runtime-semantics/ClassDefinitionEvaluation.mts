@@ -1,9 +1,9 @@
 import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
-import { currentTypeParameterFrame, RegisterDeclaredZero } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { displayType } from '../type-system/records.mts';
+import { displayType, typeParameterRecordsOf } from '../type-system/records.mts';
 import { CallDecorator } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -2570,6 +2570,25 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
     TypeAnnotation?: { Type?: ParseNode } | null,
   };
   const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  // PLAN-variadic-and-named-generic-arguments.md Phase 5: a GENERIC method's
+  // own type parameters are in scope for its annotations - `on<U>(h: (e: U) =>
+  // void)` resolved `U` with no frame, failed silently, and typed the parameter
+  // `any` - and its signature carries their Type Parameter Records, which is
+  // what lets a class satisfy a generic interface method by shape under its own
+  // parameter names (#sec-samefunctiontype, identity up to renaming).
+  const methodTypeParameters = (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList;
+  let methodFrame: Map<string, TypeRecord> | null = null;
+  if (methodTypeParameters && methodTypeParameters.length > 0) {
+    methodFrame = new Map<string, TypeRecord>();
+    for (const tp of methodTypeParameters) {
+      const tpName = tp.BindingIdentifier?.name;
+      if (tpName) {
+        methodFrame.set(tpName, { Kind: 'parameter', Name: tpName } as TypeRecord);
+      }
+    }
+    pushTypeParameterFrame(methodFrame);
+  }
+  try {
   const Parameters = [];
   let annotated = false;
   for (const formal of formals) {
@@ -2603,7 +2622,21 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
   if (!annotated) {
     return undefined;
   }
-  return { Kind: 'function', Signatures: [{ Parameters, Return }] } as TypeRecord;
+  return {
+    Kind: 'function',
+    Signatures: [{
+      Parameters,
+      Return,
+      ...(methodTypeParameters && methodTypeParameters.length > 0
+        ? { TypeParameters: typeParameterRecordsOf(methodTypeParameters).map((r) => ({ ...r, Parameter: methodFrame?.get(r.Name) })) }
+        : {}),
+    }],
+  } as TypeRecord;
+  } finally {
+    if (methodFrame) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic: boolean, className: Value, classCtor: Value, node?: ParseNode): ValueEvaluator {

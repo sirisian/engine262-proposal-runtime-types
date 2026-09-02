@@ -1,7 +1,7 @@
 import { SameValue, R } from '../abstract-ops/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
-import type { ParameterRecord, TypeRecord, TupleElementRecord } from './records.mts';
+import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
@@ -346,6 +346,16 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // the declaration nothing else is known about it.
   if (s.Kind === 'parameter' || t.Kind === 'parameter') {
     if (s.Kind === 'parameter' && t.Kind === 'parameter') {
+      // #sec-samefunctiontype: two generic signatures' parameters are
+      // IDENTIFIED position by position through the assumptions. Where a pair
+      // covers either name, the pair decides - `<T, U>(x: T)` against
+      // `<U, T>(x: T)` must NOT fall back to "same letter" - and where no pair
+      // mentions them the names compare as before.
+      const pairs = assumptions.filter((a) => a.First.Kind === 'parameter' && a.Second.Kind === 'parameter');
+      if (pairs.some((a) => (a.First as typeof s).Name === s.Name || (a.Second as typeof t).Name === t.Name)) {
+        return pairs.some((a) => (a.First as typeof s).Name === s.Name && (a.Second as typeof t).Name === t.Name
+          && ((a.First as typeof s).Arity ?? 0) === (s.Arity ?? 0) && ((a.Second as typeof t).Arity ?? 0) === (t.Arity ?? 0));
+      }
       // Name AND arity: `W<_>` and `W<_, _>` are different parameters even
       // where a declaration reuses the name, since one stands for a
       // one-argument declaration and the other for a two-argument one.
@@ -483,18 +493,31 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'function': {
       const tf = t as Extract<TypeRecord, { Kind: 'function' }>;
       return t.Kind === 'function' && s.Signatures.length === tf.Signatures.length
-        && s.Signatures.every((g, i) => g.Parameters.length === tf.Signatures[i].Parameters.length
+        && s.Signatures.every((g, i) => {
+          // #sec-samefunctiontype: two GENERIC signatures are the same up to
+          // renaming. Their type parameters are identified position by position
+          // through the assumptions list - the mechanism the recursive cases
+          // already use - so `<T>(x: T) => T` and `<U>(x: U) => U` are one type
+          // and [[Name]] is never read; kind, variadic marker, variance and
+          // arity must agree (constraints and defaults are Parse Nodes here and
+          // compare in the resolver-side check, Phase 5's remainder).
+          const identified = identifyTypeParameters(g, tf.Signatures[i], next);
+          if (identified === null) {
+            return false;
+          }
+          const nextG = identified;
+          return g.Parameters.length === tf.Signatures[i].Parameters.length
           && g.Parameters.every((p, j) => {
             // PLAN-rest-parameters.md phase 0: Rest and Optional are part of a
             // signature's identity, not decoration on the type.
             const q = tf.Signatures[i].Parameters[j];
             return p.Rest === q.Rest && p.Optional === q.Optional
-              && SameTypeWithAssumptions(p.Type, q.Type, next);
+              && SameTypeWithAssumptions(p.Type, q.Type, nextG);
           })
           // [[ThisType]]: both ~none~ is equal; one ~none~ is unequal; both
           // present are compared as types (spec SameSignature).
           && ((g.ThisType ?? null) === null) === ((tf.Signatures[i].ThisType ?? null) === null)
-          && (!g.ThisType || SameTypeWithAssumptions(g.ThisType, tf.Signatures[i].ThisType!, next))
+          && (!g.ThisType || SameTypeWithAssumptions(g.ThisType, tf.Signatures[i].ThisType!, nextG))
           // [[Narrows]] likewise: #sec-declared-narrowing makes a signature's
           // narrowings part of what it establishes, so two signatures that
           // establish different things are different types. Interning compares
@@ -505,10 +528,11 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           && (g.Narrows?.length ?? 0) === (tf.Signatures[i].Narrows?.length ?? 0)
           && (g.Narrows ?? []).every((nw, j) => {
             const other = tf.Signatures[i].Narrows![j]!;
-            return nw.Target === other.Target && SameTypeWithAssumptions(nw.Type, other.Type, next);
+            return nw.Target === other.Target && SameTypeWithAssumptions(nw.Type, other.Type, nextG);
           })
           && (g.Return === null) === (tf.Signatures[i].Return === null)
-          && (!g.Return || SameTypeWithAssumptions(g.Return, tf.Signatures[i].Return!, next)));
+          && (!g.Return || SameTypeWithAssumptions(g.Return, tf.Signatures[i].Return!, nextG));
+        });
     }
     default:
       return false;
@@ -1480,7 +1504,175 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
  * parameter receives each.
  */
 function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extract<TypeRecord, { Kind: 'function' }>, assumptions: readonly Assumption[]): boolean {
-  return t.Signatures.every((tg) => s.Signatures.some((sg) => {
+  return t.Signatures.every((tg) => s.Signatures.some((sg) => IsSignatureSubtypeGeneric(sg, tg, assumptions)));
+}
+
+/**
+ * Two Lists of Type Parameter Records identified position by position
+ * (#sec-signature-records "the same up to renaming"): the assumptions extended
+ * with a pair per position, or null where the shapes differ.
+ */
+function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumptions: readonly Assumption[]): readonly Assumption[] | null {
+  const ap = a.TypeParameters ?? [];
+  const bp = b.TypeParameters ?? [];
+  if (ap.length !== bp.length) {
+    return null;
+  }
+  if (ap.length === 0) {
+    return assumptions;
+  }
+  const out: Assumption[] = [...assumptions];
+  for (let k = 0; k < ap.length; k += 1) {
+    const u = ap[k]!;
+    const w = bp[k]!;
+    if (u.Kind !== w.Kind || u.Variadic !== w.Variadic || u.Variance !== w.Variance || u.Arity !== w.Arity) {
+      return null;
+    }
+    // Pairs by RECORD where both signatures were built under a frame; pairs by
+    // NAME otherwise (the checker mints a fresh ~parameter~ record per
+    // reference, so its records have no stable identity to pair). The
+    // parameter-vs-parameter branch of SameTypeWithAssumptions honours both.
+    out.push(u.Parameter && w.Parameter
+      ? { First: u.Parameter, Second: w.Parameter }
+      : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity } as TypeRecord, Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity } as TypeRecord });
+  }
+  return out;
+}
+
+/**
+ * #sec-structural-matching, the walk the relation needs: binds the ~parameter~
+ * records of a generic signature's `pattern` against a concrete `target`,
+ * structurally, running no user code. Returns false where the concrete parts
+ * disagree or a parameter would need two different bindings.
+ */
+function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): boolean {
+  if (pattern.Kind === 'parameter') {
+    const prior = bindings.get(pattern);
+    if (prior) {
+      return SameTypeWithAssumptions(prior, target, []);
+    }
+    bindings.set(pattern, target);
+    return true;
+  }
+  if (pattern.Kind !== target.Kind) {
+    return SameTypeWithAssumptions(pattern, target, []);
+  }
+  switch (pattern.Kind) {
+    case 'array':
+      return matchTypeStructurally(pattern.Element, (target as typeof pattern).Element, bindings);
+    case 'tuple': {
+      const te = (target as typeof pattern).Elements;
+      return pattern.Elements.length === te.length
+        && pattern.Elements.every((e, i) => e.Rest === te[i]!.Rest && matchTypeStructurally(e.Type, te[i]!.Type, bindings));
+    }
+    case 'function': {
+      const tsigs = (target as typeof pattern).Signatures;
+      return pattern.Signatures.length === tsigs.length && pattern.Signatures.every((g, i) => {
+        const h = tsigs[i]!;
+        return g.Parameters.length === h.Parameters.length
+          && g.Parameters.every((q, j) => matchTypeStructurally(q.Type, h.Parameters[j]!.Type, bindings))
+          && (g.Return === null || h.Return === null || matchTypeStructurally(g.Return, h.Return, bindings));
+      });
+    }
+    case 'nominal': {
+      const tn = target as typeof pattern;
+      return pattern.Declaration === tn.Declaration && pattern.Arguments.length === tn.Arguments.length
+        && pattern.Arguments.every((a, i) => {
+          const b = tn.Arguments[i]!;
+          return typeof a === 'object' && typeof b === 'object'
+            ? matchTypeStructurally(a as TypeRecord, b as TypeRecord, bindings)
+            : a === b;
+        });
+    }
+    default:
+      return SameTypeWithAssumptions(pattern, target, []);
+  }
+}
+
+/** Replaces bound ~parameter~ records throughout `t`, structurally, for the relation's own use. */
+function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): TypeRecord {
+  if (t.Kind === 'parameter') {
+    return bindings.get(t) ?? t;
+  }
+  switch (t.Kind) {
+    case 'array':
+      return { ...t, Element: substituteParameterRecords(t.Element, bindings) };
+    case 'tuple':
+      return { ...t, Elements: t.Elements.map((e) => ({ ...e, Type: substituteParameterRecords(e.Type, bindings) })) };
+    case 'function':
+      return {
+        ...t,
+        Signatures: t.Signatures.map((g) => ({
+          ...g,
+          Parameters: g.Parameters.map((q) => ({ ...q, Type: substituteParameterRecords(q.Type, bindings) })),
+          Return: g.Return === null ? null : substituteParameterRecords(g.Return, bindings),
+          TypeParameters: undefined,
+        })),
+      } as TypeRecord;
+    case 'nominal':
+      return { ...t, Arguments: t.Arguments.map((a) => (typeof a === 'object' ? substituteParameterRecords(a as TypeRecord, bindings) : a)) } as TypeRecord;
+    default:
+      return t;
+  }
+}
+
+/**
+ * #sec-issignaturesubtype, the four directions a generic signature can face,
+ * decided before the concrete relation runs (PLAN-variadic-and-named-generic-arguments.md 2.11):
+ * a generic source is usable where a concrete target is required by
+ * INSTANTIATION - the bindings the structural match infers, then the concrete
+ * relation on the substituted signature; a concrete source is NOT usable where a
+ * generic target is required (`<T>(x: T) => T` promises every `T`), the untyped
+ * catch-all excepted as everywhere; generic against generic identifies the
+ * parameters position by position and requires the same shape. The inference
+ * here runs no user code; a `where` on the source's declaration is not
+ * consulted, a function type having none, and is checked at the specialization
+ * the crossing performs (Phase 4's interning).
+ */
+function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[]): boolean {
+  if ((sg as { Untyped?: boolean }).Untyped === true
+      && (sg as { InferredReturn?: unknown }).InferredReturn === undefined) {
+    return true;
+  }
+  const sTP = sg.TypeParameters ?? [];
+  const tTP = tg.TypeParameters ?? [];
+  if (sTP.length > 0 && tTP.length === 0) {
+    if (sg.Parameters.length !== tg.Parameters.length) {
+      return false;
+    }
+    const bindings = new Map<TypeRecord, TypeRecord>();
+    for (let j = 0; j < sg.Parameters.length; j += 1) {
+      if (!matchTypeStructurally(sg.Parameters[j]!.Type, tg.Parameters[j]!.Type, bindings)) {
+        return false;
+      }
+    }
+    if (sg.Return !== null && tg.Return !== null && !matchTypeStructurally(sg.Return, tg.Return, bindings)) {
+      return false;
+    }
+    for (const u of sTP) {
+      if (u.Parameter && !bindings.has(u.Parameter)) {
+        // A parameter the target's shape does not determine cannot be
+        // instantiated by the crossing; the specialization would have to guess.
+        return false;
+      }
+    }
+    const substituted = substituteParameterRecords({ Kind: 'function', Signatures: [sg] } as TypeRecord, bindings) as Extract<TypeRecord, { Kind: 'function' }>;
+    return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions);
+  }
+  if (sTP.length === 0 && tTP.length > 0) {
+    return false;
+  }
+  if (sTP.length > 0) {
+    const identified = identifyTypeParameters(sg, tg, assumptions);
+    if (identified === null) {
+      return false;
+    }
+    return IsSignatureSubtypeCore(sg, tg, identified);
+  }
+  return IsSignatureSubtypeCore(sg, tg, assumptions);
+}
+
+function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[]): boolean {
     // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
     //
     // FIRST, before the arity and parameter steps, because an untyped signature
@@ -1622,7 +1814,6 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
       return IsSubtype(sg.Return, tg.Return, assumptions);
     }
     return true;
-  }));
 }
 
 /** #sec-isassignable */

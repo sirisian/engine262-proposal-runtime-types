@@ -4155,8 +4155,9 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
   // neither, so a generic method signature dropped its parameters on the
   // floor and `T` in `on<T>(h: (e: T) => void)` had nothing to resolve to.
   let pushedTypeParameterFrame = false;
+  let tpFrame: Map<string, TypeRecord> | null = null;
   if (typeParameters && typeParameters.length > 0) {
-    const tpFrame = new Map<string, TypeRecord>();
+    tpFrame = new Map<string, TypeRecord>();
     for (const tp of typeParameters) {
       const tpName = tp.BindingIdentifier?.name;
       if (tpName) {
@@ -4210,7 +4211,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     Kind: 'function',
     Signatures: [
       typeParameters && typeParameters.length > 0
-        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters) }
+        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r, Parameter: tpFrame!.get(r.Name) })) }
         : { Parameters, Return, ThisType },
     ],
   };

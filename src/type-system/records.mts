@@ -248,6 +248,15 @@ export interface TypeParameterRecord {
   readonly ConstraintNode: ParseNode.Type | null;
   readonly DefaultNode: ParseNode.Type | null;
   readonly Declaration: ParseNode.TypeParameter;
+  /**
+   * Engine-side: the ~parameter~ Type Record this parameter denotes within its
+   * own signature, where the signature was built under a frame (the parameter
+   * and return types reference this very record). Identity up to renaming
+   * (#sec-samefunctiontype) identifies two signatures' parameters by pairing
+   * these records in the assumptions list; absent where the signature was not
+   * built under a frame.
+   */
+  readonly Parameter?: TypeRecord;
 }
 
 /** The Type Parameter Records of a declared TypeParameterList, in declaration order. */

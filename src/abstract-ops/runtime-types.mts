@@ -17,7 +17,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
-import { generatorDeclaredType, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue } from '../type-system/records.mts';
+import { generatorDeclaredType, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -3741,6 +3741,28 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   // resolved: the caller wants only what the parameter nodes say - arity, rest,
   // and optional, all syntactic - and resolving reads type bindings that are not
   // initialized yet. See MakeOverloadedFunction.
+  // PLAN-variadic-and-named-generic-arguments.md Phase 5.2 (F-G): a GENERIC
+  // member's parameter and return annotations name its own type parameters,
+  // which resolved here with no frame in scope - so `r(1)` against
+  // `{ r(uint8), r<T>(T) }` died with "'T' is not defined" before the concrete
+  // member could be chosen. The parameters bind to ~parameter~ records for the
+  // resolution, and the signature carries their Type Parameter Records, so the
+  // resolver can rank a generic member (overloads.mts, the Generic tier) and the
+  // call that selects it binds them from the arguments as any generic call does.
+  const genericDeclaration = (((fn as { ECMAScriptCode?: { parent?: unknown } | null }).ECMAScriptCode?.parent) ?? null) as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null;
+  const genericTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList;
+  let genericFrame: Map<string, TypeRecord> | null = null;
+  if (resolveAnnotations && genericTypeParameters && genericTypeParameters.length > 0) {
+    genericFrame = new Map<string, TypeRecord>();
+    for (const tp of genericTypeParameters) {
+      const tpName = tp.BindingIdentifier?.name;
+      if (tpName) {
+        genericFrame.set(tpName, { Kind: 'parameter', Name: tpName } as TypeRecord);
+      }
+    }
+    pushTypeParameterFrame(genericFrame);
+  }
+  try {
   const resolved = new Map<ParseNode, TypeRecord>();
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -3783,8 +3805,19 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
     ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
   }
   return {
-    Parameters: params, Function: fn, Untyped: untyped, ReturnType,
+    Parameters: params,
+    Function: fn,
+    Untyped: untyped,
+    ReturnType,
+    ...(genericTypeParameters && genericTypeParameters.length > 0
+      ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r, Parameter: genericFrame?.get(r.Name) })) }
+      : {}),
   };
+  } finally {
+    if (genericFrame) {
+      popTypeParameterFrame();
+    }
+  }
 }
 
 /**

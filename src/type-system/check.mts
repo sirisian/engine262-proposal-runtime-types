@@ -5676,6 +5676,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: 'tuple', Elements };
       }
       case 'FunctionType': {
+        // #sec-function-types: a GENERIC function type, `<T>(x: T) => T`, puts
+        // its own parameters in scope for its parameter and return types and
+        // carries their Type Parameter Records. Answering null here instead
+        // would leave a binding annotated with such a type UNCHECKED - the
+        // `let` boundary is the checker's - so the checker reads it itself.
+        const fnTypeParameters = (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList;
+        if (fnTypeParameters && fnTypeParameters.length > 0) {
+          const fnScope = new Map<string, Known | null>();
+          typeParameterScopes.push(fnScope);
+          for (const tp of fnTypeParameters) {
+            const tpName = tp.BindingIdentifier?.name;
+            if (tpName) {
+              fnScope.set(tpName, tp.TypeParameterConstraint ? resolveType(tp.TypeParameterConstraint) : null);
+            }
+          }
+        }
+        try {
         const Parameters: ParameterRecord[] = [];
         for (const p of node.FunctionTypeParameterList) {
           const pn = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Type?: ParseNode.Type | null, Rest?: boolean, Optional?: boolean, BindingIdentifier?: { name?: string } };
@@ -5695,7 +5712,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }));
         }
         const Return = resolveType(node.ReturnType);
-        return { Kind: 'function', Signatures: [{ Parameters, Return }] };
+        return {
+          Kind: 'function',
+          Signatures: [{
+            Parameters,
+            Return,
+            ...(fnTypeParameters && fnTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(fnTypeParameters) } : {}),
+          }],
+        };
+        } finally {
+          if (fnTypeParameters && fnTypeParameters.length > 0) {
+            typeParameterScopes.pop();
+          }
+        }
       }
       case 'ObjectType': {
         // #sec-object-types: a CALL SIGNATURE (a member with no name) makes

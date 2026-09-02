@@ -204,8 +204,16 @@ const enum Tier {
   Literal = 2,
   // The argument is assignable to the parameter by an ordinary widening.
   Assignable = 3,
+  // PLAN-variadic-and-named-generic-arguments.md 2.9 / #sec-overload-resolution:
+  // the parameter is a TYPE PARAMETER of a generic member, which binds from the
+  // argument at the call. Viable, and below every concrete match: "a concrete
+  // position beats a type parameter". The instantiate-then-rank rule with
+  // specificity as the tie-break lands with the inference plumbing (Phase 6);
+  // this tier orders concrete over generic today without running inference in
+  // the ranking.
+  Generic = 4,
   // The parameter is the `any` type: an untyped catch-all that accepts anything.
-  CatchAll = 4,
+  CatchAll = 5,
 }
 
 /**
@@ -271,6 +279,12 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
 
   if (paramType.Kind === 'any') {
     return Tier.CatchAll;
+  }
+  // A TYPE PARAMETER of a generic member binds from the argument at the call,
+  // so it admits every argument - at the Generic tier, below every concrete
+  // match (F-G).
+  if (paramType.Kind === 'parameter') {
+    return Tier.Generic;
   }
   if (IsAssignable(argType, paramType)) {
     // Exact identity is mutual assignability: the argument type is the parameter
