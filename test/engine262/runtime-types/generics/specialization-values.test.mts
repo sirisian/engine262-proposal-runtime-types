@@ -24,7 +24,7 @@ test('a specialization is a first-class function: stored, keyed, called later (J
 
 test('its type is the instantiated signature; the bare name keeps the generic one (J67)', () => {
   expect(evaluated(`${ID} String(Reflect.typeOf(id.<uint8>));`)).toBe('(x: uint.<8>) => uint.<8>');
-  expect(evaluated(`${ID} String(Reflect.typeOf(id));`)).toBe('(x: T) => T');
+  expect(evaluated(`${ID} String(Reflect.typeOf(id));`)).toBe('<T>(x: T) => T');
 });
 
 test('a method specialization captures no receiver and is receiver-independent (J68, J69)', () => {

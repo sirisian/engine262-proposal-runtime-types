@@ -358,6 +358,11 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
         // reports the published return, so the two halves of one signature are
         // reported on the same footing.
         Return: constructedType ?? o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
+        // #sec-signature-records: a GENERIC signature keeps its type parameters
+        // (the fifth field-by-field rebuild that dropped them - Phase 7).
+        ...((o as { TypeParameters?: readonly unknown[] }).TypeParameters?.length
+          ? { TypeParameters: (o as { TypeParameters?: readonly unknown[] }).TypeParameters }
+          : {}),
       }));
       return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
     }
@@ -909,6 +914,26 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
           return p as Value;
         });
         X(CreateDataProperty(sr, Value('parameters'), CreateArrayFromList(params)));
+        // PLAN-variadic-and-named-generic-arguments.md Phase 7 (spec.emu
+        // reflection): a GENERIC signature reflects its type parameters - the
+        // declared data of the Type Parameter Record, in declaration order -
+        // which is what lets a tool complete a named type argument at an
+        // application site. `constraint` and `default` type objects (or their
+        // deferred applications) follow once resolution under the signature's
+        // own frame is available here.
+        const tpRecords = (sig as { TypeParameters?: readonly { Name: string, Kind: string, Variadic: boolean, Variance: string, Arity: number }[] }).TypeParameters;
+        if (tpRecords && tpRecords.length > 0) {
+          const tps = tpRecords.map((tp) => {
+            const o = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+            X(CreateDataProperty(o, Value('name'), Value(tp.Name)));
+            X(CreateDataProperty(o, Value('kind'), Value(tp.Kind)));
+            X(CreateDataProperty(o, Value('variadic'), tp.Variadic ? Value.true : Value.false));
+            X(CreateDataProperty(o, Value('variance'), Value(tp.Variance)));
+            X(CreateDataProperty(o, Value('arity'), Value(tp.Arity)));
+            return o as Value;
+          });
+          X(CreateDataProperty(sr, Value('typeParameters'), CreateArrayFromList(tps)));
+        }
         const ret = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
         X(CreateDataProperty(ret, Value('type'), typeObj(sig.Return ?? { Kind: 'void' })));
         X(CreateDataProperty(sr, Value('return'), ret));

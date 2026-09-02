@@ -157,7 +157,8 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     // value parameter, the array for a value pack.
     if (IsUnresolvableReference(_val) === Value.true) {
       const name = _val.ReferencedName;
-      const framed = surroundingAgent.feature('runtime-types') && name instanceof JSStringValue && lookupTypeParameter(name.stringValue()) !== undefined;
+      const framedBinding = surroundingAgent.feature('runtime-types') && name instanceof JSStringValue ? lookupTypeParameter(name.stringValue()) : null;
+      const framed = framedBinding !== null && framedBinding !== undefined;
       if (!framed) {
         return Value('undefined');
       }

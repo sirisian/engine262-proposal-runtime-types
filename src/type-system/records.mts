@@ -1315,9 +1315,16 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     }
     case 'function': {
       const signature = (s: SignatureRecord): string => {
-        const params = s.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`);
+        // `ref` on a parameter, distributed over a rest (#sec-function-types),
+        // prints where it was written.
+        const params = s.Parameters.map((p) => `${(p as { Reference?: boolean }).Reference ? 'ref ' : ''}${p.Rest ? '...' : ''}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`);
+        // A GENERIC signature prints its type parameter list - names and the
+        // pack marker; a constraint is a Parse Node here and does not print.
+        const generic = s.TypeParameters && s.TypeParameters.length > 0
+          ? `<${s.TypeParameters.map((tp) => `${tp.Variadic ? '...' : ''}${tp.Name}`).join(', ')}>`
+          : '';
         // A null Return is representable and must not print as `null`.
-        return `(${params.join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
+        return `${generic}(${params.join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
       };
       // Overloads join with `&`, which is how an overloaded function type is
       // written, and matches the intersection case above.
