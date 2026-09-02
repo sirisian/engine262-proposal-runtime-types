@@ -1,5 +1,6 @@
-import { Value, ReferenceValue, ObjectValue } from '../value.mts';
-import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
+import { Value, ReferenceValue, ReferenceRunValue, ObjectValue } from '../value.mts';
+import type { ReferenceRecord } from '../value.mts';
+import { DecayReferenceValue, withReferenceRunInitializationEvaluator } from '../abstract-ops/reference-operations.mts';
 import {
   EnsureCompletion,
   NormalCompletion,
@@ -270,6 +271,11 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // borrow of an `SoA` element by one caller and of a `[].<T>` element by
   // another, and neither call site says which layout produced it.
   const annotatedRef = node.TypeAnnotation?.Type?.type === 'ReferenceType';
+  if (v instanceof ReferenceRunValue) {
+    // The second-class rule: a ref rest passed WHOLE to a parameter that is
+    // not a ref rest is the escape a reference never survives.
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
+  }
   if (v instanceof ReferenceValue && !annotatedRef) {
     v = Q(yield* DecayReferenceValue(v));
   }
@@ -304,10 +310,34 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
 // BindingRestElement :
 //   `...` BindingIdentifier
 //   `...` BindingPattern
-function* IteratorBindingInitialization_BindingRestElement({ BindingIdentifier, BindingPattern, TypeAnnotation }: ParseNode.BindingRestElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.BindingRestElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+  const { BindingIdentifier, BindingPattern, TypeAnnotation } = restNode;
   if (BindingIdentifier) {
     // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
     const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
+    // proposal-runtime-types #sec-function-types (F-T): `ref ...refs` - the
+    // modifier distributes over the run, so each argument the rest collects
+    // must be a ref argument, and the rest binds NO ARRAY: it binds the run of
+    // their locations, which the reference operations read and write through.
+    if ((restNode as { Ref?: boolean }).Ref === true) {
+      const locations: ReferenceRecord[] = [];
+      while (true) {
+        const next = Q(yield* IteratorStepValue(iteratorRecord));
+        if (next === 'done') {
+          break;
+        }
+        if (!(next instanceof ReferenceValue)) {
+          return Throw.TypeError('parameter $1 requires a ref argument', StringValue(BindingIdentifier));
+        }
+        locations.push(next.Location);
+      }
+      const run = new ReferenceRunValue(locations);
+      // The rest's OWN binding is the one place the run is stored.
+      const initialized = yield* withReferenceRunInitializationEvaluator(function* () {
+        return yield* InitializeReferencedBinding(lhs, run);
+      });
+      return initialized;
+    }
     // #sec-type-annotations: "A rest element's annotation is the type of what it
     // COLLECTS", so each argument the rest takes is checked against that type's
     // ELEMENT type (D41, and D32's run-time half). This function did not read its

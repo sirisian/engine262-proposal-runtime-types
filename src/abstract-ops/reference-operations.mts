@@ -9,6 +9,8 @@ import {
   JSStringValue,
   ObjectValue,
   ReferenceValue,
+  ReferenceRunValue,
+  NumberValue,
 } from '../value.mts';
 import { VectorValue, type PropertyKeyValue } from '../value.mts';
 import { vectorGet, vectorSet } from '../type-system/vector-ops.mts';
@@ -71,7 +73,41 @@ export function IsPrivateReference(V: ReferenceRecord): V is ReferenceRecord & {
 }
 
 /** https://tc39.es/ecma262/#sec-getvalue */
+/** F-T: set by the rest binding while it initializes its own run binding. */
+let initializingReferenceRun = false;
+export function* withReferenceRunInitializationEvaluator<T>(f: () => Generator<unknown, T, unknown>): Generator<unknown, T, unknown> {
+  initializingReferenceRun = true;
+  try {
+    return yield* f();
+  } finally {
+    initializingReferenceRun = false;
+  }
+}
+
+/**
+ * F-T: the element of a ref RUN a property reference names - the k-th location
+ * for a constant index, `length` for the count; anything else is the escape.
+ */
+function* referenceRunElement(run: ReferenceRunValue, key: Value): PlainEvaluator<ReferenceRecord | 'length'> {
+  if (key instanceof JSStringValue && key.stringValue() === 'length') {
+    return 'length';
+  }
+  const index = key instanceof JSStringValue ? Number(key.stringValue()) : (key instanceof NumberValue ? key.numberValue() : NaN);
+  if (Number.isInteger(index) && index >= 0 && index < run.Locations.length) {
+    return run.Locations[index]!;
+  }
+  return Throw.TypeError('$1', Value('a ref rest binds no array: index it with a constant in range, read its length, or forward it with `...`'));
+}
+
 export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
+  // F-T: `refs[k]` and `refs.length` on a ref run read through the location.
+  if (V instanceof ReferenceRecord && V.Base instanceof ReferenceRunValue) {
+    const element = Q(yield* referenceRunElement(V.Base, V.ReferencedName as Value));
+    if (element === 'length') {
+      return Value(V.Base.Locations.length);
+    }
+    return Q(yield* GetValue(element));
+  }
   // 1. If V is not a Reference Record, return V.
   if (!(V instanceof ReferenceRecord)) {
     return V;
@@ -213,6 +249,18 @@ export function LocationOfAssignmentTarget(node: ParseNode, target: ReferenceRec
 
 /** https://tc39.es/ecma262/#sec-putvalue */
 export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator {
+  // F-T: a write through `refs[k]` reaches the k-th location; the run itself
+  // is never stored (the escape error a single ref parameter has).
+  if (W instanceof ReferenceRunValue) {
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
+  }
+  if (V instanceof ReferenceRecord && V.Base instanceof ReferenceRunValue) {
+    const element = Q(yield* referenceRunElement(V.Base, V.ReferencedName as Value));
+    if (element === 'length') {
+      return Throw.TypeError('$1', Value('the length of a ref rest is a constant'));
+    }
+    return Q(yield* PutValue(element, W));
+  }
   // proposal-runtime-types #sec-location-consuming-contexts: an assignment
   // whose target is a call stores THROUGH the location the call returned; the
   // borrow arrives here in place of a Reference Record.
@@ -337,6 +385,11 @@ export function GetThisValue(V: ReferenceRecord) {
 
 /** https://tc39.es/ecma262/#sec-initializereferencedbinding */
 export function* InitializeReferencedBinding(V: PlainCompletion<ReferenceRecord>, W: Value): PlainEvaluator {
+  // F-T: a ref run is never stored - `const saved = refs` is the escape a
+  // reference never survives - but a ref REST's own binding holds it.
+  if (W instanceof ReferenceRunValue && !(V instanceof ReferenceRecord && initializingReferenceRun)) {
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
+  }
   Q(V);
   Q(W);
   // 3. Assert: V is a Reference Record.

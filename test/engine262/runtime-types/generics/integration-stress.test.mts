@@ -48,12 +48,11 @@ test('B.2: two same-bound adjacent type packs bind by names and positionally', (
   expect(evaluated(`${W} new World().each.<Transform, Velocity>();`)).toBe('2/0');
 });
 
-// F-T, pinned: rung one THROUGH A CALLBACK'S SIGNATURE with a `ref` rest - the
-// pack must bind from the callback literal's individually-ref parameters, and
-// the ref rest's second-class rule must bind no array. Both are Phase 4/6
-// remainders (the `ref`-rest rule; callback-signature inference).
-test.fails('B.2: a pack infers from a callback with a ref rest, and a ref run forwards (F-T)', () => {
-  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x += 1; y += 1; }, ref a, ref f); String(a === 2 && f === 3);')).toBe('true');
+test('B.2: a pack infers from ref-rest arguments, and a ref run forwards (F-T closed)', () => {
+  // `ref ...xs: Cs` binds NO array - the run of the callers' locations - and
+  // Cs binds from the referents' types; `cb(...xs)` forwards the run into the
+  // callback's ref-rest position; each `ref x` in the callback writes through.
+  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a === 2 && f === 3);')).toBe('true');
 });
 
 // ---- B.3 Typed event bus: generic signature records end to end ----

@@ -1546,6 +1546,36 @@ export class ReferenceRecord {
 // consumes a value, so typeof, ===, and instanceof only ever see the referent. It
 // is produced by the `ref` argument and `ref` return forms and consumed by a `ref`
 // parameter, a `ref` lexical binding, or decay.
+/**
+ * proposal-runtime-types #sec-function-types, `ref` on a rest parameter
+ * (PLAN-variadic-and-named-generic-arguments.md 2.5, the second-class rule):
+ * the RUN of references a `ref ...refs` collects. References are not values,
+ * so a ref rest binds no array; this internal value holds the locations, and
+ * the reference operations admit exactly three uses of it - `refs[k]` reads
+ * and writes through the k-th location, `refs.length` is the count, and
+ * `...refs` forwards the run into another call's ref-rest position. Storing it
+ * anywhere is the escape error a single ref parameter has.
+ */
+export class ReferenceRunValue extends PrimitiveValue {
+  declare readonly type: 'ReferenceRun';
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is ReferenceRunValue;
+
+  readonly Locations: readonly ReferenceRecord[];
+
+  constructor(locations: readonly ReferenceRecord[]) {
+    super();
+    this.Locations = locations;
+  }
+
+  // NON-SPEC
+  mark(m: GCMarker) {
+    for (const location of this.Locations) {
+      location.mark(m);
+    }
+  }
+}
+
 export class ReferenceValue extends PrimitiveValue {
   declare readonly type: 'Reference';
 

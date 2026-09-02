@@ -1,5 +1,6 @@
 import {
   Value, Descriptor, ObjectValue, JSStringValue, wellKnownSymbols, type Arguments,
+  ReferenceValue, ReferenceRunValue,
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
@@ -143,6 +144,14 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
       // 3. Let spreadObj be ? GetValue(spreadRef).
       const spreadObj = Q(yield* GetValue(spreadRef));
+      // F-T: `...refs` FORWARDS a ref run - each location becomes a ref argument
+      // of this call, the one way a run moves without any reference escaping.
+      if (spreadObj instanceof ReferenceRunValue) {
+        for (const location of spreadObj.Locations) {
+          precedingArgs.push(new ReferenceValue(location));
+        }
+        continue;
+      }
       // 4. Let iteratorRecord be ? GetIterator(spreadObj).
       const iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
       // 5. Repeat,

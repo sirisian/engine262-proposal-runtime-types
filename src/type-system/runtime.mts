@@ -1026,7 +1026,11 @@ export function* InferGenericBindings(
         // `...parts: S` binds S to the tuple of the trailing arguments' types.
         const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
         for (let i = ordinary.length; i < args.length; i += 1) {
-          elements.push({ Type: literalRule ? elementLiteralTypeOf(args[i]) : RuntimeTypeOf(args[i]), Rest: false, Initial: 'none' });
+          // F-T: a `ref` argument in the run contributes its REFERENT's type -
+          // `apply2(cb, ref a, ref f)` binds Cs to [uint32, float32].
+          const arg = args[i]!;
+          const referent = arg instanceof ReferenceValue ? Q(yield* GetValue(arg.Location)) : arg;
+          elements.push({ Type: literalRule ? elementLiteralTypeOf(referent) : RuntimeTypeOf(referent), Rest: false, Initial: 'none' });
         }
         bound = { Kind: 'tuple', Elements: elements };
       }
