@@ -68,8 +68,8 @@ test('the display nests through other kinds', () => {
 
 test('the two kinds the exhaustiveness check found', () => {
   // `pattern` and `range` also had no case, and were found by making the
-  // default a `never` assignment rather than by reading the switch - the plan's
-  // own survey counted four falling-through kinds and there were six.
+  // default a `never` assignment rather than by reading the switch - reading it
+  // counted four falling-through kinds and there were six.
   expect(message('let p: /ab+c/ = 5;')).toContain('/ab+c/');
   expect(message('let r: 0..<10 = "s";')).toContain('0..10');
   expect(message('let r: 0..=10 = "s";')).toContain('0..=10');
@@ -139,7 +139,7 @@ test('an inhabitable intersection is unaffected', () => {
 });
 
 test('StaticTypeError is a SyntaxError subclass', () => {
-  // OQ27: #sec-type-errors makes a DECIDABLE violation an Early Error and
+  // #sec-type-errors makes a DECIDABLE violation an Early Error and
   // "reserves a thrown *TypeError* for the ~any~ boundary". It does not say what
   // the rejection throws, and one constructor cannot mean both "catchable here"
   // and "the source was rejected" - a program could not tell which it had.

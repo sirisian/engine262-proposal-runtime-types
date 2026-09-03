@@ -203,8 +203,8 @@ test('an intrinsic metadata interface declares nothing', () => {
   // contributed, there is nothing for a value to lack.
   expect(evaluated('let m: ClassMetadata = {}; "admitted";')).toBe('admitted');
   // And it is still an OBJECT type, so a value of the wrong kind is refused.
-  // Refused STATICALLY since `PLAN-checker-type-resolution.md stage A` taught the
-  // checker the intrinsic names: no partial can make `5` an object, so the kind
+  // Refused STATICALLY now that the checker knows the intrinsic names: no
+  // partial can make `5` an object, so the kind
   // is decidable from the source text however the shape later completes.
   expectStaticTypeError('let m: ClassMetadata = 5;');
 });
@@ -262,8 +262,7 @@ test('what bounds a symbol-keyed metadata member', () => {
   expect(outcome('partial interface ClassFieldMetadata { s: string; } let m: ClassFieldMetadata = { s: "ok" }; m.s = 5;')).toBe('StaticTypeError');
   // 2. The checker now KNOWS the intrinsic names, so a wrong kind is rejected in
   // a never-called function exactly as a user interface's is - the convention
-  // this used to be the documented exception to
-  // (`PLAN-checker-type-resolution.md stage A`).
+  // this used to be the documented exception to.
   //
   // The reason the exception existed still holds and is still honoured: an
   // intrinsic's SHAPE is completed by whichever partials have evaluated, so a

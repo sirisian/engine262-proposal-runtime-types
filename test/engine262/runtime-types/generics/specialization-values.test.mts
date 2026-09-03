@@ -1,5 +1,4 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 4 remainder (F-C, F-I;
-// spec.emu #sec-generic-function-values): a generic function applied in
+// spec.emu #sec-generic-function-values: a generic function applied in
 // expression position denotes its SPECIALIZATION as a value - interned per
 // function and ordered bindings, `where` checked once at creation, no receiver
 // captured, the instantiated signature as its type - and `typeof T` reads the
@@ -37,7 +36,7 @@ test('where clauses run once, at creation (J65)', () => {
   expectThrown('function f<N: uint32>(): uint32 where N < 4 { return N; } const s = f.<9>;', 'where');
 });
 
-test('typeof reads a type parameter (F-I)', () => {
+test('typeof reads a type parameter', () => {
   expect(evaluated('function f<T>(): boolean { return typeof T === typeof uint8; } String(f.<uint8>());')).toBe('true');
   expect(evaluated('function g<V: uint32>(): string { return typeof V; } g.<3>();')).toBe('number');
   expect(evaluated('function h<...I: [].<uint32>>(): string { return typeof I; } h.<1, 2>();')).toBe('object');

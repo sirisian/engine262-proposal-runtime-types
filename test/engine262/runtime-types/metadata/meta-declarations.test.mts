@@ -41,9 +41,9 @@ function errorMessage(source: string): string {
 }
 
 test('the default hook does not supply uninitialized annotated bindings', () => {
-  // REWRITTEN by PLAN-meta-default-scope.md phase 1, the third test that
-  // asserted the conflation and the one that stated it most plainly - its title
-  // was the behaviour.
+  // REWRITTEN once the `meta` hook's scope was settled: the third test that
+  // asserted the conflation, and the one that stated it most plainly - its
+  // title was the behaviour.
   //
   // #table-meta-hooks: `default` is "the unconstrained constraint: what a value
   // carries where it has no field of this meta type". A binding holds its
@@ -244,8 +244,8 @@ test('meta: a metadata key no meta type claims is a type error at the parameteri
 // is a type error at the parameterization that writes it." The tests below write
 // keys of their own to exercise metadata COMPARISON, so each declares a meta type
 // claiming them. They did not, and passed because the runtime did not enforce the
-// rule while the checker did - `FINDING-unclaimed-metadata-key.md`. The subject of
-// each test is unchanged; only the claim is now written down.
+// rule while the checker did. The subject of each test is unchanged; only the
+// claim is now written down.
 const CLAIMS = 'type Keys = { a: any, q: any, u: any, p: any };'
   // `validate` is required, not decoration: a meta type that claims a key and
   // defines none refuses bare values (see the test of that name below), which is
@@ -421,7 +421,7 @@ test('meta: `validate` stays optional, which is what a brand needs', () => {
 });
 
 test('a builder that names ambient state is not compile-time evaluable', () => {
-  // ISSUES-found-while-writing-examples.md I8. #sec-iscompiletimeevaluable puts
+  // #sec-iscompiletimeevaluable puts
   // the discipline on what the code can NAME - "a property of what the code can
   // name rather than a wall around what it does" - and the engine applied it to
   // a REPLACEMENT DECORATOR and not to a BUILDER, which is the other place user
@@ -443,7 +443,7 @@ test('a builder that names ambient state is not compile-time evaluable', () => {
 });
 
 test('a meta declaration may be generic', () => {
-  // PLAN-generic-meta-declarations.md. #sec-meta-declarations has carried
+  // #sec-meta-declarations has carried
   // `TypeParameters?` in the production; the parser read a TypeName and went
   // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { … }` - the
   // central worked example of primitivemetadata.md - did not parse.
@@ -453,7 +453,7 @@ test('a meta declaration may be generic', () => {
   // one `type`, `interface` and `primitive` already call.
   expect(run(`${ord} type NB2<T: Ordered.<T>> = { nonZero?: boolean }; `
     + 'meta NB2<T: Ordered.<T>> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
-  // D1: a hook may name the parameter in its annotations.
+  // A hook may name the parameter in its annotations.
   expect(run(`${ord} type NB3<T: Ordered.<T>> = { nonZero?: boolean }; `
     + 'meta NB3<T: Ordered.<T>> { default = {}; subtype(sub: NB3.<T>, sup: NB3.<T>): boolean { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   // The non-generic form is unchanged, and an empty parameter list is refused by
@@ -461,14 +461,14 @@ test('a meta declaration may be generic', () => {
   // already a SyntaxError, and this pins that it keeps coming from there.
   expect(run('type NB4 = { nonZero?: boolean }; meta NB4 { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   expect(run('type NB5<> = { nonZero?: boolean };')).toMatchObject({ Type: 'throw' });
-  // D2: claiming does not depend on the argument, so one type declared twice is
+  // Claiming does not depend on the argument, so one type declared twice is
   // still refused whatever parameters are written.
   expect(run('type NB6<T> = { nonZero?: boolean }; meta NB6<T> { default = {}; subtype(a, b) { return true; } } '
     + 'meta NB6<U> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'throw' });
 });
 
 test('a base-form meta type has no type parameters to bind', () => {
-  // D4. #sec-meta-declarations: a meta declaration "may instead name a PRIMITIVE
+  // #sec-meta-declarations: a meta declaration "may instead name a PRIMITIVE
   // type rather than an object type, declaring a base-form meta type" - and a
   // primitive has no parameter to bind. The production allows `TypeParameters?`
   // after any TypeName, so this is an early error rather than a parse failure,
@@ -480,8 +480,7 @@ test('a base-form meta type has no type parameters to bind', () => {
 });
 
 test('a generic meta declaration claims its keys and runs its hooks', () => {
-  // PLAN-generic-meta-evaluation.md. The declaration parsed
-  // (PLAN-generic-meta-declarations.md phase 1), registered its hooks, its
+  // The declaration parsed, registered its hooks, its
   // default and its name - and governed nothing, because a GENERIC constraint
   // shape resolves to the alias's nominal record rather than to its body, so the
   // object guard claimed no keys. Claiming is what lets a metadata value FIND
@@ -531,7 +530,7 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
 });
 
 test('a hook may name the meta type\'s type parameter in its annotations', () => {
-  // PLAN-hook-parameter-binding.md. The declaration was accepted and the
+  // The declaration was accepted and the
   // annotation was enforced when the hook was CALLED, where `T` was not bound:
   // `ReferenceError: "T" is not defined`. A generic meta type therefore worked
   // only if its hooks were written unannotated - which the design documents do
@@ -565,7 +564,7 @@ test('a hook may name the meta type\'s type parameter in its annotations', () =>
 });
 
 test('a meta declaration takes one type parameter, matching its constraint shape', () => {
-  // PLAN-meta-hook-signatures.md. #sec-meta-declarations: "It is an early error
+  // #sec-meta-declarations: "It is an early error
   // for a MetaDeclaration to declare more than one type parameter, or for its
   // constraint shape to take a number of type parameters other than the number
   // the declaration takes."
@@ -597,7 +596,6 @@ test('a meta declaration takes one type parameter, matching its constraint shape
 });
 
 test('a hook signature is its ARITY, which is what the table gives', () => {
-  // PLAN-meta-hook-signatures.md §1, and the reason D36 was withdrawn.
   // #table-meta-hooks writes each hook as `subtype(sub, sup)` - names and counts,
   // NO types - so "a hook whose signature does not match the table" is the arity.
   expect(run('type MD = { md?: boolean }; meta MD { default = {}; subtype(a) { return true; } }'))
@@ -619,7 +617,7 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
 });
 
 test('a meta declaration takes one type parameter, matching its constraint shape', () => {
-  // PLAN-meta-hook-signatures.md. #sec-meta-declarations: "It is an early error
+  // #sec-meta-declarations: "It is an early error
   // for a MetaDeclaration to declare more than one type parameter, or for its
   // constraint shape to take a number of type parameters other than the number
   // the declaration takes."
@@ -651,7 +649,6 @@ test('a meta declaration takes one type parameter, matching its constraint shape
 });
 
 test('a hook signature is its ARITY, which is what the table gives', () => {
-  // PLAN-meta-hook-signatures.md §1, and the reason D36 was withdrawn.
   // #table-meta-hooks writes each hook as `subtype(sub, sup)` - names and counts,
   // NO types - so "a hook whose signature does not match the table" is the arity.
   expect(run('type MD = { md?: boolean }; meta MD { default = {}; subtype(a) { return true; } }'))
@@ -677,12 +674,12 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
 // machine, which is why 120s was not enough - the bound works, the wait is the
 // cost of proving it.
 test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () => {
-  // PLAN-crossing-budget.md. #sec-evaluation-budget: "The budget bounds a
+  // #sec-evaluation-budget: "The budget bounds a
   // computation, which either completes or is abandoned and reported." A hook
   // that looped forever did NEITHER - the engine hung.
   //
-  // TWO causes, one per crossing, which is why the original item named only
-  // `validate` and a fix for it alone would have left the other open:
+  // TWO causes, one per crossing, which is why a fix for `validate` alone would
+  // have left the other open:
   //   - the meter charged one step per hook CALL, so a hook that never returned
   //     was never charged again
   //   - a crossing from an UNCONSTRAINED value opened no budget frame at all,
@@ -704,9 +701,9 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () 
     .toMatch(/exhausted at "VB's validate hook"/);
   // A hook that TERMINATES is unaffected, and its cost does not leak into the
   // next crossing - the charge is per evaluation, not cumulative across them.
-  // The RECORD limit rides on the same frame (PLAN-crossing-budget.md phase 3):
-  // `CountConstructedTypeRecord` reads the same `current()` frame the step
-  // counter does, so phase 2's frame makes BOTH limits live at a crossing. A
+  // The RECORD limit rides on the same frame: `CountConstructedTypeRecord` reads
+  // the same `current()` frame the step counter does, so one frame makes BOTH
+  // limits live at a crossing. A
   // hook constructing types in a loop is bounded - by steps in practice, since
   // the default step limit binds long before a million records, but the record
   // counter is charged and would bind on a host that sets the limits otherwise.
@@ -733,11 +730,12 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () 
     + 'let a: uint8.<{ lk: false }> = (1 := uint8.<{ lk: false }>); ';
   expect(evaluated(`${spend} let b: uint8.<{ lk: false }> = a; let c: uint8.<{ lk: false }> = a; `
     + 'let d: uint8.<{ lk: false }> = a; String(d);')).toBe('1');
-  // NOT COVERED, and recorded rather than faked: Q3's mutual recursion between
-  // two meta types. Every probe for it is refused before the recursion starts -
+  // NOT COVERED, and recorded rather than faked: mutual recursion between two
+  // meta types. Every probe for it is refused before the recursion starts -
   // a hook's body cannot construct a constrained value to cross, because
   // `(1 := uint8.<{ k: true }>)` is itself refused (a limitation shared with the
-  // D37 work). The per-CALL charge that bounds it is untouched by this entry, so
+  // tuple-position store rule). The per-CALL charge that bounds it is untouched
+  // by this entry, so
   // the property is preserved rather than newly at risk, but it is untested.
   const ok1 = 'type GB = { gb?: boolean }; '
     + 'meta GB { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
@@ -818,7 +816,7 @@ test('the four meta hook diagnostics that already worked still do', () => {
 });
 
 test('meta hook spellings this entry deliberately leaves open', () => {
-  // PLAN-meta-hook-form-diagnostics.md §9. All four are ungrammatical - a
+  // All four are ungrammatical - a
   // MetaHook is `default =` or a MethodDefinition, and none of these is either -
   // and all four are ACCEPTED. They are recorded rather than fixed because each
   // needs a decision the form rule does not: which duplicate wins, whether an

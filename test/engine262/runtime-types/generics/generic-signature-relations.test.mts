@@ -1,5 +1,5 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 5: the relations on
-// generic signatures (spec.emu #sec-samefunctiontype, #sec-issignaturesubtype,
+// The relations on generic signatures (spec.emu #sec-samefunctiontype,
+// #sec-issignaturesubtype,
 // #sec-overload-resolution). Identity is up to renaming; assignability follows
 // one question - could a caller reading the target be misled?; an overload set
 // may mix concrete and generic members, concrete winning.
@@ -39,13 +39,13 @@ test('an overload set mixes concrete and generic members, concrete winning (J84 
   expect(evaluated(`${R} String(route(true));`)).toBe('g');
 });
 
-// F-Q, pre-existing and pinned: an INSTANCE is not assignable to an interface
+// Pre-existing and pinned: an INSTANCE is not assignable to an interface
 // by shape when the interface declares a method - `interface Bus { on(name:
 // string): void }` against a class with that very method already throws
 // "SimpleBus is not assignable to Bus" with no generics in sight. The generic
 // identification is in place (the method type carries its TypeParameters, the
 // interface member its own); this flips when instance-to-interface method
 // satisfaction lands.
-test.fails('a class satisfies a generic interface method by shape, with its own parameter names (B.3, F-Q)', () => {
+test.fails('a class satisfies a generic interface method by shape, with its own parameter names', () => {
   expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
 });

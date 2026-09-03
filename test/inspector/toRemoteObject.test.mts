@@ -374,7 +374,7 @@ test('normal object', async () => {
 });
 
 test('runtime-types type objects', async () => {
-  // PLAN-devtools-type-inspection.md F193. A Type Object is CALLABLE - that is
+  // F193. A Type Object is CALLABLE - that is
   // its construction boundary, `Email('a@b')` - so it matched `IsCallable` in
   // getInspector's ladder before any later case and rendered as a native
   // function. The reported repro is the intersection below.

@@ -11,7 +11,7 @@ import {
  * source text's `meta` declarations and its `primitive` blocks' implicit cast
  * operators before applying this operation".
  *
- * PLAN-parameterized-defaults.md phase 6. A default is now a CROSSING, and a
+ * A default is now a CROSSING, and a
  * crossing consults the realm, so which declarations a realm has is part of the
  * answer. The cases a single script cannot ask: a type used inside a module at
  * all, and a cast declared by a module evaluated before the one that needs it.
@@ -117,7 +117,7 @@ test('primitive metadata: the no-default answer arrives from the checking pass',
   // which is observable: a declaration inside a function that is never called
   // does not throw."
   //
-  // PLAN-default-timing.md moved it. The declaration is now refused whether or
+  // The timing moved. The declaration is now refused whether or
   // not the function is ever called, which is what an Early Error means: "a
   // source text that contains one is rejected rather than evaluated".
   const dims = 'type Dim = { m: number }; '

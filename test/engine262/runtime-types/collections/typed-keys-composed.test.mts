@@ -2,10 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.3 - the remaining key families.
+ * The remaining key families.
  *
- * The plan lists `typed-keys-types`, `typed-keys-enums`, `typed-keys-references`
- * and `typed-keys-composed` as four files. They are one here: each is a handful
+ * Types, enums, references and composed keys could each have a file. They are
+ * one here: each is a handful
  * of assertions about how a family's identity rule reaches a collection, and
  * splitting them four ways would put one test in each file and hide what they
  * have in common - which is that a collection keys on whatever its element type
@@ -13,7 +13,7 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
  *
  * The families with a rule worth a file of their own already have one:
  * `typed-keys-primitives`, `typed-keys-64bit`, `typed-keys-composite`, and
- * `value-type-keys` (blocked on D5).
+ * `value-type-keys` (blocked on value equality).
  */
 
 // ---------------------------------------------------------------------------

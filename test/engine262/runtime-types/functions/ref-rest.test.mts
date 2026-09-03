@@ -1,11 +1,11 @@
-// PLAN-variadic-and-named-generic-arguments.md 2.5 / spec.emu #sec-function-types:
+// spec.emu #sec-function-types:
 // `ref` on a rest parameter DISTRIBUTES over the run it collects, and the run
 // binds no array - references are not values. Its name is usable in exactly
 // three forms, each a direct use of one collected reference: `refs[k]` (read
 // or written through), `refs.length` (a constant), and `...refs` forwarded
 // into another call's ref-rest position. Everything else is the escape error a
 // single ref parameter has. (The STATIC half - a constant index - is the
-// checker's, Phase 6's remainder; at run time an in-range index reads.)
+// checker's and is not yet done; at run time an in-range index reads.)
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 

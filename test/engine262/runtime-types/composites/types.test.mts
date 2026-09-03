@@ -65,7 +65,7 @@ test('a shape must be NAMED at the creation site, not inferred', () => {
 });
 
 test('`Composite.<S>` discriminates on its SHAPE', () => {
-  // `FINDING-composite-shape-ignored.md`. Every composite satisfied every shape:
+  // Every composite satisfied every shape:
   // `Composite.<S>` was built as a metadata parameterization, so the shape went
   // into [[Metadata]] while `#sec-issubtype` reads [[Arguments]] - it found none,
   // treated the type as the TOP composite, and admitted everything.

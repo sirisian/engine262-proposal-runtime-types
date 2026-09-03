@@ -6,7 +6,7 @@ import { evaluated, expectError, ok } from '../harness.mts';
  * inside a generic declaration evaluates at each specialization, once every
  * generic parameter it reads is bound."
  *
- * `FINDING-generic-body-unchecked.md`. The body used to be walked with no type
+ * The body used to be walked with no type
  * parameter in scope, so `T` there resolved to nothing and `let v: T = 5` was
  * accepted for want of a constraint to violate. This file pins the three things
  * that boundary turns on:
@@ -84,8 +84,7 @@ test('a return should be evaluated at each specialization', () => {
 
 test('an indexed access over a parameter is deferred, not unresolvable', () => {
   // Was `test.fails` while `T[K]` over an opaque parameter resolved to nothing
-  // and the annotation was unchecked. `PLAN-parameter-composition` Stage C: it
-  // answers a DEFERRED type instead - opaque like the parameters it composes -
+  // and the annotation was unchecked. It answers a DEFERRED type instead - opaque like the parameters it composes -
   // so nothing concrete is assignable to it.
   expectError('function p<T, K: keyof T>(o: T, k: K): T[K] { return 5; }');
   expectError('function p<T, K: keyof T>(o: T, k: K) { let v: T[K] = 5; }');

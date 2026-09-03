@@ -19,8 +19,6 @@ import { Agent, setSurroundingAgent } from '#self';
  * which must never be ignored. The two are indistinguishable by message, so the
  * question is asked of resolution BEFORE the call rather than inferred from the
  * error after it.
- *
- * `FINDING-overload-resolution-host-nominals.md` §9.3.
  */
 
 function compile(moduleSource: string, body: string): { type: string, text: string } {

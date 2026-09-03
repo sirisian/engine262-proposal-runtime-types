@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
-// OQ-type-arguments-vs-metadata.md, D2. What `X.<…>` means.
+// What `X.<…>` means.
 //
 // `Box.<{ a: uint8 }>` has two readings and the grammar separates neither: a
 // generic application whose one type argument is an object type, and a metadata
@@ -15,7 +15,7 @@ import { evaluated, expectThrown, run } from '../harness.mts';
 // in the specification - and `Iterable.<ObjectType>`; and on the deferred path
 // it dropped a brand in silence.
 //
-// D2 reads the BASE: type arguments where the base declares type parameters, a
+// The rule reads the BASE: type arguments where the base declares type parameters, a
 // metadata record otherwise. This is the rule the specification already states
 // for the two neighbouring ambiguities in the same bracket - type-vs-value
 // arguments ("the clause on generics decides which a given parameter expects")
@@ -116,12 +116,12 @@ test('expression position is unaffected', () => {
     + ' String(f.<{ a: uint8 }>({ a: (1 := uint8) }).a);')).toBe('1');
 });
 
-// -- `X.<>`, admitted so D2 costs no working spelling --------------------------
+// -- `X.<>`, admitted so the rule costs no working spelling -------------------
 
 test('an empty argument list applies every default', () => {
-  // D2 makes `Grid.<{ brand: 'V' }>` an APPLICATION, since `Grid` declares a
-  // parameter. That is the one currently-working spelling the decision takes
-  // away, so `Grid.<>` is admitted alongside it: a generic all of whose
+  // The rule makes `Grid.<{ brand: 'V' }>` an APPLICATION, since `Grid`
+  // declares a parameter. That is the one currently-working spelling the rule
+  // takes away, so `Grid.<>` is admitted alongside it: a generic all of whose
   // parameters have defaults gets a spelling for the type it denotes with
   // nothing supplied, and can therefore be branded in one further step.
   expect(kind('type Grid<T = float64> = { v: T }; type T = Grid.<>;')).toBe('object');
@@ -170,7 +170,7 @@ test('an arity error names the parameter list, not the alias', () => {
 });
 
 test('the fully-defaulted generic keeps a route to a brand', () => {
-  // The two-step form worked before the decision and must still, since it is
-  // what `Grid.<>` is measured against.
+  // The two-step form worked before this rule and must still, since it is what
+  // `Grid.<>` is measured against.
   expect(kind("type Grid<T = float64> = { v: T }; type T = Grid.<float64>.<{ brand: 'V' }>;")).toBe('parameterized');
 });

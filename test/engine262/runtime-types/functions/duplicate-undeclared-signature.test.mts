@@ -8,7 +8,7 @@ import { evaluated, expectError } from '../harness.mts';
  * are one signature written twice, and are a type error at the second.
  * Declaring nothing is a declaration of nothing, not an unknown."
  *
- * `PLAN-module-scope-overloads` Q6. Before this, `function f() {} function f() {}`
+ * Before this, `function f() {} function f() {}`
  * was accepted at the declarations and then AMBIGUOUS at every call — an error
  * naming neither of them, and arriving at a place the author had not written.
  * The annotated pair was already refused here, early; this is the same rule

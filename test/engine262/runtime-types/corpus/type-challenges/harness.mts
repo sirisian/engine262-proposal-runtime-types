@@ -23,8 +23,8 @@ import { STD_TYPES_SOURCE } from '../../../../../src/type-system/std-types.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 4: THE
- * REAL KIT, as a script prelude.
+ * proposal-runtime-types `annex-standard-kit`: THE REAL KIT, as a script
+ * prelude.
  *
  * Three corpus files each carried their own `const KIT` string of five to eight
  * hand-written helpers, and dozens of challenges open-coded the same few
@@ -93,8 +93,7 @@ export const KIT = `${KIT_ONLY}\n${CORPUS_LOCAL}\n${STD_NAMESPACE}`;
  * A challenge program with the corpus prelude in scope, minus any export the
  * program declares for itself.
  *
- * PLAN-std-types.md phase 4b step 7. Shadowing was supposed to make this
- * unnecessary: a challenge that implements a helper the kit also exports
+ * Shadowing was supposed to make this unnecessary: a challenge that implements a helper the kit also exports
  * declares its own `function omit`, a later declaration wins over an earlier
  * one, and the exercise rule - "implementing the utility is the whole point" -
  * keeps working.
@@ -161,7 +160,7 @@ export function evaluateBuilder(source: string): ChallengeResult {
     Type: 'normal' | 'throw';
     Value?: { stringValue?(): string };
   };
-  // PLAN-std-types.md phase 4b: report the THROWN MESSAGE, not the first sixty
+  // Report the THROWN MESSAGE, not the first sixty
   // characters of source. Those sixty characters are now the kit prelude, so a
   // failure read "builder threw: const std = (() => { // ---- foundations" for
   // every challenge in the corpus - identical, and useless for telling one

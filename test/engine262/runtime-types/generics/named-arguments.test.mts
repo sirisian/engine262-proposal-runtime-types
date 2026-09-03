@@ -1,12 +1,9 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A, F-B): named type
-// arguments bind by NAME at every application site - class types in type
+// Named type arguments bind by NAME at every application site - class types in type
 // position, `new`, heritage, explicit calls, methods, statics, generators,
 // async functions, expression-position aliases, and library generics - not only
-// for a generic alias in type position. Before this phase a correct name was
-// silently mis-positioned (the argument landed in position 0), which is the
-// exact failure the unknown-name rule exists to prevent.
-//
-// Cases carry their Appendix A/B numbers from the plan.
+// for a generic alias in type position. Before this a correct name was silently
+// mis-positioned (the argument landed in position 0), which is the exact
+// failure the unknown-name rule exists to prevent.
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 

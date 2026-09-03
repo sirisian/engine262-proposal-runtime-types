@@ -117,7 +117,7 @@ test('generators still run', () => {
   `)).toBe('1,2');
 });
 
-test('OQ13: an unannotated generator INFERS its return type', () => {
+test('an unannotated generator INFERS its return type', () => {
   // #sec-inferred-result-type: "_R_ is the join of its return contributions",
   // said in the same breath as "_N_ is not inferred, being the type of what a
   // caller sends IN". So _R_ was meant to be inferred where no annotation
@@ -136,7 +136,7 @@ test('OQ13: an unannotated generator INFERS its return type', () => {
   expect(evaluated('async function* g() { yield (1 := uint8); return "d"; } String(typeof g);')).toBe('function');
 });
 
-test('OQ13: a generator with NO return keeps `void`', () => {
+test('a generator with NO return keeps `void`', () => {
   // The verification step this change was gated on: an empty contribution set
   // must reach `void` and not `undefined`, or inferring _R_ would refuse
   // `function* g() { yield 1; }` - the commonest generator there is. It is the
@@ -147,7 +147,7 @@ test('OQ13: a generator with NO return keeps `void`', () => {
   expect(evaluated('function* g() { } String(typeof g);')).toBe('function');
 });
 
-test('OQ13: an ANNOTATION still wins over the inference', () => {
+test('an ANNOTATION still wins over the inference', () => {
   // Inference fills in what no annotation supplies; it does not override one.
   // A generator declared to return `void` and returning a String is still an
   // error, which is what says the change is about the DEFAULT and not about the

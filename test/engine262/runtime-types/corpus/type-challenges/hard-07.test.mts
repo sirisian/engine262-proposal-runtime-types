@@ -98,8 +98,8 @@ test('hard 213 - Vue Basic Props (inferPropType)', () => {
 // 6 - Simple Vue - vueOptions types `data`, `computed`, and `methods` so each
 // method sees the right `this`: computed getters see data's shape as `this`,
 // methods see data, the computed results, and methods. The `this`-parameter type
-// on function signatures (implemented in this phase) makes `withThisType`
-// expressible, so the typed-options identity is asserted here.
+// on function signatures makes `withThisType` expressible, so the typed-options
+// identity is asserted here.
 test('hard 6 - Simple Vue', () => {
   const f = `
     function withThisType(F, Self) {

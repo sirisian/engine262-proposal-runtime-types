@@ -2,21 +2,20 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrownKind } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.6 - CONSTRUCTION (Phase 4, OQ5 and D8).
+ * CONSTRUCTION: the seed and the subclassed specialization.
  *
  * THE SEED IS CHECKED. `new Set.<uint8>(["a"])` built a `Set.<uint8>` holding
  * the String "a": the stamp lands on the RESULT of Construct, and the
  * constructor has consumed its seed by then, so every seeded entry went
  * unchecked while every added one was checked.
  *
- * OQ5 RECOMMENDED STAMPING EARLIER, AND THAT IS NOT AVAILABLE. There is no
- * object to stamp until the construction produces one, so the type arguments
- * would have to be threaded INTO construction through a channel that does not
- * exist. The stamp instead VALIDATES what it finds, which reaches further than
- * the recommended fix would have: it also covers the annotation path,
- * `let s: Set.<uint8> = new Set(["a"])`, where the construction carries no type
- * arguments at all and there would have been nothing to thread; and it gives
- * Phase 3's ADOPTION rule its missing half, since a collection should adopt a
+ * STAMPING EARLIER IS NOT AVAILABLE. There is no object to stamp until the
+ * construction produces one, so the type arguments would have to be threaded
+ * INTO construction through a channel that does not exist. The stamp instead
+ * VALIDATES what it finds, which reaches further: it also covers the annotation
+ * path, `let s: Set.<uint8> = new Set(["a"])`, where the construction carries no
+ * type arguments at all and there would have been nothing to thread; and it
+ * gives the ADOPTION rule its missing half, since a collection should adopt a
  * target's arguments only where its contents support the claim.
  *
  * The rule stated once: a collection is of `Map.<K, V>` when every entry it
@@ -26,7 +25,7 @@ import { evaluated, ok, expectThrownKind } from '../harness.mts';
  * boundary converts - so a seeded element and an added one are the same type
  * afterwards rather than differing by how they arrived.
  *
- * D8 - A SUBCLASS OF A SPECIALIZATION. `class M extends Map.<string, uint8> {}`
+ * A SUBCLASS OF A SPECIALIZATION. `class M extends Map.<string, uint8> {}`
  * reached neither stamping path: the construction is a plain identifier, so the
  * type-arguments branch does not fire, and there is no annotation whose boundary
  * would adopt it. The heritage's arguments are now recorded on the class
@@ -64,7 +63,7 @@ test('the ANNOTATION path checks its seed too', () => {
 });
 
 test('an existing collection does not adopt a type its contents deny', () => {
-  // Phase 3 established that only an UNSTAMPED collection adopts. This is the
+  // Only an UNSTAMPED collection adopts. This is the
   // other half: adopting is conditional on the contents fitting, so a populated
   // untyped collection cannot be re-labelled by annotating it.
   expect(ok('const u = new Set(); u.add("a"); let s: Set.<uint8> = u;')).toBe(false);
@@ -98,10 +97,10 @@ test('the seed forms the language accepts are all covered', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D8 - subclassing a specialization
+// Subclassing a specialization
 // ---------------------------------------------------------------------------
 
-test('D8: a subclass of a specialization carries its type arguments', () => {
+test('a subclass of a specialization carries its type arguments', () => {
   const M = 'class M extends Map.<string, uint8> {} ';
   const S = 'class S extends Set.<uint8> {} ';
   // The bad value goes through `any` so the run time is what answers.
@@ -115,7 +114,7 @@ test('D8: a subclass of a specialization carries its type arguments', () => {
   expect(evaluated(`${M} const m = new M(); String(m is Map.<string, string>);`)).toBe('false');
 });
 
-test('D8: a subclass of a subclass inherits them', () => {
+test('a subclass of a subclass inherits them', () => {
   // Walked up the constructor chain. These are internal fields rather than
   // JS-visible properties, so nothing inherits them without being asked to -
   // an earlier attempt relied on ordinary property lookup and the grandchild
@@ -126,7 +125,7 @@ test('D8: a subclass of a subclass inherits them', () => {
   expect(evaluated(`${M} const n = new N(); n.set("a", 1); String(n.size);`)).toBe('1');
 });
 
-test('D8: a subclass of a BARE collection is untouched', () => {
+test('a subclass of a BARE collection is untouched', () => {
   // sec 0's invariant reaches subclasses: `class P extends Map {}` names no type
   // arguments, so its instances are ordinary Maps.
   expect(evaluated('class P extends Map {} const p = new P(); p.set(1, 2); p.set("a", "b"); String(p.size);')).toBe('2');
@@ -141,8 +140,8 @@ test('D8: a subclass of a BARE collection is untouched', () => {
 // ---------------------------------------------------------------------------
 
 test('an untyped constructor is unaffected', () => {
-  // The guard suite covers these; repeated here because this phase is the one
-  // that touched the construction path.
+  // The guard suite covers these; repeated here because this is the change that
+  // touched the construction path.
   expect(evaluated('const s = new Set(["a", 300, {}]); String(s.size);')).toBe('3');
   expect(evaluated('const m = new Map([[1, "a"], ["b", 2]]); String(m.size);')).toBe('2');
   expectThrownKind('new Set(1);', 'TypeError');
@@ -151,8 +150,8 @@ test('an untyped constructor is unaffected', () => {
 });
 
 test('a collection type still has no default value', () => {
-  // Unchanged by this phase, and asserted because the construction path is where
-  // a default would have had to come from.
+  // Unchanged, and asserted because the construction path is where a default
+  // would have had to come from.
   // The rule fires at the DECLARATION for a binding, and at INSTANTIATION for a
   // field - declaring the class is fine, constructing it is not, since that is
   // where the field would have to be given a value.

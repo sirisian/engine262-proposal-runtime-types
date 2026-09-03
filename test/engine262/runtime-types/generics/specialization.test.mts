@@ -130,7 +130,7 @@ test('a generator method of a specialization reads its parameters', () => {
     + ' const it = new C.<4>().g(); it.next(); String(it.next().value);')).toBe('4');
 });
 
-// -- G3: the rest of the matrix ----------------------------------------------
+// -- The rest of the matrix --------------------------------------------------
 test('a value parameter reaches the remaining body shapes', () => {
   // a setter, which the getter case above does not cover
   expect(evaluated('class C<W: uint32> { set s(v) { this.n = v * W; } }'
@@ -252,7 +252,7 @@ test('a method\'s own parameter may annotate its signature', () => {
   expect(evaluated('class C { m<T>(v: T): T { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
   // and enforced: a value of another type is refused - STATICALLY, since the
   // checker now types a generic method's parameter as its own `T` rather than
-  // `any` (F-AB), and an explicit `.<uint8>` with a string argument is a
+  // `any`, and an explicit `.<uint8>` with a string argument is a
   // mismatch it can see; a call the checker cannot see through still meets the
   // runtime boundary.
   expectThrown('class C { m<T>(v: T) { return v; } } new C().m.<uint8>("x");', 'not assignable');

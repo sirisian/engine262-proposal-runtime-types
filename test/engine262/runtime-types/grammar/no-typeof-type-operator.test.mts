@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError } from '../harness.mts';
 
 /**
- * `PLAN-remove-typeof-type-operator.md`: `typeof` is not a type operator.
+ * `typeof` is not a type operator.
  *
  * JavaScript's `typeof` reports the underlying language type as a string and is
  * unchanged by this proposal (`#sec-runtimetypeof`: "`typeof` is unchanged by

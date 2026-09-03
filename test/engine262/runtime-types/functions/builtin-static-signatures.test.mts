@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-static-signatures.md phase 1 - `Map.groupBy`.
+ * TYPED SIGNATURES FOR THE STANDARD LIBRARY'S GENERIC STATICS.
  *
  * `standardlibrary.md` states four typed signatures for the standard library's
  * generic statics and calls them "signature listings rather than new features:
@@ -41,7 +41,7 @@ test('the callback\'s parameter is typed from the source, which is the point', (
   expect(ok(`${A} Map.groupBy(a, (n) => { let s: uint32 = n; return "k"; });`)).toBe(true);
   expectStaticTypeError(`${A} Map.groupBy(a, (n) => { let s: string = n; return "k"; });`);
   // A BLOCK-bodied callback binds its key type as a concise one does, which
-  // needed the whole of Phase 0 to be true.
+  // needed the callback-inference groundwork to be true.
   expect(ok(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => { return "k"; });`)).toBe(true);
   expectStaticTypeError(`${A} let g: Map.<uint8, [].<uint32>> = Map.groupBy(a, (n) => { return "k"; });`);
 });
@@ -55,8 +55,8 @@ test('the key type comes from the callback, including a COMPOSITE key', () => {
 
 test('a SHADOWED `Map` gets no signature', () => {
   // A constructor is a value a program may replace, and the builtin's signature
-  // must not follow the name. This is the guard the plan's risk section asks to
-  // be asserted before anything else.
+  // must not follow the name. This is the guard for that, asserted before
+  // anything else.
   // Guarded, so what is asserted is the STATIC answer: the shadowed `Map` has no
   // `groupBy` at run time and would throw for a reason that has nothing to do
   // with the signature.
@@ -81,7 +81,7 @@ test('the run time is unchanged in every case', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Object.groupBy - phase 2
+// Object.groupBy
 // ---------------------------------------------------------------------------
 
 test('Object.groupBy publishes an index-signature result', () => {
@@ -111,7 +111,7 @@ test('Object.groupBy constrains its key where Map.groupBy does not', () => {
   expectStaticTypeError(`${A} let g: Map.<string, [].<uint32>> = Map.groupBy(a, (n) => (1 := uint8));`);
 });
 
-test('OQ17 FIXED: an index-signature type resolves, binds and is read', () => {
+test('an index-signature type resolves, binds and is read', () => {
   // Filed as "index signatures do not participate in assignability". THAT WAS
   // WRONG - `Reflect.isAssignable` between two of them answers correctly, and
   // the subtype rule for them has existed all along. Nothing REACHED the
@@ -133,7 +133,7 @@ test('OQ17 FIXED: an index-signature type resolves, binds and is read', () => {
 });
 
 test('Object.groupBy\'s result is no longer inert', () => {
-  // The reason OQ17 blocked `Object.values`, `entries` and `fromEntries`: the
+  // The reason `Object.values`, `entries` and `fromEntries` were blocked: the
   // signature refused a wrong WHOLE-result annotation and then let every read
   // off it go unchecked.
   const G = 'const a: [].<uint32> = [1]; let o: { [key: string]: [].<uint32> } = Object.groupBy(a, (x) => "k"); ';
@@ -142,7 +142,7 @@ test('Object.groupBy\'s result is no longer inert', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 4 - the cases the plan's list did not name
+// The cases the original list did not name
 // ---------------------------------------------------------------------------
 
 test('the items may be any ITERABLE, not only an array', () => {
@@ -177,12 +177,12 @@ test('a shadowed `Object` gets no signature either', () => {
   expect(ok(`if (false) { class O2 { } const Object = O2; ${A} let o: uint8 = Object.groupBy(a, (n) => "k"); } 1;`)).toBe(true);
 });
 
-test('D25: an ANNOTATED result is stamped, the elision no longer skipping adoption', () => {
+test('an ANNOTATED result is stamped, the elision no longer skipping adoption', () => {
   // `Map.groupBy` publishes `Map.<K, [].<T>>` while the value it returns carries
   // no type arguments. #sec-collection-construction has an unstamped collection
   // ADOPT the target's at a boundary - and the boundary was being ELIDED,
-  // because Phase 1 gave the call a Static Type and the checker could then prove
-  // the initializer satisfied its annotation.
+  // because the call acquired a Static Type and the checker could then prove the
+  // initializer satisfied its annotation.
   //
   // The elision is right for a CHECK, which cannot fail where the type is
   // proven, and wrong for ADOPTION, which is not a no-op. `conversionHasEffect`
@@ -201,15 +201,15 @@ test('a BARE call is not stamped, and that is correct', () => {
   // same collection differently.
   //
   // Not unsound: `g.size` is a Number, and a Number reaching a `uint64` position
-  // converts. Whether a static-only claim should exist at all is the open half
-  // of D25, and it is a question about the SIGNATURE rather than about the
-  // elision that this fixed.
+  // converts. Whether a static-only claim should exist at all is still open, and
+  // it is a question about the SIGNATURE rather than about the elision that this
+  // fixed.
   expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(typeof g.size);`)).toBe('number');
   expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g.get("k").length);`)).toBe('3');
 });
 
 // ---------------------------------------------------------------------------
-// Group A - statics whose result depends on nothing the call passes
+// Statics whose result depends on nothing the call passes
 // ---------------------------------------------------------------------------
 
 test('a fixed-result static states what it returns', () => {
@@ -241,8 +241,8 @@ test('a fixed-result static states what it returns', () => {
 });
 
 test('Math and the numeric library are untouched by this group', () => {
-  // They were already done, in the specification AND the engine, and a draft of
-  // the plan misread them as this group's headline. `Math.sqrt` over a numeric
+  // They were already done, in the specification AND the engine, and an earlier
+  // draft misread them as this group's headline. `Math.sqrt` over a numeric
   // type answers that type; over a Number it is unchanged, which is the clause's
   // own rule and what the misreading measured.
   expect(ok('const x: float32 = 4; let n: float32 = Math.sqrt(x);')).toBe(true);
@@ -373,7 +373,7 @@ test('Family A leaves the arithmetic and the methods alone', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group B - an element type in, an element type out
+// An element type in, an element type out
 // ---------------------------------------------------------------------------
 
 test('Array.from carries the element type through', () => {
@@ -426,7 +426,7 @@ test('Group B preserves participation and the run time', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group D - the Promise combinators
+// The Promise combinators
 // ---------------------------------------------------------------------------
 
 const PS = 'let ps: [].<Promise.<uint8, Error>> = []; ';
@@ -502,7 +502,7 @@ test('a TUPLE of differently typed promises resolves positionally', () => {
   expect(evaluated('const p = Promise.all([Promise.resolve(1), Promise.resolve("a")]); String(typeof p.then);')).toBe('function');
 });
 
-test('D26 FIXED: a union inside a nominal argument is a SET of members', () => {
+test('a union inside a nominal argument is a SET of members', () => {
   // `race` and `any` over a tuple resolve with the UNION of its positions, and
   // the union comes out in the order the positions were read. That should not
   // matter and does: measured, `Promise.<string | uint8, Error>` is not
@@ -514,14 +514,14 @@ test('D26 FIXED: a union inside a nominal argument is a SET of members', () => {
   // and a bare `let b: string | uint8 = a` is accepted. Only the invariant
   // comparison inside a nominal's arguments disagreed - `SameTypeList` walked
   // members position by position - and a `Set` showed it with no promise
-  // involved. Members are matched as a SET now, which is D16's fix one container
-  // along.
+  // involved. Members are matched as a SET now, which is the same fix one
+  // container along.
   expect(ok('let a: Set.<uint8 | string> = new Set(); let b: Set.<string | uint8> = a;')).toBe(true);
   expect(ok(`${TUP} let p: Promise.<uint8 | string, Error> = Promise.race(t);`)).toBe(true);
 });
 
 test('race and any over a tuple resolve with the union of its positions', () => {
-  // BOTH spellings, which is what D26's fix bought: the union is a set of
+  // BOTH spellings, which is what that fix bought: the union is a set of
   // members, so the order the positions happened to be read in does not reach
   // the caller's annotation.
   expect(ok(`${TUP} let p: Promise.<string | uint8, Error> = Promise.race(t);`)).toBe(true);
@@ -538,7 +538,7 @@ test('Promise.try takes its value from the callback, and FLATTENS', () => {
   // what THAT resolves with, because `try` flattens as `then` does.
   expect(ok('let p: Promise.<uint8, any> = Promise.try(() => (1 := uint8));')).toBe(true);
   expectStaticTypeError('let p: Promise.<string, any> = Promise.try(() => (1 := uint8));');
-  // A block-bodied callback works, which needed the whole of Phase 0.
+  // A block-bodied callback works, which needed the callback-inference groundwork.
   expect(ok('let p: Promise.<uint8, any> = Promise.try(() => { return (1 := uint8); });')).toBe(true);
   // Flattening: one `Promise` in the result, not two. Guarded, since the stubs
   // are *undefined* and no `Promise` annotation admits that at run time.
@@ -580,9 +580,9 @@ test('withResolvers is typed where its type arguments are WRITTEN', () => {
 });
 
 test('the IDENTITY statics answer what they were given', () => {
-  // `Object.freeze<T>(o: T): T` and its siblings. Group A listed these and could
-  // not express them: a FIXED result cannot say "whatever you passed", so they
-  // needed a signature rather than a table row.
+  // `Object.freeze<T>(o: T): T` and its siblings. The fixed-result group listed
+  // these and could not express them: a FIXED result cannot say "whatever you
+  // passed", so they needed a signature rather than a table row.
   const A2 = 'const a: [].<uint8> = [1]; ';
   for (const f of ['freeze', 'seal', 'preventExtensions']) {
     expectStaticTypeError(`${A2} let n: string = Object.${f}(a);`);
@@ -613,7 +613,7 @@ test('Promise.reject carries its reason', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Object.values / entries / fromEntries - unblocked by OQ17
+// Object.values / entries / fromEntries
 // ---------------------------------------------------------------------------
 
 test('values and entries read V from an index signature OR the properties', () => {
@@ -680,7 +680,7 @@ test('fromAsync AWAITS its elements', () => {
 
 test('fromAsync\'s two overloads are selected by ARITY', () => {
   // A builtin's overloads differ in how many arguments they take, so the general
-  // overload-ranking machinery this plan once budgeted for was not needed - the
+  // overload-ranking machinery once budgeted for was not needed - the
   // same answer `Array.from`'s pair reached.
   expect(ok(`${FA} let p: Promise.<[].<string>, any> = Array.fromAsync(a, (x) => "k");`)).toBe(true);
   expectStaticTypeError(`${FA} let p: Promise.<[].<uint8>, any> = Array.fromAsync(a, (x) => "k");`);
@@ -730,9 +730,9 @@ test('new WeakRef carries its referent\'s type', () => {
 
 test('the COLLECTION constructors are deliberately left untyped', () => {
   // `new Array(3)` and `new Map()` have no type the call supports: an untyped
-  // array's Static Type is not `[].<any>`, which is the question D13's library
-  // half settled by resolving library nominals ONLY where type arguments are
-  // written - and neither writes any.
+  // array's Static Type is not `[].<any>`, which was settled by resolving
+  // library nominals ONLY where type arguments are written - and neither writes
+  // any.
   //
   // For the collections there is also a better mechanism already in place:
   // #sec-collection-construction has the ADOPTION at an annotation do the work,
@@ -760,12 +760,12 @@ test('Reflect.isAssignable answers a Boolean', () => {
   expect(evaluated('function f(a, b) { return Reflect.isAssignable(a, b); } String(f(type uint8, type uint8));')).toBe('true');
 });
 
-test('OQ20: Reflect.typeOf answers a `Reflect.TypeObject` - D34\'s row, restored', () => {
-  // The row was written as `Reflect.Type` and WITHDRAWN (D34), because a Type
+test('Reflect.typeOf answers a `Reflect.TypeObject`', () => {
+  // The row was once written as `Reflect.Type` and withdrawn, because a Type
   // Object does not report `Reflect.Type` - and it does not, correctly.
   // `Reflect.Type` is the type of a reflection NODE; a Type Object is the type
   // itself, reified as a value. Naming the SECOND is what the earlier row
-  // lacked, and D35 spent three attempts trying to make a Type Object report
+  // lacked, and three attempts were spent trying to make a Type Object report
   // the first.
   //
   // The failure the withdrawal prevented was a RUN-TIME one, not a refusal:
@@ -774,11 +774,11 @@ test('OQ20: Reflect.typeOf answers a `Reflect.TypeObject` - D34\'s row, restored
   expectStaticTypeError('let n: string = Reflect.typeOf(1);');
   expect(ok('if (false) { let t: Reflect.TypeObject = Reflect.typeOf(1); } 1;')).toBe(true);
   expect(ok('if (false) { function f(v): Reflect.TypeObject { return Reflect.typeOf(v); } } 1;')).toBe(true);
-  // And the boundary RUNS, which is what D34 could not achieve.
+  // And the boundary RUNS, which the withdrawn row could not achieve.
   expect(evaluated('function f(v): Reflect.TypeObject { return Reflect.typeOf(v); } String(f(1) is Reflect.TypeObject);')).toBe('true');
 });
 
-test('OQ20: what `Reflect.typeOf` REPORTS is unchanged', () => {
+test('what `Reflect.typeOf` REPORTS is unchanged', () => {
   // It answers a value's STRUCTURE, and that was never the defect. An enum
   // object gives its members - which is what makes `keyof Reflect.typeOf(E)`
   // the enumerator names - and a plain Type Object gives `{}` by the same rule,
@@ -805,7 +805,7 @@ test('the reflection statics keep their run time and respect shadowing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D36 — a rest annotation is the type of what it COLLECTS
+// A rest annotation is the type of what it COLLECTS
 // ---------------------------------------------------------------------------
 
 test('a rest annotation must RESOLVE to an array or tuple type', () => {
@@ -839,7 +839,7 @@ test('a type PARAMETER rest is judged by its CONSTRAINT', () => {
   expectStaticTypeError('function f<C extends string>(...a: C) { return 1; }');
 });
 
-test('D36 leaves the neighbouring forms alone', () => {
+test('the rest-annotation rule leaves the neighbouring forms alone', () => {
   // A NON-rest parameter takes its annotation as its own type, as always.
   expect(ok('if (false) { function f(x: string) { return 1; } } 1;')).toBe(true);
   // An unannotated rest is unaffected.
@@ -852,7 +852,7 @@ test('D36 leaves the neighbouring forms alone', () => {
   expect(ok('if (false) { function f<N: uint32>(...a: [N].<uint8>) { return 1; } } 1;')).toBe(true);
 });
 
-test('D42/OQ18: a resolved promise reaches a declared rejection type', () => {
+test('a resolved promise reaches a declared rejection type', () => {
   // #table-typed-statics: `(value: R): Promise.<R, E>`, E from the contextual
   // type and `any` without one.
   //
@@ -864,7 +864,7 @@ test('D42/OQ18: a resolved promise reaches a declared rejection type', () => {
   // A contextual arm read the rejection from the target to fix it. It is GONE:
   // #sec-generic-variance now declares a promise `Promise.<out R, out E>` and a
   // covariant position admits what it is ASSIGNABLE FROM, so an `any` rejection
-  // reaches any declared one (OQ18/OQ19). Removed, every row here answered
+  // reaches any declared one. Removed, every row here answered
   // identically and the suite passed - it computed by hand, one call at a time,
   // what the variance rule gives.
   //
@@ -876,7 +876,7 @@ test('D42/OQ18: a resolved promise reaches a declared rejection type', () => {
   expect(ok('if (false) { async function f(): Promise.<uint8, Error> { return await Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
 });
 
-test('D42 narrows nothing it should not', () => {
+test('the resolved-promise row narrows nothing it should not', () => {
   // A wrong RESOLUTION type is still refused - only the rejection was unfixable.
   expectStaticTypeError('let a: Promise.<string, Error> = Promise.resolve((1 := uint8));');
   // With no contextual type the rejection stays `any`, which is what a call
@@ -891,7 +891,7 @@ test('D42 narrows nothing it should not', () => {
 
 const PROM = 'let p: Promise.<uint8, Error> = new Promise.<uint8, Error>((r, j) => {}); ';
 
-test('D45: a promise handler takes the type the receiver carries', () => {
+test('a promise handler takes the type the receiver carries', () => {
   // #table-promise-prototype-signatures. These were typed NOWHERE - not in the
   // specification and not in the engine - so a handler's parameter was
   // unchecked, while the same shape on an ARRAY was refused. That contrast is
@@ -906,14 +906,14 @@ test('D45: a promise handler takes the type the receiver carries', () => {
   expect(ok(`if (false) { ${PROM} p.catch((e) => { let x: Error = e; return 1; }); } 1;`)).toBe(true);
 });
 
-test('D45: every handler is OPTIONAL, and finally takes none', () => {
+test('every handler is OPTIONAL, and finally takes none', () => {
   expect(ok(`if (false) { ${PROM} p.then(); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${PROM} p.catch(); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${PROM} p.finally(); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${PROM} p.finally(() => {}); } 1;`)).toBe(true);
 });
 
-test('D45 leaves the neighbouring receivers alone', () => {
+test('the handler rule leaves the neighbouring receivers alone', () => {
   // An UNTYPED promise carries no arguments to check against, and must not
   // start refusing callbacks.
   expect(ok('if (false) { let q = Promise.resolve(1); q.then((v) => { let s: string = v; return 1; }); } 1;')).toBe(true);
@@ -924,7 +924,7 @@ test('D45 leaves the neighbouring receivers alone', () => {
 
 const SUB = 'class A { x: uint8 = (0 := uint8); } class B extends A { y: uint8 = (0 := uint8); } ';
 
-test('OQ19: a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
+test('a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
   // #sec-generic-variance: "A position declared covariant admits an argument the
   // position's own type is ASSIGNABLE FROM, not merely a subtype of."
   //
@@ -938,7 +938,7 @@ test('OQ19: a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
   expectStaticTypeError(`${SUB} class Box<out T> { } let p: Box.<A> = new Box.<A>(); let q: Box.<B> = p;`);
 });
 
-test('OQ19 does not reach an INVARIANT parameter', () => {
+test('covariant assignability does not reach an INVARIANT parameter', () => {
   // The mutable-container hazard #sec-generic-variance is written about: a
   // `Map.<string, uint8>` used as `Map.<string, number>` "would accept a Number
   // into storage typed uint8". Map is deliberately absent from the library
@@ -948,7 +948,7 @@ test('OQ19 does not reach an INVARIANT parameter', () => {
   expectStaticTypeError('let m: Map.<string, any> = new Map.<string, any>(); let n: Map.<string, uint8> = m;');
 });
 
-test('OQ18: a promise is COVARIANT in both parameters', () => {
+test('a promise is COVARIANT in both parameters', () => {
   // Every promise method rejects with `any` - "the reject type is never
   // inferred: anything may throw" - so these programs were unwritable under
   // invariance AND under covariance-by-subtyping. They are the ordinary case.
@@ -956,8 +956,8 @@ test('OQ18: a promise is COVARIANT in both parameters', () => {
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then((v) => v); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.catch((e) => (0 := uint8)); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.finally(() => {}); } 1;`)).toBe(true);
-  // D44: `Promise.reject`'s `Promise.<never, E>` now flows where a resolution
-  // type is wanted, its row having been correct all along.
+  // `Promise.reject`'s `Promise.<never, E>` now flows where a resolution type is
+  // wanted, its row having been correct all along.
   expect(ok('if (false) { let q: Promise.<uint8, Error> = Promise.reject(new Error()); } 1;')).toBe(true);
   // And a resolved promise flows through a NAMED binding, which the contextual
   // approach could not do - the target that typed the call was lost at the name.
@@ -966,7 +966,7 @@ test('OQ18: a promise is COVARIANT in both parameters', () => {
   expectStaticTypeError('let q: Promise.<string, Error> = Promise.resolve((1 := uint8));');
 });
 
-test('OQ18/OQ19: the rejection type flows without any per-call inference', () => {
+test('the rejection type flows without any per-call inference', () => {
   // The row the removed contextual arm could NEVER reach: a resolved promise
   // bound to a name loses whatever target typed the call, so an arm reading the
   // target one call at a time had nothing left to read. The variance rule does
@@ -978,7 +978,7 @@ test('OQ18/OQ19: the rejection type flows without any per-call inference', () =>
   expect(ok('if (false) { async function f(): Promise.<uint8, Error> { return await Promise.resolve((1 := uint8)); } } 1;')).toBe(true);
 });
 
-test('D43: an untyped literal ADAPTS through a static\'s inferred return', () => {
+test('an untyped literal ADAPTS through a static\'s inferred return', () => {
   // `staticType(args[i])` alone widens an untyped literal - `1` becomes
   // `number` - and no later check recovers the `uint8` the position wanted, so
   // `Array.of(1, 2)` at a `[].<uint8>` was refused. Reading the argument
@@ -993,7 +993,7 @@ test('D43: an untyped literal ADAPTS through a static\'s inferred return', () =>
   expect(ok('if (false) { let p: Promise.<never, uint8> = Promise.reject(1); } 1;')).toBe(true);
 });
 
-test('D43 adapts only where the literal FITS', () => {
+test('adaptation happens only where the literal FITS', () => {
   // A wrong target still refuses: adaptation is not permission.
   expectStaticTypeError('let a: [].<string> = Array.of(1, 2);');
   expectStaticTypeError('let p: Promise.<string, Error> = Promise.resolve(1);');
@@ -1006,7 +1006,7 @@ test('D43 adapts only where the literal FITS', () => {
   expect(ok('if (false) { let a: [].<uint8> = Array.of((1 := uint8), (2 := uint8)); } 1;')).toBe(true);
 });
 
-test('D43: an ITERABLE argument carries the wanted element through', () => {
+test('an ITERABLE argument carries the wanted element through', () => {
   // `Array.from`, `Array.fromAsync`, `Iterator.from` and `Promise.all` take an
   // iterable rather than per-argument values, so the wanted type is pushed
   // through it - an array OF the wanted element - and an array literal argument
@@ -1023,7 +1023,7 @@ test('D43: an ITERABLE argument carries the wanted element through', () => {
   expect(ok('if (false) { let p: Promise.<[].<uint8>, any> = Promise.all([Promise.resolve(1)]); } 1;')).toBe(true);
 });
 
-test('D43: the iterable arms adapt only where the literal FITS', () => {
+test('the iterable arms adapt only where the literal FITS', () => {
   expectStaticTypeError('let a: [].<string> = Array.from([1, 2]);');
   expectStaticTypeError('let i: IteratorHelper.<string, void, void> = Iterator.from([1, 2]);');
   // A typed argument and a call with no contextual type are both unaffected.
@@ -1031,7 +1031,7 @@ test('D43: the iterable arms adapt only where the literal FITS', () => {
   expect(ok('if (false) { let a = Array.from([1, 2]); } 1;')).toBe(true);
 });
 
-test('D47: a promise method RESOLVES with what its handlers return', () => {
+test('a promise method RESOLVES with what its handlers return', () => {
   // `then` and `catch` built `Promise.<any, any>`, their signature arm getting
   // the receiver's types and not the handler ARGUMENTS. That was harmless while
   // a promise was INVARIANT - an `any` result reached no declared promise type -
@@ -1047,7 +1047,7 @@ test('D47: a promise method RESOLVES with what its handlers return', () => {
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then((v) => v); } 1;`)).toBe(true);
 });
 
-test('D47: an ABSENT handler passes its type through, and catch unions', () => {
+test('an ABSENT handler passes its type through, and catch unions', () => {
   // #table-promise-prototype-signatures: `then` resolves with U | V and `catch`
   // with R | U - the receiver's value where the promise FULFILLED, the
   // handler's where it rejected. So a caught promise resolves with both.
@@ -1055,7 +1055,7 @@ test('D47: an ABSENT handler passes its type through, and catch unions', () => {
   expect(ok(`if (false) { ${P} let q: Promise.<uint8 | string, Error> = p.catch((e) => "s"); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.then(); } 1;`)).toBe(true);
   expect(ok(`if (false) { ${P} let q: Promise.<uint8, Error> = p.finally(() => {}); } 1;`)).toBe(true);
-  // The handler PARAMETER checking from D45 is untouched, and so is `map`.
+  // The handler PARAMETER checking is untouched, and so is `map`.
   expectStaticTypeError(`${P} p.then((v) => { let s: string = v; return 1; });`);
   expectStaticTypeError('let a: [].<uint8> = []; let b: [].<string> = a.map((v) => (1 := uint8));');
 });

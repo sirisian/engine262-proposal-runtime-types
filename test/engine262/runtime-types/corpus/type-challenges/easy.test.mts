@@ -5,7 +5,7 @@ import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
  * Type Challenges - the easy tier (13 challenges).
  * Source: ecmascript-types/examples/typechallenges.md
  *
- * PORTING NOTE (important, per the plan's faithfulness principle):
+ * PORTING NOTE (important, for faithfulness to the corpus):
  *
  * Each corpus challenge ships a *builder solution* that computes a utility
  * (myPick, first, concat, ...) from the type-programming primitives, then
@@ -22,8 +22,8 @@ import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
  * (aliases intern by structure; `is` tests membership; `===` tests identity).
  * This tests the interning semantics the challenge exercises. It does NOT fake
  * the builder API: where a challenge's full builder form needs an unbuilt
- * primitive, that is stated in a `PENDING` note and the builder form is left for
- * the phase that unlocks it, rather than weakened to pass now.
+ * primitive, that is stated in a `PENDING` note and the builder form is left
+ * until that primitive exists, rather than weakened to pass now.
  *
  * A ported identity assertion is written as a self-contained program ending in
  * `String(<boolean>)`, checked with expectBuilderTrue.

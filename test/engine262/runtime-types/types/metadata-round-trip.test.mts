@@ -2,8 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * proposal-runtime-types `sec-reflect-maketype`,
- * PLAN-metadata-representation.md phase 3.
+ * proposal-runtime-types `sec-reflect-maketype`.
  *
  * The clause states the round trip as an IDENTITY, in those words:
  *
@@ -32,7 +31,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 test('a brand round-trips: a Value leaf', () => {
   // A brand's tag is an engine `Value` on both sides of the conversion, so it
   // never met the mismatch. That is why a brand round-tripped while a pattern
-  // did not, and why the working feature masked the broken one for two plans.
+  // did not, and why the working feature masked the broken one for so long.
   expect(evaluated("type B = uint32.<{ brand: 'UserId' }>;"
     + ' String(Reflect.makeType(Reflect.getReflection(B)) === B);')).toBe('true');
 });
@@ -47,7 +46,7 @@ test('a pattern round-trips: a marker leaf', () => {
 });
 
 test('both leaf kinds in ONE record round-trip', () => {
-  // The phase-1 gate. A fix that handles a Value leaf and not a marker, or the
+  // The gate. A fix that handles a Value leaf and not a marker, or the
   // reverse, passes both tests above and fails this one - which is the whole
   // reason it is stated separately.
   expect(evaluated("type M = string.<{ brand: 'Name', pattern: /^a$/ }>;"
@@ -64,7 +63,8 @@ test('a nested record inside the metadata round-trips', () => {
 });
 
 test('a SYMBOL-tagged brand round-trips, and its identity survives', () => {
-  // The leaf OQ3-A exists to protect. A Symbol has no plain equivalent whose
+  // The leaf that keeping leaves as `Value`s exists to protect. A Symbol has
+  // no plain equivalent whose
   // identity survives a conversion, which is why leaves stay `Value`s - and
   // `SameValue` on two SymbolValues is what makes a symbol-tagged brand
   // unforgeable (F147). A round trip that unwrapped the tag would silently make
@@ -127,7 +127,7 @@ test('the rebuild is idempotent, and that is not sufficient', () => {
 
 test('a reflected `metadata` is readable, on both leaf kinds', () => {
   // Reading this field used to ABORT the engine, not throw - which is how a
-  // slot that crashed on access survived until a plan went looking for a
+  // slot that crashed on access survived until something went looking for a
   // brand's tag. No test in the repository read it before that.
   expect(evaluated("type B = uint32.<{ brand: 'UserId' }>;"
     + ' String(Reflect.getReflection(B).metadata.brand);')).toBe('UserId');
@@ -138,11 +138,10 @@ test('a reflected `metadata` is readable, on both leaf kinds', () => {
 });
 
 test('the entry check refuses a metadata node that is not a plain record', () => {
-  // OQ2-C. The canonical form is a plain record with plain containers, and
+  // The canonical form is a plain record with plain containers, and
   // nothing in the type system enforces it - the slot is declared `Value` and
   // holds something else behind a cast. This is the check that would have
-  // caught F154 at construction rather than in a round-trip test three plans
-  // later.
+  // caught F154 at construction rather than in a round-trip test much later.
   expectThrown("Reflect.makeType({ kind: 'parameterized', base: uint32, metadata: 'not a record' });");
 });
 
@@ -169,7 +168,7 @@ test('`enum` is the one kind that still does not round-trip, for its own reason'
 // ---------------------------------------------------------------------------
 
 test('a hook still receives an ECMAScript object, not the stored record', () => {
-  // PLAN-metadata-typing.md OQ4-C. The slot STORES a frozen plain record, so
+  // The slot STORES a frozen plain record, so
   // that `SameMetadata` can compare two parameterizations without allocating an
   // object or running user code on the interning path. A hook is user code and
   // must receive an object instead - handing it the host record once failed
@@ -190,7 +189,7 @@ test('a hook still receives an ECMAScript object, not the stored record', () => 
 });
 
 test('the stored form and the hook form are different, and both are right', () => {
-  // The distinction the plan turns on, asserted from the outside. Reflection
+  // The distinction, asserted from the outside. Reflection
   // reads the STORED record - keys and leaves - while a hook reads a converted
   // object. Both answer for the same parameterization, and neither is the other.
   expect(evaluated("type B = uint32.<{ brand: 'UserId' }>;"

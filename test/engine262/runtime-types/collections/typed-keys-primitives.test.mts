@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.3 - PRIMITIVE KEYS.
+ * PRIMITIVE KEYS.
  *
  * Each operation against each type family, as key and as element. The cases that
  * earn their place are the ones where a family's own equality rule decides the
@@ -109,10 +109,10 @@ test('string, boolean, symbol, bigint keys', () => {
 
 test('a key of the wrong primitive type is refused', () => {
   // Written through an ANNOTATION, because `new Map.<K, V>()` gives the checker
-  // no receiver type (D13) and the refusal would come from the run time instead.
+  // no receiver type and the refusal would come from the run time instead.
   expectStaticTypeError('let m: Map.<string, uint8> = new Map(); m.set(1, 1);');
   expectStaticTypeError('let s: Set.<uint8> = new Set(); s.add("a");');
-  // The run time refuses them either way, which is what D13 leaves intact.
+  // The run time refuses them either way, which that gap leaves intact.
   expect(ok('const m = new Map.<string, uint8>(); const bad = (1 := any); m.set(bad, 1);')).toBe(false);
   expect(ok('const s = new Set.<boolean>(); const bad = (1 := any); s.add(bad);')).toBe(false);
 });
@@ -129,7 +129,7 @@ test('a Map VALUE takes its declared type across the families', () => {
   // question about the decimal types and not something a collection does to
   // them, so it does not belong in this file.
   expect(ok('const m = new Map.<string, uint8>(); m.set("a", 300);')).toBe(false);
-  // A value position CONVERTS where a key position checks (OQ7), so a lossless
+  // A value position CONVERTS where a key position checks, so a lossless
   // source is admitted here and refused as a key.
   expect(evaluated('const m = new Map.<uint8, string>(); const n = (1 := any); m.set(1, n); m.get(1);')).toBe('1');
 });

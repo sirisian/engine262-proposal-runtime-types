@@ -57,7 +57,7 @@ test('Variable Declaration: a typed binding without an initializer takes the def
   expect(evaluated('let b: boolean; String(b);')).toBe('false'); // default false
   expect(evaluated('let n: bigint; String(n === 0n);')).toBe('true'); // default 0n
   expect(evaluated('let x: uint8 | null; String(x === null);')).toBe('true'); // nullable -> null
-  // PLAN-typed-const-default.md. This asserted the opposite - "a `const` without
+  // This asserted the opposite - "a `const` without
   // an initializer remains a Syntax Error whether or not it is typed (the README
   // prose is superseded here)" - and #sec-typed-bindings now says the README was
   // right: the annotation is what makes the initializer redundant rather than

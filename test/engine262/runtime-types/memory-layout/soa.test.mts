@@ -345,7 +345,7 @@ test('soa: conversion is explicit and copies, and the two types are distinct', (
   // be undone."
   expectThrown('class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
   // Through a `let`, so the RUN-TIME refusal is what answers. A `const` bound to
-  // a construction now takes that construction's type (D13), and `SoA` is a
+  // a construction now takes that construction's type, and `SoA` is a
   // library nominal like `Map`, so the conversion is refused as an Early Error
   // before the run time is reached. Both are asserted, the early error being the
   // better answer.
@@ -436,7 +436,7 @@ test('a boolean SoA column is written and read as a boolean', () => {
   // Q: a scatter, through the same function one frame down.
   expect(evaluated(`${s} const v = new R(); v.x = (3.5 := float32); s[0] = v; String(s[0].x);`)).toBe('3.5');
   // The scatter above asserts the FLOAT field, which only shows the write did
-  // not crash. Item Q's crash happened while scattering the BOOLEAN, so the
+  // not crash. The crash happened while scattering the BOOLEAN, so the
   // value that landed there is what the fix has to be judged on - a scatter
   // that stored 1 rather than `true` would pass the line above and fail this.
   expect(evaluated(`${s} const v = new R(); v.alive = true; s[0] = v; `
@@ -474,7 +474,7 @@ test('the boolean fix does not disturb the layout or its neighbours', () => {
   // A gather is still a COPY, per soa.md:106 "Gathers a Particle value from the
   // columns" - specified, not a defect, and easy to mistake for one. What it is
   // NOT is a different value: `G` is a value type class, so two gathers of one
-  // element are `===` because their fields are (D5). This assertion read
+  // element are `===` because their fields are. This assertion read
   // *false* while `===` on a value type class was still reference identity, and
   // the comment above is what makes the new answer the right one - a copy of a
   // value is that value.

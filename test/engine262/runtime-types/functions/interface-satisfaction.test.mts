@@ -170,9 +170,9 @@ test('ranking works where the shapes differ', () => {
 test('a generic interface is NOT satisfied by a class that never declared it', () => {
   // The declaration site takes `<T>` and the use site `.<T>`; an earlier probe
   // used the use-site spelling in both places and reported a parse error, which
-  // went into the plan as an open question. It is not one.
+  // was recorded as an open question. It is not one.
   //
-  // INVERTED (OQ22). This asserted `expectOk` and passed only because a
+  // INVERTED. This asserted `expectOk` and passed only because a
   // parameterised interface resolved to NULL and nothing was compared - so it
   // recorded the absence of a check rather than a rule. `sec-interfaces` gives
   // two routes and a class instance is in one: "a class that implements it is a
@@ -186,8 +186,8 @@ test('a generic interface is NOT satisfied by a class that never declared it', (
     + 'let b: Box.<uint8> = new C();');
   // NOT asserted here: the `implements` route, which should make it a subtype
   // "by the declared hierarchy" and is REFUSED today - `"C" is not assignable to
-  // "Box.<uint.<8>>"` with the clause written. That is D65, a separate gap: OQ22
-  // settles which routes EXIST, not whether each works.
+  // "Box.<uint.<8>>"` with the clause written. That is a separate gap: what is
+  // settled here is which routes EXIST, not whether each works.
   //
   // An OBJECT satisfies it structurally, which is the route the list names.
   expectOk('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };');

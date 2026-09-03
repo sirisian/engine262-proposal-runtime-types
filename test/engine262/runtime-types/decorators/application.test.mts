@@ -197,9 +197,9 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
   const both = 'const log = []; function tag(n, c) { log.push(n + \'(\' + c.kind + \')\'); } '
     + 'class Op { operator +(@tag(\'p\') r: Op): @tag(\'ret\') Op { return r; } } ';
   expect(evaluated(`${both} log.join(',');`)).toBe('p(ClassOperatorParameter),ret(ClassOperatorReturn)');
-  // THE RETURN TAKES ITS OWN CONTEXT. It borrowed `ClassMethodReturn` when C1
-  // wired it, because the table had no `ClassOperatorReturn`; the table now has
-  // one. Every other callable member had a return context - ClassGetterReturn,
+  // THE RETURN TAKES ITS OWN CONTEXT. It borrowed `ClassMethodReturn` when it
+  // was first wired, because the table had no `ClassOperatorReturn`; the table
+  // now has one. Every other callable member had a return context - ClassGetterReturn,
   // ClassMethodReturn, FunctionReturn, ObjectGetterReturn, ObjectMethodReturn -
   // and the borrow made "decorate method returns but not operator returns"
   // unwriteable, since a context IS the dispatch.
@@ -356,8 +356,8 @@ test('the object family mirrors the class family', () => {
     + 'gr(ObjectGetterReturn),g(ObjectGetter),sp(ObjectSetterParameter),s(ObjectSetter),O(Object)',
   );
 
-  // THE ONE THING THAT DID NOT GENERALIZE, and the plan predicted the shape of
-  // it: the sub-target mapping. An owner kind that does not name its own
+  // THE ONE THING THAT DID NOT GENERALIZE, and its shape was predictable: the
+  // sub-target mapping. An owner kind that does not name its own
   // parameter and return contexts silently borrows the CLASS ones - which is
   // invisible to an ordering test, since the sequence is identical either way.
   // It bites for `Function` and again for all three object member kinds.

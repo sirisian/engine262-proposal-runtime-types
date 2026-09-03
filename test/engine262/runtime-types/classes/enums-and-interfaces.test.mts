@@ -69,7 +69,7 @@ test('interfaces check structurally', () => {
   // `a`, and `a` is bound nowhere. The function-type and object-type spellings
   // both report that already: `type F = (a) => uint8` and
   // `type G = { greet(a) }` each answer `"a" is not defined`. Only the interface
-  // was silent, which is D69.
+  // was silent.
   //
   // The row is about MEMBERSHIP - a method member is satisfied by a method and
   // not by a number - so the parameter is given a type and the row keeps testing
@@ -88,7 +88,7 @@ test('interfaces check structurally', () => {
   //
   // `anyv` is DECLARED `: any` now. It was unannotated, and the comment above
   // called it "the `any` path where the checker cannot decide" - which stopped
-  // being true when an object literal gained a static type (D58): the inferred
+  // being true when an object literal gained a static type: the inferred
   // return became `{ x: number }` and the assignment an Early Error, so these
   // two rows tested the checker where they meant to test the RUN TIME. Writing
   // the annotation restores what they were for.
@@ -132,7 +132,7 @@ test('a typed class is sealed and its prototype frozen', () => {
   // type is what constrains it", and the store check still applies.
   expect(evaluated('class A { a: uint8; } const x = new A(); x.a = 7; String(x.a);')).toBe('7');
   // Written through a `let`, because a `const` bound to a CONSTRUCTION now takes
-  // that construction's type (D13) and `x.a = 300` becomes an Early Error - the
+  // that construction's type and `x.a = 300` becomes an Early Error - the
   // store check moving from run time to compile time, which is the checker doing
   // its job. The run-time check is what this line is about, so it is reached
   // through a binding the checker does not type.

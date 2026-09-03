@@ -13,9 +13,9 @@ import {
  * was a prover with a budget, and no other rule here asks for one." So a shape
  * this does not recognise DISQUALIFIES rather than being reasoned about.
  *
- * It answers with CONSTANTS, not a type - building the denoted union is stage
- * B's, and keeping them apart is what lets every form be tested without
- * constructing a type.
+ * It answers with CONSTANTS, not a type - building the denoted union is a
+ * separate step, and keeping them apart is what lets every form be tested
+ * without constructing a type.
  */
 
 function chain(source: string): string {

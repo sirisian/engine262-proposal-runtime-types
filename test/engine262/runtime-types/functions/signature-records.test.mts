@@ -18,8 +18,8 @@ import { SequenceAssignment, slotReceiving, type Slot } from '../../../../src/ty
  * The consequence this file pins is IDENTITY. Types are interned by a canonical
  * order key, and that key was built from the parameter TYPES alone - so two
  * signatures differing only in a rest, or only in an optional marker, produced
- * the same key and interned as ONE Type Object. Every later phase of the plan
- * would have been built on a model that could not tell its own cases apart.
+ * the same key and interned as ONE Type Object. Everything built on top would
+ * have rested on a model that could not tell its own cases apart.
  */
 
 test('a rest parameter is part of a function type\'s IDENTITY', () => {
@@ -229,7 +229,7 @@ test('slotReceiving reads which slot took an item', () => {
 });
 
 test('a non-arrow literal adopts the `this` its contextual signature declares', () => {
-  // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: "Where a
+  // #sec-this-adoption: "Where a
   // non-arrow function literal's contextual type is a ~function~ type whose
   // applicable signature has a [[ThisType]], the literal adopts it: `this`
   // within the body has that type ... An ARROW adopts nothing, since it has no
@@ -252,8 +252,7 @@ test('a non-arrow literal adopts the `this` its contextual signature declares', 
 });
 
 test('an adopted self marker resolves to the owner, and only for reading', () => {
-  // PLAN-declarative-checker-facts.md phase 1b, from
-  // ANALYSIS-self-marker-resolution.md (D-3 + D-5). A method's [[ThisType]] is
+  // A method's [[ThisType]] is
   // the SELF MARKER, which has no members - so a literal adopting it got a
   // `this` that was typed and unusable. At the READING site the marker resolves
   // to the type that owns the signature, which is what it stands for.

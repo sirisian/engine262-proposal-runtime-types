@@ -90,7 +90,7 @@ test('IndexedTypeOf distributes over a union operand and a union key', () => {
 });
 
 test('a computed access with a String literal key is TYPED', () => {
-  // PLAN-parameter-composition Stage B. `o["n"]` and `o.n` read the same
+  // `o["n"]` and `o.n` read the same
   // property, so they answer the same type - and both go through
   // `IndexedAccessTypeRecord`, which is the operation the ANNOTATION `T["n"]`
   // denotes, so the three cannot drift apart.

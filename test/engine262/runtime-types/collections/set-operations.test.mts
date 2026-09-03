@@ -2,8 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.5 - THE SET OPERATIONS AND THE FAMILY TOP
- * (Phase 3, OQ2 and D2).
+ * THE SET OPERATIONS AND THE FAMILY TOP.
  *
  * THE FAMILY TOP. `Set.<any>` is a set of some element type and
  * `Map.<any, any>` a map of some key and value types, and every specialization
@@ -17,8 +16,9 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
  * map-of-string-keys top, and a `Map.<uint8, uint8>` does not reach it. The
  * array has one argument and so never had to say this.
  *
- * D2, FIXED. A bare library nominal used to accept its own specializations - a
- * `Set.<uint8>` was assignable to `Set` - while a bare USER generic did not, so
+ * THE BARE NOMINAL, FIXED. A bare library nominal used to accept its own
+ * specializations - a `Set.<uint8>` was assignable to `Set` - while a bare USER
+ * generic did not, so
  * `G.<uint8>` was not assignable to `G`. Two readings of one rule, and the
  * ARRAY settles which is right: a `[].<uint8>` is NOT assignable to a bare `[]`,
  * and a bare `[]` is the untyped array. Collections now agree with both. The
@@ -65,25 +65,25 @@ test('invariance is untouched for every other argument', () => {
   expectStaticTypeError('function f(x: Set.<any>) {} let m: Map.<string, uint8> = new Map(); f(m);');
 });
 
-test('D2: a BARE nominal is not a top, for a library or a user generic', () => {
+test('a BARE nominal is not a top, for a library or a user generic', () => {
   // The array is the precedent: a typed array does not reach a bare `[]`.
   expectStaticTypeError('function f(x: []) {} let a: [].<uint8> = [1]; f(a);');
   // The array's OTHER half is not asserted, because the array disagrees with
   // itself about it: `f([1,2,3])` at a bare `[]` parameter is accepted by the
   // checker and throws at RUN TIME, "[object Array] is not assignable to []".
   // Measured on a clean build of the base commit, so it predates this work and
-  // is filed rather than fixed here (D18). The collections do not share it -
-  // see the two assertions at the foot of this test - which is what makes it an
-  // array defect rather than a rule this phase got wrong.
+  // is filed rather than fixed here. The collections do not share it - see the
+  // two assertions at the foot of this test - which is what makes it an array
+  // defect rather than a rule the collections got wrong.
   // Collections now agree.
   expectStaticTypeError('function f(x: Set) {} let s: Set.<uint8> = new Set(); f(s);');
   expectStaticTypeError('function f(x: Map) {} let m: Map.<string, uint8> = new Map(); f(m);');
   // ...as does the user generic, which always did.
   expectStaticTypeError('class G<T> { x: uint8; } function f(a: G) {} let g: G.<uint8> = new G.<uint8>(); f(g);');
   // A bare nominal still admits the UNPARAMETERIZED value, which is what it
-  // means - and is how sec 0's untyped collections stay writable. Asserted
-  // UNWRAPPED, so the run time answers too: the checker and the run time must
-  // agree here, which is exactly what D18 shows the array failing to do.
+  // means - and is how untyped collections stay writable. Asserted UNWRAPPED,
+  // so the run time answers too: the checker and the run time must agree here,
+  // which is exactly what the array above fails to do.
   expect(ok('function f(x: Set) {} f(new Set());')).toBe(true);
   expect(ok('function f(x: Map) {} f(new Map());')).toBe(true);
   expect(evaluated('function f(x: Set) { return x.size; } String(f(new Set()));')).toBe('0');
@@ -94,7 +94,7 @@ test('D2: a BARE nominal is not a top, for a library or a user generic', () => {
 // ---------------------------------------------------------------------------
 
 test('the other operand is bound at the family top', () => {
-  // Before Phase 3 the parameter was ~any~ and every one of these type-checked.
+  // The parameter was once ~any~ and every one of these type-checked.
   for (const op of ['union', 'intersection', 'difference', 'symmetricDifference',
     'isSubsetOf', 'isSupersetOf', 'isDisjointFrom']) {
     expectStaticTypeError(`${AB} a.${op}(1);`);
@@ -166,7 +166,7 @@ test('the operations carry their element types at run time', () => {
   expect(ok(`${a}${b} const u = a.union(b); const bad = (300 := any); u.add(bad);`)).toBe(false);
 });
 
-test('D20: the constant-fold holds in BOTH directions', () => {
+test('the constant-fold holds in BOTH directions', () => {
   // The design's claim is symmetric - "distinct value types share no values" -
   // and before this it was not. A set operation walks the SMALLER operand and
   // probes the larger, and the probe ran through the converting path: a uint8

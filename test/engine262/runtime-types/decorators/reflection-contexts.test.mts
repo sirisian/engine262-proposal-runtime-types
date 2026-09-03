@@ -150,9 +150,8 @@ test('a reflection context is a STRUCTURAL type, as the design writes it', () =>
   // a thrown *TypeError* for the ~any~ boundary and other genuinely dynamic
   // checks". The literal's shape is known here, so the refusal is static.
   expectStaticTypeError('let x: Reflect.ClassField = { kind: "nope" };');
-  // The wrong KIND is refused before evaluation, since
-  // `PLAN-checker-type-resolution.md stage A` taught the checker to resolve a
-  // qualified name. The shape row above stays a runtime judgment: a `kind`
+  // The wrong KIND is refused before evaluation, the checker being able to
+  // resolve a qualified name. The shape row above stays a runtime judgment: a `kind`
   // string is read off the value, not from the source text.
   expectStaticTypeError('let x: Reflect.ClassField = 5;');
   // `Reflect.Type` is the exception the design already names: it "is the one
@@ -198,7 +197,7 @@ test('the rest of #sec-decorator-application', () => {
  *
  * The difference matters: "a decorator ran" and "the RIGHT decorator ran" are
  * different claims, and only the second catches a context being built for the
- * wrong position - which is the defect shape this plan has met most often.
+ * wrong position - which is the defect shape this area has met most often.
  */
 
 test('a decorator SELECTS on the context it is given', () => {
@@ -240,8 +239,8 @@ test('a SUB-TARGET selects its own context too', () => {
   expect(evaluated(`${decls} class A { m(@f x: uint8) {} } l.join(",");`)).toBe('param');
   expect(evaluated(`${decls} class A { m(): @f uint8 { return uint8(1); } } l.join(",");`)).toBe('return');
   // A method decorated ALONGSIDE its sub-targets fires all three, each with its
-  // own context - which is the case A4 records as having hidden a defect for
-  // eleven cycles, because a sub-target only fired when its OWNER was decorated.
+  // own context - the case that hid a defect for a long time, because a
+  // sub-target only fired when its OWNER was decorated.
   expect(evaluated(`${decls} class A { @f m(@f x: uint8): @f uint8 { return uint8(1); } } l.join(",");`))
     .toBe('param,return,method');
   // And the sub-targets fire when the owner is NOT decorated, which is the
@@ -268,8 +267,8 @@ test('a CLASS and a FUNCTION select their own contexts', () => {
 test('an operator return takes ClassOperatorReturn', () => {
   // Every other callable member had a return context - ClassGetterReturn,
   // ClassMethodReturn, FunctionReturn, ObjectGetterReturn, ObjectMethodReturn.
-  // The operator was the only one without, so C1 gave its return the METHOD
-  // context, which made "decorate method returns but not operator returns"
+  // The operator was the only one without, so its return was first given the
+  // METHOD context, which made "decorate method returns but not operator returns"
   // unwriteable: a context IS the dispatch here.
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } class O { operator +(r: O): @f O { return r; } } k;')).toBe('ClassOperatorReturn');
   expect(evaluated('typeof Reflect.ClassOperatorReturn;')).toBe('object');
@@ -321,7 +320,7 @@ test('a decorator precedes a type only where the position has a context', () => 
 });
 
 test('a function\'s sub-targets fire on their own', () => {
-  // Writing decision 4's assertions found that a plain function's parameter and
+  // Writing these assertions found that a plain function's parameter and
   // return decorations fired ONLY when the function itself was decorated - so
   // the rule "a decorator precedes a type where the position has a context" was
   // half true: `function g(): @f T` has a context and never reached it.
@@ -330,7 +329,7 @@ test('a function\'s sub-targets fire on their own', () => {
   // sub-target application sat inside it. A class method and an object method
   // never had this, because theirs run from ClassElementEvaluation, which does
   // not ask whether the member is decorated - the same one-of-two-entry-points
-  // shape as the operator bug of C1.
+  // shape as the operator bug above.
   const tag = 'const l = []; function tag(n, c) { l.push(n + "(" + c.kind + ")"); } ';
   expect(evaluated(`${tag} function g(@tag("p") x: uint8): @tag("r") uint8 { return x; } l.join(",");`)).toBe('p(FunctionParameter),r(FunctionReturn)');
   // The function's OWN decoration is unchanged, and still last in the order.
@@ -341,21 +340,21 @@ test('a function\'s sub-targets fire on their own', () => {
   expect(evaluated(`${tag} function g(x: uint8) { return x; } String(l.length);`)).toBe('0');
 });
 
-test('OQ20: `Reflect.TypeObject` is the type of a TYPE OBJECT', () => {
+test('`Reflect.TypeObject` is the type of a TYPE OBJECT', () => {
   // NOT a synonym for `Reflect.Type`, which is the type of a reflection NODE.
   // The two sit on opposite sides of the reflection relationship: a Type Object
   // IS a type reified as a value; a node DESCRIBES one, and a node's members are
   // themselves Type Objects.
   //
-  // `Reflect.typeOf` returns a Type Object, which is why its row was WITHDRAWN
-  // (D34) - `Reflect.Type` was the only name available and is the wrong one.
+  // `Reflect.typeOf` returns a Type Object, which is why its row was WITHDRAWN -
+  // `Reflect.Type` was the only name available and is the wrong one.
   expect(evaluated('String(Reflect.typeOf(1) is Reflect.TypeObject);')).toBe('true');
   expect(evaluated('String((type uint8) is Reflect.TypeObject);')).toBe('true');
   expect(evaluated('String(1 is Reflect.TypeObject);')).toBe('false');
   expect(evaluated('String("s" is Reflect.TypeObject);')).toBe('false');
 });
 
-test('OQ20: the two reflection types stay APART', () => {
+test('the two reflection types stay APART', () => {
   // A node satisfies `Reflect.Type` and is not a Type Object; a Type Object is
   // the reverse. Neither may drift into the other.
   expect(evaluated('String(Reflect.getReflection.<Reflect.Type, uint8>() is Reflect.Type);')).toBe('true');

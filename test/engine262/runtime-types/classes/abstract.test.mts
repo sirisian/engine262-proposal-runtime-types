@@ -48,7 +48,7 @@ function errorMessage(source: string): string {
 }
 
 test('a member is abstract because it has no body', () => {
-  // PLAN-signature-listings.md Part A. #sec-abstract-classes: "A member is
+  // #sec-abstract-classes: "A member is
   // abstract because it has no body; the `abstract` keyword before it is
   // optional and says the same thing earlier."
   //
@@ -96,14 +96,14 @@ test('an accessor is an abstract member; four other forms are not', () => {
 });
 
 test('a concrete class must implement what it inherits with no body', () => {
-  // PLAN-abstract-implementation.md phase 2b. #sec-abstract-classes: "a type
+  // #sec-abstract-classes: "a type
   // error if a class not declared `abstract` leaves an inherited abstract
   // method unimplemented". Until now the class declared, constructed, and
   // reported only when the missing member was CALLED - "h.m is not a function",
   // which names the symptom rather than the contract.
   //
   // Newly reachable at all: `m(): uint8;` without the keyword, and accessors as
-  // abstract members, both arrived with PLAN-signature-listings Part A.
+  // abstract members, both arrived with the bodiless-member syntax.
   const G = 'abstract class G { m(): uint8; } ';
   expect(errorMessage(`${G} class H extends G { }`)).toMatch(/inherits "m" with no body/);
   // Both accessor forms, which a kind-filtered walk is likeliest to miss - an
@@ -139,12 +139,12 @@ test('the branches that already worked still do', () => {
 });
 
 test('an implementation must have a signature the declaration accepts', () => {
-  // PLAN-abstract-implementation.md phase 3, rule 1. #sec-abstract-classes: an
+  // #sec-abstract-classes: an
   // abstract method's "annotation types the implementations: it is a type error
   // if a subclass implements an inherited abstract method with a signature the
   // abstract declaration does not accept".
   //
-  // The SUBTYPE relation (D3), which is what interface satisfaction already uses
+  // The SUBTYPE relation, which is what interface satisfaction already uses
   // for the same question - `class C implements I { m(): uint8 }` for an `I`
   // declaring `m(): number` is refused, and an abstract `m(): number` accepting
   // it was the engine answering one question two ways.
@@ -156,7 +156,7 @@ test('an implementation must have a signature the declaration accepts', () => {
   // `uint8` is NOT a narrower `number` in this design: the numeric families are
   // mutually unrelated, no boundary admits the value, and the override that is
   // accepted today produces a result every `number` position rejects. This case
-  // is why D3 was reopened, and it is refused rather than preserved.
+  // is why the relation was reopened, and it is refused rather than preserved.
   expect(errorMessage('abstract class R { m(): number; } class S extends R { m(): uint8 { return (1 := uint8); } }'))
     .toMatch(/signature the declaration does not accept/);
   // Where the design DOES have a subtype, it is accepted: a literal type sits
@@ -168,10 +168,9 @@ test('an implementation must have a signature the declaration accepts', () => {
 });
 
 test('the signature rule is an Early Error too', () => {
-  // PLAN-abstract-implementation.md, the checking-pass migration, rule 1. It was
-  // evaluation-time only after phase 3: the marker before the class ran, then
-  // the override threw. Both rules of #sec-abstract-classes are now Early
-  // Errors, which is what D1's recorded deviation asked for.
+  // It was evaluation-time only: the marker before the class ran, then the
+  // override threw. Both rules of #sec-abstract-classes are now Early Errors,
+  // which is what the recorded deviation asked for.
   //
   // The assertion is TIMING - both behaviours throw.
   expect(evaluated('globalThis.ran = 0; try { eval("abstract class G { m(): uint8; } '
@@ -187,12 +186,10 @@ test('the signature rule is an Early Error too', () => {
 });
 
 test('the unimplemented rule is an Early Error', () => {
-  // PLAN-abstract-implementation.md, the checking-pass migration. D1 recorded a
-  // deviation: both rules refused at class definition EVALUATION, so a marker
-  // before the class ran and a class in dead code was never checked.
+  // A recorded deviation: both rules refused at class definition EVALUATION, so
+  // a marker before the class ran and a class in dead code was never checked.
   // #sec-type-errors wants "a source text that contains one is rejected rather
-  // than evaluated", which is what PLAN-default-timing settled for the
-  // no-default rule.
+  // than evaluated", which is what the no-default rule settled on.
   //
   // The assertion is TIMING, not that an error occurs - both behaviours throw.
   expect(evaluated('globalThis.ran = 0; try { eval("abstract class G { m(): uint8; } class H extends G { }"); } '
@@ -206,9 +203,8 @@ test('the unimplemented rule is an Early Error', () => {
 });
 
 test('both rules follow a chain of any depth', () => {
-  // PLAN-abstract-implementation.md. The plan's own tests went two levels; these
-  // are A / B extends A / C extends B and deeper, which is where the two walks
-  // stop being obviously equivalent.
+  // Earlier coverage went two levels; these are A / B extends A / C extends B
+  // and deeper, which is where the two walks stop being obviously equivalent.
   //
   // An obligation survives any number of ABSTRACT links.
   expectThrown('abstract class A { m(): uint8; } abstract class B extends A { } class C extends B { }');

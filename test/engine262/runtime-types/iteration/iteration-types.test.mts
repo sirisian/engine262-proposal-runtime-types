@@ -227,11 +227,11 @@ test('a pipeline carries an iterator through a chain', () => {
  */
 
 test('map erases the element type, as it does for arrays', () => {
-  // The plan called `map` the method that CHANGES the element type. It does
-  // not, here or for arrays: the side-table mechanism these signatures use has
-  // no way to bind a callback's return as a type parameter, so both return
-  // `any`. Asserted rather than left implied, because the plan's own text says
-  // otherwise and someone will check.
+  // `map` is often described as the method that CHANGES the element type. It
+  // does not, here or for arrays: the side-table mechanism these signatures use
+  // has no way to bind a callback's return as a type parameter, so both return
+  // `any`. Asserted rather than left implied, because the expectation runs the
+  // other way and someone will check.
   const g = 'function* g(): uint8 { yield 1; } ';
   // The two erase it differently, which is worth pinning. An array's `map`
   // returns bare `any`, which is assignable to anything, so a wrong annotation
@@ -251,8 +251,8 @@ test('destructuring reads a typed iterator', () => {
 });
 
 test('composites are unaffected', () => {
-  // The existing caller of the structural form, which the plan names as the
-  // suite to run first on every iteration.
+  // The existing caller of the structural form, and the first thing to check on
+  // any change here.
   expect(evaluated('const k = Composite({ a: 1 }); String(k === Composite({ a: 1 }));')).toBe('true');
 });
 
@@ -308,9 +308,9 @@ test('applying type arguments to a Type Object is not a no-op', () => {
  * their results carry - `Iterator<T, R, N, W<_> = Identity>` synchronous,
  * the same with `Promise` asynchronous.
  *
- * The gate for this phase was that every test above passes UNCHANGED, and it
- * does. A unification requiring its own tests to be rewritten has changed the
- * types rather than deduplicated them.
+ * The gate was that every test above passes UNCHANGED, and it does. A
+ * unification requiring its own tests to be rewritten has changed the types
+ * rather than deduplicated them.
  *
  * `Iterable` and `AsyncIterable` remain two, and so do their IterableIterator
  * pair, because they differ in the member KEY - [Symbol.iterator] against
@@ -348,7 +348,7 @@ test('Iterable and AsyncIterable remain two interfaces', () => {
   expect(ok('function* g(): uint8 { yield 1; } const i: AsyncIterable.<uint8> = g();')).toBe(false);
 });
 
-test('an array and a tuple satisfy Iterable over their elements (D22)', () => {
+test('an array and a tuple satisfy Iterable over their elements', () => {
   // BUILTIN_IMPLEMENTS is keyed on a [[LibraryName]], and an array type has
   // none - it is ~array~, not ~nominal~ - so the declared-implements branch
   // could not see it whatever the table said. The omission was invisible from
@@ -372,7 +372,7 @@ test('an array and a tuple satisfy Iterable over their elements (D22)', () => {
   expect(ok('function f(i: Iterable.<uint8>) {} let s: Set.<uint8> = new Set(); f(s);')).toBe(true);
 });
 
-test('an iteration interface written as a type EXPRESSION carries its arguments (D16, part)', () => {
+test('an iteration interface written as a type EXPRESSION carries its arguments', () => {
   // `type Iterable.<uint8>`, `type Iterable.<string>` and `type Iterable` all
   // interned to one type object: an iteration interface resolves to a
   // structural record rather than a nominal one, so the branch that carries

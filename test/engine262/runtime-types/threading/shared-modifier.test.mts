@@ -49,8 +49,8 @@ test('shared: admits the value types', () => {
 // The three refusals are catchable TypeErrors raised where the type expression
 // is evaluated, which is the shape the existing type-expression errors take (the
 // `keyof` of a type with no keys is the nearest neighbour). Whether some of these
-// belong in the checking pass instead is open; matching the established pattern is
-// what this phase does.
+// belong in the checking pass instead is open; the established pattern is what
+// is matched here.
 test('shared: a non-value type is refused', () => {
   // An object is ALREADY shared - one heap - so the modifier would claim of it
   // nothing that is not already true, and `shared Map` would falsely suggest a

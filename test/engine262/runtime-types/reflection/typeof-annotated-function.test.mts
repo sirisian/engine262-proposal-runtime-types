@@ -2,8 +2,6 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * `PLAN-capture-by-signature.md` Stage A.
- *
  * `ResolveTypeName` resolved through `ResolveBinding` with no environment, which
  * reads the RUNNING execution context's LexicalEnvironment. A BUILT-IN's context
  * has none, so every path that resolved a type name from inside a built-in
@@ -41,7 +39,7 @@ test('a built-in primitive still resolves, which always worked', () => {
 test('the signature is READ, not merely survived', () => {
   // Not crashing is not the same as resolving. The parameter list is reachable
   // and its second entry's type is identity-equal to the type it names - which
-  // is the predicate Stage C is built on.
+  // is the predicate capture by signature is built on.
   const M = 'function m(s: TokenStream, c: Reflect.Block): [].<Token> { return []; } ';
   expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).kind);`)).toBe('function');
   expect(evaluated(`${M}String(Reflect.getReflection(Reflect.typeOf(m)).signatures[0].parameters.length);`)).toBe('2');

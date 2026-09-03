@@ -36,8 +36,8 @@ test('function runtime type: an overloaded function reports every arm', () => {
 });
 
 test('function runtime type: a function that declares nothing reports one anyway', () => {
-  // PLAN-callable-reflection.md phase 2 (OQ1-B). This test used to assert the
-  // opposite, on the rationale that reporting all-`any` parameters "would
+  // This test used to assert the opposite, on the rationale that reporting
+  // all-`any` parameters "would
   // synthesise the signature the unannotated rule refuses".
   //
   // The rationale did not hold. The checker ALREADY performs that inference and
@@ -76,7 +76,7 @@ test('F129: every unannotated callable no longer shares one type', () => {
     + ' m.set(Reflect.typeOf(f), 1); m.set(Reflect.typeOf(g), 2); String(m.size);')).toBe('2');
 });
 
-test('function runtime type: every callable shape reports a function type (OQ4-C)', () => {
+test('function runtime type: every callable shape reports a function type', () => {
   // The rule has to be statable, and "the shapes our edit happened to reach" is
   // not one. An arrow, a builtin, a bound function and a Proxy of a function are
   // all callables whose signature the engine may not hold; each still reports a
@@ -91,9 +91,9 @@ test('function runtime type: every callable shape reports a function type (OQ4-C
   expect(evaluated('class C { x: uint8 = 1; } String(Reflect.getReflection(Reflect.typeOf(C)).kind);')).toBe('function');
 });
 
-test('OQ5-B: a class constructor reports what it constructs', () => {
+test('a class constructor reports what it constructs', () => {
   // The constructor's BODY-inferred return is `void` - it returns nothing, and
-  // after PLAN-constructor-returns.md phase 1 it may return nothing but `this`.
+  // a typed constructor may return nothing but `this`.
   // `void` is not what `new C(...)` produces, and reporting it left every class
   // with the same constructor parameters sharing ONE type: F129 fixed for
   // functions and still live for classes.
@@ -113,9 +113,9 @@ test('OQ5-B: a class constructor reports what it constructs', () => {
     + ' String(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].return.type === type void);')).toBe('true');
 });
 
-test('OQ5-B does not disturb OQ3-C - the two answer different questions', () => {
-  // PLAN-constructor-returns.md OQ3-C gives a constructor's DECLARATION
-  // reflection no return entry, because a constructor declares none. This gives
+test('the value type and the declaration reflection answer different questions', () => {
+  // A constructor's DECLARATION reflection has no return entry, because a
+  // constructor declares none. This gives
   // its VALUE's type a return, because a construction yields the class. Both
   // are right and they must not be collapsed into each other by a later edit
   // that notices they disagree - so they are asserted side by side.

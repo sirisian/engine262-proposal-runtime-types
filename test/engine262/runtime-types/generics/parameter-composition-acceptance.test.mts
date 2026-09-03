@@ -2,18 +2,16 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError, ok } from '../harness.mts';
 
 /**
- * `PLAN-parameter-composition.md` Stage E — the plan's own acceptance criteria,
- * asserted rather than claimed.
- *
- * The plan's "done when": §1.1's two lines refused, §1.3's four still accepted,
- * and no suite regresses. Each is pinned below with the section it comes from,
- * so a later change that breaks one is told which promise it broke.
+ * The acceptance criteria for parameter composition, asserted rather than
+ * claimed: the two lines that must be refused, the four that must still be
+ * accepted, and no suite regressing. Each is pinned below, so a later change
+ * that breaks one is told which promise it broke.
  *
  * The subject is what a type PARAMETER composes into. Three things were wrong
  * and are fixed: a parameter carried no constraint, so a constrained one was
- * less usable than an unconstrained one (Stage A); a computed access with a
- * String literal key had no type at all (Stage B); and an indexed access over a
- * parameter resolved to nothing, so its annotation was unchecked (Stages C/D).
+ * less usable than an unconstrained one; a computed access with a String
+ * literal key had no type at all; and an indexed access over a parameter
+ * resolved to nothing, so its annotation was unchecked.
  */
 
 const okSrc = (s: string) => expect(ok(s), `expected accepted: ${s}`).toBe(true);

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.3 - COMPOSITE KEYS.
+ * COMPOSITE KEYS.
  *
  * A composite is interned by its contents, so two separately built composites of
  * equal contents are one value and therefore ONE KEY. That is what makes a
@@ -16,7 +16,7 @@ import { evaluated, ok } from '../harness.mts';
  * any of the three would break it silently.
  *
  * The value-type-class half of "structural keys" is the OTHER file,
- * `value-type-keys.test.mts`, and it is only partly working (D5). A composite
+ * `value-type-keys.test.mts`, and it is only partly working. A composite
  * needs none of that machinery: it is interned rather than compared.
  */
 
@@ -32,7 +32,7 @@ test('two separately built composites of equal contents are one key', () => {
   expect(evaluated('const m = new Map(); m.set(Composite({ a: 1 }), "one"); String(m.get(Composite({ a: 2 })));')).toBe('undefined');
 });
 
-test.fails('D23: a typed composite key type loses its object members', () => {
+test.fails('a typed composite key type loses its object members', () => {
   // `Composite.<{cx: int32, cy: int32}>` resolves with an EMPTY object argument -
   // the diagnostic reads `Composite.<{  }>` - so nothing is assignable to it and
   // the chunk-store idiom composites.md names cannot be written with its key
@@ -40,8 +40,8 @@ test.fails('D23: a typed composite key type loses its object members', () => {
   //
   // PRE-EXISTING, and not a collection defect: the same failure appears in a
   // bare `let c: Composite.<{x: int32}> = Composite({ (x: int32): 1 });`, verified
-  // on a clean build. It became visible here only once D13 gave
-  // `new Map.<K, V>()` a Static Type, so the key position is checked where it
+  // on a clean build. It became visible here only once `new Map.<K, V>()`
+  // acquired a Static Type, so the key position is checked where it
   // previously was not.
   const k = 'Composite({ (cx: int32): 1, (cy: int32): 2 })';
   expect(ok(`const m = new Map.<Composite.<{cx: int32, cy: int32}>, string>(); m.set(${k}, "chunk");`)).toBe(true);
@@ -50,7 +50,7 @@ test.fails('D23: a typed composite key type loses its object members', () => {
 
 test('an UNTYPED composite key works, which is the idiom in practice', () => {
   // The same chunk store with the key type left to inference. This is what
-  // composites.md's own examples write, and D23 does not reach it.
+  // composites.md's own examples write, and the defect above does not reach it.
   const k = 'Composite({ cx: 1, cy: 2 })';
   expect(evaluated(`const m = new Map(); m.set(${k}, "chunk"); String(m.get(${k}));`)).toBe('chunk');
   expect(evaluated(`const m = new Map(); m.set(${k}, "chunk"); String(m.get(Composite({ cx: 9, cy: 2 })));`)).toBe('undefined');

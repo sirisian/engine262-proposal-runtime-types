@@ -9,8 +9,8 @@ import {
  * The parser and the plain form's evaluation, which cannot be separated: the
  * evaluator's dispatch is exhaustive, so a new
  * PrimaryExpression that nothing evaluates does not typecheck, so a parser-only
- * commit was not available. The runtime half is small for the reason the plan
- * recorded - Evaluate_StatementList already threads UpdateEmpty exactly as the
+ * commit was not available. The runtime half is small for a reason worth
+ * recording - Evaluate_StatementList already threads UpdateEmpty exactly as the
  * base specification does, so a block's completion already CARRIES its
  * completion value, and this only reads it.
  */

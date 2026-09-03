@@ -112,7 +112,7 @@ test('an untyped catch-all still ranks last', () => {
  * that parameter as a contextual type changes what the inference sees. The
  * contextual type is currently pushed only at an annotated binding; making it
  * the common case at every argument of every call is exactly the
- * broad-blast-radius change this file's own phase-2 note warned about.
+ * broad-blast-radius change this file's own note warned about.
  *
  * `soleSignatureParameterTypes` is kept - it is correct, tested by hand against
  * all three clause cases, and answers null for an overloaded callee, which is

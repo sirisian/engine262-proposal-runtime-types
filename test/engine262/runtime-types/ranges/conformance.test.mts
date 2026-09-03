@@ -292,7 +292,7 @@ test('sec-ranges: a range is an expression and appears wherever one does', () =>
 test('sec-ranges: DIVERGENCE - a range is a value, but does not compare as one', () => {
   // "A range is a value, so it allocates nothing and copies."
   //
-  // DIVERGENCE, recorded and NOT this plan's to fix: two equal ranges are not
+  // DIVERGENCE, recorded and not fixed here: two equal ranges are not
   // `===`. This is engine-wide rather than range-specific -- two equal vectors
   // are not `===` either, while typed numbers are -- so object-backed value
   // types generally lack value equality. Fixing it for ranges alone would make
@@ -579,7 +579,7 @@ test('sec-metadata-narrowing: a meta type defining no `narrow` keeps the constra
 });
 
 test('sec-metadata-narrowing: a `narrow` hook that throws leaves the binding un-narrowed', () => {
-  // Q3. `subtype` answers a JUDGMENT, so one that cannot be made must refuse;
+  // `subtype` answers a JUDGMENT, so one that cannot be made must refuse;
   // `narrow` produces KNOWLEDGE, and the clause already sanctions learning
   // nothing. Not hypothetical: this pass runs BEFORE evaluation, so a hook
   // touching anything the script initializes throws a TDZ ReferenceError.
@@ -606,7 +606,7 @@ test('sec-metadata-narrowing: an assignment invalidates a narrowing', () => {
 });
 
 test('sec-narrowing: an empty narrowed bound is NOT reported as dead code', () => {
-  // Q4. The dead-branch rule is defined operationally - "These are the branches
+  // The dead-branch rule is defined operationally - "These are the branches
   // for which NarrowTo or NarrowFrom returns ~empty~" - over the two TYPE-level
   // operations. Metadata narrowing goes through NarrowMetadata, which is
   // neither, so an empty bound is outside the rule as written and not reporting
@@ -812,7 +812,7 @@ test('ranges.md: a range helper answers exactly as the iterator it delegates to'
 
 test('ranges.md: helper chains compose, and keep the element type', () => {
   // `map` changes the element type and the chain carries it with no annotation
-  // at any step - the type comes from the range literal (R2b) and flows.
+  // at any step - the type comes from the range literal and flows.
   expect(evaluated('const a = (0..<3).map(v => String(v)).toArray(); String(a.length) + "/" + a.join("");')).toBe('3/012');
   // Leaving the family and staying in it compose in either order.
   expect(evaluated('(0..<10).filter(v => v % 2 === 0).map(v => v * 10).take(2).toArray().join(",");')).toBe('0,20');
@@ -869,7 +869,7 @@ test('table-metadata-values: a range of any of the four shapes is a metadata val
   // type claims is a type error at the parameterization that writes it". This
   // row asserted the nine shapes without one and passed only because the
   // checker could not resolve a range-bearing annotation and so never
-  // adjudicated the key - the hole A0 closed.
+  // adjudicated the key, which is the hole this closed.
   for (const b of ['0..<10', '1..=6', '0<..<10', '0<..=10', '0..', '0<..', '..<10', '..=10', '..']) {
     expect(evaluated(`${NB} type T = float64.<{ bounds: ${b} }>; "ok";`)).toBe('ok');
   }

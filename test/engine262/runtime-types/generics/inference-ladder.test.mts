@@ -1,11 +1,10 @@
-// PLAN-variadic-and-named-generic-arguments.md 2.6 / spec.emu
-// #sec-inference-through-results, #sec-declared-inverses: the ladder's last two
-// rungs, for scalars and packs alike (OQ-8, no carve-outs). Rung two: a
+// spec.emu #sec-inference-through-results, #sec-declared-inverses: the ladder's
+// last two rungs, for scalars and packs alike, with no carve-outs. Rung two: a
 // parameter reached only through a BUILDER, with a CLOSED constraint, binds by
 // trialling the constraint's inhabitants forward - exactly one must pass. Rung
 // three: with an open constraint, the parameter binds only through the
 // builder's declared inverse - and none exists here yet - so the call is
-// refused NAMING THE BUILDER, which is the diagnostic contract (G34, G37).
+// refused NAMING THE BUILDER, which is the diagnostic contract.
 // Before this, such a parameter bound silently to `any` and the builder ran
 // over nothing.
 import { test, expect } from 'vitest';
@@ -13,7 +12,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 
 const WRAP = 'function wrapOf(T) { return T; }';
 
-test('rung three: a builder with no inverse refuses the call, naming the builder and the parameter (G34, F-Y)', () => {
+test('rung three: a builder with no inverse refuses the call, naming the builder and the parameter', () => {
   expectThrown(`${WRAP} function j<T>(x: wrapOf(T)): uint32 { return 1; } j(1);`, 'wrapOf declares no inverse');
   expectThrown(`${WRAP} function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1, "a");`, 'wrapOf declares no inverse, so Ts');
 });
@@ -31,7 +30,7 @@ test('the forward-declaration pattern needs no rung beyond the first (G35 shape)
 // A builder whose result distinguishes every inhabitant of `[2].<boolean>`.
 const MASK = 'function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); }';
 
-test('rung two: a closed SCALAR constraint proposes its inhabitants and exactly one verifies (F-X, scalar)', () => {
+test('rung two: a closed SCALAR constraint proposes its inhabitants and exactly one verifies', () => {
   // The call succeeding is the proof: only the candidate `true` makes `pick`
   // yield `uint8`, which the argument satisfies; the candidate `false` yields
   // `string`, which it does not. With no candidate passing the call would be
@@ -40,14 +39,14 @@ test('rung two: a closed SCALAR constraint proposes its inhabitants and exactly 
   expect(evaluated('function pick(B) { return B === type true ? uint8 : string; } function one<B extends boolean>(x: pick(B)): string { return "bound"; } one("s");')).toBe('bound');
 });
 
-test('rung two: a trial-bound literal is the same Type Object as its written spelling (F-AD retracted)', () => {
-  // F-AD was a bug in the trial's own patch: the fallback `bound = any` ran
+test('rung two: a trial-bound literal is the same Type Object as its written spelling', () => {
+  // This was a bug in the trial's own patch: the fallback `bound = any` ran
   // unconditionally after the trial had bound the candidate. The binder-built
   // literal interns exactly as the written one does.
   expect(evaluated('function pick(B) { return B === type true ? uint8 : string; } function one<B extends boolean>(x: pick(B)): string { return String(B === type true); } one(1 := uint8);')).toBe('true');
 });
 
-test('rung two: a closed PACK constraint proposes its tuples and exactly one verifies (F-X, pack)', () => {
+test('rung two: a closed PACK constraint proposes its tuples and exactly one verifies', () => {
   expect(evaluated(`${MASK} function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): string { return String(Reflect.getReflection(Bs).elements.map((e) => e.type === type true).join(",")); } withFlags(1 := uint16);`)).toBe('true,false');
   expect(evaluated(`${MASK} function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): string { return String(Reflect.getReflection(Bs).elements.map((e) => e.type === type true).join(",")); } withFlags("s");`)).toBe('false,false');
 });

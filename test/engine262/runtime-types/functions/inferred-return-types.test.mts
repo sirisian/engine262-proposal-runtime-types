@@ -423,8 +423,8 @@ test('a mixed reference and value body is decided at the assignment', () => {
   // is not statically one or the other, so the check is the deferred run-time
   // one: the branch that returned a reference writes through, and the branch
   // that returned a value reports that there is no location to assign to.
-  // Refusing the declaration outright is the stricter reading (r15) and is not
-  // what the implementation does.
+  // Refusing the declaration outright is the stricter reading and is not what
+  // the implementation does.
   const setup = 'let arr: [].<uint32> = [1, 2]; '
     + 'function m(b, a: [].<uint32>) { if (b) { return ref a[0]; } return 0; } ';
   expect(value(setup + 'm(1, arr) = 5; String(arr[0]);')).toBe('5');
@@ -432,7 +432,7 @@ test('a mixed reference and value body is decided at the assignment', () => {
 });
 
 test('an inference-sourced error names the annotation it came from', () => {
-  // The second half of the gate (D4). Participation is non-local by design: an
+  // The second half of the gate. Participation is non-local by design: an
   // annotation's reach travels through returns, so a function nobody annotated
   // acquires a type, and the question left is not "which return" but "which
   // annotation". Naming the callee closes it.
@@ -465,7 +465,7 @@ test('a typed local binding anchors a contribution', () => {
 });
 
 test('a refused union names the member that does not fit, and its return', () => {
-  // The finer half of the gate (D3). Naming the function answers "why does this
+  // The finer half of the gate. Naming the function answers "why does this
   // have a type"; naming the anchor answers "which annotation"; a union leaves
   // the question a reader of a multi-return function actually asks - of
   // `uint32 | string` refused at a `string`, WHICH return produced the
@@ -480,14 +480,14 @@ test('a refused union names the member that does not fit, and its return', () =>
   const both = thrown(`${h} const t: boolean = h(0);`);
   expect(both).toContain('inferred return type of "h"');
   expect(both).not.toContain('comes from');
-  // A non-union keeps the D4 form.
+  // A non-union keeps the simpler form.
   expect(thrown('function f(): uint32 { return 5; } function g() { return f(); } const s: string = g();'))
     .toContain('which is what "f" declares');
 });
 
 /**
- * PLAN-constructor-returns.md phase 3, tests 21-25. Where a CONSTRUCTOR meets
- * return inference, plus one widening rule this file never pinned.
+ * Where a CONSTRUCTOR meets return inference, plus one widening rule this file
+ * never pinned.
  */
 
 test('the multi-arm widening, pinned (F124)', () => {
@@ -505,10 +505,9 @@ test('the multi-arm widening, pinned (F124)', () => {
 
 test('a constructor contributes nothing to inference', () => {
   // #sec-published-return-types: "A setter declares no return type, and a
-  // constructor has none to infer." The constructor now reflects a SIGNATURE
-  // (PLAN-constructor-returns.md OQ3-C), which is a different thing - its
-  // parameters are known and its result is fixed by rule, so nothing is
-  // inferred. The absence of the `return` slot is what says so.
+  // constructor has none to infer." The constructor now reflects a SIGNATURE,
+  // which is a different thing - its parameters are known and its result is
+  // fixed by rule, so nothing is inferred. The absence of the `return` slot is what says so.
   for (const decl of [
     'class C { x: uint8 = 1; constructor(y: uint8) {} }',
     'class C { x: uint8 = 1; constructor(y) {} }',
@@ -528,9 +527,9 @@ test('a method NAMED `constructor` on an object literal does infer', () => {
   expect(value('const o = { constructor(): uint8 { return 4; } }; String(o.constructor());')).toBe('4');
 });
 
-test('inference through a factory yields the class - the sentence phase 1 made true', () => {
-  // `new K()` has static type `K`, and after PLAN-constructor-returns.md phase 1
-  // that is true rather than assumed: no typed class can return anything else.
+test('inference through a factory yields the class', () => {
+  // `new K()` has static type `K`, and that is true rather than assumed: no
+  // typed class can return anything else.
   // So an unannotated factory infers the class, seeded by the construction.
   expect(value('class K { x: uint8 = 1; } function make() { return new K(); }'
     + ' const s = Reflect.getReflection(Reflect.typeOf(make)).signatures[0];'
@@ -541,7 +540,7 @@ test('inference through a factory yields the class - the sentence phase 1 made t
 });
 
 test('a getter\'s published return still joins its shape', () => {
-  // Regression guard on the clause phase 1 touches: the annotation refusal is
+  // Regression guard on the clause the rule touches: the annotation refusal is
   // scoped to `constructor`, and a getter is the neighbour most likely to be
   // caught by an over-wide rule, since it reaches the same parse.
   expect(value('class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'

@@ -22,7 +22,7 @@ test('a NAME or a READ copies', () => {
   // returning one each COPY it."
   expect(evaluated(`${V} const a = new P(); a.x = 1; const b = a; b.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; let b = new P(); b = a; b.x = 9; String(a.x);`)).toBe('1');
-  // Into TYPED STORAGE, which is what a store copies into (D28).
+  // Into TYPED STORAGE, which is what a store copies into.
   expect(evaluated(`${V} class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; h.p.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [1].<P> = [new P()]; arr[0] = a; arr[0].x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; var b = a; b.x = 9; String(a.x);`)).toBe('1');
@@ -126,7 +126,7 @@ test('the literal cases that must NOT copy still do not', () => {
   expect(evaluated('const b: [].<uint8> = []; b.push((65 := uint8)); String(b.length);')).toBe('1');
 });
 
-test('D28: an untyped destination does NOT copy', () => {
+test('an untyped destination does NOT copy', () => {
   // #sec-value-type-copying's position list names "storing into a FIELD or an
   // array element". A plain object's property and a plain array's element are
   // neither: they hold a REFERENCE, as they do for every other object, and a

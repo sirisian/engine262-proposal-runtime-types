@@ -7,7 +7,7 @@ import {
  * Spec: #sec-inference-fixpoint (the domain of the fixpoint), #sec-inferred-return-types.
  *
  * "Having a function in a module or in the current source text should have no
- * impact on the behavior of the code" is the Q10 lock, and it did not hold: the
+ * impact on the behavior of the code" is the requirement, and it did not hold: the
  * checker had no handling for `ImportDeclaration` or `ExportDeclaration` at all,
  * so an imported name was undeclared and every use of it was ~any~. That was
  * true of DECLARED types too, not only inferred ones - a module could write
@@ -75,7 +75,7 @@ test('a declared export is checked at the importer', () => {
 });
 
 test('an INFERRED export crosses the boundary', () => {
-  // The Q10 lock's substance: `wx` declares no return type and publishes one,
+  // The requirement's substance: `wx` declares no return type and publishes one,
   // and the importer is checked against it.
   expect(graph({
     'a.js': 'function f(): uint32 { return 5; }\nexport function wx() { return f(); }',

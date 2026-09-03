@@ -176,8 +176,8 @@ test('a parameterization defaults to its base zero where that is a value of it',
 });
 
 test('a brand has no default where nothing lets its base zero in', () => {
-  // PLAN-parameterized-defaults.md phase 4 rewrote what "brand" has to mean
-  // here. A parameterization's default is its base's zero HAVING CROSSED
+  // What "brand" has to mean here was rewritten. A parameterization's default
+  // is its base's zero HAVING CROSSED
   // (#sec-defaultvalueof, #sec-metadata-conversion), and a crossing has "exactly
   // two ways through: `subtype` admits it, or the value carries nothing of that
   // meta type and a cast supplies what it lacks". So the absence of `validate`
@@ -320,13 +320,13 @@ test('a field of a type with no default is refused, at the declaration it names'
 test('a generic parameter is exempt', () => {
   // Nothing is known about what an application will bind, so the declaration
   // stands; the check belongs at the specialization, which this engine does not
-  // reach (see KNOWN-DIVERGENCES.md).
+  // reach.
   expectOk('class Box<T> { value: T; }');
   expectOk('class Box<T> { value: T; } const b = new Box.<uint8>();');
 });
 
 test('a registered meta default does NOT satisfy the rule', () => {
-  // REWRITTEN by PLAN-meta-default-scope.md phase 1. This asserted that a
+  // REWRITTEN once the `meta` hook's scope was settled. This asserted that a
   // `meta` default "supplies a default for a type with no structural one", so
   // `type T = uint8 | string; meta T { default = "d"; } let s: T;` was legal.
   //
@@ -463,7 +463,7 @@ test('a TOP-LEVEL var enforces its type, through the property that holds it', ()
 });
 
 test('the no-default answer arrives before the source text runs', () => {
-  // PLAN-default-timing.md. #sec-defaultvalueof makes this a type error and
+  // #sec-defaultvalueof makes this a type error and
   // #sec-type-errors makes a type error determinable before the text runs an
   // Early Error - "a source text that contains one is rejected rather than
   // evaluated". The engine answered at DECLARATION EVALUATION, so the marker
@@ -485,16 +485,15 @@ test('the no-default answer arrives before the source text runs', () => {
 });
 
 test('the pass does not answer where it has not processed what supplies the default', () => {
-  // Two guards, both found by this suite rather than by the plan.
+  // Two guards, both found by this suite rather than reasoned about in advance.
   //
   // A `meta` declaration nested in a block is not reached by the pre-evaluation
   // loop, which scans top-level items, so the pass stands down for a type such
   // a declaration names and the evaluation-time site answers.
   //
   // The guard's ORIGINAL example is gone: it relied on a nested `meta` default
-  // supplying a value for `T`, which PLAN-meta-default-scope.md phase 1 removed
-  // as a conflation - a `meta` declaration says what a value CARRIES, not what a
-  // binding HOLDS. Both sites now refuse this program, which is the right
+  // supplying a value for `T`, which was removed as a conflation - a `meta`
+  // declaration says what a value CARRIES, not what a binding HOLDS. Both sites now refuse this program, which is the right
   // answer; what the guard still buys is that the refusal comes from the site
   // that can see the whole picture. Asserted as a refusal so the guard's
   // remaining behaviour is pinned rather than assumed.

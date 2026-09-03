@@ -6,7 +6,7 @@ import {
 } from '#self';
 
 /**
- * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 3.
+ * proposal-runtime-types `annex-standard-kit`.
  *
  * The conformance suite for `std:types`. This file previously carried the kit
  * as a `const KIT` string of fifteen hand-written helpers prepended to each
@@ -211,10 +211,9 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
 
   // maximal set (4)
   ['noInfer', 'std.noInfer(uint8) === uint8', ''],
-  // Unblocked by PLAN-brand.md phases 1 and 2: F110 gave `makeType` a
-  // `parameterized` case, and `src/intrinsics/Brand.mts` claims the `brand`
-  // key. It was the ONE blocked export of the 71 and carried this file's only
-  // `test.todo`.
+  // Unblocked once F110 gave `makeType` a `parameterized` case and
+  // `src/intrinsics/Brand.mts` claimed the `brand` key. It was the ONE blocked
+  // export of the 71 and carried this file's only `test.todo`.
   ['brand', "std.brand(uint32, 'UserId') === type uint32.<{ brand: 'UserId' }>", ''],
   ['options', 'std.reflect(std.options(type { n: uint8 }, type { inc: () => void })).properties.length === 2', ''],
   ['listeners', 'std.listeners(type { x: uint8 }) === type { onXChanged: (uint8) => void }', ''],
@@ -243,8 +242,8 @@ test.each(EXPORTS)('%s', async (_name, expr, setup) => {
 test('agreement: `keys` IS `keyof`, including where reflection cannot see', async () => {
   // Satisfied by construction - `keys` forwards to the operator - and the test
   // says so rather than proving it. The cases that matter are the ones a
-  // reimplementation over `reflect()` would have got WRONG, which is why OQ1
-  // ruled that direction out: reflection collapses a nominal to an opaque
+  // reimplementation over `reflect()` would have got WRONG, which is why that
+  // direction was ruled out: reflection collapses a nominal to an opaque
   // `primitive` leaf, so a hand-written version could not have answered for a
   // class or an interface at all.
   expect(await holds('std.keys(type { a: uint8, b: string }) === type keyof { a: uint8, b: string }')).toBe('ok');
@@ -253,7 +252,7 @@ test('agreement: `keys` IS `keyof`, including where reflection cannot see', asyn
   expect(await holds('std.keys(type K) === type keyof K', 'class K { x: uint8 = 1; y: string = ""; }')).toBe('ok');
 });
 
-test('agreement: OQ5-D - keyless is `never`, and the refusal lives at the USE', async () => {
+test('agreement: keyless is `never`, and the refusal lives at the USE', async () => {
   // Asserted as a pair, because either half alone reads as a bug. `keys` of a
   // keyless type is not an error - the fold is total - and the diagnostic
   // arrives where the keys are consumed, which is what indexed access already
@@ -327,11 +326,11 @@ test('agreement: the round trip, over every kind the READ side emits', async () 
     expect(await holds(`Reflect.makeType(Reflect.getReflection(${spelling})) === ${spelling}`), kind).toBe('ok');
   }
   // `parameterized` round-trips, brand and pattern alike. It was asserted here
-  // as an EXCEPTION so that OQ6-A's landing would break this test; it landed
-  // (PLAN-brand.md phase 1), and then the rewrite recorded that a pattern was
-  // still only stable-but-unequal. PLAN-metadata-representation.md closed that
-  // too: the metadata is now read back structurally to the depth of the record,
-  // and the marker's own discriminant is compared across both representations.
+  // as an EXCEPTION so that closing it would break this test; it was closed,
+  // and then the rewrite recorded that a pattern was still only
+  // stable-but-unequal. That closed too: the metadata is now read back
+  // structurally to the depth of the record, and the marker's own discriminant
+  // is compared across both representations.
   //
   // `sec-reflect-maketype` states this as an IDENTITY - "which is what makes
   // the round trip the identity function rather than an equivalence" - so `===`

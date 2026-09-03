@@ -2,8 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
- * `PLAN-checker-type-resolution.md stage A`: the checker resolves the type names
- * the runtime resolves.
+ * The checker resolves the type names the runtime resolves.
  *
  * The checker resolves an annotation with `resolveType`, a second resolver
  * mirroring `TypeNodeToTypeRecord`. A name only the runtime knew resolved to
@@ -26,7 +25,7 @@ test('a bare intrinsic type name is resolved', () => {
   expectStaticTypeError(mismatch('Token'));
   expectStaticTypeError(mismatch('ClassMetadata'));
   expectStaticTypeError(mismatch('EnumEnumeratorMetadata'));
-  // Already resolvable before stage A, so a guard against fixing one by breaking
+  // Already resolvable beforehand, so a guard against fixing one by breaking
   // the other: `TokenStream` is in `libraryTypeNames` and `Token` never was.
   expectStaticTypeError(mismatch('TokenStream'));
   expectStaticTypeError(mismatch('string'));
@@ -56,7 +55,7 @@ test('a resolved name does not displace a declaration that completes it', () => 
   // `partial interface` extends exactly these intrinsic names, so this lookup
   // sits LAST among the name lookups. Ahead of `interfaceTypeOf` the empty
   // intrinsic record shadowed the completed one and the added member stopped
-  // being checked - silently, which is the failure mode this whole plan is about.
+  // being checked - silently, which is the failure mode this whole file is about.
   expect(evaluated('partial interface ClassMetadata { b: string; } let v: ClassMetadata = { b: "x" }; "took";')).toBe('took');
   expectThrown('partial interface ClassMetadata { b: string; } let w: ClassMetadata = {};');
   // And with no partial, the intrinsic declares nothing, so any object is admitted.

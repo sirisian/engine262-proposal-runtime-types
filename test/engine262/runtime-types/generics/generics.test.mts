@@ -72,13 +72,13 @@ test('generics: a generic mixin function returns a class expression', () => {
   expect(evaluated('let Mixin = (Base) => class extends Base { extra() { return "e"; } }; class Base {} let C = Mixin(Base); new C().extra();')).toBe('e');
 });
 
-// -- A variadic generic parameter parses (PLAN-variadic-and-named-generic-arguments.md Phase 3) --
+// -- A variadic generic parameter parses ------------------------------------
 test('generics: a variadic generic parameter parses and an application leaving it empty runs', () => {
   // generics.md: a parameter written `...Name: [].<T>` collects constant
   // arguments into a tuple, which is what lets a projection take its indices as
   // generic arguments. The rest form in the generic parameter list parses now
   // (`generics/pack-grammar.test.mts` is the grammar's own file); binding a
-  // non-empty pack at an application is Phase 4.
+  // non-empty pack at an application is not yet done.
   expect(evaluated('function f<...I: [].<uint32>>() { return 1; } String(f());')).toBe('1');
 });
 

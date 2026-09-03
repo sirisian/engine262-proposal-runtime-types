@@ -52,8 +52,8 @@ test('at most one meta declaration per type', () => {
 });
 
 test('the default hook does NOT supply a binding of the constraint shape', () => {
-  // REWRITTEN by PLAN-meta-default-scope.md phase 1, and the reasoning matters
-  // because this test was written to protect the old behaviour.
+  // REWRITTEN once the `meta` hook's scope was settled, and the reasoning
+  // matters because this test was written to protect the old behaviour.
   //
   // It asserted that `meta uint8 { default = 7; } let x: uint8;` yields 7 - a
   // `meta` declaration redefining the zero of a PRIMITIVE. #table-meta-hooks

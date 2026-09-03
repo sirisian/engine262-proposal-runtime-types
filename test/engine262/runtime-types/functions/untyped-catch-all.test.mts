@@ -6,8 +6,7 @@ import { expect } from 'vitest';
  * `#sec-issignaturesubtype`, the catch-all step:
  * "If a.[[Untyped]] is true and a.[[InferredReturn]] is ~none~, return true."
  *
- * `PLAN-checker-type-resolution.md stage B1`. The step was absent, and its
- * absence was not cosmetic: the arity step it precedes refused an untyped
+ * The step was absent, and its absence was not cosmetic: the arity step it precedes refused an untyped
  * `function f(x, y, z) {}` at `(x: number) => number` for requiring more
  * arguments than the position supplies. An untyped callback naming parameters
  * its caller does not pass is the ordinary shape of existing ECMAScript, which

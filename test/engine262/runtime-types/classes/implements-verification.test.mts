@@ -1,7 +1,6 @@
-// PLAN-variadic-and-named-generic-arguments.md F-AB: `implements` is verified.
-// Every member an interface requires must be declared by the class with an
-// assignable type; a generic method satisfies the interface's through identity
-// up to renaming (Phase 5's relation), so `on<U>` satisfies `on<T>` and
+// `implements` is verified. Every member an interface requires must be declared
+// by the class with an assignable type; a generic method satisfies the
+// interface's through identity up to renaming, so `on<U>` satisfies `on<T>` and
 // `on<T, U>` does not; an optional member may be absent. Before this the
 // checker merged the interface's members into the class and verified nothing.
 import { test, expect } from 'vitest';

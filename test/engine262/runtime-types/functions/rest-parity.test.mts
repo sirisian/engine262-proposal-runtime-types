@@ -1,5 +1,4 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 0.6 (F-D, F-E): the
-// README's own multi-rest examples, verbatim. These are the function-side
+// The README's own multi-rest examples, verbatim. These are the function-side
 // parity anchors the generic pack rules mirror - `BindTypeArguments` shares
 // `SequenceAssignment` with this path, so a rule that holds here is the rule
 // packs inherit.

@@ -24,7 +24,7 @@ test('the capacity rules the design states', () => {
 });
 
 test('a copy of a typed array carries its element type', () => {
-  // PLAN-tuple-stores.md phase 2. #sec-array-defaults-and-stores says a method
+  // #sec-array-defaults-and-stores says a method
   // that takes or returns an ELEMENT does so at the element type, and says
   // nothing about a method that returns an ARRAY - so `slice()` handed back
   // something that accepted a String at any index and grew without limit. The
@@ -40,7 +40,7 @@ test('a copy of a typed array carries its element type', () => {
 });
 
 test('with() takes its value at the position it writes', () => {
-  // PLAN-tuple-stores.md phase 3. `with` WRITES a position, so the rule that a
+  // `with` WRITES a position, so the rule that a
   // method taking an ELEMENT takes it at the element type governs it - and for
   // a tuple that means the type of the position written, since the positions
   // differ. It checked nothing, which mattered more once the copy carried a
@@ -72,7 +72,7 @@ test("a tuple's arity is fixed against length", () => {
 });
 
 test('a copy of a tuple carries the shape the operation produced', () => {
-  // PLAN-tuple-stores.md phase 2, the tuple half. An array's copy has the same
+  // The tuple half of the copy rule. An array's copy has the same
   // element type whatever the operation did; a tuple's does not - `toReversed`
   // permutes the positions, `slice` takes a window, `with` leaves them alone -
   // so each method states the shape it produced rather than sharing one rule.
@@ -99,7 +99,7 @@ test('a copy of a tuple carries the shape the operation produced', () => {
 });
 
 test('a count is checked as a count, not coerced', () => {
-  // ISSUES-found-while-writing-examples.md I2. #sec-toindextype: "If value is
+  // #sec-toindextype: "If value is
   // not a value of the index type, throw a TypeError exception", and the clause
   // gives the reason - "`length` and `capacity` READ at the index type, so a
   // count that could be written as a String and silently converted would make

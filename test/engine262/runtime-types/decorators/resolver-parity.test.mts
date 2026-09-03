@@ -4,8 +4,8 @@ import { expect, test } from 'vitest';
 import { run } from '../harness.mts';
 
 /**
- * `PLAN-checker-type-resolution.md stage C2`: the checker's `resolveType` and the
- * runtime's `TypeNodeToTypeRecord` must agree about what an annotation means.
+ * The checker's `resolveType` and the runtime's `TypeNodeToTypeRecord` must
+ * agree about what an annotation means.
  *
  * They are two resolvers for one grammar, and `resolveType`'s own comment states
  * the contract: it "mirrors TypeNodeToTypeRecord so the checker and the runtime
@@ -76,10 +76,9 @@ const rows: readonly Row[] = [
 /**
  * Kinds the checker cannot resolve, and the reason it cannot.
  *
- * Three of the seven this test first reported are closed
- * (`PLAN-checker-type-resolution.md stage E`): `ReferenceType` is a structural
- * record, and `KeyOfType` and `IndexedAccessType` compute from resolved operands
- * through the SAME helpers the runtime uses.
+ * Three of the seven this test first reported are closed: `ReferenceType` is a
+ * structural record, and `KeyOfType` and `IndexedAccessType` compute from
+ * resolved operands through the SAME helpers the runtime uses.
  *
  * The remaining four are gaps of three different KINDS, which is the finding
  * that matters more than the count.
@@ -98,10 +97,10 @@ const rows: readonly Row[] = [
  * checker that runs before evaluation has no call to make, so this list can never
  * be emptied by better resolution.
  *
- * That matters beyond this test. `PLAN-checker-type-resolution.md` Q6/D3 gates
- * reporting an unresolvable annotation as a user error on this set being EMPTY,
- * and it cannot become empty - so that gate needs restating as "empty of kinds
- * decidable without evaluation" before stage E can proceed. An annotation naming
+ * That matters beyond this test. Reporting an unresolvable annotation as a user
+ * error was gated on this set being EMPTY, and it cannot become empty - so that
+ * gate needs restating as "empty of kinds decidable without evaluation" before
+ * it can be acted on. An annotation naming
  * `typeof x` is valid, and the checker's inability to read it is a property of
  * when the checker runs, not a defect in the program.
  */
@@ -112,7 +111,7 @@ const KNOWN_CHECKER_GAPS = new Set([
   // instead. `literalFitsNumericType` now looks through it, and the annotation
   // is resolved and judged - `let s: shared uint8 = "x";` is refused.
   // `PatternType` was here and is closed; see `check.mts`. `ComputedType` needs
-  // EVALUATION, so it does not count against Q8/D2's gate - which is now met.
+  // EVALUATION, so it does not count against that gate - which is now met.
   'ComputedType',
 ]);
 
@@ -184,7 +183,7 @@ test('the checker resolves every kind the runtime resolves, except the known gap
     diverged,
     `the checker stopped resolving: ${diverged.join(', ')}. `
     + 'A kind the runtime reads and the checker does not is unchecked statically and '
-    + 'unelidable; see PLAN-checker-type-resolution.md.',
+    + 'unelidable.',
   ).toEqual([]);
 });
 

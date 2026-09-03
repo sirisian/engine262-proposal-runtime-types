@@ -1,13 +1,12 @@
-// PLAN-variadic-and-named-generic-arguments.md OQ-18 / typeprogramming.md R15 /
-// spec.emu #sec-declared-inverses: rung three's POSITIVE half. A builder that
-// declares an inverse - `@inverse(fn)` from std:types, applied to the builder's
-// own declaration - lets a parameter reached only through it be inferred: the
-// inverse receives the argument's type (a rest's is the tuple of what it
-// collects, A1) and returns a PROPOSAL, which binds only after the forward
-// verification an explicitly specialized call faces. The association is an
-// internal slot set through the live decoration context (B1); the inverse read
-// is the resolved overload's (C). Programs import the kit, so these run as
-// modules.
+// typeprogramming.md R15 / spec.emu #sec-declared-inverses: the POSITIVE half of
+// inference through a builder. A builder that declares an inverse -
+// `@inverse(fn)` from std:types, applied to the builder's own declaration - lets
+// a parameter reached only through it be inferred: the inverse receives the
+// argument's type (a rest's is the tuple of what it collects) and returns a
+// PROPOSAL, which binds only after the forward verification an explicitly
+// specialized call faces. The association is an internal slot set through the
+// live decoration context; the inverse read is the resolved overload's.
+// Programs import the kit, so these run as modules.
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, ModuleCache, setSurroundingAgent } from '#self';
 
@@ -78,8 +77,8 @@ test('the same for a SCALAR parameter', async () => {
   expect(await evaluate(src)).toBe('evaluated');
 });
 
-test('explicit type arguments through a class-applying builder (F-AE closed)', async () => {
-  // F-AE: the specialized record reaching the second enforcement had lost its
+test('explicit type arguments through a class-applying builder', async () => {
+  // The specialized record reaching the second enforcement had lost its
   // [[Constructor]] to interning, and IsOfType fell back to the bare class's
   // prototype, which a specialized instance never chains to. Membership now
   // asks the instance's own class type.

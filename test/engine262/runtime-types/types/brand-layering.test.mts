@@ -2,18 +2,16 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * PLAN-brand-layering-F.md. Layering a brand — "a Verified Email" — and the
- * criteria a layering mechanism has to meet.
+ * Layering a brand — "a Verified Email" — and the properties a layering
+ * mechanism has to meet.
  *
- * The mechanism is INTERSECTION. `PLAN-brand-layering.md` compared six
- * directions against fourteen criteria and intersection was the only one whose
- * algebra was already correct: `E & V` sheds to `E`, sheds to the base, and
- * refuses a bare value. What it lacked was normalization (F169, phase 1),
- * a construction boundary (phase 2), and an error where the metadata merge
- * silently discards a second brand (phase 3).
+ * The mechanism is INTERSECTION, which was the only direction whose algebra was
+ * already correct: `E & V` sheds to `E`, sheds to the base, and refuses a bare
+ * value. What it lacked was normalization (F169), a construction boundary, and
+ * an error where the metadata merge silently discards a second brand.
  *
- * Tests are named for the criterion they pin, so a failure names the property
- * that was lost rather than a line number.
+ * Tests are named for the property they pin, so a failure names what was lost
+ * rather than a line number.
  */
 
 const E = "type E = string.<{ brand: 'Email' }>;";
@@ -21,39 +19,39 @@ const V = "type V = string.<{ brand: 'Verified' }>;";
 const EV = `${E}${V}type EV = E & V;`;
 
 // ---------------------------------------------------------------------------
-// C1-C4, C9: the algebra, which held before this plan and must keep holding
+// The algebra, which held before layering and must keep holding
 // ---------------------------------------------------------------------------
 
-test('C1: a layered type is expressible', () => {
+test('a layered type is expressible', () => {
   expect(evaluated(`${EV}const n = Reflect.getReflection(EV); String(n.kind + ':' + n.members.length);`))
     .toBe('intersection:2');
 });
 
-test('C2: the inner brand survives — a Verified IS an Email', () => {
+test('the inner brand survives — a Verified IS an Email', () => {
   // The criterion layering exists for. Without it, `send(verify(e))` cannot
   // work and a second brand is just an unrelated type.
   expect(evaluated(`${EV}String(Reflect.isAssignable(EV, E));`)).toBe('true');
   expect(evaluated(`${EV}String(Reflect.isAssignable(EV, V));`)).toBe('true');
 });
 
-test('C3: the base still sheds', () => {
+test('the base still sheds', () => {
   expect(evaluated(`${EV}String(Reflect.isAssignable(EV, string));`)).toBe('true');
 });
 
-test('C4: the base is still refused, by assignability AND at an annotation', () => {
+test('the base is still refused, by assignability AND at an annotation', () => {
   expect(evaluated(`${EV}String(Reflect.isAssignable(string, EV));`)).toBe('false');
   expectThrown(`${EV}function g(s: string) { let y: EV = s; return y; } g('a@b');`);
 });
 
-test('C9: the same layering written twice is one type', () => {
+test('the same layering written twice is one type', () => {
   expect(evaluated(`${EV}String(EV === type E & V);`)).toBe('true');
 });
 
 // ---------------------------------------------------------------------------
-// C5: normalization — F169, phase 1
+// Normalization — F169
 // ---------------------------------------------------------------------------
 
-test('C5: layering is order-independent', () => {
+test('layering is order-independent', () => {
   // F169. `orderKeyWithin`'s ~parameterized~ case keyed only the BASE, so two
   // parameterizations of one base produced the identical key, the canonical
   // sort could not separate them, and the written order survived into the
@@ -61,28 +59,28 @@ test('C5: layering is order-independent', () => {
   expect(evaluated(`${EV}String(type E & V === type V & E);`)).toBe('true');
 });
 
-test('C5: normalization is not brand-specific', () => {
+test('normalization is not brand-specific', () => {
   // The row that shows F169 is a metadata-protocol defect rather than a brand
   // one: ANY two parameterizations of one base were affected.
   expect(evaluated("type P = string.<{ pattern: /^a/ }>; type V = string.<{ brand: 'V' }>;"
     + ' String(type P & V === type V & P);')).toBe('true');
 });
 
-test('C5: parameterizations of DIFFERENT bases were already fine', () => {
+test('parameterizations of DIFFERENT bases were already fine', () => {
   // These key differently by base, which is why the defect looked narrower than
   // it was.
   expect(evaluated("type E = string.<{ brand: 'E' }>; type N = uint8.<{ brand: 'N' }>;"
     + ' String(type E & N === type N & E);')).toBe('true');
 });
 
-test('C5: non-parameterized intersections are unchanged', () => {
-  // The phase-1 gate. A fix that reached order-independence by changing how
+test('non-parameterized intersections are unchanged', () => {
+  // The gate. A fix that reached order-independence by changing how
   // every intersection is keyed would pass the tests above and break these.
   expect(evaluated('type A = { a: uint8 }; type B = { b: string }; String(type A & B === type B & A);')).toBe('true');
   expect(evaluated('String(type uint8 & string === type string & uint8);')).toBe('true');
 });
 
-test('C5: normalizing did not collapse distinct types', () => {
+test('normalizing did not collapse distinct types', () => {
   // The other failure mode: order-independence is trivially achievable by
   // making everything equal.
   expect(evaluated(`${EV}String(EV !== E);`)).toBe('true');
@@ -91,20 +89,20 @@ test('C5: normalizing did not collapse distinct types', () => {
 });
 
 // ---------------------------------------------------------------------------
-// C8, C12: properties a brand must not lose by being layered
+// Properties a brand must not lose by being layered
 // ---------------------------------------------------------------------------
 
-test('C8: no wrapper — a layered value is its base value', () => {
+test('no wrapper — a layered value is its base value', () => {
   expect(evaluated(`${EV}function f(x: EV) { return typeof x; } String(1);`)).toBe('1');
 });
 
-test('C12: layering composes with other metadata', () => {
+test('layering composes with other metadata', () => {
   // A branded-and-patterned type intersected with a brand keeps both readings.
   expect(evaluated("type P = string.<{ brand: 'E', pattern: /^a/ }>; type V = string.<{ brand: 'V' }>;"
     + ' String(Reflect.isAssignable(type P & V, P));')).toBe('true');
 });
 
-test('C12: a pattern still validates at its own boundary', () => {
+test('a pattern still validates at its own boundary', () => {
   expect(evaluated("type P = string.<{ pattern: /^a+$/ }>; String(P('aa'));")).toBe('aa');
   expectThrown("type P = string.<{ pattern: /^a+$/ }>; P('zz');");
 });
@@ -118,37 +116,37 @@ test('a layered type round-trips as an identity', () => {
 });
 
 test('an intersection that is NOT all parameterizations of one base refuses construction', () => {
-  // Phase 2's guard, asserted before phase 2 so that widening the construction
-  // rule too far breaks a test. An object type and a brand have no single value
-  // to cross.
+  // The construction guard, asserted ahead of the construction boundary itself
+  // so that widening the rule too far breaks a test. An object type and a brand
+  // have no single value to cross.
   expectThrown("type O = { a: uint8 }; type V = string.<{ brand: 'V' }>; (type O & V)('a');");
 });
 
 // ---------------------------------------------------------------------------
-// C6: the construction boundary — phase 2
+// The construction boundary
 // ---------------------------------------------------------------------------
 
-test('C6: a layered type is constructible', () => {
+test('a layered type is constructible', () => {
   // `ConvertValue` had no ~intersection~ case, so `EV(x)` fell past every
   // branch. The only intersection handling was in `CheckedConvertValue`, the
   // MEMBERSHIP path - and membership is exactly what a brand's absent
-  // `validate` refuses. PLAN-brand.md OQ1, one level up.
+  // `validate` refuses. The same question a single brand raises, one level up.
   expect(evaluated(`${EV}String(EV('a@b'));`)).toBe('a@b');
 });
 
-test('C6: an already-branded value can cross into the layering', () => {
-  // C7's mechanism: `EV(Email(x))` rather than a bare value.
+test('an already-branded value can cross into the layering', () => {
+  // The incremental mechanism: `EV(Email(x))` rather than a bare value.
   expect(evaluated(`${EV}String(EV(E('a@b')));`)).toBe('a@b');
 });
 
-test('C6: the guard holds — a mixed intersection still refuses', () => {
+test('the guard holds — a mixed intersection still refuses', () => {
   // An object type and a brand have no single value to cross. Asserted twice,
   // here and above, because widening the crossing rule is the likeliest wrong
   // fix and this is what catches it.
   expectThrown("type O = { a: uint8 }; type V = string.<{ brand: 'V' }>; type OV = O & V; OV('a');");
 });
 
-test('C6: an intersection of brands over DIFFERENT bases refuses', () => {
+test('an intersection of brands over DIFFERENT bases refuses', () => {
   // The guard's second half: same-base is required, not merely all-parameterized.
   expectThrown("type A = string.<{ brand: 'A' }>; type B = uint8.<{ brand: 'B' }>; type AB = A & B; AB('a');");
 });
@@ -216,11 +214,11 @@ test('F172: the numeric bases are unchanged', () => {
 });
 
 // ---------------------------------------------------------------------------
-// OQ4-A: a brand needs somewhere to live
+// A brand needs somewhere to live
 // ---------------------------------------------------------------------------
 
 test('an object or array base carries a brand', () => {
-  // OQ4-A refused these, on two arguments that both fail. An object's runtime
+  // These were once refused, on two arguments that both fail. An object's runtime
   // type is DERIVED from its shape - true - but that is not the same as having
   // nowhere to store one: an array's [[TypedElement]] and a tuple's record
   // already travel on the object, because "only a mark on the object itself can
@@ -255,14 +253,14 @@ test('a branded object keeps its brand across a mutation', () => {
     + ' String(Reflect.typeOf(v) === T);')).toBe('true');
 });
 
-test('OQ4-A: other metadata on an object base is unaffected', () => {
+test('other metadata on an object base is unaffected', () => {
   // The refusal is about `brand` specifically, not about parameterizing an
   // object: a judgment that VALIDATES re-runs at each boundary and so needs
   // nothing carried on the value.
   expect(evaluated("type Base = { a: uint8 }; type P = Base.<{ pattern: /^a/ }>; String(1);")).toBe('1');
 });
 
-test('OQ4-A: brands on carrying bases are unaffected', () => {
+test('brands on carrying bases are unaffected', () => {
   expect(evaluated(`${E}function f(x: E) { return 1; } String(f(E('a')));`)).toBe('1');
   expect(evaluated("type U = uint32.<{ brand: 'B' }>; String(Reflect.typeOf(U((7 := uint32))) === U);")).toBe('true');
 });
@@ -280,10 +278,10 @@ test('F176: a bigint brand carries, as a string brand does', () => {
 
 
 // ---------------------------------------------------------------------------
-// T4: a carrier is chosen by the base's PRIMITIVE, looked through
+// A carrier is chosen by the base's PRIMITIVE, looked through
 // ---------------------------------------------------------------------------
 
-test('T4: a brand over a LITERAL base carries', () => {
+test('a brand over a LITERAL base carries', () => {
   // The carrier was chosen by `Base.Kind === 'primitive'`, and a
   // parameterization's base need not be one: `'a'.<{ brand }>` has a ~literal~
   // base. So a branded literal carried nothing and every boundary refused it.
@@ -291,7 +289,7 @@ test('T4: a brand over a LITERAL base carries', () => {
     + ' String(Reflect.typeOf(B(\'a\')) === B);')).toBe('true');
 });
 
-test('T4: a NESTED brand carries its outer layer, not its inner', () => {
+test('a NESTED brand carries its outer layer, not its inner', () => {
   // Two gaps in one: the base of `E.<{ brand: 'N' }>` is ~parameterized~, which
   // the guard also missed; and `carryStringType` returned an already-carrying
   // value unchanged, so a nested crossing left it reporting the INNER type.
@@ -301,7 +299,7 @@ test('T4: a NESTED brand carries its outer layer, not its inner', () => {
   expect(evaluated(`${N} String(Reflect.typeOf(N(E('a'))) === E);`)).toBe('false');
 });
 
-test('T4: a plain brand is unchanged', () => {
+test('a plain brand is unchanged', () => {
   expect(evaluated(`${E}String(Reflect.typeOf(E('a')) === E);`)).toBe('true');
   expect(evaluated("type G = bigint.<{ brand: 'G' }>; String(Reflect.typeOf(G(1n)) === G);")).toBe('true');
 });
@@ -326,14 +324,14 @@ test('F179: a crossing into an intersection yields the INTERSECTION', () => {
     + ' String(Reflect.typeOf(AB(A((7 := uint32)))) === AB);')).toBe('true');
 });
 
-test('F179: C7 - a brand can be ADDED to an already-branded value', () => {
+test('F179: a brand can be ADDED to an already-branded value', () => {
   // The incremental case every real use has.
   expect(evaluated("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
     + ' String(AB(A((7 := uint32))));')).toBe('7');
 });
 
 test('F179: the end-to-end gate runs - send(verify(e))', () => {
-  // The program this plan opened with. `verify` takes an Email and returns an
+  // The end-to-end program. `verify` takes an Email and returns an
   // Email & Verified; `send` takes an Email; a Verified IS an Email.
   expect(evaluated(`${EV}function verify(e: E): EV { return EV(e); }`
     + " function send(to: E) { return to; } String(send(verify(E('a@b'))));")).toBe('a@b');
@@ -352,7 +350,7 @@ test('F179: the guards survive the fix', () => {
 });
 
 test('F179: layering works on every carrying base, not only strings', () => {
-  // The matrix in the plan measured a SINGLE brand per base. Layering is a
+  // Earlier measurement covered a SINGLE brand per base. Layering is a
   // different question and F179 changed it, so it is measured separately: for
   // each carrying base, `A & B` constructs, reports itself, accepts an already-
   // branded value, and sheds to a member.

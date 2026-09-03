@@ -4,7 +4,7 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 /**
  * `structuredClone(value)` and its typed signature.
  *
- * PLAN-remaining-blockers.md item 6. It is defined by HTML rather than by
+ * It is defined by HTML rather than by
  * ECMAScript and this engine did not provide it, so the signature
  * `standardlibrary.md` states - `structuredClone<T>(value: T): T` - could not be
  * given: a signature is a claim that the function EXISTS.

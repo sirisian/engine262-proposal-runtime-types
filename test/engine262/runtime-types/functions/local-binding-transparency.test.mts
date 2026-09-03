@@ -197,7 +197,7 @@ test('a const initialized with a literal publishes the widened type', () => {
 });
 
 test('an annotation inside a binding pattern applies', () => {
-  // Q2-pre. The design writes `let [a: uint8, b: uint8] = [1, 2]`, and the
+  // The design writes `let [a: uint8, b: uint8] = [1, 2]`, and the
   // annotation did NOTHING: no type, and no check either - a value out of range
   // bound, and a value of another type bound, where the same annotation on a
   // plain binding refuses both.
@@ -229,7 +229,7 @@ test('a plain parameter keeps its own boundary, unchanged', () => {
 });
 
 test('a destructured binding carries the type of its position', () => {
-  // Q2a. A pattern binds names, and each takes the type of the position it
+  // A pattern binds names, and each takes the type of the position it
   // destructures: a property's type for an object pattern, the element type for
   // an array pattern, the positional type for a tuple. Same condition as a plain
   // local - a `const`, or a `let` this function never assigns - and the same
@@ -251,7 +251,7 @@ test('destructuring transparency keeps the same guards', () => {
   expectNotInferred('const o: { p: string } = { p: "s" }; let { p } = o; p = 5; return p;');
   // A source whose type is unknown yields nothing to read.
   expectNotInferred('function legacy() { return { p: "s" }; } const { p } = legacy(); return p;');
-  // A DEFAULTED element is left alone in this phase: its type is the union of
+  // A DEFAULTED element is left alone: its type is the union of
   // the position's and the default's, and guessing at one of them would state
   // something the program does not.
   expectNotInferred('let t3: [uint8, string] = [1, "s"]; const [e0 = 5] = t3; return e0;');
@@ -290,7 +290,7 @@ test('the two passes leave the completed types alone', () => {
     + ' let m2: ClassFieldMetadata = { [k2]: 5 };');
 });
 test('an object literal initializer is read for the transparency', () => {
-  // Q1b. `const o = { p: g() }; return o.p;` published nothing: an object
+  // `const o = { p: g() }; return o.p;` published nothing: an object
   // literal has no Static Type, so a local initialized with one had nothing to
   // read. With the object ANNOTATED the member read already carried its type,
   // so the gap was the literal.

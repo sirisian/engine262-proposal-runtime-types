@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, ok } from '../harness.mts';
 
 test('a class may declare the zero its bindings hold', () => {
-  // PLAN-type-declared-zero.md. #sec-declared-zero: a class may declare "the
+  // #sec-declared-zero: a class may declare "the
   // value its bindings hold before assignment, in place of the one
   // DefaultValueOf derives field by field", as a static field named `default`.
   expect(evaluated('class Z { x: uint8; static default = new Z(); } let z: Z; String(z.x);')).toBe('0');
@@ -15,7 +15,7 @@ test('a class may declare the zero its bindings hold', () => {
 });
 
 test('a static block may set the declared zero, and is what registration sees', () => {
-  // PLAN-generic-declared-zero.md Q3. A block runs AFTER the static fields and
+  // A block runs AFTER the static fields and
   // may assign `default`, so there are two moments a zero could be read. The
   // registration reads the FINISHED class - after fields and blocks both - so a
   // binding and the static field never disagree.
@@ -28,7 +28,7 @@ test('a static block may set the declared zero, and is what registration sees', 
 });
 
 test('an unspecialized generic keeps its DERIVED zero', () => {
-  // PLAN-generic-declared-zero.md phase 1. A generic class DEFERS its static
+  // A generic class DEFERS its static
   // fields and blocks - "a static field's initializer may read the class's type
   // parameters", and none are bound until an application. So `default` is not
   // set yet, and reading it at declaration would register *undefined* -
@@ -52,29 +52,29 @@ test('an unspecialized generic keeps its DERIVED zero', () => {
 });
 
 test('a GENERIC class may declare a zero, once its application exists', () => {
-  // PLAN-generic-declared-zero.md, unblocked by item N. The declared zero for a
-  // generic was registered correctly all along; the value was then REJECTED,
-  // because a specialized instance was a member of no type - which item N fixed.
+  // The declared zero for a generic was registered correctly all along; the
+  // value was then REJECTED, because a specialized instance was a member of no
+  // type.
   //
   // The zero may name its own specialization: the type-parameter frame is
   // pushed during the application's re-entry, so `new Bx.<T>()` resolves.
   const Bx = 'class Bx<T> { x: uint8; static default = new Bx.<T>(); } ';
   expect(evaluated(`${Bx} const f = Bx.<uint8>; f.default.x = (9 := uint8); `
     + 'let b: Bx.<uint8>; String(b.x);')).toBe('9');
-  // Q2, the hazard a single-key registry hides: one DECLARATION serves every
+  // The hazard a single-key registry hides: one DECLARATION serves every
   // application, so a zero keyed on the declaration alone let `Bx.<string>`
   // pick up `Bx.<uint8>`'s value and report "[object Object] is not assignable
   // to Bx.<string>". Keyed on the arguments, each application holds its own.
   expect(evaluated(`${Bx} const f = Bx.<uint8>; f.default.x = (7 := uint8); `
     + 'let a: Bx.<uint8>; let c: Bx.<string>; String(a.x) + "/" + String(c.x);')).toBe('7/0');
   // An application never evaluated has no registered zero, and falls back to the
-  // DERIVED one rather than to undefined - which is phase 1's guard, still held.
+  // DERIVED one rather than to undefined - the guard above, still held.
   expect(evaluated('class Bx2<T> { x: uint8; static default = new Bx2.<T>(); } '
     + 'let b: Bx2.<uint8>; String(b.x);')).toBe('0');
 });
 
 test('a declared zero may not write, and the floor is narrower than the rule', () => {
-  // PLAN-type-declared-zero.md phase 4. #sec-declared-zero requires the
+  // #sec-declared-zero requires the
   // expression to be compile-time evaluable, and #sec-iscompiletimeevaluable's
   // rule for a binding reference needs its MUTABILITY - "the binding is
   // immutable and its initializer is compile-time evaluable" - which the parser

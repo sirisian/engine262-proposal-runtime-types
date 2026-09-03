@@ -62,7 +62,7 @@ test('every kind the engine produces is a reflection the document defines', () =
   const documented = documentedReflections();
   // No exemptions. `Region` was the one value the document did not have, and it
   // is gone: a captured region reports `Block`, which `decorators.md` already
-  // defines. `PLAN-region-context-removal` Q2/Q3.
+  // defines.
   //
   // Kept as a plain filter rather than an empty exemption set, so that adding a
   // kind the document does not define fails here rather than being waved

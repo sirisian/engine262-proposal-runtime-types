@@ -150,8 +150,8 @@ test('a BLOCK arm is a do expression\'s block', () => {
 });
 
 test('an abrupt completion cannot leave a block arm', () => {
-  // The plan flagged this as the place an implementation could be "wrong in
-  // five ways at once": in a block arm `return`, `break`, `continue`, `await`
+  // This is the place an implementation can be "wrong in five ways at once":
+  // in a block arm `return`, `break`, `continue`, `await`
   // and `yield` must mean what they mean IN THE ENCLOSING FUNCTION, and the
   // specification threads those permissions through.
   //

@@ -1,5 +1,4 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 7 (spec.emu reflection):
-// a generic signature reflects its type parameters - the declared data of the
+// spec.emu reflection: a generic signature reflects its type parameters - the declared data of the
 // Type Parameter Record, in declaration order - and displays its list.
 import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';

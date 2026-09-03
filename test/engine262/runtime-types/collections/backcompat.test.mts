@@ -4,7 +4,7 @@ import {
 } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md §6.1 - THE BACKCOMPAT GUARD.
+ * THE BACKCOMPAT GUARD.
  *
  * The governing invariant of the typed-collections work: **a `Map` or `Set`
  * written without type arguments is an ordinary JavaScript `Map` or `Set` and
@@ -20,16 +20,16 @@ import {
  * either the design or the specification, which is why this file was written
  * before any of the work it guards.
  *
- * WHY THIS FILE COMES FIRST. Every later phase of the plan changes what a TYPED
- * collection does - `size` becomes `uint64`, the iteration members acquire
+ * WHY THIS FILE COMES FIRST. Everything the typed surface adds changes what a
+ * TYPED collection does - `size` becomes `uint64`, the iteration members acquire
  * signatures, the constructors check their seed. Each of those changes runs
  * through code an untyped collection also reaches, so each is an opportunity to
  * change untyped behaviour by accident. A baseline asserted AFTER such a change
  * records whatever the change did; a baseline asserted before it is a guard.
  *
  * EVERY ASSERTION HERE IS CURRENT ES2026 BEHAVIOUR, asserted verbatim. Nothing
- * in this file should ever need to change. If a later phase makes one of these
- * fail, the phase is wrong, not the test.
+ * in this file should ever need to change. If a later change makes one of these
+ * fail, the change is wrong, not the test.
  *
  * The mechanism the invariant rests on is the [[TypedCollection]] stamp: a
  * collection acquires one only from a type carrying arguments, either through
@@ -39,7 +39,7 @@ import {
  *
  * Paired with `test262`'s `built-ins/Map`, `built-ins/Set`, `built-ins/WeakMap`
  * and `built-ins/WeakSet`, which are the other half of the guard and must be run
- * at each phase boundary. NOTE that `test/test262/test262` is a git submodule and
+ * alongside it. NOTE that `test/test262/test262` is a git submodule and
  * is NOT checked out in a fresh clone; run
  * `git submodule update --init test/test262/test262` before relying on it.
  */
@@ -141,8 +141,8 @@ test('Set: the seven set-algebra methods on untyped sets', () => {
 
 test('Set: the set-algebra methods accept a SET-LIKE, not only a Set', () => {
   // This is the GetSetRecord path, which reads `size`, `has` and `keys` off an
-  // arbitrary object. Phase 1 modifies GetSetRecord for the typed `size`, so
-  // this row is the guard for that change: an ordinary set-like must keep
+  // arbitrary object. GetSetRecord is modified for the typed `size`, so this
+  // row is the guard for that change: an ordinary set-like must keep
   // working, and its `size` is an ordinary Number.
   const setLike = 'const like = { size: 2, has: (v) => v === 2 || v === 3, keys: () => [2, 3][Symbol.iterator]() }; ';
   expect(evaluated(`${setLike} const a = new Set([1, 2]); [...a.union(like)].join(",");`)).toBe('1,2,3');
@@ -201,8 +201,8 @@ test('size on an untyped collection is a plain Number', () => {
 });
 
 test('an untyped size participates in untyped arithmetic and comparison', () => {
-  // Phase 1 gives a TYPED collection's `size` the index type, at which point it
-  // stops mixing with a Number. None of that may reach here: these are the
+  // A TYPED collection's `size` has the index type, at which point it stops
+  // mixing with a Number. None of that may reach here: these are the
   // expressions ordinary JavaScript is written in, and each must keep working.
   expect(evaluated('const m = new Map([["a", 1]]); String(m.size + 1);')).toBe('2');
   expect(evaluated('const s = new Set([1, 2]); String(s.size * 2);')).toBe('4');
@@ -318,8 +318,8 @@ test('a typed collection in the same program does not change an untyped one', ()
 });
 
 test('the [[TypedCollection]] stamp travels with the VALUE, not the binding', () => {
-  // Measured during the plan's audit and recorded here, because it is the one
-  // thing §0's invariant needs that is not simply "nothing happens": an untyped
+  // Measured and recorded here, because it is the one thing the invariant needs
+  // that is not simply "nothing happens": an untyped
   // BINDING of a typed VALUE keeps the typed behaviour. Otherwise the carve-out
   // would be a hole - a program could launder a typed collection through `let u
   // = s` and write anything into it.

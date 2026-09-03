@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.2 - `size` AT THE INDEX TYPE (Phase 1, OQ1).
+ * `size` AT THE INDEX TYPE.
  *
  * A typed collection's `size` reads at the index type, `uint64`, the same type
  * an array's `length` and `capacity` report.
@@ -53,7 +53,7 @@ test('the checker gives size the index type too', () => {
   //
   // Written through an ANNOTATION rather than through `new Map.<K, V>()`,
   // because only the annotation gives the checker a receiver type - see the
-  // D13 test below, which is a general checker gap and not a collections one.
+  // test below, which is a general checker gap and not a collections one.
   expectStaticTypeError('let m: Map.<string, uint8> = new Map(); let n: string = m.size;');
   expectStaticTypeError('let m: Map.<string, uint8> = new Map(); let n: number = m.size;');
   expectStaticTypeError('let s: Set.<uint8> = new Set(); let n: string = s.size;');
@@ -61,11 +61,11 @@ test('the checker gives size the index type too', () => {
   expect(ok('let s: Set.<uint8> = new Set(); let n: uint64 = s.size;')).toBe(true);
 });
 
-test.fails('D13: a `new T.<Args>()` expression has no Static Type (general, not collections)', () => {
+test.fails('a `new T.<Args>()` expression has no Static Type (general, not collections)', () => {
   // The checker sees a collection member only through an annotation. Through the
   // construction spelling the receiver is ~any~, so every signature
   // `collectionMethodSignature` provides is unreachable that way - `size`, and
-  // `get` and `set` long before this phase.
+  // `get` and `set` long before it.
   //
   // NOT a collections defect. The array and the user generic behave identically,
   // which is why all three are asserted here: a fix belongs wherever a
@@ -83,8 +83,8 @@ test.fails('D13: a `new T.<Args>()` expression has no Static Type (general, not 
 // ---------------------------------------------------------------------------
 
 test('a collection count is comparable with an array count', () => {
-  // This was a TypeError before Phase 1. It is the reason the width is the
-  // index type and not something of its own.
+  // This was once a TypeError. It is the reason the width is the index type and
+  // not something of its own.
   expect(evaluated('const m = new Map.<string, uint8>(); const a: [].<uint8> = [1, 2, 3]; String(m.size < a.length);')).toBe('true');
   expect(evaluated('const s = new Set.<uint8>(); s.add(1); const a: [].<uint8> = [1, 2, 3]; String(s.size < a.length);')).toBe('true');
   // And with the other counts an array reports, which are the same type.
@@ -134,11 +134,11 @@ test('a typed size counts what an untyped one counts', () => {
 });
 
 // ---------------------------------------------------------------------------
-// size is read-only (OQ10)
+// size is read-only
 // ---------------------------------------------------------------------------
 
 test('size has no setter, on a typed collection as on an untyped one', () => {
-  // OQ10: read-only, with `capacity` as the in-proposal precedent for an
+  // Read-only, with `capacity` as the in-proposal precedent for an
   // index-typed count that reports and does not accept. An array's `length` is
   // settable because an array is POSITIONAL and dropping a suffix is well
   // defined; a keyed collection has no such operation that is not already
@@ -151,7 +151,7 @@ test('size has no setter, on a typed collection as on an untyped one', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WeakMap and WeakSet have no size (D4)
+// WeakMap and WeakSet have no size
 // ---------------------------------------------------------------------------
 
 test('a weak collection refuses `size` by name', () => {
@@ -172,10 +172,10 @@ test('a weak collection refuses `size` by name', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D3 - the set-algebra methods still work with a typed size
+// The set-algebra methods still work with a typed size
 // ---------------------------------------------------------------------------
 
-test('D3: a set operation between two TYPED sets still works', () => {
+test('a set operation between two TYPED sets still works', () => {
   // GetSetRecord reads `size` off the other operand and used to run ToNumber
   // over it. Once `size` answers a value of the index type, that step is an
   // implicit numeric conversion - the thing this proposal does not do - so it
@@ -189,7 +189,7 @@ test('D3: a set operation between two TYPED sets still works', () => {
   expect(evaluated('const a = new Set.<uint8>(); a.add(1); const b = new Set.<uint8>(); b.add(2); String(a.isDisjointFrom(b));')).toBe('true');
 });
 
-test('D3: a typed set against an untyped one, and against a set-like', () => {
+test('a typed set against an untyped one, and against a set-like', () => {
   // Mixed operands are the case that reaches BOTH branches of the new
   // GetSetRecord step in one call.
   expect(evaluated('const a = new Set.<uint8>(); a.add(1); const b = new Set([2]); [...a.union(b)].join(",");')).toBe('1,2');

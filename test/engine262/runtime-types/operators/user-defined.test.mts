@@ -278,8 +278,8 @@ test('a primitive block may declare an implicit cast into a parameterization', (
 });
 
 test('a cast into a meta type that defines no validate admits the crossing', () => {
-  // PLAN-parameterized-defaults.md phase 1, and the case every fixture above
-  // is blind to: each of them gives its meta type a `validate` returning
+  // The case every fixture above is blind to: each of them gives its meta type
+  // a `validate` returning
   // *true*, and the DESIGN'S OWN `Dimensions` defines none - "No validate -
   // dimensions constrain type compatibility, not value ranges"
   // (primitivemetadata.md). So the sentence those fixtures assert,

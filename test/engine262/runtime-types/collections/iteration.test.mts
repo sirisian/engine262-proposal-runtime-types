@@ -2,22 +2,20 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.4 - ITERATION AND THE REMAINING MEMBERS
- * (Phase 2, OQ3 and OQ4).
+ * ITERATION AND THE REMAINING MEMBERS.
  *
- * What Phase 2 adds: `clear`, `keys`, `values`, `entries` and `forEach` acquire
- * signatures on a typed `Map` or `Set`; a weak collection refuses all of them by
- * name; and `Reflect.typeOf` reports a collection's specialization (D6).
+ * `clear`, `keys`, `values`, `entries` and `forEach` acquire signatures on a
+ * typed `Map` or `Set`; a weak collection refuses all of them by name; and
+ * `Reflect.typeOf` reports a collection's specialization.
  *
- * OQ3, AND A CORRECTION TO ITS RECOMMENDATION. The question was what
- * `keys`/`values`/`entries` return. `sec-iteration-types` rules out
+ * WHAT THE ITERATION MEMBERS RETURN, AND A CORRECTION TO AN EARLIER ANSWER. `sec-iteration-types` rules out
  * per-collection iterator types by name - there is no `MapIterator` to return -
  * so the specification says `Iterator.<T>`, and it should. But the CHECKER
  * cannot return that record: in this engine `Iterator.<T>` is a structural
  * OBJECT record carrying members, with no [[Arguments]] to read, so a chain
  * starting from one loses its element type at the first step and
- * `m.values().map(f)` would be untyped. OQ3's recommendation - "return
- * `Iterator.<K>`, and add `Iterator` to the helper-dispatch receiver list" - was
+ * `m.values().map(f)` would be untyped. The obvious fix - "return
+ * `Iterator.<K>`, and add `Iterator` to the helper-dispatch receiver list" - is
  * not implementable as written, because there is no `Iterator` LibraryName to
  * dispatch on.
  *
@@ -29,21 +27,21 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
  * step needs. The two statements agree rather than compete, and it is the same
  * choice `iteratorMethodSignature` already made for the helpers themselves.
  *
- * OQ4 TURNED OUT TO BE DONE. `Map` and `Set` were already in
+ * THE IMPLEMENTS RELATION WAS ALREADY IN PLACE. `Map` and `Set` were already in
  * `BUILTIN_IMPLEMENTS` - `Set.<T>` implements `Iterable.<T>` and `Map.<K, V>`
  * implements `Iterable.<[K, V]>` - and the checker honours it. Asserted below so
  * it stays true, since the table's own comment calls each entry "a claim kept
  * true by hand, which is why every one has a test".
  *
- * NOT IN PHASE 2, AND NOT A COLLECTIONS DEFECT: a `for`-`of` binding has no
- * type. See the D17 tests at the foot of this file.
+ * NOT A COLLECTIONS DEFECT: a `for`-`of` binding has no type. See the tests at
+ * the foot of this file.
  */
 
 const M = 'let m: Map.<string, uint8> = new Map(); ';
 const S = 'let s: Set.<uint8> = new Set(); ';
 
 // ---------------------------------------------------------------------------
-// The members Phase 2 types
+// The members that acquire signatures
 // ---------------------------------------------------------------------------
 
 test('clear returns void on a typed collection', () => {
@@ -143,10 +141,10 @@ test('a weak collection refuses every enumerating member by name', () => {
 });
 
 // ---------------------------------------------------------------------------
-// OQ4 - the implements relation
+// The implements relation
 // ---------------------------------------------------------------------------
 
-test('OQ4: a typed collection satisfies Iterable at a declared parameter', () => {
+test('a typed collection satisfies Iterable at a declared parameter', () => {
   // BUILTIN_IMPLEMENTS calls each entry "a claim kept true by hand, which is why
   // every one has a test". These are the collections' tests.
   expect(ok('function f(i: Iterable.<uint8>) {} let s: Set.<uint8> = new Set(); f(s);')).toBe(true);
@@ -162,10 +160,10 @@ test('OQ4: a typed collection satisfies Iterable at a declared parameter', () =>
 });
 
 // ---------------------------------------------------------------------------
-// D6 - Reflect.typeOf reports the specialization
+// Reflect.typeOf reports the specialization
 // ---------------------------------------------------------------------------
 
-test('D6: Reflect.typeOf reports a collection specialization', () => {
+test('Reflect.typeOf reports a collection specialization', () => {
   // The design states the wanted answer directly: "Reflect.typeOf(new
   // Map.<string, uint8>()); // Map.<string, uint8>". Before this it was neither
   // the specialization nor the bare nominal - the value fell through to the
@@ -177,7 +175,7 @@ test('D6: Reflect.typeOf reports a collection specialization', () => {
   expect(evaluated('let m: Map.<string, uint8> = new Map(); String(Reflect.typeOf(m) === (type Map.<string, uint8>));')).toBe('true');
 });
 
-test('D6: an UNTYPED collection reports the bare nominal', () => {
+test('an UNTYPED collection reports the bare nominal', () => {
   // The other half, and the one that keeps sec 0's invariant: an ordinary Map is
   // a `Map`, not a specialization and not a shape.
   expect(evaluated('String(Reflect.typeOf(new Map()) === (type Map));')).toBe('true');
@@ -188,11 +186,11 @@ test('D6: an UNTYPED collection reports the bare nominal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D17 - for-of binding types. FIXED for the receivers below; the remainder is
+// for-of binding types. FIXED for the receivers below; the remainder is
 // recorded as expected failures rather than folded into the passing test.
 // ---------------------------------------------------------------------------
 
-test('D17: a for-of binding takes the element type (general, not collections)', () => {
+test('a for-of binding takes the element type (general, not collections)', () => {
   // The binding was untyped for EVERY receiver - an array, a generator, a
   // string, a range, and a collection alike - so this was never something the
   // collections were missing, and fixing it only for them would have made them
@@ -220,7 +218,7 @@ test('D17: a for-of binding takes the element type (general, not collections)', 
   expect(ok('const a = [1,2,3]; for (const v of a) { let x: string = v; }')).toBe(true);
 });
 
-test('D17: the range-counter bound still composes with the binding type', () => {
+test('the range-counter bound still composes with the binding type', () => {
   // A counter over a literal range carries a proven upper bound, which is what
   // lets a fixed-array index be checked. Typing the binding must not displace
   // that - the two are set on the same name in the same frame.
@@ -228,7 +226,7 @@ test('D17: the range-counter bound still composes with the binding type', () => 
   expect(evaluated('let t = 0; for (const i of 0..<4) t = i; String(t);')).toBe('3');
 });
 
-test.fails('D17 remainder: a range counter and a destructuring head are still untyped', () => {
+test.fails('the remainder: a range counter and a destructuring head are still untyped', () => {
   // Three receivers the fix does not reach, kept as expected failures so they
   // convert when it is extended rather than being quietly absorbed into the
   // passing test above.
@@ -242,14 +240,14 @@ test.fails('D17 remainder: a range counter and a destructuring head are still un
   expect(ok('let a: [].<[uint8, string]> = []; for (const [n, s2] of a) { let x: string = n; }')).toBe(false);
 });
 
-test.fails('D17 remainder: a spread of a typed source takes its element type', () => {
+test.fails('the remainder: a spread of a typed source takes its element type', () => {
   // Spread is the same derivation in expression position and is not done.
   expect(ok('let a: [].<uint8> = [1,2,3]; let b: [].<string> = [...a];')).toBe(false);
   expect(ok(`${S} let b: [].<string> = [...s];`)).toBe(false);
 });
 
 test('control: iteration RUNS correctly whatever the binding is typed at', () => {
-  // D17 is about the binding's static type. The values themselves are right,
+  // This is about the binding's static type. The values themselves are right,
   // and the run-time element checks still apply - so nothing here is unsound,
   // only unchecked earlier than it could be.
   expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 1); let out = ""; for (const [k, v] of m) out = k + v; out;')).toBe('a1');

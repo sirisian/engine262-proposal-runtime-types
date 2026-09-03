@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.3 - 64-BIT AND WIDER KEYS.
+ * 64-BIT AND WIDER KEYS.
  *
  * A `uint64`, `int64` or `uint128` key compares at ITS OWN precision. This has a
  * file of its own because it is the case an implementation gets wrong by
@@ -17,7 +17,7 @@ import { evaluated, ok } from '../harness.mts';
  *
  * This is the key-position form of the hazard `sec-ordered-element-types`
  * describes for element storage, and it is the reason `size` reads at the index
- * type rather than at a Number (OQ1).
+ * type rather than at a Number.
  */
 
 const TWO53 = '9007199254740992n';
@@ -60,8 +60,8 @@ test('the full width of the type is usable as a key', () => {
 });
 
 test('a numeric key converts where the target represents it EXACTLY, and not otherwise', () => {
-  // A key position checks rather than converts only for the string target
-  // (OQ7); the numeric targets already had the property OQ7 wanted, because
+  // A key position checks rather than converts only for the string target; the
+  // numeric targets already had the property that rule wanted, because
   // `sec-requiretype` admits a numeric source only where the target represents
   // it exactly. So an `int64` 1 reaching a `uint64` key is admitted - it is the
   // same magnitude, and no two distinct sources can land on one key that way.

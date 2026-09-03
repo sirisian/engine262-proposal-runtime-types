@@ -186,7 +186,7 @@ test('representability still decides, and the limits do not participate', () => 
 });
 
 test('a union containing bigint does not capture an integer literal', () => {
-  // PLAN-number-bigint-coercion.md, OUTSTANDING item S. `bigintTarget` answered
+  // `bigintTarget` answered
   // true for a union if ANY arm was `bigint`, without asking whether another arm
   // already accepted the literal as written - so the literal propagated to
   // `bigint` and the binding held a BigInt the program never wrote:
@@ -201,8 +201,8 @@ test('a union containing bigint does not capture an integer literal', () => {
   expect(evaluated('let x: number | bigint = 5; String(x === 5);')).toBe('true');
   expect(evaluated('let x: bigint | number = 5; String(typeof x);')).toBe('number');
   expect(evaluated('let x: number | bigint | string = 5; String(typeof x);')).toBe('number');
-  // A SIZED numeric arm too - the first draft of the plan thought these escaped,
-  // having measured them with a cast rather than a literal.
+  // A SIZED numeric arm too - an earlier reading thought these escaped, having
+  // measured them with a cast rather than a literal.
   expect(evaluated('let x: int8 | bigint = 5; String(typeof x);')).toBe('number');
 });
 

@@ -89,7 +89,7 @@ test('Fixed-length arrays: the extents must agree, and a window takes either', (
 // -- Any Typed Array: [] -------------------------------------------------------
 // `[]` alone is the array of `any`; `[].<any>` is the same type spelled out.
 test('Any Typed Array: the family bound is [].<any>; [] is the empty tuple', () => {
-  // PLAN-std-types.md F115, direction B. `[]` used to BE `[].<any>` - the array
+  // F115. `[]` used to BE `[].<any>` - the array
   // of `any`, and the bound of the array and tuple family. It is now the EMPTY
   // TUPLE, and the bound keeps a spelling rather than the short one.
   //

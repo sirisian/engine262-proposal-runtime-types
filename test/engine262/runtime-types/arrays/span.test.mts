@@ -141,8 +141,8 @@ test('a window reads its elements and its length', () => {
   // The read surface a window HAS today. The array METHODS - `indexOf`,
   // `includes`, `map`, iteration - are accepted by the checker and are not
   // implemented on the window value yet, so they are not asserted here; that
-  // is the remaining half of equipping the window (plan K7), and a test that
-  // passed by accident of the static rule would hide it.
+  // is the remaining half of equipping the window, and a test that passed by
+  // accident of the static rule would hide it.
   expect(evaluated('function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2, 3]; String(w(a)[1]);')).toBe('2');
   expect(evaluated('function w(s: Span.<uint32>) { return s; }'
@@ -429,7 +429,7 @@ test('a column reads as a window of the field type', () => {
   expect(evaluated(`${s}let z: Span.<float32> = s.fields.x; String(z.length);`)).toBe('1');
 });
 
-// -- the coercion this whole phase replaces -----------------------------------
+// -- the coercion the window replaces ----------------------------------------
 
 test('a fixed array is not assignable to a growable one', () => {
   // The unsoundness `Span.<T>` exists to replace. `[].<T>` promises growth and

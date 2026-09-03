@@ -5,8 +5,8 @@ import { evaluated, ok, run } from '../harness.mts';
  * Spec: #sec-literal-freshness, #sec-type-members, #sec-partial-declarations,
  * #sec-type-references, #sec-composite-types.
  *
- * Regression rows for the object-literal and interface defects closed in the
- * D66-D83 sequence. Each row is the shortest program that distinguished the
+ * Regression rows for the object-literal and interface defects closed here.
+ * Each row is the shortest program that distinguished the
  * defect from its correct neighbour, and most are paired: an accepted row is
  * worthless without the wrong-value twin that proves the check ran.
  *
@@ -23,7 +23,7 @@ function accepts(source: string): boolean {
  * Whether a program is REJECTED at all, statically or at the run time.
  *
  * Some of these rules are enforced at the run-time boundary rather than by the
- * checking pass - D69's unresolvable member types are reported where the
+ * checking pass - unresolvable member types are reported where the
  * interface is evaluated, and an unbound type parameter reaches a binding
  * lookup - so `accepts` above, which never executes the program, cannot see
  * them. Where the row is about a rule holding AT ALL, this is the honest test.
@@ -36,13 +36,13 @@ function rejects(source: string): boolean {
 }
 
 test('a method in an object type is checked, and its type parameters are in scope', () => {
-  // D66: an object type written with method shorthand checked nothing.
+  // An object type written with method shorthand checked nothing.
   expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); } };')).toBe(true);
   expect(accepts('let p: { m(): uint8 } = { m: "s" };')).toBe(false);
-  // D64 row 11: a missing method member.
+  // A missing method member.
   expect(accepts('let p: { m(): uint8 } = { };')).toBe(false);
 
-  // D71's shape half: a METHOD written in shorthand made the literal's whole
+  // The shape half: a METHOD written in shorthand made the literal's whole
   // shape null, so NOTHING about it was checked - not the method, and not its
   // siblings. Every row below was accepted before.
   expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); }, u: "s" };')).toBe(false);
@@ -52,7 +52,7 @@ test('a method in an object type is checked, and its type parameters are in scop
   expect(accepts('let p: { m(): uint8 } = { m() { return (1 := uint8); } };')).toBe(true);
   expect(accepts('let p: { m(): uint8, n: uint8 } = { m() { return (1 := uint8); }, n: 1 };')).toBe(true);
 
-  // D71's body half: an UNANNOTATED method body's return, taken from the member
+  // The body half: an UNANNOTATED method body's return, taken from the member
   // the target declares. `enterFunction` enforced a return only where one was
   // WRITTEN, so this escaped while the annotated, arrow and standalone
   // spellings were all refused.
@@ -89,12 +89,12 @@ test('a method in an object type is checked, and its type parameters are in scop
   expect(accepts('let c: { m(): int32 } & { m(): int32 } = { m() { return (1 := int32); } };')).toBe(true);
   expect(accepts('let c: { m(): int32 } & { n: int32 } = { m() { return (1 := int32); }, n: 1 };')).toBe(true);
 
-  // D67: an interface with a method reaches an object type, both readonly.
+  // An interface with a method reaches an object type, both readonly.
   expect(accepts(`interface S { m(): uint8; }
     let s: S = { m() { return (0 := uint8); } };
     let o: { m(): uint8 } = s;`)).toBe(true);
 
-  // D68: a method's OWN type parameters are in scope across its signature.
+  // A method's OWN type parameters are in scope across its signature.
   expect(accepts('type G = { m<T>(v: T): T };')).toBe(true);
   expect(accepts('type G = { m<A, B>(a: A, b: B): A };')).toBe(true);
   // ...and nowhere else: a sibling member naming `T` is still unbound.
@@ -102,12 +102,12 @@ test('a method in an object type is checked, and its type parameters are in scop
 });
 
 test('an interface member type is resolved and its failures reported', () => {
-  // D69: an unbound name, in a data member and in a method signature.
+  // An unbound name, in a data member and in a method signature.
   expect(rejects('interface I { n: U; }')).toBe(true);
   expect(rejects('interface I { m(): U; }')).toBe(true);
   expect(rejects('interface I { m(v: U): uint8; }')).toBe(true);
 
-  // D72: a name that IS bound but denotes a value is "not a type", not a
+  // A name that IS bound but denotes a value is "not a type", not a
   // temporal-dead-zone report - the two were indistinguishable.
   expect(rejects('const q = 5; interface I { n: q; }')).toBe(true);
 
@@ -116,21 +116,21 @@ test('an interface member type is resolved and its failures reported', () => {
   expect(accepts('interface A { b: B; } interface B { a: A; }')).toBe(true);
   // A forward reference to a type declared later keeps working.
   expect(accepts('interface I { n: L; } type L = uint8; let i: I = { n: (1 := uint8) };')).toBe(true);
-  // D68's frame reaches the interface path too.
+  // The method's own type-parameter frame reaches the interface path too.
   expect(accepts('interface I { m<T>(v: T): T; }')).toBe(true);
 });
 
 test('an untyped literal adapts at an INTERSECTION where the arms agree', () => {
   const arms = 'type A = { x: int32 }; type B = { y: int32 }; type C = A & B; ';
-  // D70: the arms carry [[Members]], not [[Properties]], so nothing adapted.
+  // The arms carry [[Members]], not [[Properties]], so nothing adapted.
   expect(accepts(`${arms} let c: C = { x: 1, y: 2 };`)).toBe(true);
   expect(accepts('let c: { x: int32 } & { y: int32 } = { x: 1, y: 2 };')).toBe(true);
   expect(accepts('let c: { x: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
 
   // The arms must AGREE: taking either would admit a literal at a target
-  // wanting both. This is the OPPOSITE of D75's rule for the same target form.
+  // wanting both. This is the OPPOSITE of the merge rule for the same target form.
   //
-  // D84 regressed this and it is restored: D75's merge concatenated the arms'
+  // This regressed once and is restored: the merge concatenated the arms'
   // [[Properties]], so a key two arms declare appeared TWICE and the walk
   // matched the first. Merged BY KEY now, with a disagreeing key taking `never`
   // - declared, so freshness still admits it, and satisfied by nothing.
@@ -148,17 +148,17 @@ test('an untyped literal adapts at an INTERSECTION where the arms agree', () => 
   expect(accepts('let c: { x?: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
   expect(accepts('let c: { readonly x: int32 } & { x: int32 } = { x: 1 };')).toBe(true);
 
-  // A UNION adapts too (D89), where every arm declaring the key AGREES - here
+  // A UNION adapts too, where every arm declaring the key AGREES - here
   // only one arm declares `x`, so it is unambiguous.
   expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(true);
   // ...and where the arms DISAGREE nothing is adapted, so the member widens and
   // the literal is refused. #sec-union-boundary-selection decides that case for
   // a VALUE; deciding it for a LITERAL is an open design question.
-  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // The literal now ADAPTS toward the arm it FITS, by the rule the
   // SCALAR position already used - `let v: string | uint8 = 1` has always
   // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
   // VALUE is rather than by where a member was written", and this is that rule
-  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // for a literal. The arms are ordered and flattened first, so the
   // answer is a function of the TYPE and not of the spelling.
   expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
 
@@ -168,11 +168,11 @@ test('an untyped literal adapts at an INTERSECTION where the arms agree', () => 
 });
 
 test('a NESTED literal is adapted at a composite target', () => {
-  // D73: a nested object member widened instead of being taken at the wanted
+  // A nested object member widened instead of being taken at the wanted
   // type, because the adaptation was gated on a NUMERIC predicate alone.
   expect(accepts('let c: { a: { x: int32 } } & { b: int32 } = { a: { x: (1 := int32) }, b: (2 := int32) };')).toBe(true);
 
-  // D74: the nested literal had no contextual type of its own, so its members
+  // The nested literal had no contextual type of its own, so its members
   // never adapted - two and three levels deep.
   expect(accepts('let c: { a: { x: int32 } } & { b: int32 } = { a: { x: 1 }, b: 2 };')).toBe(true);
   expect(accepts('let c: { a: { b: { x: int32 } } } & { } = { a: { b: { x: 1 } } };')).toBe(true);
@@ -185,7 +185,7 @@ test('a NESTED literal is adapted at a composite target', () => {
 });
 
 test('freshness reaches a COMPOSITE and an INTERFACE target', () => {
-  // D75: the member walk was gated on an `object` target, so a composite
+  // The member walk was gated on an `object` target, so a composite
   // reached neither freshness nor the flags inside the block.
   expect(accepts('let c: { x: int32 } & { } = { x: (1 := int32), u: "s" };')).toBe(false);
   expect(accepts('let c: { a: { x: int32 } } & { } = { a: { x: (1 := int32), u: "s" } };')).toBe(false);
@@ -196,7 +196,7 @@ test('freshness reaches a COMPOSITE and an INTERFACE target', () => {
   expect(accepts('let c: { x: int32 } & { u: string } = { x: (1 := int32), u: (2 := int32) };')).toBe(false);
   expect(accepts('let c: { x: int32 } & { u: string } = { x: (1 := int32) };')).toBe(false);
 
-  // D79: the same rule at an interface, which the RUN TIME misses entirely.
+  // The same rule at an interface, which the RUN TIME misses entirely.
   expect(accepts('interface I { n: int32 } let c: I = { n: (1 := int32), u: "s" };')).toBe(false);
   expect(accepts('interface I<T> { n: T } let c: I.<int32> = { n: (1 := int32), u: "s" };')).toBe(false);
   expect(accepts('interface I { n: int32 } function f(p: I) { return 1; } f({ n: (1 := int32), u: "s" });')).toBe(false);
@@ -207,7 +207,7 @@ test('freshness reaches a COMPOSITE and an INTERFACE target', () => {
 });
 
 test('an INDEX SIGNATURE constrains its values and survives on an interface', () => {
-  // D77: a key admitted by a signature had its value checked against nothing.
+  // A key admitted by a signature had its value checked against nothing.
   expect(accepts('let c: { [k: string]: int32 } = { x: "s" };')).toBe(false);
   expect(accepts('let c: { [k: string]: uint8 } = { x: 999 };')).toBe(false);
   expect(accepts('function f(p: { [k: string]: int32 }) { return 1; } f({ x: "s" });')).toBe(false);
@@ -221,17 +221,17 @@ test('an INDEX SIGNATURE constrains its values and survives on an interface', ()
   expect(accepts('let c: { [k: string]: int32 } = { x: (1 := int32), zz: (3 := int32) };')).toBe(true);
   expect(accepts('let c: { [k: string]: int32 } = { x: 1 };')).toBe(true);
 
-  // D78: an interface's signature was DISCARDED when its structure was built,
+  // An interface's signature was DISCARDED when its structure was built,
   // in the checker and the run time alike.
   expect(accepts('interface I { [k: string]: int32 } let c: I = { x: "s" };')).toBe(false);
   expect(accepts('interface I { [k: string]: uint8 } let c: I = { x: 999 };')).toBe(false);
   expect(accepts('interface I { [k: string]: int32 } let c: I = { x: (1 := int32) };')).toBe(true);
-  // D79's freshness must not report a key the signature admits.
+  // Freshness must not report a key the signature admits.
   expect(accepts('interface I { n: int32, [k: string]: int32 } let c: I = { n: (1 := int32), u: (2 := int32) };')).toBe(true);
 });
 
 test('an interface index signature is enforced by `is` as well as by an annotation', () => {
-  // D78 row 5: the run-time membership test admitted a value the type excludes,
+  // The run-time membership test admitted a value the type excludes,
   // where the ALIAS spelling of the same type answered *false*. Both sides had
   // to land together or the two would disagree in the other direction.
   expect(evaluated('interface I { [k: string]: int32 } String(({ x: "s" } is I));')).toBe('false');
@@ -241,11 +241,11 @@ test('an interface index signature is enforced by `is` as well as by an annotati
 
 test('every declaration of a `partial interface` contributes its members', () => {
   const base = 'interface P { n: int32 } partial interface P { u: string } ';
-  // D82: the checker held ONE declaration - the first at one site, the last at
+  // The checker held ONE declaration - the first at one site, the last at
   // another - so the base's members were absent from the structure entirely.
   expect(accepts(`${base} let c: P = { n: (1 := int32), u: "s" };`)).toBe(true);
   expect(accepts(`${base} let c: P = { n: "s", u: "s" };`)).toBe(false);
-  // D81, which closed with it: the base's member is required, not just typed.
+  // And with it: the base's member is required, not just typed.
   expect(accepts(`${base} let c: P = { u: "s" };`)).toBe(false);
   expect(accepts(`${base} let c: P = { n: (1 := int32) };`)).toBe(false);
 
@@ -256,15 +256,15 @@ test('every declaration of a `partial interface` contributes its members', () =>
   expect(accepts(`${three} let c: P = { n: (1 := int32), u: "s" };`)).toBe(false);
   expect(accepts('partial interface P { u: string } interface P { n: int32 } let c: P = { n: (1 := int32), u: "s" };')).toBe(true);
 
-  // D79's freshness works THROUGH a merged partial, which is why D82 had to
+  // Freshness works THROUGH a merged partial, which is why the declaration merge had to
   // land first: before it, `u` read as undeclared.
   expect(accepts(`${base} let c: P = { n: (1 := int32), u: "s", zz: "t" };`)).toBe(false);
-  // ...and D78's signature survives a partial too.
+  // ...and an interface's signature survives a partial too.
   expect(accepts('interface P { n: int32 } partial interface P { [k: string]: int32 } let c: P = { n: (1 := int32), zz: (2 := int32) };')).toBe(true);
 });
 
 test('an object type is a subtype of an index-signature type it satisfies', () => {
-  // D85: `IsObjectSubtype` covered t's signatures only from s's OWN signatures,
+  // `IsObjectSubtype` covered t's signatures only from s's OWN signatures,
   // so `every(... some(...))` was vacuously false for a source declaring none.
   // `{ x: int32, [k: string]: int32 }` passed where `{ x: int32 }` did not.
   expect(evaluated('type F = { }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
@@ -282,19 +282,19 @@ test('an object type is a subtype of an index-signature type it satisfies', () =
   // position, which `dependentrecordtypes.md` calls the principal use.
   expect(accepts('function f(data: { [key: string]: any }) { return 1; } let o: { a: uint8 } = { a: (1 := uint8) }; f(o);')).toBe(true);
   expect(accepts('function g(): { [key: string]: any } { let o: { a: uint8 } = { a: (1 := uint8) }; return o; }')).toBe(true);
-  // ...and D76, which was this defect seen through an intersection.
+  // ...and the same defect seen through an intersection.
   expect(accepts('let c: { [k: string]: int32 } & { } = { };')).toBe(true);
   expect(accepts('let c: { [k: string]: int32 } & { } = { x: (1 := int32) };')).toBe(true);
 
   // A property t declares BY NAME is judged by the property loop, not the
   // signature, so a named member of a different type is still fine.
   expect(evaluated('type F = { x: string }; type T = { x: string, [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
-  // ...and D77's value rule at a literal is untouched.
+  // ...and the signature's value rule at a literal is untouched.
   expect(accepts('let c: { [k: string]: int32 } = { x: "s" };')).toBe(false);
 });
 
 test('a parameterised type substitutes its index signatures', () => {
-  // D86: TWO substitution walks, the same gap in each. `substituteTypeParameters`
+  // TWO substitution walks, the same gap in each. `substituteTypeParameters`
   // in check.mts had no signature arm at all and serves the ALIAS spelling;
   // `SubstituteTypeArguments` in runtime.mts copied [[IndexSignatures]] verbatim
   // beside a walked [[Properties]] and serves the NOMINAL one. Both were needed.
@@ -311,16 +311,16 @@ test('a parameterised type substitutes its index signatures', () => {
   expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: "s" };')).toBe(false);
 
   // The arm is GATED on `mentionsTypeParameter`, which was missing the same
-  // case - D62's shape, where an arm existed and was gated off so the fix did
+  // case - the shape where an arm existed and was gated off so the fix did
   // nothing. These rows fail if only one half is applied.
   expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
   expect(accepts('interface B<T> { m(): T; } let b: B.<uint8> = { m() { return (1 := uint8); } };')).toBe(true);
 });
 
 test('a parameterised tuple substitutes its elements', () => {
-  // D87: the SINGULAR [[Element]] an array carries was handled in both walks and
+  // The SINGULAR [[Element]] an array carries was handled in both walks and
   // the PLURAL [[Elements]] a tuple carries was not - one letter apart, at
-  // check.mts:1519 and :2527. Three edits, as D86 needed: the predicate the arm
+  // check.mts:1519 and :2527. Three edits, as the substitution walks needed: the predicate the arm
   // is gated on, the alias walk, and the nominal one.
   expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
   expect(accepts('type P<T> = [T, string]; let s: [uint8, string] = [(1 := uint8), "s"]; let p: P.<uint8> = s;')).toBe(true);
@@ -345,10 +345,11 @@ test('a parameterised tuple substitutes its elements', () => {
 });
 
 test('the runtime substitution walk reaches every kind it must', () => {
-  // D88: the walk dispatches on [[Kind]] and had five arms, where the checker's
+  // The walk dispatches on [[Kind]] and had five arms, where the checker's
   // `substituteTypeParameters` dispatches on FIELDS - so a kind with no arm
-  // returned UNSUBSTITUTED at the tail, silently. That asymmetry is why D86, D87
-  // and D88 were each found on the NOMINAL side after the alias side worked.
+  // returned UNSUBSTITUTED at the tail, silently. That asymmetry is why all
+  // three substitution defects were found on the NOMINAL side after the alias
+  // side worked.
   expect(accepts('interface B<T> { n: [].<T> } let b: B.<uint8> = { n: [(1 := uint8)] };')).toBe(true);
   expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
   // The arms must COMPOSE: a handled kind containing an unhandled one failed.
@@ -372,7 +373,7 @@ test('the runtime substitution walk reaches every kind it must', () => {
 });
 
 test("an object literal's shape carries readonly", () => {
-  // D91: `objectLiteralShape` pushed `{ key, type, optional }` with no
+  // `objectLiteralShape` pushed `{ key, type, optional }` with no
   // `readonly`, so a literal's property records held `undefined` where a written
   // type holds `false`, and relations.mts's exact-match arm compares them with
   // `===`. Instrumented: `ro undefined/false sameType=true` - the member TYPES
@@ -393,7 +394,7 @@ test("an object literal's shape carries readonly", () => {
   expect(evaluated('type R = { readonly a: int32 }; type W = { a: int32 }; String(Reflect.isAssignable((type R), (type W)));')).toBe('false');
 
   // A readonly INNER member: a LITERAL adapts to it, at a union as at a single
-  // target (D89 gave the union a wanted type, so the two agree), while a BINDING
+  // target (the union has a wanted type, so the two agree), while a BINDING
   // of an already-typed value does not - a writable source cannot satisfy a
   // readonly target. The literal/binding split is the point: a literal is
   // created at the target type, a binding already has one.
@@ -408,7 +409,7 @@ test("an object literal's shape carries readonly", () => {
 });
 
 test("a literal's method member takes the signature its position wants", () => {
-  // D92: the member was typed `{ Kind: 'function', Signatures: [] }` - D71's
+  // The member was typed `{ Kind: 'function', Signatures: [] }` - the method-shorthand
   // deliberate stub, right for the member WALK where each member is compared on
   // its own, wrong at an EXACT-MATCH comparison where a signature-less function
   // is not the same type as any signature. A union reaches neither
@@ -419,7 +420,7 @@ test("a literal's method member takes the signature its position wants", () => {
   expect(accepts('let c: { m(): int32 } | { y: string } = { m(): int32 { return (1 := int32); } };')).toBe(true);
   expect(accepts('let c: { m(): int32, x: int32 } | { y: string } = { m() { return (1 := int32); }, x: 1 };')).toBe(true);
   expect(accepts('interface I { m(): int32; } let c: I | { y: string } = { m() { return (1 := int32); } };')).toBe(true);
-  // Two arms declaring `m` and AGREEING - D89 made wantedOf answer across arms.
+  // Two arms declaring `m` and AGREEING - `wantedOf` answers across arms.
   expect(accepts('let c: { m(): int32 } | { m(): int32, y: string } = { m() { return (1 := int32); } };')).toBe(true);
 
   // The WANTED signature is adopted, never an inferred one, so the BODY is still
@@ -441,7 +442,7 @@ test("a literal's method member takes the signature its position wants", () => {
 });
 
 test('a NESTED composite annotation reaches every arm', () => {
-  // D93: a composite written inside another arrived UNFLATTENED - traced,
+  // A composite written inside another arrived UNFLATTENED - traced,
   // `arms=2 armKinds=["union","object"]` where the FLAT spelling of the same
   // type gives three object arms. The two annotations denote one type and the
   // canonical form proves it, so the display was not what the literal met.
@@ -455,14 +456,14 @@ test('a NESTED composite annotation reaches every arm', () => {
   expect(accepts('type U = { x: int32 } | { y: string }; let c: U & { z: int32 } = { x: 1, z: 2 };')).toBe(true);
 
   // ONE agreement check across ALL levels, not one per level. These three arms
-  // are two levels apart and must still be seen to disagree - D89 left a
+  // are two levels apart and must still be seen to disagree - the union rule left a
   // disagreeing key REFUSED as an open design question, and a per-level check
   // would pick an arm instead.
-  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // The literal now ADAPTS toward the arm it FITS, by the rule the
   // SCALAR position already used - `let v: string | uint8 = 1` has always
   // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
   // VALUE is rather than by where a member was written", and this is that rule
-  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // for a literal. The arms are ordered and flattened first, so the
   // answer is a function of the TYPE and not of the spelling.
   expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
   expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(true);
@@ -471,12 +472,12 @@ test('a NESTED composite annotation reaches every arm', () => {
   // Reaching into an arm must not invent a wanted type nor excuse a wrong value.
   expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { w: 1 };')).toBe(false);
   expect(accepts('let c: ({ x: int32 } | { y: string }) & { z: int32 } = { x: "s", z: 2 };')).toBe(false);
-  // An arm declaring NOTHING contributes nothing - D90's row.
+  // An arm declaring NOTHING contributes nothing.
   expect(accepts('let c: { x: int32 } | never = { x: 1 };')).toBe(true);
 });
 
 test('a self-referential union reports instead of overflowing', () => {
-  // D94: `type R = { a: int32 } | R` has no finite layout and the DECLARATION
+  // `type R = { a: int32 } | R` has no finite layout and the DECLARATION
   // said so. The literal path went through `requireAssignable`, which erases
   // both sides, and TWO walks recursed over [[Members]] with no cycle guard -
   // `eraseMetadata` and `literalFitsNumericType`. Guarding the first only moved
@@ -507,7 +508,7 @@ test('a self-referential union reports instead of overflowing', () => {
 });
 
 test('a nested literal at a recursive type takes its wanted member types', () => {
-  // D95: `adapted` took the wanted type only for an ~object~ member - D73 added
+  // `adapted` took the wanted type only for an ~object~ member - the nested-member rule added
   // that arm for the case it had and scoped it to that kind. A member of any
   // other kind fell through to `widen`, so at
   // `type L = { value: uint8, next: L | null }` the inner literal's `next: null`
@@ -536,16 +537,16 @@ test('a nested literal at a recursive type takes its wanted member types', () =>
   // asked - which is what confirmed the invariance reading.
   expect(accepts('type RO = { v: uint8, readonly next: RO | null }; const n: RO = { v: 1, next: { v: 2, next: null } };')).toBe(true);
 
-  // D73's OBJECT arm is untouched: freshness still reaches a nested object
+  // The OBJECT arm is untouched: freshness still reaches a nested object
   // member at a plain (non-union) position.
   expect(accepts('type P = { v: uint8, inner: { w: uint8 } }; const p: P = { v: 1, inner: { w: 2, u: "x" } };')).toBe(false);
 });
 
 test('mentionsTypeParameter terminates on a cyclic record', () => {
-  // D98: the THIRD walk of this shape, after D94 guarded `eraseMetadata` and
+  // The THIRD walk of this shape, after the recursion guard reached `eraseMetadata` and
   // `literalFitsNumericType`. A recursive ALIAS reached through a function
   // PARAMETER inside a BLOCK overflowed the host stack - at top level the same
-  // program is merely unchecked (D96), because the block takes a path that
+  // program is merely unchecked, because the block takes a path that
   // WALKS the type instead of decaying it to `any`.
   //
   // `false` on a revisit is the honest answer: a record already being asked
@@ -556,8 +557,8 @@ test('mentionsTypeParameter terminates on a cyclic record', () => {
   expect(rejects(`${L} { function f(p: L) { return 1; } f({ v: "s", next: null }); }`)).toBe(true);
   expect(accepts(`${L} { function f(p: L) { return 1; } f({ v: (1 := uint8), next: null }); }`)).toBe(true);
 
-  // The generic machinery this predicate gates is unchanged - it is what D62,
-  // D86 and D87 all turned on, so a `seen` set that returned the wrong answer
+  // The generic machinery this predicate gates is unchanged - it is what the
+  // substitution defects all turned on, so a `seen` set that returned the wrong answer
   // would show here first.
   expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
   expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
@@ -566,13 +567,13 @@ test('mentionsTypeParameter terminates on a cyclic record', () => {
 });
 
 test('freshness reaches a UNION target', () => {
-  // D97: #sec-literal-freshness is written for "an expected OBJECT TYPE", so a
+  // #sec-literal-freshness is written for "an expected OBJECT TYPE", so a
   // union was outside it and an excess property SURVIVED - at run time as well
   // as statically, which made it a loosening rather than a missing diagnostic.
   //
   // The rule applied is the CONSERVATIVE one: excess only where NO arm declares
   // or admits the key. A stricter rule - fresh against the arm that takes the
-  // literal - needs an arm CHOSEN, which D89 left open. Every property refused
+  // literal - needs an arm CHOSEN, which the union rule left open. Every property refused
   // here is refused under either rule.
   expect(accepts('let c: { x: int32 } | { y: string } = { x: (1 := int32), u: "t" };')).toBe(false);
   expect(accepts('type P = { v: uint8, inner: { w: uint8 } | null }; let p: P = { v: 1, inner: { w: 2, u: "x" } };')).toBe(false);
@@ -584,14 +585,14 @@ test('freshness reaches a UNION target', () => {
   // a union was measured first and REGRESSED this row from refused to accepted:
   // that arm ends `return contextual`, so entering it skips the
   // `requireAssignable` that refuses a disagreeing-arm literal.
-  // D70b (A'): the literal now ADAPTS toward the arm it FITS, by the rule the
+  // The literal now ADAPTS toward the arm it FITS, by the rule the
   // SCALAR position already used - `let v: string | uint8 = 1` has always
   // adapted. #sec-union-boundary-selection decides the VALUE case "by what the
   // VALUE is rather than by where a member was written", and this is that rule
-  // for a literal. The arms are ordered and flattened first (D110, D112), so the
+  // for a literal. The arms are ordered and flattened first, so the
   // answer is a function of the TYPE and not of the spelling.
   expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
-  // ...and D89's adaptation is untouched.
+  // ...and the union adaptation is untouched.
   expect(accepts('let c: { x: int32 } | { y: string } = { x: 1 };')).toBe(true);
 
   // A key SOME arm declares is admitted: this is the conservative rule's own
@@ -603,12 +604,12 @@ test('freshness reaches a UNION target', () => {
   expect(accepts('let s = { x: (1 := int32), u: "t" }; let c: { x: int32 } | { y: string } = s;')).toBe(true);
 
   // An arm that is itself a COMPOSITE is flattened, not dropped: a filter that
-  // kept only object arms reported `x` as excess here (D93's lesson).
+  // kept only object arms reported `x` as excess here.
   expect(accepts('let c: ({ x: int32 } | { y: string }) | { z: boolean } = { x: 1 };')).toBe(true);
 });
 
 test('an empty array literal is refused where no array fits', () => {
-  // D58b: `staticType` returns `null` for an element-less ArrayLiteral, so the
+  // `staticType` returns `null` for an element-less ArrayLiteral, so the
   // annotation had nothing to compare against - `let n: uint8 = []` raised no
   // static error while `let o: { x: uint8 } = [1]` did. The RUN TIME refused
   // both, so this was a missing diagnostic and not a loosening.
@@ -633,7 +634,7 @@ test('an empty array literal is refused where no array fits', () => {
 });
 
 test('concat does not admit a foreign element', () => {
-  // D102: `concat` shared a table case with `slice`, `reverse`, `sort`,
+  // `concat` shared a table case with `slice`, `reverse`, `sort`,
   // `toReversed` and `toSorted`, all returning the RECEIVER. That is right for
   // the other five and wrong for concat, whose result unions the ARGUMENTS'
   // element types - which the RUN TIME already answered:
@@ -659,7 +660,7 @@ test('concat does not admit a foreign element', () => {
 });
 
 test('push, unshift and splice check their element', () => {
-  // D102 row 2: all three were ABSENT from `arrayMethodSignature`, so a foreign
+  // All three were ABSENT from `arrayMethodSignature`, so a foreign
   // element raised no static error - `a.push("s")` on a `[].<uint8>`
   // type-checked. The RUN TIME refused every one, and these entries are copied
   // from it.
@@ -676,12 +677,12 @@ test('push, unshift and splice check their element', () => {
   // record gave `Extent: undefined` and refused this row - which MATCHES the run
   // time, and the run time is wrong there: it reports
   // `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`. Copying an
-  // error is not agreement (D103).
+  // error is not agreement.
   expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.splice(0, 1);')).toBe(true);
 });
 
 test('a returned value type class instance is copied', () => {
-  // D104: `returning` is one of the positions #sec-value-type-copying lists and
+  // `returning` is one of the positions #sec-value-type-copying lists and
   // was the ONLY one that did not copy - a binding, an assignment, a typed
   // field, a typed array element and an argument all did.
   //
@@ -712,7 +713,7 @@ test('a returned value type class instance is copied', () => {
 });
 
 test('Promise.resolve rejects with never, as the statics table states', () => {
-  // D48: the row is "`(value: R): Promise.<R, never>`, a resolved promise having
+  // The row is "`(value: R): Promise.<R, never>`, a resolved promise having
   // nothing to reject with", and the engine built `Promise.<R, any>` - the
   // opposite claim, that it may reject with anything.
   //
@@ -733,7 +734,7 @@ test('Promise.resolve rejects with never, as the statics table states', () => {
 });
 
 test('a self-describing contribution does not anchor inference', () => {
-  // D105: #sec-anchored-contributions says a contribution anchors when its
+  // #sec-anchored-contributions says a contribution anchors when its
   // Static Type "derives from a DECLARED type". The checker asked instead
   // whether the type was NOT A LITERAL, and its own comment states the
   // assumption: "a known, non-literal contribution is one that derives from an
@@ -768,7 +769,7 @@ test('a self-describing contribution does not anchor inference', () => {
 });
 
 test('a signature is trusted only where the name cannot be replaced', () => {
-  // D107: a `function` declaration creates a MUTABLE binding, so
+  // A `function` declaration creates a MUTABLE binding, so
   // `function g(p: uint32){ return "s"; } g = function(p){ return 1; }` leaves
   // `g` holding a function that returns a NUMBER. The checker read `string` from
   // the declaration and refused `const q: number = g(...)` - rejecting a program
@@ -802,7 +803,7 @@ test('a signature is trusted only where the name cannot be replaced', () => {
 });
 
 test('an inference anchored in a nested list still publishes', () => {
-  // D106: `publishInferredReturns()` ran as the last step of
+  // `publishInferredReturns()` ran as the last step of
   // `declareFunctionSignatures`, which runs BEFORE its statement list is walked -
   // deliberately, so `f(300)` above `function f(v: uint8) {}` is an Early Error.
   // The cost was that the fixpoint sampled the list's own bindings before they
@@ -828,15 +829,15 @@ test('an inference anchored in a nested list still publishes', () => {
   expect(accepts('f(300); function f(v: uint8) {}')).toBe(false);
 
   // An unannotated binding is ~any~, and a self-describing contribution does not
-  // anchor (D105): both stay deferred.
+  // anchor: both stay deferred.
   expect(accepts(`{ let s = "s"; ${G} }`)).toBe(true);
   expect(accepts('function g2(){ return {}; } let a: uint8 = g2();')).toBe(true);
-  // ...and a reassigned name is still not trusted (D107).
+  // ...and a reassigned name is still not trusted.
   expect(accepts('function g4(p: uint32){ return "s"; } g4 = function(p){ return 1; }; const q: number = g4((1 := uint32));')).toBe(true);
 });
 
 test('a void return is required of nothing', () => {
-  // D57 half (a): #sec-issubtype states the step beside the ~none~ one the
+  // #sec-issubtype states the step beside the ~none~ one the
   // engine already had - "If _b_.[[Return]].[[Kind]] is ~void~, return *true*" -
   // and gives the reason in the same clause: "a caller that has declared it will
   // not use the result".
@@ -861,14 +862,14 @@ test('a void return is required of nothing', () => {
 
   // The METHOD-SHORTHAND member is a SECOND site: it reaches the
   // `ReturnStatement` arm rather than `IsFunctionSubtype`, so the rule had to be
-  // stated there too. The origin of the `void` is what separates it from D56 - a
+  // stated there too. The origin of the `void` is what separates the two cases - a
   // CONTEXTUAL `void` requires nothing, an OWN annotation still refuses.
   expect(accepts('type O = { m(): void }; const o: O = { m() { return "s"; } };')).toBe(true);
   expect(accepts('type O = { m(): void }; const o: O = { m() { } };')).toBe(true);
   expect(accepts('type O = { m(): string }; const o: O = { m() { return "s"; } };')).toBe(true);
   expect(accepts('type O = { m(): string }; const o: O = { m() { return (1 := uint8); } };')).toBe(false);
 
-  // D56 is intact: a body contradicting its OWN annotation still refuses.
+  // The neighbouring rule is intact: a body contradicting its OWN annotation still refuses.
   expect(accepts('function f(): void { return "s"; }')).toBe(false);
   expect(accepts('const o = { m(): void { return "s"; } };')).toBe(false);
 
@@ -893,7 +894,7 @@ test('a void return is required of nothing', () => {
 });
 
 test('a concise arrow body is checked against its own return annotation', () => {
-  // D109: the declared return was RECORDED on the concise body's expression as a
+  // The declared return was RECORDED on the concise body's expression as a
   // contextual type and never COMPARED to it, so `(): uint8 => "s"` and
   // `(): void => "s"` were both accepted - although the code's own comment said
   // "the checker refuses the declaration before any call runs".
@@ -920,14 +921,14 @@ test('a concise arrow body is checked against its own return annotation', () => 
   expect(accepts('const f = (): string => { return (1 := uint8); };')).toBe(false);
   expect(accepts('let s: string = (1 := uint8);')).toBe(false);
 
-  // D57's rule is NOT this one: a CONTEXTUAL `void` requires nothing of the
+  // The subtype rule is NOT this one: a CONTEXTUAL `void` requires nothing of the
   // body, and only an arrow's OWN annotation refuses.
   expect(accepts('type VF = () => void; const h: VF = (() => "s");')).toBe(true);
   expect(accepts('const f = (): void => { return "s"; };')).toBe(false);
 });
 
 test('a spread supplies members for a MEMBERSHIP question', () => {
-  // D64c: `objectLiteralShape` answers what TYPE a literal has and is
+  // `objectLiteralShape` answers what TYPE a literal has and is
   // deliberately conservative - "a spread, a computed key, and a method each
   // yield NOTHING rather than an object type that omits what could not be read".
   //
@@ -937,7 +938,7 @@ test('a spread supplies members for a MEMBERSHIP question', () => {
   // `{ a: uint8, b: uint8 }` was accepted with `b` never supplied, while the
   // same members written plainly were refused.
   //
-  // D64b changed the shape for EVERY caller and broke the conservatism test;
+  // An earlier attempt changed the shape for EVERY caller and broke the conservatism test;
   // the split is why both can hold at once.
   const P = 'type P = { a: uint8, b: uint8 }; ';
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(false);
@@ -949,7 +950,7 @@ test('a spread supplies members for a MEMBERSHIP question', () => {
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, b: (2 := uint8) };`)).toBe(true);
 
   // The NULL is KEPT where the keys are genuinely unknowable: an UNANNOTATED
-  // operand is ~any~ (D54), and a getter cannot be read. Enumerating either
+  // operand is ~any~, and a getter cannot be read. Enumerating either
   // would report every declared member as missing.
   expect(accepts(`${P}const s = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(true);
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, get b() { return (2 := uint8); } };`)).toBe(true);
@@ -964,13 +965,13 @@ test('a spread supplies members for a MEMBERSHIP question', () => {
 });
 
 test('a spread carries its members into the FRESHNESS rule', () => {
-  // D64d: `checkObjectLiteralAgainst` walks `PropertyDefinitionList`, so a
+  // `checkObjectLiteralAgainst` walks `PropertyDefinitionList`, so a
   // spread - a PropertyDefinition with NO PropertyName - contributed no key and
   // the excess-member rule saw nothing. `{ ...u }` at `{ a: uint8 }` was
   // accepted with `u`'s excess `zz` unreported, while the same members written
   // plainly were refused.
   //
-  // This is the THIRD site reading a literal's members, after the two D64c
+  // This is the THIRD site reading a literal's members, after the two
   // split. It uses `objectLiteralMembers`, so the NULL is kept where the keys
   // are unknowable and an unknowable spread reports nothing rather than
   // everything.
@@ -980,17 +981,17 @@ test('a spread carries its members into the FRESHNESS rule', () => {
   expect(accepts('type E = { a: uint8 }; let e: E = { a: (1 := uint8), zz: "s" };')).toBe(false);
 
   // A spread with nothing excess, and an UNANNOTATED operand whose keys are
-  // unknowable (~any~ by D54), are both accepted.
+  // unknowable (~any~), are both accepted.
   expect(accepts('type E = { a: uint8 }; const u: { a: uint8 } = { a: (1 := uint8) }; let e: E = { ...u };')).toBe(true);
   expect(accepts('type E = { a: uint8 }; const u = { a: (1 := uint8), zz: "s" }; let e: E = { ...u };')).toBe(true);
 
-  // An INDEX SIGNATURE admits the key (D78), and an OPTIONAL member declares it.
+  // An INDEX SIGNATURE admits the key, and an OPTIONAL member declares it.
   expect(accepts('type I = { [k: string]: int32 }; const u: { a: int32, zz: int32 } = { a: (1 := int32), zz: (2 := int32) }; let i: I = { ...u };')).toBe(true);
   expect(accepts(`type Q = { a: uint8, zz?: string }; ${U}let q: Q = { ...u };`)).toBe(true);
 });
 
 test('the LAST member writing a key decides its type', () => {
-  // D64e: the walk had no notion of ORDER. It tested each member against the
+  // The walk had no notion of ORDER. It tested each member against the
   // target as it met it, so `{ a: (1 := uint8), ...t }` was accepted by checking
   // the NAMED `a` and never learning that `t`'s String `a` overwrote it, and
   // `{ ...u, ...t }` was accepted for the same reason one spread later.
@@ -1014,16 +1015,16 @@ test('the LAST member writing a key decides its type', () => {
   expect(accepts(`${P}${T}${U}let p: P = { ...u, ...t };`)).toBe(false);
   expect(accepts(`${P}${T}${U}let p: P = { ...t, ...u };`)).toBe(true);
 
-  // An UNANNOTATED operand is ~any~ (D54) and says nothing about its members.
+  // An UNANNOTATED operand is ~any~ and says nothing about its members.
   expect(accepts(`${P}const s = { a: "x", b: (2 := uint8) }; let p: P = { ...s };`)).toBe(true);
 
-  // D64c's presence rule and D64d's excess rule are unchanged.
+  // The presence rule and the excess rule are unchanged.
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(false);
   expect(accepts('type E = { a: uint8 }; const g: { a: uint8, zz: string } = { a: (1 := uint8), zz: "s" }; let e: E = { ...g };')).toBe(false);
 });
 
 test('a member read from a UNION is the union of the arms', () => {
-  // D111: `structureOf` resolves a ~nominal~ to its structure and returns
+  // `structureOf` resolves a ~nominal~ to its structure and returns
   // everything else unchanged, so a union receiver arrived as `Kind: 'union'`
   // and the `=== 'object'` guard skipped the lookup entirely - the read fell
   // through to ~any~. `c.x` on `{ x: int32 } | { x: int8 }` was accepted at
@@ -1065,7 +1066,7 @@ test('a member read from a UNION is the union of the arms', () => {
 });
 
 test('one union type selects one arm, whatever the spelling', () => {
-  // D110: `TypeNodeToTypeRecord` built [[Members]] by walking `node.Types` in
+  // `TypeNodeToTypeRecord` built [[Members]] by walking `node.Types` in
   // SOURCE order and returned it raw, and that is the record the BOUNDARY
   // receives - `ConvertValueToUnion` iterates the members it is handed. So
   // `{ x: int32 } | { x: uint8 }` and its reverse were the same interned type,
@@ -1106,7 +1107,7 @@ test('one union type selects one arm, whatever the spelling', () => {
 });
 
 test('a nested union in an annotation is flattened', () => {
-  // D112: `(uint8 | int8) | uint16` and `type P = uint8 | int8; P | uint16`
+  // `(uint8 | int8) | uint16` and `type P = uint8 | int8; P | uint16`
   // build the SAME nested record, and the alias one is flattened downstream by
   // its declaration's canonicalization while the written annotation's is not.
   // The boundary then saw two members rather than three, and
@@ -1129,7 +1130,7 @@ test('a nested union in an annotation is flattened', () => {
   expect(evaluated('type A2 = { b: B2 | null }; type B2 = { a: A2 | null };'
     + ' const v: A2 = { b: { a: null } }; String(v.b.a);')).toBe('null');
 
-  // A nested OBJECT union agrees in either spelling, as D110's ordering left it.
+  // A nested OBJECT union agrees in either spelling, as the arm ordering left it.
   const G = 'function g(): any { return { x: 1 }; } ';
   const nested = evaluated(`${G}let c: ({ x: int32 } | { x: uint8 }) | { x: uint16 } = g(); String(Reflect.typeOf(c));`);
   const swapped = evaluated(`${G}let c: { x: uint16 } | ({ x: int32 } | { x: uint8 }) = g(); String(Reflect.typeOf(c));`);
@@ -1141,7 +1142,7 @@ test('a nested union in an annotation is flattened', () => {
 });
 
 test('a literal adapts toward the union arm it fits', () => {
-  // D70b, direction A': `wantedOf` answers ONE type and a union whose arms
+  // `wantedOf` answers ONE type and a union whose arms
   // disagree has none, so an untyped numeric literal was never adapted toward
   // any arm. `{ x: 1 }` was refused at `{ x: int32 } | { x: string }` although
   // `{ x: int32 }` written ALONE accepts it, and at `{ x: int32 } | { x: uint8 }`,
@@ -1153,11 +1154,11 @@ test('a literal adapts toward the union arm it fits', () => {
   expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
   expect(accepts('let c: { x: string } | { x: int32 } = { x: 1 };')).toBe(true);
   expect(accepts('let c: { x: int32 } | { x: uint8 } = { x: 1 };')).toBe(true);
-  // A union nested with parentheses contributes its arms (D112's checker half).
+  // A union nested with parentheses contributes its arms (the checker half of flattening).
   expect(accepts('let c: ({ x: int32 } | { x: string }) | { z: boolean } = { x: 1 };')).toBe(true);
 
-  // The answer is a function of the TYPE, not the spelling: D110 orders the arms
-  // and D112 flattens them, so both spellings select alike.
+  // The answer is a function of the TYPE, not the spelling: the arms are
+  // ordered and then flattened, so both spellings select alike.
   const one = evaluated('let c: { x: int32 } | { x: uint8 } = { x: 1 }; String(Reflect.typeOf(c));');
   const two = evaluated('let c: { x: uint8 } | { x: int32 } = { x: 1 }; String(Reflect.typeOf(c));');
   expect(one).toBe(two);
@@ -1167,7 +1168,7 @@ test('a literal adapts toward the union arm it fits', () => {
   expect(accepts('let c: { x: int32 } | { x: string } = { x: "s" };')).toBe(true);
   expect(accepts('let c: { x: uint8 } | { x: int8 } = { x: 70000 };')).toBe(false);
 
-  // D75's freshness, D97's union row and D89's INTERSECTION rule are untouched:
+  // Freshness, the union row and the INTERSECTION rule are untouched:
   // an intersection's arms must ALL be satisfied, so disagreement there is still
   // no answer.
   expect(accepts('let c: { x: int32 } | { y: string } = { x: (1 := int32), zz: "s" };')).toBe(false);
@@ -1179,10 +1180,10 @@ test('a literal adapts toward the union arm it fits', () => {
 });
 
 test('a literal adapts where a union\'s arms differ ONE LEVEL DOWN', () => {
-  // D113: the nested literal was handed a contextual only where `wantedOf`
+  // The nested literal was handed a contextual only where `wantedOf`
   // returned ONE answer, and a union whose arms disagree returns null - so the
   // arms were invisible one level down and nothing adapted. The FLAT spelling of
-  // the same question is accepted (D70b), and so
+  // the same question is accepted, and so
   // `{ p: { x: int32 } } | { p: { x: string } }` refused `{ p: { x: 1 } }`, as
   // did `{ p: { x: int32 } } | { p: { x: uint8 } }` whose arms do not disagree
   // about being numeric at all.
@@ -1205,13 +1206,13 @@ test('a literal adapts where a union\'s arms differ ONE LEVEL DOWN', () => {
   // the self-confirming test broke.
   expect(accepts(`${U}{ p: { x: "s" } };`)).toBe(true);
 
-  // A literal fitting NO arm, a wrong shape, and D75's excess through a nested
+  // A literal fitting NO arm, a wrong shape, and excess through a nested
   // arm are all still refused.
   expect(accepts('let c: { p: { x: uint8 } } | { p: { x: int8 } } = { p: { x: 70000 } };')).toBe(false);
   expect(accepts(`${U}{ p: { zz: 1 } };`)).toBe(false);
   expect(accepts(`${U}{ p: { x: (1 := int32), zz: "s" } };`)).toBe(false);
 
-  // D70b's flat rows, D89's intersection rule and a self-referential alias are
+  // The flat rows, the intersection rule and a self-referential alias are
   // untouched.
   expect(accepts('let c: { x: int32 } | { x: string } = { x: 1 };')).toBe(true);
   expect(accepts('let c: { x: int32 } & { x: string } = { x: 1 };')).toBe(false);
@@ -1219,7 +1220,7 @@ test('a literal adapts where a union\'s arms differ ONE LEVEL DOWN', () => {
 });
 
 test('an ARRAY literal member adapts at a union target', () => {
-  // D114: an OBJECT-literal member reaches its contextual by recursing into
+  // An OBJECT-literal member reaches its contextual by recursing into
   // `objectLiteralShape`, which consults `contextualObjectTypes`. An ARRAY
   // literal has no such recursion - `staticType` answers with the unadapted
   // array type - so the shape carried `[].<number>` where the target wanted
@@ -1255,7 +1256,7 @@ test('an ARRAY literal member adapts at a union target', () => {
 });
 
 test('an alias declared in a NESTED list is published before the signatures', () => {
-  // D101: the scan records an alias NODE, and the walk publishes its TYPE when it
+  // The scan records an alias NODE, and the walk publishes its TYPE when it
   // reaches the declaration - which for a NESTED list is after the signatures in
   // that list have been read. Instrumented, a lookup of `L` finds it at the top
   // level (a placeholder, then the filled record) and finds NOTHING at any frame
@@ -1287,7 +1288,7 @@ test('an alias declared in a NESTED list is published before the signatures', ()
 
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
-  // D61: the literal arm ended `return contextual`, GIVING the literal the
+  // The literal arm ended `return contextual`, GIVING the literal the
   // target's type without comparing - so a missing member and an excess one both
   // passed, and only a wrong member TYPE was caught by the walk's own check.
   //
@@ -1311,13 +1312,13 @@ test('a CLASS type is not satisfied by an object literal', () => {
 });
 
 test('a member already declared on an interface is a TypeError', () => {
-  // D83: the run time reported this and the checker accepted it in silence.
+  // The run time reported this and the checker accepted it in silence.
   expect(accepts('interface P { n: int32 } partial interface P { n: int32 }')).toBe(false);
   expect(accepts('interface P { n: int32 } partial interface P { n: string }')).toBe(false);
   expect(accepts('interface P { m(): int32; } partial interface P { m(): string; }')).toBe(false);
   expect(accepts('interface P { z: int32 } partial interface P { n: int32 } partial interface P { n: string }')).toBe(false);
 
-  // Two members of ONE declaration are refused too (OQ25). The note here used to
+  // Two members of ONE declaration are refused too. The note here used to
   // say the run time accepted that, so refusing would introduce a disagreement -
   // measured, it does NOT: `interface P { n: int32, n: string }` THROWS at
   // declaration time, as do the object-type and same-type forms. The checker was

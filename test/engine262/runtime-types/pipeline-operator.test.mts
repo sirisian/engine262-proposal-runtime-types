@@ -65,7 +65,7 @@ test('precedence: looser than a range, tighter than a conditional', () => {
   // the level the upstream proposal named for the pipeline's operands.
   expect(evaluated('String(0..<10 |> %.start);')).toBe('0');
   expect(evaluated('function f(x) { return x; } String(true ? 1 |> f(%) : 2);')).toBe('1');
-  // `null` LITERAL is not used here: it now has a static type (D52), so the
+  // `null` LITERAL is not used here: it now has a static type, so the
   // dead-code analysis can see that `null ?? _x_` never takes its left branch
   // and refuses the program - correctly, and for a reason unrelated to
   // precedence, which is what this row tests.
@@ -156,8 +156,8 @@ test('the topic goes where any expression goes', () => {
 
 test('the topic is refused in every binding position, not just assignment', () => {
   // Each of these is caught by the base grammar rather than by a rule of this
-  // extension - a TopicReference is not a valid assignment target - but the
-  // plan lists them, so they are asserted rather than assumed.
+  // extension - a TopicReference is not a valid assignment target - so each is
+  // asserted rather than assumed.
   expectError('5 |> ([%] = [1]);');
   expectError('5 |> ({ a: % } = { a: 1 });');
   expectError('[1] |> (function () { for (% of [1]) {} })();');

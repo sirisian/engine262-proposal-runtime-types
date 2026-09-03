@@ -352,7 +352,7 @@ test('Identity resolves in every position', () => {
 });
 
 test('deep but finite nesting completes', () => {
-  // The budget's other direction, which the plan asks for explicitly: a budget
+  // The budget's other direction: a budget
   // that fires on reasonable code is a bug, so realistic nesting must complete.
   expect(ok('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]];')).toBe(true);
   expect(ok('type Bx<T> = [].<T>; class B<W<_>> {} const b: B.<Bx> = new B.<Bx>();')).toBe(true);
@@ -388,7 +388,7 @@ test('deep but finite nesting completes', () => {
  */
 
 test('an unbounded type evaluation exhausts the budget and reports', () => {
-  // The failing direction the plan asks for, at a lowered budget - which is
+  // The failing direction, at a lowered budget - which is
   // what a host does when it wants the diagnostic rather than the stack.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });

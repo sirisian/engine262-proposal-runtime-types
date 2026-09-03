@@ -48,10 +48,10 @@ test('all TWELVE block contexts now exist', () => {
 });
 
 test('a match ARM cannot be decorated yet - grammar, not reflection', () => {
-  // The plan called this "a missing reflection rather than a missing feature",
-  // on the reasoning that `match` is implemented. **Measuring shows that was
-  // half right**: the reflection is now registered, and no arm can carry a
-  // decorator, so nothing ever builds the context.
+  // This was called "a missing reflection rather than a missing feature", on the
+  // reasoning that `match` is implemented. **Measuring shows that was half
+  // right**: the reflection is now registered, and no arm can carry a decorator,
+  // so nothing ever builds the context.
   //
   // The same mistake as the block forms earlier in this project - assuming a
   // decoration position exists because the thing it would decorate does.

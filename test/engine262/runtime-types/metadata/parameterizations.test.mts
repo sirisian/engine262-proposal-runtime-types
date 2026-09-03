@@ -63,7 +63,7 @@ test('primitive metadata: a numeric type argument is unaffected', () => {
 });
 
 test('primitive metadata: a parameterization over `number` defaults as one over a value type does', () => {
-  // PLAN-parameterized-defaults.md phase 2. `number.<M>` had NO default while
+  // `number.<M>` had NO default while
   // the identical `float64.<M>` had one, and the asymmetry was not in the
   // metadata at all: DefaultValueOf stamped the zero of `number` as a typed
   // number, and #sec-value-types keeps `number` free of stamped values - "a
@@ -76,7 +76,7 @@ test('primitive metadata: a parameterization over `number` defaults as one over 
   // already; the value of the Number type representing 0 is the Number +0.
   const bounds = 'type B = { lo: number }; '
     + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';
-  // Rewritten for the CROSSING model (PLAN-parameterized-defaults.md phase 4):
+  // Rewritten for the CROSSING model:
   // a default is the base's zero having crossed, so it needs a way in. The
   // PARITY is what this test is for and holds under either model - `number` and
   // `float64` must answer alike - so each case is asked of both bases.
@@ -114,7 +114,7 @@ test('primitive metadata: the zero of `number` is a plain Number and is one of `
 });
 
 test('primitive metadata: a value of a `number` parameterization is a value of `number`', () => {
-  // PLAN-parameterized-defaults.md phase 2b. The `number` arm of membership
+  // The `number` arm of membership
   // said "a plain Number, and nothing carried", which is right about the value
   // types and wrong about `number`'s own parameterizations: a value of
   // `number.<M>` is necessarily carried, the parameterization being what it
@@ -149,7 +149,7 @@ test('primitive metadata: a value of a `number` parameterization is a value of `
 });
 
 test('primitive metadata: a default crosses, so both spellings of a declaration agree', () => {
-  // PLAN-parameterized-defaults.md phase 4, closing D22. #sec-defaultvalueof's
+  // #sec-defaultvalueof's
   // ~parameterized~ step crosses the base's zero into the parameterization
   // (#sec-metadata-conversion) instead of testing membership, so `let w: T;`
   // and `let w: T = 0;` succeed together and fail together. The four cases

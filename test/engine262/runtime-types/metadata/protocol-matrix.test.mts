@@ -139,8 +139,8 @@ test('the optional-key form survives the full shape rule', () => {
 test('a cast into a metadata type admits, whatever the meta type declares', () => {
   // WAS: "a brand written at its own default admits, and off it refuses",
   // expecting a cast to metadata off the meta type's default to be gated by its
-  // `subtype` judgment. PLAN-brand-layering-F.md OQ5: the specification says
-  // otherwise, and the engine follows it.
+  // `subtype` judgment. The specification says otherwise, and the engine
+  // follows it.
   //
   //   "A cast's declared parameterization names what its result BECOMES, and is
   //    not a boundary its body must already satisfy."
@@ -161,7 +161,7 @@ test('a cast into a metadata type admits, whatever the meta type declares', () =
 });
 
 test('a cast DOES consult the judgments between two parameterizations', () => {
-  // The other half of OQ5, and what makes the rule above a rule rather than a
+  // The other half of that rule, and what makes it a rule rather than a
   // hole: the bare-value entry is what a cast is for, and everything else is
   // still checked.
   expectThrown(`${brand}

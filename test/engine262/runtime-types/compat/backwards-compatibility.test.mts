@@ -43,7 +43,7 @@ test('old and new co-exist in ONE program', () => {
 });
 
 test('a fixed-result static does not change what a call RETURNS', () => {
-  // Group A gave these Static Types. The clause's warning is that a VALUE type
+  // These carry Static Types. The clause's warning is that a VALUE type
   // would change the answer - a `uint16` from `charCodeAt` breaking `=== 65` -
   // so none of them was given one: `boolean`, `string`, `symbol` and `number`
   // are what these already answer.

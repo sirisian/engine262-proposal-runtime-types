@@ -5,8 +5,7 @@ import { evaluated, expectError, ok } from '../harness.mts';
  * proposal-runtime-types `#sec-issubtype`: a type parameter is a subtype of
  * itself and of its [[Constraint]], and nothing else is a subtype of IT.
  *
- * `PLAN-parameter-composition.md` Stage A. The rule was stated in neither the
- * specification nor the engine: `resolveType` built `{ Kind: 'parameter', Name }`
+ * The rule was stated in neither the specification nor the engine: `resolveType` built `{ Kind: 'parameter', Name }`
  * with no constraint, so the [[Constraint]] step had nothing to read, and a
  * constrained parameter was LESS usable than an unconstrained one - writing the
  * constraint bought its author nothing inside the declaration while still

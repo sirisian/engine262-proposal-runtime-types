@@ -103,7 +103,7 @@ test('a runtime object reports a structural type whose keys keysOf reads', () =>
 });
 
 // ---------------------------------------------------------------------------
-// PLAN-literal-type-arguments.md F165/F166
+// Literal type arguments (F165/F166)
 // ---------------------------------------------------------------------------
 
 test('a TYPE parameter given a literal argument reads as the type', () => {
@@ -193,8 +193,8 @@ test('a type variable is inferred from a CALLBACK, in both directions', () => {
 test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => {
   // `standardlibrary.md` gives `Map.groupBy<K, T>(items, callback): Map.<K, [].<T>>`,
   // where T comes from the items and K from the callback's RETURN and from
-  // nowhere else. This is that shape written as a user generic, and it is the
-  // prerequisite PLAN-static-signatures.md's Phase 0 exists for.
+  // nowhere else. This is that shape written as a user generic, and it is what
+  // the standard library's typed statics rest on.
   const G = 'function g<T, K>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   // Guarded by `if (false)`, so what is asserted is the STATIC property: the

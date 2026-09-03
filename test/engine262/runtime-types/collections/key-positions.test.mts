@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md Phase 1b - KEY POSITIONS CHECK (OQ7).
+ * KEY POSITIONS ARE CHECKED, NOT CONVERTED.
  *
  * `table-string-conversion-sources` admits a numeric or Boolean source at a
  * `string` target, converting with ToString, and argues the case: ToString is
@@ -60,7 +60,7 @@ test('the merge the rule exists to prevent cannot happen', () => {
 
 test('a SEARCH position checks too, so the two agree', () => {
   // A needle the key type cannot hold makes a test that can never succeed. This
-  // was already the rule for the numeric types (F69); it now holds for `string`
+  // was already the rule for the numeric types (F69), and it now holds for `string`
   // as well, so `get`, `has` and `delete` agree with `set` about what a key is.
   expect(ok(`const m = new Map.<string, uint8>(); ${HIDE} m.get(n);`)).toBe(false);
   expect(ok(`const m = new Map.<string, uint8>(); ${HIDE} m.has(n);`)).toBe(false);

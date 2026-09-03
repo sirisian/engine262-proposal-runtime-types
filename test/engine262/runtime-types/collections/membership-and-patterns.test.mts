@@ -2,12 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.7 - collection MEMBERSHIP and the type patterns
- * built on it. D12 (new) and D7 (relocated).
+ * Collection MEMBERSHIP and the type patterns built on it.
  *
- * D12 - FIXED IN PHASE 3. Membership on a collection specialization now compares
- * the type arguments against the [[TypedCollection]] stamp, so these tests
- * assert behaviour rather than record a gap.
+ * FIXED. Membership on a collection specialization now compares the type
+ * arguments against the [[TypedCollection]] stamp, so these tests assert
+ * behaviour rather than record a gap.
  *
  * What was wrong: `m is Map.<string, string>` was *true* for a
  * `Map.<string, uint8>`, and `new Map() is Map.<string, uint8>` was *true* for a
@@ -41,14 +40,14 @@ import { evaluated, ok } from '../harness.mts';
  * generic (SameType, IsAssignable and `is` all agreeing) does not hold for a
  * library one.
  *
- * The cause was the same as that file's "OUTSTANDING item N", one level along. A
- * user generic's specialization is a distinct constructor, so membership was
+ * The cause was the same one level along. A user generic's specialization is a
+ * distinct constructor, so membership was
  * fixed by carrying the right constructor on the Type Record. A library
  * collection has no per-specialization constructor - the specialization is
  * carried by the [[TypedCollection]] stamp instead - and IsOfType had never been
  * taught to read it.
  *
- * DECIDED BY THE STAMP RATHER THAN BY CONTENTS (OQ8). Inspecting the entries
+ * DECIDED BY THE STAMP RATHER THAN BY CONTENTS. Inspecting the entries
  * would be the ARRAY's answer - `[1,2,3] is [].<uint8>` walks elements - and it
  * loses on three counts: it is O(n) per test in the positions `is` is read from
  * (narrowing, a `when` arm, a `catch` match, each of which can sit in a loop);
@@ -64,7 +63,7 @@ import { evaluated, ok } from '../harness.mts';
  * file rather than in a pattern-matching one. They are membership wearing
  * different syntax.
  *
- * D7, CORRECTED. An earlier draft filed "a type pattern over a collection does
+ * THE `when extends` FORM, CORRECTED. An earlier draft filed "a type pattern over a collection does
  * not match" as a collections defect on the strength of `match (m) { when
  * (Map.<K: type, V: type>): ... }` throwing. That spelling was wrong twice over -
  * the design's form is `when extends Map.<K: type, V: type>:`, and its subject is
@@ -72,24 +71,24 @@ import { evaluated, ok } from '../harness.mts';
  * so does `when extends uint8:` and `when extends string:`, with the same
  * "Unexpected token". **The `when extends` form is unimplemented across the
  * board.** That is a pattern-matching gap and NOT a collections one; it is
- * recorded here only so the finding is not lost, and the collections work will
+ * recorded here only so the finding is not lost, and the collections work does
  * not move it.
  */
 
 // ---------------------------------------------------------------------------
-// D12 - membership must read the type arguments
+// Membership must read the type arguments
 // ---------------------------------------------------------------------------
 
-test('D12: `is` discriminates between two specializations of Map', () => {
+test('`is` discriminates between two specializations of Map', () => {
   expect(evaluated('const m = new Map.<string, uint8>(); String(m is Map.<string, string>);')).toBe('false');
   expect(evaluated('const m = new Map.<string, uint8>(); String(m is Map.<uint8, uint8>);')).toBe('false');
 });
 
-test('D12: `is` discriminates between two specializations of Set', () => {
+test('`is` discriminates between two specializations of Set', () => {
   expect(evaluated('const s = new Set.<uint8>(); String(s is Set.<string>);')).toBe('false');
 });
 
-test('D12: an UNTYPED collection is not a member of a specialization', () => {
+test('an UNTYPED collection is not a member of a specialization', () => {
   // The invariant of sec 0 read in the other direction. An untyped Map is an
   // ordinary Map, and an ordinary Map is not a `Map.<string, uint8>` - it makes
   // no promise about what it holds, which is exactly what the specialization is.
@@ -97,7 +96,7 @@ test('D12: an UNTYPED collection is not a member of a specialization', () => {
   expect(evaluated('const s = new Set(); String(s is Set.<uint8>);')).toBe('false');
 });
 
-test('D12: the three relations agree, as they do for a user generic', () => {
+test('the three relations agree, as they do for a user generic', () => {
   // The evidence shape `generic-instance-membership.test.mts` uses: a fix that
   // moved one of these without the others would trade one contradiction for
   // another.
@@ -110,14 +109,14 @@ test('D12: the three relations agree, as they do for a user generic', () => {
   expect(evaluated(`${m} String(m is Map.<string, string>);`)).toBe('false');
 });
 
-test('D12: a `when` pattern naming a specialization selects on it', () => {
+test('a `when` pattern naming a specialization selects on it', () => {
   // Membership in different syntax: `when T:` tests membership, so this arm and
   // the `is` above are one question.
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, string>: "wrong"; default: "fell through"; }')).toBe('fell through');
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; default: "fell through"; }')).toBe('right');
 });
 
-test('D12: a typed catch selects on the specialization', () => {
+test('a typed catch selects on the specialization', () => {
   // A `catch` whose annotation does not match must NOT catch, so the throw
   // escapes the script. Asserted as "the program does not complete normally",
   // which is what an uncaught throw looks like from here - writing the arm's
@@ -128,14 +127,14 @@ test('D12: a typed catch selects on the specialization', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D7 - the `when extends` form, recorded and NOT owned by this plan
+// The `when extends` form, recorded and NOT owned by the collections work
 // ---------------------------------------------------------------------------
 
-test.fails('D7: `when extends` over a type object is unimplemented (not collection-specific)', () => {
+test.fails('`when extends` over a type object is unimplemented (not collection-specific)', () => {
   // The collection spelling the design gives...
   expect(ok('match (type Map.<string, uint8>) { when extends Map.<K: type, V: type>: 1; default: 0; }')).toBe(true);
   // ...and the two non-collection spellings that fail identically, which is what
-  // places the defect outside this plan.
+  // places the defect outside the collections work.
   expect(ok('match (type uint8) { when extends uint8: 1; default: 0; }')).toBe(true);
   expect(ok('match (type string) { when extends string: 1; default: 0; }')).toBe(true);
 });
@@ -145,13 +144,13 @@ test.fails('D7: `when extends` over a type object is unimplemented (not collecti
 // ---------------------------------------------------------------------------
 
 test('control: membership against the BARE nominal, and the user-generic answer', () => {
-  // A collection is a Map. This much membership does get right, and D12's fix
+  // A collection is a Map. This much membership does get right, and the fix
   // must not break it.
   expect(evaluated('const m = new Map.<string, uint8>(); String(m is Map);')).toBe('true');
   expect(evaluated('const m = new Map(); String(m is Map);')).toBe('true');
   expect(evaluated('const s = new Set.<uint8>(); String(s is Set);')).toBe('true');
-  // A user generic already discriminates, which is the behaviour D12 asks the
-  // library nominals to match.
+  // A user generic already discriminates, which is the behaviour the library
+  // nominals are asked to match.
   expect(evaluated('class G<T> { x: uint8; } String(new G.<uint8>() is G.<string>);')).toBe('false');
   expect(evaluated('class G<T> { x: uint8; } String(new G.<uint8>() is G.<uint8>);')).toBe('true');
 });
@@ -164,8 +163,8 @@ test('control: a Map is not a Set and neither is an ordinary object', () => {
 
 test('control: the assignability relation is already correct', () => {
   // IsAssignable reads the arguments and answers correctly. It is `is` that does
-  // not, which is what makes D12 a contradiction rather than a uniform gap - and
-  // what makes it fixable without deciding anything new.
+  // not, which makes this a contradiction rather than a uniform gap - and what
+  // makes it fixable without deciding anything new.
   expect(evaluated('String(Reflect.isAssignable(type Map.<string, uint8>, type Map.<string, number>));')).toBe('false');
   expect(evaluated('String(Reflect.isAssignable(type Map.<string, uint8>, type Map.<string, uint8>));')).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Set.<string>));')).toBe('false');

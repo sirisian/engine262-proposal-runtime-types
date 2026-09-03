@@ -121,12 +121,11 @@ test('6.8 a rest-bound array is an ordinary array', () => {
 });
 
 /**
- * What 6.8 asks for and this file does not test: pattern matching over a
- * rest-bound array.
+ * What this file does not test: pattern matching over a rest-bound array.
  *
  * `match` is not implemented in this engine - `match (1) { when 1: 1; }` is a
- * Syntax Error - so there is nothing to exercise. The plan wrote the item
- * because the design has the feature; the engine has not reached it. Recorded
+ * Syntax Error - so there is nothing to exercise. The design has the feature;
+ * the engine has not reached it. Recorded
  * rather than skipped silently, so that whoever implements pattern matching
  * finds the case waiting.
  */

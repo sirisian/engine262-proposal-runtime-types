@@ -2,8 +2,8 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown, settledAfterJobs, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-async-generator-types.md. Annotations on an `async` function or a
- * generator are not enforced; this suite grows as each phase lands.
+ * Annotations on an `async` function or a generator are not enforced; this
+ * suite covers what has landed.
  */
 
 test('F187: a typed async arrow parses and runs', () => {
@@ -30,7 +30,7 @@ test('F187: the neighbouring forms are unaffected', () => {
   expect(evaluated('async function f(a: uint8) { return a; } String(1);')).toBe('1');
 });
 
-test('phase 2: a plain parameter is enforced on every async and generator form', () => {
+test('a plain parameter is enforced on every async and generator form', () => {
   // The check lives in the BODY EVALUATOR, and only `EvaluateBody_FunctionBody`
   // and `EvaluateBody_ConciseBody` called it - so these four forms accepted any
   // argument for a typed parameter.
@@ -44,13 +44,13 @@ test('phase 2: a plain parameter is enforced on every async and generator form',
   expectThrown('const g = async (a: uint8) => a; function h(x) { return g(x); } h("nope");');
 });
 
-test('phase 2: a correct argument still passes on every form', () => {
+test('a correct argument still passes on every form', () => {
   expect(evaluated('function* g(a: uint8) { yield a; } String(g((1 := uint8)).next().value);')).toBe('1');
   expect(evaluated('async function f(a: uint8) { return a; } f((1 := uint8)); String(1);')).toBe('1');
   expect(evaluated('const g = async (a: uint8) => a; g((1 := uint8)); String(1);')).toBe('1');
 });
 
-test('phase 3: a yield is checked against the declared yield type', () => {
+test('a yield is checked against the declared yield type', () => {
   // sec-function-annotations: "a generator's annotation types the values the
   // iterator YIELDS". Nothing checked them, so `.next().value` was the String.
   //
@@ -63,17 +63,17 @@ test('phase 3: a yield is checked against the declared yield type', () => {
   expect(evaluated('function* g(): uint8 { yield (1 := uint8); } String(g().next().value);')).toBe('1');
 });
 
-test('phase 3: an unannotated generator is unaffected', () => {
+test('an unannotated generator is unaffected', () => {
   // Nothing is promised, so nothing is checked.
   expect(evaluated('function* g() { yield "anything"; } String(g().next().value);')).toBe('anything');
 });
 
-test('phase 3: yield* still delegates', () => {
+test('yield* still delegates', () => {
   expect(evaluated('function* inner(): uint8 { yield (1 := uint8); }'
     + ' function* outer(): uint8 { yield* inner(); } String(outer().next().value);')).toBe('1');
 });
 
-test('phase 3: an async generator REJECTS on a bad yield', () => {
+test('an async generator REJECTS on a bad yield', () => {
   // An async generator reports a type failure as a REJECTION, not a throw, so
   // `expectThrown` cannot see one - and nothing in this repository could, which
   // made a working check indistinguishable from a missing one.
@@ -98,16 +98,17 @@ test('F188: a generator return is compared against R, not the Generator type', (
   expectThrown('function* g(): Generator.<uint8, string, void> { return (0 := uint8); }');
 });
 
-test('OQ1-C: a bare annotation types the yields and returns nothing', () => {
-  // Decided direction C: a bare `: uint8` maps to `Generator.<uint8, void, void>`,
+test('a bare annotation types the yields and returns nothing', () => {
+  // A bare `: uint8` maps to `Generator.<uint8, void, void>`,
   // so its R is `void` and a value-returning `return` is refused. It falls out of
   // the mapping F188 fixed rather than needing a rule of its own - the `void`
-  // filler that made C coherent is the same filler that does the refusing.
+  // filler that makes the mapping coherent is the same filler that does the
+  // refusing.
   expectThrown('function* g(): uint8 { return (0 := uint8); }');
   expect(evaluated('function* g(): uint8 { yield (1 := uint8); return; } String(g().next().value);')).toBe('1');
 });
 
-test('phase 4: an async return is checked against the promise resolution type', () => {
+test('an async return is checked against the promise resolution type', () => {
   // The body field for an AsyncFunctionDeclaration is `AsyncBody`, not
   // `AsyncFunctionBody` - the name the body EVALUATOR uses. Naming the
   // evaluator's field found nothing, so `body` was undefined, the walk never
@@ -120,7 +121,7 @@ test('phase 4: an async return is checked against the promise resolution type', 
   expect(evaluated('async function f(): Promise.<uint8, Error> { return (1 := uint8); } String(1);')).toBe('1');
 });
 
-test('OQ2-A: an async annotation must be a promise', () => {
+test('an async annotation must be a promise', () => {
   // Decided A. NOT read as shorthand for `Promise.<T, ?>` the way a bare
   // generator annotation is read as `Generator.<Y, void, void>`: that shorthand
   // fills with `void`, which says something true about a generator that yields
@@ -130,16 +131,16 @@ test('OQ2-A: an async annotation must be a promise', () => {
   expect(evaluated('async function f(): Promise.<uint8, Error> { return (1 := uint8); } String(1);')).toBe('1');
 });
 
-test('OQ2-A: the asymmetry with the generator shorthand is deliberate', () => {
+test('the asymmetry with the generator shorthand is deliberate', () => {
   // The thing a reader will call an inconsistency, asserted so it is recorded
   // as intended rather than discovered as a bug.
   expect(evaluated('function* g(): uint8 { yield (1 := uint8); } String(g().next().value);')).toBe('1');
   expectThrown('async function f(): uint8 { return (1 := uint8); }');
 });
 
-test('phase 5: every function form enforces its parameter', () => {
-  // The audit found the plan's form list named three and there are seven. These
-  // four were the additions, and `sec-function-annotations` names "typed
+test('every function form enforces its parameter', () => {
+  // An earlier form list named three and there are seven. These four were the
+  // additions, and `sec-function-annotations` names "typed
   // generator methods" explicitly as a form the design writes throughout.
   expectThrown('class C { *m(a: uint8) { yield a; } } function h(x) { return new C().m(x).next(); } h("nope");');
   expectThrown('class C { async *m(a: uint8) { yield a; } } function h(x) { return new C().m(x); } h("nope");');
@@ -147,7 +148,7 @@ test('phase 5: every function form enforces its parameter', () => {
   expectThrown('const g = async (a: uint8) => a; function h(x) { return g(x); } h("nope");');
 });
 
-test('phase 5: the explicit Generator spelling checks its yields', () => {
+test('the explicit Generator spelling checks its yields', () => {
   expectThrown('function* g(): Generator.<uint8, void, void> { yield "nope"; } g().next();');
   expect(evaluated('function* g(): Generator.<uint8, void, void> { yield (1 := uint8); }'
     + ' String(g().next().value);')).toBe('1');
@@ -165,32 +166,32 @@ test('F189: yield* does NOT check its delegated values', () => {
   expectThrown('function* outer(): uint8 { yield "s"; } outer().next();');
 });
 
-test('phase 5: an async function REJECTS on a bad return', () => {
-  // Group E. An async function reports a type failure as a rejection, the same
-  // as an async generator, so `expectThrown` cannot see it. `settledAfterJobs`
-  // is what makes the phase-4 check provable rather than merely believed.
+test('an async function REJECTS on a bad return', () => {
+  // An async function reports a type failure as a rejection, the same as an
+  // async generator, so `expectThrown` cannot see it. `settledAfterJobs` is what
+  // makes the check provable rather than merely believed.
   const settle = (body: string) => settledAfterJobs(`globalThis.settled = 'pending';
     async function f(): Promise.<uint8, Error> { ${body} }
     f().then(() => { globalThis.settled = 'resolved'; }, () => { globalThis.settled = 'rejected'; });`);
   expect(settle('return (1 := uint8);')).toBe('resolved');
 });
 
-test('phase 5: unannotated forms are untouched', () => {
-  // Group F. Nothing is promised, so nothing is checked - the rule must not
+test('unannotated forms are untouched', () => {
+  // Nothing is promised, so nothing is checked - the rule must not
   // reach a program that never opted in.
   expect(evaluated('function* g(a) { yield a; } String(g("anything").next().value);')).toBe('anything');
   expect(evaluated('async function f(a) { return a; } f("anything"); String(1);')).toBe('1');
   expect(evaluated('const g = async (a) => a; g("anything"); String(1);')).toBe('1');
 });
 
-test('phase 5: a synchronous function is unaffected by any of this', () => {
-  // The control for the whole plan: every change here was scoped to the async
+test('a synchronous function is unaffected by any of this', () => {
+  // The control for the whole file: every change here was scoped to the async
   // and generator forms, and the synchronous path must read exactly as before.
   expectThrown('function s(a: uint8) { return a; } function h(x) { return s(x); } h("nope");');
   expect(evaluated('function s(a: uint8): uint8 { return a; } String(s((1 := uint8)));')).toBe('1');
 });
 
-test('D56: a `void` return admits *undefined* and nothing else', () => {
+test('a `void` return admits *undefined* and nothing else', () => {
   // The exemption that lets `return undefined;` through was gated on the
   // CONTEXT - `if (!(context.Kind === 'void'))` - so it skipped the check
   // WHOLESALE and a `void` function could return anything.
@@ -202,13 +203,13 @@ test('D56: a `void` return admits *undefined* and nothing else', () => {
   expectStaticTypeError('function f(): void { return "s"; }');
   expectStaticTypeError('class A { m(): void { return "s"; } }');
   expectStaticTypeError('let f = (): void => { return "s"; };');
-  // OQ1-C's row, which is how the skip was FOUND: a bare annotation "types the
+  // The bare-annotation row, which is how the skip was FOUND: a bare annotation "types the
   // yields and returns nothing", so a generator's return position is void.
   expectStaticTypeError('function* g(): uint8 { return (0 := uint8); }');
 });
 
-test('D56: what a `void` return still admits', () => {
-  // The value the exemption exists for (D52 row 19), and the two empty forms,
+test('what a `void` return still admits', () => {
+  // The value the exemption exists for, and the two empty forms,
   // which never reach the guarded call - it takes `if (expr)`.
   expect(ok('if (false) { function f(): void { return undefined; } } 1;')).toBe(true);
   expect(ok('if (false) { function f(): void { return; } } 1;')).toBe(true);

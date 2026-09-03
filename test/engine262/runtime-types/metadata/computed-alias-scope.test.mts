@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * PLAN-declarative-checker-facts.md phase 2. `type G = makeG();` is a
+ * `type G = makeG();` is a
  * |ComputedType|, which resolves by EVALUATING rather than by walking a Type
  * node - so the checker's resolver answered nothing for it and every annotation
  * of `G` degraded to ~any~, refusing a bad value at run time where the inline

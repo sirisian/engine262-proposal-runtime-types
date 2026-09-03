@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError } from '../harness.mts';
 
 /**
- * `PLAN-checker-type-resolution.md`, C2's `SharedType` gap — closed.
+ * The `SharedType` resolution gap — closed.
  *
  * `shared T` is a marker over its target, and the CHECKER used to leave the
  * annotation unresolved on purpose. Resolving it made `let s: shared uint8 = 1;`

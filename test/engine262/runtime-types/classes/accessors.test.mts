@@ -184,7 +184,7 @@ test('the accessor is TYPED, and the setter enforces it', () => {
   // The reason to write `accessor a: uint8` rather than a hand-written pair.
   // Out of range is a RangeError, not a TypeError, and it arrives
   // through the backing field rather than through anything this stage wrote.
-  // Through a `let`: a `const` bound to a construction is now typed (D13), so
+  // Through a `let`: a `const` bound to a construction is now typed, so
   // the setter's range check is reached at COMPILE time and the run-time kind
   // this line asserts never happens. Both are asserted, the early error being
   // the better answer.

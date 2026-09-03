@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * PLAN-typed-collections.md sec 6.7 - THE CROSS-FEATURE SWEEP.
+ * THE CROSS-FEATURE SWEEP.
  *
  * Derived from a pass over every design document: for each feature of the
  * proposal, what a typed collection does when it meets it. The other files in
@@ -16,10 +16,11 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
  * says exactly that.
  *
  * Rows NOT asserted, and why:
- *   - VALUE TYPE CLASS keys are `value-type-keys.test.mts`, blocked on D5.
- *   - `for`-`of` BINDING types are D17 and are asserted as expected failures in
+ *   - VALUE TYPE CLASS keys are `value-type-keys.test.mts`, blocked on value
+ *     equality for such classes.
+ *   - `for`-`of` BINDING types are asserted as expected failures in
  *     `iteration.test.mts`, for every receiver rather than only collections.
- *   - `when extends` is D7, a pattern-matching gap this plan does not own.
+ *   - `when extends` is a pattern-matching gap the collections do not own.
  */
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ test('a collection is invariant in its arguments, and reaches its family top', (
 test('reflection reports a collection and its members', () => {
   expect(evaluated('String(Reflect.typeOf(new Map.<string, uint8>()) === (type Map.<string, uint8>));')).toBe('true');
   expect(evaluated('String(Reflect.typeOf(new Map()) === (type Map));')).toBe('true');
-  // The relation agrees with the checker, which it did not before D16.
+  // The relation agrees with the checker, which it did not always.
   expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Iterable.<uint8>));')).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Set.<any>));')).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type Set.<uint8>, type Set.<string>));')).toBe('false');
@@ -91,7 +92,7 @@ test('a collection is compared by identity and is truthy', () => {
 test('a collection cannot be shared, and says why', () => {
   // threading.md: `shared` applies to a value type, and a collection is not one.
   // Asserted at RUN TIME, because the no-default-value rule fires first at a
-  // bare declaration and would mask this (D10).
+  // bare declaration and would mask this.
   expect(ok('let m: shared Map.<string, uint8> = new Map();')).toBe(false);
   expect(ok('let s: shared Set.<uint8> = new Set();')).toBe(false);
   // The contrast: a fixed array of a value type IS sharable, so the refusal is
@@ -154,8 +155,8 @@ test('a decorated collection field, and a collection through a pipeline', () => 
 
 test('a `ref` in a collection type is accepted today, and should not be', () => {
   // references.md: "a reference cannot be stored in a binding that outlives it,
-  // a field, an array, or a collection." The type still forms. OQ9 resolved this
-  // as an annotation-position refusal and assigned it to `references.md`;
+  // a field, an array, or a collection." The type still forms. This was
+  // resolved as an annotation-position refusal owned by `references.md`;
   // asserted here as the CURRENT answer so that implementing it is a visible
   // change rather than a silent one.
   expect(ok('let m: Map.<string, ref uint8> = new Map();')).toBe(true);

@@ -184,21 +184,21 @@ test('regexp: a literal carries its inferred capture shape as its type', () => {
 
 // -- Guards on the two neighbouring clauses this one depends on ---------------
 //
-// PLAN-typed-regexp-capture-types.md phase 3. `sec-typed-regular-expressions`
-// once stated both of these wrongly, and in each case the engine implemented the
-// clause faithfully, so nothing but these tests disagreed.
+// `sec-typed-regular-expressions` once stated both of these wrongly, and in each
+// case the engine implemented the clause faithfully, so nothing but these tests
+// disagreed.
 //
-// D1: an optional capture was `string | void`. `void` is the type with NO VALUES
+// An optional capture was `string | void`. `void` is the type with NO VALUES
 // (#sec-null-and-undefined-types), and a capture no matching path entered holds
 // *undefined* - so the declared type could not hold what the capture takes.
 //
-// D2: the no-capture case was the empty ARRAY type, on the stated ground that
-// this was what a bare `[]` denotes. It is not - `[]` is the empty TUPLE - so the
+// The no-capture case was the empty ARRAY type, on the stated ground that this
+// was what a bare `[]` denotes. It is not - `[]` is the empty TUPLE - so the
 // choice made to let `RegExp.<[], {}>` name a no-capture literal was exactly what
 // refused it.
 
 test('an optional capture type can hold what exec puts there', () => {
-  // The fact D1 turns on, asserted as a VALUE crossing rather than as an
+  // The fact the optional-capture type turns on, asserted as a VALUE crossing rather than as an
   // annotation being accepted: a non-participating capture is `undefined`, and
   // the declared type must admit it.
   expect(evaluated('const m = /(a)?/.exec(""); let c: string | undefined = m[1];'
@@ -209,7 +209,7 @@ test('an optional capture type can hold what exec puts there', () => {
 });
 
 test('a bare [] is the empty tuple, which is what the no-capture case emits', () => {
-  // The fact D2 turns on. If `[]` ever becomes the array type, the clause's
+  // The fact the no-capture case turns on. If `[]` ever becomes the array type, the clause's
   // choice has to change with it, and this fails rather than the annotation
   // quietly ceasing to work.
   expect(evaluated('String(Reflect.getReflection(type []).kind);')).toBe('tuple');
@@ -218,7 +218,7 @@ test('a bare [] is the empty tuple, which is what the no-capture case emits', ()
   expect(evaluated('let r: RegExp.<[], {}> = /abc/; "ok";')).toBe('ok');
 });
 
-test('the D2 trade: the array spelling stops naming a no-capture literal', () => {
+test('the trade: the array spelling stops naming a no-capture literal', () => {
   // Recorded as INTENDED. `RegExp.<[].<any>, {}>` matched a no-capture literal
   // before and does not now, because RegExp's arguments are invariant and
   // Captures is a tuple. That is the cost of `RegExp.<[], {}>` working, which is
@@ -246,7 +246,7 @@ test('optionality itself is unchanged: only the type assigned to it moved', () =
   expect(evaluated('let r: RegExp.<[string], {}> = /(a)\\1/; "ok";')).toBe('ok');
 });
 
-test('D30: a REGEXP reports `RegExp.<Captures, Groups>` at run time', () => {
+test('a REGEXP reports `RegExp.<Captures, Groups>` at run time', () => {
   // It reported `{}` - an object with no structure - though the CHECKER has
   // always known the type: `RegExp.<[string], {}>` at `/(a)/` is accepted and a
   // wrong ARITY refused. Only REPORTING was missing.
@@ -261,9 +261,9 @@ test('D30: a REGEXP reports `RegExp.<Captures, Groups>` at run time', () => {
   expect(evaluated('String(Reflect.typeOf(new RegExp("(a)")));')).toBe('RegExp.<[string], {}>');
 });
 
-test('D30: the neighbouring reporters are unaffected', () => {
+test('the neighbouring reporters are unaffected', () => {
   expect(evaluated('String(Reflect.typeOf(new Map.<string, uint8>()));')).toBe('Map.<string, uint.<8>>');
-  // A PROMISE reports its library type (D30b). The note here used to say it
+  // A PROMISE reports its library type. The note here used to say it
   // stays `{}` because "its arguments are not recoverable from the value" -
   // which is TRUE and is why no arguments are passed, but the NAME is
   // recoverable, from the `[[PromiseState]]` slot, exactly as `[[MapData]]`
@@ -279,7 +279,7 @@ test('D30: the neighbouring reporters are unaffected', () => {
   expect(evaluated('async function* ag() { yield 1; } String(Reflect.typeOf(ag()));')).toBe('AsyncGenerator');
 });
 
-test('D49: a BARE `RegExp` is the supertype of every parameterization', () => {
+test('a BARE `RegExp` is the supertype of every parameterization', () => {
   // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
   // every such parameterization, so it holds a literal of any shape while a
   // written parameterization does not hold a value of another."
@@ -295,7 +295,7 @@ test('D49: a BARE `RegExp` is the supertype of every parameterization', () => {
   expectStaticTypeError('let r: RegExp.<[string, string], {}> = /(a)/;');
 });
 
-test('D49 is stated for RegExp ALONE, not for every library name', () => {
+test('the supertype rule is stated for RegExp ALONE, not for every library name', () => {
   // #sec-untyped-collections: the rule is "stated per family rather than as a
   // general rule about an unparameterized built-in, because the families do not
   // agree on what an unparameterized use means".

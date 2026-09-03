@@ -176,7 +176,7 @@ test('shortening is not deleting', () => {
   // DYNAMIC array's length is not part of its type, so it may shrink.
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.pop());')).toBe('3');
 
-  // A TUPLE's is (PLAN-tuple-stores.md phase 3). This case previously passed
+  // A TUPLE's is. This case previously passed
   // and now throws, and the change is deliberate: `push`, `shift` and `splice`
   // on a tuple were already refused because the arity is part of the type, and
   // `pop` reached the same truncation through `length`, which nothing checked.
@@ -191,7 +191,7 @@ test('shortening is not deleting', () => {
 });
 
 test('a redefinition is checked against the type the position already has', () => {
-  // PLAN-tuple-stores.md phase 1. #table-check-sites names both spellings -
+  // #table-check-sites names both spellings -
   // "a value crossing into a typed position through reflection, including
   // `Reflect.set` and `Reflect.defineProperty`" - and only `Reflect.set` was
   // wired. The branch above handles a descriptor that CARRIES a type, which
@@ -233,7 +233,7 @@ test('a redefinition is checked against the type the position already has', () =
 });
 
 test('a redefinition is checked against the type the position already has', () => {
-  // PLAN-tuple-stores.md phase 1. #table-check-sites names both spellings -
+  // #table-check-sites names both spellings -
   // "a value crossing into a typed position through reflection, including
   // `Reflect.set` and `Reflect.defineProperty`" - and only `Reflect.set` was
   // wired. The branch above handles a descriptor that CARRIES a type, which

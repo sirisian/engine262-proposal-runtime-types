@@ -49,7 +49,7 @@ test('it is DELIBERATELY NOT a runtime wall', () => {
     + 'String(Reflect.getReflection.<Reflect.ClassField, B>("a").protected);')).toBe('true');
 });
 
-test('a `const` bound to a construction is typed, so protected access is checked (D13)', () => {
+test('a `const` bound to a construction is typed, so protected access is checked', () => {
   // This test PINNED the opposite answer and said in as many words that it
   // "closes when inference for `new` bindings lands". It has landed: a `const`
   // whose initializer is a `new` expression takes that construction's type, so

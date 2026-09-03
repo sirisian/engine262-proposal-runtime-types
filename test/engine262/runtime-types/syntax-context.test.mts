@@ -108,9 +108,9 @@ test('a labelled decoration is not a different POSITION from an unlabelled one',
   // the labelled path reached the statement parser by a different route and the
   // region rule did not apply. A label is not a position.
   //
-  // Both report `Block` now - a captured region IS a block
-  // (`PLAN-region-context-removal` Q2) - so the two spellings can no longer
-  // disagree by naming different things. That they AGREE is still the subject,
+  // Both report `Block` now - a captured region IS a block - so the two
+  // spellings can no longer disagree by naming different things. That they
+  // AGREE is still the subject,
   // and the assertion still fails if the labelled route diverges again.
   const kindOnly = '(function (t, c) { return [{ kind: "string",'
     + ' value: JSON.stringify(c.kind), span: t[0] && t[0].span }]; })';

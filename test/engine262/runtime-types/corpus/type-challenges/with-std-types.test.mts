@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 4.
+ * proposal-runtime-types `annex-standard-kit`.
  *
  * typechallenges.md gives 46 of its challenges a second block, "With
  * std:types", showing the same answer as a call into the kit. Forty-two of the

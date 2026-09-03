@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * proposal-runtime-types, PLAN-function-family-bound.md F136.
+ * proposal-runtime-types: the FUNCTION family's bound (F136).
  *
  * Every family of this proposal has a BOUND - a type that admits every member
  * of the family and nothing else - and two of the three could be written:
@@ -81,8 +81,8 @@ test('the bound composes, which a bare top type could not', () => {
 });
 
 test('F136 reaches `this` too, which is contravariant "as a parameter is"', () => {
-  // Added in the phase-3 audit, which found the fix had been made in phase 3
-  // and never tested. #sec-this-adoption says a signature's [[ThisType]] "is
+  // Added on a re-check, which found the fix had been made and never tested.
+  // #sec-this-adoption says a signature's [[ThisType]] "is
   // contravariant, as a parameter is", so it inherits the parameter rule - and
   // it inherited the defect with it: `this: uint8` was refused where
   // `this: any` was declared, while the mirror passed, for exactly the reason
@@ -97,8 +97,8 @@ test('F136 reaches `this` too, which is contravariant "as a parameter is"', () =
 });
 
 test('the family splits on `this`, and that is #sec-this-adoption working', () => {
-  // Found in the phase-3 audit: the plan claimed the bound admits
-  // `this`-carrying functions. It does not, and it should not.
+  // Found on a re-check: the bound was claimed to admit `this`-carrying
+  // functions. It does not, and it should not.
   //
   // #sec-this-adoption: "A signature with none supplies no `this` rather than
   // accepting any", so a signature that HAS a [[ThisType]] "is usable nowhere a

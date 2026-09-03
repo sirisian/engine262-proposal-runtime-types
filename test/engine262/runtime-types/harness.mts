@@ -24,8 +24,8 @@ export function run(source: string) {
 /**
  * Run _source_, drain the job queue, and report how a promise settled.
  *
- * PLAN-async-generator-types.md phase 3. An `async function` and an
- * `async function*` report a type failure as a REJECTION, not a throw, so
+ * An `async function` and an `async function*` report a type failure as a
+ * REJECTION, not a throw, so
  * `expectThrown` cannot see one - and nothing in this repository could. The
  * async checks were landing unobserved, which is indistinguishable from not
  * landing.
@@ -149,14 +149,14 @@ export function expectThrown(source: string, messageIncludes?: string) {
 /**
  * Assert `source` is rejected STATICALLY: wrapped in a try/catch that would
  * swallow any runtime throw, the script must still fail, which only a
- * rejection before evaluation can produce. Phase 3 moved the numeric
- * library's resolution failures here from catchable runtime TypeErrors; the
- * ~any~ path keeps the runtime dispatch as the backstop, asserted separately.
+ * rejection before evaluation can produce. The numeric library's resolution
+ * failures moved here from catchable runtime TypeErrors; the ~any~ path keeps
+ * the runtime dispatch as the backstop, asserted separately.
  */
 export function expectStaticTypeError(source: string) {
   const completion = run(`try { ${source} } catch (e) {} "ran";`) as { Type: string };
   expect(completion.Type, `expected a static rejection for: ${source}`).toBe('throw');
-  // ...and that it is a StaticTypeError, not merely SOME failure (OQ27).
+  // ...and that it is a StaticTypeError, not merely SOME failure.
   //
   // Until the constructor existed this could assert only that the script did not
   // run, so a syntax error, a host error or an unrelated throw all satisfied it.

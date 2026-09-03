@@ -41,8 +41,8 @@ test('numeric types: the decimal types are registered type names', () => {
 test('numeric types: float128 and decimal are usable in annotation position', () => {
   // An alias: `float128` has no values at all in this engine, so after
   // #sec-defaultvalueof's refusal there is no way to write a binding of it -
-  // neither a default nor an initializer exists. Recorded in
-  // KNOWN-DIVERGENCES.md.
+  // neither a default nor an initializer exists. Recorded as a known
+  // divergence.
   expect(evaluated('type A = float128; typeof float128;')).toBe('object');
   expect(evaluated('let a: decimal128; typeof decimal128;')).toBe('object');
 });
@@ -471,9 +471,9 @@ test('memory layout: a fixed array and a value type class hold zero-filled defau
 // to 2**16. A double holds those exactly only to 53 bits, so a value of a wider
 // type has to be carried as a BigInt.
 //
-// This stage widens the carrier without constructing anything wide, so these
-// pin what must not change while the rest of the work lands, and what is still
-// wrong so the gap is recorded rather than assumed. See KNOWN-DIVERGENCES.md.
+// The carrier is widened without constructing anything wide, so these pin what
+// must not change, and what is still wrong so the gap is recorded rather than
+// assumed.
 
 test('a narrow integer type is unchanged', () => {
   expect(evaluated('let a: uint8 = 200; `${a}:${typeof a}`;')).toBe('200:number');

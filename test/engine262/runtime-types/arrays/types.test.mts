@@ -115,9 +115,9 @@ test('an element type is inferred from an array argument', () => {
   // `function g<T>(v: [].<T>): string { let x: T = 'z'; return x; }`, and both
   // of its halves are now refused, correctly: nothing but a `T` is a `T`, so
   // `let x: T = 'z'` is ill typed, and an unconstrained `T` is not a subtype of
-  // `string`, so returning one is too. `#sec-issubtype`, and
-  // `PLAN-parameter-composition` Stage A. The inference being demonstrated -
-  // `T` bound to the element type of the argument - is unaffected.
+  // `string`, so returning one is too - see `#sec-issubtype`. The inference
+  // being demonstrated - `T` bound to the element type of the argument - is
+  // unaffected.
   expect(evaluated("function g<T>(v: [].<T>): T { return v[0]; } g(['a']);")).toBe('a');
   expect(evaluated('function g<T>(v: [].<T>): T { return v[0]; } String(g([(1 := int32)]));')).toBe('1');
 });
@@ -259,11 +259,11 @@ test('an array type in expression position is inert with the feature off', () =>
 
 test('a store to a tuple position is checked against THAT position', () => {
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t[0] = "wrong";');
-  // A store into a `string` position is now REFUSED STATICALLY (D37).
+  // A store into a `string` position is now REFUSED STATICALLY.
   //
   // This pinned the run-time coercion instead - `t[1] = (1 := uint8)` giving
-  // `1:string` - and deferred the cause to a `KNOWN-DIVERGENCES.md` that does not
-  // exist in this repository. The coercion is still there: `RequireType` converts,
+  // `1:string` - and deferred the cause. The coercion is still there:
+  // `RequireType` converts,
   // and the ARRAY element store reaches the same conversion. What differed was
   // that the checker refused the array store and had no rule for a tuple
   // position, so only the tuple's coercion was reachable.
@@ -284,8 +284,8 @@ test('a tuple keeps its arity', () => {
   expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
     + ' r[2] = "c"; r.push("d"); `${r.length}:${r[3]}`;')).toBe('4:d');
   // The REST position's type is the one consulted. Stored through an untyped
-  // binding so the D37 store rule, which would refuse this at the declaration,
-  // is out of the path - what is under test here is the RUN TIME's choice of
+  // binding so the tuple-position store rule, which would refuse this at the
+  // declaration, is out of the path - what is under test here is the RUN TIME's choice of
   // position type, not whether the checker catches the store.
   expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
     + ' const u = r; u[2] = (5 := uint8); typeof r[2];')).toBe('string');
@@ -319,7 +319,7 @@ test('a tuple carries its type even when it needed no conversion', () => {
   // unstamped. The same shortcut already stamps an array's element type and a
   // typed collection's arguments, for the same reason.
   // Through an untyped binding, so the RUN TIME's stamp is what refuses the
-  // store rather than D37's static rule.
+  // store rather than the static store rule.
   expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x]; const u = a;'
     + ' let m = ""; try { u[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
   // Through `any`, so the boundary certainly runs rather than being elided.
@@ -335,8 +335,8 @@ test('a tuple carries its type even when it needed no conversion', () => {
 });
 
 test('an elided check still leaves the array carrying its element type', () => {
-  // ISSUES-found-while-writing-examples.md I1. The conversion is where an array
-  // acquires its [[TypedElement]], and #sec-check-elision lets the checker skip
+  // The conversion is where an array acquires its [[TypedElement]], and
+  // #sec-check-elision lets the checker skip
   // the conversion where it proves the boundary cannot fail - so the stamp went
   // with it. Only ONE literal form was affected, which is why this read as a
   // missing `capacity` rather than as a hole: `[1]` is not already of type
@@ -367,7 +367,7 @@ test('a wider view does not restamp the array it names', () => {
     + 'function big() { return 300; } try { b[0] = big(); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
 });
 
-test('D18: an array literal at a TUPLE annotation is checked for ARITY', () => {
+test('an array literal at a TUPLE annotation is checked for ARITY', () => {
   // An array literal at a tuple target returned null from `staticTypeIn` and was
   // checked nowhere, so every arity mismatch type-checked and threw at run time.
   // An array literal at an ARRAY target was checked, an object literal was
@@ -383,8 +383,8 @@ test('D18: an array literal at a TUPLE annotation is checked for ARITY', () => {
   expectStaticTypeError('let a: [].<[uint8]> = [[(1 := uint8), (2 := uint8)]];');
 });
 
-test('D18/D33: what the ARITY rule refuses, and what it deliberately does not', () => {
-  // TOO FEW is refused NOW (D33). It was left out here because this arm could not
+test('what the ARITY rule refuses, and what it deliberately does not', () => {
+  // TOO FEW is refused NOW. It was left out here because this arm could not
   // read a trailing default and would have refused
   // `let x: [uint8, string = "d"] = [(1 := uint8)]` - the clause's own example.
   //
@@ -398,20 +398,20 @@ test('D18/D33: what the ARITY rule refuses, and what it deliberately does not', 
   // past the fixed ones.
   expect(ok('if (false) { const s: [].<uint8> = [(1 := uint8)]; let x: [uint8] = [...s]; } 1;')).toBe(true);
   expect(ok('if (false) { let x: [uint8, ...string] = [(1 := uint8), "a", "b"]; } 1;')).toBe(true);
-  // The per-position ELEMENT TYPE is checked NOW (D18's element half).
+  // The per-position ELEMENT TYPE is checked NOW.
   //
   // It was left out twice because it regressed a literal of PROMISES at a tuple
   // of promise types - and the promise case is now understood: a static's
   // inferred return widened `Promise.resolve(1)`'s untyped literal to `number`,
-  // so those elements were refused for a reason unrelated to positions. D43
-  // fixed that and this landed the same day.
+  // so those elements were refused for a reason unrelated to positions. Fixing
+  // that widening unblocked this.
   expectStaticTypeError('let x: [uint8] = ["a"];');
 });
 
-test('D18: each tuple element is checked against ITS OWN position', () => {
+test('each tuple element is checked against ITS OWN position', () => {
   // `[uint8, string] = ["a", (1 := uint8)]` - the positions SWAPPED - was
-  // accepted while only the arity was checked. This is the rule D37 landed for
-  // a STORE, at the literal site.
+  // accepted while only the arity was checked. This is the store rule, at the
+  // literal site.
   expectStaticTypeError('let x: [uint8, string] = ["a", (1 := uint8)];');
   expect(ok('if (false) { let x: [uint8, string] = [(1 := uint8), "a"]; } 1;')).toBe(true);
   // An untyped literal still ADAPTS to its position, as it does everywhere.
@@ -425,7 +425,7 @@ test('D18: each tuple element is checked against ITS OWN position', () => {
   expect(ok('if (false) { let t: [Promise.<uint8, Error>, Promise.<string, Error>] = [Promise.resolve(1), Promise.resolve("a")]; } 1;')).toBe(true);
 });
 
-test('D33: a tuple\'s length is a RANGE, set by its trailing defaults', () => {
+test('a tuple\'s length is a RANGE, set by its trailing defaults', () => {
   // #sec-array-and-tuple-types: "A tuple's length is a RANGE rather than a number
   // because a trailing position may carry a default... `[uint8, uint32 = 10]`
   // accepts a one-element and a two-element array, which is what lets a shorter
@@ -444,7 +444,7 @@ test('D33: a tuple\'s length is a RANGE, set by its trailing defaults', () => {
   expectStaticTypeError('let x: [uint8, uint32] = [(1 := uint8)];');
 });
 
-test('D33: the range composes with a REST, and holds at every position', () => {
+test('the range composes with a REST, and holds at every position', () => {
   // "`[uint32, ...[].<float32>]` accepts any length from one upward" - a rest
   // makes the MAXIMUM unbounded and leaves the minimum alone.
   expect(ok('if (false) { let x: [uint32, ...[].<float32>] = [(1 := uint32)]; } 1;')).toBe(true);
@@ -457,13 +457,13 @@ test('D33: the range composes with a REST, and holds at every position', () => {
   expect(ok('if (false) { function f(): [uint8, uint32 = 10] { return [(1 := uint8)]; } } 1;')).toBe(true);
 });
 
-test('D33: the RUN TIME is unchanged - it was right already', () => {
+test('the RUN TIME is unchanged - it was right already', () => {
   expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8)]; String(x[1]);')).toBe('10');
   expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8)]; String(x.length);')).toBe('2');
   expect(evaluated('let x: [uint8, uint32 = 10] = [(1 := uint8), (7 := uint32)]; String(x[1]);')).toBe('7');
 });
 
-test('D38: a default may only be in a TRAILING position', () => {
+test('a default may only be in a TRAILING position', () => {
   // #sec-array-and-tuple-types: "A tuple's TRAILING position may carry a
   // default". A tuple is positional, so the only way to leave a position
   // unsupplied is to stop short of it - a default anywhere but the tail could
@@ -485,7 +485,7 @@ test('D38: a default may only be in a TRAILING position', () => {
   expectThrown('type T = [...[].<uint8>, uint8 = 1]; 1;', 'may not follow a rest');
 });
 
-test('D37: a store into a TUPLE POSITION is checked against that position', () => {
+test('a store into a TUPLE POSITION is checked against that position', () => {
   // The assignment arm had a branch for an ARRAY element - `objType.Element` -
   // and none for a tuple, so a store into a position was unchecked. At run time
   // the store CONVERTS, so `_x_[1] = (9 := uint8)` on a `[uint8, string]` put the
@@ -501,7 +501,7 @@ test('D37: a store into a TUPLE POSITION is checked against that position', () =
   expect(ok(`if (false) { ${T} x[0] = (2 := uint8); } 1;`)).toBe(true);
 });
 
-test('D37: a REST position takes the rest\'s element type', () => {
+test('a REST position takes the rest\'s element type', () => {
   // A position the rest collects is checked against what the rest COLLECTS,
   // which is #sec-type-annotations' reading of the annotation.
   const R = 'let y: [uint8, ...[].<string>] = [(1 := uint8), "a"]; ';
@@ -510,7 +510,7 @@ test('D37: a REST position takes the rest\'s element type', () => {
   expect(ok(`if (false) { ${R} y[0] = (2 := uint8); } 1;`)).toBe(true);
 });
 
-test('D37 leaves the neighbouring stores alone', () => {
+test('the tuple store rule leaves the neighbouring stores alone', () => {
   // The ARRAY element store, which already worked.
   expectStaticTypeError('let a: [].<string> = ["x"]; a[0] = (9 := uint8);');
   expect(ok('if (false) { let a: [].<string> = ["x"]; a[0] = "z"; } 1;')).toBe(true);

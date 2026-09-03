@@ -14,8 +14,8 @@ import { evaluated, evaluatedFlagOff, realmWithMacro } from '../harness.mts';
  * positions the design does not give as admitting the ones it does.
  *
  * Every assertion here was MEASURED before it was written. Where the answer
- * differed from what the plan predicted it is recorded as such rather than
- * quietly asserted, and the three positions that are accepted and do NOTHING
+ * differed from what was predicted it is recorded as such rather than quietly
+ * asserted, and the three positions that are accepted and do NOTHING
  * are pinned at the end as gaps rather than left to be discovered.
  */
 
@@ -100,7 +100,7 @@ test('a reserved layout control is not shadowable by a user binding', () => {
   // named `packed` must still be refused, and that interaction is easy to
   // break while opening the door."
   //
-  // MEASURED, and the answer is a shade different from the plan's wording: a
+  // MEASURED, and the answer is a shade different from that wording: a
   // user binding named `packed` is not REFUSED, it is IGNORED - the control is
   // recognized syntactically, so the name never reaches the binding at all.
   // That is the right behaviour and the stronger one to pin, because it is

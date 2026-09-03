@@ -74,8 +74,8 @@ test('Interfaces: assignability follows the nominal hierarchy', () => {
   // an implementing class relates to its interface, and so does a bare object
   // type that has the members.
   //
-  // PLAN-nominal-records.md phase 3 CHANGED THIS ASSERTION, and the change is
-  // worth a decision rather than a silent flip. This line asserted *false*, on
+  // THIS ASSERTION CHANGED, and the change is worth a decision rather than a
+  // silent flip. This line asserted *false*, on
   // the reading that an interface is nominal for assignability and structural
   // only for membership. `#sec-object-types` says otherwise, in the clause that
   // defines the structural form: "This is what lets a value satisfy an

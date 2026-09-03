@@ -77,8 +77,8 @@ test('row 3: the operand of a return in a function with a declared return type',
 });
 
 // The row programs below bind their instances with `let`, not `const`. A `const`
-// whose initializer is a construction now takes that construction's type (D13),
-// so a bad store through one is an EARLY ERROR and the run-time check site these
+// whose initializer is a construction now takes that construction's type, so a
+// bad store through one is an EARLY ERROR and the run-time check site these
 // rows exist to exercise is never reached - the kind changes from the
 // operation's own RangeError to the checker's TypeError. `let` is left untyped
 // deliberately, so it is the spelling that reaches the boundary.
@@ -536,7 +536,7 @@ test('a typed collection checks every position it declares, at any type', () => 
   expect(thrownKind(`${ss} function anyv() { return {}; } s.has(anyv());`)).toBe('TypeError');
   expect(thrownKind(`${ss} function anyv() { return {}; } s.delete(anyv());`)).toBe('TypeError');
   // The conversion is NOT the array's conversion at this position, and the
-  // difference is OQ7. A `[].<string>` still converts - `a.push(5)` produces
+  // difference is deliberate. A `[].<string>` still converts - `a.push(5)` produces
   // the string "5", asserted below so the two stay distinguishable - because an
   // array element is a STORE addressed by an index. A Set's element is its KEY,
   // and a conversion that loses nothing as a value can still lose an identity
@@ -861,8 +861,8 @@ test('the RETURN boundary elides too, and the condition is a property of the fun
 });
 
 test('the PARAMETER boundary is a different decision, and this is why', () => {
-  // Recorded as a test rather than as a comment because it is the reason this
-  // phase stops at two boundaries. A parameter annotation is shared by every
+  // Recorded as a test rather than as a comment because it is the reason
+  // elision stops at two boundaries. A parameter annotation is shared by every
   // CALL SITE, and the checker cannot see them all: a function reached through
   // `apply`, through a builtin taking it as a callback, or through `eval` is
   // called from outside the source the checker walked. Deciding elision in the
@@ -1039,7 +1039,7 @@ test('a collection constructed with type arguments carries them', () => {
   // not.
   expect(evaluated('const s = new Set.<uint8>(); s.add(65); String([...s][0] is uint8);')).toBe('true');
   // Through a `let`, so the RUN-TIME stamp this test is about is what answers:
-  // a `const` bound to a construction now takes its type (D13), and with the
+  // a `const` bound to a construction now takes its type, and with the
   // library nominals resolved a bad add is an Early Error before the stamp is
   // consulted. Both are asserted, the early error being the better answer.
   expect(thrownKind('let s = new Set.<uint8>(); s.add(300);')).toBe('RangeError');
@@ -1388,11 +1388,11 @@ test('a BLOCK body IS read now, and the two spellings agree', () => {
   // of inferring the block was to make the two agree, and this is that
   // agreement rather than a second assertion of the same thing.
   expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => "wrong");');
-  // D24, pre-existing and shared by BOTH spellings: a numeric literal return is
-  // not assignable to a numeric value type in a function-type position, so
+  // Pre-existing and shared by BOTH spellings: a numeric literal return is not
+  // assignable to a numeric value type in a function-type position, so
   // `h((x) => 1)` is refused too. Measured on a clean build, where the concise
   // form was already refused and the block form was accepted only because it was
-  // never checked. Asserted here so that fixing D24 converts both together.
+  // never checked. Asserted here so that fixing it converts both together.
   expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => 1);');
   expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => { return 1; });');
   expect(evaluated('let f: (a: uint8) => void = () => {}; f(5); "ok";')).toBe('ok');

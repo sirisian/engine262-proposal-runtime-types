@@ -97,7 +97,7 @@ test('what the accessor context does and does not carry', () => {
   // decorators.md gives it on `ClassAccessorReflection` as well as
   // `ClassFieldReflection`, and the two describe the same declaration - so ONE
   // derivation serves both rather than two that can drift, which is the shape
-  // this plan has repeatedly been bitten by.
+  // this project has repeatedly been bitten by.
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.initial);`)).toBe('5');
   // A typed accessor with no initializer reports its type's ZERO VALUE.
   expect(evaluated(`${grab} class A { @f accessor a: uint32; } String(c.initial);`)).toBe('0');
@@ -110,7 +110,7 @@ test('what the accessor context does and does not carry', () => {
   // checked where the static type is known", and nothing checks it yet. The
   // modifier parses, lays out, and reflects.
   expect(evaluated('class B { protected a: uint8 = 1; } class D extends B { read() { return this.a; } } String(new D().read());')).toBe('1');
-  // Through a `let`: a `const` bound to a construction is now typed (D13), so
+  // Through a `let`: a `const` bound to a construction is now typed, so
   // `o.a` from outside the class is refused as the protected access it is.
   // Reading it here is about the accessor's VALUE, so it goes through a binding
   // the checker does not type.

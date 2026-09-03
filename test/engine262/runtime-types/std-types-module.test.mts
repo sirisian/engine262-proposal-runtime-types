@@ -5,16 +5,16 @@ import {
 } from '#self';
 
 /**
- * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 1.
+ * proposal-runtime-types `annex-standard-kit`.
  *
- * The phase gate: `import { partial } from 'std:types'` resolves in a
- * `runtime-types` realm AND NOT OTHERWISE. This file tests the RESOLUTION and
- * the module's evaluation as a whole; the per-export conformance suite is
- * phase 3, and lives beside the kit's obligations in `standard-kit.test.mts`.
+ * `import { partial } from 'std:types'` resolves in a `runtime-types` realm AND
+ * NOT OTHERWISE. This file tests the RESOLUTION and the module's evaluation as
+ * a whole; the per-export conformance suite lives beside the kit's obligations
+ * in `standard-kit.test.mts`.
  *
  * Two properties are load-bearing and neither is obvious.
  *
- * The kit is resolved by the ENGINE, not by an embedder's loader (OQ3-B), so
+ * The kit is resolved by the ENGINE, not by an embedder's loader, so
  * these realms wire NO module loader at all and the import still resolves. That
  * is the whole point of the arrangement: eight call sites configure loaders
  * today, and a standard module that eight places can forget is not standard.
@@ -53,7 +53,7 @@ function evaluate(realm: ManagedRealm, source: string): Promise<string> {
   });
 }
 
-test('the phase gate: `import { partial } from "std:types"` resolves with no loader configured', async () => {
+test('`import { partial } from "std:types"` resolves with no loader configured', async () => {
   const realm = bareRealm(['runtime-types']);
   // The import must resolve AND the helper must compute the right type. A
   // resolution that yields a module whose `partial` is wrong would pass a
@@ -67,8 +67,8 @@ test('the phase gate: `import { partial } from "std:types"` resolves with no loa
 test('the whole module evaluates - every one of the 71 exports is reachable', async () => {
   const realm = bareRealm(['runtime-types']);
   // A namespace import forces the module body to completion, so a helper whose
-  // DEFINITION does not evaluate fails here rather than at its first call in
-  // some later phase. The corpus imports the kit both ways
+  // DEFINITION does not evaluate fails here rather than at its first call
+  // somewhere later. The corpus imports the kit both ways
   // (`import { ... }` and `import * as std`), so both are exercised.
   const source = 'import * as std from "std:types";' + NL
     + 'const names = Object.keys(std);' + NL

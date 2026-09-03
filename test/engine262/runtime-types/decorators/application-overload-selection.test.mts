@@ -136,7 +136,7 @@ test('FEWER DEFAULTS WINS, and a tie is ambiguous', () => {
   expect(evaluated(`const l = []; ${alone}${defaulted} class A { @f(1) a: uint8; } l.join(",");`)).toBe('defaulted');
 
   // "Two signatures satisfied only by defaults is a TypeError at the decorated
-  // declaration" - stage A0's third bullet, reachable for the first time.
+  // declaration" - reachable for the first time.
   //
   // NOTE FOR ANYONE ADDING TO THIS FILE: this assertion runs the SCRIPT WHOLE -
   // not through `rejectionKind`'s `eval`, and not through `expectThrownKind`'s

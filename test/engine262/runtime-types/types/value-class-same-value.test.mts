@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * D27 - `Object.is` on a value type class.
+ * `Object.is` on a value type class.
  *
  * #sec-typed-classes makes an instance of a value type class a VALUE:
  * "every one of its fields has a type that is a value type ... assigning one

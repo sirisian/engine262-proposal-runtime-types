@@ -61,7 +61,7 @@ test('feature off: class-name-as-type stays an error', () => {
 });
 
 test('reflection answers the class relations the checker decides', () => {
-  // PLAN-nominal-records.md phase 2. `Reflect.isAssignable` is specified as the
+  // `Reflect.isAssignable` is specified as the
   // checker's judgment "exposed unchanged", and it was not: the relation walks
   // [[Base]] for the inheritance chain and compares [[Structure]] to decide
   // that a class satisfies an interface it implements, and the record the
@@ -81,7 +81,7 @@ test('reflection answers the class relations the checker decides', () => {
 });
 
 test('a class type is satisfied by construction, not by shape', () => {
-  // The guard phase 2 needed. Giving a runtime class record a [[Structure]] for
+  // The guard this needed. Giving a runtime class record a [[Structure]] for
   // SUBTYPING made membership read it too, and `{} instanceof (type A)` became
   // true for any class with no members. #sec-object-types: "a class states a
   // construction and an identity as well as a shape, and it is the identity
@@ -96,7 +96,7 @@ test('a class type is satisfied by construction, not by shape', () => {
 });
 
 test('an object type satisfies an interface by having its members', () => {
-  // PLAN-nominal-records.md phase 3. #sec-issubtype takes the structural form
+  // #sec-issubtype takes the structural form
   // of an interface BEFORE the step that separates the kinds, and
   // #sec-object-types names the failure that ordering prevents: "Without it the
   // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`".

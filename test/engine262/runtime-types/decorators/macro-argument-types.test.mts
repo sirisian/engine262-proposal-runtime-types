@@ -17,8 +17,7 @@ import { Agent, setSurroundingAgent } from '#self';
  * selects on argument types, found `array` where a signature asked for
  * `TokenStream`, and reported "no overload matches these arguments".
  *
- * `FINDING-overload-resolution-host-nominals.md`. These tests exist so the two
- * paths cannot drift apart again silently — a value that a direct call accepts
+ * These tests exist so the two paths cannot drift apart again silently — a value that a direct call accepts
  * for a nominal parameter must also be MATCHABLE against it.
  */
 
@@ -58,7 +57,6 @@ test('the context argument answers its reflection context, not `object`', () => 
 test('the context still carries its `kind`, which is what a macro reads', () => {
   // `Block`, not `Region`: a captured region IS a block, and the engine not
   // parsing its text is a fact about the DECORATOR rather than a second position.
-  // `PLAN-region-context-removal` Q2.
   // The stamp is additive: `#sec-syntax-replacement` says the context "is an
   // ordinary object with one own property, `kind`", and that is unchanged.
   expect(reported('String(c.kind)')).toBe('"Block";');

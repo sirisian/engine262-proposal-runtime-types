@@ -300,7 +300,7 @@ test('a signature carries its RETURN', () => {
 
 test('the signature agrees with the PARAMETER CONTEXT about one declaration', () => {
   // Both are read from the same node, which is what stops two reflections of
-  // one parameter from disagreeing - the failure this plan has met repeatedly.
+  // one parameter from disagreeing - a failure this area has met repeatedly.
   const P = 'let p; function h(c) { p = c; } ';
   expect(evaluated(`${GRAB}${P} class A { @g m(@h x: uint32 = 7) {} } `
     + 'String(p.name === ctx.signatures[0].parameters[0].name);')).toBe('true');
@@ -400,7 +400,7 @@ test('a parameter\'s metadata PROTOTYPE-LINKS to the base class\'s', () => {
  *
  * decorators.md gives a member reflection a `type`. The read path had none while
  * the context did - **two reflections of one declaration disagreeing**, which is
- * the failure this plan has met more often than any other. Both now answer from
+ * the failure this area has met more often than any other. Both now answer from
  * one recorded type, derived by one operation.
  */
 
@@ -426,7 +426,7 @@ test('THE READ PATH AND THE DECORATOR CONTEXT AGREE, BY IDENTITY', () => {
     + 'String(t === Reflect.getReflection.<Reflect.ClassGetter, A>("s").type);')).toBe('true');
   // And an UNDECORATED member is reflectable with its type - whether a decorator
   // ran is no part of what was DECLARED, which is the owner-gating mistake this
-  // plan records four separate instances of.
+  // file records four separate instances of.
   expect(evaluated('type F = (x: uint8) => uint8; class A { m(x: uint8): uint8 { return x; } } '
     + 'String(Reflect.getReflection.<Reflect.ClassMethod, A>("m").type === (type F));')).toBe('true');
 });

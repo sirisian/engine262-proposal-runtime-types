@@ -55,8 +55,8 @@ test('every parameter position admits the new forms', () => {
   expect(ok('const o = { m(...a: [].<uint32>, b: string) { return b; } };')).toBe(true);
 
   // Arrows come through the cover grammar and are refined afterwards, which is
-  // a separate path. A TYPED rest never parsed there at any position before
-  // this phase, so both halves are pinned.
+  // a separate path. A TYPED rest never parsed there at any position before, so
+  // both halves are pinned.
   expect(ok('const g = (...a: [].<uint32>) => a.length;')).toBe(true);
   expect(ok('const g = (...a: [].<uint32>, b: string) => b;')).toBe(true);
   expect(ok('const g = (...a, b) => b;')).toBe(true);
@@ -222,7 +222,7 @@ test('overload resolution admits a signature the assignment satisfies', () => {
   `)).toBe('rest');
 });
 
-test('D39: a REST parameter no longer disables the whole signature', () => {
+test('a REST parameter no longer disables the whole signature', () => {
   // `check.mts` marked a signature unusable for any parameter that is not a
   // SingleNameBinding or BindingElement, with the reason "a rest or
   // destructuring parameter: no arity to check against". The consequence was
@@ -230,7 +230,7 @@ test('D39: a REST parameter no longer disables the whole signature', () => {
   // FIXED parameters included.
   //
   // A rest DOES have an arity: #sec-type-annotations makes its annotation the
-  // type of what it collects (D36).
+  // type of what it collects.
   expectStaticTypeError('function f(...a: [].<uint8>) { return 1; } f("no");');
   expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f((1 := uint8)); } 1;')).toBe(true);
   expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f(); } 1;')).toBe(true);
@@ -241,7 +241,7 @@ test('D39: a REST parameter no longer disables the whole signature', () => {
   expect(ok('if (false) { function d({ x }) { return 1; } d({ x: 1 }); } 1;')).toBe(true);
 });
 
-test('D39: arguments are mapped by the SAME operation the run time uses', () => {
+test('arguments are mapped by the SAME operation the run time uses', () => {
   // This proposal allows NON-FINAL and MULTIPLE rests, so a positional walk over
   // parameters is wrong for both. `assignArguments` - which this file's overload
   // ranking already used, and which wraps the `SequenceAssignment` the run time
@@ -264,7 +264,7 @@ test('D39: arguments are mapped by the SAME operation the run time uses', () => 
   `)).toBe('3,3');
 });
 
-test('D36: a rest annotation with an EXTENT fixes the argument count', () => {
+test('a rest annotation with an EXTENT fixes the argument count', () => {
   // #sec-type-annotations: "Where the annotation states an EXTENT - `[2].<uint8>`,
   // or `[N].<uint8>` for a value parameter N - the extent is part of the type and
   // the call must supply that many arguments".
@@ -275,7 +275,7 @@ test('D36: a rest annotation with an EXTENT fixes the argument count', () => {
   expect(ok('if (false) { function f(...a: [2].<uint8>) { return 1; } f((1 := uint8), (2 := uint8)); } 1;')).toBe(true);
   expectStaticTypeError('function f(...a: [2].<uint8>) { return 1; } f((1 := uint8), (2 := uint8), (3 := uint8));');
   // A TUPLE rest fixes its arity the same way, and a trailing default lowers the
-  // minimum as D33's length range says.
+  // minimum as a tuple's length range says.
   expectStaticTypeError('function f(...a: [string, string]) { return 1; } f("a");');
   expect(ok('if (false) { function f(...a: [string, string]) { return 1; } f("a", "b"); } 1;')).toBe(true);
   // A DYNAMIC extent admits any count, which is the common case and must not
@@ -284,7 +284,7 @@ test('D36: a rest annotation with an EXTENT fixes the argument count', () => {
   expect(ok('if (false) { function f(...a: [].<uint8>) { return 1; } f(); } 1;')).toBe(true);
 });
 
-test('D41: a rest parameter\'s ELEMENT type is enforced at run time', () => {
+test('a rest parameter\'s ELEMENT type is enforced at run time', () => {
   // #sec-type-annotations: "A rest element's annotation is the type of what it
   // COLLECTS". A rest was the ONE position in the language whose declared type
   // the run time ignored - a fixed parameter, a binding's element and a field's
@@ -295,7 +295,7 @@ test('D41: a rest parameter\'s ELEMENT type is enforced at run time', () => {
   // confound is what hid this defect while two static checks were built on the
   // assumption the run time already enforced it.
   // The ELEMENT failure is a CONVERSION failure, not an assignability one: a
-  // rest's element type is enforced through `CheckedConvertValue` (D41), which
+  // rest's element type is enforced through `CheckedConvertValue`, which
   // reports what it could not convert FROM. The fragment asserted here said
   // "not assignable" and was never checked - `expectThrown` took one argument
   // and JavaScript dropped the second.
@@ -303,7 +303,7 @@ test('D41: a rest parameter\'s ELEMENT type is enforced at run time', () => {
   expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g((1 := uint32), "no");', 'not a conversion source');
 });
 
-test('D41: BINDING converts, it does not test membership', () => {
+test('BINDING converts, it does not test membership', () => {
   // An untyped literal ADAPTS to a declared type, as it does for a fixed
   // parameter, so these are valid and must stay valid. A first attempt used
   // `IsOfType` - strict membership - and refused all of them.
@@ -324,7 +324,7 @@ test('D41: BINDING converts, it does not test membership', () => {
   expect(evaluated('function f(...a: [].<number>, b: string) { return a.length + ":" + b; } f(1, 2, "x");')).toBe('2:x');
 });
 
-test('D41: a rest annotation\'s EXTENT fixes the argument count at run time', () => {
+test('a rest annotation\'s EXTENT fixes the argument count at run time', () => {
   // #sec-type-annotations: "Where the annotation states an EXTENT ... the extent
   // is part of the type and the call must supply that many arguments".
   //
@@ -337,7 +337,7 @@ test('D41: a rest annotation\'s EXTENT fixes the argument count at run time', ()
   expect(evaluated('function f(...a: [2].<uint8>) { return a.length; } String(f((1 := uint8), (2 := uint8)));')).toBe('2');
 });
 
-test('D41: the extent rule respects D33\'s length RANGE', () => {
+test('the extent rule respects a tuple\'s length RANGE', () => {
   // A trailing default lowers the minimum, so `[uint8, string = "d"]` admits one
   // element and two. The run time's resolution EVALUATES an initializer, so a
   // defaulted position carries its VALUE in [[Initial]]; [[DeclaredDefault]] is
@@ -346,7 +346,7 @@ test('D41: the extent rule respects D33\'s length RANGE', () => {
   // admits.
   // The default lowers the MINIMUM; it is not filled into the collected array,
   // which holds exactly what the call supplied. `[[Initial]]` fills a POSITION of
-  // a tuple value (D33), and a rest's array is built by collection rather than by
+  // a tuple value, and a rest's array is built by collection rather than by
   // conversion to the tuple type - so the length is 1 here and 2 below.
   expect(evaluated('function f(...a: [uint8, string = "d"]) { return a.length; } String(f((1 := uint8)));')).toBe('1');
   expect(evaluated('function f(...a: [uint8, string = "d"]) { return a[1]; } f((1 := uint8), "z");')).toBe('z');
@@ -355,11 +355,11 @@ test('D41: the extent rule respects D33\'s length RANGE', () => {
   expect(evaluated('function f(...a: [].<uint32>) { return a.length; } String(f());')).toBe('0');
 });
 
-test('D41: the CHECKER and the RUN TIME now agree', () => {
-  // The point of this item is not that more programs throw; it is that the two
-  // sides answer the same question the same way. A static check that refuses what
-  // the run time accepts refuses WORKING programs, which is what
-  // PLAN-D36-implementation's extent check did until this landed.
+test('the CHECKER and the RUN TIME now agree', () => {
+  // The point is not that more programs throw; it is that the two sides answer
+  // the same question the same way. A static check that refuses what the run
+  // time accepts refuses WORKING programs, which is what the earlier extent
+  // check did until this landed.
   const both = (src: string) => [ok(`if (false) { ${src} } 1;`), (run(src) as { Type: string }).Type !== 'throw'];
   for (const src of [
     'function f(...a: [2].<uint8>) { return 1; } f((1 := uint8));',

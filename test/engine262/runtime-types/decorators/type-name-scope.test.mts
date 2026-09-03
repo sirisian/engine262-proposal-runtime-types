@@ -6,12 +6,11 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * scope chain first and through the built-in table only where no user binding of
  * the name exists".
  *
- * `PLAN-checker-type-resolution.md` stage A gave the checker a registry keyed by
- * the WRITTEN NAME and never consulted scope, so under a shadow the checker
- * answered with the intrinsic while the runtime, which walks the scope chain,
- * answered with the binding. The two disagreed about what an annotation MEANS -
- * the defect that plan exists to remove, reintroduced by it, and not caught by
- * the parity test, which asks whether a kind resolves rather than whether it
+ * The checker was given a registry keyed by the WRITTEN NAME that never
+ * consulted scope, so under a shadow the checker answered with the intrinsic
+ * while the runtime, which walks the scope chain, answered with the binding. The
+ * two disagreed about what an annotation MEANS - the very defect the registry
+ * existed to remove, reintroduced by it, and not caught by the parity test, which asks whether a kind resolves rather than whether it
  * resolves to the same thing.
  *
  * The probes below separate the two judges. A value whose static type the checker
@@ -49,8 +48,8 @@ test('a program binding shadows an intrinsic type name, and both judges agree', 
 });
 
 test('with no shadow the intrinsic is used, and both judges still agree', () => {
-  // The guard against fixing the divergence by disabling the registry: unshadowed,
-  // these must still resolve, or stage A is undone.
+  // The guard against fixing the divergence by disabling the registry:
+  // unshadowed, these must still resolve.
   for (const [label, , ty] of CASES) {
     expect(checker('', ty), `checker, unshadowed ${label}`).toBe('refuses');
     expect(runtime('', ty), `runtime, unshadowed ${label}`).toBe('refuses');

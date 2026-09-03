@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * PLAN-declarative-checker-facts.md phase 3. #sec-declared-narrowing: a
+ * #sec-declared-narrowing: a
  * signature may carry [[Narrows]], and "a binding declared of a constructed
  * guard type narrows at every call through it". The engine built the field,
  * reflected it and checked its variance, and consumed it nowhere - the built-in

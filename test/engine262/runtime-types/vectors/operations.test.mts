@@ -2,13 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * SIMD operations, sectioned by the phases of the coverage plan so that what is
- * covered reads against the instruction tables.
+ * SIMD operations, sectioned so that what is covered reads against the
+ * instruction tables.
  *
- * The regression floor comes first: it is what every later phase must not
- * break, and the two most fragile entries are the ambiguity error - which every
- * new comparison result form threatens - and masks behaving as ordinary
- * vectors.
+ * The regression floor comes first: it is what the rest must not break, and the
+ * two most fragile entries are the ambiguity error - which every new comparison
+ * result form threatens - and masks behaving as ordinary vectors.
  */
 
 // -- regression floor ---------------------------------------------------------
@@ -226,8 +225,8 @@ test('a scalar beside a vector broadcasts, and shapes must agree', () => {
  * propagation, so `int64x2(1n, 2n)` is a type error and `int64x2(1, 2)` is the
  * spelling.
  *
- * Every negative value of an `int64` or `int128` was zero before this phase -
- * scalar and lane alike - because the reduction modulo 2**bits was done in
+ * Every negative value of an `int64` or `int128` was once zero - scalar and
+ * lane alike - because the reduction modulo 2**bits was done in
  * Number arithmetic, where `-5 + 2**64` rounds to exactly 2**64 and the
  * two's-complement step then subtracts it back to nothing.
  */

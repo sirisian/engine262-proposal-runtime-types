@@ -28,10 +28,9 @@ import {
  * without the parser knowing the four new tokens: that nothing which already
  * lexed has moved, and that the one base-adjacent change -- `?.` is not the
  * optional chaining punctuator before a `.` -- does what it says. The family's
- * own forms, the removed forms, the whitespace edges, precedence, and ASI are
- * the second half of the same vector document and land with the parser (E2 of
- * the engine plan); they are written out at the foot of this file, skipped, so
- * the contract reads whole and unskipping them is the next stage's first act.
+ * own forms, the removed forms, the whitespace edges, precedence, and ASI land
+ * with the parser; they are written out at the foot of this file, skipped, so
+ * the contract reads whole and unskipping them is what comes next.
  *
  * Everything is gated on `runtime-types`. Where the base grammar answers
  * differently with the feature off, the flag-off twin is asserted beside it:
@@ -124,9 +123,9 @@ test('with the feature off the new tokens are not tokens', () => {
 });
 
 /**
- * The parser's half of the same vector document, transcribed from
- * STAGE-A-lexical-tests.md. Each token fixes both bounds and whether an end
- * follows, which is what let the follow-set heuristic go: a bare `..` is now
+ * The parser's half of the lexical contract. Each token fixes both bounds and
+ * whether an end follows, which is what let the follow-set heuristic go: a bare
+ * `..` is now
  * unambiguously the from form, so `a..b` needs no rejection code -- the range
  * finishes and the dangling operand is the ordinary unexpected-token error.
  */

@@ -2,15 +2,15 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
- * proposal-runtime-types, PLAN-constructor-returns.md phase 2.
+ * proposal-runtime-types: the SCOPE of the constructor-return rule.
  *
- * Phase 1 refused `return <expr>` in a TYPED class's constructor (OQ1-E). This
- * file pins WHERE that line falls (OQ2-B): a typed class is one carrying at
- * least one type annotation, and an untyped class keeps JavaScript's semantics
- * unchanged. The second half is what keeps the proposal a superset, so it is
- * asserted here rather than assumed.
+ * `return <expr>` is refused in a TYPED class's constructor. This file pins
+ * WHERE that line falls: a typed class is one carrying at least one type
+ * annotation, and an untyped class keeps JavaScript's semantics unchanged. The
+ * second half is what keeps the proposal a superset, so it is asserted here
+ * rather than assumed.
  *
- * The measurement that justifies the line, run in phase 2:
+ * The measurement that justifies the line:
  *
  *   test262 `language/statements/class` - 4367 files, 205 constructors, 25 with
  *   a `return <expr>`. Of those 25, three are `new Proxy(this, ...)` and about
@@ -51,7 +51,7 @@ test('an UNTYPED class keeps JavaScript semantics - the superset property', () =
   // risk, not just this one.
   expect(evaluated('class C { constructor() { return { a: 1 }; } }'
     + ' String(JSON.stringify(new C()));')).toBe('{"a":1}');
-  // including the Proxy idiom, the one pattern OQ1-E costs a typed class
+  // including the Proxy idiom, the one pattern the rule costs a typed class
   expect(evaluated('class C { constructor() { return new Proxy(this, {}); } }'
     + ' String(typeof new C());')).toBe('object');
   // and the primitive returns test262 uses to assert JavaScript discards them
@@ -68,9 +68,8 @@ test('a decorator does not make a class typed', () => {
 });
 
 test('a class is typed when an INSTANCE FIELD is annotated - #sec-typed-classes', () => {
-  // Phase 2 decided this line independently and drew it wider: any annotation
-  // anywhere. Phase 4 corrected it, because #sec-typed-classes ALREADY defines
-  // the term - "at least one of its public or private fields carries a type
+  // An earlier reading drew this line wider: any annotation anywhere. That was
+  // corrected, because #sec-typed-classes ALREADY defines the term - "at least one of its public or private fields carries a type
   // annotation" - and that definition has teeth elsewhere: a typed class "is
   // automatically sealed and its prototype frozen", implemented as
   // [[SealInstances]]. The wider reading gave one term two meanings, with the
@@ -120,13 +119,13 @@ test('the annotation may come AFTER the constructor', () => {
 });
 
 test('a class EXPRESSION is caught at the `return`, not at its binding', () => {
-  // This case already failed before phase 1, but at the wrong place and for the
-  // wrong reason: `const K = class { ... }; let k: K = new K();` threw
+  // This case already failed before the rule, but at the wrong place and for
+  // the wrong reason: `const K = class { ... }; let k: K = new K();` threw
   // "[object Object] is not assignable to nominal" at the ASSIGNMENT, because a
   // class expression's type resolves through its binding and so never got the
   // false static proof that let the declaration form through (F122).
   //
-  // So phase 1 does not add enforcement here; it MOVES the diagnostic to the
+  // So the rule adds no enforcement here; it MOVES the diagnostic to the
   // offence and makes it independent of whether the value is ever assigned.
   expectEarlyError('const K = class { x: uint8 = 1; constructor() { return { a: 1 }; } };');
   // no binding, no assignment, still refused

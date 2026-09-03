@@ -497,7 +497,8 @@ test("select's element type is independent of the mask's", () => {
 
 test('a mask is an ordinary vector', () => {
   // It indexes, permutes, and carries component accessors like any other, which
-  // follows from the earlier phases rather than needing a rule.
+  // follows from the vector rules already covered rather than needing one of
+  // its own.
   const P = 'type Mask = vector.<uint.<1>, 4>; const m: Mask = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1); ';
   expect(evaluated(`${P}String(m.x);`)).toBe('1');
   expect(evaluated(`${P}String(m[2]);`)).toBe('0');

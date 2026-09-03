@@ -1,8 +1,6 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
-// PLAN-in-place-conversion-non-writable.md phase 1, W1.
-//
 // An object type's boundary CONVERTS ITS MEMBERS IN PLACE - "a boundary is where
 // a value acquires a type it did not have", and the alternative of building a new
 // object "would DISCARD" the properties the type does not declare. That rationale
@@ -15,7 +13,7 @@ import { evaluated, expectThrown, run } from '../harness.mts';
 // standing in for a type judgment, naming neither the type nor the reason, and
 // arriving at run time.
 //
-// W1 refuses instead, and says why. Chosen over copying because a copy would
+// The boundary refuses instead, and says why. Chosen over copying because a copy would
 // break the identity the rationale relies on, and would make sharing depend on
 // the argument's property descriptors.
 
@@ -63,7 +61,7 @@ test('the fault is gone, whatever makes the property unwritable', () => {
 });
 
 test('a COMPOSITE cannot be narrowed at a boundary, and says so', () => {
-  // The sharpest consequence of W1, because both sides are the design's own
+  // The sharpest consequence of that refusal, because both sides are the design's own
   // constructs: a composite is frozen from its creation (#sec-composite-types),
   // so a member needing conversion cannot acquire the narrower type.
   //
@@ -107,7 +105,7 @@ test('the write-back still does the job it was added for', () => {
 
 test('the two facts the in-place rationale rests on still hold', () => {
   // Measured rather than trusted, because they are the argument against copying
-  // (W3) and therefore the argument for this refusal existing at all.
+  // and therefore the argument for this refusal existing at all.
   //
   // The callee receives the SAME object...
   expect(evaluated('let o = { n: 1 }; function f(x: { n: uint32 }) { return x; }'

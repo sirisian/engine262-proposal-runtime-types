@@ -33,8 +33,7 @@ test('a class satisfies an interface it declares', () => {
 });
 
 test('a class does NOT satisfy an interface it never declared', () => {
-  // REWRITTEN by PLAN-interface-satisfaction.md phase 2, and the case it was
-  // protecting is kept below rather than lost.
+  // REWRITTEN, and the case it was protecting is kept below rather than lost.
   //
   // It asserted the opposite: that a class with the right shape satisfies an
   // interface it never mentions. #sec-issubtype relates a class to an interface
@@ -43,11 +42,10 @@ test('a class does NOT satisfy an interface it never declared', () => {
   // no structural form to be compared by: "a class states a construction and an
   // identity as well as a shape, and it is the identity that its type is for".
   //
-  // The decided rule (ANALYSIS-class-interface-satisfaction.md, D-3) is that an
-  // OBJECT TYPE asks what a value HAS and an INTERFACE asks what a class
-  // PROMISED. The ergonomic objection this test was defending against - that a
-  // class could then reach no structural position - is answered by phase 1, and
-  // that is the second assertion here.
+  // The rule is that an OBJECT TYPE asks what a value HAS and an INTERFACE asks
+  // what a class PROMISED. The ergonomic objection this test was defending
+  // against - that a class could then reach no structural position - is
+  // answered by the structural half, and that is the second assertion here.
   expectError(`
     interface I { a: string; }
     class D { a: string = 's'; }
@@ -99,8 +97,7 @@ test('a structural check reads each member once', () => {
 });
 
 test('an interface and a class coexist in one script', () => {
-  // Asserted because an earlier draft of the plan reported this as a blocking
-  // bug. It was not: the failure reproduced only in a harness evaluating
+  // Asserted because an earlier draft reported this as a blocking bug. It was not: the failure reproduced only in a harness evaluating
   // several scripts in ONE realm, where a second `interface I` collides with
   // the first. The test is kept so the claim stays falsifiable.
   expect(ok(`
@@ -114,10 +111,9 @@ test('an interface and a class coexist in one script', () => {
 });
 
 test('a class instance reaches an object-typed position by having the members', () => {
-  // PLAN-interface-satisfaction.md phase 1, implementing D-3: an object type
-  // asks what a value HAS. A class instance has its members, so it reaches an
-  // object-typed position; what it does not reach without saying so is an
-  // INTERFACE, which asks what a class promised (phase 2).
+  // An object type asks what a value HAS. A class instance has its members, so
+  // it reaches an object-typed position; what it does not reach without saying
+  // so is an INTERFACE, which asks what a class promised.
   //
   // This row was refused STATICALLY while the same value passed through `any`
   // at run time and `is` agreed with the run time - the checker and the run
@@ -167,9 +163,9 @@ test('the implements clause is walked up the base chain', () => {
 });
 
 test('an empty interface is satisfied by a value, not by any class', () => {
-  // Q3 of the plan, decided deliberately: an empty interface is satisfied by
-  // any value with no required members, which is what falls out of the
-  // structural half. Under D-3 a CLASS still has to say so - which is what
+  // Decided deliberately: an empty interface is satisfied by any value with no
+  // required members, which is what falls out of the structural half. A CLASS
+  // still has to say so - which is what
   // keeps `implements` meaningful for a marker interface, the case TypeScript's
   // `{}` cannot express.
   expect(evaluated('interface Marker {} String(Reflect.isAssignable(type { q: string }, type Marker));')).toBe('true');
@@ -180,7 +176,7 @@ test('an empty interface is satisfied by a value, not by any class', () => {
 });
 
 test('a class expression carries the same relations as a declaration', () => {
-  // PLAN-nominal-records.md v2 task A. `check.mts` registered class nodes by
+  // `check.mts` registered class nodes by
   // NAME and only for |ClassDeclaration|, so `classInstanceType` never ran for
   // an expression, nothing was published, and the runtime record built at
   // ClassExpression and NamedEvaluation carried neither [[Base]] nor
@@ -194,7 +190,7 @@ test('a class expression carries the same relations as a declaration', () => {
   // would have split them silently.
   expect(evaluated(`${base} const Named = class N extends Base { c: uint8 = 3; }; `
     + 'String(Reflect.isAssignable(type Named, type Base));')).toBe('true');
-  // And into an object type, which is phase 1's rule applied to the same record.
+  // And into an object type, the structural rule applied to the same record.
   expect(evaluated(`${base} const Loose = class { a: uint8 = 1; }; `
     + 'String(Reflect.isAssignable(type Loose, type { a: uint8 }));')).toBe('true');
   // A class expression that declares `implements` satisfies the interface - the
@@ -210,7 +206,7 @@ test('a class expression carries the same relations as a declaration', () => {
 });
 
 test('a recursive interface terminates against a matching object type', () => {
-  // PLAN-nominal-records.md v2 task B. `assumed` compared assumption pairs by
+  // `assumed` compared assumption pairs by
   // IDENTITY, and for a nominal pair the thing that recurs is the DECLARATION:
   // comparing an interface walks its structural form, whose members reach the
   // interface again through records built along the way, which are not the same
@@ -221,8 +217,8 @@ test('a recursive interface terminates against a matching object type', () => {
 });
 
 test('two interfaces relate by width, and only where they are two', () => {
-  // PLAN-nominal-records.md v2 task B, completed. The step existed in
-  // #sec-issubtype and could not be routed: it blew the stack. Two things were
+  // The step existed in #sec-issubtype and could not be routed: it blew the
+  // stack. Two things were
   // wrong, and only the first was diagnosed at the time.
   //
   // `assumed` compared assumption pairs by IDENTITY, which a recursive
@@ -250,13 +246,13 @@ test('two interfaces relate by width, and only where they are two', () => {
 });
 
 test('a method-bearing interface is satisfiable through reflection', () => {
-  // PLAN-nominal-records.md v2 item 2.3. An interface's method member resolved
+  // An interface's method member resolved
   // to `{ Kind: 'function', Signatures: [] }` in the RUNTIME record - a stub,
   // never filled - so every comparison against it failed and
   // `Reflect.isAssignable` answered *false* for a method-bearing interface,
   // from a declaring class and from a matching object type alike, while the
-  // checker accepted all of them. The same family as D26: the runtime record
-  // carrying less than the checker's.
+  // checker accepted all of them. The same family of defect throughout: the
+  // runtime record carrying less than the checker's.
   const iface = 'interface IM { m(): uint8 } ';
   expect(evaluated(`${iface} class Impl implements IM { m(): uint8 { return (0 := uint8); } } `
     + 'String(Reflect.isAssignable(type Impl, type IM));')).toBe('true');

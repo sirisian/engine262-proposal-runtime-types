@@ -58,7 +58,7 @@ test('a class field reaches it too', () => {
 });
 
 test('a method may carry a where clause naming its class\'s parameters', () => {
-  // PLAN-where-on-methods.md D2. #sec-type-annotations, as amended: a method
+  // #sec-type-annotations, as amended: a method
   // takes |WhereClauses| the same way a function declaration does. The rule
   // needs no restatement - "checked at each specialization once its parameters
   // are bound" - because a generic method specializes as a generic function
@@ -86,7 +86,7 @@ test('a method may carry a where clause naming its class\'s parameters', () => {
 });
 
 test('a checked contract names the builder, the arguments and the clause', () => {
-  // PLAN-where-on-methods.md D1, the VERIFIED half. #sec-checked-contracts: "a
+  // The VERIFIED half. #sec-checked-contracts: "a
   // clause that is falsy is a type error naming the builder, the arguments it
   // was given, and the clause" - THREE things, and a DIFFERENT requirement from
   // the generic bound's, which is "reported against the clause's source".
@@ -111,19 +111,18 @@ test('a checked contract names the builder, the arguments and the clause', () =>
   expectThrown('const x = return;');
 });
 
-test('the where positions the plan claimed were covered', () => {
-  // PLAN-where-on-methods.md §6, audited. Three of its required tests had no
-  // assertion, and writing them found one behaviour it had asserted wrongly.
+test('the where positions previously claimed as covered', () => {
+  // Audited. Three of the required rows had no assertion, and writing them
+  // found one behaviour that had been asserted wrongly.
   //
   // An ABSTRACT method carries a clause, since `simd.md` writes them bodiless.
   expect(ok('abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; }')).toBe(true);
-  // A class-level `where` is still refused - nothing writes one, and D3 leaves
-  // the dependent-record form to its extension.
+  // A class-level `where` is still refused - nothing writes one, and the
+  // dependent-record form is left to its extension.
   expectThrown('class C<N: uint32> where N > 0 { }');
   // A TYPE ALIAS clause parses.
   expect(evaluated('type P<N: uint32> = uint32 where N > 0; let x: P.<3> = (1 := uint32); String(x);')).toBe('1');
-  // FIXED (PLAN-alias-where-enforcement.md, OUTSTANDING item K). This was
-  // recorded as a MEASUREMENT while the alias position parsed its clause and
+  // FIXED. This was recorded as a MEASUREMENT while the alias position parsed its clause and
   // never ran it - "so the day the alias position enforces, the test says what
   // changed". It did: this assertion is the one that failed when the fix landed.
   //
@@ -142,12 +141,12 @@ test('the deferred application record kind exists and relates by identity', () =
   // interning, and two different calls are unrelated until they evaluate" -
   // since without interning two spellings of one call would compare unequal.
   //
-  // Nothing PRODUCES one yet (step 2, see the plan), so what is asserted here is
-  // that the kind's arrival disturbs nothing: every existing relation holds, and
+  // Nothing PRODUCES one yet, so what is asserted here is that the kind's
+  // arrival disturbs nothing: every existing relation holds, and
   // a computed type over a BOUND parameter still evaluates rather than
   // deferring, which is the case step 2 must not capture.
-  // PLAN-where-on-methods.md, unblocking D1's assumed half. Steps 1 and 3 of the
-  // five: the ~application~ Type Record kind, and the IsSubtype arm.
+  // Unblocking the assumed half. Steps 1 and 3 of the five: the ~application~
+  // Type Record kind, and the IsSubtype arm.
   //
   // #sec-computed-types: "A deferred ~application~ is a subtype only of itself
   // and of the `any` type. Before specialization nothing finer than identity is
@@ -167,7 +166,7 @@ test('the deferred application record kind exists and relates by identity', () =
 });
 
 test('a checked contract is ASSUMED before specialization', () => {
-  // PLAN-where-on-methods.md D1, the assumed half. #sec-checked-contracts: a
+  // The assumed half. #sec-checked-contracts: a
   // contract "is ASSUMED: before specialization, where the application is
   // deferred and no result exists, the checker takes each clause as a known fact
   // about the ~application~ Type Record. The second is sound because of the
@@ -195,7 +194,7 @@ test('a checked contract is ASSUMED before specialization', () => {
 });
 
 test('a violated alias where clause reports against the clause', () => {
-  // PLAN-alias-where-enforcement.md phase 3. #sec-generic-where: where the
+  // #sec-generic-where: where the
   // expression is false "that application is a type error, reported against the
   // CLAUSE'S SOURCE" - not against the application that failed it.
   //
@@ -211,7 +210,7 @@ test('a violated alias where clause reports against the clause', () => {
   expect(completion.Type).toBe('throw');
   const stack = String((completion.Value as { stack?: string })?.stack ?? '');
   expect(stack === '' || /:1:/.test(stack)).toBe(true);
-  // And the message matches the function form's, because it is ONE rule (Q2) -
+  // And the message matches the function form's, because it is ONE rule -
   // a reader who has met it from `g.<0>()` should meet it from `Pos.<0>`.
   const messageOf = (src: string) => {
     const c = run(src) as unknown as { Value: { properties?: Map<unknown, { Value?: { stringValue(): string } }> } };
@@ -228,16 +227,14 @@ test('a violated alias where clause reports against the clause', () => {
 });
 
 test('an alias where clause is an EARLY error and costs nothing per call', () => {
-  // PLAN-alias-where-enforcement.md phases 1-3, tests P1-P3 and row 13.
-  //
   // #sec-generic-where puts a violated clause at the specialization, and
   // #sec-type-errors makes a determinable one an Early Error: "a source text
   // that contains one is rejected rather than evaluated".
   const Pos = 'type Pos<N: uint32> = uint32 where N > 0; ';
-  // P1: rejected BEFORE evaluation - a violated application in a source with
+  // Rejected BEFORE evaluation - a violated application in a source with
   // side effects runs none of them.
   expectThrown(`${Pos} globalThis.ran = true; let y: Pos.<0> = (1 := uint32);`);
-  // P2: dead code is still refused. An Early Error checks the SOURCE, not the
+  // Dead code is still refused. An Early Error checks the SOURCE, not the
   // path taken - the run-time backstop alone would never see this.
   expectThrown(`${Pos} if (false) { let x: Pos.<0> = (1 := uint32); }`);
   // Row 13: a satisfied application must not mask a violated one. The early

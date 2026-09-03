@@ -11,9 +11,9 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * #sec-strict-mode-code makes all class code strict and a module's besides - so
  * the resolve killed the HOST rather than raising any guest error.
  *
- * `class C {}` alone in a module was enough. KNOWN-DIVERGENCES.md D13 attributed
- * the crash to the replacement-decorator pipeline, which merely happened to be
- * the program that reached it.
+ * `class C {}` alone in a module was enough. The crash was once attributed to
+ * the replacement-decorator pipeline, which merely happened to be the program
+ * that reached it.
  */
 function evaluateModule(source: string): void {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] } as never));

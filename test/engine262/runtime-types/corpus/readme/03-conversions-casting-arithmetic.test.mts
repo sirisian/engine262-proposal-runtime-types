@@ -57,18 +57,18 @@ test('Conversions: a checked boundary reports range and type failures differentl
   // a non-numeric source has no conversion to attempt: still a TypeError
   expectThrownKind('function g(){return {};} let a: uint8 = g();', 'TypeError');
   expectThrownKind('function g(){return "abc";} let a: uint8 = g();', 'TypeError');
-  // An EARLY error now, not a catchable one (D52): `undefined` and `null` have
+  // An EARLY error now, not a catchable one: `undefined` and `null` have
   // static types and `IsAssignable` refuses them at `uint8`. The rows above
   // still throw at RUN TIME because an unannotated function's return type is not
   // inferred at the call - `return "abc"` is accepted statically and refused
-  // when it runs - which is D54, not this. So these two values are checked
+  // when it runs - a separate rule. So these two values are checked
   // EARLIER than their neighbours here.
   // `null` and `undefined` are SELF-DESCRIBING contributions: each type has one
   // value, so knowing it says nothing a program annotated, and
   // #sec-anchored-contributions anchors only what "derives from a DECLARED
   // type". An unannotated function returning one therefore does not participate
   // in inference, its call has the ~any~ Static Type, and the check belongs at
-  // the boundary - where it still throws (D105).
+  // the boundary - where it still throws.
   expectThrownKind('function g(){return undefined;} let a: uint8 = g();', 'TypeError');
   // and a value that fits is simply the value
   expect(evaluated('function g(){return 5;} let a: uint8 = g(); String(Number(a));')).toBe('5');
@@ -205,7 +205,7 @@ test('Conversions: a numeric annotation accepts only a numeric value', () => {
     expectThrownKind(`function g(){return "abc";} let a: ${t} = g();`, 'TypeError');
     // the quiet ones this closes
     expectThrownKind(`function g(){return "";} let a: ${t} = g();`, 'TypeError');
-    // An EARLY error now (D52), where its neighbours remain run-time throws.
+    // An EARLY error now, where its neighbours remain run-time throws.
     expectThrownKind(`function g(){return null;} let a: ${t} = g();`, 'TypeError');
     expectThrownKind(`function g(){return true;} let a: ${t} = g();`, 'TypeError');
     expectThrownKind(`function g(){return [7];} let a: ${t} = g();`, 'TypeError');
@@ -241,7 +241,7 @@ test('Conversions: a string annotation accepts what has a canonical text', () =>
   expect(evaluated('function g(){return true;} let s: string = g(); s;')).toBe('true');
   expect(evaluated('function g(){return "x";} let s: string = g(); s;')).toBe('x');
   // and refuses the ones whose text is a diagnostic
-  // Both EARLY errors now (D52).
+  // Both EARLY errors now.
   expectThrownKind('function g(){return undefined;} let s: string = g();', 'TypeError');
   expectThrownKind('function g(){return null;} let s: string = g();', 'TypeError');
   expectThrownKind('function g(){return {};} let s: string = g();', 'TypeError');

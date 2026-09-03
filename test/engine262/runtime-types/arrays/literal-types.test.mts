@@ -15,8 +15,8 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * and "not intended" is written down rather than rediscovered:
  *
  *   - what an ANNOTATION already makes work, which must not regress;
- *   - what a bare literal does today, marked `test.fails` where the plan says
- *     it should change;
+ *   - what a bare literal does today, marked `test.fails` where it is expected
+ *     to change;
  *   - what is deliberately unchanged, because a binding without an annotation
  *     has the ~any~ Static Type whatever its initializer.
  */
@@ -131,7 +131,7 @@ test('a bare literal has the type of its elements joined', () => {
   expectOk('let u: [].<uint8> = [];');
   // An empty literal reports nothing, so the boundary decides and names the
   // VALUE rather than a type.
-  // An EMPTY array literal is refused STATICALLY now (D58b), where it used to
+  // An EMPTY array literal is refused STATICALLY now, where it used to
   // reach the run-time boundary and report the VALUE - `[object Array] is not
   // assignable to "string"`. The static message names the form instead, which is
   // what a reader of the source can act on.

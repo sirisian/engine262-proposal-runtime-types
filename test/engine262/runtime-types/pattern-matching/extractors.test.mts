@@ -56,7 +56,7 @@ test('`Composite` is the parenthesis-free membership form', () => {
 });
 
 test('IsOfType and IsSubtype now AGREE about composites', () => {
-  // A gap this phase surfaced: `let c: Composite = Composite({x: 1})` was
+  // A gap surfaced here: `let c: Composite = Composite({x: 1})` was
   // accepted - the assignment goes through IsSubtype - while
   // `Composite({x: 1}) is Composite` answered *false*, because IsOfType had no
   // composite case. One relation said yes and the other no about the same pair.

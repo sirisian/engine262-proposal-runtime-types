@@ -135,9 +135,9 @@ test('overloads: an unannotated METHOD has no signatures; a constructor always d
   // here rather than decided by a constructor fix." That was right to refuse a
   // constructor-shaped answer to a general question.
   //
-  // PLAN-constructor-returns.md OQ3-C answers the CONSTRUCTOR half, and only
-  // that half, on a ground that does not generalise: after OQ1-E a typed class
-  // may not `return` anything but `this`, so a construction yields its class BY
+  // The CONSTRUCTOR half is answered, and only that half, on a ground that does
+  // not generalise: a typed class may not `return` anything but `this`, so a
+  // construction yields its class BY
   // RULE. A constructor's signature is therefore DERIVED - parameters are
   // syntactically present, the result is fixed, nothing is guessed - where a
   // method's would be INFERRED, which is the thing the unannotated rule
@@ -158,7 +158,7 @@ test('overloads: an unannotated METHOD has no signatures; a constructor always d
   expect(evaluated(has('constructor(a: uint8) {}', 'constructor'))).toBe('1');
   // the derived arm carries the parameter's NAME and `any` for its type, and no
   // `return` slot - #sec-published-return-types: "a constructor has none to
-  // infer", and after OQ1-E none can be written either
+  // infer", and none can be written either
   expect(evaluated("class A { constructor(a) {} }"
     + " const s = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor').signatures[0];"
     + " String(s.parameters[0].name + ':' + (s.parameters[0].type === any) + ':' + (s.return === undefined));")).toBe('a:true:true');

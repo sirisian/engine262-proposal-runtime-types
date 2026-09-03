@@ -1,9 +1,8 @@
-// PLAN-variadic-and-named-generic-arguments.md Phase 6, rung one: a variadic
-// parameter is BOUND FROM A CALL'S ARGUMENTS wherever a scalar parameter is
+// Rung one: a variadic parameter is BOUND FROM A CALL'S ARGUMENTS wherever a
+// scalar parameter is
 // (spec.emu #sec-variadic-parameters, #sec-inference-through-results) - through
 // a rest parameter typed by it, a whole-tuple parameter, a written tuple
-// pattern - with explicit arguments binding by the shared assignment. Cases
-// carry their Appendix A.G numbers.
+// pattern - with explicit arguments binding by the shared assignment.
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 

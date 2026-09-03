@@ -7,7 +7,7 @@ import { expectBuilderTrue, kit } from './harness.mts';
  *
  * The remaining medium challenges. Two of the three depend on primitives that
  * are not present, so they are recorded as pending with the named missing
- * primitive rather than approximated (per the plan's principle).
+ * primitive rather than approximated.
  */
 
 // 12 - Chainable Options - the corpus builds this as a typed `interface

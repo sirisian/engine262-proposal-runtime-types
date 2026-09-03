@@ -6,8 +6,8 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * binding that merely HOLDS a value does not become one, however precisely that
  * value's type is known.
  *
- * `PLAN-Q3-value-binding-as-type.md`. The engine used to admit some of them,
- * because `isTypeObject` tested only for the presence of a [[TypeRecord]] slot
+ * The engine used to admit some of them, because `isTypeObject` tested only
+ * for the presence of a [[TypeRecord]] slot
  * and a typed primitive carries one - that is how `RuntimeTypeOf` reports the
  * type of `(5 := uint8)`. The result was a feature nobody wrote and nobody could
  * predict: `const q: uint8 = 1; let v: q = 2;` resolved, `const s: string = "a";

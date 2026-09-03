@@ -312,16 +312,16 @@ test('the loop rule refuses a length change at the operation', () => {
 });
 
 test('a standalone reference survives growth that does not relocate', () => {
-  // S1: the push fit in the existing allocation, so nothing moved
+  // The push fit in the existing allocation, so nothing moved
   expect(evaluated(`${soa} const ref e = s[0]; s.push({ a: 2, b: 2.5 }); String(e.a);`)).toBe('1');
   // and a capacity reserved up front is exactly how a program avoids the move
   expect(evaluated('class P { a: uint8; } const s = SoA.withCapacity.<P>(8); s.push({ a: 1 }); const ref e = s[0]; s.push({ a: 2 }); String(e.a);')).toBe('1');
 });
 
 test('relocation invalidates a standalone reference, caught at the next use', () => {
-  // S2: growth past the allocation moves every column; the read is refused
+  // Growth past the allocation moves every column; the read is refused
   expectThrownKind(`${soa} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2.5 }); e.a;`, 'TypeError');
-  // S4: a write through the stale reference is refused too
+  // A write through the stale reference is refused too
   expectThrownKind(`${soa} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2.5 }); e.a = 7;`, 'TypeError');
   // the capacity operations participate, which is the case no length rule sees
   expectThrownKind(`${soa} const ref e = s[0]; s.reserve(64); e.a;`, 'TypeError');
@@ -461,7 +461,7 @@ test('the liveness rules apply to an SoA borrow however it was taken', () => {
   expectThrownKind(`${soaP} for (const ref p of s) { s.push({ a: 9, b: 9 }); }`, 'TypeError');
 });
 
-// -- B3: a typed array satisfies its own type, so a boundary checks not copies --
+// -- a typed array satisfies its own type, so a boundary checks not copies ----
 test('a typed array passes a typed boundary without being copied', () => {
   // a typed array reports a TYPED length, and membership used to reject it for
   // that alone - so every typed boundary rebuilt the array instead of passing
@@ -489,7 +489,7 @@ test('a plain array still propagates into a new typed array', () => {
   expect(evaluated('const a: [].<uint8> = []; a.push(65); String(a[0] is uint8);')).toBe('true');
 });
 
-// -- #sec-typed-destructuring: the parenthesized member (B1) -------------------
+// -- #sec-typed-destructuring: the parenthesized member -----------------------
 test('an object pattern member may carry a type in parentheses', () => {
   // `{ a: uint8 }` already means rename-to-uint8, so the annotation goes in
   // parentheses and the rename colon stays free
@@ -518,7 +518,7 @@ test('a ref member borrows the property location on the destructured object', ()
   expectThrown('let o = { a: 1 }; function g({ (ref a: int32) }) { } g(o);');
 });
 
-// -- #sec-reference-liveness: relocation for a growable [].<T> (B4) -----------
+// -- #sec-reference-liveness: relocation for a growable [].<T> ---------------
 test('a growable typed array has a capacity that reserve can grow', () => {
   expect(evaluated('const a: [].<uint32> = [1, 2]; String(a.capacity >= 2);')).toBe('true');
   expect(evaluated('const a: [].<uint32> = [1]; a.reserve(64); String(a.capacity >= 64);')).toBe('true');

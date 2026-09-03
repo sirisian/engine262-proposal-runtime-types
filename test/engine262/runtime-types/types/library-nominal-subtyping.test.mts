@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// OQ-library-nominal-subtyping.md D2. The built-in ERROR hierarchy.
+// The built-in ERROR hierarchy.
 //
 // `TypeError` was not a subtype of `Error`, and the engine disagreed with
 // itself: `new TypeError('x') is Error` and `instanceof` both answered *true*
@@ -131,7 +131,7 @@ test('extending a library nominal relates to THAT one and no other', () => {
 // `libraryExtends` is the ONE place the built-in hierarchy is stated, and it is
 // stated by hand: the alternative, reading `%TypeError.prototype%` off the realm,
 // was rejected because a relation derived from a realm answers differently in
-// different ones and the chain is mutable (OQ-library-nominal-subtyping.md, D3).
+// different ones and the chain is mutable.
 //
 // A hand-written table can drift from the realm it describes, and nothing else
 // would notice: a library global added with a heritage, or an entry mistyped,
