@@ -584,6 +584,26 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
   if (!target) {
     return false;
   }
+  // #sec-where-clauses: a dependent record type's predicate is a RUNTIME fact
+  // about the value - `{ a: uint8 } where this.a > 0` refuses `{ a: 0 }` - so
+  // the boundary check can never be elided for a type that declares one,
+  // however completely the structure was proved: an initializer whose members
+  // were already typed (`{ a: (0 := uint8) }`) matched structurally, the check
+  // was elided, and the predicate never ran.
+  const declaresPredicate = (t: TypeRecord | null | undefined): boolean => {
+    if (!t) {
+      return false;
+    }
+    const decl = (t as { Declaration?: { WhereClauses?: readonly unknown[] | null } }).Declaration;
+    if (decl?.WhereClauses && decl.WhereClauses.length > 0) {
+      return true;
+    }
+    const own = (t as { WhereClauses?: readonly unknown[] | null }).WhereClauses;
+    return !!(own && own.length > 0);
+  };
+  if (declaresPredicate(target)) {
+    return true;
+  }
   if (target.Kind !== 'nominal') {
     return false;
   }
