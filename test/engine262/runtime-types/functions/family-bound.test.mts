@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * proposal-runtime-types: the FUNCTION family's bound (F136).
+ * proposal-runtime-types: the FUNCTION family's bound.
  *
  * Every family of this proposal has a BOUND - a type that admits every member
  * of the family and nothing else - and two of the three could be written:
@@ -48,7 +48,7 @@ test('and admits nothing outside the family', () => {
   expect(evaluated('String(Reflect.isAssignable(uint8, type (...a: [].<any>) => any));')).toBe('false');
 });
 
-test('F136: `any` in a parameter position is bidirectional, as it is elsewhere', () => {
+test('`any` in a parameter position is bidirectional, as it is elsewhere', () => {
   // The defect, and it is owed a fix regardless of bounds: a function could not
   // be passed where an `any`-parameterised signature was declared.
   expect(evaluated('String(Reflect.isAssignable(type (uint8) => void, type (any) => any));')).toBe('true');
@@ -80,10 +80,10 @@ test('the bound composes, which a bare top type could not', () => {
     + ' type (...a: [].<any>) => string));')).toBe('false');
 });
 
-test('F136 reaches `this` too, which is contravariant "as a parameter is"', () => {
+test('the bound reaches `this` too, which is contravariant "as a parameter is"', () => {
   // Added on a re-check, which found the fix had been made and never tested.
-  // #sec-this-adoption says a signature's [[ThisType]] "is
-  // contravariant, as a parameter is", so it inherits the parameter rule - and
+  // #sec-this-adoption says a signature's [[ThisType]] "is contravariant, as a
+  // parameter is", so it inherits the parameter rule - and
   // it inherited the defect with it: `this: uint8` was refused where
   // `this: any` was declared, while the mirror passed, for exactly the reason
   // the parameter step failed.

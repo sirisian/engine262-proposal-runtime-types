@@ -2,14 +2,14 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * F194. `typeprogramming.md` §3.3 promises a
+ * `typeprogramming.md` §3.3 promises a
  * Type Object a canonical `toString` — *"the canonical source form —
  * `String(type 'a' | 'b')` is `"'a' | 'b'"` — because builders throwing authored
  * `TypeError`s need to print types"*. Nothing implemented it, so every type
  * stringified as `[object Type]`.
  */
 
-test('F194: the canonical form is the source text, for every kind', () => {
+test('the canonical form is the source text, for every kind', () => {
   // The literal case is the one `displayType` gets wrong: it is a DIAGNOSTIC
   // formatter and names the KIND of thing that was wrong — "a literal type of
   // string" — which is right in an error and does not round-trip as source.
@@ -22,12 +22,12 @@ test('F194: the canonical form is the source text, for every kind', () => {
   expect(evaluated('String(type never);')).toBe('never');
 });
 
-test('F194: the reported program shows its type', () => {
+test('the reported program shows its type', () => {
   expect(evaluated('type A = { x: int32 }; type B = { x: null }; type C = A & B;'
     + ' String(C);')).toBe('{ x: int.<32> } & { x: null }');
 });
 
-test('F194: the canonical form is valid source that names the same type', () => {
+test('the canonical form is valid source that names the same type', () => {
   // The round trip is what separates a canonical form from a description: the
   // output must be text a developer can paste back.
   expect(evaluated(`type R = 'a' | 'b'; String(R === type 'a' | 'b');`)).toBe('true');
@@ -36,7 +36,7 @@ test('F194: the canonical form is valid source that names the same type', () => 
     + ` String(R === type string.<{ brand: 'B' }>);`)).toBe('true');
 });
 
-test('F194: a recursive type does not hang', () => {
+test('a recursive type does not hang', () => {
   // The back-edge prints as the type it closes on rather than expanding.
   expect(evaluated('type Node = { next: Node | null }; String(String(Node).length > 0);')).toBe('true');
 });

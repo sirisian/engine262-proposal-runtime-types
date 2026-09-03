@@ -824,7 +824,7 @@ test('an inference anchored in a nested list still publishes', () => {
   // identically, so the test is purely "declared in a nested statement list".
   expect(accepts(`{ var s: string = "s"; ${G} }`)).toBe(false);
 
-  // F56: the scan still runs BEFORE the list is walked, so a call above its
+  // The scan still runs BEFORE the list is walked, so a call above its
   // declaration is still an Early Error. Only the PUBLISH moved.
   expect(accepts('f(300); function f(v: uint8) {}')).toBe(false);
 

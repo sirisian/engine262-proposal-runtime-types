@@ -65,7 +65,7 @@ test('a switch decides only with a default that no clause escapes', () => {
 // --- D. Out of scope ---------------------------------------------------------
 
 test('nothing is promised without a written return annotation', () => {
-  // An inferred return type is not published (F185), so it is not a promise the
+  // An inferred return type is not published, so it is not a promise the
   // function made and does not bind here.
   expect(evaluated('function f(a: uint8) { if (a) { return a; } }'
     + ' String(f((0 := uint8)) === undefined);')).toBe('true');

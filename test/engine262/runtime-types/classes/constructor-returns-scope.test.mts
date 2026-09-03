@@ -83,7 +83,7 @@ test('a class is typed when an INSTANCE FIELD is annotated - #sec-typed-classes'
 test('and NOT typed by an annotation that says nothing about an instance', () => {
   // The cost of the alignment, asserted rather than left to be discovered. A
   // class annotated only on a static field, a method, a getter, or a
-  // constructor parameter is not typed, so F122's hole stays open there.
+  // constructor parameter is not typed, so the hole stays open there.
   //
   // It is the right residual. The layout argument - the strongest one, and the
   // one specific to this proposal - is about what a construction PRODUCES, and
@@ -123,7 +123,7 @@ test('a class EXPRESSION is caught at the `return`, not at its binding', () => {
   // the wrong reason: `const K = class { ... }; let k: K = new K();` threw
   // "[object Object] is not assignable to nominal" at the ASSIGNMENT, because a
   // class expression's type resolves through its binding and so never got the
-  // false static proof that let the declaration form through (F122).
+  // false static proof that let the declaration form through.
   //
   // So the rule adds no enforcement here; it MOVES the diagnostic to the
   // offence and makes it independent of whether the value is ever assigned.

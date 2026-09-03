@@ -66,7 +66,7 @@ test('function runtime type: the two mechanisms now agree, in both directions', 
   expect(evaluated('function f() {} String(Reflect.typeOf(f) === type {});')).toBe('false');
 });
 
-test('F129: every unannotated callable no longer shares one type', () => {
+test('every unannotated callable no longer shares one type', () => {
   // The consequence a reader hits first, and the one that mentions nothing
   // about functions when it bites: every unannotated callable answered
   // `type {}`, so a Map keyed on `Reflect.typeOf` collapsed them all into one
@@ -95,12 +95,12 @@ test('a class constructor reports what it constructs', () => {
   // The constructor's BODY-inferred return is `void` - it returns nothing, and
   // a typed constructor may return nothing but `this`.
   // `void` is not what `new C(...)` produces, and reporting it left every class
-  // with the same constructor parameters sharing ONE type: F129 fixed for
-  // functions and still live for classes.
+  // with the same constructor parameters sharing ONE type: fixed for functions
+  // and still live for classes.
   expect(evaluated('class C { x: uint8 = 1; constructor(a: uint8) {} }'
     + ' const s = Reflect.getReflection(Reflect.typeOf(C)).signatures[0];'
     + ' String((s.parameters[0].type === uint8) + ":" + (s.return.type === type C));')).toBe('true:true');
-  // F129 for classes: two classes are two types, even with identical parameters
+  // The same for classes: two classes are two types, even with identical parameters
   expect(evaluated('class C { x: uint8 = 1; } class D { y: string = ""; }'
     + ' String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('true');
   expect(evaluated('class C { constructor(a: uint8) {} } class D { constructor(a: uint8) {} }'

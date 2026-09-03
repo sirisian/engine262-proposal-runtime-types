@@ -374,12 +374,12 @@ test('normal object', async () => {
 });
 
 test('runtime-types type objects', async () => {
-  // F193. A Type Object is CALLABLE - that is
-  // its construction boundary, `Email('a@b')` - so it matched `IsCallable` in
+  // A Type Object is CALLABLE - that is its construction boundary,
+  // `Email('a@b')` - so it matched `IsCallable` in
   // getInspector's ladder before any later case and rendered as a native
   // function. The reported repro is the intersection below.
   //
-  // The description is the canonical source form (F194), which `String(T)` also
+  // The description is the canonical source form, which `String(T)` also
   // calls, so the console line and the program agree.
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);

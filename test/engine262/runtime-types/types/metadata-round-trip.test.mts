@@ -19,9 +19,9 @@ import { evaluated, expectThrown } from '../harness.mts';
  * green against an implementation holding two Type Objects for one type.
  *
  * The defect it guards was one representation mismatch appearing at three
- * depths in turn, each hidden by the one above it - the record (F148), the
- * container (F154), the marker's own discriminant (F155). Each fix exposed the
- * next and each looked identical from outside.
+ * depths in turn, each hidden by the one above it - the record, the container,
+ * then the marker's own discriminant. Each fix exposed the next and each looked
+ * identical from outside.
  */
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ test('a brand round-trips: a Value leaf', () => {
 });
 
 test('a pattern round-trips: a marker leaf', () => {
-  // The case F153 filed. A pattern's metadata is a structural MARKER -
+  // A pattern's metadata is a structural MARKER -
   // `{ __pattern, source, flags }` - and a marker is a container, so it has to
   // survive the conversion as a plain record rather than as the ObjectValue the
   // node carried it in.
@@ -67,7 +67,7 @@ test('a SYMBOL-tagged brand round-trips, and its identity survives', () => {
   // no plain equivalent whose
   // identity survives a conversion, which is why leaves stay `Value`s - and
   // `SameValue` on two SymbolValues is what makes a symbol-tagged brand
-  // unforgeable (F147). A round trip that unwrapped the tag would silently make
+  // unforgeable. A round trip that unwrapped the tag would silently make
   // every symbol-tagged brand equal to every other.
   expect(evaluated("const s = Symbol('x');"
     + " const B = Reflect.makeType({ kind: 'parameterized', base: uint32, metadata: { brand: s } });"
@@ -141,7 +141,8 @@ test('the entry check refuses a metadata node that is not a plain record', () =>
   // The canonical form is a plain record with plain containers, and
   // nothing in the type system enforces it - the slot is declared `Value` and
   // holds something else behind a cast. This is the check that would have
-  // caught F154 at construction rather than in a round-trip test much later.
+  // caught the container mismatch at construction rather than in a round-trip
+  // test much later.
   expectThrown("Reflect.makeType({ kind: 'parameterized', base: uint32, metadata: 'not a record' });");
 });
 

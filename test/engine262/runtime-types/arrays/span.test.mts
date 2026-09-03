@@ -59,9 +59,8 @@ test('the element type must match', () => {
 // -- the family --------------------------------------------------------------
 
 test('a window is a member of the array and tuple family', () => {
-  // The family bound is `[].<any>` (F115 direction B moved `[]` to the empty
-  // tuple), so a window has to satisfy it or the window
-  // would be outside the family it is a view of.
+  // The family bound is `[].<any>`, `[]` being the empty tuple, so a window has
+  // to satisfy it or it would be outside the family it is a view of.
   expect(evaluated('function f(p: [].<any>) { return p.length; }'
     + ' function g(s: Span.<uint32>) { return f(s); }'
     + ' let a: [].<uint32> = [1, 2]; String(g(a));')).toBe('2');

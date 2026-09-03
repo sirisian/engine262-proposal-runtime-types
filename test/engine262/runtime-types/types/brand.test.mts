@@ -48,11 +48,11 @@ test('the builder and the syntax agree', () => {
     + " metadata: { brand: 'UserId' } }); String(built === U);")).toBe('true');
 });
 
-test('F151 FIXED: a nested brand nests, keeping the outer tag', () => {
+test('a nested brand nests, keeping the outer tag', () => {
   // Was: parameterizing an already-branded type MERGED the metadata, so a
   // second `brand` key overwrote the first and `U.<{ brand: 'Inner' }>` WAS `U`.
   //
-  // Fixed as a side effect of F174: the base of a
+  // Fixed as a side effect of the alias-resolution change: the base of a
   // parameterization was resolved as a BUILTIN only, so a user alias found
   // nothing and the parameterization was never built. Resolving the alias
   // builds it - and an already-branded alias then nests rather than merging.
@@ -64,9 +64,9 @@ test('F151 FIXED: a nested brand nests, keeping the outer tag', () => {
 });
 
 test('a nested brand refuses a bare value, at the boundary and by assignability', () => {
-  // The refusal holds for a nested brand as it does for a single one. An earlier probe
-  // reported `isAssignable(uint32, N)` as true and that was a stale build - the
-  // finding it would have been (F175) does not exist.
+  // The refusal holds for a nested brand as it does for a single one. An earlier
+  // probe reported `isAssignable(uint32, N)` as true, but that was a stale
+  // build - there is no defect here.
   const U = "type U = uint32.<{ brand: 'UserId' }>; type N = U.<{ brand: 'Inner' }>;";
   expect(evaluated(`${U} String(Reflect.isAssignable(uint32, N));`)).toBe('false');
   expect(evaluated(`${U} String(Reflect.isAssignable(N, uint32));`)).toBe('true');
@@ -211,7 +211,7 @@ test('a non-branded value is refused at each of those positions', () => {
   expectThrown(`${U}function f(u: U) { return u; } function g(n: uint32) { return f(n); } g((7 := uint32));`);
 });
 
-test('F152: a union of a brand with its own base collapses to the base', () => {
+test('a union of a brand with its own base collapses to the base', () => {
   // RECORDED, NOT FIXED, and flagged in advance: in a union,
   // `brand(uint32,'A') | uint32` must not collapse to `uint32`. It does.
   //

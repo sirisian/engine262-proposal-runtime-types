@@ -490,7 +490,7 @@ test('a refused union names the member that does not fit, and its return', () =>
  * never pinned.
  */
 
-test('the multi-arm widening, pinned (F124)', () => {
+test('the multi-arm widening, pinned', () => {
   // Nothing here covered a multi-arm inferred return, so the widening rule was
   // free to drift. It is not `1 | "s"` - the literals widen - and it is not
   // `uint8 | string` either. It is `number | string`, asserted by IDENTITY

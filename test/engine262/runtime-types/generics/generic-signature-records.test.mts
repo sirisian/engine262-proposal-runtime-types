@@ -1,5 +1,5 @@
 // SignatureRecord carries its declared type parameters as Type Parameter
-// Records - name, kind (type vs value, F166), variance, arity, constraint and
+// Records - name, kind (type vs value), variance, arity, constraint and
 // default NODES - and the checker's string-list side field is retired. The
 // records are what identity up to renaming, subtyping, overload viability, and
 // reflection read; this file pins what works today and what is still owed.

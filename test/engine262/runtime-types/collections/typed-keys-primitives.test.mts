@@ -41,8 +41,8 @@ test('an out-of-range key is refused rather than wrapped', () => {
   expect(ok('const s = new Set.<uint8>(); s.add(300);')).toBe(false);
   expect(ok('const s = new Set.<int8>(); s.add(-200);')).toBe(false);
   expect(ok('const m = new Map.<uint8, string>(); m.set(300, "a");')).toBe(false);
-  // ...and a search with such a needle is refused too, for the same reason
-  // (F69): a test that can never succeed is a mistake rather than a false.
+  // ...and a search with such a needle is refused too, for the same reason: a
+  // test that can never succeed is a mistake rather than a false.
   expect(ok('const m = new Map.<uint8, string>(); m.get(300);')).toBe(false);
 });
 

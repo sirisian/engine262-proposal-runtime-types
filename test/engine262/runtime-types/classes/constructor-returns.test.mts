@@ -24,7 +24,7 @@ test('the rule: a typed class constructor may not return a value', () => {
   early('class C { x: uint8 = 1; constructor() { return { a: 1 }; } }');
 });
 
-test('F122: the declared field must not read `undefined`', () => {
+test('the declared field must not read `undefined`', () => {
   // The program that started this. It was once ACCEPTED and `c.z`
   // read `undefined` - a declared `uint8` field, absent at run time, with no
   // diagnostic anywhere near the cause.
@@ -99,7 +99,7 @@ test('the refusal does not over-reach to the neighbouring member forms', () => {
 });
 
 test('the guarantee: `new C() instanceof C` holds, and so does the private brand', () => {
-  // The two invariants F122 broke, restored by construction rather than by a
+  // The two invariants this broke, restored by construction rather than by a
   // check at `new`.
   const shapes = [
     'class C { x: uint8 = 1; }',
@@ -130,7 +130,7 @@ test('only a SYNTACTIC `this` is exempt, even where the operand can only be `thi
 });
 
 test('enforcement no longer depends on which position the value flows through', () => {
-  // F122's three positions. They once disagreed: a `let` with an
+  // Three positions. They once disagreed: a `let` with an
   // annotation was ACCEPTED because the checker statically proved the
   // assignment from `new C()`'s declared type and elided its own runtime check,
   // while a typed parameter and a class-expression binding both threw. The
@@ -206,9 +206,9 @@ test('no constructor signature carries a `return` slot', () => {
   }
 });
 
-test('F127 closed: an unannotated callable reports `kind: "function"`', () => {
+test('an unannotated callable reports `kind: "function"`', () => {
   // This was an ANCHOR - written failing-by-design, asserting `'object'` with
-  // F127 named, so that landing the fix would break it and whoever landed it
+  // the gap named, so that landing the fix would break it and whoever landed it
   // would read the note. That worked: callable reflection landed and this is
   // the rewrite.
   //

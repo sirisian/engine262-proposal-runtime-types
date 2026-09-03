@@ -17,7 +17,7 @@ import {
  *
  * Its header also claimed that "type operators are not expression-position
  * forms in the current parser", and worked around it with type aliases. That
- * was stale (F112): `type keyof T` parses in expression position, and the
+ * was stale: `type keyof T` parses in expression position, and the
  * agreement tests below use it directly.
  *
  * Four groups, and only the first is about individual helpers:
@@ -211,7 +211,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
 
   // maximal set (4)
   ['noInfer', 'std.noInfer(uint8) === uint8', ''],
-  // Unblocked once F110 gave `makeType` a `parameterized` case and
+  // Unblocked once `makeType` gained a `parameterized` case and
   // `src/intrinsics/Brand.mts` claimed the `brand` key. It was the ONE blocked
   // export of the 71 and carried this file's only `test.todo`.
   ['brand', "std.brand(uint32, 'UserId') === type uint32.<{ brand: 'UserId' }>", ''],
@@ -268,7 +268,7 @@ test('agreement: keyless is `never`, and the refusal lives at the USE', async ()
 });
 
 test('agreement: `indexed` IS `T[K]`', async () => {
-  // §4.1's `js` block is missing from typeprogramming.md (F105), so `indexed`
+  // §4.1's `js` block is missing from typeprogramming.md, so `indexed`
   // had no definition anywhere and this reconstruction is the only statement of
   // it. Pinned against the operator across the cases
   // #sec-indexed-access-types names.
@@ -286,7 +286,7 @@ test('agreement: `indexed` IS `T[K]`', async () => {
   expect(await run('std.indexed(type { a: uint8 }, type "zz");')).toBe('threw');
 });
 
-test('F128 anchor: `type (A | B)["k"]` does not parse', async () => {
+test('anchor: `type (A | B)["k"]` does not parse', async () => {
   // RECORDED, NOT FIXED, and found by writing the agreement test above.
   //
   // Indexed access over a union operand works - `type AB["a"]` where
@@ -310,7 +310,7 @@ test('F128 anchor: `type (A | B)["k"]` does not parse', async () => {
 test('agreement: the round trip, over every kind the READ side emits', async () => {
   // `makeType(getReflection(T)) === T`. The failure this guards is a kind added
   // to one side only, which is how `enum` and `parameterized` came to be
-  // emitted and rejected (F110).
+  // emitted and rejected.
   const kinds: ReadonlyArray<readonly [string, string]> = [
     ['primitive', 'uint8'],
     ['literal', 'type "a"'],
@@ -350,7 +350,7 @@ test('agreement: the round trip, over every kind the READ side emits', async () 
 });
 
 test('a struct CONTAINING a parameterized field round-trips, and walks preserve it', async () => {
-  // The correction to an earlier claim that every deep walk was broken by F110.
+  // The correction to an earlier claim that every deep walk was broken.
   // A field's type rides as a Type Object rather than a nested node, so a walk
   // reaches `kind: 'parameterized'`, falls to its default arm, and passes the
   // type through untouched. Which means §8's "metadata inside walks" already

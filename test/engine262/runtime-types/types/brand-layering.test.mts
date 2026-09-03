@@ -7,7 +7,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  *
  * The mechanism is INTERSECTION, which was the only direction whose algebra was
  * already correct: `E & V` sheds to `E`, sheds to the base, and refuses a bare
- * value. What it lacked was normalization (F169), a construction boundary, and
+ * value. What it lacked was normalization, a construction boundary, and
  * an error where the metadata merge silently discards a second brand.
  *
  * Tests are named for the property they pin, so a failure names what was lost
@@ -48,11 +48,11 @@ test('the same layering written twice is one type', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Normalization — F169
+// Normalization
 // ---------------------------------------------------------------------------
 
 test('layering is order-independent', () => {
-  // F169. `orderKeyWithin`'s ~parameterized~ case keyed only the BASE, so two
+  // `orderKeyWithin`'s ~parameterized~ case keyed only the BASE, so two
   // parameterizations of one base produced the identical key, the canonical
   // sort could not separate them, and the written order survived into the
   // interned identity - two Type Objects for one type, mutually assignable.
@@ -60,7 +60,7 @@ test('layering is order-independent', () => {
 });
 
 test('normalization is not brand-specific', () => {
-  // The row that shows F169 is a metadata-protocol defect rather than a brand
+  // The row that shows this is a metadata-protocol defect rather than a brand
   // one: ANY two parameterizations of one base were affected.
   expect(evaluated("type P = string.<{ pattern: /^a/ }>; type V = string.<{ brand: 'V' }>;"
     + ' String(type P & V === type V & P);')).toBe('true');
@@ -152,10 +152,10 @@ test('an intersection of brands over DIFFERENT bases refuses', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F172: a brand on a base that cannot carry a type
+// A brand on a base that cannot carry a type
 // ---------------------------------------------------------------------------
 
-test('F172: a branded string can be held', () => {
+test('a branded string can be held', () => {
   // Calling a Type Object is the construction boundary, and the static type of
   // that call is the type called. Without it the call typed as its BASE, so
   // every boundary downstream inserted a runtime check that CANNOT pass on a
@@ -169,14 +169,14 @@ test('F172: a branded string can be held', () => {
   expect(evaluated(`${E}function g(): E { return E('a'); } String(g());`)).toBe('a');
 });
 
-test('F172: a bare value is still refused where the brand is declared', () => {
+test('a bare value is still refused where the brand is declared', () => {
   // The guard. A static type that made the brand admit anything would pass the
   // test above and destroy the feature.
   expectThrown(`${E}function f(e: E) { return e; } function h(s: string) { return f(s); } h('a');`);
   expectThrown(`${E}function h(s: string) { const v: E = s; return v; } h('a');`);
 });
 
-test('F172: the numeric case is unchanged', () => {
+test('the numeric case is unchanged', () => {
   // A numeric value carries its Type Record, so a `uint32` brand worked
   // throughout and must keep working.
   expect(evaluated("type U = uint32.<{ brand: 'U' }>; function f(u: U) { return u; }"
@@ -184,10 +184,10 @@ test('F172: the numeric case is unchanged', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F172: a String brand now carries, so it behaves as a numeric one does
+// A String brand now carries, so it behaves as a numeric one does
 // ---------------------------------------------------------------------------
 
-test('F172: a string brand carries its type and can be passed', () => {
+test('a string brand carries its type and can be passed', () => {
   // The crossing STAMPS the value, and it stamped only a typed number - every
   // other value came back unchanged. So a branded String was a bare String,
   // `IsOfType(bare, E)` correctly answered false, and a value from the brand's
@@ -200,14 +200,14 @@ test('F172: a string brand carries its type and can be passed', () => {
   expect(evaluated(`${E}function f(x: E) { return 1; } String(f(E('a')));`)).toBe('1');
 });
 
-test('F172: a string brand still refuses a bare value and does not cross', () => {
+test('a string brand still refuses a bare value and does not cross', () => {
   // The guards. A carrier that admitted anything would pass the test above and
   // destroy the feature.
   expectThrown(`${E}function f(x: E) { return 1; } function h(u) { return f(u); } h('a');`);
   expectThrown(`${E}${V}function f(x: V) { return 1; } function h(e: E) { return f(e); } h(E('a'));`);
 });
 
-test('F172: the numeric bases are unchanged', () => {
+test('the numeric bases are unchanged', () => {
   expect(evaluated("type U = uint32.<{ brand: 'B' }>; function f(x: U) { return 1; }"
     + ' String(f(U((7 := uint32))));')).toBe('1');
   expect(evaluated("type F = float64.<{ brand: 'B' }>; String(Reflect.typeOf(F((1.5 := float64))) === F);")).toBe('true');
@@ -265,9 +265,10 @@ test('brands on carrying bases are unaffected', () => {
   expect(evaluated("type U = uint32.<{ brand: 'B' }>; String(Reflect.typeOf(U((7 := uint32))) === U);")).toBe('true');
 });
 
-test('F176: a bigint brand carries, as a string brand does', () => {
+test('a bigint brand carries, as a string brand does', () => {
   // `TypedBigIntValue` existed and `RuntimeTypeOf` already recognised it; the
-  // crossing was not using it. The same one-line gap as F172, one base over.
+  // crossing was not using it. The same one-line gap as the string case, one
+  // base over.
   const G = "type G = bigint.<{ brand: 'G' }>;";
   expect(evaluated(`${G} String(Reflect.typeOf(G(1n)) === G);`)).toBe('true');
   expect(evaluated(`${G} function f(x: G) { return 1; } String(f(G(1n)));`)).toBe('1');
@@ -306,10 +307,10 @@ test('a plain brand is unchanged', () => {
 
 
 // ---------------------------------------------------------------------------
-// F179: the intersection crossing does not produce the INTERSECTION type
+// The intersection crossing does not produce the INTERSECTION type
 // ---------------------------------------------------------------------------
 
-test('F179: a crossing into an intersection yields the INTERSECTION', () => {
+test('a crossing into an intersection yields the INTERSECTION', () => {
   // The arm threaded the value through each member in turn, which was wrong
   // twice over: the value ended up carrying the LAST member's record - so
   // `typeOf(EV(x)) === EV` was false, it was a `V` - and on a base whose values
@@ -324,20 +325,20 @@ test('F179: a crossing into an intersection yields the INTERSECTION', () => {
     + ' String(Reflect.typeOf(AB(A((7 := uint32)))) === AB);')).toBe('true');
 });
 
-test('F179: a brand can be ADDED to an already-branded value', () => {
+test('a brand can be ADDED to an already-branded value', () => {
   // The incremental case every real use has.
   expect(evaluated("type A = uint32.<{ brand: 'A' }>; type B = uint32.<{ brand: 'B' }>; type AB = A & B;"
     + ' String(AB(A((7 := uint32))));')).toBe('7');
 });
 
-test('F179: the end-to-end gate runs - send(verify(e))', () => {
+test('the end-to-end gate runs - send(verify(e))', () => {
   // The end-to-end program. `verify` takes an Email and returns an
   // Email & Verified; `send` takes an Email; a Verified IS an Email.
   expect(evaluated(`${EV}function verify(e: E): EV { return EV(e); }`
     + " function send(to: E) { return to; } String(send(verify(E('a@b'))));")).toBe('a@b');
 });
 
-test('F179: the guards survive the fix', () => {
+test('the guards survive the fix', () => {
   // A bare value is still refused, the layering still sheds to each member, a
   // mixed intersection still refuses construction, and a pattern inside an
   // intersection still validates.
@@ -349,9 +350,10 @@ test('F179: the guards survive the fix', () => {
   expect(evaluated(`${PV} String(PV('aa'));`)).toBe('aa');
 });
 
-test('F179: layering works on every carrying base, not only strings', () => {
+test('layering works on every carrying base, not only strings', () => {
   // Earlier measurement covered a SINGLE brand per base. Layering is a
-  // different question and F179 changed it, so it is measured separately: for
+  // different question and the crossing fix changed it, so it is measured
+  // separately: for
   // each carrying base, `A & B` constructs, reports itself, accepts an already-
   // branded value, and sheds to a member.
   const cases: [string, string, string][] = [
@@ -373,10 +375,10 @@ test('F179: layering works on every carrying base, not only strings', () => {
 
 
 // ---------------------------------------------------------------------------
-// F183: a dead OPERAND is not the same defect as a constant ANSWER
+// A dead OPERAND is not the same defect as a constant ANSWER
 // ---------------------------------------------------------------------------
 
-test('F183: a logical operator whose right operand can never evaluate is dead code', () => {
+test('a logical operator whose right operand can never evaluate is dead code', () => {
   // `??` was reported for this and `||`/`&&` were not, though they are the same
   // shape whenever the left operand's type settles the test. Decidable only
   // where truthiness is a property of the TYPE - a literal, or a union of
@@ -386,7 +388,7 @@ test('F183: a logical operator whose right operand can never evaluate is dead co
   expectThrown('type T = 1 | 2; function f(d: T) { return d || (9 := uint8); } f((1 := T));');
 });
 
-test('F183: a reachable operand is left alone', () => {
+test('a reachable operand is left alone', () => {
   // `uint8` settles nothing - 0 is falsy and every other value is not - and a
   // union whose members disagree settles nothing either. `5 && x` reaches its
   // right operand precisely because 5 is truthy.
@@ -398,7 +400,7 @@ test('F183: a reachable operand is left alone', () => {
     + ' String(f((1 := T)));')).toBe('1');
 });
 
-test('F183: a constant ANSWER in a value position stays legitimate', () => {
+test('a constant ANSWER in a value position stays legitimate', () => {
   // The distinction this rule turns on. An impossible `instanceof` has no
   // unreachable operand - it is a question with a constant answer, and the
   // corpus writes exactly this to demonstrate the operator.
@@ -418,8 +420,8 @@ test('a symbol brand carries, passes, and refuses a bare value', () => {
   //
   // `Value.true` and `Value.false` are SINGLETONS and the engine compares
   // against them by identity at 288 sites, so a carrier - necessarily a
-  // different object - fails every one, and a branded `true` came out falsy
-  // (F177). A Symbol has neither problem: every `Symbol()` is already a fresh
+  // different object - fails every one, and a branded `true` came out falsy.
+  // A Symbol has neither problem: every `Symbol()` is already a fresh
   // object, and the engine compares symbols by identity in ONE place.
   const S = "type S = symbol.<{ brand: 'S' }>;";
   expect(evaluated(`${S} const v = S(Symbol('a')); String(Reflect.typeOf(v) === S);`)).toBe('true');
@@ -441,7 +443,7 @@ test('a branded symbol is still a symbol', () => {
 });
 
 test('boolean brands work, and a branded boolean is still a boolean', () => {
-  // F177 ruled this out: `Value.true` and `Value.false` are singletons and a
+  // This was once ruled out: `Value.true` and `Value.false` are singletons and a
   // carrier is a different object, so a branded `true` came out FALSY.
   //
   // Fixed at the funnels rather than by avoiding a carrier. `ToBoolean` now

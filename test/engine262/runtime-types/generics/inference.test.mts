@@ -103,7 +103,7 @@ test('a runtime object reports a structural type whose keys keysOf reads', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Literal type arguments (F165/F166)
+// Literal type arguments
 // ---------------------------------------------------------------------------
 
 test('a TYPE parameter given a literal argument reads as the type', () => {

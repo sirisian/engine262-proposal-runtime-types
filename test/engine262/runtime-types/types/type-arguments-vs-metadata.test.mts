@@ -56,7 +56,7 @@ test('a brand over a type parameter SURVIVES instantiation', () => {
   // It resolved as neither reading and the parameterization was simply dropped,
   // so `F.<string>` was `string` and the brand guaranteed nothing.
   //
-  // The code's own F174 comment names this shape: "A brand that silently becomes
+  // The code's own comment names this shape: "A brand that silently becomes
   // its own base type-checks everywhere and guarantees nothing, which is the
   // worst shape this can fail in."
   expect(kind("type F<T> = T.<{ brand: 'B' }>; type T = F.<string>;")).toBe('parameterized');

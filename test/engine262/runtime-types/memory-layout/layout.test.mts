@@ -267,7 +267,7 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // `Reflect.typeOf` over it does not report the class - so the layout walk
   // cannot complete. Nothing above depends on it, and the reference width is
   // exercised by the completed-class rows instead.
-  // LIMIT CLOSED (F103). This documented that a SELF-REFERENTIAL class's own
+  // LIMIT CLOSED. This documented that a SELF-REFERENTIAL class's own
   // layout was not computed at its declaration, because the record built from
   // the declaration and the class's finished Type Object did not intern as one.
   // They do now: identity is by [[Declaration]], so the class's completion

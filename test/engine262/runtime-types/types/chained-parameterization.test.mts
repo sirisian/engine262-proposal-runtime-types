@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * F190. `TypeArguments` attached to a
+ * `TypeArguments` attached to a
  * |TypeName| and once, so every type that was not a bare NAME could not be
  * parameterized inline - and each could be the moment it was given a name,
  * which made the rule turn on whether a type had been named.
@@ -30,7 +30,7 @@ test('an array can be parameterized', () => {
   // slot on the element type, so the restriction here was structural.
   expect(evaluated("type T = [].<uint8>.<{ brand: 'B' }>;"
     + ' String(Reflect.getReflection(T).kind);')).toBe('parameterized');
-  // F191, FIXED. The inline form built its base as an intermediate record and
+  // FIXED. The inline form built its base as an intermediate record and
   // never asked for a Type Object, so nothing was interned for it - and a later
   // `type A = [].<uint8>` bound to the only Type Object whose record matched
   // closely enough, this parameterization's, so `A` reported the brand.

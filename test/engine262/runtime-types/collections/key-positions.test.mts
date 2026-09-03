@@ -60,7 +60,7 @@ test('the merge the rule exists to prevent cannot happen', () => {
 
 test('a SEARCH position checks too, so the two agree', () => {
   // A needle the key type cannot hold makes a test that can never succeed. This
-  // was already the rule for the numeric types (F69), and it now holds for `string`
+  // was already the rule for the numeric types, and it now holds for `string`
   // as well, so `get`, `has` and `delete` agree with `set` about what a key is.
   expect(ok(`const m = new Map.<string, uint8>(); ${HIDE} m.get(n);`)).toBe(false);
   expect(ok(`const m = new Map.<string, uint8>(); ${HIDE} m.has(n);`)).toBe(false);

@@ -121,7 +121,7 @@ test('array types, dynamic and fixed extent', () => {
     ArrayExtent: null,
     TypeArguments: { TypeArgumentList: [{ type: 'TypeReference' }] },
   });
-  // F115: bare `[]` is the EMPTY TUPLE. `[].<T>` is still an array,
+  // Bare `[]` is the EMPTY TUPLE. `[].<T>` is still an array,
   // and `[].<any>` is the family bound that `[]` used to spell.
   expect(parseType('[]')).toMatchObject({ type: 'TupleType', TupleElementList: [] });
   expect(parseType('[].<any>')).toMatchObject({ type: 'ArrayType', ArrayExtent: null });

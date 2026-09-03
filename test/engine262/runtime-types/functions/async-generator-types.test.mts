@@ -6,7 +6,7 @@ import { evaluated, expectThrown, settledAfterJobs, ok, expectStaticTypeError } 
  * suite covers what has landed.
  */
 
-test('F187: a typed async arrow parses and runs', () => {
+test('a typed async arrow parses and runs', () => {
   // `async (a: uint8) => a` is first parsed as a CALL, and inside a call
   // `a: uint8` is a NAMED ARGUMENT. Refining the cover to an AsyncArrowHead has
   // to turn that back into an annotated parameter and did not, so the node
@@ -22,7 +22,7 @@ test('F187: a typed async arrow parses and runs', () => {
   expect(evaluated('const g = async (a: uint8) => a; String(1);')).toBe('1');
 });
 
-test('F187: the neighbouring forms are unaffected', () => {
+test('the neighbouring forms are unaffected', () => {
   // The crash needed `async` AND an arrow AND a typed parameter. All three
   // neighbours worked and must keep working.
   expect(evaluated('const g = async (a) => a; String(1);')).toBe('1');
@@ -87,7 +87,7 @@ test('an async generator REJECTS on a bad yield', () => {
   expect(settle('yield (1 := uint8);')).toBe('resolved');
 });
 
-test('F188: a generator return is compared against R, not the Generator type', () => {
+test('a generator return is compared against R, not the Generator type', () => {
   // The raw annotation was pushed as the return type, so a `return` was compared
   // against the whole `Generator.<Y, R, N>`. A correct `return "ok"` under an R
   // of `string` was REFUSED - a String is not a Generator - which made the
@@ -101,7 +101,7 @@ test('F188: a generator return is compared against R, not the Generator type', (
 test('a bare annotation types the yields and returns nothing', () => {
   // A bare `: uint8` maps to `Generator.<uint8, void, void>`,
   // so its R is `void` and a value-returning `return` is refused. It falls out of
-  // the mapping F188 fixed rather than needing a rule of its own - the `void`
+  // the mapping above rather than needing a rule of its own - the `void`
   // filler that makes the mapping coherent is the same filler that does the
   // refusing.
   expectThrown('function* g(): uint8 { return (0 := uint8); }');
@@ -154,7 +154,7 @@ test('the explicit Generator spelling checks its yields', () => {
     + ' String(g().next().value);')).toBe('1');
 });
 
-test('F189: yield* does NOT check its delegated values', () => {
+test('yield* does NOT check its delegated values', () => {
   // RECORDED AS CURRENT STATE, NOT AS CORRECT. A plain `yield` of the same
   // value is refused; delegating it through `yield*` is not.
   //

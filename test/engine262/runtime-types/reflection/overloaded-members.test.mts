@@ -145,7 +145,7 @@ test('overloads: an unannotated METHOD has no signatures; a constructor always d
   // `m(a: any)`, both asserted below.
   //
   // The asymmetry is real and is meant to be visible: the general member
-  // question stays open (F127), and if it is decided the same way the two
+  // question stays open, and if it is decided the same way the two
   // converge. Until then a constructor is the one member whose signature does
   // not need the program to have asked.
   const has = (decl: string, member: string) => `class A { ${decl} }`
