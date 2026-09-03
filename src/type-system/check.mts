@@ -5288,7 +5288,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
             } | undefined;
             const baseIsGeneric = (baseDecl?.TypeParameters?.TypeParameterList?.length ?? 0) > 0;
-            const base = bareBuiltin ?? (baseIsGeneric ? null : lookupAlias(baseName) as TypeRecord | null);
+            // A TYPE PARAMETER in scope wins over an alias of the same name:
+            // `type F<T> = T.<{ brand: 'B' }>; type T = F.<string>;` resolved the
+            // base `T` through `lookupAlias`, found the outer alias T - the one
+            // being defined - and recursed until the host's stack died. The
+            // brand goes over the ~parameter~ record, and substitutes to
+            // `string.<{ brand }>` at instantiation, which is what "a brand over
+            // a type parameter SURVIVES instantiation" means.
+            const base = bareBuiltin
+              ?? (typeParameterInScope(baseName)
+                ? ({ Kind: 'parameter', Name: baseName } as TypeRecord)
+                : (baseIsGeneric ? null : lookupAlias(baseName) as TypeRecord | null));
             if (base) {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
