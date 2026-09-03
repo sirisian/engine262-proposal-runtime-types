@@ -2699,6 +2699,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if ((a as { IsSpread?: boolean }).IsSpread) {
         const t = resolveType(a as ParseNode.Type);
         if (!t) {
+          // F-AA remainder: a spread whose operand NAMES A VALUE binding
+          // (`...xs` with `xs` a local) is refused statically - the checker's
+          // own `lookup` knows it as a value, which is what tells "not a
+          // type" from "deferred" here.
+          const ref = a as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
+          const head = ref.type === 'TypeReference' && (ref.TypeName?.MemberNames?.length ?? 0) === 0 && !ref.TypeArguments ? ref.TypeName?.IdentifierReference?.name : undefined;
+          if (head && !typeParameterInScope(head) && lookup(head) !== null) {
+            const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`the value ${head}`), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
           return;
         }
         const extent = (t as { Extent?: number | string }).Extent;

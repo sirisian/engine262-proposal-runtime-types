@@ -1212,8 +1212,11 @@ export function* InferGenericBindings(
           }
         }
         // Nothing to infer from and no default: bind `any` so downstream
-        // resolution does not throw on an unbound reference.
-        bound = anyType;
+        // resolution does not throw on an unbound reference. (Guarded: a
+        // trial above may have bound the parameter.)
+        if (bound === null) {
+          bound = anyType;
+        }
       }
       // spec sec-computed-constraints: the binding is checked against its
       // evaluated constraint, as any binding is. A mismatched argument fails here

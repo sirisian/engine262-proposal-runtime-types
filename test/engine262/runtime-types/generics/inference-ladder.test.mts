@@ -40,20 +40,16 @@ test('rung two: a closed SCALAR constraint proposes its inhabitants and exactly 
   expect(evaluated('function pick(B) { return B === type true ? uint8 : string; } function one<B extends boolean>(x: pick(B)): string { return "bound"; } one("s");')).toBe('bound');
 });
 
-// F-AD, pinned: a candidate literal record the trial builds does not intern to
-// the Type Object a written `type true` does, so `B === type true` inside the
-// body reads false although B is bound to the literal `true`. The candidates
-// must be built by the path a written literal type takes.
-test.fails('rung two: a trial-bound literal is the same Type Object as its written spelling (F-AD)', () => {
+test('rung two: a trial-bound literal is the same Type Object as its written spelling (F-AD retracted)', () => {
+  // F-AD was a bug in the trial's own patch: the fallback `bound = any` ran
+  // unconditionally after the trial had bound the candidate. The binder-built
+  // literal interns exactly as the written one does.
   expect(evaluated('function pick(B) { return B === type true ? uint8 : string; } function one<B extends boolean>(x: pick(B)): string { return String(B === type true); } one(1 := uint8);')).toBe('true');
 });
 
-// F-X (pack half), pinned on F-AD: the trial enumerates `[2].<boolean>` as
-// four candidate tuples and verifies each forward, but the builder's
-// `es[0].type === type true` reads false for every candidate for the reason
-// above, so no candidate passes.
-test.fails('rung two: a closed PACK constraint proposes its tuples and exactly one verifies (F-X, pack)', () => {
+test('rung two: a closed PACK constraint proposes its tuples and exactly one verifies (F-X, pack)', () => {
   expect(evaluated(`${MASK} function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): string { return String(Reflect.getReflection(Bs).elements.map((e) => e.type === type true).join(",")); } withFlags(1 := uint16);`)).toBe('true,false');
+  expect(evaluated(`${MASK} function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): string { return String(Reflect.getReflection(Bs).elements.map((e) => e.type === type true).join(",")); } withFlags("s");`)).toBe('false,false');
 });
 
 test('rung two: no inhabitant, or more than one, refuses naming the builder', () => {

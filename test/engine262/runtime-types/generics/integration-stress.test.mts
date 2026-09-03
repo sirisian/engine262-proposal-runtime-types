@@ -142,12 +142,8 @@ test('B.5: a spread of a dynamic array TYPE is refused statically (F-AA closed f
   expectThrown(`${STRESS} function u() { return stress.<uint8, ...[].<uint32>, N: 4>(); }`, 'stated extent');
 });
 
-// F-AA remainder, pinned: a spread whose operand NAMES A VALUE (`...xs`) is
-// nothing the checker's resolveType can answer but null - the same null a
-// deferred computed type gives - so it cannot yet tell "not a type" from
-// "unknown here"; the runtime refuses it when called.
-test.fails('B.5: a spread naming a value is refused statically (F-AA remainder)', () => {
-  expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); }`);
+test('B.5: a spread naming a value is refused statically (F-AA closed)', () => {
+  expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); }`, 'the value xs');
 });
 
 test('B.5: a default reads an earlier pack - class form (F-W, runtime half closed)', () => {
@@ -173,11 +169,7 @@ test('B.6: rung one - direct, recursive, and through explicit arguments', () => 
   expect(evaluated('function lit<...K: [].<string>>(...ks: K): string { return K[1]; } lit("a", "b");')).toBe('b');
 });
 
-// F-X, pack half pinned (scalar half passes in generics/inference-ladder.test.mts):
-// the trial enumerates the closed constraint's tuples and verifies forward, but
-// a candidate built by the binder does not intern to the Type Object a written
-// `type true` does inside the builder.
-test.fails('B.6: rung two - trial over a closed pack constraint (F-X, pack)', () => {
+test('B.6: rung two - trial over a closed pack constraint (F-X closed)', () => {
   expect(evaluated('function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); } function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(1 := uint16));')).toBe('2');
 });
 
