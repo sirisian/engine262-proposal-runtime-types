@@ -3300,6 +3300,39 @@ export function classFrameOfMethod(fn: unknown): Map<string, TypeRecord> | null 
   return home ? classFrameOfObject(home) : null;
 }
 
+/**
+ * PLAN-variadic-and-named-generic-arguments.md OQ-18 (B1), typeprogramming.md
+ * R15, spec.emu #sec-declared-inverses: the INVERSE a builder declares - an
+ * internal association from the builder's function object to the inverse
+ * function, never a property, so nothing observable but reflection and no shape
+ * effect. Recorded by `Reflect.declareInverse(context, inverse)`, which is not
+ * a registry: it requires the LIVE decoration context of the declaration being
+ * decorated, so it can be called only from inside the decorator applied to
+ * that declaration - one author, no timeline, which is what R15 requires.
+ */
+const declaredInverses = new WeakMap<object, Value>();
+const openDecorationContexts = new WeakSet<object>();
+
+export function OpenDecorationContext(context: Value): void {
+  if (context instanceof ObjectValue) {
+    openDecorationContexts.add(context as unknown as object);
+  }
+}
+export function CloseDecorationContext(context: Value): void {
+  if (context instanceof ObjectValue) {
+    openDecorationContexts.delete(context as unknown as object);
+  }
+}
+export function IsDecorationContextOpen(context: Value): boolean {
+  return context instanceof ObjectValue && openDecorationContexts.has(context as unknown as object);
+}
+export function DeclareInverse(builder: Value, inverse: Value): void {
+  declaredInverses.set(builder as unknown as object, inverse);
+}
+export function DeclaredInverseOf(builder: Value): Value | undefined {
+  return declaredInverses.get(builder as unknown as object);
+}
+
 export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
   const code = fn.ECMAScriptCode as { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } } | null | undefined;
   const list = code?.parent?.TypeParameters?.TypeParameterList;

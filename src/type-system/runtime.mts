@@ -17,12 +17,12 @@ import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
-import { Q, X } from '../completion.mts';
+import { Q, X , ThrowCompletion } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
@@ -34,6 +34,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
+import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -1077,6 +1078,198 @@ function closedInhabitants(constraint: TypeRecord, cap = 256): TypeRecord[] | nu
   return null;
 }
 
+/** OQ-18: one inverse call per (computed-type site, argument type), the spec's memoization. */
+const inverseProposals = new WeakMap<object, Map<string, Value>>();
+
+/** The computed-type node in `formals` whose arguments mention `paramName`, with the index of the formal that carries it. */
+function builderSiteMentioning(formals: readonly ParseNode[], paramName: string): { node: object, formalIndex: number } | null {
+  const mentions = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const n = node as { type?: string, name?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } };
+    if (n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === paramName && (n.TypeName.MemberNames?.length ?? 0) === 0) {
+      return true;
+    }
+    if (n.type === 'IdentifierReference' && n.name === paramName) {
+      return true;
+    }
+    return Object.keys(n).some((key) => {
+      if (key === 'parent' || key === 'location') {
+        return false;
+      }
+      const child = (n as Record<string, unknown>)[key];
+      return Array.isArray(child) ? child.some(mentions) : (!!child && typeof child === 'object' && mentions(child));
+    });
+  };
+  const siteIn = (node: unknown): object | null => {
+    if (!node || typeof node !== 'object') {
+      return null;
+    }
+    const n = node as { type?: string, Arguments?: readonly unknown[] };
+    if (n.type === 'ComputedType' && (n.Arguments ?? []).some(mentions)) {
+      return n;
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (n as Record<string, unknown>)[key];
+      const found = Array.isArray(child) ? child.map(siteIn).find((x) => x !== null) ?? null : (child && typeof child === 'object' ? siteIn(child) : null);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  };
+  for (let i = 0; i < formals.length; i += 1) {
+    const annotation = (formals[i] as { TypeAnnotation?: { Type?: unknown } | null }).TypeAnnotation;
+    const found = siteIn(annotation?.Type);
+    if (found) {
+      return { node: found, formalIndex: i };
+    }
+  }
+  return null;
+}
+
+/**
+ * Rung three's positive half. Returns the verified binding, null where the
+ * builder declares no inverse, or a throw completion where a proposal exists
+ * and fails - naming the builder and the proposal.
+ */
+function* proposeThroughDeclaredInverse(
+  builder: string,
+  paramName: string,
+  formals: readonly ParseNode[],
+  args: readonly Value[],
+  typeParameters: readonly ParseNode.TypeParameter[],
+  frame: Map<string, TypeRecord>,
+): Generator<unknown, TypeRecord | null | ThrowCompletion, unknown> {
+  const site = builderSiteMentioning(formals, paramName);
+  if (!site) {
+    return null;
+  }
+  // The builder's name resolves as the computed type's own callee does.
+  const builderRef = EnsureCompletion(yield* ResolveTypeName(Value(builder)));
+  if (builderRef.Type !== 'normal') {
+    return null;
+  }
+  const builderFn = EnsureCompletion(yield* GetValue(builderRef.Value as never));
+  if (builderFn.Type !== 'normal') {
+    return null;
+  }
+  const inverse = DeclaredInverseOf(MetadataObjectFor(builderFn.Value as Value, undefined));
+  if (inverse === undefined) {
+    return null;
+  }
+  // A1: the argument's type - a rest's is the tuple of what it collects.
+  const formal = formals[site.formalIndex]! as { type?: string };
+  let argType: TypeRecord;
+  if (formal.type === 'BindingRestElement') {
+    const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
+    for (let k = site.formalIndex; k < args.length; k += 1) {
+      let referent: Value = args[k]!;
+      if (referent instanceof ReferenceValue) {
+        referent = Q(yield* GetValue(referent.Location));
+      }
+      elements.push({ Type: RuntimeTypeOf(referent), Rest: false, Initial: 'none' });
+    }
+    argType = CanonicalizeType({ Kind: 'tuple', Elements: elements } as TypeRecord);
+  } else {
+    if (site.formalIndex >= args.length) {
+      return null;
+    }
+    let a: Value = args[site.formalIndex]!;
+    if (a instanceof ReferenceValue) {
+      a = Q(yield* GetValue(a.Location));
+    }
+    argType = RuntimeTypeOf(a);
+  }
+  // Memoized per site and argument type; metered.
+  let table = inverseProposals.get(site.node);
+  if (!table) {
+    table = new Map<string, Value>();
+    inverseProposals.set(site.node, table);
+  }
+  const key = orderKey(argType);
+  let proposal = table.get(key);
+  if (proposal === undefined) {
+    ConsumeEvaluationSteps(1);
+    if (IsBudgetExhausted()) {
+      return Throw.TypeError('$1', Value(`the evaluation budget is exhausted evaluating the inverse of ${builder}`));
+    }
+    const called = EnsureCompletion(yield* Call(inverse, Value.undefined, [GetTypeObject(argType)]));
+    if (called.Type !== 'normal') {
+      return called as ThrowCompletion;
+    }
+    proposal = called.Value as Value;
+    table.set(key, proposal);
+  }
+  // The proposal: a Type Object, or an object of Type Objects keyed by name.
+  const recordOf = (v: Value): TypeRecord | null => ((v as { TypeRecord?: TypeRecord }).TypeRecord ?? null);
+  const proposals = new Map<string, TypeRecord>();
+  const own = recordOf(proposal);
+  if (own) {
+    proposals.set(paramName, own);
+  } else if (proposal instanceof ObjectValue) {
+    for (const tp of typeParameters) {
+      const name = tp.BindingIdentifier?.name;
+      if (!name) {
+        continue;
+      }
+      const got = EnsureCompletion(yield* Get(proposal, Value(name)));
+      if (got.Type === 'normal') {
+        const r = recordOf(got.Value as Value);
+        if (r) {
+          proposals.set(name, r);
+        }
+      }
+    }
+  }
+  if (!proposals.has(paramName)) {
+    return Throw.TypeError('$1', Value(`${builder}'s inverse returned no proposal for ${paramName}; an inverse returns a type, or an object of types keyed by parameter name`));
+  }
+  // Forward verification - the check an explicitly specialized call faces.
+  for (const [name, record] of proposals) {
+    frame.set(name, record);
+  }
+  let accepts = true;
+  for (let i = 0; i < formals.length && accepts; i += 1) {
+    const annotation = (formals[i] as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation;
+    if (!annotation?.Type) {
+      continue;
+    }
+    const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+    if (resolved.Type !== 'normal') {
+      accepts = false;
+      break;
+    }
+    const isRest = (formals[i] as { type?: string }).type === 'BindingRestElement';
+    const wanted = isRest ? restElementType(resolved.Value as TypeRecord) : resolved.Value as TypeRecord;
+    const indices = isRest ? args.map((_, k) => k).filter((k) => k >= i) : (i < args.length ? [i] : []);
+    for (const k of indices) {
+      let referent: Value = args[k]!;
+      if (referent instanceof ReferenceValue) {
+        referent = Q(yield* GetValue(referent.Location));
+      }
+      const fits = EnsureCompletion(yield* IsOfType(referent, wanted));
+      if (fits.Type !== 'normal' || fits.Value !== true) {
+        accepts = false;
+        break;
+      }
+    }
+  }
+  if (!accepts) {
+    for (const name of proposals.keys()) {
+      frame.delete(name);
+    }
+    return Throw.TypeError('$1', Value(`${builder}'s inverse proposed ${displayType(proposals.get(paramName)!)}, which its forward evaluation does not accept for these arguments; supply explicit type arguments for ${paramName}`));
+  }
+  // The other named proposals stay in the frame for their own parameters' turn.
+  frame.delete(paramName);
+  return proposals.get(paramName)!;
+}
+
 export function* InferGenericBindings(
   typeParameters: readonly ParseNode.TypeParameter[],
   formals: readonly ParseNode[],
@@ -1208,7 +1401,24 @@ export function* InferGenericBindings(
               return Throw.TypeError('$1', Value(`${passing.length} inhabitants of ${displayType(constraint!)} make ${builder} accept the arguments; supply explicit type arguments for ${paramName}`));
             }
           } else {
-            return Throw.TypeError('$1', Value(`${builder} declares no inverse, so ${paramName} cannot be inferred through it; supply explicit type arguments`));
+            // Rung three's POSITIVE half (OQ-18 A1/B1/C, F-Y): the builder's
+            // declared inverse - read from the function the builder's name
+            // resolves to in this call's scope - proposes a binding from the
+            // ARGUMENT'S type: for a rest, the tuple of the collected
+            // arguments' types (a ref argument by its referent); for a scalar,
+            // that argument's type. The proposal is a Type Object, or an object
+            // of Type Objects keyed by parameter name (several slots proposed
+            // together), and binds only after the forward verification rung
+            // two performs. The call is memoized per site and argument type,
+            // and metered.
+            const proposed = yield* proposeThroughDeclaredInverse(builder, paramName, formals, args, typeParameters, frame);
+            if (proposed instanceof ThrowCompletion) {
+              return proposed;
+            }
+            if (proposed === null) {
+              return Throw.TypeError('$1', Value(`${builder} declares no inverse, so ${paramName} cannot be inferred through it; supply explicit type arguments`));
+            }
+            bound = proposed;
           }
         }
         // Nothing to infer from and no default: bind `any` so downstream

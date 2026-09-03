@@ -169,6 +169,8 @@ export function genericApplication(base: type, args: [].<any>): type {
 
 // ---- object utilities — §4.2 -----------------------------------
 
+/** typeprogramming.md R15 / OQ-18: @inverse(fn) on a builder declares the function that proposes its argument. */
+export function inverse(fn: any, c: any): void { Reflect.declareInverse(c, fn); }
 export function partial(T: type): type  { return mapProperties(T, p => ({ ...p, optional: true  })); }
 export function required(T: type): type { return mapProperties(T, p => ({ ...p, optional: false })); }
 export function readonly(T: type): type { return mapProperties(T, p => ({ ...p, readonly: true  })); }

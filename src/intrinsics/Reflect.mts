@@ -1,7 +1,7 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import {
-  LookupClassType, SignaturesOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
+  LookupClassType, SignaturesOf, OverloadSignatureOf, IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
 import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -216,6 +216,34 @@ function* Reflect_setPrototypeOf([target = Value.undefined, proto = Value.undefi
 }
 
 /** https://sirisian.github.io/ecmascript-types/#sec-reflect.typeof */
+/**
+ * OQ-18 (B1): `Reflect.declareInverse(context, inverse)` - the primitive the
+ * kit's `inverse` decorator calls. It accepts only a LIVE `Reflect.Function`
+ * decoration context (open while its decorator runs), records the inverse on
+ * the decorated function, and mirrors it into the function's metadata as
+ * `inverse` for reflection. Called anywhere else it is refused, which is what
+ * makes it a declaration-site fact and not a registry.
+ */
+function* Reflect_declareInverse([context = Value.undefined, inverse = Value.undefined]: readonly Value[]): ValueEvaluator {
+  if (!IsDecorationContextOpen(context)) {
+    return Throw.TypeError('$1', Value('Reflect.declareInverse accepts only the decoration context of the declaration being decorated'));
+  }
+  if (!IsCallable(inverse)) {
+    return Throw.TypeError('$1 is not a function', inverse);
+  }
+  // The context's `type` is the function's Type Object; the engine-created
+  // object that identifies the decorated FUNCTION is its metadata object, which
+  // `MetadataObjectFor(fn)` returns again at inference time. The slot keys on
+  // it; the `inverse` property written on it is the reflection mirror only.
+  const metadata = Q(yield* Get(context as ObjectValue, Value('metadata')));
+  if (!(metadata instanceof ObjectValue)) {
+    return Throw.TypeError('$1', Value('an inverse is declared on a function'));
+  }
+  DeclareInverse(metadata, inverse);
+  X(CreateDataProperty(metadata, Value('inverse'), inverse));
+  return Value.undefined;
+}
+
 function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // proposal-runtime-types #sec-runtimetypeof: "If _value_ is callable and has
   // declared signatures, return the ~function~ Type Record whose [[Signatures]]
@@ -1042,6 +1070,7 @@ export function bootstrapReflect(realmRec: Realm) {
     // proposal-runtime-types
     ...(surroundingAgent.feature('runtime-types') ? [
       ['typeOf', Reflect_typeOf, 1] as [string, typeof Reflect_typeOf, number],
+      ['declareInverse', Reflect_declareInverse, 2] as [string, typeof Reflect_declareInverse, number],
       ['getReflection', Reflect_getReflection, 1] as [string, typeof Reflect_getReflection, number],
       ['getMetadata', Reflect_getMetadata, 1] as [string, typeof Reflect_getMetadata, number],
       ['getReflectionByIndex', Reflect_getReflectionByIndex, 1] as [string, typeof Reflect_getReflectionByIndex, number],

@@ -4,7 +4,7 @@ import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { displayType, typeParameterRecordsOf } from '../type-system/records.mts';
-import { CallDecorator } from '../abstract-ops/runtime-types.mts';
+import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
@@ -484,7 +484,15 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
     // the context takes its own default, and the candidate needing the fewest
     // defaults wins. CallDecorator carries that rule, because it has to see
     // each candidate signature BEFORE resolution rather than after.
-    const returned = Q(yield* CallDecorator(fn, args[i]!, context));
+    // OQ-18 (B1): the context is OPEN only while its decorator runs, which is
+    // the window in which `Reflect.declareInverse` accepts it.
+    OpenDecorationContext(context);
+    let returned;
+    try {
+      returned = Q(yield* CallDecorator(fn, args[i]!, context));
+    } finally {
+      CloseDecorationContext(context);
+    }
     if (replaceable && returned !== Value.undefined && !(returned instanceof UndefinedValue)) {
       replacement = returned;
     }

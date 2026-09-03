@@ -173,6 +173,8 @@ test('B.6: rung two - trial over a closed pack constraint (F-X closed)', () => {
   expect(evaluated('function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); } function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(1 := uint16));')).toBe('2');
 });
 
+// The positive half - a builder WITH `@inverse` binding the pack - is in
+// generics/declared-inverses.test.mts (it imports the kit, so it runs as a module).
 test('B.6: rung three - a builder with no inverse refuses, NAMING the builder (F-Y closed)', () => {
   expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
 });
