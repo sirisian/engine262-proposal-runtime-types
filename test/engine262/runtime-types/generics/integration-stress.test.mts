@@ -80,14 +80,8 @@ test('B.3: a class satisfies a generic interface by shape under its own paramete
   expect(evaluated('interface Bus { on(name: string): void; } let b: Bus = { on(name: string): void {} }; "ok";')).toBe('ok');
 });
 
-// F-AB, pinned as a PRE-EXISTING general gap: `implements` verifies nothing at
-// declaration - a missing method, a wrong concrete parameter type, and a
-// generic method of the wrong shape (`on<T, U>` for `on<T>`) are all accepted.
-// `ClassImplements` is name-based. The generic case will follow whatever
-// member verification the design adopts for `implements`; the identity-up-to-
-// renaming relation it needs is in place.
-test.fails('B.3: implements refuses a generic method of a different shape (F-AB, pre-existing)', () => {
-  expectThrown('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T, U>(name: string, h: (e: T) => void): void {} }');
+test('B.3: implements refuses a generic method of a different shape (F-AB closed)', () => {
+  expectThrown('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T, U>(name: string, h: (e: T) => void): void {} }', 'not assignable');
 });
 
 test('B.3: the pack member of an overload set takes what the others cannot', () => {

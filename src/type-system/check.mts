@@ -4775,15 +4775,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (tm.MethodSignature) {
+        // F-AB: a GENERIC method signature's annotations resolve under the
+        // method's own type-parameter scope and the signature carries the
+        // Records, so `on<T>(…, h: (e: T) => void)` is not typed as
+        // `(…, any) => void` and a class's `on<U>` compares against it by
+        // identity up to renaming.
+        const msTypeParameters = (tm.MethodSignature as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? null;
+        const pushedMethodScope = pushTypeParameterScopeOf(tm.MethodSignature as unknown as ParseNode);
         const Parameters: ParameterRecord[] = [];
         for (const p of tm.MethodSignature.FunctionTypeParameterList ?? []) {
           const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
           Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
         }
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
+        if (pushedMethodScope) {
+          typeParameterScopes.pop();
+        }
         Properties.push({
           key,
-          type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
+          type: {
+            Kind: 'function',
+            Signatures: [{
+              Parameters, Return, Untyped: false, ThisType: selfThisType,
+              ...(msTypeParameters && msTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(msTypeParameters) } : {}),
+            }],
+          } as unknown as TypeRecord,
           optional: tm.Optional === true,
           // A METHOD is an OUTPUT position, which #sec-variance-annotations says
           // in as many words: "a covariant parameter is well-formed only where
@@ -7919,24 +7935,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Parameters: ParameterRecord[] = [];
         const annotated: Known[] = [];
         let usable = true;
-        for (const p of md.UniqueFormalParameters) {
-          if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
-            usable = false;
-            break;
+        // F-AB: a GENERIC method's annotations resolve under its own
+        // type-parameter scope, and its signature carries the Records - as a
+        // function declaration's does - so `on<T, U>` is not typed as
+        // `(name: string, h: any) => void` and `implements` can compare it.
+        const mdTypeParameters = (md as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? null;
+        const pushedMethodScope = pushTypeParameterScopeOf(md as unknown as ParseNode);
+        try {
+          for (const p of md.UniqueFormalParameters) {
+            if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+              usable = false;
+              break;
+            }
+            const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
+            const resolved = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
+            annotated.push(resolved);
+            Parameters.push(parameter(resolved ?? anyTypeRecord, { Optional: pp.Optional === true || !!pp.Initializer }));
           }
-          const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
-          const resolved = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
-          annotated.push(resolved);
-          Parameters.push(parameter(resolved ?? anyTypeRecord, { Optional: pp.Optional === true || !!pp.Initializer }));
+        } finally {
+          if (pushedMethodScope) {
+            typeParameterScopes.pop();
+          }
         }
         if (!usable) {
           unusable.add(key);
           continue;
         }
-        const Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+        const pushedForReturn = pushTypeParameterScopeOf(md as unknown as ParseNode);
+        let Return: Known;
+        try {
+          Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+        } finally {
+          if (pushedForReturn) {
+            typeParameterScopes.pop();
+          }
+        }
         const Untyped = !md.TypeAnnotation && annotated.every((t) => t === null);
         const sigs = methods.get(key) ?? [];
-        const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known } = { Parameters, Return, Untyped };
+        const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = {
+          Parameters, Return, Untyped,
+          ...(mdTypeParameters && mdTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(mdTypeParameters) } : {}),
+        };
         // #sec-inference-and-function-forms: a method's published type joins the
         // shape its member belongs to, so a member call types through it.
         if (!Return) {
@@ -8025,6 +8064,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? (it as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
         : null;
       if (istruct && istruct.Kind === 'object') {
+        // F-AB: `implements` is VERIFIED, not merely declared. Every member the
+        // interface requires must be declared by the class with an assignable
+        // type - a generic method through identity up to renaming, so `on<U>`
+        // satisfies `on<T>` and `on<T, U>` does not - and an optional member
+        // may be absent. The merge below then supplies only what the class
+        // may leave out.
+        const className = ((cls as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name) ?? 'the class';
+        for (const p of istruct.Properties) {
+          const own = Properties.find((o) => o.key === p.key);
+          if (!own) {
+            if (!p.optional) {
+              const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(`${nm}`)) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+            continue;
+          }
+          if (own.type && p.type && !IsAssignable(own.type, p.type)) {
+            report(own.type, p.type);
+          }
+        }
         for (const p of istruct.Properties) {
           if (!Properties.some((own) => own.key === p.key)) {
             Properties.push(p);

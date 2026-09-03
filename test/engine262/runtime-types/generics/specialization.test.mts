@@ -250,8 +250,12 @@ test('a method\'s own parameter may annotate its signature', () => {
   // names the method's own parameter and is resolved before the body runs
   expect(evaluated('class C { m<T>(v: T) { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
   expect(evaluated('class C { m<T>(v: T): T { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
-  // and enforced: a value of another type is refused at the boundary
-  expectThrownKind('class C { m<T>(v: T) { return v; } } new C().m.<uint8>("x");', 'TypeError');
+  // and enforced: a value of another type is refused - STATICALLY, since the
+  // checker now types a generic method's parameter as its own `T` rather than
+  // `any` (F-AB), and an explicit `.<uint8>` with a string argument is a
+  // mismatch it can see; a call the checker cannot see through still meets the
+  // runtime boundary.
+  expectThrown('class C { m<T>(v: T) { return v; } } new C().m.<uint8>("x");', 'not assignable');
 });
 
 test('a higher-kinded method parameter follows the function rule', () => {
