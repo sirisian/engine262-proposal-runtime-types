@@ -78,12 +78,11 @@ test('the same for a SCALAR parameter', async () => {
   expect(await evaluate(src)).toBe('evaluated');
 });
 
-// F-AE, pinned (pre-existing, not part of the inverse): with EXPLICIT type
-// arguments, a computed parameter type that applies a class - `b: boxOf(T)`
-// with `boxOf` yielding `Box.<t>` - is enforced against the binding itself
-// (`uint.<8>`) rather than the builder's result (`Box.<uint8>`), so the call
-// is refused; an identity builder passes because the two coincide.
-test.fails('explicit type arguments through a class-applying builder (F-AE)', async () => {
+test('explicit type arguments through a class-applying builder (F-AE closed)', async () => {
+  // F-AE: the specialized record reaching the second enforcement had lost its
+  // [[Constructor]] to interning, and IsOfType fell back to the bare class's
+  // prototype, which a specialized instance never chains to. Membership now
+  // asks the instance's own class type.
   const src = 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
     + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL

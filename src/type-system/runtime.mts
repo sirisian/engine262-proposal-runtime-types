@@ -2986,6 +2986,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           }
           proto = Q(yield* proto.GetPrototypeOf());
         }
+        // F-AE: a SPECIALIZED class has two constructors here - one from the
+        // expression-position route (`Box.<t>`, the constructor) and one from
+        // the type-position route (`type Box.<t>`) - and the interned record
+        // carries whichever came first, so the prototype walk can miss an
+        // instance of the other. Identity is by declaration and arguments, so
+        // the instance's OWN class type answers membership as a subtype test.
+        if (((t.Arguments as readonly unknown[] | undefined)?.length ?? 0) > 0) {
+          const own = RuntimeTypeOf(value);
+          if (own.Kind === 'nominal' && own.Declaration === t.Declaration) {
+            return IsSubtype(own, t, []);
+          }
+        }
         return false;
       }
       // proposal-runtime-types #sec-reflection-contexts: a REFLECTION CONTEXT
