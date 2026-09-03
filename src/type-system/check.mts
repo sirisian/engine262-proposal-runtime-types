@@ -973,6 +973,157 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
 }
 
+/**
+ * The signature of an Array method for a given ELEMENT type (D46).
+ *
+ * Lifted to module scope so both readers can share ONE source: the checker
+ * instantiates it with the receiver's element to check a call, and the
+ * reflection path instantiates it with a type PARAMETER to report what the
+ * method IS - `a.map` is the same object as `Array.prototype.map`, so a
+ * receiver-specialised signature is not reportable and the generic one is.
+ *
+ * #sec-runtimetypeof requires the second: it names built-ins collapsing "into
+ * one entry" as the cost its step was changed to avoid, and says the operation
+ * "reports what a value IS".
+ */
+export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
+  const anyType = { Kind: 'any' as const };
+  const numberType = makePrimitive('number');
+  const boolType = makePrimitive('boolean');
+  const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
+  switch (name) {
+    case 'includes':
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
+    case 'indexOf':
+    case 'lastIndexOf':
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: numberType, Untyped: false }] } as unknown as Known;
+    case 'fill':
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType, numberType], 1), Return: anyType, Untyped: false }] } as unknown as Known;
+    case 'at':
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([numberType], 1), Return: element, Untyped: false }] } as unknown as Known;
+    // A result drawn from the receiver's own elements is an array of the same
+    // element type: `filter` selects, `slice` copies a range, `reverse` and
+    // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
+    // the callback's return, which needs the callback typed first, and
+    // claiming the receiver's type would be wrong rather than merely
+    // imprecise (F79).
+    // The methods that take a CALLBACK: its first parameter is the element,
+    // its second the index at `uint32`, its third the array itself. Writing
+    // that as a function type is what lets the call site push those types
+    // into the literal's parameters (F80).
+    case 'forEach':
+    case 'map':
+    case 'find':
+    case 'findIndex':
+    case 'findLast':
+    case 'findLastIndex':
+    case 'some':
+    case 'every': {
+      const callback = {
+        Kind: 'function',
+        Signatures: [{
+          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 1),
+          Return: anyType,
+          Untyped: false,
+        }],
+      } as unknown as TypeRecord;
+      const result = name === 'map' ? anyType : (name === 'find' || name === 'findLast' ? element : anyType);
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: result, Untyped: false }] } as unknown as Known;
+    }
+    case 'filter': {
+      // Selects from the receiver's own elements, so the result keeps the
+      // element type AND the callback sees it.
+      const callback = {
+        Kind: 'function',
+        Signatures: [{
+          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 1),
+          Return: anyType,
+          Untyped: false,
+        }],
+      } as unknown as TypeRecord;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
+    }
+    case 'shrinkToFit':
+      // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
+      // It had no entry, so it resolved to ~any~ and `a.shrinkToFit(1, 2, 3)`
+      // was accepted - the same hole Phase C closed for `capacity`, reopened
+      // by adding an operation without adding its signature alongside.
+      return { Kind: 'function', Signatures: [{ Parameters: [], Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
+    case 'reserve':
+      // #sec-array.prototype.reserve: takes a count and answers nothing. The
+      // parameter is the index type and not `number`, so that a reserve
+      // argument is checked exactly as a length or a capacity would be.
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([builtinTypeRecord('uint', [64])!], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
+    // `push`, `unshift` and `splice` were absent from this table entirely
+    // (D102 row 2), so a foreign element raised no static error at all -
+    // `a.push("s")` on a `[].<uint8>` type-checked. The RUN TIME refused every
+    // one of them, which is what these entries are copied from: it throws for
+    // a wrong element and accepts a right one, `push` and `unshift` answer the
+    // new length, and `splice` answers an array of the element.
+    //
+    // The element parameter is a REST, since all three are variadic -
+    // `a.push(x, y)` is legal and must stay so.
+    case 'push':
+    case 'unshift':
+      return {
+        Kind: 'function',
+        Signatures: [{ Parameters: [parameter(element, { Rest: true })], Return: numberType }],
+      } as Known;
+    case 'splice':
+      // The RETURN is `receiver`, as `slice`'s is, and NOT a freshly built
+      // array record. Building one gave `Extent: undefined`, and the checker
+      // then refused `let b: [].<uint8> = a.splice(0, 1)` - which happens to
+      // match what the RUN TIME does, and the run time is WRONG there: it
+      // reports `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`,
+      // a malformed extent. Copying an error is not agreement (D103).
+      return {
+        Kind: 'function',
+        Signatures: [{
+          Parameters: [
+            parameter(numberType, { Optional: true }),
+            parameter(numberType, { Optional: true }),
+            parameter(element, { Rest: true }),
+          ],
+          Return: receiver,
+        }],
+      } as Known;
+    // `concat` is NOT one of the five below (D102).
+    //
+    // It shared their case and so returned the RECEIVER, ignoring its
+    // arguments - but concat's result unions the arguments' element types,
+    // which is what the RUN TIME already answers:
+    // `Reflect.typeOf(a.concat(["s"]))` is `[].<string | uint.<8>>` where the
+    // checker said `[].<uint.<8>>`.
+    //
+    // The consequence was a LOOSENING, not a display quirk: the checker
+    // believed the result had the receiver's type, so
+    // `let b: [].<uint8> = a.concat(["s"])` matched and ran, and `b[1]` was
+    // the string `"s"` inside an array typed `[].<uint8>`. BOTH halves missed
+    // it. `a.slice()` bound at `[].<string>` was caught throughout, which is
+    // what located the shared case.
+    //
+    // The parameters are arrays OF THE ELEMENT rather than the `any` pair the
+    // shared case gives, so a foreign element is refused at the argument too -
+    // the same entry caused both.
+    case 'concat': {
+      const arrayOfElement = { Kind: 'array', Element: element, Extent: undefined } as unknown as TypeRecord;
+      return {
+        Kind: 'function',
+        Signatures: [{ Parameters: shapes([arrayOfElement, arrayOfElement], 0), Return: receiver }],
+      } as Known;
+    }
+    case 'slice':
+    case 'reverse':
+    case 'sort':
+    case 'toReversed':
+    case 'toSorted':
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
+    default:
+      return null;
+  }
+};
+
+
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
@@ -6855,7 +7006,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : null;
           const cbArg = (node as { Arguments?: readonly ParseNode[] }).Arguments?.[0];
           if (recv && recv.Kind === 'array' && cbArg) {
-            const returned = inferredReturnType(cbArg, [recv.Element, builtinTypeRecord('uint', [32]), recv]);
+            const returned = inferredReturnType(cbArg, [recv.Element, builtinTypeRecord('uint', [64])!, recv]);
             if (returned) {
               // `flatMap` flattens ONE level, so a callback returning an array
               // contributes that array's elements and one returning a value
@@ -7252,7 +7403,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // type directly.
               return indexTypeRecord();
             }
-            const sig = arrayMethodSignature(name, receiver.Element, receiver);
+            const sig = ArrayMethodSignature(name, receiver.Element, receiver);
             if (sig) {
               return sig;
             }
@@ -7293,7 +7444,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 errors.push(completion.Value as ObjectValue);
                 return null;
               }
-              const sig = arrayMethodSignature(name, spanElement, receiver!);
+              const sig = ArrayMethodSignature(name, spanElement, receiver!);
               if (sig) {
                 return sig;
               }
@@ -10396,7 +10547,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
     const boolType = makePrimitive('boolean');
-    const u32 = builtinTypeRecord('uint', [32])!;
+    const u32 = builtinTypeRecord('uint', [64])!!;
     const anyT = { Kind: 'any' as const } as TypeRecord;
     const fn = (params: TypeRecord[], Return: TypeRecord) => ({
       Kind: 'function',
@@ -10669,143 +10820,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
       case 'finally':
         return { Kind: 'function', Signatures: [{ Parameters: shapes([{ Kind: 'function', Signatures: [{ Parameters: [], Return: anyType, Untyped: false }] } as unknown as TypeRecord], 0), Return: promiseOf(resolution), Untyped: false }] } as unknown as Known;
-      default:
-        return null;
-    }
-  };
-
-  const arrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
-    const anyType = { Kind: 'any' as const };
-    const numberType = makePrimitive('number');
-    const boolType = makePrimitive('boolean');
-    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
-    switch (name) {
-      case 'includes':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
-      case 'indexOf':
-      case 'lastIndexOf':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: numberType, Untyped: false }] } as unknown as Known;
-      case 'fill':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType, numberType], 1), Return: anyType, Untyped: false }] } as unknown as Known;
-      case 'at':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([numberType], 1), Return: element, Untyped: false }] } as unknown as Known;
-      // A result drawn from the receiver's own elements is an array of the same
-      // element type: `filter` selects, `slice` copies a range, `reverse` and
-      // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
-      // the callback's return, which needs the callback typed first, and
-      // claiming the receiver's type would be wrong rather than merely
-      // imprecise (F79).
-      // The methods that take a CALLBACK: its first parameter is the element,
-      // its second the index at `uint32`, its third the array itself. Writing
-      // that as a function type is what lets the call site push those types
-      // into the literal's parameters (F80).
-      case 'forEach':
-      case 'map':
-      case 'find':
-      case 'findIndex':
-      case 'findLast':
-      case 'findLastIndex':
-      case 'some':
-      case 'every': {
-        const callback = {
-          Kind: 'function',
-          Signatures: [{
-            Parameters: shapes([element, builtinTypeRecord('uint', [32]) ?? numberType, receiver], 1),
-            Return: anyType,
-            Untyped: false,
-          }],
-        } as unknown as TypeRecord;
-        const result = name === 'map' ? anyType : (name === 'find' || name === 'findLast' ? element : anyType);
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: result, Untyped: false }] } as unknown as Known;
-      }
-      case 'filter': {
-        // Selects from the receiver's own elements, so the result keeps the
-        // element type AND the callback sees it.
-        const callback = {
-          Kind: 'function',
-          Signatures: [{
-            Parameters: shapes([element, builtinTypeRecord('uint', [32]) ?? numberType, receiver], 1),
-            Return: anyType,
-            Untyped: false,
-          }],
-        } as unknown as TypeRecord;
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
-      }
-      case 'shrinkToFit':
-        // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
-        // It had no entry, so it resolved to ~any~ and `a.shrinkToFit(1, 2, 3)`
-        // was accepted - the same hole Phase C closed for `capacity`, reopened
-        // by adding an operation without adding its signature alongside.
-        return { Kind: 'function', Signatures: [{ Parameters: [], Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
-      case 'reserve':
-        // #sec-array.prototype.reserve: takes a count and answers nothing. The
-        // parameter is the index type and not `number`, so that a reserve
-        // argument is checked exactly as a length or a capacity would be.
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeRecord()], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
-      // `push`, `unshift` and `splice` were absent from this table entirely
-      // (D102 row 2), so a foreign element raised no static error at all -
-      // `a.push("s")` on a `[].<uint8>` type-checked. The RUN TIME refused every
-      // one of them, which is what these entries are copied from: it throws for
-      // a wrong element and accepts a right one, `push` and `unshift` answer the
-      // new length, and `splice` answers an array of the element.
-      //
-      // The element parameter is a REST, since all three are variadic -
-      // `a.push(x, y)` is legal and must stay so.
-      case 'push':
-      case 'unshift':
-        return {
-          Kind: 'function',
-          Signatures: [{ Parameters: [parameter(element, { Rest: true })], Return: numberType }],
-        } as Known;
-      case 'splice':
-        // The RETURN is `receiver`, as `slice`'s is, and NOT a freshly built
-        // array record. Building one gave `Extent: undefined`, and the checker
-        // then refused `let b: [].<uint8> = a.splice(0, 1)` - which happens to
-        // match what the RUN TIME does, and the run time is WRONG there: it
-        // reports `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`,
-        // a malformed extent. Copying an error is not agreement (D103).
-        return {
-          Kind: 'function',
-          Signatures: [{
-            Parameters: [
-              parameter(numberType, { Optional: true }),
-              parameter(numberType, { Optional: true }),
-              parameter(element, { Rest: true }),
-            ],
-            Return: receiver,
-          }],
-        } as Known;
-      // `concat` is NOT one of the five below (D102).
-      //
-      // It shared their case and so returned the RECEIVER, ignoring its
-      // arguments - but concat's result unions the arguments' element types,
-      // which is what the RUN TIME already answers:
-      // `Reflect.typeOf(a.concat(["s"]))` is `[].<string | uint.<8>>` where the
-      // checker said `[].<uint.<8>>`.
-      //
-      // The consequence was a LOOSENING, not a display quirk: the checker
-      // believed the result had the receiver's type, so
-      // `let b: [].<uint8> = a.concat(["s"])` matched and ran, and `b[1]` was
-      // the string `"s"` inside an array typed `[].<uint8>`. BOTH halves missed
-      // it. `a.slice()` bound at `[].<string>` was caught throughout, which is
-      // what located the shared case.
-      //
-      // The parameters are arrays OF THE ELEMENT rather than the `any` pair the
-      // shared case gives, so a foreign element is refused at the argument too -
-      // the same entry caused both.
-      case 'concat': {
-        const arrayOfElement = { Kind: 'array', Element: element, Extent: undefined } as unknown as TypeRecord;
-        return {
-          Kind: 'function',
-          Signatures: [{ Parameters: shapes([arrayOfElement, arrayOfElement], 0), Return: receiver }],
-        } as Known;
-      }
-      case 'slice':
-      case 'reverse':
-      case 'sort':
-      case 'toReversed':
-      case 'toSorted':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
       default:
         return null;
     }
