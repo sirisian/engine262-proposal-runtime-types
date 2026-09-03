@@ -6563,6 +6563,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (referenced === 'undefined' && !typeParameterInScope(referenced)) {
           return undefinedType as Known;
         }
+        // The ref-rest second-class rule, statically: the innermost frame that
+        // knows the name decides whether it is a ref rest, and the reference's
+        // PARENT decides whether the form is one of the three admitted.
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          const fr = frames[i] as { declaredNames: Set<string>, refRestNames?: Set<string> };
+          if (fr.refRestNames?.has(referenced)) {
+            const parent = (node as { parent?: ParseNode }).parent as {
+              type?: string, MemberExpression?: unknown, Expression?: { type?: string } | null, IdentifierName?: { name?: string } | null,
+            } | undefined;
+            const isObjectOf = parent?.type === 'MemberExpression' && parent.MemberExpression === node;
+            const constantIndex = isObjectOf && parent!.Expression !== null && parent!.Expression !== undefined && parent!.Expression!.type === 'NumericLiteral';
+            const lengthRead = isObjectOf && parent!.Expression == null && parent!.IdentifierName?.name === 'length';
+            const forwarded = parent?.type === 'AssignmentRestElement';
+            if (!constantIndex && !lengthRead && !forwarded) {
+              const completion = Throw.StaticTypeError('$1', Value(`a ref rest binds no array: ${referenced} is usable only as ${referenced}[k] with a constant k, ${referenced}.length, or ...${referenced} forwarded to another ref rest`)) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+            break;
+          }
+          if (fr.declaredNames.has(referenced)) {
+            break;
+          }
+        }
         return lookup(referenced);
       }
       case 'ThisExpression':
@@ -11890,6 +11913,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : undefined;
         if (named && !frames[frames.length - 1].declaredNames.has(named)) {
           declare(named, annotated ? resolveType(annotated.Type) : null);
+        }
+      } else if (p.type === 'BindingRestElement' && (p as { Ref?: boolean }).Ref === true) {
+        // The static half of the ref-rest second-class rule (#sec-function-types;
+        // PLAN-variadic-and-named-generic-arguments.md 2.5): the name a
+        // `ref ...refs` binds in this frame. A reference to it is admitted in
+        // exactly three forms - `refs[k]` with a constant k, `refs.length`, and
+        // `...refs` as a call argument - and refused statically in every other,
+        // since the run time refuses only an out-of-range index or a store.
+        const restName = (p as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+        if (typeof restName === 'string') {
+          const frame = frames[frames.length - 1] as { refRestNames?: Set<string> };
+          (frame.refRestNames ??= new Set<string>()).add(restName);
+          declare(restName, null);
         }
       }
       index += 1;

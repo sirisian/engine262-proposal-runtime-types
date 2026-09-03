@@ -41,3 +41,17 @@ test('the second-class rule: a run is never stored, passed whole, or indexed out
 test('a ref rest requires ref arguments', () => {
   expectThrown('function f(ref ...xs: [].<uint32>): void {} f(1, 2);', 'requires a ref argument');
 });
+
+test('the static half: a non-constant index, a property, a bare use, and a whole pass are refused before the program runs', () => {
+  // These never evaluate the body - the refusal is the checker's.
+  expectThrown('function f(ref ...xs: [].<uint32>): uint32 { let i = 0; return xs[i]; }', 'binds no array');
+  expectThrown('function f(ref ...xs: [].<uint32>): uint32 { return xs.foo; }', 'binds no array');
+  expectThrown('function f(ref ...xs: [].<uint32>): void { const saved = xs; }', 'binds no array');
+  expectThrown('function h(z: any): void {} function f(ref ...xs: [].<uint32>): void { h(xs); }', 'binds no array');
+  expectThrown('function f(ref ...xs: [].<uint32>): void { let s; s = xs; }', 'binds no array');
+});
+
+test('the static half admits the three forms, and a same-named binding elsewhere is not a ref rest', () => {
+  expect(evaluated(`function g(ref ...ys: [].<uint32>): uint32 { return ys.length; } function f(ref ...xs: [].<uint32>): string { return String(xs[0]) + "/" + String(xs.length) + "/" + String(g(...xs)); } ${AB} f(ref a, ref b);`)).toBe('1/2/2');
+  expect(evaluated('function f(ref ...xs: [].<uint32>): uint32 { return xs.length; } const xs = [1, 2, 3]; String(xs.length);')).toBe('3');
+});
