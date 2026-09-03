@@ -173,16 +173,16 @@ test('B.6: rung one - direct, recursive, and through explicit arguments', () => 
   expect(evaluated('function lit<...K: [].<string>>(...ks: K): string { return K[1]; } lit("a", "b");')).toBe('b');
 });
 
-// F-X, pinned: rung two - a pack that appears only inside a builder with a
-// CLOSED constraint is bound by trialling the constraint's inhabitants.
-test.fails('B.6: rung two - trial over a closed constraint (F-X)', () => {
-  expect(evaluated('type maskOf(Bs: type): type { const es = Reflect.getReflection(Bs).elements; return Reflect.makeType({ kind: "literal", value: (es[0].type === true ? 2 : 0) + (es[1].type === true ? 1 : 0) }); } function withFlags<...Bs extends [2].<boolean1>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(2 := uint8));')).toBe('2');
+// F-X, pack half pinned (scalar half passes in generics/inference-ladder.test.mts):
+// the trial enumerates the closed constraint's tuples and verifies forward, but
+// a candidate built by the binder does not intern to the Type Object a written
+// `type true` does inside the builder.
+test.fails('B.6: rung two - trial over a closed pack constraint (F-X, pack)', () => {
+  expect(evaluated('function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); } function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(1 := uint16));')).toBe('2');
 });
 
-// F-Y, pinned: rung three - a builder between the pack and the arguments binds
-// only through its declared inverse, and the refusal NAMES the builder.
-test.fails('B.6: rung three - a declared inverse binds a pack, and its absence names the builder (F-Y)', () => {
-  expectThrown('type wrapOf(Ts: type): type { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf');
+test('B.6: rung three - a builder with no inverse refuses, NAMING the builder (F-Y closed)', () => {
+  expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
 });
 
 test('B.6: a pack refuses to bind from a spread of unknown length (F-Z closed; F-AC retracted)', () => {

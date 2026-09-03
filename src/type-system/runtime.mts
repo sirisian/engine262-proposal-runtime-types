@@ -971,6 +971,112 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
  * infers S as the tuple of the trailing arguments' (literal, under constraint)
  * types. A parameter with no inferable argument falls back to its default, if any.
  */
+/**
+ * PLAN-variadic-and-named-generic-arguments.md 2.6, rung three
+ * (#sec-inference-through-results, #sec-declared-inverses): the name of the
+ * BUILDER - a computed type in a parameter annotation - through which a type
+ * parameter is reached but not bound, or null where no annotation mentions the
+ * parameter inside a computed type. A parameter reached only through a builder
+ * binds through that builder's declared inverse and never by search; a call
+ * that supplies no explicit argument for it is refused naming the builder,
+ * rather than binding it silently to `any` and letting the builder run over
+ * nothing.
+ */
+function builderMentioning(formals: readonly ParseNode[], paramName: string): string | null {
+  const mentions = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const n = node as { type?: string, name?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } };
+    if (n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === paramName && (n.TypeName.MemberNames?.length ?? 0) === 0) {
+      return true;
+    }
+    // A computed type's arguments are EXPRESSIONS: `T` in `wrapOf(T)` is an
+    // IdentifierReference naming the parameter.
+    if (n.type === 'IdentifierReference' && n.name === paramName) {
+      return true;
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (n as Record<string, unknown>)[key];
+      if (Array.isArray(child) ? child.some(mentions) : (child && typeof child === 'object' && mentions(child))) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const builderIn = (node: unknown): string | null => {
+    if (!node || typeof node !== 'object') {
+      return null;
+    }
+    const n = node as { type?: string, Callee?: { TypeName?: { IdentifierReference?: { name?: string } } }, Arguments?: readonly unknown[] };
+    if (n.type === 'ComputedType' && (n.Arguments ?? []).some(mentions)) {
+      return n.Callee?.TypeName?.IdentifierReference?.name ?? 'the builder';
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (n as Record<string, unknown>)[key];
+      const found = Array.isArray(child) ? child.map(builderIn).find((x) => x !== null) ?? null : (child && typeof child === 'object' ? builderIn(child) : null);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  };
+  for (const f of formals) {
+    const annotation = (f as { TypeAnnotation?: { Type?: unknown } | null }).TypeAnnotation;
+    const found = builderIn(annotation?.Type);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Rung two (#sec-inference-through-results): the inhabitants of a CLOSED
+ * constraint - `boolean`, a literal, a union of those, an enumeration by its
+ * members, and a stated-extent array of any of these (the pack case, as
+ * tuples) - or null where the constraint is open. Capped, since a trial is a
+ * search over a finite set and not a solver.
+ */
+function closedInhabitants(constraint: TypeRecord, cap = 256): TypeRecord[] | null {
+  if (constraint.Kind === 'primitive' && constraint.Name === 'boolean') {
+    return [{ Kind: 'literal', Value: Value.true, Base: constraint } as TypeRecord, { Kind: 'literal', Value: Value.false, Base: constraint } as TypeRecord];
+  }
+  if (constraint.Kind === 'literal') {
+    return [constraint];
+  }
+  if (constraint.Kind === 'union') {
+    const members = (constraint as { Members: readonly TypeRecord[] }).Members.map((m) => closedInhabitants(m, cap));
+    if (members.some((m) => m === null)) {
+      return null;
+    }
+    const all = (members as TypeRecord[][]).flat();
+    return all.length <= cap ? all : null;
+  }
+  if (constraint.Kind === 'array') {
+    const extent = (constraint as { Extent?: number | string }).Extent;
+    if (typeof extent !== 'number') {
+      return null;
+    }
+    const element = closedInhabitants(constraint.Element, cap);
+    if (!element || element.length ** extent > cap) {
+      return null;
+    }
+    let tuples: TypeRecord[][] = [[]];
+    for (let k = 0; k < extent; k += 1) {
+      tuples = tuples.flatMap((t) => element.map((e) => [...t, e]));
+    }
+    return tuples.map((t) => CanonicalizeType({ Kind: 'tuple', Elements: t.map((e) => ({ Type: e, Rest: false, Initial: 'none' })) } as TypeRecord));
+  }
+  return null;
+}
+
 export function* InferGenericBindings(
   typeParameters: readonly ParseNode.TypeParameter[],
   formals: readonly ParseNode[],
@@ -1051,6 +1157,60 @@ export function* InferGenericBindings(
         }
       }
       if (bound === null) {
+        // Rung three (F-Y): a parameter reached only THROUGH A BUILDER binds
+        // through that builder's declared inverse, never by search - and no
+        // inverse mechanism exists here yet - so the call is refused naming the
+        // builder, as the design's diagnostic contract requires. Binding `any`
+        // here ran the builder over nothing and accepted every argument.
+        const builder = builderMentioning(formals, paramName);
+        if (builder) {
+          // Rung two (F-X): a CLOSED constraint proposes its inhabitants, each
+          // verified FORWARD - the builder evaluated over the candidate, the
+          // arguments checked against the result - and exactly one must pass.
+          const candidates = constraint === null ? null : closedInhabitants(constraint);
+          if (candidates && candidates.length > 0) {
+            const passing: TypeRecord[] = [];
+            for (const candidate of candidates) {
+              frame.set(paramName, candidate);
+              let accepts = true;
+              for (let i = 0; i < formals.length && accepts; i += 1) {
+                const annotation = (formals[i] as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation;
+                if (!annotation?.Type) {
+                  continue;
+                }
+                const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+                if (resolved.Type !== 'normal') {
+                  accepts = false;
+                  break;
+                }
+                const isRest = (formals[i] as { type?: string }).type === 'BindingRestElement';
+                const wanted = isRest ? restElementType(resolved.Value as TypeRecord) : resolved.Value as TypeRecord;
+                const argIndices = isRest ? args.map((_, k) => k).filter((k) => k >= i) : (i < args.length ? [i] : []);
+                for (const k of argIndices) {
+                  const referent = args[k] instanceof ReferenceValue ? Q(yield* GetValue((args[k] as ReferenceValue).Location)) : args[k]!;
+                  const fits = EnsureCompletion(yield* IsOfType(referent, wanted));
+                  if (fits.Type !== 'normal' || fits.Value !== true) {
+                    accepts = false;
+                    break;
+                  }
+                }
+              }
+              frame.delete(paramName);
+              if (accepts) {
+                passing.push(candidate);
+              }
+            }
+            if (passing.length === 1) {
+              bound = passing[0]!;
+            } else if (passing.length === 0) {
+              return Throw.TypeError('$1', Value(`no inhabitant of ${displayType(constraint!)} makes ${builder} accept the arguments; supply explicit type arguments for ${paramName}`));
+            } else {
+              return Throw.TypeError('$1', Value(`${passing.length} inhabitants of ${displayType(constraint!)} make ${builder} accept the arguments; supply explicit type arguments for ${paramName}`));
+            }
+          } else {
+            return Throw.TypeError('$1', Value(`${builder} declares no inverse, so ${paramName} cannot be inferred through it; supply explicit type arguments`));
+          }
+        }
         // Nothing to infer from and no default: bind `any` so downstream
         // resolution does not throw on an unbound reference.
         bound = anyType;
