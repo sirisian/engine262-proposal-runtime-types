@@ -2558,9 +2558,18 @@ export function SubstituteTypeArguments(
       if (withArguments.Arguments && withArguments.Arguments.length > 0) {
         const out = { ...r } as TypeRecord;
         seen.set(r, out);
-        (out as unknown as { Arguments: unknown }).Arguments = withArguments.Arguments.map((a) => (typeof a === 'number'
+        const substitutedArguments = withArguments.Arguments.map((a) => (typeof a === 'number'
           ? a
           : walk(a as TypeRecord)));
+        (out as unknown as { Arguments: unknown }).Arguments = substitutedArguments;
+        // F-AF: substituted arguments name a DIFFERENT specialization than the
+        // one whose [[Constructor]] this record carried (`Box.<T>`'s is not
+        // `Box.<uint8>`'s); the slot is dropped and re-resolved where the
+        // record is used, rather than pointing `Box.<uint8>` at `Box.<T>`'s
+        // constructor.
+        if ('Constructor' in (out as object) && substitutedArguments.some((a, i) => a !== withArguments.Arguments![i])) {
+          delete (out as unknown as { Constructor?: unknown }).Constructor;
+        }
         return out;
       }
     }

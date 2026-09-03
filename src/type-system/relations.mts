@@ -1590,6 +1590,25 @@ function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings
 }
 
 /** Replaces bound ~parameter~ records throughout `t`, structurally, for the relation's own use. */
+/**
+ * F-AF: a nominal whose ARGUMENTS were substituted is a different
+ * specialization from the one whose [[Constructor]] the record carried
+ * (`Box.<T>`'s constructor is not `Box.<uint8>`'s), so the slot is dropped
+ * and the specialization's own constructor is looked up where the record is
+ * used (IsOfType's own-class-type membership; the type-position route's
+ * cache lookup). Keeping it made `Box.<uint8>` name the wrong constructor.
+ */
+function dropConstructorIfChanged(original: TypeRecord, substituted: TypeRecord): TypeRecord {
+  const before = (original as { Arguments?: readonly unknown[] }).Arguments ?? [];
+  const after = (substituted as { Arguments?: readonly unknown[] }).Arguments ?? [];
+  const changed = before.length !== after.length || before.some((a, i) => a !== after[i]);
+  if (!changed || !('Constructor' in (substituted as object))) {
+    return substituted;
+  }
+  const { Constructor: _dropped, ...rest } = substituted as TypeRecord & { Constructor?: unknown };
+  return rest as TypeRecord;
+}
+
 export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): TypeRecord {
   if (t.Kind === 'parameter') {
     return bindings.get(t) ?? t;
@@ -1610,7 +1629,7 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
         })),
       } as TypeRecord;
     case 'nominal':
-      return { ...t, Arguments: t.Arguments.map((a) => (typeof a === 'object' ? substituteParameterRecords(a as TypeRecord, bindings) : a)) } as TypeRecord;
+      return dropConstructorIfChanged(t, { ...t, Arguments: t.Arguments.map((a) => (typeof a === 'object' ? substituteParameterRecords(a as TypeRecord, bindings) : a)) } as TypeRecord);
     default:
       return t;
   }
