@@ -23,7 +23,6 @@ import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
-import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';

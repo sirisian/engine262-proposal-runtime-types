@@ -95,6 +95,7 @@ const INSPECTORS = {
   // proposal-runtime-types #sec-vector-types: the lanes, parenthesized, which is how the design writes a vector literal.
   Vector: (v: VectorValue, _ctx: InspectContext, i: (v: Value) => string) => `(${v.lanes.map((lane) => i(lane)).join(', ')})`,
   Reference: () => '[reference]',
+  ReferenceRun: () => '[reference run]',
   BigInt: (v: BigIntValue) => `${R(v)}n`,
   String: (v: JSStringValue) => {
     const s = JSON.stringify(v.stringValue()).slice(1, -1);

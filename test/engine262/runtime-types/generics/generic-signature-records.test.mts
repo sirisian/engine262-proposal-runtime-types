@@ -6,7 +6,7 @@
 // in the later phases; this file pins what works today and what Phase 5.2
 // still owes.
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 test('a generic method signature in an interface keeps its type parameters (the 0.1 fix)', () => {
   // functionRecordFromSignature was called WITHOUT the member's TypeParameters,

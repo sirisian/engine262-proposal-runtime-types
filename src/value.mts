@@ -88,6 +88,7 @@ export type Value =
   // sibling of TypedNumberValue carrying N lanes rather than one.
   | VectorValue
   | ReferenceValue
+  | ReferenceRunValue
   | BigIntValue
   | ObjectValue;
 
@@ -150,6 +151,7 @@ export type PrimitiveValue =
   // sibling of TypedNumberValue carrying N lanes rather than one.
   | VectorValue
   | ReferenceValue
+  | ReferenceRunValue
   | BigIntValue;
 
 /** https://tc39.es/ecma262/#sec-ecmascript-language-types */
@@ -1573,6 +1575,10 @@ export class ReferenceRunValue extends PrimitiveValue {
     for (const location of this.Locations) {
       location.mark(m);
     }
+  }
+
+  static {
+    Object.defineProperty(this.prototype, 'type', { value: 'ReferenceRun' });
   }
 }
 

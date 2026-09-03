@@ -12,6 +12,7 @@ import {
   type PropertyKeyValue,
   unwrapToNumber,
   isTypedNumber, ReferenceValue,
+  ReferenceRunValue,
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { VectorWrapperCreate } from '../type-system/vector-ops.mts';
@@ -485,6 +486,11 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
     // observable identity; a conversion applies to the referent.
     const referent = Q(yield* GetValue(argument.Location));
     return Q(yield* ToString(referent));
+  }
+  if (argument instanceof ReferenceRunValue) {
+    // proposal-runtime-types #sec-function-types: a `ref` rest binds no array;
+    // converting the run is the escape a reference never survives.
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
   }
   if (argument instanceof VectorValue) {
     // The lanes, comma-separated, in the manner an array of them prints.

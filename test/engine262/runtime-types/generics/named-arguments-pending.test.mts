@@ -11,7 +11,7 @@
 // binder unification of Phase 0.1/0.2, where displayType learns the canonical
 // form at the same time.
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 // NOT part of the remainder: the runtime BOUNDARY already tolerates a
 // positional short list (assignability matches through the declaration), so

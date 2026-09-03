@@ -224,7 +224,7 @@ function* Reflect_setPrototypeOf([target = Value.undefined, proto = Value.undefi
  * `inverse` for reflection. Called anywhere else it is refused, which is what
  * makes it a declaration-site fact and not a registry.
  */
-function* Reflect_declareInverse([context = Value.undefined, inverse = Value.undefined]: readonly Value[]): ValueEvaluator {
+function* Reflect_declareInverse([context = Value.undefined, inverse = Value.undefined]: Arguments): ValueEvaluator {
   if (!IsDecorationContextOpen(context)) {
     return Throw.TypeError('$1', Value('Reflect.declareInverse accepts only the decoration context of the declaration being decorated'));
   }

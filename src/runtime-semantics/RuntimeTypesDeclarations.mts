@@ -1955,10 +1955,10 @@ function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNo
       }
     }
   }
-  const specialized = CreateBuiltinFunction(function* SpecializedCall(args: readonly Value[], context: { thisValue?: Value }): ValueEvaluator {
+  const specialized = CreateBuiltinFunction(function* SpecializedCall(args: Arguments, context: { thisValue?: Value }): ValueEvaluator {
     pushTypeParameterFrame(frame);
     try {
-      return Q(yield* Call(fn, context.thisValue ?? Value.undefined, args as Value[]));
+      return Q(yield* Call(fn, context.thisValue ?? Value.undefined, Array.from(args, (a) => a ?? Value.undefined)));
     } finally {
       popTypeParameterFrame();
     }

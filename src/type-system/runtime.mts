@@ -18,7 +18,7 @@ import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
-import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
+import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
@@ -33,7 +33,7 @@ import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
-import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
+import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { IsSharableValueType } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
@@ -505,7 +505,7 @@ export function* BindTypeArgumentsInto(
           }
           elements.push(r);
         }
-        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false })) } as TypeRecord);
+        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })) } as TypeRecord);
       }
       if (constraint && packConstraintRefuses((record as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => e.Type), constraint)) {
         return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
@@ -604,7 +604,7 @@ export function* BindTypeArgumentRecords(
           }
           elements.push(r);
         }
-        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false })) } as TypeRecord);
+        record = CanonicalizeType({ Kind: 'tuple', Elements: elements.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })) } as TypeRecord);
       }
       if (q.TypeParameterConstraint) {
         const c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
@@ -1144,7 +1144,7 @@ function* proposeThroughDeclaredInverse(
   args: readonly Value[],
   typeParameters: readonly ParseNode.TypeParameter[],
   frame: Map<string, TypeRecord>,
-): Generator<unknown, TypeRecord | null | ThrowCompletion, unknown> {
+): PlainEvaluator<TypeRecord | null> {
   const site = builderSiteMentioning(formals, paramName);
   if (!site) {
     return null;
@@ -1200,7 +1200,7 @@ function* proposeThroughDeclaredInverse(
     }
     const called = EnsureCompletion(yield* Call(inverse, Value.undefined, [GetTypeObject(argType)]));
     if (called.Type !== 'normal') {
-      return called as ThrowCompletion;
+      return called as never;
     }
     proposal = called.Value as Value;
     table.set(key, proposal);
@@ -1411,10 +1411,7 @@ export function* InferGenericBindings(
             // together), and binds only after the forward verification rung
             // two performs. The call is memoized per site and argument type,
             // and metered.
-            const proposed = yield* proposeThroughDeclaredInverse(builder, paramName, formals, args, typeParameters, frame);
-            if (proposed instanceof ThrowCompletion) {
-              return proposed;
-            }
+            const proposed = Q(yield* proposeThroughDeclaredInverse(builder, paramName, formals, args, typeParameters, frame));
             if (proposed === null) {
               return Throw.TypeError('$1', Value(`${builder} declares no inverse, so ${paramName} cannot be inferred through it; supply explicit type arguments`));
             }
@@ -4448,7 +4445,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
             sig.TypeAnnotation,
             sig.TypeParameters?.TypeParameterList,
           ));
-          Signatures.push(...(built as { Signatures: SignatureRecord[] }).Signatures);
+          Signatures.push(...(built as unknown as { Signatures: readonly SignatureRecord[] }).Signatures);
         }
         return CanonicalizeType({ Kind: 'function', Signatures } as TypeRecord);
       }

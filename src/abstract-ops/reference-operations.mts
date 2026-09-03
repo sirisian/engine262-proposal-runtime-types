@@ -75,7 +75,7 @@ export function IsPrivateReference(V: ReferenceRecord): V is ReferenceRecord & {
 /** https://tc39.es/ecma262/#sec-getvalue */
 /** F-T: set by the rest binding while it initializes its own run binding. */
 let initializingReferenceRun = false;
-export function* withReferenceRunInitializationEvaluator<T>(f: () => Generator<unknown, T, unknown>): Generator<unknown, T, unknown> {
+export function* withReferenceRunInitializationEvaluator<T>(f: () => PlainEvaluator<T>): PlainEvaluator<T> {
   initializingReferenceRun = true;
   try {
     return yield* f();
