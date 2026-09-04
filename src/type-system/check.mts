@@ -3877,15 +3877,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const thisTypeFrames: Known[] = [];
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
-    if (node && contextual && (node as ParseNode).type === 'CallExpression') {
-      contextualCallTypes.set(node as ParseNode, contextual);
+    // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
+    // that reads it - the call, the object literal - and `( … )` is a node of
+    // its own in between, so a parenthesized literal was recorded against
+    // nothing and adapted against nothing:
+    // `let o: { x: int32 } = ({ x: 1 });` was refused where the same value
+    // without the parentheses is accepted. Parentheses do not change what an
+    // expression means and must not change whether it is accepted.
+    //
+    // It is also why a CONCISE arrow returning an object literal never adapted.
+    // `() => ({ d: true })` must parenthesize to be an expression body at all,
+    // so every such arrow arrived here wrapped, while the block form
+    // `() => { return { d: true }; }` arrived with the literal itself - one
+    // spelling of a function adapting and the other not.
+    //
+    // Everything below reads `inner`, not `node`: the FRESHNESS walk needs it
+    // as much as the adaptation does. Looking through for adaptation alone
+    // makes `({ x: 1, zz: 2 })` adapt its members and then be asked about the
+    // excess one against a node that has no members to walk, which accepts it.
+    let inner = node as ParseNode | null | undefined;
+    while (inner && inner.type === 'ParenthesizedExpression') {
+      const next = (inner as unknown as { Expression?: ParseNode }).Expression;
+      if (!next || next === inner) {
+        break;
+      }
+      inner = next;
+    }
+    if (inner && contextual && inner.type === 'CallExpression') {
+      contextualCallTypes.set(inner, contextual);
     }
     // An OBJECT LITERAL's members adapt to the target's members, the way
     // a static's arguments adapt to its target. Recorded here and read in
     // `objectLiteralShape`, which is reached from `staticType`'s own arm and so
     // cannot take the target as a parameter.
-    if (node && contextual && (node as ParseNode).type === 'ObjectLiteral') {
-      contextualObjectTypes.set(node as ParseNode, contextual);
+    if (inner && contextual && inner.type === 'ObjectLiteral') {
+      contextualObjectTypes.set(inner, contextual);
     }
     if (!node) {
       return null;
@@ -4138,7 +4164,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // (#sec-array-types).
       return null;
     }
-    if (node.type === 'ObjectLiteral' && contextual) {
+    if (inner && inner.type === 'ObjectLiteral' && contextual) {
       // A nominal carrying [[Arguments]] has them SUBSTITUTED into its structure
       // before the literal is checked member by member. `structureOf`
       // answers the DECLARED structure, whose members are still the
@@ -4271,7 +4297,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // takes the literal - needs an arm CHOSEN, which the union rule left open where the
       // arms disagree. Every property refused here is refused under either.
       if (unionFreshArms.length > 0) {
-        for (const member of node.PropertyDefinitionList ?? []) {
+        for (const member of (inner as ParseNode.ObjectLiteral).PropertyDefinitionList ?? []) {
           if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
             continue;
           }
@@ -4405,7 +4431,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // walk below would not have reported - it names it better - so the
         // refusal set is unchanged.
         if (intersectionArms.length > 1) {
-          const literalHere = objectLiteralMembers(node as unknown as ParseNode);
+          const literalHere = objectLiteralMembers(inner as unknown as ParseNode);
           if (literalHere) {
             const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
             if (offending) {
@@ -4423,7 +4449,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        checkObjectLiteralAgainst(node as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
+        checkObjectLiteralAgainst(inner as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
         return contextual;
       }
     }

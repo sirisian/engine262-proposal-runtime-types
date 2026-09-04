@@ -1474,3 +1474,31 @@ test('a literal member adapts to a LITERAL arm of a union', () => {
   expect(accepts('let c: { n: 1 } | { n: 2 } = { n: "s" };')).toBe(false);
   expect(accepts('let c: { p: { x: int32 } } | { p: { x: string } } = { p: { x: (1 := int32), zz: "s" } };')).toBe(false);
 });
+
+test('parentheses are transparent to contextual typing and to freshness', () => {
+  // `( … )` is a node of its own between the target and the literal that reads
+  // the contextual, so a parenthesized literal was recorded against nothing and
+  // adapted against nothing - the same value without the parentheses being
+  // accepted. Parentheses do not change what an expression means and must not
+  // change whether it is accepted.
+  expect(accepts('let o: { x: int32 } = ({ x: 1 });')).toBe(true);
+  expect(accepts('let o: { x: int32 } = ((({ x: 1 })));')).toBe(true);
+  expect(accepts('type R = { d: true } | { d: false }; let o: R = ({ d: true });')).toBe(true);
+
+  // This is why a CONCISE arrow returning an object literal never adapted: it
+  // must parenthesize to be an expression body at all, while the block form
+  // reaches the same check with the literal itself.
+  expect(accepts('let f: () => { x: int32 } = () => ({ x: 1 });')).toBe(true);
+  expect(accepts('function g(h: () => { x: int32 }) {} g(() => ({ x: 1 }));')).toBe(true);
+  expect(accepts('let f: () => () => { x: int32 } = () => () => ({ x: 1 });')).toBe(true);
+
+  // FRESHNESS has to look through them too, and separately: adapting through
+  // the parentheses while the excess-member walk still read the wrapper - which
+  // has no members - accepted an excess property. The last row failed even
+  // before adaptation reached through, an accidental refusal having masked it.
+  expect(accepts('let o: { x: int32 } = ({ x: 1, zz: 2 });')).toBe(false);
+  expect(accepts('let o: { x: int32 } = ({ x: (1 := int32), zz: 2 });')).toBe(false);
+  expect(accepts('let o: { p: { x: int32 } } = ({ p: ({ x: 1, zz: 2 }) });')).toBe(false);
+  expect(accepts('let o: { x: int32, y: uint8 } = ({ x: 1 });')).toBe(false);
+  expect(accepts('let o: { x: int32 } = ({ x: "s" });')).toBe(false);
+});
