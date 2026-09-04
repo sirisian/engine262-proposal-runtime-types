@@ -81,7 +81,7 @@ function* Evaluate_UnaryExpression_Delete({ UnaryExpression }: ParseNode.UnaryEx
     // the element type. This lives on the OPERATOR rather than in [[Delete]],
     // because ArraySetLength truncates by deleting from the top and asserts
     // that those deletes are infallible: shortening an array removes elements
-    // without leaving a hole, and it is the hole this rule is about (F51).
+    // without leaving a hole, and it is the hole this rule is about.
     if (surroundingAgent.feature('runtime-types')
         && (baseObj as { TypedElement?: unknown }).TypedElement !== undefined
         && isArrayIndex(ref.ReferencedName as Value)) {
@@ -149,7 +149,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   if (_val instanceof ReferenceRecord) {
     // a. If IsUnresolvableReference(val) is true, return "undefined".
     //
-    // proposal-runtime-types (F-I): a TYPE PARAMETER is not an environment
+    // proposal-runtime-types: a TYPE PARAMETER is not an environment
     // binding - GetValue resolves it against the type-parameter frames - so
     // `typeof T` in a specialized body read "undefined" for a name that
     // resolves. Where such a frame binds the name, the value is read as
@@ -180,7 +180,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     // reports 'number', consistent with it reading as its underlying Number.
     return Value('number');
   } else if (isFloat128Object(val) || isDecimalObject(val)) {
-    // PLAN-brand-layering-F.md F181. `sec-narrowing`: "`typeof` is unchanged: it
+    // `sec-narrowing`: "`typeof` is unchanged: it
     // reports *number* for EVERY numeric type ... and reports *object* for the
     // SIMD, rational, and complex types."
     //

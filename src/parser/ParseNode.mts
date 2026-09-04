@@ -100,7 +100,7 @@ export namespace ParseNode {
      * contextual type. `9007199254740993` is the double ...992 the moment the
      * lexer produces it, and #sec-literalvalueintype converts from "the
      * mathematical value denoted by the literal", which is exact. The text is
-     * the only place that value still exists (F67).
+     * the only place that value still exists.
      */
     readonly SourceText?: string;
     /**
@@ -1083,7 +1083,7 @@ export namespace ParseNode {
     readonly type: 'AssignmentRestElement';
     readonly AssignmentExpression: AssignmentExpressionOrHigher;
     /**
-     * proposal-runtime-types, PLAN-rest-parameters.md phase 1: a rest inside the
+     * proposal-runtime-types: a rest inside the
      * arrow cover grammar may carry a type annotation, which the refinement to
      * BindingRestElement transfers. A spread at a CALL site never has one.
      */
@@ -2015,7 +2015,7 @@ export namespace ParseNode {
   //   `get` ClassElementName `(` `)` `{` FunctionBody `}`
   //   `set` ClassElementName `(` PropertySetParameterList `)` `{` FunctionBody `}`
   export interface MethodDefinition extends BaseParseNode {
-    /** PLAN-where-on-methods.md D2: the method's `where` clauses, if any. */
+    /** The method's `where` clauses, if any. */
     readonly WhereClauses?: readonly WhereClause[];
     readonly type: 'MethodDefinition';
 
@@ -2871,7 +2871,7 @@ export namespace ParseNode {
     readonly type: 'MetaDeclaration';
     readonly TypeName: TypeName;
     /**
-     * PLAN-generic-meta-declarations.md phase 1. #sec-meta-declarations:
+     * #sec-meta-declarations:
      * `meta` [no LineTerminator here] TypeName TypeParameters? `{` MetaHookList `}`
      *
      * The production has carried `TypeParameters?` and this node did not, so
@@ -2924,7 +2924,7 @@ export namespace ParseNode {
     readonly type: 'AbstractMethodDefinition';
     readonly static: false;
     /**
-     * PLAN-abstract-implementation.md phase 2a. Which accessor form this is,
+     * Which accessor form this is,
      * where it is one. Part A made `get x(): T;` and `set x(v: T);` abstract
      * members and finished both as this node type - deliberately, so nothing
      * downstream learns a second one - but nothing recorded WHICH, and the
@@ -3239,7 +3239,7 @@ export namespace ParseNode {
   }
 
   /**
-   * PLAN-chained-parameterization.md F190. A parameterization whose operand is
+   * A parameterization whose operand is
    * any |PostfixType|, not only a |TypeName|.
    *
    * `TypeReference : TypeName TypeArguments?` attaches arguments to a NAME and
@@ -3385,7 +3385,7 @@ export namespace ParseNode {
      */
     readonly Arity?: number;
     readonly TypeParameterConstraint: Type | null;
-    /** Declared with `:` - a VALUE parameter - rather than `extends` or unbounded. F166. */
+    /** Declared with `:` - a VALUE parameter - rather than `extends` or unbounded. */
     readonly IsValueParameter: boolean;
     /**
      * proposal-runtime-types #sec-type-parameters: declared with `...` - a
@@ -3399,7 +3399,7 @@ export namespace ParseNode {
 
   // WhereClause : `where` RefinementPredicate
   /**
-   * PLAN-where-on-methods.md D1. #sec-checked-contracts: "Within a |WhereClause|
+   * #sec-checked-contracts: "Within a |WhereClause|
    * of a function declaration, `return` is a |PrimaryExpression| denoting the
    * value the function returns. It is a Syntax Error for `return` to occur as an
    * expression anywhere else, which costs nothing, since the token is

@@ -51,7 +51,7 @@ function MapProto_clear(_args: Arguments, { thisValue }: FunctionCallContext): V
  * proposal-runtime-types: a typed collection's key and value positions take
  * their declared types, which sec-array-defaults-and-stores states for
  * `Map.<K, V>` alongside the array. The map carries its type arguments from the
- * boundary that produced it, index 0 being the key and 1 the value (F73).
+ * boundary that produced it, index 0 being the key and 1 the value.
  *
  * RequireType, the one check-site operation, for the reason the Set side gives:
  * the synchronous helper this replaces reached the numeric types alone, so a

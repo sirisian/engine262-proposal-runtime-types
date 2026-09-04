@@ -7,7 +7,7 @@ import {
 /**
  * A Type Object in the console.
  *
- * PLAN-devtools-type-inspection.md F193. Without this a type rendered as a
+ * Without this a type rendered as a
  * native function: the dispatch ladder in `./index.mts` tests `IsCallable`
  * before any later case, and a Type Object IS callable - that is its
  * construction boundary, `Email('a@b')` - so it matched there and got the
@@ -16,7 +16,7 @@ import {
  * Nothing was broken; a case was missing, and the ladder already carried two
  * proposal-specific entries above the callable one.
  *
- * The collapsed description is the canonical source form (F194), so what the
+ * The collapsed description is the canonical source form, so what the
  * console shows is text the developer can paste back, and it is the same
  * function `String(T)` calls - the two cannot disagree.
  */

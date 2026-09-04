@@ -19,7 +19,7 @@ import {
  *
  * This is the first thing in the engine that puts real BYTES under an instance.
  * Every typed class before it stored its fields as ordinary properties, which
- * is why the layout could be computed for four stages without anything reading
+ * is why the layout could be computed for a long time without anything reading
  * it. A placement instance is the other case: its fields ARE the buffer's
  * bytes, so a read is a decode at an offset and a write is an encode there.
  */

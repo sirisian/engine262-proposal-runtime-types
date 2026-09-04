@@ -13,7 +13,7 @@ import {
 /**
  * `structuredClone(value)` - a deep copy by value.
  *
- * PLAN-remaining-blockers.md item 6. Defined by HTML rather than by ECMAScript,
+ * Defined by HTML rather than by ECMAScript,
  * and implemented here because the proposal states a type for it
  * (`standardlibrary.md`: `function structuredClone<T>(value: T): T`) and a
  * signature is a claim that the function EXISTS. A type system that cannot say

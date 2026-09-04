@@ -12,8 +12,8 @@ export default defineConfig({
     // TypeScript, so many of them take seconds rather than milliseconds:
     // vitest's 5s default was tuned for unit tests and several of these sit
     // right at it, failing under full-suite load and passing in isolation.
-    // Three cycles lost time diagnosing that as a regression before it was
-    // recognised as a timeout (F60, F61). Raising the default is the right fix
+    // Time was lost diagnosing that as a regression before it was recognised
+    // as a timeout. Raising the default is the right fix
     // rather than skipping the slow tests: the slowest of them are the
     // conformance matrices, and a skipped matrix is a regression nobody
     // notices.

@@ -156,7 +156,7 @@ export function CountConstructedTypeRecord(): void {
  * Depth of meta-hook evaluation, so the step meter charges WHILE user code runs
  * rather than only when a hook is entered.
  *
- * PLAN-crossing-budget.md phase 1. The budget charged one step per hook CALL, so
+ * The budget charged one step per hook CALL, so
  * a hook that looped forever never returned to be charged again and the bound
  * never bit. #sec-evaluation-budget: "The budget bounds a computation, which
  * either completes or is abandoned and reported" - a loop inside a hook body
@@ -168,7 +168,7 @@ export function CountConstructedTypeRecord(): void {
 /**
  * The hooks being evaluated, innermost last.
  *
- * PLAN-crossing-budget.md phase 4. #sec-evaluation-budget forbids an evaluation
+ * #sec-evaluation-budget forbids an evaluation
  * that "ends in a way no program can observe and NO DIAGNOSTIC NAMES, which is
  * the outcome this clause exists to prevent" - so exhaustion inside a hook has
  * to name the hook, as `InstantiateGenericAlias` names its alias.

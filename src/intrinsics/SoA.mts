@@ -23,8 +23,7 @@ import {
  * allocation per column. That is what the design's own byte view requires -
  * "a byte view over an `SoA` sees the columns in declaration order, one after
  * another. That is also its serialization order, and it's why `byteLength` is a
- * sum of column lengths" - and it is what makes the view form of a later stage
- * possible at all: a host lays out one buffer by the rule and hands it over.
+ * sum of column lengths" - and it is what makes the view form possible at all: a host lays out one buffer by the rule and hands it over.
  *
  * It is also why there is no constructor that assembles an SoA from columns a
  * caller supplies. soa.md declines that deliberately: two SoAs could then share
@@ -292,7 +291,7 @@ function* readColumnElement(storage: SoAStorage, columnIndex: number, index: num
   const primitive = BufferElementType(column.type);
   if (primitive !== null) {
     const raw = GetValueFromBuffer(storage.Buffer, at, primitive, true, 'unordered');
-    // PLAN-soa-boolean-columns.md phase 2, the mirror of the write. A boolean
+    // The mirror of the write. A boolean
     // column is a Uint8, so GetValueFromBuffer always answers a Number and the
     // wrap below turned it into a TypedNumberValue - `s[0].alive` read as `0`
     // with `typeof "number"`, where the same field on a plain class instance
@@ -334,7 +333,7 @@ function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: nu
   const primitive = BufferElementType(column.type);
   if (primitive !== null) {
     const converted = Q(yield* RequireType(value, column.type));
-    // PLAN-soa-boolean-columns.md phase 1. `RequireType` answers a
+    // `RequireType` answers a
     // BooleanValue for a boolean column, and the unwrapping below only handled
     // a TypedNumberValue - so a boolean reached SetValueInBuffer, which asserts
     // `value instanceof NumberValue`, and the engine CRASHED rather than

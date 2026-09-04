@@ -144,7 +144,7 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
       // 3. Let spreadObj be ? GetValue(spreadRef).
       const spreadObj = Q(yield* GetValue(spreadRef));
-      // F-T: `...refs` FORWARDS a ref run - each location becomes a ref argument
+      // `...refs` FORWARDS a ref run - each location becomes a ref argument
       // of this call, the one way a run moves without any reference escaping.
       if (spreadObj instanceof ReferenceRunValue) {
         for (const location of spreadObj.Locations) {
@@ -357,7 +357,7 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
   for (const v of restCollected) {
     result.push(v);
   }
-  // proposal-runtime-types, PLAN-rest-parameters.md phase 4/6.6: a rest may be
+  // proposal-runtime-types: a rest may be
   // followed by further parameters, and a named argument may name one of them.
   // The assembly stopped at the rest, so `f(1, 2, b: "x")` for
   // `function f(...a: [].<number>, b: string)` dropped the b entirely and the

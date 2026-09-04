@@ -148,7 +148,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     }
     let applied = Desc;
     if (Desc.Value !== undefined) {
-      // RequireType RETURNS the value of the type to be used (F51): a plain 7
+      // RequireType RETURNS the value of the type to be used: a plain 7
       // reaching a uint8 property becomes that property's uint8 value, and the
       // descriptor must carry the converted value rather than the raw one.
       const converted = Q(yield* RequireType(Desc.Value, record));
@@ -169,7 +169,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     }
     return result;
   }
-  // PLAN-tuple-stores.md phase 1. The branch above handles a descriptor that
+  // The branch above handles a descriptor that
   // CARRIES a type - `defineProperty(o, "x", { type: T, value: v })` - and
   // records it. What no path consulted is the type a property ALREADY has when
   // the descriptor carries only a value, so a redefinition walked around the
@@ -197,7 +197,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
       if (Desc.Value !== undefined) {
         // RequireType returns the value OF THE TYPE to be used, so the
         // descriptor must carry what it returned rather than the raw value -
-        // the same correction F51 made to the typed branch above.
+        // the same correction made to the typed branch above.
         const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord));
         const current = Q(yield* O.GetOwnProperty(P));
         const extensible = Q(yield* IsExtensible(O));

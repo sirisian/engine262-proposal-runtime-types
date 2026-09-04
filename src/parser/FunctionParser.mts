@@ -37,8 +37,7 @@ interface ConciseBodyInfo {
 
 export abstract class FunctionParser extends IdentifierParser {
   /**
-   * proposal-runtime-types, PLAN-constructor-returns.md phase 1 (OQ1-E):
-   * `return` statements with an operand seen inside the class constructor
+   * proposal-runtime-types: `return` statements with an operand seen inside the class constructor
    * currently being parsed, or null when not in one. Read by the class-body
    * early-error pass, which is the first point that knows whether the class is
    * typed - an annotation may appear AFTER the constructor.
@@ -185,7 +184,7 @@ export abstract class FunctionParser extends IdentifierParser {
   }
 
   validateFormalParameters(parameters: ParseNode.FormalParameters, body: ParseNode.FunctionBodyLike | ParseNode.ConciseBody | ParseNode.AsyncConciseBody, wantsUnique = false) {
-    // proposal-runtime-types README "Rest Parameters" (F-D): "Two rests with
+    // proposal-runtime-types README "Rest Parameters": "Two rests with
     // nothing typed between them are an error, since there is no boundary
     // between them and no assignment more right than another." An untyped rest
     // admits everything, so two adjacent rests where EITHER is untyped have no
@@ -257,7 +256,7 @@ export abstract class FunctionParser extends IdentifierParser {
         return this.finishNode(SingleNameBinding, 'SingleNameBinding');
       }
       case 'NamedArgument': {
-        // PLAN-async-generator-types.md F187. `async (a: uint8) => a` is first
+        // `async (a: uint8) => a` is first
         // parsed as a CALL - `async(...)` - and inside a call `a: uint8` is a
         // NAMED ARGUMENT. Refining the cover to an AsyncArrowHead has to turn
         // that back into an annotated parameter, and did not: the node reached
@@ -567,7 +566,7 @@ export abstract class FunctionParser extends IdentifierParser {
         }
         // proposal-runtime-types #sec-type-annotations: `ref ...refs: Cs` - the
         // modifier distributes over the run the rest collects (the second-class
-        // rule that binds no array is the binder's, Phase 4). Claimed same-line,
+        // rule that binds no array is the binder's). Claimed same-line,
         // as at every other `ref` site.
         let refRest = false;
         if (surroundingAgent.feature('runtime-types') && this.test('ref')
@@ -585,12 +584,12 @@ export abstract class FunctionParser extends IdentifierParser {
           }
           this.scope.declare(element, 'parameter');
           params.push(element);
-          // proposal-runtime-types #sec-type-annotations, PLAN-rest-parameters.md
-          // phase 1b: a rest is an ORDINARY element of the parameter list. It
+          // proposal-runtime-types #sec-type-annotations: a rest is an ORDINARY
+          // element of the parameter list. It
           // may be followed by further parameters and a list may hold several,
           // which is what the design's `f(a: string, ...args: [].<uint32>,
           // ...args2: [].<string>, callback: () => void)` needs. Which run each
-          // rest takes is decided by the types (phase 2's assignment).
+          // rest takes is decided by the types (the assignment).
           //
           // With the feature OFF the base language's rule stands exactly: a
           // rest ends the list, and anything after it is a Syntax Error.
@@ -624,7 +623,7 @@ export abstract class FunctionParser extends IdentifierParser {
 
   parseFunctionBody(isAsync: boolean, isGenerator: boolean, isArrow: boolean): ParseNode.FunctionBodyLike {
     const node = this.startNode<ParseNode.FunctionBodyLike>();
-    // PLAN-constructor-returns.md phase 1 (OQ1-E). Every function body funnels
+    // Every function body funnels
     // through here, so the constructor-return collector is scoped ONCE, here,
     // rather than at each of the forms that parse a body. That is what makes
     // nesting correct without enumerating it: a function, arrow, or nested

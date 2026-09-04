@@ -91,7 +91,7 @@ export function getInspector(value: Value): Inspector<Value> {
       return Vector;
     case isProxyExoticObject(value):
       return Proxy;
-    // PLAN-devtools-type-inspection.md F193. ABOVE the callable case: a Type
+    // ABOVE the callable case: a Type
     // Object is callable (its construction boundary), so it would otherwise
     // match there and render as a native function.
     case isTypeObject(value):

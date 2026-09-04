@@ -205,7 +205,7 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
 
 export function SameValue(x: Value, y: Value): boolean {
   // A VALUE TYPE CLASS compares by its fields here as it does at
-  // `IsStrictlyEqual` and `SameValueZero` (D27). #sec-value-types: "two values
+  // `IsStrictlyEqual` and `SameValueZero`. #sec-value-types: "two values
   // of the same value type that are the same value are indistinguishable", and
   // `Object.is` is a way of asking whether two values are the same one.
   //
@@ -537,7 +537,7 @@ export function SameValueNonNumber(x: Value, y: Value): boolean {
   }
 
   if (x instanceof BooleanValue) {
-    // PLAN-brand-layering-F.md. Compare the VALUE, not the object: a Boolean
+    // Compare the VALUE, not the object: a Boolean
     // carrying a Type Record is not one of the two singletons, and comparing by
     // identity made `B(true) === true` answer false.
     return x.booleanValue() === (y as BooleanValue).booleanValue();

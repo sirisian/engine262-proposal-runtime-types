@@ -252,7 +252,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // operands are rationals, +, -, *, /, and ** are exact and canonical; a zero
   // divisor or a zero base to a negative power is a RangeError, and an operator
   // with no rational meaning is a TypeError.
-  // proposal-runtime-types (PLAN-decimal.md stage C): the decimal operator set,
+  // proposal-runtime-types: the decimal operator set,
   // with IEEE 754-2008 clause 5.1's PREFERRED EXPONENT deciding which cohort
   // member results. `1.5 + 1.50` is `3.00`, not `3.0`, because addition's
   // preferred exponent is min(Q(x), Q(y)) - the rule is the standard's, and
@@ -334,7 +334,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     if (!isDecimalObject(lval) || !isDecimalObject(rval)) {
       // A decimal mixes with nothing implicitly: the other operand would have to
       // be converted, and `float64` -> decimal is the conversion the spec flags
-      // as hard. Refusing is the same answer stage A gave to `decimal128(0.1)`.
+      // as hard. Refusing is the same answer given to `decimal128(0.1)`.
       return Throw.TypeError('a decimal operand requires a decimal on both sides');
     }
     const realmRec = surroundingAgent.currentRealmRecord;

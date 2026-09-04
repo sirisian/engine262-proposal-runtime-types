@@ -16,7 +16,7 @@ import { RegisterBoundTypeRecord } from './records.mts';
  * and the LAST declaration ran.
  *
  * This is a STAMP rather than a shape test, and the distinction is the point.
- * Cycle 129 made membership structural - an object whose `kind` is "ClassField"
+ * Membership is structural - an object whose `kind` is "ClassField"
  * SATISFIES `Reflect.ClassField`, which is what decorators.md's writing of the
  * contexts as object shapes asks for. What a value REPORTS is a different
  * question from what it satisfies: an object literal reports its own shape and
@@ -40,7 +40,7 @@ const stamped = new WeakMap<ObjectValue, TypeRecord>();
  * under its own name. Reading them back rather than listing them again is
  * deliberate: a list here would be a second copy of the context table, and a
  * context added to `Reflect` without a matching line would dispatch as though
- * it did not exist - the drift F58 describes, in the place it is least visible.
+ * it did not exist - that drift, in the place it is least visible.
  */
 export function RegisterReflectionContexts(reflect: ObjectValue): void {
   const properties = (reflect as unknown as { properties?: Map<Value, { Value?: Value }> }).properties;
@@ -56,9 +56,9 @@ export function RegisterReflectionContexts(reflect: ObjectValue): void {
     }
     // EVERY type `Reflect` binds, under the name a program writes for it, which
     // is qualified: an annotation says `Reflect.Block`, never `Region`.
-    // `PLAN-checker-type-resolution.md stage A` - the checker's resolver refused
-    // every qualified name outright, so all 47 of these were unresolvable to it
-    // while the runtime resolved them by walking the binding.
+    // The checker's resolver once refused every qualified name outright, so all
+    // 47 of these were unresolvable to it while the runtime resolved them by
+    // walking the binding.
     //
     // Registered before the context filter below, and without it: `Reflect.Type`
     // is a type a program may write and is not a context, so a filter that keeps

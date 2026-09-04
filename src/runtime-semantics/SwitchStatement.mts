@@ -35,7 +35,7 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
   const clauseSelector = Q(yield* GetValue(exprRef));
   // 4. Return the result of performing Strict Equality Comparison input === clauseSelector.
   // A `case` label is compared by strict equality, so the literal rule reaches
-  // it for the same reason it reaches `===` (F65): without this a `switch` over
+  // it for the same reason it reaches `===`: without this a `switch` over
   // a typed value matched no numeric label, which is the form an enum-like
   // dispatch over a `uint8` takes.
   if (surroundingAgent.feature('runtime-types')) {

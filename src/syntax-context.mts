@@ -25,7 +25,7 @@ import type { Realm } from '#self';
  * invented one, and `syntax-context.test.mts` fails if that stops being true.
  */
 const KIND_BY_PARSE_NODE: Readonly<Record<string, string>> = {
-  // `PLAN-region-context-removal` Q2/Q3: a region reports `Block`, the context it
+  // A region reports `Block`, the context it
   // IS. `Region` was a position of its own only because the context type carried
   // the capture decision; capture follows from being a replacement decorator now
   // (`#sec-preprocessor-modules`), so a region is a block whose text the engine
@@ -86,7 +86,6 @@ export function SyntaxContextFor(realm: Realm, kind: string, label?: string): Ob
   // annotated `Reflect.Block`. A direct call accepted the same value, because
   // parameter enforcement judges it differently; that asymmetry is what made
   // one name carrying both a replacement and an ordinary decorator impossible.
-  // `FINDING-overload-resolution-host-nominals.md`.
   StampReflectionContext(context, kind);
   X(CreateDataPropertyOrThrow(context, Value('kind'), Value(kind)));
   // `label` is the ONE syntactic fact the tokens cannot carry, and that is why

@@ -8,7 +8,7 @@
 // condition was true would have to evaluate it, and the design's analyses do
 // not.
 //
-// PLAN-do-expressions.md phase 0. The clause is owed to `switch` and to `match`
+// The clause is owed to `switch` and to `match`
 // rather than to do expressions: #sec-pattern-static-semantics already reads a
 // match arm's type by divergence, and the README's switch chapter defines it.
 // Nothing in this engine computed it, so CompletionTypeOf had nothing to call.

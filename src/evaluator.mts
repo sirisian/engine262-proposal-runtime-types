@@ -123,7 +123,7 @@ export function Evaluate(node: ParseNode): StatementEvaluator
 export function* Evaluate(node: ParseNode): Evaluator<unknown> {
   surroundingAgent.runningExecutionContext.callSite.setLocation(node);
 
-  // PLAN-crossing-budget.md phase 1. #sec-evaluation-budget: "The budget bounds a
+  // #sec-evaluation-budget: "The budget bounds a
   // computation, which either completes or is abandoned and reported." A meta
   // hook that loops forever did NEITHER: the budget charged one step per hook
   // CALL, so a hook that never returned was never charged again.
@@ -230,7 +230,7 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     case 'CommaOperator':
       return yield* Evaluate_CommaOperator(node);
     case 'ContractReturn':
-      // PLAN-where-on-methods.md D1. #sec-checked-contracts: within a
+      // #sec-checked-contracts: within a
       // |WhereClause| of a function declaration, `return` denotes the value the
       // function returns. It is only ever evaluated while a contract is being
       // checked, which is the only time the stack is non-empty.

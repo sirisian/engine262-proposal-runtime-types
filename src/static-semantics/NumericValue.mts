@@ -11,7 +11,7 @@ import { surroundingAgent } from '#self';
  * The two have to agree - the checker admitted the literal on the strength of
  * the exact value, so the run time must produce it - and the double is already
  * wrong by then: `9007199254740993` is ...992 from the moment it is scanned
- * (F67). Every other literal is unaffected and answers exactly as before.
+ * Every other literal is unaffected and answers exactly as before.
  */
 export function NumericValue(node: ParseNode.NumericLiteral) {
   // proposal-runtime-types #sec-complex-numbers: "An imaginary literal has the

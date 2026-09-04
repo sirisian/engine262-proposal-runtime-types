@@ -1,11 +1,10 @@
 /**
  * proposal-runtime-types #sec-type-references: named type arguments, ordered
  * into PARAMETER order before anything is bound. This is the SYNTACTIC half of
- * BindTypeArguments (PLAN-variadic-and-named-generic-arguments.md §2.2 steps
- * 2-3): which argument goes to which parameter is decided by names alone, so it
- * lives in one pure function both resolvers share - a rule enforced in one and
- * not the other is a rule that holds in some positions (F-B), and named
- * arguments were exactly that (F-A).
+ * BindTypeArguments: which argument goes to which parameter is decided by names
+ * alone, so it lives in one pure function both resolvers share - a rule enforced
+ * in one and not the other is a rule that holds in some positions, and named
+ * arguments were exactly that.
  *
  * Resolution, defaults, and constraints stay with each site: they need frames
  * and left-to-right evaluation (#sec-computed-constraints) that ordering does
@@ -72,13 +71,12 @@ export function orderTypeArguments<T>(
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md OQ-17 (locked): library generics
- * carry the parameter names the specification itself writes - `Map.<K, V>`,
+ * Library generics carry the parameter names the specification itself writes - `Map.<K, V>`,
  * `Set.<T>` (#sec-keyed-collections), `vector.<T, N>` (#sec-vector-types),
  * `int.<N>` / `uint.<N>` (#sec-parameterized-integers). Names are added here
  * only once verified against their clause; a name this table does not know is
  * refused rather than guessed, which is the same rule a misspelling gets.
- * The declared-prelude direction (OQ-17 (c)) retires this table.
+ * A declared prelude would retire this table.
  */
 export function libraryTypeParameterNames(name: string): readonly string[] | null {
   switch (name) {
@@ -119,9 +117,8 @@ export type TypeArgumentAssignment<T> =
   | { readonly ok: false, readonly kind: 'missing', readonly name: string };
 
 /**
- * #sec-bindtypearguments, the SYNTACTIC half with variadic parameters
- * (PLAN-variadic-and-named-generic-arguments.md 2.2 steps 2-6): names resolve
- * first - a named variadic parameter opens a RUN that takes the unnamed
+ * #sec-bindtypearguments, the SYNTACTIC half with variadic parameters: names
+ * resolve first - a named variadic parameter opens a RUN that takes the unnamed
  * arguments after it - and the positional prefix is distributed by
  * SequenceAssignment, the rest-parameter operation, a pack being a rest slot.
  * A non-variadic slot admits by arity alone (its constraint is checked once

@@ -106,7 +106,7 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
       }
       if (result.Type === 'return') {
         const enforced = Q(yield* EnforceReturnType(functionObject, result.Value as Value));
-        // PLAN-where-on-methods.md D1, the VERIFIED half. #sec-checked-contracts:
+        // The VERIFIED half. #sec-checked-contracts:
         // "at every concrete evaluation of the builder, once [it] has a result,
         // each clause is evaluated with `return` bound to it, and a clause that
         // is falsy is a type error". Checked HERE because this is the first
@@ -221,7 +221,7 @@ function* EvaluateBody_AsyncConciseBody({ ExpressionBody }: ParseNode.AsyncConci
 export function* EvaluateBody_GeneratorBody(GeneratorBody: ParseNode.GeneratorBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments): StatementEvaluator {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
-  // PLAN-async-generator-types.md phase 2. A parameter's declared type is
+  // A parameter's declared type is
   // enforced HERE, in the body evaluator, and only `EvaluateBody_FunctionBody`
   // and `EvaluateBody_ConciseBody` called it - so a generator, an async
   // generator and an async function accepted any argument for a typed

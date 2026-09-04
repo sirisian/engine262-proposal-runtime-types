@@ -16,7 +16,7 @@ import type { Realm } from '#self';
 
 /**
  * proposal-runtime-types #sec-type-errors: the error a DECIDABLE type violation
- * produces (OQ27).
+ * produces.
  *
  * The clause makes such a violation an Early Error - "a source text that
  * contains one is rejected rather than evaluated" - and "reserves a thrown
@@ -31,7 +31,7 @@ import type { Realm } from '#self';
  * WHY NOT `TypeError`: that is the one this must be distinguishable FROM. A
  * `TypeError` can be caught where it occurs; an Early Error rejects the source
  * text before any of it runs. Using one constructor for both meant a program
- * could not tell which it had, which is the split OQ27 was filed for.
+ * could not tell which it had, which is the split this exists for.
  *
  * WHY IT EXTENDS `SyntaxError`: a module loader, a bundler and an `eval` caller
  * all already treat a `SyntaxError` as "this source did not load", and that is

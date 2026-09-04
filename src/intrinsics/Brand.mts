@@ -13,8 +13,7 @@ import {
  * admits no bare value of its base except through the construction boundary,
  * which is the point of a brand" - and never DECLARES one. So `brand` was
  * claimed by nothing and `uint32.<{ brand: 'UserId' }>` was refused at its
- * declaration: "brand is not claimed by any meta type". That is F126, and this
- * is PLAN-brand.md phase 2 answering it (OQ9-A).
+ * declaration: "brand is not claimed by any meta type". This answers it.
  *
  * It is modelled on `StringPattern`, which claims `pattern`, with one
  * deliberate difference: **no `validate` hook is registered**. That absence is
@@ -32,7 +31,7 @@ import {
  * type in any module without a registry, which is what typeprogramming.md
  * requires of a brand, and two different tags are two types because
  * `SameMetadata` compares the tag - by `SameValue` for a Symbol, which is what
- * makes a symbol-tagged brand unforgeable (F147).
+ * makes a symbol-tagged brand unforgeable.
  */
 
 /** The constraint shape: `{ brand: ... }`, whose key is what the meta type claims. */

@@ -51,7 +51,7 @@ function requireEnum(thisValue: Value, method: string) {
  * `Count.toString(Count.Zero)` is `'Zero'`: toString maps a VALUE to its key.
  * It answered `"[object Type]"` - the inherited Object.prototype.toString -
  * which is a silently wrong answer where the design specifies a right one, and
- * by this project's standard that is worse than a missing feature (F48).
+ * by this project's standard that is worse than a missing feature.
  *
  * It takes the value as an ARGUMENT rather than reading a receiver, which is
  * the design's own signature and is what makes it a lookup on the enumeration

@@ -240,10 +240,9 @@ export class BooleanValue<T extends boolean = boolean> extends PrimitiveValue {
 /**
  * A Boolean carrying an interned Type Record.
  *
- * PLAN-brand-layering-F.md. `Value.true` and `Value.false` are SINGLETONS, and
+ * `Value.true` and `Value.false` are SINGLETONS, and
  * twelve sites test a `ToBoolean` result with `=== Value.true`. A carrier is a
- * different object, so a branded `true` failed every one and came out FALSY
- * (F177).
+ * different object, so a branded `true` failed every one and came out FALSY.
  *
  * That is fixed at the funnel rather than here: `ToBoolean` now normalizes to
  * the singleton, which is observably identical for a plain Boolean and sheds
@@ -345,10 +344,10 @@ export class SymbolValue extends PrimitiveValue {
  * A Symbol carrying an interned Type Record, so a parameterization of `symbol`
  * survives a crossing.
  *
- * PLAN-brand-layering-F.md. `boolean` cannot have one: `Value.true` and
+ * `boolean` cannot have one: `Value.true` and
  * `Value.false` are SINGLETONS and the engine compares against them by identity
  * at 288 sites, so a carrier - necessarily a different object - fails every one,
- * and a branded `true` came out falsy (F177).
+ * and a branded `true` came out falsy.
  *
  * A Symbol has neither problem. Every `Symbol()` is already a fresh object, so
  * there is no singleton to fail to be, and the engine compares symbols by
@@ -674,7 +673,7 @@ export class TypedNumberValue extends PrimitiveValue {
    * exactly only to 53 bits, so a value of a WIDER integer type is carried as a
    * BigInt and everything narrower stays a Number.
    *
-   * This stage widens the field and constructs nothing wide yet, so the reads
+   * The field is widened and nothing wide is constructed yet, so the reads
    * that assume a Number are what it exists to find. `numberValue()` is the one
    * that must not be reached for a wide value once wide values exist - see the
    * note on it.
@@ -1129,7 +1128,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     // The STORED length stays a plain Number, because the array exotic object's
     // own [[DefineOwnProperty]] asserts that it is one and ArraySetLength
     // computes with it; what the clause constrains is the value a read yields,
-    // so the typing is applied at the read (F54).
+    // so the typing is applied at the read.
     if (surroundingAgent.feature('runtime-types')
         && (this as { TypedElement?: unknown }).TypedElement !== undefined
         && P instanceof JSStringValue && P.stringValue() === 'length'
@@ -1393,7 +1392,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (typeObject !== undefined) {
           // The store boundary of #table-check-sites, and it uses what
           // RequireType returns: `o.x = 7` on a uint8 property stores that
-          // property's uint8 value, not the plain Number (F51).
+          // property's uint8 value, not the plain Number.
           V = Q(yield* RequireType(V, typeObject.TypeRecord as never));
         }
       }
@@ -1549,9 +1548,8 @@ export class ReferenceRecord {
 // is produced by the `ref` argument and `ref` return forms and consumed by a `ref`
 // parameter, a `ref` lexical binding, or decay.
 /**
- * proposal-runtime-types #sec-function-types, `ref` on a rest parameter
- * (PLAN-variadic-and-named-generic-arguments.md 2.5, the second-class rule):
- * the RUN of references a `ref ...refs` collects. References are not values,
+ * proposal-runtime-types #sec-function-types, `ref` on a rest parameter (the
+ * second-class rule): the RUN of references a `ref ...refs` collects. References are not values,
  * so a ref rest binds no array; this internal value holds the locations, and
  * the reference operations admit exactly three uses of it - `refs[k]` reads
  * and writes through the k-th location, `refs.length` is the count, and

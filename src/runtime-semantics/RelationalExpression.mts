@@ -188,7 +188,7 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // different numeric types do not compare any more than they add, and a
   // literal takes the type of the other operand here too. The comparison path
   // does not route through ApplyStringOrNumericBinaryOperator, so it asked for
-  // the rule separately and, until F53, did not get it: `(1 := uint8) <
+  // the rule separately and, for a while, did not get it: `(1 := uint8) <
   // (2 := uint16)` answered true. Literalness is syntactic, as it is for
   // arithmetic, so the operand nodes decide it.
   if (surroundingAgent.feature('runtime-types')

@@ -132,14 +132,14 @@ export function ToBoolean(argument: Value): BooleanValue {
     return Value.false;
   } else if (argument instanceof BooleanValue) {
     // Return argument.
-    // PLAN-brand-layering-F.md. NORMALIZE to the singleton rather than
+    // NORMALIZE to the singleton rather than
     // returning the argument.
     //
     // Observably identical for a plain Boolean - it IS the singleton - and it is
     // what lets a BRANDED boolean be truthy. `Value.true` and `Value.false` are
     // singletons and twelve sites test a ToBoolean result with `=== Value.true`,
     // so a carrier, being a different object, failed every one and a branded
-    // `true` came out falsy (F177).
+    // `true` came out falsy.
     //
     // ToBoolean produces a Boolean, not a branded boolean, so shedding the
     // carrier here is also the right reading: the brand is a property of the

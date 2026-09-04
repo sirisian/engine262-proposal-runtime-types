@@ -51,12 +51,12 @@ import type {
  * proposal-runtime-types: a typed collection's element positions take the
  * declared type, which #sec-array-defaults-and-stores states for the array and
  * for `Set.<T>` and `Map.<K, V>` alike. The collection carries its type
- * arguments from the boundary that produced it (F72, F73).
+ * arguments from the boundary that produced it.
  *
  * This is RequireType, the one check-site operation, and nothing else. The
  * helper it replaces was synchronous and so reached the NUMERIC element types
  * alone: a `Set.<string>` checked nothing at all, and `s.add(5)` stored the
- * Number silently. That is the shape F51 named - the engine holding a second,
+ * Number silently. That is a familiar shape - the engine holding a second,
  * narrower operation where the specification has one - and the fix is the same
  * one: delete the narrow operation and call the real one. Being a generator is
  * what buys the rest of the type space, since a conversion may run user code
@@ -66,7 +66,7 @@ import type {
  * not a new rule: a value already of the type passes, a lossless conversion
  * runs, and a value the type cannot hold is an error. It is one error for a
  * search as much as for a store, because a needle the element type cannot hold
- * makes a test that can never succeed (F69).
+ * makes a test that can never succeed.
  */
 function* collectionValueAtType(O: Value, value: Value, index: number): PlainEvaluator<Value> {
   if (!surroundingAgent.feature('runtime-types')) {
@@ -94,10 +94,10 @@ function* collectionValueAtType(O: Value, value: Value, index: number): PlainEva
  *
  * Without this the result came back UNSTAMPED, which switched the typed
  * surface off for everything downstream: `s.union(o).add(300)` was accepted on
- * two `Set.<uint8>` operands. That is F71's shape - a typed container produced
+ * two `Set.<uint8>` operands. That is the familiar shape - a typed container produced
  * by a route that forgot to carry the type - and it is why the static half of
- * this cycle could not land alone: a checker that says `Set.<uint8>` over a run
- * time that holds an untyped Set is the disagreement cycle 76 was about.
+ * this could not land alone: a checker that says `Set.<uint8>` over a run time
+ * that holds an untyped Set is exactly that disagreement.
  *
  * Where the OTHER side's element type is unknown, a union of the two is
  * unknown, so the result is deliberately left unstamped. Answering the
@@ -714,7 +714,7 @@ interface SetRecord {
  *
  * A user-written `b.has(x)` on a `Set.<string>` where `x` is not a String is an
  * ERROR, deliberately: a needle the element type cannot hold makes a test that
- * can never succeed (F69), and OQ7 extended that from a conversion to a refusal
+ * can never succeed, and the key-position rule extends that from a conversion to a refusal
  * at every identity-bearing position. But a set OPERATION's probe is not a
  * user-written test - it is an internal membership question asked once per
  * element while walking two collections, and the design fixes its answer: "an
@@ -723,7 +723,7 @@ interface SetRecord {
  * values."
  *
  * Both rules are right for their own caller. Writing a test that can never
- * succeed is the mistake F69 is about; asking a question whose answer is already
+ * succeed is the mistake that rule is about; asking a question whose answer is already
  * KNOWN is not. So the probe reads an inadmissible needle as the *false* it was
  * always going to be, and the constant-fold the design describes falls out of
  * iterating rather than needing a rule of its own.
@@ -734,7 +734,7 @@ interface SetRecord {
  * operation's own type test is inspected, and the user's `has` is called
  * unguarded once it passes.
  *
- * This also repairs a direction-dependence that predates OQ7 (D20): the probe
+ * This also repairs a direction-dependence that predates it: the probe
  * ran through the converting path, so `Set.<uint8>` against `Set.<string>`
  * worked in the order where the needle could be stringified and threw in the
  * other. The design's constant-fold was only ever half true, and which half

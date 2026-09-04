@@ -59,7 +59,7 @@ export function tieAliasKnot(placeholder: TypeRecord, resolved: TypeRecord): voi
 /**
  * What a type alias RESOLVED TO, by name, per realm.
  *
- * PLAN-declarative-checker-facts.md phase 2. The checker resolves an annotation
+ * The checker resolves an annotation
  * by walking the Type node, and a |ComputedType| - `type G = makeG();` -
  * resolves by EVALUATING rather than by walking, so the walk answers nothing
  * and every annotation of `G` degrades to ~any~.

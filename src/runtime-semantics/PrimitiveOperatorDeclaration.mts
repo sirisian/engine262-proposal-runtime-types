@@ -78,13 +78,13 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     // The parameter's type is resolved HERE, at declaration, not at dispatch:
     // the annotation names a type in the scope the block was written in, and
     // resolving it at an operator invocation would look it up wherever that
-    // expression happens to be. This is F51's lesson at a second site.
+    // expression happens to be. This is the same lesson at a second site.
     //
     // UNLESS the block is PARAMETERIZED. `primitive float64 <D: Dim>` declares
     // operators "for each parameterization its parameters admit", and `D` names
     // nothing until an invocation supplies a receiver - so the nodes are kept
-    // and resolved at dispatch with `D` bound. That is not F51's mistake: F51
-    // was resolving a name already fixed at declaration, and this is a
+    // and resolved at dispatch with `D` bound. That is not the earlier mistake
+    // of resolving a name already fixed at declaration; this is a
     // parameter whose value IS the invocation.
     const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
     let parameterType: TypeRecord | null = null;

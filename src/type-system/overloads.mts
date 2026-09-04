@@ -18,7 +18,7 @@ import { RuntimeTypeOf } from './runtime.mts';
 /**
  * One parameter of a signature, as overload resolution reads it.
  *
- * PLAN-rest-parameters.md phase 0: this was a second parameter model, carrying
+ * This was a second parameter model, carrying
  * Type/Optional/Rest/HasDefault where the type system's SignatureRecord carried
  * bare types. It is now the one model. HasDefault is gone: a defaulted parameter
  * IS an optional one by #sec-signature-records, and keeping the two apart is
@@ -48,7 +48,7 @@ export interface OverloadSignature {
    * `f(1, 2)` takes the untyped one, "since the typed signature's arity does
    * not accept two arguments and it is not viable". Neither the run time nor
    * the checker implemented that: both answered "no overload matches" for the
-   * two-argument call (F58). Declaring a return type is what makes a
+   * two-argument call. Declaring a return type is what makes a
    * zero-parameter function typed.
    */
   readonly Untyped?: boolean;
@@ -93,7 +93,7 @@ export function describeParameters(
     };
     const name = parameterName(p);
     if (node.type === 'BindingRestElement') {
-      // The rest's own annotation is read in a later phase; resolution needs its
+      // The rest's own annotation is read elsewhere; resolution needs its
       // position and that it absorbs a run, which is what Rest says.
       params.push({
         Name: name, Type: node.TypeAnnotation ? typeOf(node.TypeAnnotation) : anyType, Optional: false, Rest: true,
@@ -130,7 +130,7 @@ export function minimumArity(params: readonly OverloadParameter[]): number {
  * Assign a call's argument types to a signature's parameters, or null where no
  * assignment admits them all.
  *
- * PLAN-rest-parameters.md phase 4, per #sec-bindarguments. Viability WAS an
+ * Per #sec-bindarguments. Viability WAS an
  * arity count: at least the minimum, and no more than the parameter count
  * unless the LAST parameter was a rest. That is the single-trailing-rest rule,
  * and it answers wrongly for every list this feature admits - a rest in the
@@ -142,7 +142,7 @@ export function minimumArity(params: readonly OverloadParameter[]): number {
  * direct path and never reaches the matcher.
  */
 /**
- * Exported for the CALL CHECK (D39), which asks the same question this file's
+ * Exported for the CALL CHECK, which asks the same question this file's
  * overload ranking does: which parameter receives each argument, for a signature
  * whose rests may be non-final or several.
  *
@@ -204,13 +204,12 @@ const enum Tier {
   Literal = 2,
   // The argument is assignable to the parameter by an ordinary widening.
   Assignable = 3,
-  // PLAN-variadic-and-named-generic-arguments.md 2.9 / #sec-overload-resolution:
-  // the parameter is a TYPE PARAMETER of a generic member, which binds from the
-  // argument at the call. Viable, and below every concrete match: "a concrete
-  // position beats a type parameter". The instantiate-then-rank rule with
-  // specificity as the tie-break lands with the inference plumbing (Phase 6);
-  // this tier orders concrete over generic today without running inference in
-  // the ranking.
+  // #sec-overload-resolution: the parameter is a TYPE PARAMETER of a generic
+  // member, which binds from the argument at the call. Viable, and below every
+  // concrete match: "a concrete position beats a type parameter". The
+  // instantiate-then-rank rule with specificity as the tie-break belongs with
+  // the inference plumbing; this tier orders concrete over generic without
+  // running inference in the ranking.
   Generic = 4,
   // The parameter is the `any` type: an untyped catch-all that accepts anything.
   CatchAll = 5,
@@ -282,7 +281,7 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   }
   // A TYPE PARAMETER of a generic member binds from the argument at the call,
   // so it admits every argument - at the Generic tier, below every concrete
-  // match (F-G).
+  // match.
   if (paramType.Kind === 'parameter') {
     return Tier.Generic;
   }
@@ -332,8 +331,8 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   if (isNumericValueType(argType) && isNumericValueType(paramType)) {
     return Tier.Literal;
   }
-  // PLAN-variadic-and-named-generic-arguments.md Phase 0.6 (F-E, checker half):
-  // a LITERAL argument - `{Kind: 'literal'}` over a numeric base, which is what
+  // The checker half: a LITERAL argument - `{Kind: 'literal'}` over a numeric
+  // base, which is what
   // `staticType(0)` reports - fell through both arms above against a sized
   // numeric parameter, so `assignArguments` answered 'unmatched' for the
   // README's own multi-rest example and the per-argument check fell back to
@@ -434,7 +433,7 @@ function compareTiers(a: readonly Tier[], b: readonly Tier[]): number {
  * equally ranked the fixed one is preferred.
  */
 function hasRest(sig: OverloadSignature): boolean {
-  // PLAN-rest-parameters.md phase 4: ANY rest, not only a trailing one. The
+  // ANY rest, not only a trailing one. The
   // tiebreak is about matching by absorption rather than by fixed parameters,
   // and where a rest sits has nothing to do with that.
   return sig.Parameters.some((p) => p.Rest);
@@ -460,9 +459,9 @@ export function resolveOverload(signatures: readonly OverloadSignature[], argVal
  * #sec-overload-resolution over argument TYPES rather than argument values, so
  * the checker can resolve a call the same way the run time does instead of
  * carrying a second copy of #table-argument-match-ranks. The run-time entry
- * above is this one with RuntimeTypeOf applied first; F53 is the reason they
- * share rather than mirror - a rule this subtle drifts within a cycle or two of
- * being written twice (F58).
+ * above is this one with RuntimeTypeOf applied first; they share rather than
+ * mirror because a rule this subtle drifts within a cycle or two of being
+ * written twice.
  */
 export function resolveOverloadByTypes(signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[], contextualType?: TypeRecord): OverloadResolution {
   const viable: { sig: OverloadSignature, tiers: Tier[] }[] = [];

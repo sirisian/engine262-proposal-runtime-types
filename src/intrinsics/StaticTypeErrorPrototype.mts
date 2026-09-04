@@ -3,7 +3,7 @@ import { bootstrapPrototype } from './bootstrap.mts';
 import type { Realm } from '#self';
 
 /**
- * proposal-runtime-types #sec-type-errors (OQ27): the prototype of the error a
+ * proposal-runtime-types #sec-type-errors: the prototype of the error a
  * DECIDABLE type violation produces.
  *
  * Its [[Prototype]] is `%SyntaxError.prototype%`, NOT `%Error.prototype%` -

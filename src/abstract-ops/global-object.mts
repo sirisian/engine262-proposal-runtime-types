@@ -128,7 +128,7 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   // proposal-runtime-types #sec-type-errors: the static checker runs in
   // ParseScript, and direct eval parses through wrappedParse instead, so
   // eval'd source was never checked - `eval('let x: uint8 = 300')` reported at
-  // run time what the same text rejects statically at script scope (F55). The
+  // run time what the same text rejects statically at script scope. The
   // parent links are wired first, exactly as ParseScript does, because the
   // checker reads the shape a node sits in.
   if (surroundingAgent.feature('runtime-types')) {
@@ -221,10 +221,10 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
   // source too. It was wired at ScriptEvaluation and ExecuteModule only, and
   // direct eval goes through neither, so `eval('type E = float32.<{ zzz: 1 }>;
   // ...')` admitted an unclaimed key that the same text rejects at script
-  // scope. F44 pinned that as one written boundary beating two half-boundaries,
-  // which was right for that cycle and is the wrong resting place: eval text is
-  // a Script, and there is no principled reason for the two surfaces to
-  // disagree (F55). The pass is idempotent over declarations it has already
+  // scope. That was pinned as one written boundary beating two half-boundaries,
+  // which was right at the time and is the wrong resting place: eval text is a
+  // Script, and there is no principled reason for the two surfaces to disagree.
+  // The pass is idempotent over declarations it has already
   // pre-evaluated, and an eval'd `meta` declaration registers claims that
   // outlive the eval, which is the per-agent behaviour claiming already has.
   if (result.Type === 'normal' && surroundingAgent.feature('runtime-types')) {

@@ -185,7 +185,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       // A ~parameter~ is exempt: nothing is known about what an application will
       // bind, so a generic's field is checked at its specialization - which this
       // engine does not reach, since a specialized field's type is not
-      // substituted at all (recorded in KNOWN-DIVERGENCES.md).
+      // substituted at all (a known divergence).
         return NoDefaultValueError(record);
       }
     }

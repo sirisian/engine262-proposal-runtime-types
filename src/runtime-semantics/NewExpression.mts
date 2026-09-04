@@ -140,7 +140,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // constructor for a library generic, so the collection came back unstamped
   // and every method went unchecked. An annotation happens to make this
   // unnecessary, since the binding's boundary stamps instead, which is why the
-  // common spelling worked and the direct one did not (F73).
+  // common spelling worked and the direct one did not.
   if (surroundingAgent.feature('runtime-types')
       && constructExpr.type === 'TypeArgumentsExpression'
       && constructed instanceof ObjectValue) {
@@ -162,11 +162,11 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       Q(yield* StampTypedCollection(constructed, argRecords));
     }
   }
-  // D8: a SUBCLASS of a specialization. `class M extends Map.<string, uint8> {}`
+  // A SUBCLASS of a specialization. `class M extends Map.<string, uint8> {}`
   // followed by `new M()` reaches neither stamping path - the construction is a
   // plain IdentifierReference, so the branch above does not fire, and there is
   // no annotation whose boundary would adopt it - so the instance came back
-  // unstamped and every method went unchecked, which is F73 one level along.
+  // unstamped and every method went unchecked, the same defect one level along.
   //
   // The arguments are recorded on the class constructor when its heritage is
   // evaluated, and read back here off the constructor that was actually called.

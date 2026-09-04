@@ -24,7 +24,7 @@ import { Throw } from '#self';
 /**
  * Does this type's default depend on a CLASS declared in this source text?
  *
- * PLAN-default-timing.md phase 2, widened by the suite. A value type class's
+ * A value type class's
  * default is "the instance of _t_ each of whose fields holds the default of the
  * field's type" - an object that only exists once the class has evaluated. The
  * pass pre-processes type aliases, interfaces, `meta` declarations and
@@ -34,7 +34,7 @@ import { Throw } from '#self';
  * at run time. `class P { a: uint8; } let d: [P, P];` is the case
  * `typed-bindings.test.mts` caught.
  *
- * Same shape as D4's guard and the same resolution: where the pass has not
+ * Same shape as the nested-`meta` guard below and the same resolution: where the pass has not
  * processed what supplies the default, it does not answer, and the
  * evaluation-time site does.
  */
@@ -62,7 +62,7 @@ function defaultNeedsEvaluatedClass(t: TypeRecord, seen: Set<TypeRecord> = new S
 /**
  * Type names named by a `meta` declaration this pass did NOT pre-process.
  *
- * PLAN-default-timing.md, D4. The pre-evaluation loop scans a Script's or
+ * The pre-evaluation loop scans a Script's or
  * Module's TOP-LEVEL items, so a `meta` declaration nested in a block is
  * invisible to it - and perfectly visible to the running program, which
  * registers its `default` when the block evaluates. This program works and must
@@ -182,7 +182,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   const items = root.type === 'Script'
     ? root.ScriptBody?.StatementList
     : root.ModuleBody?.ModuleItemList;
-  // PLAN-declarative-checker-facts.md phase 2. A |ComputedType| alias -
+  // A |ComputedType| alias -
   // `type G = makeG();` - resolves by EVALUATING, so the walk that runs at
   // PARSE time cannot know what it denotes: nothing has evaluated yet, the
   // annotation reads ~any~, and a bad value is left to the run-time boundary.
@@ -190,7 +190,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // where it can be used - but that walk only runs when narrowing recorded
   // something, so an alias-annotated binding never reached it.
   let computedAliasResolved = false;
-  // PLAN-alias-where-enforcement.md phase 1. #sec-generic-where: a violated
+  // #sec-generic-where: a violated
   // clause is a type error at the SPECIALIZATION, and a written application's
   // arguments are in the source - so it is determinable, and #sec-type-errors
   // then makes it an Early Error: "a source text that contains one is rejected
@@ -262,7 +262,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
   }
   // The names this pass is defining, so a recursive reference can be told from a
-  // member naming a VALUE binding (D72) - both report "cannot be used before
+  // member naming a VALUE binding - both report "cannot be used before
   // initialization" from the same site.
   for (const item of items ?? []) {
     if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
@@ -283,8 +283,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         }
       }
     } else if (item.type === 'PrimitiveOperatorDeclaration') {
-      // PLAN-default-timing.md phase 2, found by the suite rather than by the
-      // plan. #sec-type-errors lists what the pass processes before applying a
+      // Found by the suite. #sec-type-errors lists what the pass processes before applying a
       // judgment that consults it: "its type aliases, its interfaces, its
       // `meta` declarations, AND THE IMPLICIT CAST OPERATORS OF ITS `primitive`
       // BLOCKS". The loop had the first three.
@@ -312,11 +311,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // its meta type is legal while a key claimed nowhere in the agent is the
   // clause's type error, named at the parameterization that writes it.
   // Adjudicated BEFORE the pairwise judgment below, so a deferred pair riding
-  // only on unclaimed keys is rejected earlier and for the right reason,
-  // which closes cycle 26's vacuous-admit rider by the plan's own prediction.
+  // only on unclaimed keys is rejected earlier and for the right reason, which
+  // closes the vacuous-admit case.
   for (const check of TakeUnclaimedKeyChecks(root)) {
     if (HasMetaHooks(GetTypeObject(check.base) as unknown as object)) {
-      // The base-form waiver (C9, found while landing this phase): a meta
+      // The base-form waiver: a meta
       // registered against the BASE receives the whole metadata, so it speaks
       // for every key of a parameterization of that base, and the brand and
       // where-shaped programs of the base-form route stay legal. The route
@@ -387,7 +386,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
   }
-  // PLAN-default-timing.md phase 2. #sec-defaultvalueof: "It is a type error to
+  // #sec-defaultvalueof: "It is a type error to
   // declare a binding or a field with a type _t_ and no initializer when
   // DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
   // determinable before the text runs an Early Error - so a source text
@@ -404,7 +403,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // declarations and is not true now.
   const nestedMetaNames = nestedMetaTypeNames(root);
   for (const requirement of TakeDefaultRequirements(root)) {
-    // D4's guard: a `meta` declaration nested where this loop cannot see it -
+    // The nested-`meta` guard: a `meta` declaration where this loop cannot see it -
     // the loop scans TOP-LEVEL items - may register a default for this very
     // type at run time, and `{ meta T { default = "d"; } } let s: T;` works
     // today. Where such a declaration names the type, the question is left to
@@ -546,7 +545,7 @@ function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<b
   ]);
   for (const metaType of governing) {
     if (!MetaTypeGoverns(s, metaType) && !MetaTypeGoverns(t, metaType)) {
-      // Participation (plan section 2): both portions at the default means no
+      // Participation: both portions at the default means no
       // part taken. `subtype(default, default)` is never consulted, so a
       // hostile or throwing hook cannot veto a crossing carrying none of its
       // metadata, and no hook need be reflexive at its own default.

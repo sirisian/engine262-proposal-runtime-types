@@ -265,7 +265,7 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
    * the types can see. An earlier draft of this returned *false* on the
    * reasoning that a search "asks a question with a perfectly good answer";
    * that invented a search-versus-store split the proposal does not have, and
-   * a parameter is a parameter (F69).
+   * a parameter is a parameter.
    */
   function* searchNeedleAtElementType(O: Value, needle: Value): PlainEvaluator<Value> {
     if (!surroundingAgent.feature('runtime-types')) {

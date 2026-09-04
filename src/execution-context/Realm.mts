@@ -198,7 +198,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   bootstrapAggregateErrorPrototype(realmRec);
   bootstrapAggregateError(realmRec);
   // AFTER `bootstrapNativeError`, which creates `%SyntaxError%` and
-  // `%SyntaxError.prototype%` - both are this pair's [[Prototype]] (OQ27).
+  // `%SyntaxError.prototype%` - both are this pair's [[Prototype]].
   bootstrapStaticTypeErrorPrototype(realmRec);
   bootstrapStaticTypeError(realmRec);
 
@@ -530,7 +530,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     'isFinite',
     'isNaN',
     'parseFloat',
-    // PLAN-remaining-blockers.md item 6: a HTML function rather than an
+    // A HTML function rather than an
     // ECMAScript one, provided so that the typed signature
     // `standardlibrary.md` states for it can be given - a signature is a claim
     // that the function exists.
@@ -543,7 +543,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
 
     // Constructor Properties of the Global Object
     'AggregateError',
-    // proposal-runtime-types #sec-type-errors (OQ27): reachable so a loader can
+    // proposal-runtime-types #sec-type-errors: reachable so a loader can
     // tell a failed TYPE check from a failed parse.
     'StaticTypeError',
     'Array',

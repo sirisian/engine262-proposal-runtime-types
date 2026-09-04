@@ -164,8 +164,8 @@ export function bindMetadataInterfaceGlobals(realmRec: Realm) {
   const global = realmRec.GlobalObject as ObjectValue;
   const token = tokenRecord();
   // Registered as it is bound, so the checker resolves exactly the record the
-  // runtime does - `PLAN-checker-type-resolution.md stage A`. Building a second
-  // record for the checker is what stage A's disproved first attempt did:
+  // runtime does. Building a second record for the checker is what a
+  // disproved first attempt did:
   // `Token` resolved to a bare nominal tested by a prototype chain rather than
   // to this one, whose [[Structure]] is what an object literal satisfies.
   RegisterBoundTypeRecord('Token', token);

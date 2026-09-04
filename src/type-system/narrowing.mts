@@ -65,7 +65,7 @@ function fromMembers(kept: readonly TypeRecord[]): NarrowResult {
 /**
  * The names `typeof` answers *"number"* for.
  *
- * PLAN-brand-layering-F.md F182. `sec-narrowing`: "`typeof` is unchanged: it
+ * `sec-narrowing`: "`typeof` is unchanged: it
  * reports *number* for every numeric type, so `typeof v === "number"` narrows
  * `uint8 | string` to `uint8`".
  */
@@ -85,7 +85,7 @@ function isNumberCategory(t: TypeRecord): boolean {
 }
 
 function overlaps(m: TypeRecord, t: TypeRecord): boolean {
-  // F182. A `typeof` test names a CATEGORY of types, not one type. The
+  // A `typeof` test names a CATEGORY of types, not one type. The
   // specification is explicit that `number` is disjoint from the sized numeric
   // types - "no other numeric type is assignable to it and it is assignable to
   // no other numeric type" - which is right for ASSIGNMENT and wrong here: it

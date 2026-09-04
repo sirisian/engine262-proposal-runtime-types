@@ -50,7 +50,7 @@ const InternalMethods = {
     const array = this;
 
     Assert(IsPropertyKey(P));
-    // PLAN-tuple-stores.md phase 1. `Set` checks a store against the tuple's
+    // `Set` checks a store against the tuple's
     // position type or the array's element type; a REDEFINITION reached
     // neither, so `Object.defineProperty(a, 0, { value: "no" })` put a String
     // in a slot declared `uint8`, and `Reflect.defineProperty` did the same.
@@ -198,7 +198,7 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (extent !== undefined && newLen !== extent) {
     return Throw.TypeError('a fixed-extent array cannot be grown');
   }
-  // PLAN-tuple-stores.md phase 3. A tuple's ARITY is part of its type, as an
+  // A tuple's ARITY is part of its type, as an
   // array's extent is, and a tuple carries its positions rather than a
   // [[TypedExtent]] - so `t.length = 1` on a `[uint8, string]` walked past the
   // check above and left the value outside the type it is declared to have.

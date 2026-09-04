@@ -313,8 +313,8 @@ export function HostGetModuleSourceModuleRecord(specifier: ObjectValue): Abstrac
 
 // #sec-HostLoadImportedModule
 export function HostLoadImportedModule(referrer: CyclicModuleRecord | ScriptRecord | Realm, moduleRequest: ModuleRequestRecord, hostDefined: ModuleRecordHostDefined | undefined, payload: HostLoadImportedModulePayloadOpaque) {
-  // proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 1
-  // (OQ3-B): `std:types` is resolved by the ENGINE, ahead of the host hook, so
+  // proposal-runtime-types `annex-standard-kit`: `std:types` is resolved by the
+  // ENGINE, ahead of the host hook, so
   // that a standard module is not something an embedder can fail to configure.
   // The kit declines when `runtime-types` is off, so this is inert for every
   // other agent, and any other specifier falls through untouched.

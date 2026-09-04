@@ -69,7 +69,7 @@ Throw.ReferenceError = ThrowFactory('%ReferenceError%');
 Throw.SyntaxError = ThrowFactory('%SyntaxError%');
 Throw.TypeError = ThrowFactory('%TypeError%');
 /**
- * proposal-runtime-types #sec-type-errors (OQ27): a DECIDABLE type violation,
+ * proposal-runtime-types #sec-type-errors: a DECIDABLE type violation,
  * which is an Early Error rather than a thrown *TypeError*. The clause reserves
  * the latter "for the ~any~ boundary and other genuinely dynamic checks", and
  * one constructor could not mean both.

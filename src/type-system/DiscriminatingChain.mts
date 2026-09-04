@@ -2,8 +2,9 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
- * proposal-runtime-types `sec-discriminated-where-chains`, stage A: does a
- * `where` chain DISCRIMINATE, and if so on which member against which constants?
+ * proposal-runtime-types `sec-discriminated-where-chains`, `DiscriminatingChainOf`:
+ * does a `where` chain DISCRIMINATE, and if so on which member against which
+ * constants?
  *
  * **The qualification is syntactic and this operation keeps it that way.** The
  * specification says why: "The qualification is syntactic so that no predicate
@@ -13,14 +14,15 @@ import type { TypeRecord } from './records.mts';
  * rather than being reasoned about.
  *
  * It answers with the CONSTANTS each branch tests, not with a type. Building the
- * denoted union is stage B's, and keeping them apart is what lets every
- * qualifying and disqualifying form be tested without constructing a type.
+ * denoted union is `DenotedUnionOf`'s job, and keeping the two apart is what
+ * lets every qualifying and disqualifying form be tested without constructing a
+ * type.
  */
 
 export interface DiscriminatingBranch {
   /** The constants this branch tests. Several where a clause is an `or`. */
   readonly constants: readonly string[];
-  /** The branch's predicate, whose shape assertions stage B applies. */
+  /** The branch's predicate, whose shape assertions `DenotedUnionOf` applies. */
   readonly predicate: ParseNode;
 }
 
@@ -258,8 +260,8 @@ export function DiscriminatingChainOf(clause: ParseNode): DiscriminatingChain | 
 }
 
 /**
- * `sec-discriminated-where-chains`, stage B: the union a qualifying chain
- * DENOTES.
+ * `sec-discriminated-where-chains`, `DenotedUnionOf`: the union a qualifying
+ * chain DENOTES.
  *
  * "one member per branch, and where a branch tests several constants one member
  * per constant, each the type's base with the discriminant narrowed to the
@@ -346,8 +348,8 @@ function withDiscriminant(
  * "a branch predicate that is not a shape assertion refines its member as a
  * `where` of its own and contributes no members" - so anything this does not
  * recognise contributes NOTHING rather than disqualifying the branch. That is
- * the difference between stage A's job and this one: stage A refuses a chain it
- * cannot read, and stage B ignores a predicate it cannot read.
+ * the difference between `DiscriminatingChainOf`'s job and this one: it refuses
+ * a chain it cannot read, and this ignores a predicate it cannot read.
  */
 function shapeAssertionsOf(predicate: ParseNode): readonly [string, TypeRecord][] {
   const out: [string, TypeRecord][] = [];

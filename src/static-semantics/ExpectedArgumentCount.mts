@@ -4,7 +4,7 @@ import { HasInitializer } from './all.mts';
 /**
  * https://tc39.es/ecma262/#sec-static-semantics-expectedargumentcount
  *
- * PLAN-rest-parameters.md phase 4d. The count stops at the first parameter that
+ * The count stops at the first parameter that
  * is optional, defaulted, or a rest - and it read the LAST element to find the
  * rest, which is the base language's rule and not this proposal's. A rest may
  * now sit anywhere, so the scan looks for one at each position; a leading rest

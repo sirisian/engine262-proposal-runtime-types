@@ -25,7 +25,7 @@ import {
  * WHY A SOFTWARE FORMAT RATHER THAN A DOUBLE. Every binary64 value is exactly a
  * binary128 value, so backing one with a double would be faithful for that
  * subset and silently wrong outside it - which is the shape of the wide-integer
- * defect that took four stages to undo (KNOWN-DIVERGENCES.md D9). A type whose
+ * defect that took four attempts to undo. A type whose
  * point is 113 bits of significand cannot be represented by 53.
  */
 export interface Float128Object extends OrdinaryObject {

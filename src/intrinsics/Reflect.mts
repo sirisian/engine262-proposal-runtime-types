@@ -217,7 +217,7 @@ function* Reflect_setPrototypeOf([target = Value.undefined, proto = Value.undefi
 
 /** https://sirisian.github.io/ecmascript-types/#sec-reflect.typeof */
 /**
- * OQ-18 (B1): `Reflect.declareInverse(context, inverse)` - the primitive the
+ * `Reflect.declareInverse(context, inverse)` - the primitive the
  * kit's `inverse` decorator calls. It accepts only a LIVE `Reflect.Function`
  * decoration context (open while its decorator runs), records the inverse on
  * the decorated function, and mirrors it into the function's metadata as
@@ -259,7 +259,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // A callable that declares NO signature falls through unchanged: an
   // unannotated declaration stays unannotated, and synthesising all-`any`
   // parameters would be inference the program did not ask for.
-  // PLAN-callable-reflection.md phase 2. The callable branch below runs BEFORE
+  // The callable branch below runs BEFORE
   // `RuntimeTypeOf`, which hoists #sec-runtimetypeof's step 10 above steps 5-9.
   // That was harmless only while the `declared` filter below meant the branch
   // almost never fired; removing the filter exposed it, and three tests caught
@@ -315,7 +315,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // unannotated rule refuses. A parameter with no annotation resolves to
     // `any`, so a signature counts as declared where some parameter is not
     // `any` or a return type was written.
-    // PLAN-callable-reflection.md phase 2 (OQ1-B). This filter USED to discard
+    // This filter USED to discard
     // a signature that had already been built, on the grounds that reporting
     // all-`any` parameters "would be inference the program did not ask for".
     //
@@ -333,7 +333,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // reflection and not a `{}` to a binding. Every unannotated callable in a
     // program - functions, arrows, methods, builtins, class constructors - also
     // shared ONE type, `type {}`, so a Map keyed on `Reflect.typeOf` collapsed
-    // them all into one entry (F129).
+    // them all into one entry.
     //
     // The "unannotated is not `any`" distinction the filter protected is real
     // and survives: it lives on DECLARATION reflection, which answers what was
@@ -341,21 +341,20 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // still reports one. `Reflect.typeOf` answers what a value IS. The two are
     // allowed to differ and this is where.
     const declared = overloads;
-    // PLAN-callable-reflection.md OQ5-B. A CLASS CONSTRUCTOR's body-inferred
-    // return is `void` - the constructor returns nothing, and after
-    // PLAN-constructor-returns.md phase 1 it may return nothing but `this`. But
+    // A CLASS CONSTRUCTOR's body-inferred return is `void` - the constructor
+    // returns nothing, and a typed one may return nothing but `this`. But
     // `void` is not what `new C(...)` produces, and reporting it made every
     // class with the same constructor parameters share ONE type: `typeOf(C)`
     // and `typeOf(D)` were equal for `class C { x: uint8 = 1; }` and
-    // `class D { y: string = ""; }`, which is F129 surviving for classes after
-    // it was fixed for functions.
+    // `class D { y: string = ""; }`, the same collapse surviving for classes
+    // after it was fixed for functions.
     //
     // The class is what a construction yields - #sec-typed-classes says so, and
-    // PLAN-constructor-returns.md phase 1 made it TRUE by refusing any other
-    // `return` - so the return is derivable rather than guessed.
+    // the constructor-return rule makes it TRUE by refusing any other `return`
+    // - so the return is derivable rather than guessed.
     //
-    // This does NOT touch PLAN-constructor-returns.md OQ3-C, which gives a
-    // constructor's DECLARATION reflection no return entry because a
+    // This does NOT touch the rule that gives a constructor's DECLARATION
+    // reflection no return entry because a
     // constructor declares none. That rule is about what was WRITTEN and lives
     // in the class-member reflection path; this is about what a VALUE is. The
     // two answers differ on purpose and a test asserts both.
@@ -387,7 +386,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
         // reported on the same footing.
         Return: constructedType ?? o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
         // #sec-signature-records: a GENERIC signature keeps its type parameters
-        // (the fifth field-by-field rebuild that dropped them - Phase 7).
+        // (the fifth field-by-field rebuild that dropped them).
         ...((o as { TypeParameters?: readonly unknown[] }).TypeParameters?.length
           ? { TypeParameters: (o as { TypeParameters?: readonly unknown[] }).TypeParameters }
           : {}),
@@ -403,7 +402,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
  * Is _record_ the canonical `[[Metadata]]` form - a plain record whose
  * containers are plain records and whose leaves are engine `Value`s?
  *
- * PLAN-metadata-representation.md OQ2-C. Cheap, and it names the invariant that
+ * Cheap, and it names the invariant that
  * three findings violated in turn at three different depths.
  */
 function isCanonicalMetadata(record: unknown): boolean {
@@ -419,7 +418,7 @@ function isCanonicalMetadata(record: unknown): boolean {
  * A `[[Metadata]]` record, read out of the ECMAScript object a type node
  * carries it in.
  *
- * PLAN-metadata-representation.md phase 1 (F154). The canonical form of the
+ * The canonical form of the
  * slot is a FROZEN PLAIN RECORD - `MetadataObjectFromType` builds one and
  * `SameMetadata` walks it with `Object.keys` - whose LEAVES are engine `Value`s
  * or the structural markers the metadata language defines: a pattern's
@@ -441,9 +440,9 @@ function isCanonicalMetadata(record: unknown): boolean {
  * neither, so a one-level read was a conformance failure and not a shortcoming.
  *
  * Recursion is over CONTAINERS only. A leaf stays the `Value` it is, which
- * OQ3-A settled: a Symbol tag has no plain equivalent whose identity survives,
+ * is settled: a Symbol tag has no plain equivalent whose identity survives,
  * and `SameValue` on two SymbolValues is what makes a symbol-tagged brand
- * unforgeable (F147).
+ * unforgeable.
  */
 function* metadataFromValue(value: ObjectValue): ValueEvaluator {
   const keys = Q(yield* value.OwnPropertyKeys());
@@ -632,7 +631,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
             if (!(p instanceof ObjectValue)) {
               return Throw.TypeError('$1 is not a parameter', p);
             }
-            // PLAN-rest-parameters.md phase 0: a reflected parameter node
+            // A reflected parameter node
             // carries its own flags, so the record is built rather than the
             // bare type pushed.
             const restV = Q(yield* Get(p, Value('rest')));
@@ -695,7 +694,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       return { Kind: 'function', Signatures };
     }
     case 'parameterized': {
-      // proposal-runtime-types, PLAN-brand.md phase 1 (F110). The read side has
+      // proposal-runtime-types. The read side has
       // always emitted this kind and the write side rejected it, so
       // `makeType(getReflection(T)) === T` was false for every parameterized
       // type, and `brand` - which IS a parameterized node - could not be built
@@ -716,14 +715,14 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node without metadata'));
       }
       const record = Q(yield* metadataFromValue(metadataV));
-      // OQ2-C's entry check. The slot's canonical form is a plain record with
+      // The entry check. The slot's canonical form is a plain record with
       // plain containers (see `MetadataRecord` in records.mts), and nothing in
       // the type system enforces it - the slot is declared `Value` and holds
       // something else behind a cast. This asserts on the way IN, which is the
-      // one boundary a rebuilt record passes through, and it is where F154
-      // would have been caught: a container left as an `ObjectValue` fails here
-      // rather than surviving to make `makeType(getReflection(T)) === T` false
-      // three plans later.
+      // one boundary a rebuilt record passes through, and it is where the
+      // container mismatch would have been caught: a container left as an
+      // `ObjectValue` fails here rather than surviving to make
+      // `makeType(getReflection(T)) === T` false much later.
       //
       // On the `makeType` path, not the interning path, so its cost is paid
       // once per construction rather than once per type comparison.
@@ -748,7 +747,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
 /**
  * A [[Metadata]] record, as an ECMAScript object a program can read.
  *
- * PLAN-brand.md F148. The slot's canonical form is a FROZEN PLAIN RECORD -
+ * The slot's canonical form is a FROZEN PLAIN RECORD -
  * `MetadataObjectFromType` builds one and casts it to `Value`, and
  * `SameMetadata` walks it with `Object.keys`, which only works on that form.
  * The emitter, though, handed the record straight to `CreateDataProperty`,
@@ -821,7 +820,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       set('type', typeObj(t));
       // ...except an ENUM, which reflected as an indistinguishable "primitive"
       // leaf, so the enum-ness was erased and a reflection walker could not see
-      // its members or its underlying type at all (F62). The design leans on
+      // its members or its underlying type at all. The design leans on
       // that member count being readable.
       if (t.Kind === 'nominal' && t.EnumMembers !== undefined) {
         set('kind', Value('enum'));
@@ -857,7 +856,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       break;
     case 'union':
       set('kind', Value('union'));
-      // OQ-union-arms-vs-members.md. `members`, not `arms`: every other
+      // `members`, not `arms`: every other
       // reflection field is its slot lowercased - [[Elements]] to `elements`,
       // [[Base]] to `base`, [[Properties]] to `properties` - and a union's
       // parts come from [[Members]], the same slot an intersection and an
@@ -886,7 +885,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       set('kind', Value('array'));
       set('element', typeObj(t.Element));
       // [[Extent]] may be a NUMBER, ~dynamic~, or a Type Record for a value
-      // parameter that fixes it (D40). A reflection reports the parameter as a
+      // parameter that fixes it. A reflection reports the parameter as a
       // Type Object, the way every other type-valued field here does, rather
       // than trying to pass a record to `Value`.
       set('extent', t.Extent === 'dynamic'
@@ -933,7 +932,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
           X(CreateDataProperty(p, Value('type'), typeObj(pr.Type)));
           X(CreateDataProperty(p, Value('index'), Value(i)));
           // typeprogramming.md R1: `rest` on a parameter record, which the
-          // node model needs and which phase 0 makes available to report.
+          // node model needs and which the parameter record makes available to report.
           X(CreateDataProperty(p, Value('rest'), pr.Rest ? Value.true : Value.false));
           X(CreateDataProperty(p, Value('optional'), pr.Optional ? Value.true : Value.false));
           if (pr.Name) {
@@ -942,8 +941,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
           return p as Value;
         });
         X(CreateDataProperty(sr, Value('parameters'), CreateArrayFromList(params)));
-        // PLAN-variadic-and-named-generic-arguments.md Phase 7 (spec.emu
-        // reflection): a GENERIC signature reflects its type parameters - the
+        // spec.emu reflection: a GENERIC signature reflects its type parameters - the
         // declared data of the Type Parameter Record, in declaration order -
         // which is what lets a tool complete a named type argument at an
         // application site. `constraint` and `default` type objects (or their
@@ -1124,7 +1122,7 @@ export function typeContextRecord(): TypeRecord {
 }
 
 /**
- * `Reflect.TypeObject` - the type of a TYPE OBJECT (OQ20).
+ * `Reflect.TypeObject` - the type of a TYPE OBJECT.
  *
  * NOT a synonym for `Reflect.Type`, which is the type of a reflection NODE.
  * The two sit on opposite sides of the reflection relationship: a Type Object
@@ -1133,8 +1131,8 @@ export function typeContextRecord(): TypeRecord {
  * only `family` and `members` is *undefined* - and a node's members are
  * themselves Type Objects, so walking alternates between the two.
  *
- * `Reflect.typeOf` returns a Type Object, which is why its row was WITHDRAWN
- * (D34): naming `Reflect.Type` there would claim it returns a node.
+ * `Reflect.typeOf` returns a Type Object, which is why its row was once
+ * WITHDRAWN: naming `Reflect.Type` there would claim it returns a node.
  * #sec-reflection states the consequence - "the signature would name a type its
  * own result does not satisfy" - and the failure is a RUN-TIME one, since
  * `typeOf` being untyped makes its result `any` and assignable to anything. So

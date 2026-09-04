@@ -78,7 +78,7 @@ export function IsComposite(value: Value): boolean {
  * Objects, and rationals, the last because the type keeps every value in lowest
  * terms.
  *
- * THE DECIMAL STEP (PLAN-decimal.md stage D). composites.md: "Where the type
+ * THE DECIMAL STEP. composites.md: "Where the type
  * declares no scale, the REDUCED member is stored: trailing zeros are stripped,
  * THE ONE MEMBER COMPUTABLE FROM THE NUMERICAL VALUE ALONE, independent of the
  * width, and the value the hash had to be taken over in any case."
@@ -452,7 +452,7 @@ function* CompositeFunction([source = Value.undefined]: Arguments, { NewTarget }
   }
   const isArray = Q(IsArray(source));
   if (isArray === Value.true) {
-    // The tuple kind is phase four of PLAN-composites.md. Refused rather than
+    // The tuple kind is not implemented. Refused rather than
     // silently treated as a record: `sec-composite-deviations` keeps the array
     // form and gives it its OWN kind in the intern key, so answering with a
     // record here would produce an object that a later phase must invalidate.

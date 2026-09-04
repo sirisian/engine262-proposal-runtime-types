@@ -77,7 +77,7 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   // literal never forces a conversion". The clause names arithmetic, bitwise,
   // shift, and relational operators, and EQUALITY was left out - so
   // `(65 := uint16) < 66` compared but `(65 := uint16) === 65` was *false*, the
-  // same literal adopting in one operator and not the next (F65). The BigInt
+  // same literal adopting in one operator and not the next. The BigInt
   // precedent does not govern: a BigInt has its own literal syntax, `1n`, so it
   // never needed adoption, while these types have none and `65` is the only way
   // to write sixty-five. Adopting here is what Rust, Go, Swift, and Haskell do

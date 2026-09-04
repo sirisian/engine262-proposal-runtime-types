@@ -181,9 +181,9 @@ function mathOpExact(op: BinOp, x: bigint, y: bigint, bits: number, signed: bool
     case '%': return y === 0n ? undefined : x % y;
     case '**': return y < 0n ? undefined : x ** y;
     // The shifts are performed at the TYPE'S width rather than at 32, and the
-    // distance is taken modulo that width. Doing this in the Number path is
-    // what KNOWN-DIVERGENCES.md D30 is about; here the exact path gets it right
-    // from the start rather than inheriting the same defect.
+    // distance is taken modulo that width. The Number path has a known
+    // divergence here; the exact path gets it right from the start rather than
+    // inheriting the same defect.
     case '<<': return x << (((y % BigInt(bits)) + BigInt(bits)) % BigInt(bits));
     case '>>': return x >> (((y % BigInt(bits)) + BigInt(bits)) % BigInt(bits));
     case '>>>': {
@@ -250,8 +250,8 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * The engine promoted instead: it wrapped the other operand into the typed
  * operand's type, so `uint8(1) + uint16(1)` was 2 and `uint8(1) + any(300)` was
  * 45 - a silent conversion across value types at every arithmetic operator,
- * which is the one thing this proposal's arithmetic is most emphatic about
- * (F52). LITERALNESS IS SYNTACTIC, so the operand nodes decide it: the caller
+ * which is the one thing this proposal's arithmetic is most emphatic about.
+ * LITERALNESS IS SYNTACTIC, so the operand nodes decide it: the caller
  * passes which side was written as a numeric literal, and a literal adopts the
  * other's type while any other untyped operand is a mix and throws.
  */
@@ -353,7 +353,7 @@ export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Val
  * The literal rule alone, for the operators that ADOPT but do not otherwise
  * constrain their operands: equality compares rather than computes, so a
  * literal takes the other operand's type and a mismatch is an ordinary
- * *false* rather than a type error (F65). Returns the operand pair to use, or
+ * *false* rather than a type error. Returns the operand pair to use, or
  * undefined where neither side needs adopting.
  */
 export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean }): { left: Value, right: Value } | undefined {
@@ -372,8 +372,7 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
   // other, but it is not a Number and must not adopt a Number-family type: a
   // BigInt is a numeric type of its own, so `(5 := uint8) === 5n` stays false
   // rather than becoming a uint8 comparison. Reading its payload as a Number
-  // was a host crash rather than a wrong answer, which is how it was found
-  // (F74).
+  // was a host crash rather than a wrong answer, which is how it was found.
   if (!(untyped instanceof NumberValue)) {
     return undefined;
   }
@@ -394,8 +393,7 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
  * the clause names: "an arithmetic, bitwise, shift, or RELATIONAL operator".
  * Returns the type the operation is in, or the completion that says why the
  * operands do not mix. Relational operators reach it through the same door as
- * arithmetic ones, because it is the same rule and a second copy would drift
- * (F53).
+ * arithmetic ones, because it is the same rule and a second copy would drift.
  */
 export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypeRecord | ThrowCompletion {
   // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
@@ -411,8 +409,7 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
   // mix with one. The arithmetic operators reach the same verdict by a
   // different road - they fall through to the standard path, which raises the
   // existing "cannot mix BigInt" TypeError - but the comparison path has BigInt
-  // cases of its own that would otherwise compare the payloads and answer
-  // (F53).
+  // cases of its own that would otherwise compare the payloads and answer.
   if ((xt && y instanceof BigIntValue) || (yt && x instanceof BigIntValue)) {
     return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType((xt ?? yt)!)), Value('bigint'));
   }

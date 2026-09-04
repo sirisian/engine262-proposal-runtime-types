@@ -133,7 +133,7 @@ export function LayoutOf(t: TypeRecord): Layout | null {
   if (t.Kind === 'nominal') {
     // #sec-memory-layout's type table, row "an enum": "Yes, its underlying
     // type's." The pin this replaces said the Type Record carried no resolved
-    // underlying type; F62 added [[Underlying]] for the enum subtype relation,
+    // underlying type; [[Underlying]] was added for the enum subtype relation,
     // so the enum row costs one line now.
     if (t.EnumMembers !== undefined) {
       return t.Underlying ? LayoutOf(t.Underlying) : null;

@@ -890,13 +890,13 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   if (actualIndex >= len || actualIndex < 0) {
     return Throw.RangeError('$1 is out of range', index);
   }
-  // PLAN-tuple-stores.md phase 3. `with` WRITES a position, so
+  // `with` WRITES a position, so
   // #sec-array-defaults-and-stores' rule that "a method of the array that takes
   // or returns an ELEMENT takes or returns it at the element type" governs its
   // value argument - and for a tuple that has to mean the type of the position
   // it writes, since the positions differ. It checked nothing, so
   // `a.with(0, "no")` on a `[].<uint8>` answered a copy holding a String; once
-  // phase 2 gave that copy the receiver's element type, the copy was stamped
+  // a copy took the receiver's element type, the copy was stamped
   // `uint8` AROUND a String, which is worse than the hole it replaced. The
   // check belongs here rather than at the stamp: the value is entering a typed
   // position, and RequireType returns the value OF the type to store.
@@ -1018,7 +1018,7 @@ function* ArrayProto_at([index = Value.undefined]: Arguments, { thisValue }: Fun
 }
 
 /**
- * PLAN-tuple-stores.md phase 2: give a COPY the element type of the array it
+ * Give a COPY the element type of the array it
  * was copied from.
  *
  * `#sec-array-defaults-and-stores` says a method that takes or returns an
@@ -1053,7 +1053,7 @@ function tupleShapeOf(source: Value): TupleShape | undefined {
 }
 
 /**
- * PLAN-tuple-stores.md phase 2, the tuple half: give a copy the tuple shape the
+ * The tuple half: give a copy the tuple shape the
  * operation produced.
  *
  * `propagateElementType` covers an array, whose copy has the same element type

@@ -27,8 +27,8 @@ const stringType: TypeRecord = makePrimitive('string');
 const undefinedType: TypeRecord = makePrimitive('undefined');
 
 function stringOrUndefined(optional: boolean): TypeRecord {
-  // PLAN-typed-regexp-capture-types.md D1. `undefined`, NOT ~void~ - which is
-  // what this function was named for and did not do.
+  // `undefined`, NOT ~void~ - which is what this function was named for and did
+  // not do.
   //
   // The clause said "the union of `string` with the ~void~ type", and ~void~ is
   // the type with NO VALUES, "written to say that a result must not be depended
@@ -137,8 +137,7 @@ export function inferRegExpLiteralType(body: string, flags: string): TypeRecord 
   // The Captures argument: a tuple of the capture types in source order, and for
   // a no-capture pattern the tuple with NO elements.
   //
-  // PLAN-typed-regexp-capture-types.md D2. This emitted a dynamic array for the
-  // zero-capture case, on the stated ground that "a bare `[]` type denotes a
+  // This emitted a dynamic array for the zero-capture case, on the stated ground that "a bare `[]` type denotes a
   // dynamic array here rather than an empty tuple".
   //
   // That was TRUE when written. `[]` was reassigned to the empty tuple a month

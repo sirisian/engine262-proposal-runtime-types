@@ -67,7 +67,7 @@ function* ArrayConstructor(values: Arguments, { NewTarget }: FunctionCallContext
     // LENGTH or an element, and "is it a Number" was how it asked. A value of a
     // numeric type of this proposal is not a Number, so `Array(3 := uint32)`
     // took the element path and produced a one-element array holding the 3 -
-    // the shape F54 named, a builtin that predates the numeric types testing
+    // a familiar shape: a builtin that predates the numeric types testing
     // for Number where it means numeric. The design writes a length AT an
     // integer type (`[n].<uint8, uint64>`), so a numeric value is exactly what
     // a length may be.
@@ -76,7 +76,7 @@ function* ArrayConstructor(values: Arguments, { NewTarget }: FunctionCallContext
     // place: SameValueZero of a plain uint32 3 against a TYPED 3 is *false* by
     // R1, so leaving `len` typed would turn every valid typed length into a
     // RangeError. The array's stored length stays a plain Number, which the
-    // array exotic object asserts and which F54 left in place - the typing of
+    // array exotic object asserts and which was left in place - the typing of
     // a length lives at the [[Get]], not in the slot.
     const lenNumber = isTypedNumber(len) ? unwrapToNumber(len) : len;
     if (!(lenNumber instanceof NumberValue)) {

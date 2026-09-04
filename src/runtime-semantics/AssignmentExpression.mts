@@ -222,14 +222,14 @@ export function* Evaluate_AssignmentExpression({
       //
       // Measured before this: `_b_ = _a_` copied where `_b_` was ANNOTATED and
       // aliased where it was not, the annotation's boundary having been doing
-      // the work. That is the elision hazard this whole plan turns on: a
+      // the work. That is the elision hazard this turns on: a
       // boundary may be skipped, so a copy resting on one is a copy that
       // sometimes does not happen.
       //
       // Placed at the SIMPLE-assignment `PutValue`. A first attempt put it at
       // the one below, which serves DESTRUCTURING - the two look alike and only
       // one of them runs for `_b_ = _a_`.
-      // D28: copy only into TYPED STORAGE. #sec-value-type-copying's position
+      // Copy only into TYPED STORAGE. #sec-value-type-copying's position
       // list names "storing into a FIELD or an array element", and a plain
       // object's property is neither - it holds a reference, as it does for
       // every other object.

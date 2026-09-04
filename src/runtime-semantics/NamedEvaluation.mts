@@ -73,7 +73,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
   // 1. Let value be the result of ClassDefinitionEvaluation of ClassTail with arguments undefined and name.
   const value = yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, name, sourceText, decorators);
   Q(value);
-  // proposal-runtime-types M21: associate the class type; this is the named
+  // proposal-runtime-types: associate the class type; this is the named
   // evaluation path taken by `const C = class {}` and property definitions.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const published = PublishedClassTypeOf(ClassExpression as unknown as object);
@@ -82,7 +82,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
-      // PLAN-nominal-records.md phase 2, as at ClassDeclaration: the relation
+      // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,

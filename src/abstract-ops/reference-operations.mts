@@ -73,7 +73,7 @@ export function IsPrivateReference(V: ReferenceRecord): V is ReferenceRecord & {
 }
 
 /** https://tc39.es/ecma262/#sec-getvalue */
-/** F-T: set by the rest binding while it initializes its own run binding. */
+/** Set by the rest binding while it initializes its own run binding. */
 let initializingReferenceRun = false;
 export function* withReferenceRunInitializationEvaluator<T>(f: () => PlainEvaluator<T>): PlainEvaluator<T> {
   initializingReferenceRun = true;
@@ -85,7 +85,7 @@ export function* withReferenceRunInitializationEvaluator<T>(f: () => PlainEvalua
 }
 
 /**
- * F-T: the element of a ref RUN a property reference names - the k-th location
+ * The element of a ref RUN a property reference names - the k-th location
  * for a constant index, `length` for the count; anything else is the escape.
  */
 function* referenceRunElement(run: ReferenceRunValue, key: Value): PlainEvaluator<ReferenceRecord | 'length'> {
@@ -100,7 +100,7 @@ function* referenceRunElement(run: ReferenceRunValue, key: Value): PlainEvaluato
 }
 
 export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
-  // F-T: `refs[k]` and `refs.length` on a ref run read through the location.
+  // `refs[k]` and `refs.length` on a ref run read through the location.
   if (V instanceof ReferenceRecord && V.Base instanceof ReferenceRunValue) {
     const element = Q(yield* referenceRunElement(V.Base, V.ReferencedName as Value));
     if (element === 'length') {
@@ -130,7 +130,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         // required reads the type, which the value still carries, since the
         // literal type's single value IS its view of the binding. Handing back
         // the Type Object for a value parameter made arithmetic over it NaN.
-        // F165. The test is the DECLARATION, not the bound record's kind:
+        // The test is the DECLARATION, not the bound record's kind:
         // sec-generic-parameters-as-values gives a value parameter its value
         // here and a type parameter its Type Object, and a type parameter given
         // a literal argument is bound to a literal record too. Asking the
@@ -141,7 +141,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         if (bound.Kind === 'literal' && isValueParameterBinding(bound)) {
           return bound.Value;
         }
-        // #sec-variadic-parameters (Phase 4): a VALUE pack reads as a frozen
+        // #sec-variadic-parameters: a VALUE pack reads as a frozen
         // fixed-extent array of its literal elements' values, one per
         // specialization - the same array on every read, so `I === I` - which
         // is what makes `I.length` and `I[k]` constants a `where` can test.
@@ -249,7 +249,7 @@ export function LocationOfAssignmentTarget(node: ParseNode, target: ReferenceRec
 
 /** https://tc39.es/ecma262/#sec-putvalue */
 export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator {
-  // F-T: a write through `refs[k]` reaches the k-th location; the run itself
+  // A write through `refs[k]` reaches the k-th location; the run itself
   // is never stored (the escape error a single ref parameter has).
   if (W instanceof ReferenceRunValue) {
     return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
@@ -385,7 +385,7 @@ export function GetThisValue(V: ReferenceRecord) {
 
 /** https://tc39.es/ecma262/#sec-initializereferencedbinding */
 export function* InitializeReferencedBinding(V: PlainCompletion<ReferenceRecord>, W: Value): PlainEvaluator {
-  // F-T: a ref run is never stored - `const saved = refs` is the escape a
+  // A ref run is never stored - `const saved = refs` is the escape a
   // reference never survives - but a ref REST's own binding holds it.
   if (W instanceof ReferenceRunValue && !(V instanceof ReferenceRecord && initializingReferenceRun)) {
     return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));

@@ -766,7 +766,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           // why each is ONE token: `a <.. < b` does not assemble the open range,
           // it compares against the open-start from-range `a<..`.
           //
-          // PLAN-variadic-and-named-generic-arguments.md Phase 3: `<...` is NOT
+          // `<...` is NOT
           // an open-start range followed by a dot - it is `<` then `...`, the
           // start of a variadic type parameter list, `f<...Ts>`. Longest match
           // gives the ellipsis the three dots, as it does everywhere else in

@@ -73,7 +73,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       popTypeParameterFrame();
     }
   }
-  // proposal-runtime-types M21: associate the class type with its constructor.
+  // proposal-runtime-types: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
     const published = PublishedClassTypeOf(ClassDeclaration as unknown as object);
     const typeObject = GetTypeObject({
@@ -81,7 +81,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       Declaration: ClassDeclaration,
       Arguments: [],
       Constructor: value,
-      // PLAN-nominal-records.md phase 2: the relation walks [[Base]] for the
+      // The relation walks [[Base]] for the
       // inheritance chain and compares [[Structure]] to satisfy an interface,
       // and this record carried neither - so reflection answered *false* for
       // relations the checker decides correctly. Taken from the checker's own

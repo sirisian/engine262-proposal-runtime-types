@@ -27,7 +27,7 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
     // 2. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments className and className.
     value = Q(yield* ClassDefinitionEvaluation(ClassTail, className, className, sourceText, decorators));
   }
-  // proposal-runtime-types M21: associate the class type with its constructor.
+  // proposal-runtime-types: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
     const published = PublishedClassTypeOf(ClassExpression as unknown as object);
     AssociateClassType(value, GetTypeObject({
@@ -35,7 +35,7 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
-      // PLAN-nominal-records.md phase 2, as at ClassDeclaration: the relation
+      // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,

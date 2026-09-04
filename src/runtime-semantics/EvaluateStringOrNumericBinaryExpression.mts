@@ -13,7 +13,7 @@ import { GetValue } from '#self';
  * arrived through a variable of the `any` type, and those two must behave
  * differently: the literal adopts the type, the `any` value is a mix and
  * throws. So the operand nodes answer the question and the answer travels with
- * the values (F52). A parenthesized literal and a negated one are literals.
+ * the values. A parenthesized literal and a negated one are literals.
  */
 /**
  * The numeric constants of `Math`, named because none can be written as a

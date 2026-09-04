@@ -16,8 +16,7 @@ import {
 } from '#self';
 
 /**
- * proposal-runtime-types (decimal.md): the decimal value types, stage A of
- * PLAN-decimal.md.
+ * proposal-runtime-types (decimal.md): the decimal value types.
  *
  * A decimal value is a SIGNIFICAND and an EXPONENT, so that the value denotes
  * significand x 10^exponent. That pair is the representation the type exists
@@ -34,11 +33,11 @@ import {
  * shape `rational` already establishes here, and the reason is the same. Adding
  * a primitive would touch `typeof`, ToPrimitive and every conversion path; the
  * identity the design needs comes instead from a branch in SameValue, exactly
- * as rational's does. PLAN-decimal.md 4.2a asked this and it settled itself:
+ * as rational's does. This settled itself:
  * `SameValue` already carries `isRationalObject(x) || isRationalObject(y)`.
  *
  * What is NOT here, by design: arithmetic, literals, conversions, and the
- * width limits. Stage A is the representation and the equality split alone,
+ * width limits. What is here is the representation and the equality split alone,
  * because the split is the whole reason the representation has to be a pair.
  */
 
@@ -425,7 +424,7 @@ function* DecimalProto_toString(_args: Arguments, { thisValue }: FunctionCallCon
  * is nonsense that looks like a value, the second is a wrong value that looks
  * right.
  *
- * Stage C owns the operators, with IEEE's exponent rules deciding which cohort
+ * The operators are defined elsewhere, with IEEE's exponent rules deciding which cohort
  * member results - `1.5 + 1.50` is `3.00`, not `3.0`.
  */
 /** https://sirisian.github.io/proposal-runtime-types/#sec-decimal-types */
@@ -448,8 +447,8 @@ function* DecimalConstructorBody(width: 32 | 64 | 128, args: Arguments): ValueEv
   // A NUMBER argument is deliberately refused for now. `decimal128(0.1)` would
   // have to choose a cohort member for a binary double whose exact expansion is
   // 55 digits, and the spec flags that conversion as the hard one - "the
-  // difficulty is not arithmetic but which cohort member results". Stage F owns
-  // it; refusing is what keeps a wrong answer from being shipped meanwhile.
+  // difficulty is not arithmetic but which cohort member results". It is not
+  // defined yet; refusing is what keeps a wrong answer from being shipped.
   return Throw.TypeError('a decimal is constructed from a string of digits; the conversion from $1 is not yet defined', input ?? Value.undefined);
 }
 

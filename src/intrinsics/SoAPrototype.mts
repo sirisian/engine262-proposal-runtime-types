@@ -9,7 +9,7 @@ import {
  * proposal-runtime-types soa.md: `%SoA.prototype%`.
  *
  * `length` is the ELEMENT count and not a column length, which is the whole
- * reason the field projections of a later stage live under `fields` rather than
+ * reason the field projections live under `fields` rather than
  * on the container: a field named `length` or `push` then collides with
  * nothing.
  *

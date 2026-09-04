@@ -278,7 +278,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   // type off the object, and only the reflection route (a defineProperty
   // descriptor carrying a type) ever recorded it, so every write to a DECLARED
   // typed field went unchecked - `c.x = "str"` on a `x: uint8` field stored the
-  // string (F49). Recording it here is what closes that, since the ordinary
+  // string. Recording it here is what closes that, since the ordinary
   // [[Set]] already performs the check for anything it finds.
   const fieldAnnotation = (fieldRecord as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   const fieldTypeObject = (fieldRecord as { TypeObject?: object }).TypeObject;
@@ -313,7 +313,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     // default leaves the field undefined.
     // Resolved at class definition time, not here: this runs inside the
     // constructor, which for a default constructor is a builtin with no
-    // lexical environment to resolve a named type against (F51).
+    // lexical environment to resolve a named type against.
     const record = (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord;
     let dflt = LookupTypeDefault(fieldTypeObject!);
     if (dflt === undefined) {
@@ -331,8 +331,8 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
       // Against the RESOLVED record, not the annotation node. EnforceAnnotation
       // re-resolves the node, which calls ResolveBinding - and this runs inside
       // the constructor, which for a default constructor is a builtin with no
-      // lexical environment to resolve against. F51 recorded exactly that for
-      // the field's own type and fixed it by resolving at class definition;
+      // lexical environment to resolve against. That was recorded for the
+      // field's own type and fixed by resolving at class definition;
       // this call kept re-resolving and was latent only because no field type
       // had named a binding before. A `next: N | null` names one.
       initValue = Q(yield* RequireType(dflt, record));
@@ -346,7 +346,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     Q(yield* PrivateFieldAdd(receiver, fieldName, initValue));
     // A private field with a declared type is a typed field: the same row of
     // #table-check-sites, stored elsewhere. PrivateSet reads the type from the
-    // Private Name, which is per-class and so shared by every instance (F51).
+    // Private Name, which is per-class and so shared by every instance.
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       (fieldName as { TypeObject?: object }).TypeObject = fieldTypeObject;
     }
@@ -359,7 +359,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     // initializer got a typed default, a field written after construction got
     // a typed value, and a field with an initializer kept whatever the
     // initializer produced, so `class C { x: uint8 = 1 }` made `new C().x is
-    // uint8` FALSE until something wrote to it (F57).
+    // uint8` FALSE until something wrote to it.
     let stored = initValue;
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
