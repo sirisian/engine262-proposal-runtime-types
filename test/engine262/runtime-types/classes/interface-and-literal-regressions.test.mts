@@ -1286,6 +1286,65 @@ test('an alias declared in a NESTED list is published before the signatures', ()
   expect(accepts(`${L}function w() { type L = { z: string }; let x: L = { z: "s" }; }`)).toBe(true);
 });
 
+test('concat accepts an element or an array of them', () => {
+  // `Array.prototype.concat` takes an ELEMENT or an array of them and flattens
+  // one level, and every argument is optional: `[1].concat(2)` is `[1, 2]` and
+  // `a.concat()` copies.
+  //
+  // The checker's parameter for it must therefore be `T | [].<T>`, optional from
+  // the first, and its array form must carry a ~dynamic~ Extent like every other
+  // array Type Record - an `undefined` Extent renders as `[undefined].<uint.<8>>`
+  // and matches nothing, refusing an argument of exactly the right element type.
+  const A = 'let a: [].<uint8> = []; ';
+  expect(accepts(`${A}let b: [].<uint8> = []; a.concat(b);`)).toBe(true);
+  expect(accepts(`${A}a.concat((1 := uint8));`)).toBe(true);
+  expect(accepts(`${A}a.concat();`)).toBe(true);
+
+  // A foreign element is still refused, in either form.
+  expect(accepts(`${A}let s: [].<string> = []; a.concat(s);`)).toBe(false);
+  expect(accepts(`${A}a.concat("s");`)).toBe(false);
+
+  // It runs, and its result carries the element type.
+  expect(evaluated('let a: [].<uint8> = [(1 := uint8)]; let b: [].<uint8> = [(2 := uint8)];'
+    + ' String(a.concat(b).length);')).toBe('2');
+  expect(evaluated('let a: [].<uint8> = [(1 := uint8)]; String(Reflect.typeOf(a.concat(a)));')).toBe('[].<uint.<8>>');
+
+  // The neighbouring entries in the same table are unaffected.
+  expect(accepts(`${A}a.push((1 := uint8));`)).toBe(true);
+  expect(accepts(`${A}a.slice();`)).toBe(true);
+  expect(accepts(`${A}a.includes((1 := uint8));`)).toBe(true);
+});
+
+test('an array method takes the index type, not `number`', () => {
+  // sec-array-types defines the index type as `uint64` and says `length` is of
+  // it, and the callback a method passes an index to receives that type.
+  //
+  // An entry taking `number` instead refuses an array's own length, and refuses
+  // the index its own callback hands out - so a value produced by one method
+  // could not be passed to another.
+  const A = 'let a: [].<uint8> = [(1 := uint8)]; ';
+  expect(accepts(`${A}a.at((0 := uint64));`)).toBe(true);
+  expect(accepts(`${A}a.indexOf((1 := uint8), (0 := uint64));`)).toBe(true);
+  expect(accepts(`${A}a.includes((1 := uint8), (0 := uint64));`)).toBe(true);
+  expect(accepts(`${A}a.fill((1 := uint8), (0 := uint64));`)).toBe(true);
+  expect(accepts(`${A}a.at(a.length);`)).toBe(true);
+  expect(accepts(`${A}a.map((x: uint8, i: uint64) => a.at(i));`)).toBe(true);
+
+  // An untyped literal index still reaches every one of them.
+  expect(accepts(`${A}a.at(0);`)).toBe(true);
+  expect(accepts(`${A}a.indexOf((1 := uint8), 0);`)).toBe(true);
+
+  // A foreign argument is still refused, in the index position and the element
+  // position alike.
+  expect(accepts(`${A}a.at("s");`)).toBe(false);
+  expect(accepts(`${A}a.fill((1 := uint8), "s");`)).toBe(false);
+  expect(accepts(`${A}a.includes("s");`)).toBe(false);
+
+  // The entries that already took the index type keep their answers.
+  expect(accepts(`${A}a.slice((0 := uint64));`)).toBe(true);
+  expect(accepts(`${A}a.map((x: uint8, i: uint64) => x);`)).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // The literal arm ended `return contextual`, GIVING the literal the

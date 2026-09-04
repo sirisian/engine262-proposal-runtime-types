@@ -988,18 +988,22 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   const numberType = makePrimitive('number');
+  // sec-array-types: the index type is `uint64`, and `length` is of it. An
+  // entry taking `number` instead refuses an array's own length - `a.at(a.length)`
+  // - and refuses the index a callback receives, which is already this type.
+  const indexTypeForArray = builtinTypeRecord('uint', [64])!;
   const boolType = makePrimitive('boolean');
   const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
   switch (name) {
     case 'includes':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: boolType, Untyped: false }] } as unknown as Known;
     case 'indexOf':
     case 'lastIndexOf':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType], 1), Return: numberType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: indexTypeForArray, Untyped: false }] } as unknown as Known;
     case 'fill':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, numberType, numberType], 1), Return: anyType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray, indexTypeForArray], 1), Return: anyType, Untyped: false }] } as unknown as Known;
     case 'at':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([numberType], 1), Return: element, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeForArray], 1), Return: element, Untyped: false }] } as unknown as Known;
     // A result drawn from the receiver's own elements is an array of the same
     // element type: `filter` selects, `slice` copies a range, `reverse` and
     // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
@@ -1105,10 +1109,23 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
     // shared case gives, so a foreign element is refused at the argument too -
     // the same entry caused both.
     case 'concat': {
-      const arrayOfElement = { Kind: 'array', Element: element, Extent: undefined } as unknown as TypeRecord;
+      // `Extent` is ~dynamic~, as in every other array Type Record the checker
+      // builds. `undefined` renders as `[undefined].<uint.<8>>`, which is not a
+      // type any program can write, and it matches nothing - so `a.concat(b)`
+      // was refused for an argument of exactly the right element type.
+      const arrayOfElement = { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord;
+      // An argument may be an ELEMENT or an array of them, since
+      // `Array.prototype.concat` flattens one level: `[1].concat(2)` is
+      // `[1, 2]`. A parameter accepting only the array form refuses half of the
+      // method's uses.
+      const concatArgument = CanonicalizeType({
+        Kind: 'union', Members: [element, arrayOfElement],
+      } as TypeRecord) as TypeRecord;
       return {
         Kind: 'function',
-        Signatures: [{ Parameters: shapes([arrayOfElement, arrayOfElement], 0), Return: receiver }],
+        // Optional from the FIRST parameter: `a.concat(b)` passes one and
+        // `a.concat()` copies, so requiring two refuses both.
+        Signatures: [{ Parameters: shapes([concatArgument, concatArgument], 1), Return: receiver }],
       } as Known;
     }
     case 'slice':
